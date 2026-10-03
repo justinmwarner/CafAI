@@ -150,8 +150,11 @@ describe('restoreFromMirrorIfEmpty', () => {
     expect(await fresh.versions.listByBag('bag_kiambu')).toEqual([makeVersion()]);
     expect(await fresh.conversations.get('conv_kiambu')).toEqual(makeConversation());
     const [iteration] = await fresh.iterations.listAll();
-    const { series: _series, ...summary } = makeIteration().summary!;
-    expect(iteration).toEqual({ ...makeIteration(), summary } as unknown as IterationRecord);
+    const summary = {
+      ...makeIteration().summary!,
+      series: { tS: [], pressure: [], flow: [], weight: [], weightFlow: [], temperature: [], targetPressure: [], targetFlow: [] },
+    };
+    expect(iteration).toEqual({ ...makeIteration(), summary } as IterationRecord);
     expect(await fresh.settings.get()).toEqual(makeSettings({ grinderName: 'Niche Zero', grinderSetting: '14', activeBagId: 'bag_kiambu' }));
   });
 
