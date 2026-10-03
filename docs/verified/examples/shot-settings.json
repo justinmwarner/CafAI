@@ -1,0 +1,10 @@
+{
+  "steamSetting": 0,
+  "targetSteamTemp": 150,
+  "targetSteamDuration": 50,
+  "targetHotWaterTemp": 75,
+  "targetHotWaterVolume": 50,
+  "targetHotWaterDuration": 30,
+  "targetShotVolume": 36,
+  "groupTemp": 91.0
+}

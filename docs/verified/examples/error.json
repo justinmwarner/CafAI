@@ -1,0 +1,4 @@
+{
+  "error": "Invalid request",
+  "message": "Invalid argument(s): Profile must have \"tank_temperature\""
+}

@@ -1,0 +1,10 @@
+{
+  "version": "1358",
+  "model": "DE1Pro",
+  "serialNumber": "6482",
+  "GHC": true,
+  "extra": {
+    "refillKit": false,
+    "voltage": 220
+  }
+}

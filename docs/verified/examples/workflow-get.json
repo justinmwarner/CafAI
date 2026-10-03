@@ -1,0 +1,132 @@
+{
+  "id": "8d3f2b6e-4c1a-4f0e-9a57-6b2e1d7c9f30",
+  "name": "Workflow",
+  "description": "Description",
+  "profile": {
+    "version": "2",
+    "title": "Guji Hambela v1",
+    "notes": "CafAI dial-in for Guji Hambela (Square Mile). Base: Default. Change: +1.0 C on every step.",
+    "author": "CafAI",
+    "beverage_type": "espresso",
+    "steps": [
+      {
+        "name": "preinfusion temp boost",
+        "pump": "flow",
+        "transition": "fast",
+        "exit": {
+          "type": "pressure",
+          "condition": "over",
+          "value": 4.0
+        },
+        "volume": 0.0,
+        "seconds": 2.0,
+        "weight": 0.0,
+        "temperature": 91.0,
+        "sensor": "coffee",
+        "flow": 8.0,
+        "limiter": null
+      },
+      {
+        "name": "preinfusion",
+        "pump": "flow",
+        "transition": "fast",
+        "exit": {
+          "type": "pressure",
+          "condition": "over",
+          "value": 4.0
+        },
+        "volume": 0.0,
+        "seconds": 18.0,
+        "weight": 0.0,
+        "temperature": 89.0,
+        "sensor": "coffee",
+        "flow": 8.0,
+        "limiter": null
+      },
+      {
+        "name": "forced rise without limit",
+        "pump": "pressure",
+        "transition": "fast",
+        "exit": null,
+        "volume": 0.0,
+        "seconds": 3.0,
+        "weight": 0.0,
+        "temperature": 89.0,
+        "sensor": "coffee",
+        "pressure": 8.6,
+        "limiter": null
+      },
+      {
+        "name": "rise and hold",
+        "pump": "pressure",
+        "transition": "fast",
+        "exit": null,
+        "volume": 0.0,
+        "seconds": 1.0,
+        "weight": 0.0,
+        "temperature": 89.0,
+        "sensor": "coffee",
+        "pressure": 8.6,
+        "limiter": null
+      },
+      {
+        "name": "forced rise without limit",
+        "pump": "pressure",
+        "transition": "fast",
+        "exit": null,
+        "volume": 0.0,
+        "seconds": 3.0,
+        "weight": 0.0,
+        "temperature": 89.0,
+        "sensor": "coffee",
+        "pressure": 8.6,
+        "limiter": null
+      },
+      {
+        "name": "decline",
+        "pump": "pressure",
+        "transition": "smooth",
+        "exit": null,
+        "volume": 0.0,
+        "seconds": 32.0,
+        "weight": 0.0,
+        "temperature": 89.0,
+        "sensor": "coffee",
+        "pressure": 6.0,
+        "limiter": null
+      }
+    ],
+    "target_volume": 36.0,
+    "target_weight": 36.0,
+    "target_volume_count_start": 2,
+    "tank_temperature": 0.0
+  },
+  "context": {
+    "targetDoseWeight": 18.0,
+    "targetYield": 36.0,
+    "grinderId": "2c9e7a41-5b3d-4e8f-a6c2-91d0f4b8e735",
+    "grinderModel": "Niche Zero",
+    "grinderSetting": "14.5",
+    "beanBatchId": "b7e14c2a-93f6-4d58-8a1e-0c5f2d9b6a43",
+    "coffeeName": "Guji Hambela",
+    "coffeeRoaster": "Square Mile",
+    "finalBeverageType": "espresso"
+  },
+  "steamSettings": {
+    "targetTemperature": 150,
+    "duration": 50,
+    "flow": 0.8,
+    "stopAtTemperature": 0.0
+  },
+  "hotWaterData": {
+    "targetTemperature": 75,
+    "duration": 30,
+    "volume": 50,
+    "flow": 10.0
+  },
+  "rinseData": {
+    "targetTemperature": 90,
+    "duration": 10,
+    "flow": 6.0
+  }
+}

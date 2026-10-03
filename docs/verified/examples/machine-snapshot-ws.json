@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-10-03T08:15:32.035113",
+  "state": {
+    "state": "espresso",
+    "substate": "pouring"
+  },
+  "flow": 1.889892578125,
+  "pressure": 7.25,
+  "targetFlow": 0.0,
+  "targetPressure": 7.5,
+  "mixTemperature": 88.421875,
+  "groupTemperature": 88.78999328613281,
+  "targetMixTemperature": 90.6015625,
+  "targetGroupTemperature": 89.0,
+  "profileFrame": 5,
+  "steamTemperature": 147
+}

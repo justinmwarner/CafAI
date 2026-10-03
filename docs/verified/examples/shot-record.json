@@ -1,0 +1,378 @@
+{
+  "id": "3f6b0a9e-8c1d-4e52-9b7a-2d4f61c08e17",
+  "timestamp": "2026-10-03T08:15:02.731455",
+  "createdAt": "2026-10-03T06:15:41.902117Z",
+  "updatedAt": "2026-10-03T06:17:12.481230Z",
+  "measurements": [
+    {
+      "machine": {
+        "timestamp": "2026-10-03T08:15:02.725113",
+        "state": {
+          "state": "espresso",
+          "substate": "preparingForShot"
+        },
+        "flow": 0.27001953125,
+        "pressure": 0.002685546875,
+        "targetFlow": 0.0,
+        "targetPressure": 0.0,
+        "mixTemperature": 89.62109375,
+        "groupTemperature": 88.96000671386719,
+        "targetMixTemperature": 18.19921875,
+        "targetGroupTemperature": 91.0,
+        "profileFrame": 5,
+        "steamTemperature": 148
+      },
+      "scale": {
+        "timestamp": "2026-10-03T08:15:02.704113",
+        "weight": 0.0,
+        "weightFlow": 0.0,
+        "battery": 87,
+        "timerValue": null
+      },
+      "volume": 0.0
+    },
+    {
+      "machine": {
+        "timestamp": "2026-10-03T08:15:07.345113",
+        "state": {
+          "state": "espresso",
+          "substate": "preinfusion"
+        },
+        "flow": 7.610107421875,
+        "pressure": 0.929931640625,
+        "targetFlow": 8.0,
+        "targetPressure": 0.0,
+        "mixTemperature": 90.41015625,
+        "groupTemperature": 87.1199951171875,
+        "targetMixTemperature": 93.6015625,
+        "targetGroupTemperature": 91.0,
+        "profileFrame": 0,
+        "steamTemperature": 148
+      },
+      "scale": {
+        "timestamp": "2026-10-03T08:15:07.324113",
+        "weight": 0.0,
+        "weightFlow": 0.0,
+        "battery": 87,
+        "timerValue": 301
+      },
+      "volume": 0.0
+    },
+    {
+      "machine": {
+        "timestamp": "2026-10-03T08:15:12.576113",
+        "state": {
+          "state": "espresso",
+          "substate": "preinfusion"
+        },
+        "flow": 2.469970703125,
+        "pressure": 3.4599609375,
+        "targetFlow": 8.0,
+        "targetPressure": 0.0,
+        "mixTemperature": 89.328125,
+        "groupTemperature": 87.74000549316406,
+        "targetMixTemperature": 91.8984375,
+        "targetGroupTemperature": 89.0,
+        "profileFrame": 1,
+        "steamTemperature": 148
+      },
+      "scale": {
+        "timestamp": "2026-10-03T08:15:12.555113",
+        "weight": 0.0,
+        "weightFlow": 0.0,
+        "battery": 87,
+        "timerValue": 5532
+      },
+      "volume": 0.0
+    },
+    {
+      "machine": {
+        "timestamp": "2026-10-03T08:15:14.808113",
+        "state": {
+          "state": "espresso",
+          "substate": "pouring"
+        },
+        "flow": 2.93994140625,
+        "pressure": 7.860107421875,
+        "targetFlow": 0.0,
+        "targetPressure": 8.625,
+        "mixTemperature": 88.96875,
+        "groupTemperature": 88.14999389648438,
+        "targetMixTemperature": 92.3984375,
+        "targetGroupTemperature": 89.0,
+        "profileFrame": 2,
+        "steamTemperature": 148
+      },
+      "scale": {
+        "timestamp": "2026-10-03T08:15:14.787113",
+        "weight": 0.4,
+        "weightFlow": 0.3104838709677419,
+        "battery": 87,
+        "timerValue": 7764
+      },
+      "volume": 3.912109375
+    },
+    {
+      "machine": {
+        "timestamp": "2026-10-03T08:15:22.314113",
+        "state": {
+          "state": "espresso",
+          "substate": "pouring"
+        },
+        "flow": 1.6201171875,
+        "pressure": 8.409912109375,
+        "targetFlow": 0.0,
+        "targetPressure": 8.3125,
+        "mixTemperature": 88.73046875,
+        "groupTemperature": 88.61000061035156,
+        "targetMixTemperature": 91.19921875,
+        "targetGroupTemperature": 89.0,
+        "profileFrame": 5,
+        "steamTemperature": 147
+      },
+      "scale": {
+        "timestamp": "2026-10-03T08:15:22.293113",
+        "weight": 9.8,
+        "weightFlow": 1.418279569892473,
+        "battery": 87,
+        "timerValue": 15270
+      },
+      "volume": 18.40673828125
+    },
+    {
+      "machine": {
+        "timestamp": "2026-10-03T08:15:32.035113",
+        "state": {
+          "state": "espresso",
+          "substate": "pouring"
+        },
+        "flow": 1.889892578125,
+        "pressure": 7.25,
+        "targetFlow": 0.0,
+        "targetPressure": 7.5,
+        "mixTemperature": 88.421875,
+        "groupTemperature": 88.78999328613281,
+        "targetMixTemperature": 90.6015625,
+        "targetGroupTemperature": 89.0,
+        "profileFrame": 5,
+        "steamTemperature": 147
+      },
+      "scale": {
+        "timestamp": "2026-10-03T08:15:32.014113",
+        "weight": 24.6,
+        "weightFlow": 1.8126503944396972,
+        "battery": 87,
+        "timerValue": 24991
+      },
+      "volume": 34.118896484375
+    },
+    {
+      "machine": {
+        "timestamp": "2026-10-03T08:15:37.687113",
+        "state": {
+          "state": "espresso",
+          "substate": "pouring"
+        },
+        "flow": 2.02001953125,
+        "pressure": 6.7099609375,
+        "targetFlow": 0.0,
+        "targetPressure": 7.0625,
+        "mixTemperature": 88.359375,
+        "groupTemperature": 88.85000610351562,
+        "targetMixTemperature": 90.3984375,
+        "targetGroupTemperature": 89.0,
+        "profileFrame": 5,
+        "steamTemperature": 147
+      },
+      "scale": {
+        "timestamp": "2026-10-03T08:15:37.666113",
+        "weight": 33.9,
+        "weightFlow": 1.9307142857142856,
+        "battery": 87,
+        "timerValue": 30643
+      },
+      "volume": 45.207763671875
+    }
+  ],
+  "workflow": {
+    "id": "8d3f2b6e-4c1a-4f0e-9a57-6b2e1d7c9f30",
+    "name": "Workflow",
+    "description": "Description",
+    "profile": {
+      "version": "2",
+      "title": "Guji Hambela v1",
+      "notes": "CafAI dial-in for Guji Hambela (Square Mile). Base: Default. Change: +1.0 C on every step.",
+      "author": "CafAI",
+      "beverage_type": "espresso",
+      "steps": [
+        {
+          "name": "preinfusion temp boost",
+          "pump": "flow",
+          "transition": "fast",
+          "exit": {
+            "type": "pressure",
+            "condition": "over",
+            "value": 4.0
+          },
+          "volume": 0.0,
+          "seconds": 2.0,
+          "weight": 0.0,
+          "temperature": 91.0,
+          "sensor": "coffee",
+          "flow": 8.0,
+          "limiter": null
+        },
+        {
+          "name": "preinfusion",
+          "pump": "flow",
+          "transition": "fast",
+          "exit": {
+            "type": "pressure",
+            "condition": "over",
+            "value": 4.0
+          },
+          "volume": 0.0,
+          "seconds": 18.0,
+          "weight": 0.0,
+          "temperature": 89.0,
+          "sensor": "coffee",
+          "flow": 8.0,
+          "limiter": null
+        },
+        {
+          "name": "forced rise without limit",
+          "pump": "pressure",
+          "transition": "fast",
+          "exit": null,
+          "volume": 0.0,
+          "seconds": 3.0,
+          "weight": 0.0,
+          "temperature": 89.0,
+          "sensor": "coffee",
+          "pressure": 8.6,
+          "limiter": null
+        },
+        {
+          "name": "rise and hold",
+          "pump": "pressure",
+          "transition": "fast",
+          "exit": null,
+          "volume": 0.0,
+          "seconds": 1.0,
+          "weight": 0.0,
+          "temperature": 89.0,
+          "sensor": "coffee",
+          "pressure": 8.6,
+          "limiter": null
+        },
+        {
+          "name": "forced rise without limit",
+          "pump": "pressure",
+          "transition": "fast",
+          "exit": null,
+          "volume": 0.0,
+          "seconds": 3.0,
+          "weight": 0.0,
+          "temperature": 89.0,
+          "sensor": "coffee",
+          "pressure": 8.6,
+          "limiter": null
+        },
+        {
+          "name": "decline",
+          "pump": "pressure",
+          "transition": "smooth",
+          "exit": null,
+          "volume": 0.0,
+          "seconds": 32.0,
+          "weight": 0.0,
+          "temperature": 89.0,
+          "sensor": "coffee",
+          "pressure": 6.0,
+          "limiter": null
+        }
+      ],
+      "target_volume": 36.0,
+      "target_weight": 36.0,
+      "target_volume_count_start": 2,
+      "tank_temperature": 0.0
+    },
+    "context": {
+      "targetDoseWeight": 18.0,
+      "targetYield": 36.0,
+      "grinderId": "2c9e7a41-5b3d-4e8f-a6c2-91d0f4b8e735",
+      "grinderModel": "Niche Zero",
+      "grinderSetting": "14.5",
+      "beanBatchId": "b7e14c2a-93f6-4d58-8a1e-0c5f2d9b6a43",
+      "coffeeName": "Guji Hambela",
+      "coffeeRoaster": "Square Mile",
+      "finalBeverageType": "espresso"
+    },
+    "steamSettings": {
+      "targetTemperature": 150,
+      "duration": 50,
+      "flow": 0.8,
+      "stopAtTemperature": 0.0
+    },
+    "hotWaterData": {
+      "targetTemperature": 75,
+      "duration": 30,
+      "volume": 50,
+      "flow": 10.0
+    },
+    "rinseData": {
+      "targetTemperature": 90,
+      "duration": 10,
+      "flow": 6.0
+    },
+    "machine": {
+      "provenanceStatus": "captured",
+      "flowCalibration": 1.0,
+      "serialNumber": "6482",
+      "model": "DE1Pro",
+      "firmwareVersion": "1358"
+    }
+  },
+  "annotations": {
+    "actualDoseWeight": 18.0,
+    "actualYield": 36.3,
+    "enjoyment": 7.5,
+    "espressoNotes": "Sweet and juicy, slightly sharp finish. Try 1 step finer next.",
+    "extras": {
+      "cafai": {
+        "schema": 1,
+        "beanKey": "square-mile/guji-hambela",
+        "profileId": "profile:fbff9b37ed390c6a8110",
+        "taste": {
+          "balance": "slightly sour",
+          "body": "medium",
+          "finish": "short"
+        },
+        "suggestion": {
+          "lever": "grind",
+          "direction": "finer",
+          "amount": "1 step"
+        }
+      }
+    }
+  },
+  "stopReason": "targetWeight",
+  "shotNotes": "Sweet and juicy, slightly sharp finish. Try 1 step finer next.",
+  "metadata": {
+    "cafai": {
+      "schema": 1,
+      "beanKey": "square-mile/guji-hambela",
+      "profileId": "profile:fbff9b37ed390c6a8110",
+      "taste": {
+        "balance": "slightly sour",
+        "body": "medium",
+        "finish": "short"
+      },
+      "suggestion": {
+        "lever": "grind",
+        "direction": "finer",
+        "amount": "1 step"
+      }
+    }
+  }
+}

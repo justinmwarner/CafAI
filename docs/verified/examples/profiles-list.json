@@ -1,0 +1,229 @@
+[
+  {
+    "id": "profile:fbff9b37ed390c6a8110",
+    "profile": {
+      "version": "2",
+      "title": "Guji Hambela v1",
+      "notes": "CafAI dial-in for Guji Hambela (Square Mile). Base: Default. Change: +1.0 C on every step.",
+      "author": "CafAI",
+      "beverage_type": "espresso",
+      "steps": [
+        {
+          "name": "preinfusion temp boost",
+          "pump": "flow",
+          "transition": "fast",
+          "exit": {
+            "type": "pressure",
+            "condition": "over",
+            "value": 4.0
+          },
+          "volume": 0.0,
+          "seconds": 2.0,
+          "weight": 0.0,
+          "temperature": 91.0,
+          "sensor": "coffee",
+          "flow": 8.0,
+          "limiter": null
+        },
+        {
+          "name": "preinfusion",
+          "pump": "flow",
+          "transition": "fast",
+          "exit": {
+            "type": "pressure",
+            "condition": "over",
+            "value": 4.0
+          },
+          "volume": 0.0,
+          "seconds": 18.0,
+          "weight": 0.0,
+          "temperature": 89.0,
+          "sensor": "coffee",
+          "flow": 8.0,
+          "limiter": null
+        },
+        {
+          "name": "forced rise without limit",
+          "pump": "pressure",
+          "transition": "fast",
+          "exit": null,
+          "volume": 0.0,
+          "seconds": 3.0,
+          "weight": 0.0,
+          "temperature": 89.0,
+          "sensor": "coffee",
+          "pressure": 8.6,
+          "limiter": null
+        },
+        {
+          "name": "rise and hold",
+          "pump": "pressure",
+          "transition": "fast",
+          "exit": null,
+          "volume": 0.0,
+          "seconds": 1.0,
+          "weight": 0.0,
+          "temperature": 89.0,
+          "sensor": "coffee",
+          "pressure": 8.6,
+          "limiter": null
+        },
+        {
+          "name": "forced rise without limit",
+          "pump": "pressure",
+          "transition": "fast",
+          "exit": null,
+          "volume": 0.0,
+          "seconds": 3.0,
+          "weight": 0.0,
+          "temperature": 89.0,
+          "sensor": "coffee",
+          "pressure": 8.6,
+          "limiter": null
+        },
+        {
+          "name": "decline",
+          "pump": "pressure",
+          "transition": "smooth",
+          "exit": null,
+          "volume": 0.0,
+          "seconds": 32.0,
+          "weight": 0.0,
+          "temperature": 89.0,
+          "sensor": "coffee",
+          "pressure": 6.0,
+          "limiter": null
+        }
+      ],
+      "target_volume": 36.0,
+      "target_weight": 36.0,
+      "target_volume_count_start": 2,
+      "tank_temperature": 0.0
+    },
+    "metadataHash": "3cfdf2fd3f25a46672cf3b2d9bd616f128fd9d47982b32c2b6e9721de4ef6502",
+    "compoundHash": "5f6bdb1ac5f0f396b2ca1c238b6a109f16c6f489fd48cb4cb2656efce1c8d761",
+    "parentId": "profile:a582ef47a76f99f56912",
+    "visibility": "visible",
+    "isDefault": false,
+    "createdAt": "2026-10-03T08:12:47.553081",
+    "updatedAt": "2026-10-03T08:12:47.553081",
+    "metadata": {
+      "source": "cafai",
+      "beanKey": "square-mile/guji-hambela",
+      "iteration": 1
+    }
+  },
+  {
+    "id": "profile:a582ef47a76f99f56912",
+    "profile": {
+      "version": "2",
+      "title": "Default",
+      "notes": "This profile is gentle on the coffee puck and not too demanding on the barista.  Produces a very acceptable espresso in a wide variety of settings.",
+      "author": "Decent",
+      "beverage_type": "espresso",
+      "steps": [
+        {
+          "name": "preinfusion temp boost",
+          "pump": "flow",
+          "transition": "fast",
+          "exit": {
+            "type": "pressure",
+            "condition": "over",
+            "value": 4.0
+          },
+          "volume": 0.0,
+          "seconds": 2.0,
+          "weight": 0.0,
+          "temperature": 90.0,
+          "sensor": "coffee",
+          "flow": 8.0,
+          "limiter": null
+        },
+        {
+          "name": "preinfusion",
+          "pump": "flow",
+          "transition": "fast",
+          "exit": {
+            "type": "pressure",
+            "condition": "over",
+            "value": 4.0
+          },
+          "volume": 0.0,
+          "seconds": 18.0,
+          "weight": 0.0,
+          "temperature": 88.0,
+          "sensor": "coffee",
+          "flow": 8.0,
+          "limiter": null
+        },
+        {
+          "name": "forced rise without limit",
+          "pump": "pressure",
+          "transition": "fast",
+          "exit": null,
+          "volume": 0.0,
+          "seconds": 3.0,
+          "weight": 0.0,
+          "temperature": 88.0,
+          "sensor": "coffee",
+          "pressure": 8.6,
+          "limiter": null
+        },
+        {
+          "name": "rise and hold",
+          "pump": "pressure",
+          "transition": "fast",
+          "exit": null,
+          "volume": 0.0,
+          "seconds": 1.0,
+          "weight": 0.0,
+          "temperature": 88.0,
+          "sensor": "coffee",
+          "pressure": 8.6,
+          "limiter": null
+        },
+        {
+          "name": "forced rise without limit",
+          "pump": "pressure",
+          "transition": "fast",
+          "exit": null,
+          "volume": 0.0,
+          "seconds": 3.0,
+          "weight": 0.0,
+          "temperature": 88.0,
+          "sensor": "coffee",
+          "pressure": 8.6,
+          "limiter": null
+        },
+        {
+          "name": "decline",
+          "pump": "pressure",
+          "transition": "smooth",
+          "exit": null,
+          "volume": 0.0,
+          "seconds": 32.0,
+          "weight": 0.0,
+          "temperature": 88.0,
+          "sensor": "coffee",
+          "pressure": 6.0,
+          "limiter": null
+        }
+      ],
+      "target_volume": 36.0,
+      "target_weight": 36.0,
+      "target_volume_count_start": 2,
+      "tank_temperature": 0.0
+    },
+    "metadataHash": "b6a8748c6f65575f27548aa46d2c5db3b861b9983b5e558f20c4973b2d6dda0b",
+    "compoundHash": "c16fbae6718cd99d4e2491a0b0fb03709c21c4bcd1641864a815a9c1131517c0",
+    "parentId": null,
+    "visibility": "visible",
+    "isDefault": true,
+    "createdAt": "2026-09-16T09:02:11.204518",
+    "updatedAt": "2026-09-16T09:02:11.204518",
+    "metadata": {
+      "source": "bundled",
+      "filename": "Default1.json"
+    }
+  }
+]

@@ -1,0 +1,9 @@
+# Keep LF everywhere (the user's git has core.autocrlf=true on Windows).
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.woff binary
+*.woff2 binary
+*.zip binary
+# Bundled Decent profiles stay byte-identical to the upstream git blobs.
+src/coach/templates/source/*.json -text

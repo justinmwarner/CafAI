@@ -1,0 +1,50 @@
+{
+  "timestamp": "2026-10-03T06:15:20.044319Z",
+  "devices": [
+    {
+      "name": "Decent Scale",
+      "id": "CF:3A:91:0B:7E:12",
+      "state": "connected",
+      "type": "scale",
+      "available": true,
+      "connectionRole": "primary"
+    },
+    {
+      "name": "DE1",
+      "id": "F4:12:FA:5C:3D:8E",
+      "state": "connected",
+      "type": "machine",
+      "available": true
+    }
+  ],
+  "scanning": false,
+  "charging": {
+    "mode": "balanced",
+    "nightModeEnabled": false,
+    "currentPhase": "normal",
+    "batteryPercent": 81,
+    "usbChargerOn": true,
+    "isEmergency": false
+  },
+  "connectionStatus": {
+    "phase": "ready",
+    "foundMachines": [
+      {
+        "name": "DE1",
+        "id": "F4:12:FA:5C:3D:8E",
+        "state": "discovered",
+        "type": "machine"
+      }
+    ],
+    "foundScales": [
+      {
+        "name": "Decent Scale",
+        "id": "CF:3A:91:0B:7E:12",
+        "state": "discovered",
+        "type": "scale"
+      }
+    ],
+    "pendingAmbiguity": null,
+    "error": null
+  }
+}
