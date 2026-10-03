@@ -71,7 +71,7 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       // One entry chunk: Decaid replaces skin files in place while the page
       // runs, so any lazily loaded chunk could 404 mid-session.
-      output: { inlineDynamicImports: true },
+      output: { codeSplitting: false },
     },
   },
   server: {

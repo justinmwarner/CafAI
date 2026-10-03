@@ -1,13 +1,20 @@
 {
   "$comment": "Source of truth for the skin manifest. Decaid reads skin-manifest.json first and falls back to manifest.json; it reads only id, name, description and version, all JSON strings (docs/verified/01-platform.md section 1). Never change id: it fixes the install folder, port, origin and so the skin's saved data. The version is filled from package.json at release time.",
-  "manifestFiles": ["skin-manifest.json", "manifest.json"],
-  "requiredFields": ["id", "name", "description", "version"],
+  "manifestFiles": [
+    "skin-manifest.json",
+    "manifest.json"
+  ],
+  "requiredFields": [
+    "id",
+    "name",
+    "description",
+    "version"
+  ],
   "zipBaseName": "cafai",
   "manifest": {
     "id": "cafai",
     "name": "CafAI",
     "description": "Chat-first AI dial-in coach: describe the bag, pull a shot, tap how it tasted, confirm one change at a time.",
-    "author": "CafAI contributors",
-    "repository": "https://github.com/cafai/cafai"
+    "author": "CafAI contributors"
   }
 }
