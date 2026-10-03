@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>CafAI shell preview</title>
+    <!--
+      Dev only (served by `vite dev`, never built): the shell and machine panel
+      against fake services. Options are listed in src/ui/preview/shellPreview.tsx.
+        http://localhost:5181/dev/preview-shell.html?scenario=pulling&at=22&freeze=1
+      Frame it at a tablet size with dev/tablet.html:
+        /dev/tablet.html?preset=962x602&src=/dev/preview-shell.html%23/
+    -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/ui/preview/shellPreview.tsx"></script>
+  </body>
+</html>

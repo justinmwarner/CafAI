@@ -1,0 +1,143 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-only
+Derived from Crema web/dev/ipad.html (https://github.com/yarneo/crema @ 628cd714),
+Copyright (C) 2026 Yarden (yarneo). Modified for CafAI: Decent tablet presets, all four --safe-* insets, hash deep links, snackbar overlay, ready on app-ready.
+-->
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>CafAI tablet harness</title>
+<!--
+  A rehearsal rig for tablet sizes and hardware insets, served by `vite dev`
+  only (it lives outside public/, so it is never part of a build).
+
+    http://localhost:5173/dev/tablet.html?preset=962x602
+    http://localhost:5173/dev/tablet.html?preset=all
+    http://localhost:5173/dev/tablet.html?preset=ipad&src=/index.html%23/settings
+
+  preset   962x602 (default) | 1007x602 | 1140x712 | 1280x800 | 1920x1200 | ipad | all
+  w, h     explicit CSS size instead of a preset
+  src      page to frame (default /index.html#/); encode ?, & and # in it
+  top, right, bottom (alias inset), left
+           insets in px injected as --safe-*. The default bottom of 20 is
+           what CafAI's safe-area module infers on a real full-screen touch
+           tablet inside Decaid, so the default view matches the device.
+  snackbar=1  draw Decaid's 10-second exit hint where it floats (bottom)
+  bare=1   no harness chrome, for exact-size screenshots (insets still apply;
+           pass bottom=0 for none)
+  zoom     scale the frames down to fit a small monitor, e.g. zoom=0.5
+
+  Desktop Chrome reports no safe-area inset, which is why the layout reads
+  its insets through --safe-* and not env() directly. The values are injected
+  as an !important stylesheet so the app's own inline --safe-bottom (computed
+  as 0 on a desktop) cannot override them. document.title becomes "ready"
+  once every frame shows data-testid="app-ready", for screenshot scripts.
+-->
+<style>
+  body { margin: 0; background: #3a3330; font: 12px system-ui, sans-serif; color: #fff; }
+  #host { display: flex; flex-wrap: wrap; gap: 16px; padding: 16px; align-items: flex-start; }
+  figure { margin: 0; }
+  figcaption { padding: 0 0 6px; opacity: 0.85; }
+  .dev { position: relative; background: #000; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 6px #111; transform-origin: 0 0; }
+  iframe { border: 0; display: block; }
+  /* the hardware strips the insets stand for */
+  .strip { position: absolute; left: 0; right: 0; pointer-events: none; background: repeating-linear-gradient(45deg, #e0245e55 0 6px, transparent 6px 12px); }
+  .strip.top { top: 0; }
+  .strip.bottom { bottom: 0; }
+  .strip.bottom::after { content: ''; position: absolute; left: 50%; transform: translateX(-50%); bottom: 6px; width: 38%; height: 5px; border-radius: 3px; background: #fff9; }
+  .strip.side { top: 0; bottom: 0; left: auto; right: auto; }
+  /* Decaid's floating SnackBar: margin 16, about one line tall */
+  .snackbar { position: absolute; left: 16px; right: 16px; bottom: 16px; min-height: 52px; padding: 0 16px; border-radius: 4px; background: rgba(48, 48, 48, 0.92); color: #fff; display: flex; align-items: center; gap: 16px; pointer-events: none; font: 14px system-ui, sans-serif; }
+  .snackbar b { margin-left: auto; color: #9fc3ff; font-weight: 500; }
+  body.bare #host { padding: 0; gap: 0; }
+  body.bare { background: #000; }
+  body.bare figcaption, body.bare .strip { display: none; }
+  body.bare .dev { border-radius: 0; box-shadow: none; }
+</style>
+<div id="host"></div>
+<script>
+  var PRESETS = {
+    '962x602': { w: 962, h: 602, label: 'Teclast P80X, 1280x800 at DPR 1.33' },
+    '1007x602': { w: 1007, h: 602, label: 'Teclast M50 / T50 Mini, DPR 1.33' },
+    '1140x712': { w: 1140, h: 712, label: 'Teclast P85 Pro, DPR 1.125' },
+    '1280x800': { w: 1280, h: 800, label: '1280x800 at DPR 1' },
+    '1920x1200': { w: 1920, h: 1200, label: '1920x1200 at DPR 1' },
+    ipad: { w: 1194, h: 834, label: 'iPad Pro 11 in landscape' }
+  };
+
+  var q = new URLSearchParams(location.search);
+  var num = function (name, fallback) {
+    var raw = q.get(name);
+    return raw === null || raw === '' || isNaN(+raw) ? fallback : +raw;
+  };
+  var src = q.get('src') || '/index.html#/';
+  var bare = q.get('bare') === '1';
+  var zoom = num('zoom', 1);
+  var insets = {
+    top: num('top', 0),
+    right: num('right', 0),
+    bottom: num('bottom', num('inset', 20)),
+    left: num('left', 0)
+  };
+  if (bare) document.body.className = 'bare';
+
+  var presetName = q.get('preset') || '962x602';
+  var sizes = [];
+  if (q.get('w') && q.get('h')) sizes.push({ w: num('w', 962), h: num('h', 602), label: 'custom' });
+  else if (presetName === 'all') for (var key in PRESETS) sizes.push(PRESETS[key]);
+  else sizes.push(PRESETS[presetName] || PRESETS['962x602']);
+
+  var host = document.getElementById('host');
+  var frames = [];
+
+  sizes.forEach(function (size) {
+    var figure = document.createElement('figure');
+    figure.style.width = size.w * zoom + 'px';
+    figure.style.height = (bare ? 0 : 20) + size.h * zoom + 'px';
+    figure.innerHTML =
+      '<figcaption>' + size.w + '×' + size.h + ' · ' + size.label +
+      ' · insets ' + insets.top + '/' + insets.right + '/' + insets.bottom + '/' + insets.left + '</figcaption>' +
+      '<div class="dev" style="width:' + size.w + 'px;height:' + size.h + 'px;transform:scale(' + zoom + ')">' +
+      '<iframe src="' + src.replace(/"/g, '&quot;') + '" width="' + size.w + '" height="' + size.h + '"></iframe>' +
+      (insets.top ? '<div class="strip top" style="height:' + insets.top + 'px"></div>' : '') +
+      (insets.bottom ? '<div class="strip bottom" style="height:' + insets.bottom + 'px"></div>' : '') +
+      (insets.left ? '<div class="strip side" style="left:0;width:' + insets.left + 'px"></div>' : '') +
+      (insets.right ? '<div class="strip side" style="right:0;width:' + insets.right + 'px"></div>' : '') +
+      (q.get('snackbar') === '1'
+        ? '<div class="snackbar"><span>Swipe inward from either edge to return to the dashboard.</span><b>DON\'T SHOW AGAIN</b><span>✕</span></div>'
+        : '') +
+      '</div>';
+    host.appendChild(figure);
+    var frame = figure.querySelector('iframe');
+    frames.push(frame);
+    frame.addEventListener('load', function () {
+      var doc = frame.contentDocument;
+      if (!doc) return;
+      var style = doc.getElementById('tablet-harness-insets') || doc.createElement('style');
+      style.id = 'tablet-harness-insets';
+      style.textContent =
+        ':root{--safe-top:' + insets.top + 'px !important;--safe-right:' + insets.right +
+        'px !important;--safe-bottom:' + insets.bottom + 'px !important;--safe-left:' + insets.left + 'px !important}';
+      (doc.head || doc.documentElement).appendChild(style);
+    });
+  });
+
+  // `ready` is what a screenshot script waits on: every frame has rendered the shell.
+  var started = Date.now();
+  var poll = setInterval(function () {
+    var ready = frames.every(function (frame) {
+      try {
+        return !!frame.contentDocument.querySelector('[data-testid="app-ready"]');
+      } catch (error) {
+        return false;
+      }
+    });
+    if (ready || Date.now() - started > 15000) {
+      clearInterval(poll);
+      setTimeout(function () {
+        document.title = ready ? 'ready' : 'timeout';
+      }, 600);
+    }
+  }, 200);
+</script>
+</html>
