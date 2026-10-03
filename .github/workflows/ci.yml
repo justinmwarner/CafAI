@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Release zip builds and validates
+        run: npm run release:zip
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - run: npm run e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
+
+  chromium91:
+    # Loads the mock build in a real Chromium 91 (puppeteer 9), the WebView
+    # floor of Decaid's oldest tablets. Informational: old Chromium builds
+    # occasionally fail to launch on new runner images.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build:mock
+      - run: npm ci
+        working-directory: tools/chrome91
+      - run: npm run smoke:chrome91
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chromium91-screenshots
+          path: tools/chrome91/out
+          retention-days: 7

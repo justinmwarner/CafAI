@@ -1,0 +1,58 @@
+import { defineConfig, devices } from '@playwright/test';
+
+// End-to-end tests run against a mock-mode production build (MSW handlers for
+// Decaid's REST/WS API and a scripted Anthropic stream), never real hardware.
+const PORT = 4174;
+
+export default defineConfig({
+  testDir: './e2e',
+  timeout: 90_000,
+  expect: { timeout: 15_000 },
+  fullyParallel: false,
+  workers: 1,
+  retries: process.env.CI ? 1 : 0,
+  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : [['list']],
+  use: {
+    baseURL: `http://127.0.0.1:${PORT}/`,
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+    hasTouch: true,
+  },
+  // CSS viewports of real Decent tablets (Decaid's simulated devices,
+  // docs/verified/01-platform.md section 10): a 1280x800 panel at DPR 1.33 is
+  // 962x602 CSS px, the smallest layout CafAI must fit. 1280x800 is the
+  // research brief's stated minimum at DPR 1; 1920x1200 is the large tablet.
+  projects: [
+    {
+      name: 'tablet-962x602',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 962, height: 602 },
+        deviceScaleFactor: 1.33,
+        hasTouch: true,
+      },
+    },
+    {
+      name: 'tablet-1280x800',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 800 },
+        hasTouch: true,
+      },
+    },
+    {
+      name: 'tablet-1920x1200',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1920, height: 1200 },
+        hasTouch: true,
+      },
+    },
+  ],
+  webServer: {
+    command: `npm run build:mock && npx vite preview --mode mock --outDir dist-mock --port ${PORT} --strictPort --host 127.0.0.1`,
+    url: `http://127.0.0.1:${PORT}/`,
+    reuseExistingServer: !process.env.CI,
+    timeout: 240_000,
+  },
+});

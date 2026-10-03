@@ -1,0 +1,52 @@
+name: Release
+
+# Pushing a version tag (v1.2.3) builds the installable skin zip, with
+# index.html and the skin manifest at the zip root, and attaches it to a
+# GitHub Release that Decaid can install from (Skins -> + -> GitHub Release).
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          pkg="v$(node -p "require('./package.json').version")"
+          if [ "$pkg" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${pkg}"
+            exit 1
+          fi
+
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run release:zip
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --force --tags --depth=1
+          git tag -l --format='%(contents)' "${GITHUB_REF_NAME}" > /tmp/notes.md
+          gh release create "${GITHUB_REF_NAME}" release/*.zip \
+            --title "CafAI ${GITHUB_REF_NAME}" \
+            --notes-file /tmp/notes.md \
+            --generate-notes

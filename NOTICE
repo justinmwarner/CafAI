@@ -1,0 +1,39 @@
+CafAI - a chat-first AI dial-in coach skin for Decaid (Decent Espresso)
+Copyright (C) 2026 CafAI contributors
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License, version 3 only (GPL-3.0-only),
+as published by the Free Software Foundation. CafAI incorporates Crema, which
+is licensed GPLv3 without an "or later" grant, so the combined work is
+GPL-3.0-only. See LICENSE for the full text.
+
+-------------------------------------------------------------------------------
+Third-party code incorporated in CafAI
+-------------------------------------------------------------------------------
+
+Crema (https://github.com/yarneo/crema), GPL-3.0
+  Copyright (C) 2026 Yarden (yarneo). Licensed GPLv3 (GPL-3.0-only).
+  CafAI ports non-UI logic from Crema's web/ folder (commit
+  628cd714fa1a3a5194ea0e4c579d54ae1e38353c): the Decaid gateway client and
+  WebSocket handling, profile handling and required-field fixes, shot curve
+  analysis, provider calls, settings mirroring, safe-area handling, the
+  dev/ipad.html device harness and release tooling, together with the tests
+  that cover them. Each ported file carries a header naming its Crema origin
+  and stating that it was modified for CafAI. See docs/CREMA_PORT_PLAN.md.
+
+MimojaCafe skin for de1app, GPL-3.0
+  Crema began as a fork of the MimojaCafe de1app skin; parts of Crema's web/
+  logic were ported from that Tcl lineage. CafAI credits it accordingly.
+
+Decent Espresso profiles (https://github.com/decentespresso/decaid)
+  The coach templates in src/coach/templates/source/ are bundled Decent
+  profiles copied from Decaid's assets/defaultProfiles. See SOURCES.md in that
+  folder for exact origins and licensing.
+
+-------------------------------------------------------------------------------
+Libraries
+-------------------------------------------------------------------------------
+
+Runtime dependencies are listed in package.json and keep their own licenses
+(MIT unless noted): React, MUI (Material UI and MUI X Chat), Emotion, idb,
+uPlot, Zod, core-js, and the Roboto font via Fontsource (Apache-2.0 / OFL).

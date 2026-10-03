@@ -1,0 +1,12 @@
+{
+  "name": "cafai-chrome91-smoke",
+  "private": true,
+  "description": "Loads the production build in a real Chromium 91 (the floor of Decaid's tablets) via puppeteer 9, records errors and screenshots.",
+  "type": "module",
+  "scripts": {
+    "smoke": "node smoke.mjs"
+  },
+  "dependencies": {
+    "puppeteer": "9.1.1"
+  }
+}
