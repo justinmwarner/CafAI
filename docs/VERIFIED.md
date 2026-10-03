@@ -145,6 +145,13 @@ polyfills) loaded in a real `HeadlessChrome/91.0.4469.0` with zero errors,
 correct layout, and a working x-chat send/stream/reply round trip.
 Re-run with `npm run smoke:chrome91` (needs `npm ci` in `tools/chrome91`).
 
+The finished app was then verified the same way: `npm run smoke:chrome91`
+loads the mock-mode build with zero errors, and `npm run smoke:chrome91:loop`
+drives the whole coach loop (settings, new bag, templates, v1, scripted shot,
+taste chip, confirmed v2) in Chromium 91 with zero page or console errors.
+One incompatibility was found and fixed on the way: MSW's mock worker (test
+infrastructure only) called `crypto.randomUUID`, which Chromium 91 lacks.
+
 ## 6. Where RESEARCH.md was wrong (repo wins)
 
 1. Required profile fields are title, steps, `tank_temperature`,

@@ -128,6 +128,66 @@ evidence lives. "Repo wins" means a cloned source contradicted
   as returned (thinking blocks and signatures included) and replayed
   unchanged; current Claude models reject edited history.
 
+- **D27. Tool inputs that are not valid JSON are stored as `{}`.** The API
+  requires an object when an assistant turn is replayed, so storing the raw
+  string would poison every later request of an append-only conversation. The
+  raw text travels beside the block and the model gets an `INVALID_JSON` error
+  result instead.
+- **D28. After a refusal fallback** (Opus 5 / Fable 5.1 only), blocks before
+  the last `fallback` block are dropped except text, as the API requires when
+  such a turn is echoed back; every other turn is replayed byte-for-byte.
+- **D29. No OpenAI provider tonight.** Crema's OpenAI path is a single
+  non-streaming call without tools; a streaming tool-calling port would be new,
+  unverifiable code. The `LlmProvider` interface leaves the seam.
+- **D30. Effort `medium` by default.** Opus 5.5's own default; a chat coach
+  values latency, and the levers are bounded anyway.
+
+## Coach engine
+
+- **D31. One conversation per bag, append-only.** The engine never edits or
+  drops earlier turns; pending choices are rebuilt from the stored transcript
+  after a reload (auto tools re-run, UI tools re-shown).
+- **D32. Invalid proposals go back to the model, never to the user.** Schema
+  and bounds failures are answered as `is_error` tool results inside the same
+  run so the model can correct itself; nothing out of bounds is ever clamped
+  or shown.
+- **D33. Shots come from Decaid's record, not the WebSocket.** When
+  `shotState` says a shot finished, the engine fetches `/shots/{id}` (retrying
+  while Decaid saves it) and summarizes that; WebSocket frames only drive the
+  live graph.
+- **D34. "Lock it in" is a change too.** `variable: "none"` shows a card and
+  is confirmed like any other proposal; its iteration outcome is `kept`.
+- **D35. v1's yield is the template's `target_weight`.** Blooming 60 g,
+  D-Flow 50 g, Londonium 42 g, written to `context.targetYield` so the shot
+  stops there. Changing it is a lever like any other.
+
+## Storage
+
+- **D36. The KV backup is paged and guarded.** Lists over 256 KiB split into
+  `bags.1`, `versions.1`... so no value nears Decaid's 1 MiB limit; a store
+  that started empty merges the backup before its first push and never pushes
+  while Decaid cannot be read, so one failed read cannot wipe the backup.
+  Restored summaries come back with an empty series (the 1 Hz curves are not
+  mirrored; the coach re-reads them from Decaid when needed).
+- **D37. A pasted key is redacted.** If the API key appears in any mirrored or
+  exported text (a note, a chat message), it is replaced with `[redacted]`.
+
+## Build and verification
+
+- **D38. x-chat's lazy `remend` import is aliased to its own stub.** x-chat
+  repairs half-streamed markdown with a lazily imported package; CafAI renders
+  model text with its own safe renderer, so `#remend` points at x-chat's
+  "unavailable" stub and rolldown's `codeSplitting: false` keeps the bundle to
+  one entry chunk (Decaid updates skin files in place under a running page).
+- **D39. Mock builds polyfill `crypto.randomUUID`.** MSW's service worker
+  names requests with it and Chromium 91 lacks it, so without the polyfill
+  every mocked call fell through to the network in the old engine. Only the
+  mock worker and mock page runtime get it; shipped code never calls it
+  (ESLint bans it).
+- **D40. Chromium 91 is verified by running, not by reading.** The full coach
+  loop runs in a real HeadlessChrome 91.0.4469.0 (`tools/chrome91/loop.mjs`)
+  with zero page or console errors, and CI repeats it.
+
 ## Licensing
 
 - **D26. CafAI is GPL-3.0-only.** Crema says "GPLv3" without an "or later"
