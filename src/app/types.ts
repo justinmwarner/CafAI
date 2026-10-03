@@ -129,4 +129,6 @@ export interface CoachController {
   /** Re-send the last failed request. */
   retry(): Promise<void>;
   dismissError(): void;
+  /** Re-read settings and the stored key (call after Settings saves or forgets the key). */
+  refresh(): Promise<void>;
 }

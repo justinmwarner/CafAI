@@ -171,7 +171,13 @@ export const TOOL_INPUTS = {
  * Format: `${marker}\n${JSON payload}`.
  */
 export const EVENT = {
+  /** App context attached to the first user turn of a bag (grinder, scale). */
+  context: '[context]',
   shotCompleted: '[event:shot_completed]',
   undo: '[event:undo]',
   bagResumed: '[event:bag_resumed]',
 } as const;
+
+/** Template ids, fixed for the conversation protocol (docs/briefs/ENGINE_PROTOCOL.md). */
+export const TEMPLATE_IDS = ['blooming-espresso', 'd-flow', 'londonium'] as const;
+export type TemplateId = (typeof TEMPLATE_IDS)[number];
