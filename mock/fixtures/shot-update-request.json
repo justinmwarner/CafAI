@@ -1,0 +1,23 @@
+{
+  "annotations": {
+    "enjoyment": 7.5,
+    "espressoNotes": "Sweet and juicy, slightly sharp finish. Try 1 step finer next.",
+    "extras": {
+      "cafai": {
+        "schema": 1,
+        "beanKey": "square-mile/guji-hambela",
+        "profileId": "profile:fbff9b37ed390c6a8110",
+        "taste": {
+          "balance": "slightly sour",
+          "body": "medium",
+          "finish": "short"
+        },
+        "suggestion": {
+          "lever": "grind",
+          "direction": "finer",
+          "amount": "1 step"
+        }
+      }
+    }
+  }
+}

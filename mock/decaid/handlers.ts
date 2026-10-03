@@ -1,0 +1,300 @@
+/**
+ * MSW REST handlers for the mock Decaid.
+ *
+ * Every pattern is `*:8080/api/v1/...`: any host, but only Decaid's port, so
+ * the handlers never catch Anthropic or the app's own origin. Status codes
+ * and bodies follow the gateway source (200 `null` for state changes and
+ * tare, 500 `{error:"DeviceNotConnectedException: ..."}` without a machine,
+ * 400 `{error, message}` for bad input, KV misses as 200 `null`, ETags with
+ * 304 on the conditional routes). Unknown routes on :8080 answer shelf's
+ * plain-text 404 (see `decaidFallbackHandlers`).
+ */
+import { http, HttpResponse, type HttpHandler } from 'msw';
+import type { MachineStateName } from '../../src/api/types.ts';
+import { fixtures } from '../fixtures/index.ts';
+import { MockHttpError } from './errors.ts';
+import { sha256Hex } from './sha256.ts';
+import type { ShotPlayer } from './shotPlayer.ts';
+import type { MockDecaid } from './state.ts';
+
+/** Any host, Decaid's port. */
+export const DECAID_ORIGIN_PATTERN = '*:8080';
+
+/** dev/machine.dart MachineState values; anything else is a 500 from byName. */
+export const MACHINE_STATES: readonly MachineStateName[] = [
+  'booting',
+  'busy',
+  'idle',
+  'schedIdle',
+  'sleeping',
+  'heating',
+  'preheating',
+  'espresso',
+  'hotWater',
+  'flush',
+  'steam',
+  'steamRinse',
+  'skipStep',
+  'cleaning',
+  'descaling',
+  'calibration',
+  'selfTest',
+  'airPurge',
+  'needsWater',
+  'error',
+  'fwUpgrade',
+];
+
+type Method = 'get' | 'post' | 'put' | 'delete';
+
+interface RouteContext {
+  request: Request;
+  url: URL;
+  params: Record<string, string>;
+  /** The raw request body text ('' when there is none). */
+  bodyText: string;
+}
+
+type Resolver = (context: RouteContext) => Response | Promise<Response>;
+
+function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
+  return HttpResponse.json(body as never, { status, headers });
+}
+
+function plain(text: string, status: number): Response {
+  return new HttpResponse(text, { status, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+}
+
+function errorResponse(error: MockHttpError): Response {
+  if (error.body === null) return plain(error.plainText ?? '', error.status);
+  return json(error.body, error.status, error.headers);
+}
+
+/** jsonOkConditional: a strong ETag over the body; If-None-Match (or *) gives 304. */
+function conditional(request: Request, body: unknown): Response {
+  const text = JSON.stringify(body);
+  const etag = `"${sha256Hex(text).slice(0, 16)}"`;
+  const ifNoneMatch = request.headers.get('If-None-Match')?.trim();
+  if (ifNoneMatch && (ifNoneMatch === '*' || ifNoneMatch === etag)) {
+    return new HttpResponse(null, { status: 304, headers: { ETag: etag } });
+  }
+  return new HttpResponse(text, { status: 200, headers: { 'Content-Type': 'application/json', ETag: etag } });
+}
+
+function parseBody(text: string): unknown {
+  return text.trim() ? (JSON.parse(text) as unknown) : null;
+}
+
+/** Decaid's FormatException text for a body jsonDecode cannot read. */
+function invalidJson(text: string): string {
+  return `FormatException: Unexpected character (at character 1)\n${text.slice(0, 40)}`;
+}
+
+/** The raw path segments after /api/v1/store (Decaid never decodes them). */
+function rawStoreSegments(url: URL): string[] {
+  return url.pathname.split('/').slice(4);
+}
+
+export function decaidHttpHandlers(state: MockDecaid, player: ShotPlayer): HttpHandler[] {
+  function route(method: Method, path: string, resolve: Resolver): HttpHandler {
+    return http[method](`${DECAID_ORIGIN_PATTERN}/api/v1${path}`, async ({ request, params }) => {
+      const url = new URL(request.url);
+      const bodyText = method === 'post' || method === 'put' ? await request.text() : '';
+      let loggedBody: unknown;
+      try {
+        loggedBody = parseBody(bodyText);
+      } catch {
+        loggedBody = bodyText;
+      }
+      state.logRequest({ method: request.method, path: url.pathname, query: url.search, body: loggedBody });
+
+      const fault = state.takeFault(request.method, url.pathname);
+      if (fault) {
+        if (fault.plainText !== undefined) return plain(fault.plainText, fault.status);
+        return json(fault.body ?? null, fault.status, fault.headers ?? {});
+      }
+
+      try {
+        return await resolve({ request, url, params: params as Record<string, string>, bodyText });
+      } catch (error) {
+        if (error instanceof MockHttpError) return errorResponse(error);
+        return json({ error: 'Internal server error', message: String(error) }, 500);
+      }
+    });
+  }
+
+  function requireMachine(): void {
+    if (!state.isMachineConnected()) throw new MockHttpError(500, fixtures.errorMachineNotConnected() as Record<string, unknown>);
+  }
+
+  function shotActive(): boolean {
+    const current = state.getShotState().state;
+    return current !== 'idle' && current !== 'finished';
+  }
+
+  return [
+    // ---- info and settings ---------------------------------------------------------
+    route('get', '/info', () => json(fixtures.buildInfo())),
+    route('get', '/settings', () => json(state.getSettings())),
+
+    // ---- machine -----------------------------------------------------------------------
+    route('get', '/machine/info', () => json(state.getMachineInfo())),
+    route('get', '/machine/state', () => {
+      requireMachine();
+      return json(state.getMachineSnapshot());
+    }),
+    route('put', '/machine/state/:newState', ({ params }) => {
+      requireMachine();
+      const name = params.newState ?? '';
+      if (!(MACHINE_STATES as readonly string[]).includes(name)) {
+        throw new MockHttpError(500, {
+          error: `Invalid argument (name): No enum value with that name: "${name}"`,
+          st: '#0      EnumByName.byName (dart:core/enum.dart)\n#1      De1Handler._requestStateHandler',
+        });
+      }
+      const settings = state.getSettings();
+      if (
+        name === 'espresso' &&
+        settings.blockOnNoScale === true &&
+        !state.isScaleConnected() &&
+        state.getWorkflow().profile.beverage_type !== 'cleaning'
+      ) {
+        return json(fixtures.errorBlockNoScale(), 400);
+      }
+      state.machineCommands.push(name);
+      player.command(name);
+      return json(null);
+    }),
+    route('get', '/machine/capabilities', () => json({ capabilities: state.getCapabilities() })),
+    route('post', '/machine/heartbeat', () => json(state.heartbeat())),
+
+    // ---- scale ---------------------------------------------------------------------------
+    route('get', '/scale/info', () => {
+      if (!state.isScaleConnected()) return json({ error: 'No scale connected' }, 503);
+      return json({ batteryLevel: state.getScaleSnapshot()?.battery ?? 87 });
+    }),
+    route('put', '/scale/tare', () => {
+      const settings = state.getSettings();
+      if (settings.blockTareDuringShot === true && shotActive() && settings.gatewayMode !== 'full') {
+        return json({ details: 'Tare blocked: a shot is in progress', type: 'block_tare_during_shot' }, 400);
+      }
+      if (!state.isScaleConnected()) return json({ error: 'DeviceNotConnectedException: scale not connected' }, 500);
+      player.tare();
+      return json(null);
+    }),
+
+    // ---- devices -------------------------------------------------------------------------
+    route('get', '/devices', () => json(state.getDevices())),
+    route('get', '/devices/scan', ({ url }) => json(state.scanDevices(url.searchParams.get('quick') === 'true'))),
+    route('put', '/devices/connect', ({ bodyText }) => {
+      let body: unknown;
+      try {
+        body = parseBody(bodyText);
+      } catch {
+        return json({ error: 'Invalid JSON' }, 400);
+      }
+      return json(state.connectDevice(body));
+    }),
+
+    // ---- workflow -------------------------------------------------------------------------
+    route('get', '/workflow', () => json(state.getWorkflow())),
+    route('put', '/workflow', ({ bodyText }) => {
+      let body: unknown;
+      try {
+        body = parseBody(bodyText);
+      } catch {
+        return json({ error: 'Invalid request', message: invalidJson(bodyText) }, 400);
+      }
+      return json(state.updateWorkflow(body));
+    }),
+
+    // ---- profiles (specific routes before :id) ---------------------------------------------
+    route('get', '/profiles', ({ request, url }) =>
+      conditional(
+        request,
+        state.listProfiles({
+          visibility: url.searchParams.get('visibility'),
+          includeHidden: url.searchParams.get('includeHidden'),
+          parentId: url.searchParams.get('parentId'),
+        }),
+      ),
+    ),
+    route('get', '/profiles/defaults', () => json(state.defaultProfiles())),
+    route('post', '/profiles/restore/:filename', ({ params }) => json(state.restoreDefaultProfile(params.filename ?? ''))),
+    route('get', '/profiles/:id/lineage', ({ params }) => json(state.profileLineage(params.id ?? ''))),
+    route('put', '/profiles/:id/visibility', ({ params, bodyText }) => {
+      let body: unknown;
+      try {
+        body = parseBody(bodyText);
+      } catch {
+        return json({ error: 'Internal server error', message: invalidJson(bodyText) }, 500);
+      }
+      return json(state.setProfileVisibility(params.id ?? '', body));
+    }),
+    route('get', '/profiles/:id', ({ params }) => json(state.getProfile(params.id ?? ''))),
+    route('post', '/profiles', ({ bodyText }) => {
+      let body: unknown;
+      try {
+        body = parseBody(bodyText);
+      } catch {
+        return json({ error: 'Invalid request', message: invalidJson(bodyText) }, 400);
+      }
+      return json(state.createProfile(body), 201);
+    }),
+    route('put', '/profiles/:id', ({ params, bodyText }) => {
+      let body: unknown;
+      try {
+        body = parseBody(bodyText);
+      } catch {
+        return json({ error: 'Invalid request', message: invalidJson(bodyText) }, 400);
+      }
+      return json(state.updateProfile(params.id ?? '', body));
+    }),
+    route('delete', '/profiles/:id', ({ params }) => json(state.deleteProfile(params.id ?? ''))),
+
+    // ---- shots (specific routes before :id) ------------------------------------------------
+    route('get', '/shots', ({ request, url }) => {
+      const page = state.listShots(url.searchParams);
+      return Array.isArray(page) ? json(page) : conditional(request, page);
+    }),
+    route('get', '/shots/latest', () => json(state.getLatestShot())),
+    route('get', '/shots/ids', () => json(state.getShotIds())),
+    route('get', '/shots/:id', ({ params }) => json(state.getShot(params.id ?? ''))),
+    route('put', '/shots/:id', ({ params, bodyText }) => {
+      let body: unknown;
+      try {
+        body = parseBody(bodyText);
+      } catch {
+        return json({ error: invalidJson(bodyText) }, 500);
+      }
+      return json(state.updateShot(params.id ?? '', body));
+    }),
+    route('delete', '/shots/:id', ({ params }) => json(state.deleteShot(params.id ?? ''))),
+
+    // ---- key-value store (raw namespace and key) -------------------------------------------
+    route('get', '/store/:namespace', ({ request, url }) => {
+      const [namespace = ''] = rawStoreSegments(url);
+      if (url.searchParams.get('full') === '1') return conditional(request, state.kvAll(namespace));
+      return json(state.kvKeys(namespace));
+    }),
+    route('get', '/store/:namespace/:key', ({ url }) => {
+      const [namespace = '', key = ''] = rawStoreSegments(url);
+      return json(state.kvGet(namespace, key));
+    }),
+    route('post', '/store/:namespace/:key', ({ url, bodyText }) => {
+      const [namespace = '', key = ''] = rawStoreSegments(url);
+      state.kvSet(namespace, key, bodyText);
+      return json({});
+    }),
+    route('delete', '/store/:namespace/:key', ({ url }) => {
+      const [namespace = '', key = ''] = rawStoreSegments(url);
+      state.kvDelete(namespace, key);
+      return json({});
+    }),
+  ];
+}
+
+/** shelf's plain-text 404 for any other route on Decaid's port. Register last. */
+export function decaidFallbackHandlers(): HttpHandler[] {
+  return [http.all(`${DECAID_ORIGIN_PATTERN}/api/*`, () => plain('Route not found', 404))];
+}

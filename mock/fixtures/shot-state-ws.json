@@ -1,0 +1,21 @@
+{
+  "event": "decision",
+  "timestamp": "2026-10-03T08:15:37.956113",
+  "shotId": "3f6b0a9e-8c1d-4e52-9b7a-2d4f61c08e17",
+  "state": "pouring",
+  "machineState": "espresso",
+  "machineSubstate": "pouring",
+  "profileFrame": 5,
+  "scaleConnected": true,
+  "scaleLost": false,
+  "machineHasAutonomousSAW": false,
+  "decision": {
+    "kind": "stop",
+    "reason": "targetWeight",
+    "details": "Target weight 36.0g reached (projected: 36.12). Stopping shot.",
+    "data": {
+      "targetYield": 36.0,
+      "projectedWeight": 36.12
+    }
+  }
+}
