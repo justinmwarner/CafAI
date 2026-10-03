@@ -28,6 +28,7 @@ export default defineConfig(
     ignores: [
       'dist/**',
       'dist-mock/**',
+      '.verify/**',
       'coverage/**',
       'playwright-report/**',
       'test-results/**',
