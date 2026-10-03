@@ -362,12 +362,15 @@ describe('pull', () => {
     expect(await makeMirror(kv, memorySource().source).pull()).toBeNull();
   });
 
-  it('rebuilds an export from the mirrored keys; the series stay absent', async () => {
+  it('rebuilds an export from the mirrored keys; series come back empty', async () => {
     const kv = createMemoryKv();
     const { source } = memorySource(fullSnapshot());
     const mirror = makeMirror(kv, source);
     await mirror.pushNow();
-    const { series: _series, ...summary } = makeIteration().summary!;
+    const summary = {
+      ...makeIteration().summary!,
+      series: { tS: [], pressure: [], flow: [], weight: [], weightFlow: [], temperature: [], targetPressure: [], targetFlow: [] },
+    };
     expect(await makeMirror(kv, memorySource().source).pull()).toEqual({
       format: 'cafai-export',
       schemaVersion: 1,
@@ -425,5 +428,44 @@ describe('conversationKey', () => {
     const keys = ids.map(conversationKey);
     expect(new Set(keys).size).toBe(ids.length);
     for (const key of keys) expect(isValidKvKey(key)).toBe(true);
+  });
+});
+
+describe('restored summaries', () => {
+  it('come back with an empty series instead of none', async () => {
+    const { exportFromMirror } = await import('./mirror.ts');
+    const restored = exportFromMirror(
+      {
+        meta: { schemaVersion: 1, appVersion: '0.1.0', updatedAt: '2026-10-03T08:00:00.000Z', pages: { bags: 0, versions: 0, iterations: 1 }, skipped: [] },
+        iterations: [
+          {
+            id: 'iter-1',
+            bagId: 'bag-1',
+            bagName: 'Kiambu',
+            profileVersionId: null,
+            profileVersion: null,
+            shotId: 'shot-1',
+            summary: { shotId: 'shot-1', timestamp: 't', durationS: 30, channelingFlags: [], phases: [] },
+            feedback: null,
+            proposal: null,
+            change: null,
+            outcome: 'pending',
+            createdAt: '2026-10-03T08:00:00.000Z',
+            updatedAt: '2026-10-03T08:00:00.000Z',
+          },
+        ],
+      },
+      { appVersion: '0.1.0', defaultModel: 'claude-opus-5-5', now: () => new Date(0) },
+    );
+    expect(restored?.iterations[0]?.summary?.series).toEqual({
+      tS: [],
+      pressure: [],
+      flow: [],
+      weight: [],
+      weightFlow: [],
+      temperature: [],
+      targetPressure: [],
+      targetFlow: [],
+    });
   });
 });

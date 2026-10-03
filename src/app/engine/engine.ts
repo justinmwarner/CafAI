@@ -282,7 +282,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         record = await api.getShot(iteration.shotId);
         shotCache.set(record.id, record);
       }
-      return { record, summary: iteration.summary ?? coach.summarizeShot(record) };
+      // Summaries restored from Decaid's KV backup carry an empty series.
+      const stored = iteration.summary;
+      return { record, summary: stored && stored.series.tS.length > 0 ? stored : coach.summarizeShot(record) };
     },
   };
 

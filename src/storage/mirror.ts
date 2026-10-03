@@ -126,6 +126,17 @@ function withoutSeries(record: IterationRecord): unknown {
   return { ...record, summary: rest };
 }
 
+/**
+ * A restored summary gets an empty series rather than none, so every reader
+ * can rely on ShotSummary's shape; the coach re-reads the curves from
+ * Decaid's shot record when it needs them.
+ */
+function withEmptySeries(record: IterationRecord): IterationRecord {
+  if (!record.summary || isRecord((record.summary as { series?: unknown }).series)) return record;
+  const series = { tS: [], pressure: [], flow: [], weight: [], weightFlow: [], temperature: [], targetPressure: [], targetFlow: [] };
+  return { ...record, summary: { ...record.summary, series } };
+}
+
 /** One conversation per bag; should there ever be two, keep the newest. */
 function latestPerBag(conversations: ConversationRecord[]): ConversationRecord[] {
   const newer = (a: ConversationRecord, b: ConversationRecord) =>
@@ -217,7 +228,7 @@ function collectList<T>(data: Record<string, unknown>, name: ListKey, meta: Reco
 /**
  * Rebuild an export from the namespace's `?full=1` map, or null when nothing
  * of CafAI's is there. Records that no longer validate are dropped one by one
- * rather than failing the whole restore; series stay absent.
+ * rather than failing the whole restore; summaries come back with an empty series.
  */
 export function exportFromMirror(
   data: Record<string, unknown>,
@@ -227,7 +238,7 @@ export function exportFromMirror(
   const meta = isRecord(data['meta']) ? data['meta'] : null;
   const bags = collectList(data, 'bags', meta, (value) => BagSchema.safeParse(value));
   const versions = collectList(data, 'versions', meta, (value) => VersionSchema.safeParse(value));
-  const iterations = collectList(data, 'iterations', meta, (value) => IterationSchema.safeParse(value));
+  const iterations = collectList(data, 'iterations', meta, (value) => IterationSchema.safeParse(value)).map(withEmptySeries);
   const bagIds = new Set(bags.map((bag) => bag.id));
   const conversations: ConversationRecord[] = [];
   for (const key of Object.keys(data).filter((candidate) => candidate.startsWith('conv.')).sort()) {
