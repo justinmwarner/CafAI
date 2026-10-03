@@ -1,0 +1,117 @@
+// The whole coach loop in a real Chromium 91 (puppeteer 9), against the
+// mock-mode build: settings -> new bag -> templates -> v1 -> scripted shot ->
+// taste chip -> confirmed v2. Fails on any page error or console error.
+//
+// usage: npm run build:mock && node tools/chrome91/loop.mjs
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import puppeteer from 'puppeteer';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const dist = path.resolve(here, '../../dist-mock');
+const outDir = path.join(here, 'out');
+fs.mkdirSync(outDir, { recursive: true });
+
+const types = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
+  '.map': 'application/json',
+};
+const server = http.createServer((req, res) => {
+  const pathname = new URL(req.url, 'http://x').pathname;
+  const file = path.join(dist, pathname === '/' ? 'index.html' : decodeURIComponent(pathname));
+  if (!file.startsWith(dist) || !fs.existsSync(file)) {
+    res.writeHead(404);
+    res.end();
+    return;
+  }
+  res.writeHead(200, { 'content-type': types[path.extname(file)] ?? 'application/octet-stream' });
+  fs.createReadStream(file).pipe(res);
+});
+await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
+const version = await browser.version();
+const page = await browser.newPage();
+await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1.125, hasTouch: true });
+const problems = [];
+page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
+page.on('console', (m) => {
+  if (m.type() === 'error') problems.push(`console.error: ${m.text()}`);
+});
+
+const tid = (id) => `[data-testid="${id}"]`;
+const steps = [];
+async function step(name, fn) {
+  const started = Date.now();
+  await fn();
+  steps.push(`${name} (${Date.now() - started} ms)`);
+}
+async function fill(testId, text) {
+  await page.waitForSelector(tid(testId), { timeout: 15000 });
+  const handle = await page.$(tid(testId));
+  const tag = await handle.evaluate((el) => el.tagName.toLowerCase());
+  const input = tag === 'input' || tag === 'textarea' ? handle : await handle.$('input, textarea');
+  await input.click({ clickCount: 3 });
+  await input.type(text);
+}
+async function tap(testId, timeout = 15000) {
+  await page.waitForSelector(`${tid(testId)}:not([disabled])`, { timeout, visible: true });
+  await page.click(tid(testId));
+}
+async function waitText(testId, text, timeout = 30000) {
+  await page.waitForFunction(
+    (sel, expected) => document.querySelector(sel)?.textContent?.includes(expected),
+    { timeout },
+    tid(testId),
+    text,
+  );
+}
+
+let failed = null;
+try {
+  await step('open', async () => {
+    await page.goto(`http://127.0.0.1:${server.address().port}/?mockSpeed=25#/settings`, { waitUntil: 'load' });
+    await page.waitForSelector(tid('app-ready'), { timeout: 20000 });
+  });
+  await step('save API key', async () => {
+    await fill('api-key-input', 'sk-ant-chrome91');
+    await tap('api-key-save');
+  });
+  await step('new bag', async () => {
+    await tap('nav-coach');
+    await tap('new-bag');
+  });
+  await step('describe the bag', async () => {
+    await fill('composer-input', 'Kiambu AA, light roast, washed, blackcurrant');
+    await tap('composer-send');
+  });
+  await step('pick a template', async () => tap('template-pick-blooming-espresso', 30000));
+  await step('v1 loaded', async () => waitText('active-version', 'v1'));
+  await step('pull the scripted shot', async () => {
+    await tap('espresso-button');
+    await page.waitForSelector(tid('shot-card'), { timeout: 60000 });
+  });
+  await step('tap a taste chip', async () => tap('option-sour-sharp', 30000));
+  await step('confirm the change', async () => {
+    await page.waitForSelector(tid('diff-card'), { timeout: 30000 });
+    await tap('diff-confirm');
+  });
+  await step('v2 loaded', async () => waitText('active-version', 'v2'));
+} catch (error) {
+  failed = error.message;
+}
+
+await page.screenshot({ path: path.join(outDir, 'loop.png') });
+await browser.close();
+server.close();
+
+const ok = !failed && problems.length === 0;
+console.log(JSON.stringify({ browser: version, ok, steps, failed, problems }, null, 2));
+process.exit(ok ? 0 : 1);

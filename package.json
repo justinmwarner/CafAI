@@ -19,9 +19,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "smoke:chrome91": "node tools/chrome91/smoke.mjs --dist ../../dist-mock --name app",
+    "smoke:chrome91": "node tools/chrome91/smoke.mjs --dist ../../dist-mock --wait \"document.querySelector('[data-testid=app-ready]')\" --hash \"?mockSpeed=25#/\" --name app",
     "release:zip": "node scripts/release-zip.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run test && npm run build && npm run release:zip && npm run e2e"
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run build && npm run release:zip && npm run e2e",
+    "smoke:chrome91:loop": "node tools/chrome91/loop.mjs"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

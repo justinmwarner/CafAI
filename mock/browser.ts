@@ -49,7 +49,24 @@ function urlOptions(search: string): CreateDecaidMockOptions {
   return options;
 }
 
+/**
+ * Chromium 91 (the floor of Decent's tablets) has no crypto.randomUUID, which
+ * MSW's page runtime may call. Mock builds only; the app itself uses newId().
+ */
+function polyfillRandomUuid(): void {
+  const c = globalThis.crypto as Crypto & { randomUUID?: () => string };
+  if (!c || typeof c.randomUUID === 'function') return;
+  c.randomUUID = () => {
+    const b = c.getRandomValues(new Uint8Array(16));
+    b[6] = (b[6]! & 0x0f) | 0x40;
+    b[8] = (b[8]! & 0x3f) | 0x80;
+    const h = Array.from(b, (x) => (x + 0x100).toString(16).slice(1)).join('');
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}` as ReturnType<Crypto['randomUUID']>;
+  };
+}
+
 export async function startMockWorker(options: StartMockWorkerOptions = {}): Promise<CafaiMockHandle & { worker: SetupWorker }> {
+  polyfillRandomUuid();
   const fromUrl = urlOptions(window.location.search);
   const mock = createDecaidMock({ ...fromUrl, ...options.mock, speed: options.speed ?? options.mock?.speed ?? fromUrl.speed ?? 1 });
   const worker = setupWorker(...mock.handlers, ...(options.extraHandlers ?? []), ...mock.fallback);

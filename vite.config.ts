@@ -11,9 +11,23 @@ const require = createRequire(import.meta.url);
 // Mock mode only: serve (dev) and emit (build) MSW's service worker script so
 // the app can run against mock/ handlers. Production builds never contain it,
 // because Decaid skins must not register a service worker.
+// MSW's worker names each request with crypto.randomUUID(), which Chromium 91
+// lacks; without this its fetch handler throws and every mocked call falls
+// through to the network in the Chromium 91 smoke test.
+const RANDOM_UUID_POLYFILL = `if (self.crypto && typeof self.crypto.randomUUID !== 'function') {
+  self.crypto.randomUUID = function () {
+    var b = self.crypto.getRandomValues(new Uint8Array(16));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    var h = Array.prototype.map.call(b, function (x) { return (x + 0x100).toString(16).slice(1); }).join('');
+    return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20);
+  };
+}
+`;
+
 function mswWorkerInMockMode(mode: string): Plugin {
   const fileName = 'mockServiceWorker.js';
-  const source = () => readFileSync(require.resolve('msw/mockServiceWorker.js'), 'utf8');
+  const source = () => RANDOM_UUID_POLYFILL + readFileSync(require.resolve('msw/mockServiceWorker.js'), 'utf8');
   return {
     name: 'cafai-msw-worker',
     apply: () => mode === 'mock',
