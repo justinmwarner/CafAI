@@ -132,12 +132,12 @@ describe('ChatSurface', () => {
     const { handlers, rerender } = renderSurface({ messages, canUndo: true });
     const cards = screen.getAllByTestId(TID.diffCard);
     expect(cards).toHaveLength(2);
-    expect(within(cards[0]!).queryByTestId(TID.undoButton)).toBeNull();
-    await userEvent.click(within(cards[1]!).getByTestId(TID.undoButton));
+    expect(within(cards[0]!).queryByTestId(TID.diffUndo)).toBeNull();
+    await userEvent.click(within(cards[1]!).getByTestId(TID.diffUndo));
     expect(handlers.onUndo).toHaveBeenCalledTimes(1);
 
     rerender({ messages, canUndo: false });
-    expect(screen.queryByTestId(TID.undoButton)).toBeNull();
+    expect(screen.queryByTestId(TID.diffUndo)).toBeNull();
   });
 
   it('never turns model text into HTML', () => {

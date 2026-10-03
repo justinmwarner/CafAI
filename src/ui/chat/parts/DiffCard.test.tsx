@@ -74,14 +74,14 @@ describe('DiffCard', () => {
   it('offers Undo only when asked to', async () => {
     const handlers = setup(part({ status: 'applied' }), { showUndo: true });
     expect(screen.getByText('Loaded as Kiambu AA v3')).toBeInTheDocument();
-    await userEvent.click(screen.getByTestId(TID.undoButton));
+    await userEvent.click(screen.getByTestId(TID.diffUndo));
     expect(handlers.onUndo).toHaveBeenCalledTimes(1);
   });
 
   it('hides Undo on an applied card that is not the latest', () => {
     setup(part({ status: 'applied' }), { showUndo: false });
     expect(screen.getByText('Loaded as Kiambu AA v3')).toBeInTheDocument();
-    expect(screen.queryByTestId(TID.undoButton)).toBeNull();
+    expect(screen.queryByTestId(TID.diffUndo)).toBeNull();
   });
 
   it.each<[DiffStatus, string | RegExp]>([

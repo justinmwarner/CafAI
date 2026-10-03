@@ -177,7 +177,13 @@ function ApiKeySection() {
           <Button onClick={() => setConfirmForget(false)} sx={{ minHeight: 48 }}>
             Keep it
           </Button>
-          <Button color="error" variant="contained" onClick={() => void forget()} sx={{ minHeight: 48 }}>
+          <Button
+            color="error"
+            variant="contained"
+            data-testid={TID.forgetKeyConfirm}
+            onClick={() => void forget()}
+            sx={{ minHeight: 48 }}
+          >
             Forget key
           </Button>
         </DialogActions>

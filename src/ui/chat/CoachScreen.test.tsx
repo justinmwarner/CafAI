@@ -113,6 +113,6 @@ describe('CoachScreen', () => {
     renderCoach({ ...coachStateFor('applied'), busy: true });
     expect(screen.getByTestId(TID.newBag)).toBeDisabled();
     expect(screen.getByTestId(TID.bagPicker)).toBeDisabled();
-    for (const undo of screen.getAllByTestId(TID.undoButton)) expect(undo).toBeDisabled();
+    for (const undo of [...screen.getAllByTestId(TID.undoButton), ...screen.queryAllByTestId(TID.diffUndo)]) expect(undo).toBeDisabled();
   });
 });

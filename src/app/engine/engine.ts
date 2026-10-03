@@ -1056,6 +1056,22 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     refresh: () =>
       enqueue(async () => {
         await refreshFromStorage();
+        // After an import the bag list (and the active bag's records) may differ.
+        const bags = (await storage.bags.list()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+        state = { ...state, bags };
+        const current = session;
+        if (current) {
+          const stored = bags.find((b) => b.id === current.bag.id);
+          if (!stored) {
+            session = null;
+            state = { ...state, messages: [] };
+          } else if (stored.updatedAt !== current.bag.updatedAt) {
+            await openSession(stored);
+          }
+        } else {
+          const active = bags.find((b) => b.id === settings.activeBagId);
+          if (active) await openSession(active);
+        }
         if (state.hasApiKey && state.error?.startsWith('Add your Anthropic API key')) setError(null);
         emit();
       }),

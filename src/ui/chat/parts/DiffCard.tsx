@@ -78,7 +78,7 @@ function StatusLine({ part, showUndo, disabled, onUndo }: Pick<DiffCardProps, 'p
             <Button
               variant="outlined"
               startIcon={<UndoIcon />}
-              data-testid={TID.undoButton}
+              data-testid={TID.diffUndo}
               disabled={disabled}
               onClick={onUndo}
               sx={{ minHeight: 48 }}

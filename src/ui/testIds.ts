@@ -53,6 +53,8 @@ export const TID = {
   diffConfirm: 'diff-confirm',
   diffCancel: 'diff-cancel',
   undoButton: 'undo-button',
+  /** Undo on the latest applied diff card (the header has undoButton). */
+  diffUndo: 'diff-undo',
   shotCard: 'shot-card',
   errorBanner: 'error-banner',
   retryButton: 'retry-button',
@@ -68,6 +70,7 @@ export const TID = {
   apiKeyInput: 'api-key-input',
   apiKeySave: 'api-key-save',
   forgetKey: 'forget-key',
+  forgetKeyConfirm: 'forget-key-confirm',
   modelSelect: 'model-select',
   grinderName: 'grinder-name',
   grinderSetting: 'grinder-setting',

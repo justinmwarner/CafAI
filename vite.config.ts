@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -38,6 +39,18 @@ function mswWorkerInMockMode(mode: string): Plugin {
 // (verified in real Chromium 91 by tools/chrome91/smoke.mjs).
 export default defineConfig(({ mode }) => ({
   base: './',
+  resolve: {
+    alias: [
+      // @mui/x-chat lazily imports `remend` to repair half-streamed markdown.
+      // CafAI renders model text with its own safe renderer, so point the
+      // import at x-chat's own "unavailable" stub: no extra lazy chunk, which
+      // Decaid's in-place skin updates could 404.
+      {
+        find: /^#remend$/,
+        replacement: fileURLToPath(new URL('./node_modules/@mui/x-chat/internals/remendUnavailable.mjs', import.meta.url)),
+      },
+    ],
+  },
   plugins: [
     react(),
     legacy({
@@ -55,6 +68,11 @@ export default defineConfig(({ mode }) => ({
     cssTarget: 'chrome91',
     sourcemap: true,
     chunkSizeWarningLimit: 2000,
+    rollupOptions: {
+      // One entry chunk: Decaid replaces skin files in place while the page
+      // runs, so any lazily loaded chunk could 404 mid-session.
+      output: { inlineDynamicImports: true },
+    },
   },
   server: {
     host: true,

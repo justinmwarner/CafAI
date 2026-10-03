@@ -524,6 +524,15 @@ describe('coach engine', () => {
     expect(parsed(lastUserTurn(requests)[0])).toEqual({ selected: ['Bitter'], other: null });
   });
 
+  it('reloads bags on refresh, e.g. after an import', async () => {
+    await throughTemplatePick();
+    const imported = { ...engine.getState().activeBag!, id: 'bag-imported', name: 'Imported bag', conversationId: 'conv-imported' };
+    await storage.bags.put(imported);
+    await engine.refresh();
+    expect(engine.getState().bags.map((b) => b.id)).toContain('bag-imported');
+    expect(engine.getState().activeBag?.name).toBe('Kiambu AA');
+  });
+
   it('never sends the API key anywhere the UI can see', async () => {
     await throughProposal();
     const visible = JSON.stringify(engine.getState());
