@@ -14,7 +14,7 @@ import type {
   WorkflowContext,
   WorkflowPatch,
 } from '../../api/types.ts';
-import type { ProposeAdjustment, SeriesMetric, ToolName } from '../../coach/contract.ts';
+import type { ProposeAdjustment, ToolName } from '../../coach/contract.ts';
 import type { LeverValues, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
 import type { LlmProvider, RunRequest, RunResult, ToolDefinition, ToolValidation } from '../../llm/types.ts';
 import type { IterationRecord, ProfileVersion } from '../../storage/types.ts';
@@ -30,11 +30,13 @@ export interface ChangePlan {
   /** The next version's profile (execution content), when the change creates a version. */
   newProfile: ProfileJson | null;
   /** Workflow context to set with the activation, e.g. a new targetYield. */
-  contextPatch: { targetYield?: number; targetDoseWeight?: number };
+  contextPatch: { targetYield?: number; targetDoseWeight?: number; grinderSetting?: string };
   diffLines: string[];
   manualSteps: string[];
   summary: string;
   createsVersion: boolean;
+  /** Adjustments the validator made, e.g. rounding to the lever's step. */
+  notes?: string[];
 }
 
 export interface ProposalContext {
@@ -65,19 +67,14 @@ export interface CoachPort {
   buildVersionProfile(template: Template, base: ProfileJson, title: string, bagName: string): ProfileJson;
   /** Drops any model-sent "Other" and appends OTHER_OPTION last. */
   withOther(options: readonly string[]): string[];
-  queries: {
-    getShotSummary(source: ShotSource, ref: string): Promise<unknown>;
-    getShotSeries(
-      source: ShotSource,
-      ref: string,
-      metric: SeriesMetric,
-      fromS: number | null,
-      toS: number | null,
-    ): Promise<unknown>;
-    getPhaseStats(source: ShotSource, ref: string): Promise<unknown>;
-    compareShots(source: ShotSource, refA: string, refB: string): Promise<unknown>;
-    getBagHistory(versions: ProfileVersion[], iterations: IterationRecord[]): unknown;
-  };
+  /** Run one read-only query tool (get_shot_summary, get_shot_series, ...) on validated input. */
+  runQuery(name: ToolName, input: unknown, context: QueryContext): Promise<{ content: string; isError: boolean }>;
+}
+
+export interface QueryContext {
+  source: ShotSource;
+  versions: ProfileVersion[];
+  iterations: IterationRecord[];
 }
 
 export interface LlmPort {

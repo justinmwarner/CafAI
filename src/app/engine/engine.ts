@@ -19,13 +19,11 @@ import {
   TOOL,
   TOOL_INPUTS,
   type AskUser,
-  type GetShotSeriesInput,
   type ProposeAdjustment,
   type ProposeTemplates,
   type SaveBagDetails,
   type ToolName,
 } from '../../coach/contract.ts';
-import type { z } from 'zod';
 import type { ShotRecord, TelemetryStore, WorkflowContext } from '../../api/types.ts';
 import type { ProfileJson, ShotSummary } from '../../coach/types.ts';
 import type { ContentBlock, Effort, PendingUiCall, RunnerTool, ToolResultBlock } from '../../llm/types.ts';
@@ -291,10 +289,6 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   async function executeAuto(name: ToolName, value: unknown): Promise<{ content: string; isError?: boolean }> {
     const s = session;
     if (!s) return { content: JSON.stringify({ error: 'No bag is active.' }), isError: true };
-    const notFound = {
-      content: JSON.stringify({ error: 'No such shot. Use "latest", "previous", or a shot id from get_bag_history.' }),
-      isError: true,
-    };
     switch (name) {
       case TOOL.saveBagDetails: {
         const details = value as SaveBagDetails;
@@ -309,28 +303,16 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         emit();
         return { content: JSON.stringify({ saved: true }) };
       }
-      case TOOL.getShotSummary: {
-        const result = await coach.queries.getShotSummary(shotSource, (value as { shot: string }).shot);
-        return result == null ? notFound : { content: JSON.stringify(result) };
-      }
-      case TOOL.getShotSeries: {
-        const input = value as z.infer<typeof GetShotSeriesInput>;
-        const result = await coach.queries.getShotSeries(shotSource, input.shot, input.metric, input.fromS, input.toS);
-        return result == null ? notFound : { content: JSON.stringify(result) };
-      }
-      case TOOL.getPhaseStats: {
-        const result = await coach.queries.getPhaseStats(shotSource, (value as { shot: string }).shot);
-        return result == null ? notFound : { content: JSON.stringify(result) };
-      }
-      case TOOL.compareShots: {
-        const input = value as { shotA: string; shotB: string };
-        const result = await coach.queries.compareShots(shotSource, input.shotA, input.shotB);
-        return result == null ? notFound : { content: JSON.stringify(result) };
-      }
-      case TOOL.getBagHistory: {
-        const result = coach.queries.getBagHistory(s.versions, await bagIterations(s));
-        return { content: JSON.stringify(result) };
-      }
+      case TOOL.getShotSummary:
+      case TOOL.getShotSeries:
+      case TOOL.getPhaseStats:
+      case TOOL.compareShots:
+      case TOOL.getBagHistory:
+        return coach.runQuery(name, value, {
+          source: shotSource,
+          versions: s.versions,
+          iterations: await bagIterations(s),
+        });
       default:
         return { content: JSON.stringify({ error: `${name} is not an automatic tool.` }), isError: true };
     }
@@ -428,13 +410,14 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       const plan = validation.plan;
       const next = Math.max(0, ...s.versions.map((v) => v.version)) + 1;
       const tips = input.tips.length > 0 ? ` Tip: ${input.tips.join(' ')}` : '';
+      const notes = plan.notes && plan.notes.length > 0 ? ` (${plan.notes.join(' ')})` : '';
       addMessage('assistant', [
         diffPart({
           requestId: call.id,
           summary: plan.summary || input.summary,
           lines: plan.diffLines,
           manualSteps: plan.manualSteps,
-          rationale: `${input.rationale}${tips}`,
+          rationale: `${input.rationale}${tips}${notes}`,
           expectedEffect: input.expectedEffect,
           versionLabel: plan.createsVersion ? coach.versionTitle(s.bag.name, next) : null,
         }),
@@ -896,8 +879,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       } else if (plan.variable === 'dose' && plan.to !== null) {
         await api.updateWorkflow({ context: { targetDoseWeight: plan.to } });
         s.doseG = plan.to;
-      } else if (plan.variable === 'grind' && input.grind?.setting) {
-        settings = await storage.settings.update({ grinderSetting: input.grind.setting });
+      } else if (plan.variable === 'grind' && (plan.contextPatch.grinderSetting ?? input.grind?.setting)) {
+        settings = await storage.settings.update({ grinderSetting: plan.contextPatch.grinderSetting ?? input.grind?.setting ?? null });
       }
       const iteration = await latestPendingIteration(s);
       if (iteration) {

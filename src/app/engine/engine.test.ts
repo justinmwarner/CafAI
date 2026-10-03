@@ -134,12 +134,12 @@ const coach: CoachPort = {
   versionTitle: (name, n) => `${name} v${n}`,
   buildVersionProfile: (_t, base, title) => ({ ...base, title }),
   withOther: (options) => [...options.filter((o) => o.toLowerCase() !== 'other'), OTHER_OPTION],
-  queries: {
-    getShotSummary: async (source, ref) => (await source.resolve(ref))?.summary ?? null,
-    getShotSeries: async (source, ref, metric) => ((await source.resolve(ref)) ? { metric, values: [1, 2] } : null),
-    getPhaseStats: async () => ({}),
-    compareShots: async () => ({}),
-    getBagHistory: (versions) => ({ versions: versions.length }),
+  async runQuery(name, input, context) {
+    if (name === TOOL.getBagHistory) return { content: JSON.stringify({ versions: context.versions.length }), isError: false };
+    const ref = (input as { shot?: string }).shot ?? 'latest';
+    const shot = await context.source.resolve(ref);
+    if (!shot) return { content: 'No such shot.', isError: true };
+    return { content: JSON.stringify({ shotId: shot.record.id, values: [1, 2] }), isError: false };
   },
 };
 
