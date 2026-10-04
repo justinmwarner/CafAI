@@ -24,7 +24,7 @@ import {
   type SaveBagDetails,
   type ToolName,
 } from '../../coach/contract.ts';
-import type { ShotRecord, TelemetryStore, WireProfile, WorkflowContext } from '../../api/types.ts';
+import type { ShotRecord, TelemetryStore, WireProfile, Workflow, WorkflowContext } from '../../api/types.ts';
 import type { ProfileJson, ShotSummary } from '../../coach/types.ts';
 import type { ContentBlock, Effort, PendingUiCall, RunnerTool, ToolResultBlock } from '../../llm/types.ts';
 import type {
@@ -106,6 +106,16 @@ const DEFAULT_YIELD_G = 36;
 const STREAM_EMIT_MS = 50;
 /** The banner while a finished shot has no record in Decaid (Retry looks again). */
 const SHOT_NOT_SAVED = 'Decaid has not saved that shot yet.';
+/** CafAI's key in the workflow's context.extras (Decaid merges extras key by key). */
+const EXTRAS_KEY = 'cafai';
+
+/** The CafAI version id a workflow context was tagged with at activation, if any. */
+function taggedVersionId(context: WorkflowContext | undefined): string | null {
+  const tag = context?.extras?.[EXTRAS_KEY];
+  if (typeof tag !== 'object' || tag === null) return null;
+  const versionId = (tag as Record<string, unknown>).versionId;
+  return typeof versionId === 'string' ? versionId : null;
+}
 
 function describe(error: unknown): string {
   if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' && error.message) {
@@ -243,7 +253,12 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     return t.machine?.state.state === 'espresso' || shot === 'preheating' || shot === 'pouring' || shot === 'stopping';
   }
 
-  function workflowContext(s: Session, profile: ProfileJson, patch: ChangePlan['contextPatch'] = {}): WorkflowContext {
+  function workflowContext(
+    s: Session,
+    versionId: string,
+    profile: ProfileJson,
+    patch: ChangePlan['contextPatch'] = {},
+  ): WorkflowContext {
     const context: WorkflowContext = {
       targetYield: patch.targetYield ?? profile.target_weight ?? s.targetYieldG ?? DEFAULT_YIELD_G,
     };
@@ -258,13 +273,13 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     context.grinderId = null;
     context.grinderModel = settings.grinderName ?? null;
     context.grinderSetting = settings.grinderSetting ?? null;
+    // Which CafAI version this is: shot records keep the workflow, so a shot
+    // can be told apart even from a same-named or same-content version.
+    context.extras = { [EXTRAS_KEY]: { versionId, bagId: s.bag.id } };
     return context;
   }
 
-  /** True when a profile (from the workflow or a shot record) is this version. */
-  function runsVersion(profile: WireProfile | ProfileJson | undefined, version: ProfileVersion): boolean {
-    if (!profile) return false;
-    if (profile.title === version.title) return true;
+  function sameContent(profile: WireProfile | ProfileJson, version: ProfileVersion): boolean {
     try {
       return coach.profileId(profile) === coach.profileId(version.profile);
     } catch {
@@ -273,18 +288,32 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   }
 
   /**
-   * True when the workflow carries this version exactly as CafAI loads it:
-   * same title and same brewing content. Two bags whose v1 use the same
-   * template have identical content, so content alone would leave the other
-   * bag's title and coffee details on the machine.
+   * True when a shot record's workflow shows the machine ran this version.
+   * The CafAI tag (context.extras.cafai) names the version that was loaded
+   * last and tells same-named or same-content versions apart; the profile
+   * must still match, because another skin can change the profile and leave
+   * the tag (Decaid merges the context field by field). Without a tag only
+   * identical brewing content counts: a title alone is not enough.
    */
-  function carriesVersion(profile: WireProfile | ProfileJson | undefined, version: ProfileVersion): boolean {
-    if (!profile || profile.title !== version.title) return false;
-    try {
-      return coach.profileId(profile) === coach.profileId(version.profile);
-    } catch {
+  function ranVersion(workflow: Workflow, version: ProfileVersion): boolean {
+    const tagged = taggedVersionId(workflow.context);
+    if (tagged !== null && tagged !== version.id) return false;
+    if (sameContent(workflow.profile, version)) return true;
+    return tagged !== null && workflow.profile.title === version.title;
+  }
+
+  /**
+   * True when the workflow carries this version exactly as CafAI loads it:
+   * its tag (when there is one), its title and its brewing content. Two bags
+   * whose v1 use the same template have identical content, and two bags can
+   * share a name.
+   */
+  function carriesVersion(workflow: Workflow, version: ProfileVersion): boolean {
+    if (!workflow.profile || workflow.profile.title !== version.title || !sameContent(workflow.profile, version)) {
       return false;
     }
+    const tagged = taggedVersionId(workflow.context);
+    return tagged === null || tagged === version.id;
   }
 
   function loadedNotice(title: string) {
@@ -681,9 +710,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   }
 
   /** Upload a version's profile and make it the workflow's profile. */
-  async function activate(s: Session, profile: ProfileJson, patch?: ChangePlan['contextPatch']): Promise<void> {
+  async function activate(s: Session, versionId: string, profile: ProfileJson, patch?: ChangePlan['contextPatch']): Promise<void> {
     if (isShotRunning()) throw new Error('Wait for the shot to finish, then try again.');
-    const context = workflowContext(s, profile, patch);
+    const context = workflowContext(s, versionId, profile, patch);
     await api.activateProfile(profile, context, { shotRunning: false });
     if (context.targetYield !== undefined) s.targetYieldG = context.targetYield;
     if (context.targetDoseWeight !== undefined) s.doseG = context.targetDoseWeight;
@@ -747,7 +776,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     }
     const iterations = await bagIterations(s);
     if (iterations.some((i) => i.shotId === record.id)) return;
-    if (record.workflow?.profile && !runsVersion(record.workflow.profile, current)) {
+    if (record.workflow?.profile && !ranVersion(record.workflow, current)) {
       // The machine ran something else (another bag's profile, or a load that
       // failed): crediting this shot to the active version would corrupt the dial-in.
       addMessage('system', [
@@ -829,6 +858,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
 
     const title = coach.versionTitle(s.bag.name, 1);
     const profile = coach.buildVersionProfile(template, template.profile, title, s.bag.name);
+    const versionId = deps.newId('ver');
     let decaidProfileId: string | null = null;
     let uploaded = true;
     let note: string | null = null;
@@ -839,13 +869,13 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       });
       decaidProfileId = created.record.id;
       if (created.deduped) note = 'Decaid already had this exact profile and kept its library entry; the machine shows the new title.';
-      await activate(s, profile);
+      await activate(s, versionId, profile);
     } catch (error) {
       uploaded = false;
       note = describe(error);
     }
     const version: ProfileVersion = {
-      id: deps.newId('ver'),
+      id: versionId,
       bagId: s.bag.id,
       version: 1,
       title,
@@ -880,8 +910,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (!s || !version) return;
     try {
       const workflow = await api.getWorkflow();
-      if (carriesVersion(workflow.profile, version)) return;
-      await activate(s, version.profile);
+      if (carriesVersion(workflow, version)) return;
+      await activate(s, version.id, version.profile);
       addMessage('system', [loadedNotice(version.title)]);
     } catch (error) {
       loadProblem = { versionId: version.id, message: `Could not load ${version.title}: ${describe(error)}` };
@@ -901,7 +931,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (!s || !version) return;
     try {
       const workflow = await api.getWorkflow();
-      if (!workflow.profile || carriesVersion(workflow.profile, version)) return;
+      if (!workflow.profile || carriesVersion(workflow, version)) return;
       loadProblem = {
         versionId: version.id,
         message: `The machine is running "${workflow.profile.title}", not ${version.title}. Tap Retry to load it.`,
@@ -919,7 +949,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     state = { ...state, busy: true, error: null };
     emit();
     try {
-      await activate(s, version.profile);
+      await activate(s, version.id, version.profile);
       loadProblem = null;
       addMessage('system', [loadedNotice(version.title)]);
       lastFailed = null;
@@ -979,12 +1009,13 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         versionNumber = Math.max(...s.versions.map((v) => v.version)) + 1;
         title = coach.versionTitle(s.bag.name, versionNumber);
         const profile = coach.buildVersionProfile(template, plan.newProfile, title, s.bag.name);
+        const nextId = deps.newId('ver');
         const created = await api.createProfileVersion({
           profile,
           ...(current.decaidProfileId ? { parentId: current.decaidProfileId } : {}),
           metadata: { source: 'cafai', bagId: s.bag.id, version: versionNumber, templateId: template.id },
         });
-        await activate(s, profile, plan.contextPatch);
+        await activate(s, nextId, profile, plan.contextPatch);
         const change: AppliedChange = {
           variable: plan.variable,
           lever: plan.leverId,
@@ -994,7 +1025,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
           summary: plan.summary || input.summary,
         };
         const next: ProfileVersion = {
-          id: deps.newId('ver'),
+          id: nextId,
           bagId: s.bag.id,
           version: versionNumber,
           title,
@@ -1082,7 +1113,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     state = { ...state, busy: true, error: null };
     emit();
     try {
-      await activate(s, parent.profile);
+      await activate(s, parent.id, parent.profile);
     } catch (error) {
       state = { ...state, busy: false };
       setError(`Could not go back to ${parent.title}: ${describe(error)}`, undo);

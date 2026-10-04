@@ -168,12 +168,18 @@ evidence lives. "Repo wins" means a cloned source contradicted
   written to `context.targetYield` so the shot stops there. Changing it is a
   lever like any other. The yield hard bound is 120 g or the template's own
   `target_weight`, whichever is larger, so the Allongé's own default passes.
-- **D41. A shot counts only for the version the machine ran.** The finished
-  shot's `workflow.profile` must match the bag's active version, by title or
-  by Decaid's content id (sha256 of the execution fields). Otherwise the chat
-  says the shot ran something else, no feedback is asked, and nothing is
-  logged against the version. Another skin, or a profile picked on the
-  machine, would otherwise put the wrong shot into the bag's history.
+- **D41. A shot counts only for the version the machine ran.** Every
+  activation tags the workflow context with
+  `extras.cafai = {versionId, bagId}` (Decaid merges `extras` key by key and
+  shot records keep the workflow). A finished shot counts for the active
+  version only if its record's tag, when present, names that version and its
+  profile has the same brewing content (Decaid's content id) or, with a
+  matching tag, the same title. A title alone never counts: two bags can
+  share a name, and two bags' v1 from one template share content. Otherwise
+  the chat says the shot ran something else, no feedback is asked, and
+  nothing is logged against the version. Another skin, a profile picked on
+  the machine, or a failed load would otherwise put the wrong shot into the
+  bag's history.
 - **D42. Switching bags loads that bag's version.** Selecting a bag reads
   `GET /workflow` and, unless the workflow carries that version with the
   same title and the same content, PUTs the bag's active version. (Content

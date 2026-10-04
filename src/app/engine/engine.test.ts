@@ -149,17 +149,29 @@ interface ApiCall {
   args: unknown[];
 }
 
-const machine = { loaded: SAMPLE_WORKFLOW.profile as ProfileJson, failActivations: 0, failUpdates: 0, missingShots: new Set<string>() };
+const machine = {
+  loaded: SAMPLE_WORKFLOW.profile as ProfileJson,
+  /** The workflow context as Decaid keeps it: merged field by field, extras key by key. */
+  context: { ...SAMPLE_WORKFLOW.context } as WorkflowContext,
+  failActivations: 0,
+  failUpdates: 0,
+  missingShots: new Set<string>(),
+};
+
+function mergeContext(base: WorkflowContext, patch: WorkflowContext): WorkflowContext {
+  return { ...base, ...patch, extras: { ...base.extras, ...patch.extras } };
+}
 
 function makeApi(calls: ApiCall[]): ApiPort {
   let ids = 0;
   // Like the machine: a shot runs whatever profile was activated last.
   machine.loaded = SAMPLE_WORKFLOW.profile as ProfileJson;
+  machine.context = { ...SAMPLE_WORKFLOW.context } as WorkflowContext;
   machine.failActivations = 0;
   machine.failUpdates = 0;
   machine.missingShots.clear();
   return {
-    getWorkflow: async () => ({ ...SAMPLE_WORKFLOW, profile: machine.loaded }) as Workflow,
+    getWorkflow: async () => ({ ...SAMPLE_WORKFLOW, profile: machine.loaded, context: machine.context }) as Workflow,
     updateWorkflow: async (patch) => {
       if (machine.failUpdates > 0) {
         machine.failUpdates -= 1;
@@ -175,6 +187,7 @@ function makeApi(calls: ApiCall[]): ApiPort {
       }
       calls.push({ method: 'activateProfile', args: [profile, context] });
       machine.loaded = profile;
+      machine.context = mergeContext(machine.context, context);
       return { ...SAMPLE_WORKFLOW, profile } as Workflow;
     },
     createProfileVersion: async (request) => {
@@ -199,7 +212,8 @@ function makeApi(calls: ApiCall[]): ApiPort {
     getShot: async (id) => {
       calls.push({ method: 'getShot', args: [id] });
       if (machine.missingShots.has(id)) throw new Error('404 Not found');
-      return { id, timestamp: '', createdAt: '', updatedAt: '', workflow: { ...SAMPLE_WORKFLOW, profile: machine.loaded }, measurements: [] } as ShotRecord;
+      const workflow = { ...SAMPLE_WORKFLOW, profile: machine.loaded, context: machine.context };
+      return { id, timestamp: '', createdAt: '', updatedAt: '', workflow, measurements: [] } as ShotRecord;
     },
     getLatestShot: async () => null,
   };
@@ -312,6 +326,11 @@ function parsed(block: ContentBlock | undefined): unknown {
 // Tests
 // ---------------------------------------------------------------------------
 
+/** The CafAI version id the fake machine's workflow context is tagged with. */
+function taggedId(): unknown {
+  return (machine.context.extras?.cafai as { versionId?: unknown } | undefined)?.versionId;
+}
+
 describe('coach engine', () => {
   let storage: FakeStorage;
   let telemetry: FakeTelemetry;
@@ -352,6 +371,37 @@ describe('coach engine', () => {
     expect(engine.getState().phase).toBe('choosing_template');
     scripts.push(() => [text('Loaded. Pull a shot.')]);
     await engine.pickTemplate('t-tpl', 'd-flow');
+  }
+
+  /** Start another bag through intake and a template pick. */
+  async function anotherBag(name: string, templateId: 'd-flow' | 'londonium') {
+    await engine.newBag();
+    scripts.push(() => [
+      toolUse('t-save-2', TOOL.saveBagDetails, { name, roaster: null, origin: null, roastLevel: 'medium', process: null, notes: null }),
+      toolUse('t-tpl-2', TOOL.proposeTemplates, {
+        suggestions: [
+          { templateId, confidence: 'high', reason: 'Fits.' },
+          { templateId: templateId === 'd-flow' ? 'londonium' : 'd-flow', confidence: 'low', reason: 'Maybe.' },
+        ],
+      }),
+    ]);
+    await engine.sendText(`${name}, medium`);
+    scripts.push(() => [text('Loaded.')]);
+    await engine.pickTemplate('t-tpl-2', templateId);
+    return engine.getState().activeBag!.id;
+  }
+
+  /** Pull a shot and report whether it was logged against the active version. */
+  async function shotIsCredited(shotId: string): Promise<boolean> {
+    const before = engine.getState().messages.length;
+    scripts.push(() => [text('Got it.'), askTaste]);
+    telemetry.emitShot({ type: 'finished', shotId, stopReason: 'targetWeight' });
+    // Either a shot card (after its iteration was stored) or a warning arrives.
+    await vi.waitFor(() => expect(engine.getState().messages.length).toBeGreaterThan(before));
+    const credited = (await storage.iterations.listAll()).some((i) => i.shotId === shotId);
+    if (credited) await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+    else scripts.pop(); // the coach was not asked
+    return credited;
   }
 
   async function throughShot() {
@@ -713,6 +763,57 @@ describe('coach engine', () => {
     expect(machine.loaded.title).toBe('Kiambu AA v1');
     const notices = engine.getState().messages.flatMap((m) => m.parts).filter((p) => p.kind === 'notice');
     expect(notices.at(-1)).toMatchObject({ text: 'Loaded Kiambu AA v1 on the machine.' });
+  });
+
+  it('tags every activation with the CafAI version it loads', async () => {
+    await throughTemplatePick();
+    const version = engine.getState().activeVersion!;
+    const context = apiCalls.filter((c) => c.method === 'activateProfile').at(-1)!.args[1] as WorkflowContext;
+    expect(context.extras).toEqual({ cafai: { versionId: version.id, bagId: engine.getState().activeBag!.id } });
+  });
+
+  it('does not credit a shot to a same-named bag whose load failed', async () => {
+    await throughTemplatePick(); // "Kiambu AA" v1 from d-flow
+    const first = engine.getState().activeBag!.id;
+    const second = await anotherBag('Kiambu AA', 'londonium');
+    await engine.selectBag(first);
+    machine.failActivations = 1;
+    await engine.selectBag(second); // the machine keeps the first bag's "Kiambu AA v1"
+    expect(machine.loaded.target_weight).toBe(50);
+    expect(await shotIsCredited('shot-same-name')).toBe(false);
+    const notices = engine.getState().messages.flatMap((m) => m.parts).filter((p) => p.kind === 'notice');
+    expect(notices.at(-1)).toMatchObject({ tone: 'warning', text: expect.stringContaining('not part of this dial-in') });
+  });
+
+  it('does not credit a shot to a bag with the same brewing content whose load failed', async () => {
+    await throughTemplatePick(); // Kiambu AA v1 from d-flow
+    const kiambu = engine.getState().activeBag!.id;
+    const yirga = await anotherBag('Yirgacheffe Konga', 'd-flow');
+    await engine.selectBag(kiambu);
+    machine.failActivations = 1;
+    await engine.selectBag(yirga);
+    expect(machine.loaded.title).toBe('Kiambu AA v1');
+    expect(await shotIsCredited('shot-same-content')).toBe(false);
+  });
+
+  it('loads the selected bag even when another bag has the same name and the same content', async () => {
+    await throughTemplatePick();
+    const first = engine.getState().activeBag!.id;
+    const second = await anotherBag('Kiambu AA', 'd-flow');
+    const secondVersion = engine.getState().activeVersion!.id;
+    await engine.selectBag(first);
+    await engine.selectBag(second);
+    expect(taggedId()).toBe(secondVersion);
+    expect(await shotIsCredited('shot-twin')).toBe(true);
+  });
+
+  it('credits a shot of identical content loaded by another skin, but not a different profile', async () => {
+    await throughTemplatePick();
+    // Another skin loads the stock template: same brewing content, CafAI's tag stays.
+    machine.loaded = { ...baseProfile, title: 'D-Flow / default' };
+    expect(await shotIsCredited('shot-stock')).toBe(true);
+    machine.loaded = { ...baseProfile, title: 'Something else', target_weight: 77 };
+    expect(await shotIsCredited('shot-other')).toBe(false);
   });
 
   it('reloads a bag whose v1 has the same brewing content as the other bag, so its title and coffee win', async () => {
