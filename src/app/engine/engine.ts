@@ -147,7 +147,21 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   let session: Session | null = null;
   let lastFailed: (() => Promise<void>) | null = null;
   /** A version CafAI considers active but that may not be on the machine (a failed load, or a shot that ran something else). */
-  let loadProblem: { versionId: string; message: string } | null = null;
+  /**
+   * A problem that outlives other errors and chat turns: the machine not
+   * running the bag's version, or a finished shot Decaid has not saved.
+   * emit() puts it on the banner, with its own Retry, whenever nothing else
+   * is there.
+   */
+  let standing: { kind: 'load' | 'shot'; message: string; retry: () => Promise<void> } | null = null;
+
+  function setLoadProblem(versionId: string, message: string): void {
+    standing = { kind: 'load', message, retry: () => retryActivation(versionId) };
+  }
+
+  function clearStanding(kind: 'load' | 'shot'): void {
+    if (standing?.kind === kind) standing = null;
+  }
   const shotCache = new Map<string, ShotRecord>();
   const listeners = new Set<() => void>();
   let emitTimer: ReturnType<typeof setTimeout> | null = null;
@@ -185,10 +199,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       clearTimeout(emitTimer);
       emitTimer = null;
     }
-    if (!state.error && loadProblem && !state.busy) {
-      const versionId = loadProblem.versionId;
-      state = { ...state, error: loadProblem.message };
-      lastFailed = () => retryActivation(versionId);
+    if (!state.error && standing && !state.busy) {
+      state = { ...state, error: standing.message };
+      lastFailed = standing.retry;
     }
     state = {
       ...state,
@@ -766,6 +779,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       emit();
       return;
     }
+    // A new shot (or Retry) replaces the hunt for the previous one.
+    clearStanding('shot');
     if (state.error === SHOT_NOT_SAVED) setError(null);
     const record = await fetchShot(shotId);
     if (!record) {
@@ -780,7 +795,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
             : 'The shot finished, but Decaid has not saved it. Tap Retry to look again, or pull another shot.',
         ),
       ]);
-      setError(SHOT_NOT_SAVED, () => handleShotFinished(shotId));
+      standing = { kind: 'shot', message: SHOT_NOT_SAVED, retry: () => handleShotFinished(shotId) };
       await persistConversation(s);
       emit();
       return;
@@ -796,7 +811,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
           `That shot ran "${record.workflow.profile.title}", not ${current.title}, so it is not part of this dial-in.`,
         ),
       ]);
-      loadProblem = { versionId: current.id, message: `The machine is not running ${current.title}. Tap Retry to load it.` };
+      setLoadProblem(current.id, `The machine is not running ${current.title}. Tap Retry to load it.`);
       await persistConversation(s);
       emit();
       return;
@@ -901,8 +916,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     };
     await saveVersions(s, [version]);
     await persistBag(s, { templateId, activeVersionId: version.id });
-    if (uploaded) loadProblem = null;
-    else loadProblem = { versionId: version.id, message: `Could not load ${title} on the machine. Tap Retry to try again.` };
+    if (uploaded) clearStanding('load');
+    else setLoadProblem(version.id, `Could not load ${title} on the machine. Tap Retry to try again.`);
     addMessage('system', [
       uploaded ? loadedNotice(title) : noticePart('error', `${title} is saved, but loading it on the machine failed: ${note}`),
     ]);
@@ -926,7 +941,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       await activate(s, version.id, version.profile);
       addMessage('system', [loadedNotice(version.title)]);
     } catch (error) {
-      loadProblem = { versionId: version.id, message: `Could not load ${version.title}: ${describe(error)}` };
+      setLoadProblem(version.id, `Could not load ${version.title}: ${describe(error)}`);
     }
     await persistConversation(s);
     emit();
@@ -944,10 +959,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     try {
       const workflow = await api.getWorkflow();
       if (!workflow.profile || carriesVersion(workflow, version)) return;
-      loadProblem = {
-        versionId: version.id,
-        message: `The machine is running "${workflow.profile.title}", not ${version.title}. Tap Retry to load it.`,
-      };
+      setLoadProblem(version.id, `The machine is running "${workflow.profile.title}", not ${version.title}. Tap Retry to load it.`);
       emit();
     } catch {
       // Decaid unreachable: nothing to compare yet.
@@ -962,7 +974,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     emit();
     try {
       await activate(s, version.id, version.profile);
-      loadProblem = null;
+      clearStanding('load');
       addMessage('system', [loadedNotice(version.title)]);
       lastFailed = null;
     } catch (error) {
@@ -1084,7 +1096,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       }
       setMessages(setDiffStatus(state.messages, requestId, 'applied'));
       if (title) {
-        loadProblem = null;
+        clearStanding('load');
         addMessage('system', [loadedNotice(title)]);
       }
       payload = { applied: true, variable: plan.variable, version: versionNumber, title };
@@ -1137,7 +1149,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       { ...parent, status: 'active' },
     ]);
     await persistBag(s, { activeVersionId: parent.id });
-    loadProblem = null;
+    clearStanding('load');
     const iterations = await bagIterations(s);
     const applied = [...iterations]
       .reverse()
@@ -1219,7 +1231,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         if (refuseDuringShot()) return;
         const current = session;
         if (current && current.conversation.apiMessages.length === 0 && !current.bag.templateId) return;
-        loadProblem = null;
+        standing = null;
         await createBag();
       }),
     selectBag: (bagId) =>
@@ -1227,7 +1239,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         if (refuseDuringShot()) return;
         const bag = await storage.bags.get(bagId);
         if (!bag) return;
-        loadProblem = null;
+        standing = null; // both kinds belong to the bag being left
         await openSession(bag);
         await loadActiveVersionIfNeeded();
       }),
@@ -1246,9 +1258,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         await task();
       }),
     dismissError() {
-      // Dismissing also drops a pending load problem, which would otherwise
-      // put the banner straight back; a mismatched shot raises it again.
-      loadProblem = null;
+      // Dismissing also drops a standing problem, which would otherwise put
+      // the banner straight back; a mismatched shot raises it again.
+      standing = null;
       setError(null);
       emit();
     },

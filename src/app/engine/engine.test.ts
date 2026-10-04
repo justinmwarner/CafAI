@@ -725,6 +725,24 @@ describe('coach engine', () => {
     expect((await storage.iterations.listAll()).map((i) => i.shotId)).toEqual(['shot-lost']);
   });
 
+  it('keeps the lost-shot Retry on the banner after the user talks to the coach', async () => {
+    await throughTemplatePick();
+    machine.missingShots.add('shot-lost');
+    telemetry.emitShot({ type: 'finished', shotId: 'shot-lost', stopReason: 'targetWeight' });
+    await vi.waitFor(() => expect(engine.getState().error).toBe('Decaid has not saved that shot yet.'));
+
+    scripts.push(() => [text('Machines drop sometimes.')]);
+    await engine.sendText('What happened?');
+    expect(engine.getState().error).toBe('Decaid has not saved that shot yet.');
+
+    machine.missingShots.delete('shot-lost');
+    scripts.push(() => [text('Got it.'), askTaste]);
+    await engine.retry();
+    await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+    expect(engine.getState().error).toBeNull();
+    expect((await storage.iterations.listAll()).map((i) => i.shotId)).toEqual(['shot-lost']);
+  });
+
   it('clears the missing-shot banner when the next shot arrives', async () => {
     await throughTemplatePick();
     machine.missingShots.add('shot-lost');
