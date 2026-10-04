@@ -42,7 +42,9 @@ All JSON payloads are compact `JSON.stringify` output.
    with JSON = `{"picked":"<templateId>","version":1,"title":"<Bag> v1","uploaded":true|false,"note":string|null}`.
 3. **Shot completed**: a text block
    `"[event:shot_completed]\n" + JSON` with JSON =
-   `{"shotRef":"latest","shotId":string,"version":number,"templateId":string,"levers":{"<leverId>":number,...},"doseG":number|null,"targetYieldG":number|null,"summary":<ShotSummary without "series">}`.
+   `{"shotRef":"latest","shotId":string,"version":number,"templateId":string,"levers":{"<leverId>":number,...},"doseG":number|null,"targetYieldG":number|null,"grinder":{"name":string|null,"setting":string|null},"summary":<ShotSummary without "series">}`.
+   `grinder` is what the user last saved (Settings or a confirmed grind move);
+   it supersedes the intake context.
    If UI tool calls are still pending, their tool_results come first in the
    same message (rule 7).
 4. **Feedback**: tool_result for `ask_user` with JSON
@@ -87,7 +89,10 @@ signature), streams text in small deltas, and streams tool inputs as several
    - contains "Bitter" -> temp -1;
    - contains "Weak" -> yield -2; contains "Strong" -> yield +2;
    - contains "Balanced" -> `{variable:"none"}`;
-   - otherwise -> `{variable:"grind", grind:{direction:"finer", amount:1, setting:null}}`.
+   - otherwise -> `{variable:"grind", grind:{direction:"finer", amount:1, setting}}`,
+     where setting is the current dial minus 1 when the latest shot event's
+     (or, before any shot, the intake context's) grinder setting is a plain
+     number, else null.
    Fill summary/rationale/expectedEffect/tips with short plausible text.
 3. tool_result for `ask_user` -> text "Thanks. Let me look at the pressure
    curve." + tool_use `get_shot_series` `{shot:"latest", metric:"pressure", fromS:null, toS:null}`.

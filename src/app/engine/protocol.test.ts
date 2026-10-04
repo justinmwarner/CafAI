@@ -65,11 +65,13 @@ describe('engine protocol', () => {
       levers: { temp: 88 },
       doseG: 18,
       targetYieldG: 36,
+      grinder: { name: 'Niche Zero', setting: '13' },
       summary: summaryForModel(summary),
     });
     expect(block.text.startsWith('[event:shot_completed]\n')).toBe(true);
     const payload = JSON.parse(block.text.split('\n')[1]!);
     expect(payload.levers.temp).toBe(88);
+    expect(payload.grinder).toEqual({ name: 'Niche Zero', setting: '13' });
     expect(payload.summary.series).toBeUndefined();
     expect(payload.summary.yieldG).toBe(36.4);
   });

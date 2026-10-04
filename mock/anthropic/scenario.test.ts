@@ -349,6 +349,27 @@ describe('scripted replies', () => {
     expect(reply.tools[0]?.input).toMatchObject({ grind: { setting: null }, summary: 'Grind 1 step finer' });
   });
 
+  it('rule 2: the dial setting comes from the latest shot event once there is one', () => {
+    const shotOn13 = user(
+      text(
+        '[event:shot_completed]\n' +
+          JSON.stringify({
+            shotRef: 'latest',
+            shotId: 'shot-2',
+            version: 1,
+            templateId: 'blooming-espresso',
+            levers: BLOOMING_LEVERS,
+            doseG: 18,
+            targetYieldG: 36,
+            grinder: { name: 'Niche Zero', setting: '13' },
+            summary: { shotId: 'shot-2', durationS: 27, yieldG: 36, doseG: 18 },
+          }),
+      ),
+    );
+    const reply = ok(call([...UP_TO_SHOT, shotOn13, SHOT_REPLY, answer(['Other']), ANSWER_REPLY, SERIES]));
+    expect(reply.tools[0]?.input).toMatchObject({ grind: { setting: '12' }, summary: 'Grind 1 step finer, to 12' });
+  });
+
   it('rule 1: an applied change is confirmed, a declined one keeps the version', () => {
     const base = [...UP_TO_SHOT, shot(BLOOMING_LEVERS), SHOT_REPLY, answer(['Sour / sharp']), ANSWER_REPLY, SERIES, ADJUST_REPLY];
     const decide = (payload: unknown) => ok(call([...base, user(toolResult('t_adj', payload))]));

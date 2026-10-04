@@ -47,6 +47,8 @@ export interface ShotCompletedPayload {
   levers: Record<string, number>;
   doseG: number | null;
   targetYieldG: number | null;
+  /** The grinder as the user last saved it (Settings, or a confirmed grind move). */
+  grinder: { name: string | null; setting: string | null };
   summary: Omit<ShotSummary, 'series'>;
 }
 

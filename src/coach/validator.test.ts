@@ -278,6 +278,14 @@ describe('validateProposal: grind', () => {
     expect(plan.contextPatch).toEqual({ grinderSetting: '0.15' });
   });
 
+  it('refuses a "new" grind setting that is the current one', () => {
+    const ctx = ctxFor(dflowT, { grinderSetting: '13' });
+    expect(errorsOf(validateProposal(grind('finer', 1, '13'), ctx))).toMatch(/"13" is the setting the grinder is on now/);
+    expect(errorsOf(validateProposal(grind('finer', 1, ' 13 '), ctx))).toMatch(/is the setting the grinder is on now/);
+    expect(okPlan(validateProposal(grind('finer', 1, '12'), ctx)).contextPatch).toEqual({ grinderSetting: '12' });
+    expect(okPlan(validateProposal(grind('finer', 1, null), ctx)).contextPatch).toEqual({});
+  });
+
   it('rejects impossible step counts and a missing grind', () => {
     expect(errorsOf(validateProposal(grind('finer', 6, null), ctxFor(dflowT)))).toMatch(/more than 0 and at most 5/);
     expect(errorsOf(validateProposal(grind('finer', 0, null), ctxFor(dflowT)))).toMatch(/more than 0/);

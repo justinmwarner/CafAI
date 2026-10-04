@@ -279,8 +279,15 @@ function validateGrind(input: ProposeAdjustment, ctx: ValidationContext): Valida
   if (errors.length > 0 || !grind) return fail(errors);
 
   // The setting is passed through exactly as written: it is the grinder's own
-  // dial, which no typed range can second-guess.
+  // dial, which no typed range can second-guess. Only a "new" setting equal
+  // to the current one is refused: it would be a move that changes nothing.
   const setting = grind.setting?.trim() ? grind.setting.trim() : null;
+  const current = ctx.grinderSetting?.trim() ? ctx.grinderSetting.trim() : null;
+  if (setting !== null && current !== null && setting === current) {
+    return fail([
+      `grind.setting "${setting}" is the setting the grinder is on now. Give the new setting after the move (${grind.direction}), or null if you do not know it.`,
+    ]);
+  }
   const normalized: ProposeAdjustment = { ...input, grind: { ...grind, setting } };
   return {
     ok: true,

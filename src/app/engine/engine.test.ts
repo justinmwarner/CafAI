@@ -765,6 +765,28 @@ describe('coach engine', () => {
     expect(notices.at(-1)).toMatchObject({ text: 'Loaded Kiambu AA v1 on the machine.' });
   });
 
+  it('tells the coach the grinder as last saved with every shot, and pushes a saved grinder to Decaid', async () => {
+    await throughTemplatePick();
+    const updatesBefore = apiCalls.filter((c) => c.method === 'updateWorkflow').length;
+    await engine.refresh(); // nothing changed: no write
+    expect(apiCalls.filter((c) => c.method === 'updateWorkflow')).toHaveLength(updatesBefore);
+
+    await storage.settings.update({ grinderName: 'Niche Zero', grinderSetting: '13' });
+    await engine.refresh();
+    const patches = apiCalls.filter((c) => c.method === 'updateWorkflow').map((c) => c.args[0]);
+    expect(patches.at(-1)).toEqual({ context: { grinderModel: 'Niche Zero', grinderSetting: '13' } });
+
+    scripts.push(() => [text('Got it.'), askTaste]);
+    telemetry.emitShot({ type: 'finished', shotId: 'shot-g', stopReason: 'targetWeight' });
+    await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+    const shotEvent = requests
+      .flat()
+      .flatMap((m) => m.content)
+      .find((b) => b.type === 'text' && b.text.startsWith('[event:shot_completed]'));
+    const payload = JSON.parse((shotEvent as { text: string }).text.split('\n')[1]!);
+    expect(payload.grinder).toEqual({ name: 'Niche Zero', setting: '13' });
+  });
+
   it('keeps the bag on screen while a shot is pulled', async () => {
     await throughTemplatePick();
     const kiambu = engine.getState().activeBag!.id;

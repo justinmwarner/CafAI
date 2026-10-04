@@ -352,18 +352,20 @@ function latestShot(messages: Message[]): Raw | null {
 }
 
 /**
- * The dial setting from the latest context block, when it is a plain number.
- * The prompt asks for the absolute setting whenever it is known; the script
- * assumes the common convention that a lower number is finer.
+ * The dial setting now, when it is a plain number: from the latest shot event
+ * or, before any shot, the intake context block. The prompt asks for the
+ * absolute setting whenever it is known; the script assumes the common
+ * convention that a lower number is finer.
  */
 function dialSetting(messages: Message[]): number | null {
   let setting: number | null = null;
   for (const message of messages) {
     if (message.role !== 'user') continue;
     for (const text of textsOf(message)) {
-      if (!text.startsWith(EVENT.context)) continue;
+      if (!text.startsWith(EVENT.context) && !text.startsWith(EVENT.shotCompleted)) continue;
       const grinder = eventPayload(text)?.grinder;
-      const value = isRecord(grinder) && typeof grinder.setting === 'string' ? grinder.setting.trim() : '';
+      if (!isRecord(grinder)) continue; // a shot event from before the grinder was sent
+      const value = typeof grinder.setting === 'string' ? grinder.setting.trim() : '';
       setting = /^\d+(\.\d+)?$/.test(value) ? Number(value) : null;
     }
   }

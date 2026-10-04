@@ -839,6 +839,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       levers: template ? coach.readLeverValues(template, current.profile) : {},
       doseG: summary.doseG ?? s.doseG,
       targetYieldG: summary.targetYieldG ?? s.targetYieldG,
+      grinder: { name: settings.grinderName, setting: settings.grinderSetting },
       summary: summaryForModel(summary),
     });
     emit();
@@ -1253,7 +1254,15 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     },
     refresh: () =>
       enqueue(async () => {
+        const before = settings;
         await refreshFromStorage();
+        if (settings.grinderName !== before.grinderName || settings.grinderSetting !== before.grinderSetting) {
+          // The next shots should carry the grinder the user just saved.
+          // Best effort: the next activation writes it to Decaid anyway.
+          await api
+            .updateWorkflow({ context: { grinderModel: settings.grinderName ?? null, grinderSetting: settings.grinderSetting ?? null } })
+            .catch(() => undefined);
+        }
         // After an import the bag list (and the active bag's records) may differ.
         const bags = (await storage.bags.list()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
         state = { ...state, bags };
