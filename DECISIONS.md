@@ -175,8 +175,10 @@ evidence lives. "Repo wins" means a cloned source contradicted
   logged against the version. Another skin, or a profile picked on the
   machine, would otherwise put the wrong shot into the bag's history.
 - **D42. Switching bags loads that bag's version.** Selecting a bag reads
-  `GET /workflow` and, when the machine runs something else, PUTs the bag's
-  active version. A failed load stays on the error banner with Retry until a
+  `GET /workflow` and, unless the workflow carries that version with the
+  same title and the same content, PUTs the bag's active version. (Content
+  alone is not enough: two bags' v1 from one template are identical, and the
+  other bag's title and coffee details would stay on the machine.) A failed load stays on the error banner with Retry until a
   later upload succeeds. "Loaded on the machine" is said only while the
   machine is connected; otherwise the chat says Decaid loads it on connect.
   At start-up CafAI only reports a mismatch (the same banner, with Retry):
