@@ -77,7 +77,8 @@ export interface Feedback {
   otherText: string | null;
 }
 
-export type IterationOutcome = 'pending' | 'applied' | 'declined' | 'undone' | 'kept';
+/** `superseded`: another shot came before this one's question was answered. */
+export type IterationOutcome = 'pending' | 'applied' | 'declined' | 'undone' | 'kept' | 'superseded';
 
 /**
  * The structured, exportable log of one dial-in iteration:

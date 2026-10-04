@@ -686,7 +686,7 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
       const requestedLimit = Number.isFinite(limit) ? limit : 20;
       const requestedOffset = Number.isFinite(offset) ? offset : 0;
       const ascending = params.get('order') === 'asc';
-      const filters: Array<[string, (shot: ShotRecord) => string | undefined]> = [
+      const filters: Array<[string, (shot: ShotRecord) => string | null | undefined]> = [
         ['grinderId', (shot) => shot.workflow.context?.grinderId],
         ['grinderModel', (shot) => shot.workflow.context?.grinderModel],
         ['beanBatchId', (shot) => shot.workflow.context?.beanBatchId],

@@ -204,19 +204,22 @@ export interface DevicesState {
 // Workflow
 // ---------------------------------------------------------------------------
 
-/** Every key is omitted by Decaid when null. */
+/**
+ * Every key is omitted by Decaid when null. On PUT, an explicit null clears a
+ * field (except targetYield, which must stay a number; 0 = off).
+ */
 export interface WorkflowContext {
   targetDoseWeight?: number;
   /** THE stop-at-weight target in grams. A JSON number; 0 = off; never null. */
   targetYield?: number;
   targetWaterVolume?: number;
-  grinderId?: string;
-  grinderModel?: string;
+  grinderId?: string | null;
+  grinderModel?: string | null;
   /** A string on the wire. */
-  grinderSetting?: string;
-  beanBatchId?: string;
-  coffeeName?: string;
-  coffeeRoaster?: string;
+  grinderSetting?: string | null;
+  beanBatchId?: string | null;
+  coffeeName?: string | null;
+  coffeeRoaster?: string | null;
   finalBeverageType?: string;
   baristaName?: string;
   drinkerName?: string;

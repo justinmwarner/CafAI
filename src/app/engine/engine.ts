@@ -24,7 +24,7 @@ import {
   type SaveBagDetails,
   type ToolName,
 } from '../../coach/contract.ts';
-import type { ShotRecord, TelemetryStore, WorkflowContext } from '../../api/types.ts';
+import type { ShotRecord, TelemetryStore, WireProfile, WorkflowContext } from '../../api/types.ts';
 import type { ProfileJson, ShotSummary } from '../../coach/types.ts';
 import type { ContentBlock, Effort, PendingUiCall, RunnerTool, ToolResultBlock } from '../../llm/types.ts';
 import type {
@@ -133,6 +133,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   let settings: Settings = { model: 'claude-opus-5-5', grinderName: null, grinderSetting: null, activeBagId: null };
   let session: Session | null = null;
   let lastFailed: (() => Promise<void>) | null = null;
+  /** A version CafAI considers active but that may not be on the machine (a failed load, or a shot that ran something else). */
+  let loadProblem: { versionId: string; message: string } | null = null;
   const shotCache = new Map<string, ShotRecord>();
   const listeners = new Set<() => void>();
   let emitTimer: ReturnType<typeof setTimeout> | null = null;
@@ -169,6 +171,11 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (emitTimer) {
       clearTimeout(emitTimer);
       emitTimer = null;
+    }
+    if (!state.error && loadProblem && !state.busy) {
+      const versionId = loadProblem.versionId;
+      state = { ...state, error: loadProblem.message };
+      lastFailed = () => retryActivation(versionId);
     }
     state = {
       ...state,
@@ -240,11 +247,33 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     };
     const dose = patch.targetDoseWeight ?? s.doseG;
     if (dose) context.targetDoseWeight = dose;
-    if (s.bag.name) context.coffeeName = s.bag.name;
-    if (s.bag.roaster) context.coffeeRoaster = s.bag.roaster;
-    if (settings.grinderName) context.grinderModel = settings.grinderName;
-    if (settings.grinderSetting) context.grinderSetting = settings.grinderSetting;
+    // Decaid merges the context field by field, so anything left over from the
+    // previous coffee (another skin's bean batch, the old roaster) would stick
+    // to this coffee's shots: send null to clear what CafAI does not know.
+    context.coffeeName = s.bag.name || null;
+    context.coffeeRoaster = s.bag.roaster ?? null;
+    context.beanBatchId = null;
+    context.grinderId = null;
+    context.grinderModel = settings.grinderName ?? null;
+    context.grinderSetting = settings.grinderSetting ?? null;
     return context;
+  }
+
+  /** True when a profile (from the workflow or a shot record) is this version. */
+  function runsVersion(profile: WireProfile | ProfileJson | undefined, version: ProfileVersion): boolean {
+    if (!profile) return false;
+    if (profile.title === version.title) return true;
+    try {
+      return coach.profileId(profile) === coach.profileId(version.profile);
+    } catch {
+      return false;
+    }
+  }
+
+  function loadedNotice(title: string) {
+    return telemetry.getState().machineConnected
+      ? noticePart('success', `Loaded ${title} on the machine.`)
+      : noticePart('info', `Saved ${title}. Decaid loads it when the machine connects.`);
   }
 
   async function loadWorkflowNumbers(s: Session): Promise<void> {
@@ -415,7 +444,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         diffPart({
           requestId: call.id,
           summary: plan.summary || input.summary,
-          lines: plan.diffLines,
+          lines: plan.diffLines.filter((line) => line !== (plan.summary || input.summary)),
           manualSteps: plan.manualSteps,
           rationale: `${input.rationale}${tips}${notes}`,
           expectedEffect: input.expectedEffect,
@@ -495,6 +524,18 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     for (const held of s.held) byId.set(held.tool_use_id, held);
     for (const [id, result] of answers) byId.set(id, result);
     const results = order.map((id) => byId.get(id) ?? toolResult(id, fallback));
+    const implicit = s.pending.filter((p) => !answers.has(p.id)).map((p) => p.id);
+    if (implicit.length > 0) {
+      let messages = state.messages;
+      for (const id of implicit) {
+        messages = updatePart(messages, byRequestId(id), (part) => {
+          if (part.kind === 'templates' || part.kind === 'options') return { ...part, expired: true };
+          if (part.kind === 'diff' && part.status === 'pending') return { ...part, status: 'expired' };
+          return part;
+        });
+      }
+      setMessages(messages);
+    }
     s.pending = [];
     s.held = [];
     const blocks: ContentBlock[] = [...results, ...extra];
@@ -565,7 +606,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     }
     settings = await storage.settings.update({ activeBagId: bag.id });
     emit();
-    await loadWorkflowNumbers(s);
+    void loadWorkflowNumbers(s);
   }
 
   async function createBag(): Promise<Session> {
@@ -666,8 +707,25 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       emit();
       return;
     }
-    const known = (await bagIterations(s)).some((i) => i.shotId === record.id);
-    if (known) return;
+    const iterations = await bagIterations(s);
+    if (iterations.some((i) => i.shotId === record.id)) return;
+    if (record.workflow?.profile && !runsVersion(record.workflow.profile, current)) {
+      // The machine ran something else (another bag's profile, or a load that
+      // failed): crediting this shot to the active version would corrupt the dial-in.
+      addMessage('system', [
+        noticePart(
+          'warning',
+          `That shot ran "${record.workflow.profile.title}", not ${current.title}, so it is not part of this dial-in.`,
+        ),
+      ]);
+      loadProblem = { versionId: current.id, message: `The machine is not running ${current.title}. Tap Retry to load it.` };
+      await persistConversation(s);
+      emit();
+      return;
+    }
+    for (const stale of iterations.filter((i) => i.outcome === 'pending')) {
+      await putIteration({ ...stale, outcome: 'superseded' });
+    }
     shotCache.set(record.id, record);
     let summary: ShotSummary;
     try {
@@ -763,22 +821,35 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     };
     await saveVersions(s, [version]);
     await persistBag(s, { templateId, activeVersionId: version.id });
-    addMessage(
-      'system',
-      [
-        uploaded
-          ? noticePart('success', `Loaded ${title} on the machine.`)
-          : noticePart('error', `${title} is saved, but loading it on the machine failed: ${note}`),
-      ],
-    );
+    if (uploaded) loadProblem = null;
+    else loadProblem = { versionId: version.id, message: `Could not load ${title} on the machine. Tap Retry to try again.` };
+    addMessage('system', [
+      uploaded ? loadedNotice(title) : noticePart('error', `${title} is saved, but loading it on the machine failed: ${note}`),
+    ]);
     state = { ...state, busy: false };
     emit();
     const answers = new Map([[call.id, toolResult(call.id, { picked: templateId, version: 1, title, uploaded, note })]]);
     await sendUser(s, answers, UNANSWERED_TEXT, []);
-    if (!uploaded) {
-      setError(`Could not load ${title} on the machine. Tap Retry to try again.`, () => retryActivation(version.id));
-      emit();
+  }
+
+  /**
+   * After the user switches bags: if the machine is not running this bag's
+   * active version, load it (the tap on the bag is the request), and say so.
+   */
+  async function loadActiveVersionIfNeeded(): Promise<void> {
+    const s = session;
+    const version = activeVersion(s);
+    if (!s || !version) return;
+    try {
+      const workflow = await api.getWorkflow();
+      if (runsVersion(workflow.profile, version)) return;
+      await activate(s, version.profile);
+      addMessage('system', [loadedNotice(version.title)]);
+    } catch (error) {
+      loadProblem = { versionId: version.id, message: `Could not load ${version.title}: ${describe(error)}` };
     }
+    await persistConversation(s);
+    emit();
   }
 
   async function retryActivation(versionId: string): Promise<void> {
@@ -789,7 +860,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     emit();
     try {
       await activate(s, version.profile);
-      addMessage('system', [noticePart('success', `Loaded ${version.title} on the machine.`)]);
+      loadProblem = null;
+      addMessage('system', [loadedNotice(version.title)]);
       lastFailed = null;
     } catch (error) {
       setError(`Could not load ${version.title}: ${describe(error)}`, () => retryActivation(versionId));
@@ -899,11 +971,20 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         });
       }
       setMessages(setDiffStatus(state.messages, requestId, 'applied'));
-      if (title) addMessage('system', [noticePart('success', `Loaded ${title} on the machine.`)]);
+      if (title) {
+        loadProblem = null;
+        addMessage('system', [loadedNotice(title)]);
+      }
       payload = { applied: true, variable: plan.variable, version: versionNumber, title };
     } catch (error) {
-      setMessages(setDiffStatus(state.messages, requestId, 'failed', describe(error)));
-      payload = { applied: false, error: describe(error) };
+      // Nothing changed on the machine (a shot was running, Decaid refused):
+      // keep the proposal open so Confirm can simply be tapped again.
+      const reason = describe(error);
+      setMessages(setDiffStatus(state.messages, requestId, 'pending', reason));
+      state = { ...state, busy: false };
+      setError(`The change was not loaded: ${reason}`, () => confirmChange(requestId));
+      emit();
+      return;
     }
     state = { ...state, busy: false };
     emit();
@@ -944,6 +1025,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       { ...parent, status: 'active' },
     ]);
     await persistBag(s, { activeVersionId: parent.id });
+    loadProblem = null;
     const iterations = await bagIterations(s);
     const applied = [...iterations]
       .reverse()
@@ -970,6 +1052,16 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     const s = session ?? (await createBag());
     addMessage('user', [{ kind: 'text', text: trimmed }]);
     emit();
+    const tasteQuestion = s.pending.find((p) => p.name === TOOL.askUser);
+    if (tasteQuestion) {
+      const iteration = await latestPendingIteration(s);
+      if (iteration && !iteration.feedback) {
+        await putIteration({
+          ...iteration,
+          feedback: { question: (tasteQuestion.input as AskUser).question, selected: [], otherText: trimmed },
+        });
+      }
+    }
     if (s.conversation.apiMessages.length === 0) {
       const blocks = intakeBlocks(trimmed, {
         grinder: { name: settings.grinderName, setting: settings.grinderSetting },
@@ -1011,12 +1103,18 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     },
     newBag: () =>
       enqueue(async () => {
+        const current = session;
+        if (current && current.conversation.apiMessages.length === 0 && !current.bag.templateId) return;
+        loadProblem = null;
         await createBag();
       }),
     selectBag: (bagId) =>
       enqueue(async () => {
         const bag = await storage.bags.get(bagId);
-        if (bag) await openSession(bag);
+        if (!bag) return;
+        loadProblem = null;
+        await openSession(bag);
+        await loadActiveVersionIfNeeded();
       }),
     sendText: (text) => enqueue(() => sendText(text)),
     pickTemplate: (requestId, templateId) => enqueue(() => pickTemplate(requestId, templateId)),
@@ -1055,8 +1153,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
           const active = bags.find((b) => b.id === settings.activeBagId);
           if (active) await openSession(active);
         }
-        if (state.hasApiKey && state.error?.startsWith('Add your Anthropic API key')) setError(null);
+        const waitedForKey = state.hasApiKey && Boolean(state.error?.startsWith('Add your Anthropic API key'));
+        if (waitedForKey) setError(null);
         emit();
+        if (waitedForKey && session && awaitingModel(session.conversation.apiMessages)) await runModel();
       }),
   };
 }

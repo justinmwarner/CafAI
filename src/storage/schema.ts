@@ -146,7 +146,7 @@ export const IterationSchema = z.object({
   feedback: exact<Feedback>(FeedbackShape).nullable().default(null),
   proposal: exact<ProposeAdjustment>(ProposalShape).nullable().default(null),
   change: exact<AppliedChange>(AppliedChangeShape).nullable().default(null),
-  outcome: z.enum(['pending', 'applied', 'declined', 'undone', 'kept']),
+  outcome: z.enum(['pending', 'applied', 'declined', 'undone', 'kept', 'superseded']),
   createdAt: timestamp,
   updatedAt: timestamp,
 });

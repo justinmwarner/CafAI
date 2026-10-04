@@ -65,6 +65,8 @@ export interface CoachPort {
   summarizeShot(record: ShotRecord): ShotSummary;
   versionTitle(bagName: string, version: number): string;
   buildVersionProfile(template: Template, base: ProfileJson, title: string, bagName: string): ProfileJson;
+  /** Decaid's content-hash id of a profile (title excluded); throws on unusable input. */
+  profileId(profile: unknown): string;
   /** Drops any model-sent "Other" and appends OTHER_OPTION last. */
   withOther(options: readonly string[]): string[];
   /** Run one read-only query tool (get_shot_summary, get_shot_series, ...) on validated input. */

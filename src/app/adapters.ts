@@ -13,6 +13,7 @@ import {
   buildVersionProfile,
   createShotSource,
   getTemplate,
+  profileId,
   readLeverValues,
   runQueryTool,
   summarizeShot,
@@ -40,6 +41,7 @@ export function createCoachPort(): CoachPort {
     summarizeShot,
     versionTitle,
     buildVersionProfile,
+    profileId,
     withOther: (options) => withOther([...options]),
     async runQuery(name, input, context) {
       // The coach's queries read a synchronous shot list. Resolve each shot

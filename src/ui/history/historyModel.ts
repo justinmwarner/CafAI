@@ -63,6 +63,7 @@ const OUTCOME_LABELS: Record<IterationOutcome, string> = {
   declined: 'Change declined',
   undone: 'Change undone',
   kept: 'Kept as is',
+  superseded: 'Superseded by the next shot',
 };
 
 export function outcomeLabel(outcome: IterationOutcome): string {

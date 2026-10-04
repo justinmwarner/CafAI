@@ -38,7 +38,8 @@ export interface TemplateCardItem {
   reason: string;
 }
 
-export type DiffStatus = 'pending' | 'applying' | 'applied' | 'declined' | 'failed' | 'undone';
+/** `expired`: the conversation moved on (the user typed instead of tapping). */
+export type DiffStatus = 'pending' | 'applying' | 'applied' | 'declined' | 'failed' | 'undone' | 'expired';
 
 export type CoachUiPart =
   | { kind: 'text'; text: string; streaming?: boolean }
@@ -48,6 +49,8 @@ export type CoachUiPart =
       requestId: string;
       items: TemplateCardItem[];
       pickedTemplateId: string | null;
+      /** The user typed instead of picking; the cards no longer answer anything. */
+      expired?: boolean;
     }
   | {
       kind: 'options';
@@ -58,6 +61,8 @@ export type CoachUiPart =
       multiSelect: boolean;
       /** Null until answered. */
       answer: { selected: string[]; otherText: string | null } | null;
+      /** The user typed instead of tapping (or pulled another shot); the chips are closed. */
+      expired?: boolean;
     }
   | {
       kind: 'diff';

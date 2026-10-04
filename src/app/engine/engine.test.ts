@@ -39,7 +39,7 @@ const baseProfile: ProfileJson = {
   tank_temperature: 0,
 };
 
-function makeTemplate(id: string, name: string): Template {
+function makeTemplate(id: string, name: string, profile: ProfileJson = baseProfile): Template {
   return {
     id,
     name,
@@ -49,13 +49,13 @@ function makeTemplate(id: string, name: string): Template {
     roastFit: ['medium'],
     decaidDefaultId: `profile:${id}`,
     source: { repo: 'decentespresso/decaid', file: `${id}.json`, commit: 'a45961b' },
-    profile: baseProfile,
+    profile,
     levers: [],
     constraints: [],
   };
 }
 
-const TEMPLATES = [makeTemplate('d-flow', 'D-Flow'), makeTemplate('londonium', 'Londonium')];
+const TEMPLATES = [makeTemplate('d-flow', 'D-Flow'), makeTemplate('londonium', 'Londonium', { ...baseProfile, target_weight: 42 })];
 
 const summary: ShotSummary = {
   shotId: 'shot-1',
@@ -133,6 +133,7 @@ const coach: CoachPort = {
   summarizeShot: () => summary,
   versionTitle: (name, n) => `${name} v${n}`,
   buildVersionProfile: (_t, base, title) => ({ ...base, title }),
+  profileId: (p) => `id:${JSON.stringify((p as ProfileJson).steps)}:${(p as ProfileJson).target_weight}`,
   withOther: (options) => [...options.filter((o) => o.toLowerCase() !== 'other'), OTHER_OPTION],
   async runQuery(name, input, context) {
     if (name === TOOL.getBagHistory) return { content: JSON.stringify({ versions: context.versions.length }), isError: false };
@@ -148,16 +149,26 @@ interface ApiCall {
   args: unknown[];
 }
 
+const machine = { loaded: SAMPLE_WORKFLOW.profile as ProfileJson, failActivations: 0 };
+
 function makeApi(calls: ApiCall[]): ApiPort {
   let ids = 0;
+  // Like the machine: a shot runs whatever profile was activated last.
+  machine.loaded = SAMPLE_WORKFLOW.profile as ProfileJson;
+  machine.failActivations = 0;
   return {
-    getWorkflow: async () => SAMPLE_WORKFLOW,
+    getWorkflow: async () => ({ ...SAMPLE_WORKFLOW, profile: machine.loaded }) as Workflow,
     updateWorkflow: async (patch) => {
       calls.push({ method: 'updateWorkflow', args: [patch] });
       return SAMPLE_WORKFLOW;
     },
     activateProfile: async (profile: ProfileJson, context: WorkflowContext) => {
+      if (machine.failActivations > 0) {
+        machine.failActivations -= 1;
+        throw new Error('Decaid said no.');
+      }
       calls.push({ method: 'activateProfile', args: [profile, context] });
+      machine.loaded = profile;
       return { ...SAMPLE_WORKFLOW, profile } as Workflow;
     },
     createProfileVersion: async (request) => {
@@ -181,7 +192,7 @@ function makeApi(calls: ApiCall[]): ApiPort {
     },
     getShot: async (id) => {
       calls.push({ method: 'getShot', args: [id] });
-      return { id, timestamp: '', createdAt: '', updatedAt: '', workflow: SAMPLE_WORKFLOW, measurements: [] } as ShotRecord;
+      return { id, timestamp: '', createdAt: '', updatedAt: '', workflow: { ...SAMPLE_WORKFLOW, profile: machine.loaded }, measurements: [] } as ShotRecord;
     },
     getLatestShot: async () => null,
   };
@@ -502,13 +513,14 @@ describe('coach engine', () => {
     expect(engine.getState().error).toMatch(/API key/);
     expect(engine.getState().hasApiKey).toBe(false);
 
+    // Adding the key answers the message that was waiting for it.
     storage.apiKey = 'sk-ant-test';
+    scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);
     await engine.refresh();
     expect(engine.getState().hasApiKey).toBe(true);
     expect(engine.getState().error).toBeNull();
-    scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);
-    await engine.sendText('Kiambu AA, light, washed');
     expect(requests).toHaveLength(1);
+    expect(engine.getState().phase).toBe('choosing_template');
   });
 
   it('recovers pending choices after a reload', async () => {
@@ -531,6 +543,105 @@ describe('coach engine', () => {
     await engine.refresh();
     expect(engine.getState().bags.map((b) => b.id)).toContain('bag-imported');
     expect(engine.getState().activeBag?.name).toBe('Kiambu AA');
+  });
+
+
+  it('does not credit a shot that ran another profile, and offers to load the right one', async () => {
+    await throughTemplatePick();
+    machine.loaded = { ...baseProfile, title: 'Somebody else', target_weight: 99 };
+    telemetry.emitShot({ type: 'finished', shotId: 'shot-x', stopReason: 'targetWeight' });
+    await vi.waitFor(() => expect(engine.getState().error).toMatch(/not running Kiambu AA v1/));
+    expect(await storage.iterations.listAll()).toHaveLength(0);
+    const notice = engine.getState().messages.flatMap((m) => m.parts).find((p) => p.kind === 'notice' && p.tone === 'warning');
+    expect(notice).toMatchObject({ text: expect.stringContaining('Somebody else') });
+    await engine.retry();
+    expect(machine.loaded.title).toBe('Kiambu AA v1');
+    expect(engine.getState().error).toBeNull();
+  });
+
+  it('loads the active version of a bag when the user switches back to it', async () => {
+    await throughTemplatePick();
+    const kiambu = engine.getState().activeBag!.id;
+    await engine.newBag();
+    scripts.push(() => [
+      toolUse('t-save-b', TOOL.saveBagDetails, { name: 'Sumatra', roaster: null, origin: null, roastLevel: 'dark', process: null, notes: null }),
+      toolUse('t-tpl-b', TOOL.proposeTemplates, {
+        suggestions: [
+          { templateId: 'londonium', confidence: 'high', reason: 'Dark.' },
+          { templateId: 'd-flow', confidence: 'low', reason: 'Maybe.' },
+        ],
+      }),
+    ]);
+    await engine.sendText('Sumatra, dark');
+    scripts.push(() => [text('Loaded.')]);
+    await engine.pickTemplate('t-tpl-b', 'londonium');
+    expect(machine.loaded.title).toBe('Sumatra v1');
+
+    await engine.selectBag(kiambu);
+    expect(machine.loaded.title).toBe('Kiambu AA v1');
+    const notices = engine.getState().messages.flatMap((m) => m.parts).filter((p) => p.kind === 'notice');
+    expect(notices.at(-1)).toMatchObject({ text: 'Loaded Kiambu AA v1 on the machine.' });
+  });
+
+  it('closes the taste chips and keeps the typed answer as feedback when the user types', async () => {
+    await throughShot();
+    scripts.push(() => [text('Noted.')]);
+    await engine.sendText('Quite sour and thin');
+    const options = engine.getState().messages.flatMap((m) => m.parts).find((p) => p.kind === 'options');
+    expect(options).toMatchObject({ expired: true });
+    expect((await storage.iterations.listAll())[0]!.feedback).toEqual({
+      question: 'How did it taste?',
+      selected: [],
+      otherText: 'Quite sour and thin',
+    });
+  });
+
+  it('closes template cards and change cards that were answered by typing', async () => {
+    await throughProposal();
+    scripts.push(() => [text('Sure, ask away.')]);
+    await engine.sendText('Why temperature and not grind?');
+    const diff = engine.getState().messages.flatMap((m) => m.parts).find((p) => p.kind === 'diff');
+    expect(diff).toMatchObject({ status: 'expired' });
+    const templates = engine.getState().messages.flatMap((m) => m.parts).find((p) => p.kind === 'templates');
+    expect(templates).toMatchObject({ pickedTemplateId: 'd-flow' });
+  });
+
+  it('keeps a change open when loading it fails, so Confirm can be tapped again', async () => {
+    await throughProposal();
+    machine.failActivations = 1;
+    await engine.confirmChange('t-adj');
+    let diff = engine.getState().messages.flatMap((m) => m.parts).find((p) => p.kind === 'diff');
+    expect(diff).toMatchObject({ status: 'pending', error: 'Decaid said no.' });
+    expect(engine.getState().error).toMatch(/not loaded/);
+    expect(engine.getState().activeVersion?.version).toBe(1);
+
+    scripts.push(() => [text('Done.')]);
+    await engine.retry();
+    diff = engine.getState().messages.flatMap((m) => m.parts).find((p) => p.kind === 'diff');
+    expect(diff).toMatchObject({ status: 'applied' });
+    expect(engine.getState().activeVersion?.version).toBe(2);
+  });
+
+  it('reuses an untouched new bag instead of creating another', async () => {
+    await engine.newBag();
+    await engine.newBag();
+    expect(engine.getState().bags).toHaveLength(1);
+  });
+
+  it('marks an unanswered iteration superseded when the next shot arrives', async () => {
+    await throughShot();
+    scripts.push(() => [text('Again?'), askTaste]);
+    telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: 'targetWeight' });
+    await vi.waitFor(async () => expect(await storage.iterations.listAll()).toHaveLength(2));
+    const [first, second] = await storage.iterations.listAll();
+    expect(first!.outcome).toBe('superseded');
+    expect(second!.outcome).toBe('pending');
+  });
+
+  it('clears details of the previous coffee from the workflow context', async () => {
+    await throughTemplatePick();
+    const context = apiCalls.find((c) => c.method === 'activateProfile')!.args[1] as Record<string, unknown>;
+    expect(context).toMatchObject({ beanBatchId: null, grinderId: null, coffeeName: 'Kiambu AA' });
   });
 
   it('never sends the API key anywhere the UI can see', async () => {
