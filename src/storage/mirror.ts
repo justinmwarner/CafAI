@@ -18,7 +18,7 @@
  *
  * Key layout, namespace `cafai` (keys are [a-z0-9._-], every value JSON):
  *   meta            {schemaVersion, appVersion, updatedAt, pages, skipped}
- *   settings        the four settings
+ *   settings        the settings (model, grinder and its Decaid link, active bag)
  *   bags            Bag[], oldest first
  *   versions        ProfileVersion[], oldest first
  *   iterations      IterationRecord[], oldest first, without summary.series

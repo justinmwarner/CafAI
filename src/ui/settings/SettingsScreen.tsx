@@ -1,7 +1,9 @@
 /**
  * The settings route (#/settings): the Anthropic API key, the model, and the
  * grinder. The key goes straight to the secret store and is never shown
- * again; the UI only ever knows whether one is saved.
+ * again; the UI only ever knows whether one is saved. The grinder can be
+ * linked to Decaid's grinder library, whose step size the coach then uses
+ * (GrinderFields.tsx).
  */
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import Alert from '@mui/material/Alert';
@@ -21,9 +23,13 @@ import Typography from '@mui/material/Typography';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import { listGrinders } from '../../api/grinders.ts';
 import type { ModelInfo } from '../../llm/types.ts';
 import { useCoach, useServices } from '../../app/services.tsx';
+import type { Settings } from '../../storage/types.ts';
 import { TID } from '../testIds.ts';
+import { GrinderFields } from './GrinderFields.tsx';
+import { grinderPatch, NOT_LISTED, type GrinderForm, type GrinderLibrary } from './grinderPicker.ts';
 
 type Message = { tone: 'success' | 'error'; text: string };
 
@@ -196,13 +202,19 @@ function ApiKeySection() {
 
 interface Form {
   model: string;
-  grinderName: string;
-  grinderSetting: string;
+  grinder: GrinderForm;
 }
 
+type SavedGrinder = Pick<Settings, 'grinderId' | 'grinderName'>;
+
+/** Decaid answers in well under a second when it is there; do not hold the picker longer than this. */
+const GRINDER_LIST_TIMEOUT_MS = 5000;
+
 function CoachSettingsSection() {
-  const { storage, coach, models } = useServices();
+  const { storage, coach, models, decaid } = useServices();
   const [form, setForm] = useState<Form | null>(null);
+  const [saved, setSaved] = useState<SavedGrinder>({ grinderId: null, grinderName: null });
+  const [library, setLibrary] = useState<GrinderLibrary>({ status: 'loading' });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<Message | null>(null);
 
@@ -212,10 +224,14 @@ function CoachSettingsSection() {
       .get()
       .then((settings) => {
         if (live) {
+          setSaved({ grinderId: settings.grinderId ?? null, grinderName: settings.grinderName });
           setForm({
             model: settings.model,
-            grinderName: settings.grinderName ?? '',
-            grinderSetting: settings.grinderSetting ?? '',
+            grinder: {
+              pick: settings.grinderId ?? NOT_LISTED,
+              name: settings.grinderName ?? '',
+              setting: settings.grinderSetting ?? '',
+            },
           });
         }
       })
@@ -227,17 +243,31 @@ function CoachSettingsSection() {
     };
   }, [storage]);
 
+  // Decaid's grinder library, read each time the screen opens. Any failure
+  // (unreachable, or a Decaid without the library) shows the free-text fields.
+  useEffect(() => {
+    let live = true;
+    listGrinders(decaid, { timeoutMs: GRINDER_LIST_TIMEOUT_MS })
+      .then((grinders) => {
+        if (live) setLibrary(grinders.length > 0 ? { status: 'ready', grinders } : { status: 'unavailable' });
+      })
+      .catch(() => {
+        if (live) setLibrary({ status: 'unavailable' });
+      });
+    return () => {
+      live = false;
+    };
+  }, [decaid]);
+
   const save = async (event: FormEvent) => {
     event.preventDefault();
     if (!form || saving) return;
     setSaving(true);
     setMessage(null);
     try {
-      await storage.settings.update({
-        model: form.model,
-        grinderName: form.grinderName.trim() || null,
-        grinderSetting: form.grinderSetting.trim() || null,
-      });
+      // Only CafAI's own settings: the engine carries the grinder to Decaid's workflow.
+      const next = await storage.settings.update({ model: form.model, ...grinderPatch(form.grinder, library, saved) });
+      setSaved({ grinderId: next.grinderId ?? null, grinderName: next.grinderName });
       setMessage({ tone: 'success', text: 'Settings saved.' });
       await coach.refresh();
     } catch (error) {
@@ -248,6 +278,8 @@ function CoachSettingsSection() {
   };
 
   const update = (patch: Partial<Form>) => setForm((current) => (current ? { ...current, ...patch } : current));
+  const updateGrinder = (patch: Partial<GrinderForm>) =>
+    setForm((current) => (current ? { ...current, grinder: { ...current.grinder, ...patch } } : current));
   const selected = models.find((m) => m.id === form?.model);
   const disabled = form === null || saving;
 
@@ -277,28 +309,7 @@ function CoachSettingsSection() {
             </option>
           ))}
         </TextField>
-        <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: '3fr 2fr' } }}>
-          <TextField
-            size="small"
-            label="Grinder"
-            placeholder="e.g. Niche Zero"
-            value={form?.grinderName ?? ''}
-            disabled={disabled}
-            onChange={(event) => update({ grinderName: event.target.value })}
-            sx={fieldSx}
-            slotProps={{ htmlInput: { 'data-testid': TID.grinderName, maxLength: 60 }, inputLabel: { shrink: true } }}
-          />
-          <TextField
-            size="small"
-            label="Current grinder setting"
-            placeholder="e.g. 14"
-            value={form?.grinderSetting ?? ''}
-            disabled={disabled}
-            onChange={(event) => update({ grinderSetting: event.target.value })}
-            sx={fieldSx}
-            slotProps={{ htmlInput: { 'data-testid': TID.grinderSetting, maxLength: 20 }, inputLabel: { shrink: true } }}
-          />
-        </Box>
+        <GrinderFields form={form?.grinder ?? null} library={library} savedName={saved.grinderName} disabled={disabled} onChange={updateGrinder} />
         <Typography variant="body2" sx={{ color: 'text.secondary', mt: -1 }}>
           The coach uses your grinder and its dial setting to say how far to turn it.
         </Typography>

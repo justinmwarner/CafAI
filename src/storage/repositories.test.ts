@@ -183,7 +183,16 @@ describe('SettingsRepository', () => {
     expect(await repos.settings.get()).toEqual(makeSettings({ grinderName: 'Lagom 01', grinderSetting: '0.4' }));
   });
 
-  it('never stores anything but the four settings, even if a caller passes an API key', async () => {
+  it('keeps a grinder linked to Decaid until it is unlinked', async () => {
+    const { repos } = setup();
+    await repos.settings.update({ grinderId: 'g-1', grinderName: 'Niche Zero', grinderSetting: '14' });
+    await repos.settings.update({ grinderSetting: '13.5' });
+    expect(await repos.settings.get()).toEqual(makeSettings({ grinderId: 'g-1', grinderName: 'Niche Zero', grinderSetting: '13.5' }));
+    await repos.settings.update({ grinderId: null, grinderName: 'DF64' });
+    expect(await repos.settings.get()).toMatchObject({ grinderId: null, grinderName: 'DF64' });
+  });
+
+  it('never stores anything but the settings, even if a caller passes an API key', async () => {
     const { name, repos } = setup();
     await repos.settings.update({ grinderName: 'Niche Zero', apiKey: API_KEY } as never);
     const raw = await readCommitted(name, (db) => db.get('settings', SETTINGS_KEY));

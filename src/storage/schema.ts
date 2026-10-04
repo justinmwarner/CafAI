@@ -102,6 +102,8 @@ export const SettingsSchema = z.object({
   model: z.string().min(1),
   grinderName: nullableText,
   grinderSetting: nullableText,
+  /** Absent from exports made before grinders could be linked to Decaid: read as not linked. */
+  grinderId: nullableText,
   activeBagId: nullableText,
 });
 

@@ -16,7 +16,7 @@ export function uniqueDbName(prefix = 'cafai-test'): string {
 }
 
 export function makeSettings(overrides: Partial<Settings> = {}): Settings {
-  return { model: MODEL, grinderName: null, grinderSetting: null, activeBagId: null, ...overrides };
+  return { model: MODEL, grinderName: null, grinderSetting: null, grinderId: null, activeBagId: null, ...overrides };
 }
 
 export function makeBag(overrides: Partial<Bag> = {}): Bag {

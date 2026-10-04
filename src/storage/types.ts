@@ -114,8 +114,15 @@ export interface ConversationRecord {
 /** Non-secret settings. Mirrored to Decaid. Never holds the API key. */
 export interface Settings {
   model: string;
+  /** The grinder's model when it is linked to Decaid's library, else what the user typed. */
   grinderName: string | null;
   grinderSetting: string | null;
+  /**
+   * The grinder in Decaid's library (GET /api/v1/grinders) the user picked,
+   * or null when it is not linked. Storage always reads and writes it (null
+   * when absent); it is optional only so that older Settings literals compile.
+   */
+  grinderId?: string | null;
   /** Last bag the user worked on, restored on start. */
   activeBagId: string | null;
 }

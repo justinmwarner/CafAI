@@ -1,6 +1,6 @@
 /**
  * Decaid access for CafAI: where the gateway is, the REST and KV clients,
- * live telemetry, presence, and profile activation.
+ * live telemetry, presence, profile activation and the grinder library.
  */
 export * from './types.ts';
 export {
@@ -32,3 +32,15 @@ export { createTelemetryStore, type TelemetryStoreOptions, type TimerApi, type V
 export { createHeartbeat, type HeartbeatOptions } from './heartbeat.ts';
 export { activateProfile, createProfileVersion, findProfileMismatch, isShotRunning } from './workflow.ts';
 export { describeFailedConnect } from './devices.ts';
+export {
+  getGrinder,
+  grinderSteps,
+  listGrinders,
+  parseGrinder,
+  type Grinder,
+  type GrinderRequestOptions,
+  type GrinderSettingType,
+  type GrinderSource,
+  type GrinderSteps,
+  type ListGrindersOptions,
+} from './grinders.ts';

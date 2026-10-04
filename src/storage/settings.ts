@@ -7,14 +7,14 @@
  *
  * Whatever comes back out of storage is data from a past version of ourselves
  * (or an import file), so it is read leniently: a field with the wrong type
- * falls back to its default instead of breaking start-up. Only the four known
+ * falls back to its default instead of breaking start-up. Only the known
  * fields survive, so the record can never carry an API key into the mirror or
  * an export, whatever a caller passed in.
  */
 import type { Settings } from './types.ts';
 
 export function defaultSettings(defaultModel: string): Settings {
-  return { model: defaultModel, grinderName: null, grinderSetting: null, activeBagId: null };
+  return { model: defaultModel, grinderName: null, grinderSetting: null, grinderId: null, activeBagId: null };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -25,6 +25,11 @@ function textOrNull(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
 }
 
+/** An id is opaque, but an empty one points at nothing. */
+function idOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value : null;
+}
+
 export function normalizeSettings(raw: unknown, defaultModel: string): Settings {
   if (!isRecord(raw)) return defaultSettings(defaultModel);
   const model = raw['model'];
@@ -32,11 +37,13 @@ export function normalizeSettings(raw: unknown, defaultModel: string): Settings 
     model: typeof model === 'string' && model.trim() !== '' ? model : defaultModel,
     grinderName: textOrNull(raw['grinderName']),
     grinderSetting: textOrNull(raw['grinderSetting']),
+    // Settings saved before grinders could be linked have no id: not linked.
+    grinderId: idOrNull(raw['grinderId']),
     activeBagId: textOrNull(raw['activeBagId']),
   };
 }
 
-const FIELDS: ReadonlyArray<keyof Settings> = ['model', 'grinderName', 'grinderSetting', 'activeBagId'];
+const FIELDS: ReadonlyArray<keyof Settings> = ['model', 'grinderName', 'grinderSetting', 'grinderId', 'activeBagId'];
 
 /** `undefined` means "not part of this edit", never "clear it"; clearing takes an explicit null. */
 export function applySettingsPatch(current: Settings, patch: Partial<Settings>, defaultModel: string): Settings {
@@ -48,8 +55,8 @@ export function applySettingsPatch(current: Settings, patch: Partial<Settings>, 
   return normalizeSettings(next, defaultModel);
 }
 
-function isBlank(value: string | null): boolean {
-  return value === null || value.trim() === '';
+function isBlank(value: string | null | undefined): boolean {
+  return value === null || value === undefined || value.trim() === '';
 }
 
 /**
@@ -58,13 +65,19 @@ function isBlank(value: string | null): boolean {
  * Only ever fills blanks: anything already set here wins, so a restore can
  * never overwrite a choice made on this device. The model has no blank state,
  * so (like Crema's provider) it is adopted only while it is still the default.
+ * The grinder's name and its Decaid link describe one grinder, so the link
+ * comes along only when this device names no grinder at all: a name typed
+ * here is never paired with another grinder's link.
  */
 export function fillBlankSettings(local: Settings, incoming: Settings, defaultModel: string): Settings {
   const pick = (mine: string | null, theirs: string | null) => (isBlank(mine) && !isBlank(theirs) ? theirs : mine);
+  const linkedHere = !isBlank(local.grinderId);
+  const noGrinderHere = isBlank(local.grinderName) && !linkedHere;
   return {
     model: local.model === defaultModel && incoming.model.trim() !== '' ? incoming.model : local.model,
-    grinderName: pick(local.grinderName, incoming.grinderName),
+    grinderName: linkedHere ? local.grinderName : pick(local.grinderName, incoming.grinderName),
     grinderSetting: pick(local.grinderSetting, incoming.grinderSetting),
+    grinderId: noGrinderHere ? (incoming.grinderId ?? null) : (local.grinderId ?? null),
     activeBagId: pick(local.activeBagId, incoming.activeBagId),
   };
 }

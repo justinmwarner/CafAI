@@ -205,6 +205,18 @@ describe('import validation', () => {
     const parsed = parseCafaiExport({ ...exportOf(), settings: { ...makeSettings(), apiKey: API_KEY } });
     expect(JSON.stringify(parsed)).not.toContain(API_KEY);
   });
+
+  it('reads an export made before grinder links as not linked', () => {
+    const older = { model: MODEL, grinderName: 'Niche Zero', grinderSetting: '14', activeBagId: 'bag_kiambu' };
+    const parsed = parseCafaiExport({ ...exportOf(), settings: older });
+    expect(parsed.settings).toEqual({ ...older, grinderId: null });
+  });
+
+  it('keeps a linked grinder, and refuses a link that is not text', () => {
+    const linked = makeSettings({ grinderName: 'Niche Zero', grinderId: 'c0ffee00-0a5e-4c1e-8a11-000000000001' });
+    expect(parseCafaiExport(exportOf({ settings: linked })).settings).toEqual(linked);
+    expect(() => parseCafaiExport({ ...exportOf(), settings: { ...linked, grinderId: 42 } })).toThrow(ImportError);
+  });
 });
 
 describe('importAll replace', () => {
@@ -235,6 +247,18 @@ describe('importAll replace', () => {
     await seed(repos);
     await porter.importAll(exportOf(), 'replace');
     expect(await secrets.getApiKey()).toBe(API_KEY);
+  });
+
+  it('round-trips a grinder linked to Decaid, and loads an older file as not linked', async () => {
+    const linked = makeSettings({ grinderName: 'Niche Zero', grinderSetting: '14', grinderId: 'c0ffee00-0a5e-4c1e-8a11-000000000001' });
+    const a = await setup();
+    await a.porter.importAll(exportOf({ settings: linked }), 'replace');
+    expect(await a.repos.settings.get()).toEqual(linked);
+    expect((await a.porter.exportAll()).settings).toEqual(linked);
+
+    const older = { model: MODEL, grinderName: 'DF64', grinderSetting: '2.5', activeBagId: null };
+    await a.porter.importAll({ ...exportOf(), settings: older }, 'replace');
+    expect(await a.repos.settings.get()).toEqual({ ...older, grinderId: null });
   });
 
   it('returns the number of records imported and asks the mirror to push the new state', async () => {
@@ -314,6 +338,12 @@ describe('importAll merge', () => {
     expect(await repos.settings.get()).toEqual(
       makeSettings({ model: 'claude-sonnet-5', grinderName: 'Niche Zero', grinderSetting: '0.4' }),
     );
+  });
+
+  it('fills a blank grinder with the incoming one, link included', async () => {
+    const { repos, porter } = await setup();
+    await porter.importAll(exportOf({ settings: makeSettings({ grinderName: 'Niche Zero', grinderId: 'g-1' }) }), 'merge');
+    expect(await repos.settings.get()).toMatchObject({ grinderName: 'Niche Zero', grinderId: 'g-1' });
   });
 
   it('asks the mirror to push, without claiming local data was replaced', async () => {

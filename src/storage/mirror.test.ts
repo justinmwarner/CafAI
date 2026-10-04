@@ -409,6 +409,18 @@ describe('pull', () => {
     expect(pulled?.settings).toEqual(makeSettings());
   });
 
+  it('carries the grinder link both ways, and restores a backup made before links as not linked', async () => {
+    const kv = createMemoryKv();
+    const linked = makeSettings({ grinderName: 'Niche Zero', grinderSetting: '14', grinderId: 'c0ffee00-0a5e-4c1e-8a11-000000000001' });
+    await makeMirror(kv, memorySource({ settings: linked }).source).pushNow();
+    expect(kv.values()['settings']).toEqual(linked);
+    expect((await makeMirror(kv, memorySource().source).pull())?.settings).toEqual(linked);
+
+    const older = { model: MODEL, grinderName: 'DF64', grinderSetting: '2.5', activeBagId: 'bag_kiambu' };
+    const oldKv = createMemoryKv({ cafai: { settings: older, bags: [makeBag()] } });
+    expect((await makeMirror(oldKv, memorySource().source).pull())?.settings).toEqual({ ...older, grinderId: null });
+  });
+
   it('rejects when Decaid cannot be read, so a failure never looks like an empty backup', async () => {
     const kv = createMemoryKv();
     kv.failNext('getAll');
