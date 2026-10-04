@@ -974,8 +974,15 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       } else if (plan.variable === 'dose' && plan.to !== null) {
         await api.updateWorkflow({ context: { targetDoseWeight: plan.to } });
         s.doseG = plan.to;
-      } else if (plan.variable === 'grind' && (plan.contextPatch.grinderSetting ?? input.grind?.setting)) {
-        settings = await storage.settings.update({ grinderSetting: plan.contextPatch.grinderSetting ?? input.grind?.setting ?? null });
+      } else if (plan.variable === 'grind') {
+        // When the move names the new dial setting, the next shots carry it,
+        // in CafAI and in Decaid's workflow context. A relative move ("1 step
+        // finer") leaves the stored setting as the user last entered it.
+        const setting = plan.contextPatch.grinderSetting ?? input.grind?.setting ?? null;
+        if (setting) {
+          await api.updateWorkflow({ context: { grinderSetting: setting } });
+          settings = await storage.settings.update({ grinderSetting: setting });
+        }
       }
       const iteration = await latestPendingIteration(s);
       if (iteration) {

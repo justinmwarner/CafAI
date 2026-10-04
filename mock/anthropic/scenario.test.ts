@@ -328,13 +328,30 @@ describe('scripted replies', () => {
       variable: 'grind',
       lever: null,
       value: null,
-      grind: { direction: 'finer', amount: 1, setting: null },
+      grind: { direction: 'finer', amount: 1, setting: '13' },
     });
     expect(adjustmentFor(['Balanced, sweet'])).toMatchObject({ variable: 'none', lever: null, value: null, grind: null });
     const strong = ok(
       call([...UP_TO_SHOT, shot(BLOOMING_LEVERS), SHOT_REPLY, user(toolResult('t_ask', { selected: ['Other'], other: 'Too strong' })), ANSWER_REPLY, SERIES]),
     );
     expect(strong.tools[0]?.input).toMatchObject({ lever: 'yield', value: 38 });
+  });
+
+  it('rule 2: a grind move names the new dial setting when the context had a number', () => {
+    // INTAKE's context says the Niche Zero is on 14.
+    expect(adjustmentFor(['Other'])).toMatchObject({
+      variable: 'grind',
+      grind: { direction: 'finer', amount: 1, setting: '13' },
+      summary: 'Grind 1 step finer, to 13',
+    });
+    const noDial = user(
+      text('Kiambu AA, light roast, washed.'),
+      text('[context]\n{"grinder":{"name":null,"setting":null},"scaleConnected":true}'),
+    );
+    const reply = ok(
+      call([noDial, INTAKE_REPLY, PICKED, LOADED_REPLY, shot(BLOOMING_LEVERS), SHOT_REPLY, answer(['Other']), ANSWER_REPLY, SERIES]),
+    );
+    expect(reply.tools[0]?.input).toMatchObject({ grind: { setting: null }, summary: 'Grind 1 step finer' });
   });
 
   it('rule 1: an applied change is confirmed, a declined one keeps the version', () => {

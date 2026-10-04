@@ -346,6 +346,25 @@ function latestShot(messages: Message[]): Raw | null {
   return shot;
 }
 
+/**
+ * The dial setting from the latest context block, when it is a plain number.
+ * The prompt asks for the absolute setting whenever it is known; the script
+ * assumes the common convention that a lower number is finer.
+ */
+function dialSetting(messages: Message[]): number | null {
+  let setting: number | null = null;
+  for (const message of messages) {
+    if (message.role !== 'user') continue;
+    for (const text of textsOf(message)) {
+      if (!text.startsWith(EVENT.context)) continue;
+      const grinder = eventPayload(text)?.grinder;
+      const value = isRecord(grinder) && typeof grinder.setting === 'string' ? grinder.setting.trim() : '';
+      setting = /^\d+(\.\d+)?$/.test(value) ? Number(value) : null;
+    }
+  }
+  return setting;
+}
+
 function proposal(
   change: Pick<ProposeAdjustment, 'variable' | 'lever' | 'value' | 'grind'>,
   summary: string,
@@ -425,9 +444,11 @@ function chooseAdjustment(messages: Message[]): ProposeAdjustment {
       ['Note your grind setting so you can repeat it.'],
     );
   }
+  const dial = dialSetting(messages);
+  const finer = dial !== null && dial - 1 >= 0 ? String(Math.round((dial - 1) * 100) / 100) : null;
   return proposal(
-    { variable: 'grind', lever: null, value: null, grind: { direction: 'finer', amount: 1, setting: null } },
-    'Grind 1 step finer',
+    { variable: 'grind', lever: null, value: null, grind: { direction: 'finer', amount: 1, setting: finer } },
+    finer === null ? 'Grind 1 step finer' : `Grind 1 step finer, to ${finer}`,
     'The taste did not point to one clear fix, so slow the shot slightly with a finer grind.',
     'A slightly slower shot with more sweetness.',
     ['Keep the same dose.'],

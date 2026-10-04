@@ -561,6 +561,30 @@ describe('coach engine', () => {
     expect(engine.getState().error).toBeNull();
   });
 
+  it('remembers the new grinder setting after a confirmed grind change, here and in Decaid', async () => {
+    await throughShot();
+    scripts.push(() => [
+      toolUse('t-grind', TOOL.proposeAdjustment, {
+        variable: 'grind',
+        lever: null,
+        value: null,
+        grind: { direction: 'finer', amount: 1, setting: '13' },
+        summary: 'Grind 1 step finer, to 13',
+        rationale: 'It ran fast.',
+        expectedEffect: 'A slower, sweeter shot.',
+        tips: [],
+      }),
+    ]);
+    await engine.answerOptions('t-ask', ['Sour'], null);
+    expect(engine.getState().phase).toBe('awaiting_confirmation');
+    scripts.push(() => [text('Turn the dial, then pull another shot.')]);
+    await engine.confirmChange('t-grind');
+    expect((await storage.settings.get()).grinderSetting).toBe('13');
+    const patches = apiCalls.filter((c) => c.method === 'updateWorkflow').map((c) => c.args[0]);
+    expect(patches.at(-1)).toEqual({ context: { grinderSetting: '13' } });
+    expect(engine.getState().activeVersion?.version).toBe(1);
+  });
+
   it('says when the machine dropped mid-shot, and Retry picks the shot up once Decaid has it', async () => {
     await throughTemplatePick();
     machine.missingShots.add('shot-lost');
