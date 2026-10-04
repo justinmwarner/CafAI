@@ -76,7 +76,11 @@ ids. Every reply starts with a `thinking` block (empty text, deterministic
 signature), streams text in small deltas, and streams tool inputs as several
 `input_json_delta` pieces.
 
-1. tool_result for `propose_adjustment`:
+1. tool_result for `propose_adjustment` with `is_error` (CafAI rejected it)
+   -> text "That one is outside what this profile allows. Here is another
+   change." + a new `propose_adjustment`: the grind move below, or
+   `{variable:"none"}` when the rejected one was already a grind move.
+   tool_result for `propose_adjustment`:
    `applied:true` -> text "Done. v{version} is on the machine. Pull another
    shot and tell me how it tastes." (with `onMachine:false`: "Saved
    v{version}. Decaid loads it when the machine connects; pull another shot
@@ -90,7 +94,8 @@ signature), streams text in small deltas, and streams tool inputs as several
    - contains "Sour" -> `{variable:"profile", lever:"temp", value: levers.temp + 1}`
      (if that exceeds the template max, use `yield` +2 instead);
    - contains "Bitter" -> temp -1;
-   - contains "Weak" -> yield -2; contains "Strong" -> yield +2;
+   - contains "Weak" -> yield -2; contains "Strong" -> yield +2 (a yield
+     move only inside the template's yield range, else the grind move);
    - contains "Balanced" -> `{variable:"none"}`;
    - otherwise -> `{variable:"grind", grind:{direction:"finer", amount:1, setting}}`,
      where setting is the current dial minus 1 when the latest shot event's

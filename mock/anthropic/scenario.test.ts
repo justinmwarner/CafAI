@@ -390,6 +390,27 @@ describe('scripted replies', () => {
     expect(reply.tools[0]?.input).toMatchObject({ grind: { setting: '12' }, summary: 'Grind 1 step finer, to 12' });
   });
 
+  it('rule 1: a change CafAI rejected is replaced by another one, not read as declined', () => {
+    const base = [...UP_TO_SHOT, shot(BLOOMING_LEVERS), SHOT_REPLY, answer(['Sour / sharp']), ANSWER_REPLY, SERIES, ADJUST_REPLY];
+    const rejected = user({ type: 'tool_result', tool_use_id: 't_adj', content: 'yield: 137 g is above this template', is_error: true });
+    const retry = ok(call([...base, rejected]));
+    expect(retry.text).toBe('That one is outside what this profile allows. Here is another change.');
+    expect(retry.tools[0]?.input).toMatchObject({ variable: 'grind', grind: { direction: 'finer', setting: '13' } });
+    expectValidInputs(retry.tools);
+
+    const grindReply = assistant(toolUse('t_adj2', TOOL.proposeAdjustment, { variable: 'grind' }));
+    const rejectedAgain = user({ type: 'tool_result', tool_use_id: 't_adj2', content: 'grind.setting is current', is_error: true });
+    const last = ok(call([...base, rejected, grindReply, rejectedAgain]));
+    expect(last.tools[0]?.input).toMatchObject({ variable: 'none' });
+  });
+
+  it('rule 2: yield moves stay inside the template range', () => {
+    const allonge = { temp: 96, yield: 135, flow: 4.5, maxPressure: 8.6 };
+    expect(adjustmentFor(['Weak / watery'], allonge, 'allonge')).toMatchObject({ lever: 'yield', value: 133 });
+    // Sour at the top of the temperature and the yield: the grind instead.
+    expect(adjustmentFor(['Sour / sharp'], allonge, 'allonge')).toMatchObject({ variable: 'grind' });
+  });
+
   it('rule 1: an applied change is confirmed, a declined one keeps the version', () => {
     const base = [...UP_TO_SHOT, shot(BLOOMING_LEVERS), SHOT_REPLY, answer(['Sour / sharp']), ANSWER_REPLY, SERIES, ADJUST_REPLY];
     const decide = (payload: unknown) => ok(call([...base, user(toolResult('t_adj', payload))]));

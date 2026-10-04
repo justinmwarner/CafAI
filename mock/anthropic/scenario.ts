@@ -251,6 +251,14 @@ const TEMP_MAX: Record<string, number> = Object.fromEntries(
   TEMPLATES.map((template) => [template.id, template.levers.find((lever) => lever.id === 'temp')?.max ?? Infinity]),
 );
 
+/** Each template's yield lever range: a script proposal must stay inside it. */
+const YIELD_RANGE: Record<string, { min: number; max: number }> = Object.fromEntries(
+  TEMPLATES.map((template) => {
+    const lever = template.levers.find((l) => l.id === 'yield');
+    return [template.id, { min: lever?.min ?? 0, max: lever?.max ?? Infinity }];
+  }),
+);
+
 const TASTE_OPTIONS = ['Sour / sharp', 'Bitter / harsh', 'Balanced, sweet', 'Weak / watery'];
 
 const TEMPLATE_REASONS: Record<(typeof TEMPLATE_IDS)[number], string> = {
@@ -300,6 +308,8 @@ function toolNamesBefore(messages: Message[], index: number): Map<string, string
 interface NamedResult {
   name: string | null;
   payload: unknown;
+  /** The engine answered with is_error (e.g. a proposal outside the template's bounds). */
+  isError: boolean;
 }
 
 function namedResults(messages: Message[], index: number): NamedResult[] {
@@ -307,6 +317,7 @@ function namedResults(messages: Message[], index: number): NamedResult[] {
   return toolResults(messages[index]).map((b) => ({
     name: names.get(b.tool_use_id as string) ?? null,
     payload: parseJson(resultText(b)),
+    isError: b.is_error === true,
   }));
 }
 
@@ -391,6 +402,8 @@ function chooseAdjustment(messages: Message[]): ProposeAdjustment {
   const templateId = typeof shot?.templateId === 'string' ? shot.templateId : '';
   const temp = num(levers.temp);
   const yieldG = num(levers.yield);
+  const yieldRange = YIELD_RANGE[templateId] ?? { min: 0, max: Infinity };
+  const yieldCan = (to: number) => yieldG !== null && to >= yieldRange.min && to <= yieldRange.max;
   const profile = (lever: string, value: number) => ({ variable: 'profile' as const, lever, value, grind: null });
 
   if (answer.includes('sour')) {
@@ -403,7 +416,7 @@ function chooseAdjustment(messages: Message[]): ProposeAdjustment {
         SAME_PREP,
       );
     }
-    if (yieldG !== null) {
+    if (yieldG !== null && yieldCan(yieldG + 2)) {
       return proposal(
         profile('yield', yieldG + 2),
         'Lengthen the yield by 2 g',
@@ -423,7 +436,7 @@ function chooseAdjustment(messages: Message[]): ProposeAdjustment {
       );
     }
   } else if (answer.includes('weak')) {
-    if (yieldG !== null) {
+    if (yieldG !== null && yieldCan(yieldG - 2)) {
       return proposal(
         profile('yield', yieldG - 2),
         'Shorten the yield by 2 g',
@@ -433,7 +446,7 @@ function chooseAdjustment(messages: Message[]): ProposeAdjustment {
       );
     }
   } else if (answer.includes('strong')) {
-    if (yieldG !== null) {
+    if (yieldG !== null && yieldCan(yieldG + 2)) {
       return proposal(
         profile('yield', yieldG + 2),
         'Lengthen the yield by 2 g',
@@ -451,6 +464,10 @@ function chooseAdjustment(messages: Message[]): ProposeAdjustment {
       ['Note your grind setting so you can repeat it.'],
     );
   }
+  return grindFiner(messages);
+}
+
+function grindFiner(messages: Message[]): ProposeAdjustment {
   const dial = dialSetting(messages);
   const finer = dial !== null && dial - 1 >= 0 ? String(Math.round((dial - 1) * 100) / 100) : null;
   return proposal(
@@ -575,8 +592,30 @@ function decide(script: Script): Reply {
   const answered = (r: (typeof results)[number]) => !(isRecord(r.payload) && r.payload.answered === false);
   const resultFor = (name: string) => results.find((r) => r.name === name && answered(r));
 
-  // 1. The user decided on a proposed change.
+  // 1. The user decided on a proposed change (or CafAI rejected it).
   const decision = resultFor(TOOL.proposeAdjustment);
+  if (decision?.isError) {
+    // Outside the template's bounds: try the grind instead, or, if that was
+    // the grind already, keep the recipe.
+    const rejected = toolUses(messages[lastIndex - 1]).find((b) => b.name === TOOL.proposeAdjustment);
+    const wasGrind = isRecord(rejected?.input) && rejected.input.variable === 'grind';
+    const next = wasGrind
+      ? proposal(
+          { variable: 'none', lever: null, value: null, grind: null },
+          'Keep everything as it is',
+          'That change is outside what this profile allows, so keep this recipe for one more shot.',
+          'The same cup, to taste again.',
+          SAME_PREP,
+        )
+      : grindFiner(messages);
+    return {
+      blocks: [
+        { type: 'text', text: 'That one is outside what this profile allows. Here is another change.' },
+        { type: 'tool_use', id: script.newToolId(), name: TOOL.proposeAdjustment, input: next },
+      ],
+      stopReason: 'tool_use',
+    };
+  }
   if (decision) {
     const payload = isRecord(decision.payload) ? decision.payload : {};
     if (payload.applied === true) {
