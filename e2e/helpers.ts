@@ -59,3 +59,99 @@ export function recordRequests(page: Page): SeenRequest[] {
   });
   return seen;
 }
+
+/** openApp with extra URL switches for the mock, e.g. `{ mockPersist: '1' }`. */
+export async function openAppWithSwitches(page: Page, switches: Record<string, string>, route = '#/', mockSpeed = 25): Promise<void> {
+  const query = new URLSearchParams({ mockSpeed: String(mockSpeed), ...switches }).toString();
+  await page.goto(`./?${query}${route}`);
+  await expect(page.getByTestId(TID.appReady)).toBeVisible();
+}
+
+/**
+ * The mirrored namespace once it holds `mustContain` and has stopped
+ * changing. CafAI pushes 2 s after its last write, so call this once the
+ * coach is idle: unchanged for `quietMs` then means the backup is complete.
+ */
+export async function settledMirror(page: Page, mustContain: string, quietMs = 4_000, timeout = 30_000): Promise<string> {
+  // mirroredText is JSON, never '', so the first read always starts the quiet period.
+  let last = '';
+  let since = Date.now();
+  await expect
+    .poll(
+      async () => {
+        const text = await mirroredText(page);
+        if (text !== last) {
+          last = text;
+          since = Date.now();
+        }
+        return text.includes(mustContain) && Date.now() - since >= quietMs;
+      },
+      { message: `the backup in the mock Decaid holds "${mustContain}" and stops changing`, timeout, intervals: [250] },
+    )
+    .toBe(true);
+  return last;
+}
+
+export interface LostStorage {
+  /** IndexedDB databases on the origin before and after, by name. */
+  databasesBefore: string[];
+  databasesAfter: string[];
+  /** Each deleteDatabase outcome: 'deleted', 'blocked', 'no answer' or an error name. */
+  deleted: Record<string, string>;
+  /** localStorage keys removed, and the ones left. */
+  removedKeys: string[];
+  keptKeys: string[];
+}
+
+/**
+ * Lose the app's browser storage, as a changed origin or a wiped WebView
+ * would: delete the named IndexedDB databases and every localStorage key that
+ * does not start with `keepPrefix` (the mock Decaid's own saved store).
+ *
+ * The page first leaves the app for a same-origin file that is not the app
+ * (the MSW worker script every mock build serves): a running CafAI holds its
+ * databases open, which blocks the delete, and with its data gone it would
+ * push an empty backup over the real one. The page stays there; open the app
+ * again to reload it.
+ */
+export async function loseBrowserStorage(page: Page, databases: readonly string[], keepPrefix: string): Promise<LostStorage> {
+  await page.goto('./mockServiceWorker.js');
+  return page.evaluate(
+    async ({ names, keep }) => {
+      const listDatabases = async () => (await indexedDB.databases()).map((info) => info.name ?? '').sort();
+      const localKeys = () => {
+        const keys: string[] = [];
+        for (let i = 0; i < localStorage.length; i += 1) {
+          const key = localStorage.key(i);
+          if (key !== null) keys.push(key);
+        }
+        return keys.sort();
+      };
+      const databasesBefore = await listDatabases();
+      const deleted: Record<string, string> = {};
+      for (const name of names) {
+        deleted[name] = await new Promise<string>((resolve) => {
+          const request = indexedDB.deleteDatabase(name);
+          let blocked = false;
+          // A connection that is never closed keeps the delete pending forever.
+          const timer = setTimeout(() => resolve(blocked ? 'blocked' : 'no answer'), 10_000);
+          request.onblocked = () => {
+            blocked = true;
+          };
+          request.onsuccess = () => {
+            clearTimeout(timer);
+            resolve('deleted');
+          };
+          request.onerror = () => {
+            clearTimeout(timer);
+            resolve(request.error?.name ?? 'error');
+          };
+        });
+      }
+      const removedKeys = localKeys().filter((key) => !key.startsWith(keep));
+      for (const key of removedKeys) localStorage.removeItem(key);
+      return { databasesBefore, databasesAfter: await listDatabases(), deleted, removedKeys, keptKeys: localKeys() };
+    },
+    { names: [...databases], keep: keepPrefix },
+  );
+}
