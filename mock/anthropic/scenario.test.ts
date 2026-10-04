@@ -262,6 +262,32 @@ describe('scripted replies', () => {
     expect(reply.stopReason).toBe('end_turn');
   });
 
+  it('rule 5: a pick that did not load on the machine asks for a retry', () => {
+    const failed = user(
+      toolResult('t_save', { saved: true }),
+      toolResult('t_tpl', { picked: 'blooming-espresso', version: 1, title: 'Kiambu AA v1', uploaded: false, note: null }),
+    );
+    const reply = ok(call([INTAKE, INTAKE_REPLY, failed]));
+    expect(reply.text).toBe('I saved Kiambu AA v1, but it did not load on the machine. Tap Retry above, then pull a shot.');
+    expect(reply.tools).toEqual([]);
+  });
+
+  it('a question the user typed past is not a pick, a taste or a decision', () => {
+    const typedPast = { answered: false, note: 'The user typed a message instead.' };
+    const nudge = 'Got it. Pull a shot when you are ready, or tell me more about the coffee.';
+    const pastTemplates = user(toolResult('t_save', { saved: true }), toolResult('t_tpl', typedPast), text('Which is sweetest?'));
+    expect(ok(call([INTAKE, INTAKE_REPLY, pastTemplates])).text).toBe(nudge);
+
+    const pastTaste = user(toolResult('t_ask', typedPast), text('Is the grinder too coarse?'));
+    const taste = ok(call([...UP_TO_SHOT, shot(BLOOMING_LEVERS), SHOT_REPLY, pastTaste]));
+    expect(taste.text).toBe(nudge);
+    expect(taste.tools).toEqual([]);
+
+    const base = [...UP_TO_SHOT, shot(BLOOMING_LEVERS), SHOT_REPLY, answer(['Sour / sharp']), ANSWER_REPLY, SERIES, ADJUST_REPLY];
+    const pastChange = ok(call([...base, user(toolResult('t_adj', typedPast), text('What does that change do?'))]));
+    expect(pastChange.text).toBe(nudge);
+  });
+
   it('rule 4: a finished shot is summed up and the taste asked for', () => {
     const reply = ok(call([...UP_TO_SHOT, shot(BLOOMING_LEVERS)]));
     expect(reply.text).toBe('Got it: 28.4 s, 36.2 g out.');

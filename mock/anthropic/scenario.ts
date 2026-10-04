@@ -518,7 +518,10 @@ function decide(script: Script): Reply {
   const last = messages[lastIndex];
   const results = namedResults(messages, lastIndex);
   const texts = textsOf(last);
-  const resultFor = (name: string) => results.find((r) => r.name === name);
+  // A result marked {"answered":false} only closes a question the user talked
+  // past (ENGINE_PROTOCOL rule 7); it is never a pick, a taste or a decision.
+  const answered = (r: (typeof results)[number]) => !(isRecord(r.payload) && r.payload.answered === false);
+  const resultFor = (name: string) => results.find((r) => r.name === name && answered(r));
 
   // 1. The user decided on a proposed change.
   const decision = resultFor(TOOL.proposeAdjustment);
@@ -580,6 +583,9 @@ function decide(script: Script): Reply {
   if (picked) {
     const payload = isRecord(picked.payload) ? picked.payload : {};
     const title = typeof payload.title === 'string' ? payload.title : 'the profile';
+    if (payload.uploaded === false) {
+      return say(`I saved ${title}, but it did not load on the machine. Tap Retry above, then pull a shot.`);
+    }
     return say(`Loaded ${title}. Pull a shot when you are ready; I will read the curves.`);
   }
 
