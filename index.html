@@ -8,6 +8,245 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // The engine check (D58). CafAI is built for and verified on Chromium 91
+      // (D3, D40, D50). This classic script runs before the bundle, so it runs
+      // even where the bundle cannot: it records what it found on
+      // window.__CAFAI_ENGINE__ (AppShell warns when `supported` is false) and,
+      // when the app never starts, replaces the blank page with the ways back
+      // to Decaid (D12). ES5 only, so that any engine can parse it; the tests
+      // in src/ui/platform/engineScript.test.ts hold it to that.
+      (function () {
+        var FLOOR = 91;
+        // main.tsx renders "Starting CafAI..." into #root as its first act.
+        // Generous on purpose: nobody has timed a cold start on a slow tablet,
+        // and a false "could not start" on a working one is worse than a
+        // longer wait on a broken one, which mostly shows at once anyway (a
+        // bundle that fails to parse or to load).
+        var START_WAIT_MS = 15000;
+        var SETTINGS_PATH = ':8080/api/v1/plugins/settings.reaplugin/ui?backName=CafAI';
+        var CONTROL_CSS =
+          'box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;' +
+          'min-width:48px;min-height:48px;margin:6px;padding:0 24px;border:1px solid rgba(246,236,227,0.4);' +
+          'border-radius:12px;background:transparent;color:#F6ECE3;font-family:inherit;font-size:16px;' +
+          'text-decoration:none;cursor:pointer;';
+        var win = window;
+        var doc = document;
+        var engine = { chromium: null, supported: null, reason: 'probe' };
+        var page = null;
+        var timer = null;
+        var healer = null;
+
+        // Decaid's WebView sets the whole user agent to "Decent", so a version
+        // is known only in a browser. It names the engine in messages; what
+        // the engine can parse decides support.
+        function chromiumVersion() {
+          var nav = win.navigator || {};
+          var brands = nav.userAgentData && nav.userAgentData.brands;
+          var i, major, match;
+          for (i = 0; brands && i < brands.length; i += 1) {
+            if (brands[i] && (brands[i].brand === 'Chromium' || brands[i].brand === 'Google Chrome')) {
+              major = parseInt(brands[i].version, 10);
+              if (major > 0) return major;
+            }
+          }
+          match = /Chrome\/(\d+)/.exec(String(nav.userAgent || ''));
+          return match ? parseInt(match[1], 10) : null;
+        }
+
+        // Private brand checks (#x in obj) shipped in V8 9.1, i.e. Chromium 91:
+        // an engine that cannot parse them is older than CafAI's floor. Any
+        // other failure (an EvalError from a content security policy) says
+        // nothing about the engine, and an unknown engine is never warned.
+        function probe() {
+          try {
+            return new Function('class A { #x; static has(o) { return #x in o; } } return A.has(new A());')() === true
+              ? true
+              : null;
+          } catch (error) {
+            return error && error.name === 'SyntaxError' ? false : null;
+          }
+        }
+
+        function started() {
+          var root = doc.getElementById('root');
+          return Boolean(root && root.firstChild);
+        }
+
+        // The host the app's own settings link uses (src/api/host.ts, D13/D14).
+        function gatewayHost() {
+          var override = '';
+          var link, withPort;
+          try {
+            override = String(win.localStorage.getItem('reaHostname') || '').replace(/^\s+|\s+$/g, '');
+          } catch (unreadable) {
+            override = '';
+          }
+          if (override.indexOf('://') >= 0) {
+            link = doc.createElement('a');
+            link.href = override;
+            if (link.hostname) return link.hostname;
+          } else if (override) {
+            withPort = /^(\[[^\]]+\]|[^:\/\[\]]+):\d+$/.exec(override);
+            return withPort ? withPort[1] : override;
+          }
+          return win.location.hostname;
+        }
+
+        function settingsUrl() {
+          return 'http://' + gatewayHost() + SETTINGS_PATH;
+        }
+
+        // Decaid's dashboard (its Skins page) inside the app. In a browser
+        // skin-api.js's exit does nothing, so Decaid's settings instead.
+        function exitToDecaid() {
+          var app = win.decentApp;
+          if (win.__DECENT_HOST__ && app && typeof app.exitToDashboard === 'function') {
+            app.exitToDashboard();
+            return;
+          }
+          win.location.assign(settingsUrl());
+        }
+
+        function element(tag, css, text) {
+          var node = doc.createElement(tag);
+          node.style.cssText = css;
+          if (text) node.appendChild(doc.createTextNode(text));
+          return node;
+        }
+
+        // The engine is to blame when it is known to be too old, or when the
+        // bundle failed to parse and nothing says the engine is new enough.
+        function engineToBlame(parseFailed) {
+          if (engine.supported === false) return true;
+          return parseFailed && engine.supported === null && engine.chromium === null;
+        }
+
+        // cause: 'syntax' (the bundle did not parse), 'load' (it did not load)
+        // or 'timeout' (nothing rendered in time); kept on the page for support.
+        function show(cause) {
+          var blameEngine, title, row, exit, settings;
+          if (page || !doc.body) return;
+          blameEngine = engineToBlame(cause === 'syntax');
+          page = element(
+            'div',
+            'position:fixed;top:0;right:0;bottom:0;left:0;z-index:2147483647;overflow:auto;' +
+              'display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;' +
+              'background:#14100D;color:#F6ECE3;font-family:Roboto,Helvetica,Arial,sans-serif;text-align:center;'
+          );
+          page.setAttribute('data-cafai-start-failed', cause);
+          title = element(
+            'p',
+            'margin:0 0 8px;max-width:560px;font-size:22px;font-weight:500;line-height:1.3;',
+            blameEngine
+              ? "CafAI could not start on this tablet's browser engine" +
+                  (engine.chromium !== null ? ' (Chromium ' + engine.chromium + ').' : '.')
+              : 'CafAI could not start.'
+          );
+          title.setAttribute('role', 'alert');
+          page.appendChild(title);
+          page.appendChild(
+            element(
+              'p',
+              'margin:0;max-width:520px;font-size:16px;line-height:1.5;opacity:0.8;',
+              blameEngine ? 'It needs Chromium ' + FLOOR + ' or newer.' : 'Exit to Decaid and open CafAI again.'
+            )
+          );
+          row = element('div', 'display:flex;flex-wrap:wrap;justify-content:center;margin-top:16px;');
+          exit = element('button', CONTROL_CSS, 'Exit to Decaid');
+          exit.setAttribute('type', 'button');
+          exit.addEventListener('click', function () {
+            exitToDecaid();
+          });
+          settings = element('a', CONTROL_CSS, 'Decaid settings');
+          settings.setAttribute('href', settingsUrl());
+          row.appendChild(exit);
+          row.appendChild(settings);
+          page.appendChild(row);
+          doc.body.appendChild(page);
+          // A slow start that renders after all takes the page back.
+          healer = win.setInterval(function () {
+            if (started()) disarm();
+          }, 1000);
+        }
+
+        function disarm() {
+          win.removeEventListener('error', onError);
+          win.removeEventListener('error', onLoadError, true);
+          if (timer !== null) win.clearTimeout(timer);
+          if (healer !== null) win.clearInterval(healer);
+          timer = null;
+          healer = null;
+          if (page && page.parentNode) page.parentNode.removeChild(page);
+          page = null;
+        }
+
+        // A bundle the engine cannot parse reports a SyntaxError here before
+        // anything renders. Once the app has rendered, a SyntaxError is the
+        // app's own (a bad JSON.parse), not a failed start.
+        function onError(event) {
+          var error = event && event.error;
+          if (started()) {
+            disarm();
+            return;
+          }
+          if ((error && error.name === 'SyntaxError') || String((event && event.message) || '').indexOf('SyntaxError') >= 0) {
+            show('syntax');
+          }
+        }
+
+        function isScriptLoad(target) {
+          var name = target && target.nodeName ? String(target.nodeName).toUpperCase() : '';
+          if (name === 'SCRIPT') return true;
+          return name === 'LINK' && /(^|\s)modulepreload(\s|$)/i.test(String(target.getAttribute('rel') || ''));
+        }
+
+        // A script that fails to load (a missing bundle mid-update, a failed
+        // fetch) fires an error at its element that does not bubble: only a
+        // capture listener on window sees it. Other resources (a stylesheet,
+        // an image) do not stop the app, so the wait decides for them.
+        function onLoadError(event) {
+          if (started()) {
+            disarm();
+            return;
+          }
+          if (isScriptLoad(event && event.target)) show('load');
+        }
+
+        try {
+          engine.chromium = chromiumVersion();
+          if (engine.chromium !== null && engine.chromium < FLOOR) {
+            engine.supported = false;
+            engine.reason = 'version';
+          } else {
+            engine.supported = probe();
+          }
+        } catch (unexpected) {
+          engine.supported = null;
+        }
+        win.__CAFAI_ENGINE__ = engine;
+        // Decaid saves the WebView console (GET /api/v1/webview/logs), so the
+        // verdict can be read on a real tablet without a debugger. Info level:
+        // the Chromium 91 runs fail on any console error.
+        try {
+          win.console.info('[CafAI] engine check: ' + JSON.stringify(engine));
+        } catch (noConsole) {
+          // Nothing to log to.
+        }
+
+        try {
+          win.addEventListener('error', onError);
+          win.addEventListener('error', onLoadError, true);
+          timer = win.setTimeout(function () {
+            timer = null;
+            if (started()) disarm();
+            else show('timeout');
+          }, START_WAIT_MS);
+        } catch (noWatchdog) {
+          // Without the watchdog the page stays as it is.
+        }
+      })();
+    </script>
     <script type="module" src="./src/main.tsx"></script>
   </body>
 </html>

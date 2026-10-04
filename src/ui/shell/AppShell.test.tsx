@@ -97,3 +97,86 @@ describe('AppShell', () => {
     expect(screen.getByTestId(TID.liveGraph)).toBeInTheDocument();
   });
 });
+
+describe('AppShell browser engine warning (D58)', () => {
+  const OLD_ENGINE = { chromium: 85, supported: false, reason: 'version' };
+  const warningText = /older than CafAI is built for/;
+
+  afterEach(() => {
+    delete window.__CAFAI_ENGINE__;
+    localStorage.clear();
+  });
+
+  it('warns on an engine older than Chromium 91, between the top bar and the columns', () => {
+    window.__CAFAI_ENGINE__ = OLD_ENGINE;
+    renderShell();
+    const warning = screen.getByRole('alert');
+    expect(warning).toHaveTextContent(
+      "This tablet's browser engine (Chromium 85) is older than CafAI is built for (Chromium 91 or newer), so some parts may not work.",
+    );
+    // In the flow, not over anything: after the top bar, before the machine
+    // column and the routed screen, and inside neither.
+    const header = screen.getByRole('banner');
+    const machine = screen.getByRole('complementary', { name: 'Machine' });
+    const main = screen.getByRole('main');
+    expect(header.compareDocumentPosition(warning) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(warning.compareDocumentPosition(machine) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(warning.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    for (const region of [header, machine, main]) expect(region).not.toContainElement(warning);
+    expect(getComputedStyle(warning).position).not.toBe('absolute');
+    expect(getComputedStyle(warning).position).not.toBe('fixed');
+  });
+
+  it('names no version when the engine gave none', () => {
+    window.__CAFAI_ENGINE__ = { chromium: null, supported: false, reason: 'probe' };
+    renderShell();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      "This tablet's browser engine is older than CafAI is built for (Chromium 91 or newer), so some parts may not work.",
+    );
+  });
+
+  it('hides on dismiss and stays hidden for that engine version', async () => {
+    window.__CAFAI_ENGINE__ = OLD_ENGINE;
+    const { unmount } = renderShell();
+    await userEvent.click(screen.getByRole('button', { name: 'Dismiss the browser engine warning' }));
+    expect(screen.queryByText(warningText)).not.toBeInTheDocument();
+    expect(localStorage.getItem('cafai.engineWarning')).toBe('85');
+    unmount();
+
+    renderShell();
+    expect(screen.queryByText(warningText)).not.toBeInTheDocument();
+  });
+
+  it('warns again on another engine version', () => {
+    localStorage.setItem('cafai.engineWarning', '85');
+    window.__CAFAI_ENGINE__ = { ...OLD_ENGINE, chromium: 88 };
+    renderShell();
+    expect(screen.getByRole('alert')).toHaveTextContent('(Chromium 88)');
+  });
+
+  it('the dismiss control is a full touch target and leaves the shell working', async () => {
+    window.__CAFAI_ENGINE__ = OLD_ENGINE;
+    const { onNavigate, services } = renderShell();
+    expect(screen.getByRole('button', { name: 'Dismiss the browser engine warning' })).toHaveClass('MuiIconButton-root');
+    await userEvent.click(screen.getByTestId(TID.navSettings));
+    await userEvent.click(screen.getByTestId(TID.exitToSkins));
+    expect(onNavigate).toHaveBeenCalledWith({ name: 'settings' });
+    expect(services.host.exits).toBe(1);
+  });
+
+  it('is absent on Chromium 91 and newer, on an unknown engine, and without a check', () => {
+    for (const engine of [
+      { chromium: 91, supported: true, reason: 'probe' },
+      { chromium: null, supported: true, reason: 'probe' },
+      { chromium: null, supported: null, reason: 'probe' },
+      undefined,
+    ]) {
+      if (engine) window.__CAFAI_ENGINE__ = engine;
+      else delete window.__CAFAI_ENGINE__;
+      const { unmount } = renderShell();
+      expect(screen.queryByText(warningText), JSON.stringify(engine)).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+});

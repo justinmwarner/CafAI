@@ -6,10 +6,13 @@
  * no edge gestures (Android edge swipes leave the skin), and the Exit control
  * is on every screen: Crema hid its exit on focus screens and people got stuck.
  */
-import { useLayoutEffect, type ReactNode } from 'react';
+import { useLayoutEffect, useState, type ReactNode } from 'react';
+import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
+import CloseRounded from '@mui/icons-material/CloseRounded';
 import CoffeeMakerRounded from '@mui/icons-material/CoffeeMakerRounded';
 import ForumRounded from '@mui/icons-material/ForumRounded';
 import HistoryRounded from '@mui/icons-material/HistoryRounded';
@@ -19,6 +22,7 @@ import SettingsRounded from '@mui/icons-material/SettingsRounded';
 import type { HostEnvironment } from '../../api/types.ts';
 import { useServices } from '../../app/services.tsx';
 import { MachinePanel } from '../machine/MachinePanel.tsx';
+import { dismissEngineWarning, engineWarning, isEngineWarningDismissed, readEngineCheck } from '../platform/engineCheck.ts';
 import { watchSafeArea } from '../platform/safeArea.ts';
 import { useHeartbeatOnInteraction } from '../platform/useHeartbeatOnInteraction.ts';
 import type { Route, RouteName } from '../router.ts';
@@ -140,6 +144,50 @@ function TopBar({ route, onNavigate, host }: { route: Route; onNavigate: (route:
   );
 }
 
+/**
+ * An engine older than Chromium 91 (D58): CafAI started, but parts of it may
+ * not work. In the flow under the top bar, so it pushes the columns down
+ * instead of covering a control; dismissed once per engine version.
+ */
+function EngineWarning() {
+  // index.html's inline check ran before the bundle; the verdict holds for the page's life.
+  const [check] = useState(() => readEngineCheck(window.__CAFAI_ENGINE__));
+  const [dismissed, setDismissed] = useState(() => check !== null && isEngineWarningDismissed(check));
+  const text = engineWarning(check);
+  if (check === null || text === null || dismissed) return null;
+  return (
+    <Alert
+      severity="warning"
+      action={
+        <IconButton
+          color="inherit"
+          aria-label="Dismiss the browser engine warning"
+          onClick={() => {
+            dismissEngineWarning(check);
+            setDismissed(true);
+          }}
+        >
+          <CloseRounded />
+        </IconButton>
+      }
+      sx={{
+        flex: 'none',
+        borderRadius: 0,
+        borderBottom: 1,
+        borderColor: 'divider',
+        alignItems: 'center',
+        py: 0,
+        px: 1.5,
+        '& .MuiAlert-icon': { py: 0.5 },
+        '& .MuiAlert-message': { py: 0.5, fontSize: '0.875rem', lineHeight: 1.35 },
+        '& .MuiAlert-action': { py: 0, mr: 0, pl: 1, alignItems: 'center' },
+      }}
+    >
+      {text}
+    </Alert>
+  );
+}
+
 export function AppShell({ route, onNavigate, children, machinePanel }: AppShellProps) {
   const { heartbeat, host } = useServices();
   useHeartbeatOnInteraction(heartbeat);
@@ -167,6 +215,7 @@ export function AppShell({ route, onNavigate, children, machinePanel }: AppShell
       }}
     >
       <TopBar route={route} onNavigate={onNavigate} host={host} />
+      <EngineWarning />
       <Box sx={{ flex: '1 1 auto', minHeight: 0, display: 'flex' }}>
         {machinePanel !== null && (
           <Box
