@@ -6,10 +6,13 @@
  * root (src/app/createServices.ts) adapts the real modules to them.
  */
 import type { ZodType } from 'zod';
+import type { MachineProfileStatus } from '../../api/machineProfile.ts';
 import type {
   ProfileRecord,
   ShotRecord,
   ShotRecordSummary,
+  ShotUpdateRequest,
+  WireProfile,
   Workflow,
   WorkflowContext,
   WorkflowPatch,
@@ -99,6 +102,14 @@ export interface ApiPort {
   }): Promise<{ record: ProfileRecord; deduped: boolean }>;
   getShot(id: string): Promise<ShotRecord>;
   getLatestShot(): Promise<ShotRecordSummary | null>;
+  /**
+   * POST /machine/profile with the profile exactly as Decaid returned it from
+   * the workflow PUT: resolves once the machine holds it (D55). Throws a
+   * GatewayError with a sentence when the upload failed.
+   */
+  loadProfileOnMachine(profile: WireProfile): Promise<MachineProfileStatus>;
+  /** PUT /shots/{id}: Decaid deep-merges the annotations; the notes string is replaced. */
+  updateShot(id: string, patch: ShotUpdateRequest): Promise<ShotRecord>;
 }
 
 export interface Clock {

@@ -7,10 +7,15 @@
  *   run; the user's tap answers them as tool_results in the next user turn.
  * - Every change to the machine is an explicit tap; nothing here uploads a
  *   profile on its own.
+ * - A version is "on the machine" only once Decaid says the machine holds it
+ *   (D55): every activation is a workflow PUT followed by Decaid's barrier.
+ * - Writes to Decaid that fail (a grinder setting, a shot's notes) wait in an
+ *   outbox and go out again when Decaid is back (D64).
  * - Engine actions are serialized, so a shot that finishes mid-reply is
  *   handled after the reply, never interleaved with it.
  * - Everything is persisted as it happens (the WebView may be unloaded after
- *   ten minutes in the background without warning).
+ *   ten minutes in the background without warning). Progress notices are the
+ *   exception: they are never stored.
  *
  * Turn conventions: docs/briefs/ENGINE_PROTOCOL.md.
  */
@@ -24,7 +29,14 @@ import {
   type SaveBagDetails,
   type ToolName,
 } from '../../coach/contract.ts';
-import type { ShotRecord, TelemetryStore, WireProfile, Workflow, WorkflowContext } from '../../api/types.ts';
+import type {
+  ShotAnnotations,
+  ShotRecord,
+  TelemetryStore,
+  WireProfile,
+  Workflow,
+  WorkflowContext,
+} from '../../api/types.ts';
 import { isShotRunning as shotInProgress } from '../../api/workflow.ts';
 import { redactKeyLike } from '../../storage/redact.ts';
 import type { ProfileJson, ShotSummary } from '../../coach/types.ts';
@@ -38,7 +50,16 @@ import type {
   Settings,
   Storage,
 } from '../../storage/types.ts';
-import type { CoachController, CoachPhase, CoachState, CoachUiMessage, TemplateCardItem } from '../types.ts';
+import type {
+  CoachController,
+  CoachPhase,
+  CoachState,
+  CoachUiMessage,
+  CoachUiPart,
+  NoticeProgress,
+  TemplateCardItem,
+} from '../types.ts';
+import { createOutbox, type OutboxTimers } from './outbox.ts';
 import type { ApiPort, ChangePlan, Clock, CoachPort, LlmPort, ShotSource } from './ports.ts';
 import {
   UNANSWERED_SHOT,
@@ -54,6 +75,7 @@ import {
   type AdjustmentResultPayload,
   type TemplatePickedPayload,
 } from './protocol.ts';
+import { EXTRAS_KEY, cafaiNotesLine, lastCafaiNotes, mergeNotes, tasteWords } from './shotNotes.ts';
 import {
   NEW_BAG_PROMPT,
   appendText,
@@ -63,10 +85,15 @@ import {
   message,
   noticePart,
   optionsPart,
+  progressNoticePart,
+  removeMessage,
+  replaceParts,
   setDiffStatus,
+  setShotStars,
   shotPart,
   templatesPart,
   updatePart,
+  withoutTransient,
 } from './uiMessages.ts';
 
 export interface EngineDeps {
@@ -81,6 +108,8 @@ export interface EngineDeps {
   maxTokens?: number;
   /** How long to keep asking Decaid for a just-finished shot record. */
   shotFetch?: { attempts: number; delayMs: number };
+  /** Timers for the outbox's retry every 30 s (the browser's by default). */
+  timers?: OutboxTimers;
 }
 
 export interface CoachEngine extends CoachController {
@@ -105,12 +134,53 @@ interface Session {
   targetYieldG: number | null;
 }
 
+/**
+ * What CafAI knows about a version on the machine (D55):
+ * - loading: Decaid has it in the workflow; CafAI waits for the machine;
+ * - loaded: Decaid's barrier said the machine holds it;
+ * - waiting: no machine; Decaid uploads it when the machine connects;
+ * - failed: the barrier failed (Decaid keeps retrying its own upload);
+ * - assumed: an older Decaid without the barrier, so the workflow is trusted.
+ */
+type LoadStatus = 'loading' | 'loaded' | 'waiting' | 'failed' | 'assumed';
+
+type LoadOutcome = { status: 'loaded' | 'waiting' | 'assumed' } | { status: 'failed'; reason: string };
+
+interface ShotStart {
+  shotId: string | null;
+  /** The active version had not reached the machine when the shot started. */
+  early: { versionId: string; status: LoadStatus; at: number } | null;
+}
+
+/** What CafAI writes to a shot record's annotations (D61): notes and extras.cafai. */
+interface TasteNote {
+  bagId: string;
+  versionId: string | null;
+  version: number | null;
+  selected: string[];
+  text: string | null;
+  notes: string;
+}
+
+/** Everything CafAI still has to say about one shot; a newer write carries the older one's fields. */
+interface ShotWrite {
+  taste?: TasteNote;
+  stars?: number;
+}
+
 const DEFAULT_YIELD_G = 36;
 const STREAM_EMIT_MS = 50;
 /** The banner while a finished shot has no record in Decaid (Retry looks again). */
 const SHOT_NOT_SAVED = 'Decaid has not saved that shot yet.';
-/** CafAI's key in the workflow's context.extras (Decaid merges extras key by key). */
-const EXTRAS_KEY = 'cafai';
+const SEARCH_NOTICE = 'Looking for that shot in Decaid…';
+/**
+ * Decaid answers the barrier 500 ms after the machine acknowledged the
+ * profile's last write (its profileDownloadGuard), so a shot that started in
+ * that window started after the upload.
+ */
+const UPLOAD_GUARD_MS = 500;
+const GRINDER_WRITE = 'grinder';
+const shotWriteKey = (shotId: string) => `shot:${shotId}`;
 
 /** The CafAI version id a workflow context was tagged with at activation, if any. */
 function taggedVersionId(context: WorkflowContext | undefined): string | null {
@@ -148,7 +218,6 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   let settings: Settings = { model: 'claude-opus-5-5', grinderName: null, grinderSetting: null, activeBagId: null };
   let session: Session | null = null;
   let lastFailed: (() => Promise<void>) | null = null;
-  /** A version CafAI considers active but that may not be on the machine (a failed load, or a shot that ran something else). */
   /**
    * A problem that outlives other errors and chat turns: the machine not
    * running the bag's version, or a finished shot Decaid has not saved.
@@ -157,12 +226,19 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
    */
   let standing: { kind: 'load' | 'shot'; message: string; retry: () => Promise<void> } | null = null;
 
-  function setLoadProblem(versionId: string, message: string): void {
-    standing = { kind: 'load', message, retry: () => retryActivation(versionId) };
+  /** Set (or clear) the standing problem; the banner follows when it shows the old one. */
+  function replaceStanding(next: typeof standing): void {
+    if (standing && state.error === standing.message) setError(null);
+    standing = next;
   }
 
+  function setLoadProblem(versionId: string, message: string): void {
+    replaceStanding({ kind: 'load', message, retry: () => retryActivation(versionId) });
+  }
+
+  /** The problem is solved: off the banner too, if that is what it shows. */
   function clearStanding(kind: 'load' | 'shot'): void {
-    if (standing?.kind === kind) standing = null;
+    if (standing?.kind === kind) replaceStanding(null);
   }
   const shotCache = new Map<string, ShotRecord>();
   const listeners = new Set<() => void>();
@@ -171,6 +247,14 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   let unsubscribeTelemetry: (() => void) | null = null;
   /** Decaid reported the machine refused this version's upload; cleared by a successful load. */
   let uploadFailedFor: string | null = null;
+  /** The last version CafAI put in the workflow, and how far it got (D55); null since start-up. */
+  let machineLoad: { versionId: string; status: LoadStatus; at: number } | null = null;
+  /** False once Decaid answered the barrier with 404/405 (an older Decaid): not asked again this session. */
+  let barrierSupported = true;
+  /** The shot being pulled, as it started. */
+  let shotStart: ShotStart | null = null;
+  const outbox = createOutbox({ timers: deps.timers });
+  const shotWrites = new Map<string, ShotWrite>();
   let chain: Promise<void> = Promise.resolve();
 
   const nowIso = () => clock.now().toISOString();
@@ -237,6 +321,22 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     setMessages([...state.messages, message(deps.newId('msg'), role, parts, nowIso())]);
   }
 
+  /** Show, or update in place, a transient progress notice; returns its message id. */
+  function showProgress(messageId: string | null, text: string, progress: NoticeProgress): string {
+    const parts: CoachUiPart[] = [progressNoticePart(text, progress)];
+    if (messageId && state.messages.some((m) => m.id === messageId)) {
+      setMessages(replaceParts(state.messages, messageId, parts));
+      return messageId;
+    }
+    const id = deps.newId('msg');
+    setMessages([...state.messages, message(id, 'system', parts, nowIso())]);
+    return id;
+  }
+
+  function hideProgress(messageId: string): void {
+    setMessages(removeMessage(state.messages, messageId));
+  }
+
   function setError(error: string | null, retry: (() => Promise<void>) | null = null): void {
     state = { ...state, error };
     lastFailed = retry;
@@ -249,7 +349,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   }
 
   async function persistConversation(s: Session): Promise<void> {
-    s.conversation = { ...s.conversation, uiMessages: state.messages, updatedAt: nowIso() };
+    // Progress notices describe work in flight; a stored one would spin forever after a reload.
+    s.conversation = { ...s.conversation, uiMessages: withoutTransient(state.messages), updatedAt: nowIso() };
     await storage.conversations.put(s.conversation);
   }
 
@@ -334,6 +435,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     return tagged === null || tagged === version.id;
   }
 
+  /** The wording without Decaid's barrier (an older Decaid): trust the workflow, as before D55. */
   function loadedNotice(title: string) {
     return telemetry.getState().machineConnected
       ? noticePart('success', `Loaded ${title} on the machine.`)
@@ -348,6 +450,78 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     } catch {
       // Decaid unreachable: keep defaults; the user can still talk to the coach.
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Writes to Decaid that must not be lost (D64)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Write the grinder as last saved to Decaid's workflow context, so the next
+   * shots carry it (D54). A write Decaid cannot take now waits in the outbox;
+   * the chat says so once, and nothing when it goes through later.
+   */
+  async function sendGrinder(): Promise<void> {
+    const grinder = { grinderModel: settings.grinderName ?? null, grinderSetting: settings.grinderSetting ?? null };
+    const sent = await outbox.put(GRINDER_WRITE, () => api.updateWorkflow({ context: grinder }));
+    const s = session;
+    if (sent || !s) return;
+    const what = grinder.grinderSetting ? `grinder setting ${grinder.grinderSetting}` : 'the grinder change';
+    addMessage('system', [noticePart('warning', `Decaid can't be reached right now. CafAI will send ${what} as soon as it can.`)]);
+    await persistConversation(s);
+    emit();
+  }
+
+  /** Add to what CafAI writes to a shot's record, and send it all (latest wins in the outbox). */
+  function queueShotWrite(shotId: string, change: ShotWrite): Promise<boolean> {
+    const next: ShotWrite = { ...shotWrites.get(shotId), ...change };
+    shotWrites.set(shotId, next);
+    return outbox.put(shotWriteKey(shotId), () => writeShot(shotId, next));
+  }
+
+  /**
+   * One PUT /shots/{id} with everything CafAI has to say about the shot so
+   * far. Safe to repeat: Decaid merges extras key by key, and CafAI's notes
+   * line replaces its own previous line instead of piling up.
+   */
+  async function writeShot(shotId: string, write: ShotWrite): Promise<void> {
+    const own: Record<string, unknown> = {};
+    const annotations: ShotAnnotations = {};
+    if (write.taste) {
+      // The notes as they are now: a person may have written some in Decaid since.
+      const record = await api.getShot(shotId);
+      shotCache.set(record.id, record);
+      annotations.espressoNotes = mergeNotes(record.annotations?.espressoNotes, lastCafaiNotes(record.annotations), write.taste.notes);
+      Object.assign(own, write.taste);
+    }
+    if (write.stars !== undefined) {
+      // Decaid's scale is 0-10 (Visualizer shows it x10).
+      annotations.enjoyment = write.stars * 2;
+      own.stars = write.stars;
+    }
+    annotations.extras = { [EXTRAS_KEY]: own };
+    await api.updateShot(shotId, { annotations });
+    if (shotWrites.get(shotId) === write) shotWrites.delete(shotId);
+  }
+
+  /**
+   * The taste answer, on the iteration's shot record in Decaid (D61): a short
+   * notes line and extras.cafai. Never a key (D37).
+   */
+  function noteTaste(s: Session, iteration: IterationRecord, selected: string[], text: string | null): void {
+    if (!iteration.shotId) return;
+    const words = tasteWords(selected, text);
+    if (!words) return;
+    const version = s.versions.find((v) => v.id === iteration.profileVersionId);
+    const taste: TasteNote = {
+      bagId: s.bag.id,
+      versionId: iteration.profileVersionId,
+      version: iteration.profileVersion,
+      selected: selected.map((option) => redactKeyLike(option)),
+      text: text === null ? null : redactKeyLike(text),
+      notes: cafaiNotesLine(words, version?.title ?? s.bag.name),
+    };
+    void queueShotWrite(iteration.shotId, { taste });
   }
 
   // -------------------------------------------------------------------------
@@ -664,7 +838,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       targetYieldG: null,
     };
     session = s;
-    state = { ...state, messages: conversation.uiMessages, error: null };
+    // A stored progress notice (an older build, a crash) describes work that is long over.
+    state = { ...state, messages: withoutTransient(conversation.uiMessages), error: null };
     lastFailed = null;
     await recoverPending(s);
     if (awaitingModel(s.conversation.apiMessages)) {
@@ -753,14 +928,151 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     return true;
   }
 
-  /** Upload a version's profile and make it the workflow's profile. */
-  async function activate(s: Session, versionId: string, profile: ProfileJson, patch?: ChangePlan['contextPatch']): Promise<void> {
+  function setMachineLoad(versionId: string, status: LoadStatus): void {
+    machineLoad = { versionId, status, at: clock.now().getTime() };
+  }
+
+  /**
+   * Put a version's profile in Decaid's workflow (one PUT with the context);
+   * returns the workflow as Decaid answered. The machine gets it a moment
+   * later: confirmOnMachine waits for that.
+   */
+  async function activate(
+    s: Session,
+    versionId: string,
+    profile: ProfileJson,
+    patch?: ChangePlan['contextPatch'],
+  ): Promise<Workflow> {
     if (isShotRunning()) throw new Error('Wait for the shot to finish, then try again.');
     const context = workflowContext(s, versionId, profile, patch);
-    await api.activateProfile(profile, context, { shotRunning: false });
-    uploadFailedFor = null;
+    const workflow = await api.activateProfile(profile, context, { shotRunning: false });
+    // This context carried the grinder as last saved: a grinder write that waits is done.
+    outbox.drop(GRINDER_WRITE);
+    setMachineLoad(versionId, 'loading');
     if (context.targetYield !== undefined) s.targetYieldG = context.targetYield;
     if (context.targetDoseWeight !== undefined) s.doseG = context.targetDoseWeight;
+    return workflow;
+  }
+
+  /**
+   * Wait until the machine holds the version Decaid just put in its workflow
+   * (D55). The barrier posts the profile exactly as Decaid returned it, so it
+   * only waits for Decaid's own upload and never changes what the machine
+   * gets (D42). Shows a transient notice and keeps busy true meanwhile.
+   */
+  async function confirmOnMachine(versionId: string, title: string, profile: WireProfile): Promise<LoadOutcome> {
+    let outcome: LoadOutcome;
+    if (!barrierSupported) {
+      outcome = { status: 'assumed' };
+    } else if (!telemetry.getState().machineConnected) {
+      // Decaid uploads it when the machine connects; onMachineConnected waits for that.
+      outcome = { status: 'waiting' };
+    } else {
+      setMachineLoad(versionId, 'loading');
+      state = { ...state, busy: true };
+      const progressId = showProgress(null, `Loading ${title} on the machine…`, { value: null, label: null });
+      emit();
+      try {
+        const answer = await api.loadProfileOnMachine(profile);
+        if (answer === 'unsupported') barrierSupported = false;
+        outcome = { status: answer === 'loaded' ? 'loaded' : answer === 'offline' ? 'waiting' : 'assumed' };
+      } catch (error) {
+        outcome = { status: 'failed', reason: describe(error) };
+      }
+      hideProgress(progressId);
+    }
+    setMachineLoad(versionId, outcome.status);
+    if (outcome.status === 'loaded' || outcome.status === 'assumed') uploadFailedFor = null;
+    return outcome;
+  }
+
+  /** Say how a load went, and set (or clear) the standing load problem. */
+  function reportLoad(versionId: string, title: string, outcome: LoadOutcome): void {
+    if (outcome.status === 'failed') {
+      setLoadProblem(versionId, `The machine has not confirmed ${title}. Tap Retry to load it again.`);
+      addMessage('system', [noticePart('warning', `${title} is saved, but the machine has not confirmed it. ${outcome.reason}`)]);
+      return;
+    }
+    clearStanding('load');
+    if (outcome.status === 'loaded') addMessage('system', [noticePart('success', `Loaded ${title} on the machine.`)]);
+    else if (outcome.status === 'waiting') {
+      addMessage('system', [noticePart('info', `Saved ${title}. Decaid loads it when the machine connects.`)]);
+    } else addMessage('system', [loadedNotice(title)]);
+  }
+
+  /** `onMachine` for the model: only what the barrier confirmed (or, without one, a connected machine). */
+  function onMachine(outcome: LoadOutcome): boolean {
+    return outcome.status === 'loaded' || (outcome.status === 'assumed' && telemetry.getState().machineConnected);
+  }
+
+  /**
+   * The machine connected, and Decaid uploads the workflow's profile now. If
+   * the active version was waiting for that (or its load failed), wait for
+   * the upload and say when the machine holds it. Only when the workflow
+   * still carries the version: posting it otherwise would change what the
+   * machine gets (D42).
+   */
+  async function onMachineConnected(): Promise<void> {
+    const s = session;
+    const version = activeVersion(s);
+    if (!s || !version || !barrierSupported) return;
+    const load = machineLoad?.versionId === version.id ? machineLoad.status : null;
+    if (load !== 'waiting' && load !== 'failed' && uploadFailedFor !== version.id) return;
+    let workflow: Workflow;
+    try {
+      workflow = await api.getWorkflow();
+    } catch {
+      return; // Decaid unreachable: the next connect looks again.
+    }
+    if (!workflow.profile || !carriesVersion(workflow, version)) {
+      if (workflow.profile) {
+        setLoadProblem(version.id, `The machine is running "${workflow.profile.title}", not ${version.title}. Tap Retry to load it.`);
+      }
+      emit();
+      return;
+    }
+    const outcome = await confirmOnMachine(version.id, version.title, workflow.profile);
+    if (outcome.status === 'loaded' || outcome.status === 'assumed') {
+      clearStanding('load');
+      addMessage('system', [noticePart('success', `Loaded ${version.title} on the machine.`)]);
+    } else if (outcome.status === 'failed' && load === 'waiting') {
+      reportLoad(version.id, version.title, outcome);
+    }
+    // Waiting again: the machine dropped before Decaid answered; the next connect tries again.
+    state = { ...state, busy: false };
+    await persistConversation(s);
+    emit();
+  }
+
+  /** The active version's load state at a shot's start, when it had not reached the machine. */
+  function earlyLoad(): ShotStart['early'] {
+    const version = activeVersion(session);
+    const load = machineLoad;
+    if (!version || load?.versionId !== version.id) return null;
+    if (load.status !== 'loading' && load.status !== 'waiting' && load.status !== 'failed') return null;
+    return { versionId: version.id, status: load.status, at: clock.now().getTime() };
+  }
+
+  function takeShotStart(shotId: string | null): ShotStart | null {
+    const start = shotStart;
+    shotStart = null;
+    // Without shotState frames the id may only be known at the end.
+    if (!start || (start.shotId !== null && shotId !== null && start.shotId !== shotId)) return null;
+    return start;
+  }
+
+  /** True when a shot started before the machine had the version (D55). */
+  function startedBeforeLoad(start: ShotStart | null, version: ProfileVersion): boolean {
+    const early = start?.early;
+    if (!early || early.versionId !== version.id) return false;
+    const load = machineLoad?.versionId === version.id ? machineLoad : null;
+    // An older Decaid has no barrier to wait for: the workflow is trusted, as before.
+    if (load?.status === 'assumed') return false;
+    if (early.status === 'failed') return true;
+    // Decaid answers 500 ms after the machine acknowledged the last write: a
+    // start seen within that guard came after the upload (CafAI's own
+    // espresso start even waits for it in Decaid's write queue).
+    return !(load?.status === 'loaded' && load.at - early.at <= UPLOAD_GUARD_MS);
   }
 
   // -------------------------------------------------------------------------
@@ -771,26 +1083,37 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
    * Decaid saves the record a moment after the shot ends. Ask again with a
    * doubling delay (0.5 s to 8 s by default, about 15 s in all), so a shot that
    * is never saved costs a handful of requests rather than a steady stream.
+   * After the first miss the chat shows the search, updated on each try (D65).
    */
   async function fetchShot(shotId: string | null): Promise<ShotRecord | null> {
     let delayMs = shotFetch.delayMs;
-    for (let attempt = 0; attempt < shotFetch.attempts; attempt++) {
-      try {
-        if (shotId) return await api.getShot(shotId);
-        const latest = await api.getLatestShot();
-        if (latest) return await api.getShot(latest.id);
-      } catch {
-        // Not saved yet; ask again.
+    let progressId: string | null = null;
+    try {
+      for (let attempt = 0; attempt < shotFetch.attempts; attempt++) {
+        try {
+          if (shotId) return await api.getShot(shotId);
+          const latest = await api.getLatestShot();
+          if (latest) return await api.getShot(latest.id);
+        } catch {
+          // Not saved yet; ask again.
+        }
+        if (attempt < shotFetch.attempts - 1) {
+          progressId = showProgress(progressId, SEARCH_NOTICE, {
+            value: (attempt + 1) / shotFetch.attempts,
+            label: `Try ${attempt + 2} of ${shotFetch.attempts}`,
+          });
+          emit();
+          await clock.sleep(delayMs);
+          delayMs *= 2;
+        }
       }
-      if (attempt < shotFetch.attempts - 1) {
-        await clock.sleep(delayMs);
-        delayMs *= 2;
-      }
+      return null;
+    } finally {
+      if (progressId) hideProgress(progressId);
     }
-    return null;
   }
 
-  async function handleShotFinished(shotId: string | null): Promise<void> {
+  async function handleShotFinished(shotId: string | null, started: ShotStart | null = null): Promise<void> {
     const s = session;
     if (!s) return;
     const current = activeVersion(s);
@@ -800,9 +1123,22 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       emit();
       return;
     }
+    // Decaid just reported a shot: writes that wait go out now (D64).
+    void outbox.flush();
     // A new shot (or Retry) replaces the hunt for the previous one.
     clearStanding('shot');
     if (state.error === SHOT_NOT_SAVED) setError(null);
+    state = { ...state, busy: true };
+    emit();
+    try {
+      await creditShot(s, current, shotId, started);
+    } finally {
+      state = { ...state, busy: false };
+      emit();
+    }
+  }
+
+  async function creditShot(s: Session, current: ProfileVersion, shotId: string | null, started: ShotStart | null): Promise<void> {
     const record = await fetchShot(shotId);
     if (!record) {
       // Typically the machine dropped mid-shot. Decaid may still save the
@@ -816,9 +1152,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
             : 'The shot finished, but Decaid has not saved it. Tap Retry to look again, or pull another shot.',
         ),
       ]);
-      standing = { kind: 'shot', message: SHOT_NOT_SAVED, retry: () => handleShotFinished(shotId) };
+      replaceStanding({ kind: 'shot', message: SHOT_NOT_SAVED, retry: () => handleShotFinished(shotId, started) });
       await persistConversation(s);
-      emit();
       return;
     }
     const iterations = await bagIterations(s);
@@ -834,7 +1169,15 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       ]);
       setLoadProblem(current.id, `The machine is not running ${current.title}. Tap Retry to load it.`);
       await persistConversation(s);
-      emit();
+      return;
+    }
+    if (startedBeforeLoad(started, current)) {
+      // Decaid's workflow (and so the record) names the version, but the
+      // machine was still taking it when the shot started.
+      addMessage('system', [
+        noticePart('warning', `That shot started before the machine finished loading ${current.title}, so it is not part of this dial-in.`),
+      ]);
+      await persistConversation(s);
       return;
     }
     if (uploadFailedFor === current.id) {
@@ -844,7 +1187,6 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         noticePart('warning', `The machine did not take ${current.title}, so that shot is not part of this dial-in. Tap Retry to load it.`),
       ]);
       await persistConversation(s);
-      emit();
       return;
     }
     for (const stale of iterations.filter((i) => i.outcome === 'pending')) {
@@ -856,7 +1198,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       summary = coach.summarizeShot(record);
     } catch (error) {
       addMessage('system', [noticePart('warning', `Could not read that shot: ${describe(error)}`)]);
-      emit();
+      await persistConversation(s);
       return;
     }
     const at = nowIso();
@@ -920,6 +1262,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     let decaidProfileId: string | null = null;
     let uploaded = true;
     let note: string | null = null;
+    let workflow: Workflow | null = null;
     try {
       const created = await api.createProfileVersion({
         profile,
@@ -927,7 +1270,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       });
       decaidProfileId = created.record.id;
       if (created.deduped) note = 'Decaid already had this exact profile and kept its library entry; the machine shows the new title.';
-      await activate(s, versionId, profile);
+      workflow = await activate(s, versionId, profile);
     } catch (error) {
       uploaded = false;
       note = describe(error);
@@ -947,11 +1290,16 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     };
     await saveVersions(s, [version]);
     await persistBag(s, { templateId, activeVersionId: version.id });
-    if (uploaded) clearStanding('load');
-    else setLoadProblem(version.id, `Could not load ${title} on the machine. Tap Retry to try again.`);
-    addMessage('system', [
-      uploaded ? loadedNotice(title) : noticePart('error', `${title} is saved, but loading it on the machine failed: ${note}`),
-    ]);
+    let onMachineNow = false;
+    if (workflow) {
+      const outcome = await confirmOnMachine(version.id, title, workflow.profile);
+      reportLoad(version.id, title, outcome);
+      onMachineNow = onMachine(outcome);
+      if (outcome.status === 'failed') note = note ? `${note} ${outcome.reason}` : outcome.reason;
+    } else {
+      setLoadProblem(version.id, `Could not load ${title} on the machine. Tap Retry to try again.`);
+      addMessage('system', [noticePart('error', `${title} is saved, but loading it on the machine failed: ${note}`)]);
+    }
     state = { ...state, busy: false };
     emit();
     const picked: TemplatePickedPayload = {
@@ -959,7 +1307,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       version: 1,
       title,
       uploaded,
-      onMachine: uploaded && telemetry.getState().machineConnected,
+      onMachine: onMachineNow,
       note,
     };
     const answers = new Map([[call.id, toolResult(call.id, picked)]]);
@@ -977,11 +1325,14 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     try {
       const workflow = await api.getWorkflow();
       if (carriesVersion(workflow, version)) return;
-      await activate(s, version.id, version.profile);
-      addMessage('system', [loadedNotice(version.title)]);
+      state = { ...state, busy: true };
+      emit();
+      const loaded = await activate(s, version.id, version.profile);
+      reportLoad(version.id, version.title, await confirmOnMachine(version.id, version.title, loaded.profile));
     } catch (error) {
       setLoadProblem(version.id, `Could not load ${version.title}: ${describe(error)}`);
     }
+    state = { ...state, busy: false };
     await persistConversation(s);
     emit();
   }
@@ -1012,9 +1363,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     state = { ...state, busy: true, error: null };
     emit();
     try {
-      await activate(s, version.id, version.profile);
-      clearStanding('load');
-      addMessage('system', [loadedNotice(version.title)]);
+      const workflow = await activate(s, version.id, version.profile);
+      reportLoad(version.id, version.title, await confirmOnMachine(version.id, version.title, workflow.profile));
       lastFailed = null;
     } catch (error) {
       setError(`Could not load ${version.title}: ${describe(error)}`, () => retryActivation(versionId));
@@ -1030,13 +1380,14 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (!s) return;
     const call = requireCall(s, requestId, TOOL.askUser);
     if (!call) return;
-    const other = otherText?.trim() || null;
+    // Typed text, like a chat message: a pasted key never reaches the coach or Decaid (D37).
+    const other = redactKeyLike(otherText?.trim() ?? '', '[API key removed]') || null;
     setMessages(
       updatePart(state.messages, byRequestId(requestId), (part) =>
         part.kind === 'options' ? { ...part, answer: { selected, otherText: other } } : part,
       ),
     );
-    const said = [...selected.filter((o) => !(other && o === 'Other')), ...(other ? [other] : [])].join(', ');
+    const said = tasteWords(selected, other);
     if (said) addMessage('user', [{ kind: 'text', text: said }]);
     emit();
     const iteration = await latestPendingIteration(s);
@@ -1045,6 +1396,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         ...iteration,
         feedback: { question: (call.input as AskUser).question, selected, otherText: other },
       });
+      noteTaste(s, iteration, selected, other);
     }
     const answers = new Map([[call.id, toolResult(call.id, { selected, other })]]);
     await sendUser(s, answers, { answered: false, note: 'Not answered.' }, []);
@@ -1061,10 +1413,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     state = { ...state, busy: true };
     emit();
 
-    let payload: AdjustmentResultPayload;
+    let versionNumber: number | null = null;
+    let title: string | null = null;
+    let loading: { versionId: string; profile: WireProfile } | null = null;
     try {
-      let versionNumber: number | null = null;
-      let title: string | null = null;
       const current = activeVersion(s);
       if (plan.createsVersion && plan.newProfile && current) {
         const template = coach.getTemplate(current.templateId);
@@ -1073,10 +1425,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         title = coach.versionTitle(s.bag.name, versionNumber);
         const profile = coach.buildVersionProfile(template, plan.newProfile, title, s.bag.name);
         const nextId = deps.newId('ver');
-        await activate(s, nextId, profile, plan.contextPatch);
-        // Recorded in Decaid's library only once the machine took it, so a
-        // failed load leaves no stray "vN" there. If only this fails, the
-        // version is still on the machine; just its library lineage is missing.
+        const workflow = await activate(s, nextId, profile, plan.contextPatch);
+        // Recorded in Decaid's library only once Decaid took it, so a failed
+        // PUT leaves no stray "vN" there. If only this fails, the version is
+        // still in the workflow; just its library lineage is missing.
         let decaidProfileId: string | null = null;
         try {
           const created = await api.createProfileVersion({
@@ -1111,6 +1463,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         };
         await saveVersions(s, [{ ...current, status: 'superseded' }, next]);
         await persistBag(s, { activeVersionId: next.id });
+        loading = { versionId: nextId, profile: workflow.profile };
       } else if (plan.variable === 'dose' && plan.to !== null) {
         await api.updateWorkflow({ context: { targetDoseWeight: plan.to } });
         s.doseG = plan.to;
@@ -1119,11 +1472,11 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         // in CafAI and in Decaid's workflow context. A relative move ("1 step
         // finer") leaves the stored setting as the user last entered it. The
         // dial is turned by hand, so an unreachable Decaid does not block the
-        // confirm; the next activation writes the setting there anyway.
+        // confirm; the outbox sends the setting once Decaid is back (D64).
         const setting = plan.contextPatch.grinderSetting ?? input.grind?.setting ?? null;
         if (setting) {
           settings = await storage.settings.update({ grinderSetting: setting });
-          await api.updateWorkflow({ context: { grinderSetting: setting } }).catch(() => undefined);
+          await sendGrinder();
         }
       }
       const iteration = await latestPendingIteration(s);
@@ -1143,20 +1496,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         });
       }
       setMessages(setDiffStatus(state.messages, requestId, 'applied'));
-      if (title) {
-        clearStanding('load');
-        addMessage('system', [loadedNotice(title)]);
-      }
-      payload = {
-        applied: true,
-        variable: plan.variable,
-        version: versionNumber,
-        title,
-        onMachine: title ? telemetry.getState().machineConnected : null,
-      };
     } catch (error) {
-      // Nothing changed on the machine (a shot was running, Decaid refused):
-      // keep the proposal open so Confirm can simply be tapped again.
+      // Nothing changed in Decaid (a shot was running, Decaid refused): keep
+      // the proposal open so Confirm can simply be tapped again.
       const reason = describe(error);
       setMessages(setDiffStatus(state.messages, requestId, 'pending', reason));
       state = { ...state, busy: false };
@@ -1164,6 +1506,21 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       emit();
       return;
     }
+    // Applied: the version exists and is active even if the machine has not
+    // confirmed it yet; CafAI's own notice and banner say so (D55).
+    let onMachineNow: boolean | null = null;
+    if (loading && title) {
+      const outcome = await confirmOnMachine(loading.versionId, title, loading.profile);
+      reportLoad(loading.versionId, title, outcome);
+      onMachineNow = onMachine(outcome);
+    }
+    const payload: AdjustmentResultPayload = {
+      applied: true,
+      variable: plan.variable,
+      version: versionNumber,
+      title,
+      onMachine: onMachineNow,
+    };
     state = { ...state, busy: false };
     emit();
     await sendUser(s, new Map([[call.id, toolResult(call.id, payload)]]), { answered: false, note: 'Not answered.' }, []);
@@ -1190,8 +1547,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (!parent) return;
     state = { ...state, busy: true, error: null };
     emit();
+    let workflow: Workflow;
     try {
-      await activate(s, parent.id, parent.profile);
+      workflow = await activate(s, parent.id, parent.profile);
     } catch (error) {
       state = { ...state, busy: false };
       setError(`Could not go back to ${parent.title}: ${describe(error)}`, undo);
@@ -1203,7 +1561,6 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       { ...parent, status: 'active' },
     ]);
     await persistBag(s, { activeVersionId: parent.id });
-    clearStanding('load');
     const iterations = await bagIterations(s);
     const applied = [...iterations]
       .reverse()
@@ -1217,11 +1574,24 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       ),
     );
     addMessage('system', [noticePart('info', `Back on ${parent.title}.`)]);
+    reportLoad(parent.id, parent.title, await confirmOnMachine(parent.id, parent.title, workflow.profile));
     state = { ...state, busy: false };
     emit();
     await sendUser(s, new Map(), { answered: false, note: 'The user undid the last change.' }, [
       undoBlock({ from: current.version, to: parent.version, title: parent.title }),
     ]);
+  }
+
+  async function rateShot(shotId: string, stars: number): Promise<void> {
+    const s = session;
+    if (!s || !Number.isInteger(stars) || stars < 1 || stars > 5) return;
+    const card = state.messages.flatMap((m) => m.parts).find((p) => p.kind === 'shot' && p.shotId === shotId);
+    if (!card || card.kind !== 'shot' || card.stars === stars) return;
+    // On the card, so it comes back with the transcript; to the coach, never.
+    setMessages(setShotStars(state.messages, shotId, stars));
+    await persistConversation(s);
+    emit();
+    void queueShotWrite(shotId, { stars });
   }
 
   async function sendText(text: string): Promise<void> {
@@ -1243,6 +1613,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
           ...iteration,
           feedback: { question: (tasteQuestion.input as AskUser).question, selected: [], otherText: trimmed },
         });
+        noteTaste(s, iteration, [], trimmed);
       }
     }
     if (s.conversation.apiMessages.length === 0) {
@@ -1275,16 +1646,33 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       if (active) await openSession(active);
       state = { ...state, ready: true };
       unsubscribeShot = telemetry.onShot((event) => {
-        if (event.type === 'finished') void enqueue(() => handleShotFinished(event.shotId));
+        // How far the version had got matters at the start, not when the shot is handled.
+        if (event.type === 'started') {
+          shotStart = { shotId: event.shotId, early: earlyLoad() };
+          return;
+        }
+        const started = takeShotStart(event.shotId);
+        void enqueue(() => handleShotFinished(event.shotId, started));
       });
       // React only to reports that arrive while CafAI runs, not a stale one.
       let lastError = telemetry.getState().connectionError;
+      let machineWasConnected = telemetry.getState().machineConnected;
+      let devicesSocket = telemetry.getState().sockets.devices;
       unsubscribeTelemetry = telemetry.subscribe(() => {
-        const error = telemetry.getState().connectionError;
-        if (error === lastError) return;
-        const fresh = error !== null && (lastError === null || error.timestamp !== lastError.timestamp || error.kind !== lastError.kind);
-        lastError = error;
-        if (fresh && error.kind === 'profileUploadFailed') void enqueue(() => onUploadFailed(error.message));
+        const now = telemetry.getState();
+        const error = now.connectionError;
+        if (error !== lastError) {
+          const fresh = error !== null && (lastError === null || error.timestamp !== lastError.timestamp || error.kind !== lastError.kind);
+          lastError = error;
+          if (fresh && error.kind === 'profileUploadFailed') void enqueue(() => onUploadFailed(error.message));
+        }
+        const connected = now.machineConnected && !machineWasConnected;
+        const reachable = now.sockets.devices === 'open' && devicesSocket !== 'open';
+        machineWasConnected = now.machineConnected;
+        devicesSocket = now.sockets.devices;
+        // Decaid is reachable again: writes that wait go out (D64).
+        if (connected || reachable) void outbox.flush();
+        if (connected) void enqueue(onMachineConnected);
       });
       emit();
       void enqueue(checkMachineProfile);
@@ -1292,6 +1680,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     dispose() {
       unsubscribeShot?.();
       unsubscribeTelemetry?.();
+      outbox.dispose();
       if (emitTimer) clearTimeout(emitTimer);
       listeners.clear();
     },
@@ -1318,6 +1707,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     confirmChange: (requestId) => enqueue(() => confirmChange(requestId)),
     declineChange: (requestId) => enqueue(() => declineChange(requestId)),
     undo: () => enqueue(() => undo()),
+    rateShot: (shotId, stars) => enqueue(() => rateShot(shotId, stars)),
     retry: () =>
       enqueue(async () => {
         const task = lastFailed;
@@ -1337,13 +1727,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       enqueue(async () => {
         const before = settings;
         await refreshFromStorage();
-        if (settings.grinderName !== before.grinderName || settings.grinderSetting !== before.grinderSetting) {
-          // The next shots should carry the grinder the user just saved.
-          // Best effort: the next activation writes it to Decaid anyway.
-          await api
-            .updateWorkflow({ context: { grinderModel: settings.grinderName ?? null, grinderSetting: settings.grinderSetting ?? null } })
-            .catch(() => undefined);
-        }
+        const grinderChanged = settings.grinderName !== before.grinderName || settings.grinderSetting !== before.grinderSetting;
         // After an import the bag list (and the active bag's records) may differ.
         const bags = (await storage.bags.list()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
         state = { ...state, bags };
@@ -1360,6 +1744,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
           const active = bags.find((b) => b.id === settings.activeBagId);
           if (active) await openSession(active);
         }
+        // The next shots should carry the grinder the user just saved (D54).
+        // After the session is current, so a notice lands in the right chat.
+        if (grinderChanged) await sendGrinder();
         const waitedForKey = state.hasApiKey && Boolean(state.error?.startsWith('Add your Anthropic API key'));
         if (waitedForKey) setError(null);
         emit();

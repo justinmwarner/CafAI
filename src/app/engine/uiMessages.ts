@@ -2,7 +2,7 @@
  * Building and updating the chat's display messages (CoachUiMessage).
  * Immutable updates only: the UI subscribes with Object.is selectors.
  */
-import type { CoachUiMessage, CoachUiPart, DiffStatus, TemplateCardItem, UiRole } from '../types.ts';
+import type { CoachUiMessage, CoachUiPart, DiffStatus, NoticeProgress, TemplateCardItem, UiRole } from '../types.ts';
 import type { ShotSummary } from '../../coach/types.ts';
 
 export const NEW_BAG_PROMPT =
@@ -39,6 +39,47 @@ export function shotPart(shotId: string, summary: ShotSummary): CoachUiPart {
 
 export function noticePart(tone: 'info' | 'success' | 'warning' | 'error', text: string): CoachUiPart {
   return { kind: 'notice', tone, text };
+}
+
+/** A notice with a progress bar while CafAI works; transient, never stored. */
+export function progressNoticePart(text: string, progress: NoticeProgress): CoachUiPart {
+  return { kind: 'notice', tone: 'info', text, progress };
+}
+
+export function isTransient(part: CoachUiPart): boolean {
+  return part.kind === 'notice' && part.progress !== undefined;
+}
+
+/**
+ * The messages without transient notices (and without messages left empty):
+ * what is stored, and how a stored conversation is read back. Unchanged
+ * messages keep their identity.
+ */
+export function withoutTransient(messages: CoachUiMessage[]): CoachUiMessage[] {
+  if (!messages.some((m) => m.parts.some(isTransient))) return messages;
+  return messages.flatMap((m) => {
+    if (!m.parts.some(isTransient)) return [m];
+    const parts = m.parts.filter((part) => !isTransient(part));
+    return parts.length > 0 ? [{ ...m, parts }] : [];
+  });
+}
+
+/** Swap the parts of one message (e.g. a progress notice updated in place). */
+export function replaceParts(messages: readonly CoachUiMessage[], messageId: string, parts: CoachUiPart[]): CoachUiMessage[] {
+  return messages.map((m) => (m.id === messageId ? { ...m, parts } : m));
+}
+
+export function removeMessage(messages: readonly CoachUiMessage[], messageId: string): CoachUiMessage[] {
+  return messages.filter((m) => m.id !== messageId);
+}
+
+/** The barista's star rating on a shot's card. */
+export function setShotStars(messages: readonly CoachUiMessage[], shotId: string, stars: number): CoachUiMessage[] {
+  return updatePart(
+    messages,
+    (part) => part.kind === 'shot' && part.shotId === shotId,
+    (part) => (part.kind === 'shot' ? { ...part, stars } : part),
+  );
 }
 
 /** Replace the first part matching `match`, across all messages. */

@@ -225,6 +225,7 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
           onConfirm={(requestId) => fire(coach.confirmChange(requestId))}
           onDecline={(requestId) => fire(coach.declineChange(requestId))}
           onUndo={() => fire(coach.undo())}
+          onRateShot={(shotId, stars) => fire(coach.rateShot(shotId, stars))}
         />
       </Box>
     );

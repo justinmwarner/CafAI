@@ -80,8 +80,31 @@ export type CoachUiPart =
       status: DiffStatus;
       error: string | null;
     }
-  | { kind: 'shot'; shotId: string; summary: ShotSummary }
-  | { kind: 'notice'; tone: 'info' | 'success' | 'warning' | 'error'; text: string };
+  | {
+      kind: 'shot';
+      shotId: string;
+      summary: ShotSummary;
+      /** The barista's 1-5 star rating, written to Decaid's record as enjoyment (stars x 2). Absent until rated. */
+      stars?: number;
+    }
+  | {
+      kind: 'notice';
+      tone: 'info' | 'success' | 'warning' | 'error';
+      text: string;
+      /**
+       * CafAI is still at it (loading a profile, looking for a shot). Such a
+       * notice is transient: it is replaced when the work ends and never stored.
+       */
+      progress?: NoticeProgress;
+    };
+
+/** The progress shown on a transient notice. */
+export interface NoticeProgress {
+  /** 0-1 for a determinate bar; null while the length is unknown. */
+  value: number | null;
+  /** Short text beside the bar, e.g. "Try 3 of 6". */
+  label: string | null;
+}
 
 export interface CoachUiMessage {
   id: string;
@@ -131,6 +154,11 @@ export interface CoachController {
   declineChange(requestId: string): Promise<void>;
   /** Revert the machine to the previous version of the active bag. */
   undo(): Promise<void>;
+  /**
+   * Rate a shot 1-5 stars from its card. Written to Decaid's shot record as
+   * `enjoyment` (stars x 2); never sent to the coach.
+   */
+  rateShot(shotId: string, stars: number): Promise<void>;
   /** Re-send the last failed request. */
   retry(): Promise<void>;
   dismissError(): void;

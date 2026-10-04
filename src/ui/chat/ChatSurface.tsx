@@ -58,6 +58,8 @@ export interface ChatSurfaceProps {
   onConfirm(requestId: string): void;
   onDecline(requestId: string): void;
   onUndo(): void;
+  /** A star tapped on a shot card (1-5). */
+  onRateShot(shotId: string, stars: number): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,12 +107,21 @@ const THINKING_MESSAGE: ChatMessage = {
   parts: [{ type: THINKING_TYPE, data: null }],
 };
 
-/** x-chat messages for the thread, plus a "thinking" row while busy with nothing streaming yet. */
+function showsProgress(message: CoachUiMessage): boolean {
+  return message.parts.some((part) => part.kind === 'notice' && part.progress !== undefined);
+}
+
+/**
+ * x-chat messages for the thread, plus a "thinking" row while busy with
+ * nothing streaming yet. A progress notice already says what CafAI is doing
+ * (loading a profile, looking for a shot), so it gets no thinking row.
+ */
 export function toChatMessages(messages: readonly CoachUiMessage[], busy: boolean): ChatMessage[] {
   const result = messages.map(toChatMessage);
   const last = messages[messages.length - 1];
   const streamingNow = last !== undefined && last.role !== 'user' && isStreaming(last);
-  if (busy && !streamingNow) result.push(THINKING_MESSAGE);
+  const working = last !== undefined && showsProgress(last);
+  if (busy && !streamingNow && !working) result.push(THINKING_MESSAGE);
   return result;
 }
 
@@ -140,6 +151,7 @@ interface PartActions {
   confirm(requestId: string): void;
   decline(requestId: string): void;
   undo(): void;
+  rateShot(shotId: string, stars: number): void;
 }
 
 interface PartsContextValue {
@@ -211,13 +223,22 @@ function DiffView({ data }: { data: unknown }) {
 }
 
 function ShotView({ data }: { data: unknown }) {
+  const { busy, actions } = usePartsContext();
   const part = cardOf(data, 'shot');
-  return part ? <ShotCard summary={part.summary} /> : null;
+  if (!part) return null;
+  return (
+    <ShotCard
+      summary={part.summary}
+      stars={part.stars ?? null}
+      disabled={busy}
+      onRate={(stars) => actions.rateShot(part.shotId, stars)}
+    />
+  );
 }
 
 function NoticeView({ data }: { data: unknown }) {
   const part = cardOf(data, 'notice');
-  return part ? <Notice tone={part.tone} text={part.text} /> : null;
+  return part ? <Notice tone={part.tone} text={part.text} progress={part.progress} /> : null;
 }
 
 /** "Thinking… 12 s": the elapsed counter updates in place, so a slow reply never looks frozen. */
@@ -381,6 +402,8 @@ export function ChatSurface(props: ChatSurfaceProps) {
       confirm: act((requestId: string) => propsRef.current.onConfirm(requestId)),
       decline: act((requestId: string) => propsRef.current.onDecline(requestId)),
       undo: act(() => propsRef.current.onUndo()),
+      // A rating is often given on an older card: the view stays where the barista is reading.
+      rateShot: (shotId: string, stars: number) => propsRef.current.onRateShot(shotId, stars),
     };
   }, []);
 

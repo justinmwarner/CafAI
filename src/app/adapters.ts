@@ -6,6 +6,7 @@ import {
   createProfileVersion,
   type DecaidClient,
 } from '../api/index.ts';
+import { loadProfileOnMachine } from '../api/machineProfile.ts';
 import {
   COACH_TOOL_SPECS,
   TEMPLATES,
@@ -85,5 +86,8 @@ export function createApiPort(decaid: DecaidClient): ApiPort {
     createProfileVersion: (request) => createProfileVersion(decaid, request),
     getShot: (id) => decaid.getShot(id),
     getLatestShot: () => decaid.getLatestShot(),
+    // Not on DecaidClient (other modules fake that interface): its own transport to the same origin.
+    loadProfileOnMachine: (profile) => loadProfileOnMachine(decaid, profile),
+    updateShot: (id, patch) => decaid.updateShot(id, patch),
   };
 }

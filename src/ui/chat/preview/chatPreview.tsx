@@ -2,8 +2,8 @@
  * Dev preview of the chat UI screens with fake services (dev/preview-chat.html).
  *
  *   ?screen=coach|history|settings
- *   &state=intake|templates|shot|options|options-multi|diff|applying|applied|failed|streaming
- *          |thinking|error|nokey|nobag|firstbag|loading
+ *   &state=intake|templates|machine-loading|shot-search|shot|options|rated|options-multi|diff|applying
+ *          |applied|failed|streaming|thinking|error|nokey|nobag|firstbag|loading
  *   &bag=<bagId>   (history detail)
  *
  * The frame imitates the shell (top bar, machine panel on the left) so the

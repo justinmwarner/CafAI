@@ -328,6 +328,7 @@ export function createFakeCoach(initial: Partial<CoachState> = {}): FakeCoach {
     confirmChange: record('confirmChange'),
     declineChange: record('declineChange'),
     undo: record('undo'),
+    rateShot: record('rateShot'),
     retry: record('retry'),
     dismissError: () => void calls.push({ method: 'dismissError', args: [] }),
     refresh: record('refresh'),

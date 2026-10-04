@@ -259,14 +259,22 @@ export const TEMPLATE_ITEMS = [
 export type ConversationStage =
   | 'intake'
   | 'templates'
+  | 'machine-loading'
+  | 'shot-search'
   | 'shot'
   | 'options'
+  | 'rated'
   | 'options-multi'
   | 'diff'
   | 'applying'
   | 'applied'
   | 'failed'
   | 'streaming';
+
+/** A transient progress notice, as the engine shows while it loads a profile or looks for a shot. */
+function progressNotice(text: string, value: number | null, label: string | null): CoachUiPart {
+  return { kind: 'notice', tone: 'info', text, progress: { value, label } };
+}
 
 /** The Kiambu conversation, ending at `stage` (every earlier step already answered). */
 export function conversation(stage: ConversationStage): CoachUiMessage[] {
@@ -292,16 +300,29 @@ export function conversation(stage: ConversationStage): CoachUiMessage[] {
     ]),
   );
   if (stage === 'templates') return out;
+  if (stage === 'machine-loading') {
+    out.push(msg('system', [progressNotice('Loading Kiambu AA v1 on the machine…', null, null)]));
+    return out;
+  }
   out.push(msg('assistant', [{ kind: 'notice', tone: 'success', text: 'Kiambu AA v1 is on the machine.' }]));
   out.push(msg('assistant', [text('Loaded Kiambu AA v1. Pull a shot when you are ready; I will read the curves.')]));
+  if (stage === 'shot-search') {
+    out.push(msg('system', [progressNotice('Looking for that shot in Decaid…', 2 / 6, 'Try 3 of 6')]));
+    return out;
+  }
   out.push(
     msg('assistant', [
-      { kind: 'shot', shotId: 'shot-1', summary: sampleSummary({ channelingFlags: ['pressure_dip_after_peak'] }) },
+      {
+        kind: 'shot',
+        shotId: 'shot-1',
+        summary: sampleSummary({ channelingFlags: ['pressure_dip_after_peak'] }),
+        ...(stage === 'rated' ? { stars: 4 } : {}),
+      },
     ]),
   );
   out.push(msg('assistant', [text('Got it: 27.8 s, 36.4 g out.')]));
   if (stage === 'shot') return out;
-  const asking = stage === 'options' || stage === 'options-multi';
+  const asking = stage === 'options' || stage === 'options-multi' || stage === 'rated';
   out.push(
     msg('assistant', [
       {
@@ -314,7 +335,7 @@ export function conversation(stage: ConversationStage): CoachUiMessage[] {
       },
     ]),
   );
-  if (stage === 'options' || stage === 'options-multi') return out;
+  if (asking) return out;
   out.push(msg('assistant', [text('Thanks. Let me look at the pressure curve.')]));
   if (stage === 'streaming') {
     out.push(msg('assistant', [text('Sour with a fast pour usually means the water is not pulling enough from the', true)]));
@@ -362,11 +383,11 @@ export function coachStateFor(stage: ConversationStage, overrides: Partial<Coach
           ? 'choosing_template'
           : stage === 'diff'
             ? 'awaiting_confirmation'
-            : stage === 'options' || stage === 'options-multi'
+            : stage === 'options' || stage === 'options-multi' || stage === 'rated'
               ? 'awaiting_feedback'
               : 'awaiting_shot',
     messages: conversation(stage),
-    busy: stage === 'applying' || stage === 'streaming',
+    busy: stage === 'applying' || stage === 'streaming' || stage === 'machine-loading' || stage === 'shot-search',
     error: null,
     canUndo: stage === 'applied',
     ...overrides,

@@ -137,6 +137,12 @@ describe('CoachScreen', () => {
     ]);
   });
 
+  it('passes a star rating to the controller', async () => {
+    const services = renderCoach(coachStateFor('options'));
+    await userEvent.click(screen.getByRole('radio', { name: 'Rate 5 out of 5' }));
+    expect(services.coach.calls).toEqual([{ method: 'rateShot', args: ['shot-1', 5] }]);
+  });
+
   it('keeps the bag on screen while a shot is pulled', () => {
     const services = createFakeServices({ coach: coachStateFor('applied') });
     renderWithServices(<CoachScreen />, services);

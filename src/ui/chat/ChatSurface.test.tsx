@@ -13,6 +13,15 @@ function textMessage(id: string, role: CoachUiMessage['role'], text: string, str
   return { id, role, parts: [{ kind: 'text', text, ...(streaming ? { streaming } : {}) }], createdAt: '2026-10-03T08:00:00.000Z' };
 }
 
+function progressMessage(id: string, text: string, value: number | null, label: string | null): CoachUiMessage {
+  return {
+    id,
+    role: 'system',
+    parts: [{ kind: 'notice', tone: 'info', text, progress: { value, label } }],
+    createdAt: '2026-10-03T08:00:00.000Z',
+  };
+}
+
 function renderSurface(props: Partial<ChatSurfaceProps> = {}) {
   const handlers = {
     onSend: vi.fn(),
@@ -21,6 +30,7 @@ function renderSurface(props: Partial<ChatSurfaceProps> = {}) {
     onConfirm: vi.fn(),
     onDecline: vi.fn(),
     onUndo: vi.fn(),
+    onRateShot: vi.fn(),
   };
   const all: ChatSurfaceProps = {
     messages: conversation('diff'),
@@ -150,6 +160,31 @@ describe('ChatSurface', () => {
     expect(screen.getByText(/<img src=x onerror="alert\(1\)">/)).toBeInTheDocument();
   });
 
+  it('reports a star rating with the shot id, and blocks it while busy', async () => {
+    const { handlers, rerender } = renderSurface({ messages: conversation('options') });
+    const card = screen.getByTestId(TID.shotCard);
+    await userEvent.click(within(card).getByRole('radio', { name: 'Rate 4 out of 5' }));
+    expect(handlers.onRateShot).toHaveBeenCalledWith('shot-1', 4);
+    rerender({ messages: conversation('options'), busy: true });
+    expect(within(screen.getByTestId(TID.shotCard)).getByRole('radio', { name: 'Rate 4 out of 5' })).toBeDisabled();
+  });
+
+  it('shows the stars a shot was given', () => {
+    const rated = conversation('options').map((m) => ({
+      ...m,
+      parts: m.parts.map((p) => (p.kind === 'shot' ? { ...p, stars: 4 } : p)),
+    }));
+    renderSurface({ messages: rated });
+    expect(screen.getByRole('radio', { name: 'Rate 4 out of 5' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('shows progress notices with their bar, and no thinking row beside them', () => {
+    const messages = [...conversation('templates'), progressMessage('p', 'Loading Kiambu AA v1 on the machine…', null, null)];
+    renderSurface({ messages, busy: true });
+    expect(screen.getByRole('progressbar', { name: 'Loading Kiambu AA v1 on the machine…' })).toBeInTheDocument();
+    expect(screen.queryByText('Thinking…')).toBeNull();
+  });
+
   it('shows a thinking row while busy until text starts streaming', () => {
     const base = [textMessage('a', 'user', 'Kenya, washed')];
     const { rerender } = renderSurface({ messages: base, busy: true });
@@ -184,6 +219,11 @@ describe('toChatMessages', () => {
     expect(toChatMessages(idle, true).map((m) => m.id)).toEqual(['a', 'cafai-thinking']);
     expect(toChatMessages(idle, false).map((m) => m.id)).toEqual(['a']);
     expect(toChatMessages([...idle, textMessage('b', 'assistant', 'Hel', true)], true).map((m) => m.id)).toEqual(['a', 'b']);
+  });
+
+  it('leaves the thinking row out while a progress notice says what CafAI is doing', () => {
+    const searching = [textMessage('a', 'user', 'Hi'), progressMessage('p', 'Looking for that shot in Decaid…', 1 / 6, 'Try 2 of 6')];
+    expect(toChatMessages(searching, true).map((m) => m.id)).toEqual(['a', 'p']);
   });
 });
 

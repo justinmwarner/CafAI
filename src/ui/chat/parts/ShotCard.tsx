@@ -1,9 +1,13 @@
+import { useId, useRef, type KeyboardEvent } from 'react';
 import Box from '@mui/material/Box';
+import IconButton from '@mui/material/IconButton';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import { useTheme } from '@mui/material/styles';
 import LocalCafeIcon from '@mui/icons-material/LocalCafe';
+import StarIcon from '@mui/icons-material/Star';
+import StarBorderIcon from '@mui/icons-material/StarBorder';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import type { ShotSummary } from '../../../coach/types.ts';
 import { TID } from '../../testIds.ts';
@@ -68,8 +72,71 @@ function Sparkline({ summary }: { summary: ShotSummary }) {
   );
 }
 
-/** A finished shot at a glance: the numbers the coach reasons about, plus its curves. */
-export function ShotCard({ summary }: { summary: ShotSummary }) {
+const STARS = [1, 2, 3, 4, 5] as const;
+
+/**
+ * "How much did you enjoy it?": five 48 px stars, a radio group (arrow keys
+ * move the rating; only the rated star, or the first, takes Tab focus).
+ */
+function StarRating({ stars, disabled, onRate }: { stars: number | null; disabled: boolean; onRate(stars: number): void }) {
+  const labelId = useId();
+  const buttons = useRef<Array<HTMLButtonElement | null>>([]);
+  const current = stars ?? 0;
+  const rate = (value: number) => {
+    onRate(value);
+    buttons.current[value - 1]?.focus();
+  };
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (disabled) return;
+    const step = event.key === 'ArrowRight' || event.key === 'ArrowUp' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowDown' ? -1 : 0;
+    if (step === 0) return;
+    event.preventDefault();
+    // Unrated, either arrow starts at one star.
+    rate(current === 0 ? 1 : Math.min(5, Math.max(1, current + step)));
+  };
+  return (
+    <Stack direction="row" useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', columnGap: 1, mt: 0.5 }}>
+      <Typography id={labelId} variant="body2" sx={{ color: 'text.secondary' }}>
+        How much did you enjoy it?
+      </Typography>
+      <Box role="radiogroup" aria-labelledby={labelId} onKeyDown={onKeyDown} sx={{ display: 'flex' }}>
+        {STARS.map((value) => {
+          const lit = value <= current;
+          return (
+            <IconButton
+              key={value}
+              ref={(element) => {
+                buttons.current[value - 1] = element;
+              }}
+              role="radio"
+              aria-checked={value === current}
+              aria-label={`Rate ${value} out of 5`}
+              tabIndex={value === (current || 1) ? 0 : -1}
+              disabled={disabled}
+              onClick={() => rate(value)}
+              sx={{ width: 48, height: 48, color: lit ? 'warning.main' : 'text.secondary' }}
+            >
+              {lit ? <StarIcon /> : <StarBorderIcon />}
+            </IconButton>
+          );
+        })}
+      </Box>
+    </Stack>
+  );
+}
+
+export interface ShotCardProps {
+  summary: ShotSummary;
+  /** The barista's 1-5 star rating; null or absent until rated. */
+  stars?: number | null;
+  /** Rate the shot. Without it the card shows no rating. */
+  onRate?: (stars: number) => void;
+  /** True while the coach is working; blocks a rating tap. */
+  disabled?: boolean;
+}
+
+/** A finished shot at a glance: the numbers the coach reasons about, its curves, and the barista's rating. */
+export function ShotCard({ summary, stars = null, onRate, disabled = false }: ShotCardProps) {
   const peak =
     summary.peakPressureBar === null
       ? formatBar(null)
@@ -104,6 +171,7 @@ export function ShotCard({ summary }: { summary: ShotSummary }) {
           </Typography>
         </Stack>
       ) : null}
+      {onRate ? <StarRating stars={stars} disabled={disabled} onRate={onRate} /> : null}
     </Paper>
   );
 }
