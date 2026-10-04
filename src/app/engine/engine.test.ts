@@ -495,6 +495,21 @@ describe('coach engine', () => {
     expect(parsed(answer)).toEqual({ selected: ['Sour'], other: null });
   });
 
+  it('records a version in Decaid’s library only after the machine took it', async () => {
+    await throughProposal();
+    const creates = () => apiCalls.filter((c) => c.method === 'createProfileVersion').length;
+    const before = creates();
+    machine.failActivations = 1;
+    await engine.confirmChange('t-adj');
+    expect(engine.getState().error).toMatch(/The change was not loaded/);
+    expect(creates()).toBe(before);
+
+    scripts.push(() => [text('Done.')]);
+    await engine.retry();
+    expect(creates()).toBe(before + 1);
+    expect(engine.getState().activeVersion?.title).toBe('Kiambu AA v2');
+  });
+
   it('applies a confirmed change as v2 and can undo back to v1', async () => {
     await throughProposal();
     scripts.push(() => [text('Done. v2 is on the machine.')]);

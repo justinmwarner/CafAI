@@ -1070,12 +1070,21 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         title = coach.versionTitle(s.bag.name, versionNumber);
         const profile = coach.buildVersionProfile(template, plan.newProfile, title, s.bag.name);
         const nextId = deps.newId('ver');
-        const created = await api.createProfileVersion({
-          profile,
-          ...(current.decaidProfileId ? { parentId: current.decaidProfileId } : {}),
-          metadata: { source: 'cafai', bagId: s.bag.id, version: versionNumber, templateId: template.id },
-        });
         await activate(s, nextId, profile, plan.contextPatch);
+        // Recorded in Decaid's library only once the machine took it, so a
+        // failed load leaves no stray "vN" there. If only this fails, the
+        // version is still on the machine; just its library lineage is missing.
+        let decaidProfileId: string | null = null;
+        try {
+          const created = await api.createProfileVersion({
+            profile,
+            ...(current.decaidProfileId ? { parentId: current.decaidProfileId } : {}),
+            metadata: { source: 'cafai', bagId: s.bag.id, version: versionNumber, templateId: template.id },
+          });
+          decaidProfileId = created.record.id;
+        } catch {
+          // Library only; nothing to tell the barista.
+        }
         const change: AppliedChange = {
           variable: plan.variable,
           lever: plan.leverId,
@@ -1091,7 +1100,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
           title,
           templateId: template.id,
           profile,
-          decaidProfileId: created.record.id,
+          decaidProfileId,
           parentVersionId: current.id,
           change,
           status: 'active',
