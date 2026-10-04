@@ -112,6 +112,8 @@ evidence lives. "Repo wins" means a cloned source contradicted
   returns the existing record. CafAI keeps its own per-bag version history in
   IndexedDB, treats Decaid ids as opaque pointers, and activates by PUTting
   the full profile (with the "<Bean> v1" title) to the workflow.
+  *Superseded by D59 for most v1s: with D57's yields, v1's content usually
+  differs from the bundled default and gets its own library entry.*
 - **D22. The template tap is v1's confirmation.** Picking a template card is
   an explicit tap that creates and uploads v1; every later change (v2+) shows
   a plain-language diff and needs a separate Confirm tap.
@@ -168,6 +170,7 @@ evidence lives. "Repo wins" means a cloned source contradicted
   written to `context.targetYield` so the shot stops there. Changing it is a
   lever like any other. The yield hard bound is 120 g or the template's own
   `target_weight`, whichever is larger, so the Allongé's own default passes.
+  *v1's yield: superseded by D57 (the dose decides it). The hard bound stands.*
 - **D41. A shot counts only for the version the machine ran.** Every
   activation tags the workflow context with
   `extras.cafai = {versionId, bagId}` (Decaid merges `extras` key by key and
@@ -203,6 +206,8 @@ evidence lives. "Repo wins" means a cloned source contradicted
   sends the bag's coffee and grinder fields and `null` for the ones it does
   not know (`grinderId`, `beanBatchId`, a missing roaster or setting), so the
   previous bag's grinder or batch never lands on this bag's shots.
+  *`grinderId`: superseded in part by D62 (a grinder linked from Decaid's
+  library is sent; `null` only when none is linked).*
 - **D46. "New bag" reuses an untouched bag.** While the current bag has no
   saved details and no versions, New bag reopens it instead of leaving a
   trail of empty bags.
@@ -214,6 +219,7 @@ evidence lives. "Repo wins" means a cloned source contradicted
   not loaded: a warning in the chat, the banner with Retry, and no shot
   credited to that version until a load succeeds. A report from before CafAI
   started is ignored. (A slow upload that never fails stays QUESTIONS #1.)
+  *The slow upload is handled by D55.*
 - **D52. Some problems stand until they are solved.** The machine running
   something other than the bag's version, and a finished shot Decaid has not
   saved, come back on the banner after other errors and chat turns, each
@@ -322,3 +328,133 @@ resolutions adopted:
   computed separately.
 - C29-C31 fonts/layout, gateway override, tooling: Roboto via Fontsource,
   D9, D14, Vitest + Playwright + fflate release script.
+
+## The owner's answers (QUESTIONS.md, 2026-10-04)
+
+Each answer is an owner decision; it overrides the overnight goal and any
+earlier entry. Where an answer was open to more than one reading, the entry
+says which reading was taken and MORNING.md lists it among the top questions.
+
+- **D55. A version is "on the machine" only once Decaid confirms the upload
+  (QUESTIONS #1).** The owner asked whether CafAI can GET the loaded profile
+  and poll until it is right, and what the options are. There is no
+  read-back: no REST route returns the profile the DE1 holds, Decaid treats
+  the DE1's profile header and frame characteristics as write-only, and its
+  upload cache is internal (`.ref/decaid`: `de1handler.dart`,
+  `unified_de1_transport.dart:609-611`, `unified_de1.dart:452-473`). The
+  options, best first:
+  1. **`POST /api/v1/machine/profile` with the same full profile (chosen).**
+     Decaid runs it through the DE1 write queue the workflow sync uses and
+     answers 200 only after every write is acknowledged plus a 500 ms guard;
+     when the machine already holds an equal profile it answers at once
+     (`de1handler.dart:859-877`). CafAI calls it right after every workflow
+     PUT, as a barrier.
+  2. Fingerprint the shot afterwards: the recorded per-frame targets
+     (pressure, flow, temperature) can be compared with the version's
+     steps. It cannot see exits, step times, weights, the yield, or changes
+     under 0.5 °C, so it is a check to try on a real machine first
+     (docs/HARDWARE_TEST_PLAN.md), not a rule.
+  3. A fixed "loading" pause: a guess about Bluetooth timing. Rejected.
+  4. Watching `ws/v1/logs` for upload lines: not a contract. Rejected.
+
+  Behaviour: "Loading vN on the machine…" while the barrier runs, "Loaded"
+  only after it answers. With no machine CafAI says Decaid loads it on
+  connect, and runs the barrier again when the machine connects (it only
+  waits for Decaid's own upload; D42 holds). A failed barrier keeps the
+  version active with the load banner and Retry, as D51. A shot that started
+  while the version was still loading, or after its load failed, is not
+  credited. An older Decaid without the route keeps the overnight wording.
+  The upload's real duration and the group-head latch are measured on a real
+  DE1 (docs/HARDWARE_TEST_PLAN.md).
+- **D56. The default model stays `claude-opus-5-5`; the user picks another
+  in Settings (QUESTIONS #2).** Nothing changes in the picker. A coach that
+  runs on the user's own computer, like Crema's Mac server, so it uses a
+  Claude subscription instead of API tokens, is on the roadmap with what has
+  to be checked first (docs/ROADMAP.md). `npm run test:live` now checks the
+  default and the picker ids against the real API when a key is set (D68).
+- **D57. v1's yield follows the dose (QUESTIONS #3).** The owner left it to
+  "what is best". v1 starts at each profile author's own ratio times the
+  dose Decaid has: Blooming Espresso and D-Flow 1:2.8, Londonium and Gentle
+  and Sweet 1:2, Rao Allongé 1:5 (at 18 g: 50, 50, 36, 36 and 90 g). A dose
+  outside 12-25 g counts as unknown and the 18 g reference is used (Decent's
+  stock basket and Decaid's default); the yield lever's dose window ignores
+  such a dose too. The Allongé's ratio window is 4.0-6.0 (was 4.0-7.5) and
+  its text no longer promises a 135 g stop; Gentle and Sweet's ratio maximum
+  is 3.0 (was 2.5); Blooming's description says where its pour tops out.
+  Every other bound was checked against the authors' notes and Decent's
+  guides and stays. The table and sources: docs/briefs/coach-tuning.md.
+  Supersedes D35 for v1's yield.
+- **D58. The browser floor stays; CafAI warns on an older engine
+  (QUESTIONS #4).** The build target stays chrome91 (D50). An inline ES5
+  script in `index.html` reads the Chromium version: below 91 the app shows
+  a dismissible warning, and if the app never starts it shows a plain page
+  with Exit to Decaid and Decaid settings. iOS WebKit, which has no Chromium
+  version, gets no warning.
+- **D59. v1 gets its own Decaid library entry whenever its content differs
+  (QUESTIONS #5).** The owner has no preference. Under D57, v1's
+  `target_weight` usually differs from the bundled stop, so Decaid keeps
+  "<Bean> v1" as a profile of its own (always for Blooming, Londonium and the
+  Allongé; D-Flow and Gentle and Sweet at exactly 18 g still equal the
+  bundled default and reuse its entry). CafAI still treats Decaid ids as
+  opaque pointers and keeps its own history. Supersedes D21 for those v1s.
+- **D60. Storage across iOS app updates stays as designed (QUESTIONS #6).**
+  The KV backup restores bags, versions, iterations and conversations; the
+  API key is entered again. An end-to-end test now proves the restore in the
+  built app (D67).
+- **D61. Taste feedback goes to Decaid's shot record (QUESTIONS #7).** When
+  the taste question is answered, CafAI writes `annotations.espressoNotes`
+  (one short line: the taste, the version, "CafAI") and
+  `annotations.extras.cafai` (bag, version, the options and any typed text)
+  with `PUT /api/v1/shots/{id}`. Decaid merges `extras` per key but replaces
+  the notes string, so CafAI never overwrites notes a person wrote: it
+  appends its line instead. Interpretation: `enjoyment` (0-10) is written
+  only when the user rates the shot (an optional five-star row on the shot
+  card; stars x 2). It is never derived from the taste options, which are
+  free text from the model: a derived number would put invented data into
+  Decaid and Visualizer. Failed writes are retried (D64).
+- **D62. Grind moves use Decaid's grinder library (QUESTIONS #8).** Settings
+  lists Decaid's grinders and links the one the user picks (`grinderId`,
+  sent in the workflow context). With its small step (numeric) or its list
+  of settings (preset), CafAI turns a relative move into the new setting and
+  checks that a setting the coach names is on the grinder's own grid. The
+  change card says the new setting and that the step came from Decaid;
+  without step data it says CafAI does not know the step and asks the user to
+  note the new setting. Interpretation: Decaid has no "which way is finer",
+  so CafAI assumes lower numbers are finer and preset lists run finest first.
+  Supersedes D45's `grinderId: null` for a linked grinder.
+- **D63. The bundled Gentle and Sweet is the regenerated profile
+  (QUESTIONS #9).** It is byte-identical to Decaid a45961b's file. The stale
+  de1app import differed in exactly three step temperatures (78.5, 78.5 and
+  67 °C instead of 88) and `target_volume` 0; its pressure and flow frames
+  were the same, so comparing pressure curves cannot tell them apart. Unit
+  tests pin the regenerated values. On a machine the check is the 88 °C
+  target in every frame and the default's id `profile:1baa29bd9d9dc6d47f2a`
+  (docs/HARDWARE_TEST_PLAN.md).
+
+## Morning session (2026-10-04)
+
+- **D64. Failed Decaid writes are retried.** A grinder setting (from a
+  confirmed grind move or Settings) or a shot annotation that Decaid did not
+  take is kept, latest first, and sent again when Decaid is reachable again,
+  every 30 s while anything waits, and before the next shot is handled; a
+  profile load that carries the grinder satisfies it too. Kept in memory
+  only: a reload drops what waits (the next profile load writes the grinder
+  anyway).
+- **D65. Looking for a lost shot shows progress.** After a miss, the chat
+  shows "Looking for that shot in Decaid…" with a progress bar until the
+  shot card or the warning replaces it; the same on Retry. Progress notices
+  are never stored in the conversation.
+- **D66. The machine panel names the loaded profile.** It shows the title of
+  the profile in Decaid's workflow, read on start, after CafAI changes it,
+  after each shot, on connect and every 30 s (Decaid has no workflow
+  stream), marked as this bag's only when CafAI's tag and title match.
+- **D67. The mock keeps its store across a reload, on request.** With
+  `?mockPersist=1` the mock Decaid saves its key-value store, shots,
+  workflow and CafAI's profiles and restores them on the next load, so an
+  end-to-end test can empty CafAI's IndexedDB and prove the restore from
+  Decaid's backup.
+- **D68. The live API test is opt-in.** `npm run test:live` runs CafAI's own
+  client, prompt and tools against the real API with the key from
+  `ANTHROPIC_API_KEY`, and is skipped when the variable is unset. `npm test`
+  never runs it, even with the variable set. The key is never logged or
+  written anywhere.
