@@ -149,13 +149,14 @@ interface ApiCall {
   args: unknown[];
 }
 
-const machine = { loaded: SAMPLE_WORKFLOW.profile as ProfileJson, failActivations: 0 };
+const machine = { loaded: SAMPLE_WORKFLOW.profile as ProfileJson, failActivations: 0, missingShots: new Set<string>() };
 
 function makeApi(calls: ApiCall[]): ApiPort {
   let ids = 0;
   // Like the machine: a shot runs whatever profile was activated last.
   machine.loaded = SAMPLE_WORKFLOW.profile as ProfileJson;
   machine.failActivations = 0;
+  machine.missingShots.clear();
   return {
     getWorkflow: async () => ({ ...SAMPLE_WORKFLOW, profile: machine.loaded }) as Workflow,
     updateWorkflow: async (patch) => {
@@ -192,6 +193,7 @@ function makeApi(calls: ApiCall[]): ApiPort {
     },
     getShot: async (id) => {
       calls.push({ method: 'getShot', args: [id] });
+      if (machine.missingShots.has(id)) throw new Error('404 Not found');
       return { id, timestamp: '', createdAt: '', updatedAt: '', workflow: { ...SAMPLE_WORKFLOW, profile: machine.loaded }, measurements: [] } as ShotRecord;
     },
     getLatestShot: async () => null,
@@ -557,6 +559,43 @@ describe('coach engine', () => {
     await engine.retry();
     expect(machine.loaded.title).toBe('Kiambu AA v1');
     expect(engine.getState().error).toBeNull();
+  });
+
+  it('says when the machine dropped mid-shot, and Retry picks the shot up once Decaid has it', async () => {
+    await throughTemplatePick();
+    machine.missingShots.add('shot-lost');
+    telemetry.setState({ machineConnected: false });
+    telemetry.emitShot({ type: 'finished', shotId: 'shot-lost', stopReason: 'targetWeight' });
+    await vi.waitFor(() => expect(engine.getState().error).toBe('Decaid has not saved that shot yet.'));
+    const notices = engine.getState().messages.flatMap((m) => m.parts).filter((p) => p.kind === 'notice');
+    expect(notices.at(-1)).toMatchObject({ tone: 'warning', text: expect.stringContaining('disconnected during that shot') });
+    // A doubling back-off: six requests, not a steady stream of 404s.
+    expect(apiCalls.filter((c) => c.method === 'getShot')).toHaveLength(6);
+    expect(await storage.iterations.listAll()).toHaveLength(0);
+
+    machine.missingShots.delete('shot-lost');
+    telemetry.setState({ machineConnected: true });
+    scripts.push(() => [text('Got it.'), askTaste]);
+    await engine.retry();
+    await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+    expect(engine.getState().error).toBeNull();
+    expect((await storage.iterations.listAll()).map((i) => i.shotId)).toEqual(['shot-lost']);
+  });
+
+  it('clears the missing-shot banner when the next shot arrives', async () => {
+    await throughTemplatePick();
+    machine.missingShots.add('shot-lost');
+    telemetry.setState({ machineConnected: true });
+    telemetry.emitShot({ type: 'finished', shotId: 'shot-lost', stopReason: 'targetWeight' });
+    await vi.waitFor(() => expect(engine.getState().error).toBe('Decaid has not saved that shot yet.'));
+    const notices = engine.getState().messages.flatMap((m) => m.parts).filter((p) => p.kind === 'notice');
+    expect(notices.at(-1)).toMatchObject({ text: expect.stringContaining('has not saved it') });
+
+    scripts.push(() => [text('Got it.'), askTaste]);
+    telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: 'targetWeight' });
+    await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+    expect(engine.getState().error).toBeNull();
+    expect((await storage.iterations.listAll()).map((i) => i.shotId)).toEqual(['shot-2']);
   });
 
   it('loads the active version of a bag when the user switches back to it', async () => {

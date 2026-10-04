@@ -104,6 +104,8 @@ interface Session {
 
 const DEFAULT_YIELD_G = 36;
 const STREAM_EMIT_MS = 50;
+/** The banner while a finished shot has no record in Decaid (Retry looks again). */
+const SHOT_NOT_SAVED = 'Decaid has not saved that shot yet.';
 
 function describe(error: unknown): string {
   if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' && error.message) {
@@ -115,7 +117,7 @@ function describe(error: unknown): string {
 export function createCoachEngine(deps: EngineDeps): CoachEngine {
   const { storage, telemetry, api, coach, llm, clock } = deps;
   const effort: Effort = deps.effort ?? 'medium';
-  const shotFetch = deps.shotFetch ?? { attempts: 12, delayMs: 750 };
+  const shotFetch = deps.shotFetch ?? { attempts: 6, delayMs: 500 };
 
   let state: CoachState = {
     ready: false,
@@ -676,16 +678,25 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   // Shot finished
   // -------------------------------------------------------------------------
 
+  /**
+   * Decaid saves the record a moment after the shot ends. Ask again with a
+   * doubling delay (0.5 s to 8 s by default, about 15 s in all), so a shot that
+   * is never saved costs a handful of requests rather than a steady stream.
+   */
   async function fetchShot(shotId: string | null): Promise<ShotRecord | null> {
+    let delayMs = shotFetch.delayMs;
     for (let attempt = 0; attempt < shotFetch.attempts; attempt++) {
       try {
         if (shotId) return await api.getShot(shotId);
         const latest = await api.getLatestShot();
         if (latest) return await api.getShot(latest.id);
       } catch {
-        // Decaid saves the record a moment after the shot ends; ask again.
+        // Not saved yet; ask again.
       }
-      await clock.sleep(shotFetch.delayMs);
+      if (attempt < shotFetch.attempts - 1) {
+        await clock.sleep(delayMs);
+        delayMs *= 2;
+      }
     }
     return null;
   }
@@ -700,9 +711,21 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       emit();
       return;
     }
+    if (state.error === SHOT_NOT_SAVED) setError(null);
     const record = await fetchShot(shotId);
     if (!record) {
-      addMessage('system', [noticePart('warning', 'The shot finished, but Decaid has not saved it yet.')]);
+      // Typically the machine dropped mid-shot. Decaid may still save the
+      // record later (after a reconnect), so Retry looks for it again.
+      const dropped = !telemetry.getState().machineConnected;
+      addMessage('system', [
+        noticePart(
+          'warning',
+          dropped
+            ? 'The machine disconnected during that shot, and Decaid has no record of it. When the machine is back, tap Retry to look again, or pull another shot.'
+            : 'The shot finished, but Decaid has not saved it. Tap Retry to look again, or pull another shot.',
+        ),
+      ]);
+      setError(SHOT_NOT_SAVED, () => handleShotFinished(shotId));
       await persistConversation(s);
       emit();
       return;
