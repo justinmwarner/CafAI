@@ -24,6 +24,7 @@ import { useCoach, useServices, useTelemetry } from '../../app/services.tsx';
 import { isShotRunning } from '../../api/workflow.ts';
 import { TID } from '../testIds.ts';
 import { ChatSurface } from './ChatSurface.tsx';
+import { formatDateTime } from './format.ts';
 
 export interface CoachScreenProps {
   /** Where the "add your API key" card links. */
@@ -53,8 +54,18 @@ function pickerBags(bags: readonly Bag[], activeBag: Bag | null): Bag[] {
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
+/** The picker label: the bag's name, plus when it was started if another bag has the same name. */
+export function bagLabels(bags: readonly Bag[]): Map<string, string> {
+  const counts = new Map<string, number>();
+  for (const bag of bags) counts.set(bag.name, (counts.get(bag.name) ?? 0) + 1);
+  return new Map(
+    bags.map((bag) => [bag.id, (counts.get(bag.name) ?? 0) > 1 ? `${bag.name} · ${formatDateTime(bag.createdAt)}` : bag.name]),
+  );
+}
+
 function BagPicker({ bags, activeBag, disabled }: { bags: Bag[]; activeBag: Bag | null; disabled: boolean }) {
   const { coach } = useServices();
+  const labels = bagLabels(bags);
   return (
     <TextField
       select
@@ -81,7 +92,7 @@ function BagPicker({ bags, activeBag, disabled }: { bags: Bag[]; activeBag: Bag 
       )}
       {bags.map((bag) => (
         <option key={bag.id} value={bag.id}>
-          {bag.name}
+          {labels.get(bag.id) ?? bag.name}
         </option>
       ))}
     </TextField>

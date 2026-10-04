@@ -80,6 +80,17 @@ describe('CoachScreen', () => {
     expect(services.coach.calls).toEqual([{ method: 'selectBag', args: [SANTOS.id] }]);
   });
 
+  it('tells same-named bags apart in the picker by when they were started', () => {
+    const twin = { ...SANTOS, id: 'bag-twin', name: 'Kiambu AA', createdAt: '2026-09-20T07:00:00.000Z' };
+    renderCoach({ ...coachStateFor('options'), bags: [KIAMBU, twin] });
+    const labels = within(screen.getByTestId(TID.bagPicker))
+      .getAllByRole('option')
+      .map((o) => o.textContent ?? '');
+    expect(labels).toHaveLength(2);
+    expect(labels.every((label) => label.startsWith('Kiambu AA · '))).toBe(true);
+    expect(new Set(labels).size).toBe(2);
+  });
+
   it('says when no profile is loaded yet', () => {
     renderCoach(coachStateFor('templates'));
     expect(screen.getByTestId(TID.activeVersion)).toHaveTextContent('No profile yet');
