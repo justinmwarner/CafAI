@@ -20,7 +20,8 @@ back to Decaid's dashboard and settings on every screen.
 1. **New bag.** CafAI asks for origin, roast, process and tasting notes.
 2. **Templates.** The coach suggests 2-5 starting profiles with a rough
    confidence. Templates are real Decent profiles (Blooming Espresso,
-   D-Flow, Londonium) that declare which fields may change and how far.
+   D-Flow, Londonium, Rao Allongé, Gentle and Sweet) that declare which
+   fields may change and how far.
 3. **v1.** Tap one: CafAI creates "<Bean> v1" and loads it on the machine.
 4. **Shot.** Pull a shot. CafAI reads the shot from Decaid, summarizes it
    (aggregates plus a 1-per-second series) and gives the coach named query
@@ -142,8 +143,8 @@ CafAI is licensed under the GNU General Public License v3.0 only
 - **MimojaCafe** (de1app skin), GPL-3.0: Crema began as a fork of it, and part
   of that lineage lives on in the ported logic.
 - **Decent Espresso**: the coach templates are bundled Decaid profiles
-  (Blooming Espresso, D-Flow / default, Londonium), GPL-3.0; Decaid's API
-  documentation made the client possible.
+  (Blooming Espresso, D-Flow / default, Londonium, Rao Allongé, Gentle and
+  Sweet), GPL-3.0; Decaid's API documentation made the client possible.
 - The community skins **streamline-js**, **MSL**, **decaid-zen**, the **DYE2**
   plugin and **decaid-mcp** (shot-analysis definitions) informed the
   platform rules.
