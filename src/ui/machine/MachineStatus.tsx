@@ -13,6 +13,7 @@ import Typography from '@mui/material/Typography';
 import { useTelemetry } from '../../app/services.tsx';
 import { TID } from '../testIds.ts';
 import { describeMachineState, formatTemperature, formatWaterLevel, formatWeight, isWaterLow } from './format.ts';
+import { LoadedProfile } from './LoadedProfile.tsx';
 
 const DASH = '—';
 
@@ -188,6 +189,7 @@ export function MachineStatus() {
         <WaterLevel />
         <ScaleWeight />
       </Box>
+      <LoadedProfile />
       <ConnectionErrorNotice />
     </Box>
   );

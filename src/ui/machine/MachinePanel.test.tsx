@@ -102,6 +102,14 @@ describe('MachinePanel status', () => {
     expect(screen.getByTestId(TID.waterLevel)).toHaveTextContent('Refill');
   });
 
+  it("names the profile in Decaid's workflow, in the status section", async () => {
+    const { services } = await renderPanel();
+    const status = screen.getByRole('region', { name: 'Machine status' });
+    const profile = within(status).getByRole('group', { name: 'Profile' });
+    expect(profile).toHaveTextContent('Blooming Espresso');
+    expect(services.decaid.calls.filter((call) => call.method === 'getWorkflow')).toHaveLength(1);
+  });
+
   it("shows Decaid's connection error until dismissed", async () => {
     const services = createFakeServices({
       telemetry: {
