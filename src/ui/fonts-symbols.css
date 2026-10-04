@@ -1,0 +1,32 @@
+/*
+ * Roboto's symbols subset, for the arrows CafAI prints ("18 g → 36 g", diff
+ * lines). Fontsource's subset files carry no unicode-range, so these faces
+ * declare it here: the browser fetches a file only when such a glyph is on
+ * screen, and every other character keeps using the latin subset.
+ */
+@font-face {
+  font-family: 'Roboto';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('@fontsource/roboto/files/roboto-symbols-400-normal.woff2') format('woff2');
+  unicode-range: U+2190, U+2192, U+2194-2199;
+}
+
+@font-face {
+  font-family: 'Roboto';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('@fontsource/roboto/files/roboto-symbols-500-normal.woff2') format('woff2');
+  unicode-range: U+2190, U+2192, U+2194-2199;
+}
+
+@font-face {
+  font-family: 'Roboto';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url('@fontsource/roboto/files/roboto-symbols-700-normal.woff2') format('woff2');
+  unicode-range: U+2190, U+2192, U+2194-2199;
+}
