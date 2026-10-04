@@ -25,6 +25,7 @@ import {
   type ToolName,
 } from '../../coach/contract.ts';
 import type { ShotRecord, TelemetryStore, WireProfile, Workflow, WorkflowContext } from '../../api/types.ts';
+import { isShotRunning as shotInProgress } from '../../api/workflow.ts';
 import type { ProfileJson, ShotSummary } from '../../coach/types.ts';
 import type { ContentBlock, Effort, PendingUiCall, RunnerTool, ToolResultBlock } from '../../llm/types.ts';
 import type {
@@ -248,9 +249,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   }
 
   function isShotRunning(): boolean {
-    const t = telemetry.getState();
-    const shot = t.shotState?.state;
-    return t.machine?.state.state === 'espresso' || shot === 'preheating' || shot === 'pouring' || shot === 'stopping';
+    return shotInProgress(telemetry.getState());
   }
 
   function workflowContext(
@@ -707,6 +706,18 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       if (index < 0) s.versions.push(version);
       else s.versions[index] = version;
     }
+  }
+
+  /**
+   * The shot being pulled belongs to the bag on screen: switching bags (or
+   * starting one) mid-shot would check it against the wrong version and
+   * lose it. The UI disables both; this is the engine's own guard.
+   */
+  function refuseDuringShot(): boolean {
+    if (!isShotRunning()) return false;
+    setError('Finish the shot first, then switch bags.');
+    emit();
+    return true;
   }
 
   /** Upload a version's profile and make it the workflow's profile. */
@@ -1204,6 +1215,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     },
     newBag: () =>
       enqueue(async () => {
+        if (refuseDuringShot()) return;
         const current = session;
         if (current && current.conversation.apiMessages.length === 0 && !current.bag.templateId) return;
         loadProblem = null;
@@ -1211,6 +1223,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       }),
     selectBag: (bagId) =>
       enqueue(async () => {
+        if (refuseDuringShot()) return;
         const bag = await storage.bags.get(bagId);
         if (!bag) return;
         loadProblem = null;

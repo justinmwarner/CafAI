@@ -765,6 +765,32 @@ describe('coach engine', () => {
     expect(notices.at(-1)).toMatchObject({ text: 'Loaded Kiambu AA v1 on the machine.' });
   });
 
+  it('keeps the bag on screen while a shot is pulled', async () => {
+    await throughTemplatePick();
+    const kiambu = engine.getState().activeBag!.id;
+    const sumatra = await anotherBag('Sumatra', 'londonium');
+    telemetry.setState({
+      shotState: {
+        event: 'state',
+        timestamp: '2026-10-03T08:00:00.000000',
+        shotId: 'shot-live',
+        state: 'pouring',
+        machineState: null,
+        machineSubstate: null,
+        profileFrame: null,
+        scaleConnected: true,
+        scaleLost: false,
+        machineHasAutonomousSAW: false,
+        decision: null,
+      },
+    });
+    await engine.selectBag(kiambu);
+    expect(engine.getState().activeBag!.id).toBe(sumatra);
+    expect(engine.getState().error).toBe('Finish the shot first, then switch bags.');
+    await engine.newBag();
+    expect(engine.getState().activeBag!.id).toBe(sumatra);
+  });
+
   it('tags every activation with the CafAI version it loads', async () => {
     await throughTemplatePick();
     const version = engine.getState().activeVersion!;

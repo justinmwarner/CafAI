@@ -20,7 +20,8 @@ import LocalCafeIcon from '@mui/icons-material/LocalCafe';
 import UndoIcon from '@mui/icons-material/Undo';
 import type { Bag } from '../../storage/types.ts';
 import type { CoachPhase } from '../../app/types.ts';
-import { useCoach, useServices } from '../../app/services.tsx';
+import { useCoach, useServices, useTelemetry } from '../../app/services.tsx';
+import { isShotRunning } from '../../api/workflow.ts';
 import { TID } from '../testIds.ts';
 import { ChatSurface } from './ChatSurface.tsx';
 
@@ -178,6 +179,8 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
   const busy = useCoach((s) => s.busy);
   const error = useCoach((s) => s.error);
   const canUndo = useCoach((s) => s.canUndo);
+  // A shot belongs to the bag on screen: no switching while it is pulled.
+  const shotRunning = useTelemetry(isShotRunning);
 
   const listedBags = useMemo(() => pickerBags(bags, activeBag), [bags, activeBag]);
   const showChat = ready && hasApiKey && activeBag !== null;
@@ -195,7 +198,7 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
   } else if (!hasApiKey) {
     body = <ApiKeyCard settingsHref={settingsHref} />;
   } else if (!activeBag) {
-    body = <NewBagCta hasBags={listedBags.length > 0} disabled={busy} />;
+    body = <NewBagCta hasBags={listedBags.length > 0} disabled={busy || shotRunning} />;
   } else {
     body = (
       <Box sx={{ flex: 1, minHeight: 0 }}>
@@ -228,7 +231,7 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
           aria-label="Bag"
           sx={{ alignItems: 'center', flexWrap: 'wrap', px: 1.5, pt: 1.5, pb: 1, borderBottom: 1, borderColor: 'divider' }}
         >
-          <BagPicker bags={listedBags} activeBag={activeBag} disabled={busy} />
+          <BagPicker bags={listedBags} activeBag={activeBag} disabled={busy || shotRunning} />
           {activeBag ? (
             <Chip
               data-testid={TID.activeVersion}
@@ -256,7 +259,7 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
               variant="outlined"
               startIcon={<AddIcon />}
               data-testid={TID.newBag}
-              disabled={busy}
+              disabled={busy || shotRunning}
               onClick={() => fire(coach.newBag())}
               sx={{ minHeight: 48 }}
             >

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { CoachState } from '../../app/types.ts';
+import type { ShotStateEvent } from '../../api/types.ts';
 import { createFakeServices, type FakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
 import { CoachScreen } from './CoachScreen.tsx';
@@ -17,6 +18,22 @@ function renderCoach(coach: Partial<CoachState>): FakeServices {
 }
 
 const methods = (services: FakeServices) => services.coach.calls.map((c) => c.method);
+
+function shotStateEvent(state: ShotStateEvent['state']): ShotStateEvent {
+  return {
+    event: 'state',
+    timestamp: '2026-10-03T08:00:00.000000',
+    shotId: 'shot-1',
+    state,
+    machineState: null,
+    machineSubstate: null,
+    profileFrame: null,
+    scaleConnected: true,
+    scaleLost: false,
+    machineHasAutonomousSAW: false,
+    decision: null,
+  };
+}
 
 describe('CoachScreen', () => {
   it('waits for the engine to load', () => {
@@ -107,6 +124,17 @@ describe('CoachScreen', () => {
       { method: 'pickTemplate', args: ['tu-templates', 'blooming-espresso'] },
       { method: 'confirmChange', args: ['tu-adjust'] },
     ]);
+  });
+
+  it('keeps the bag on screen while a shot is pulled', () => {
+    const services = createFakeServices({ coach: coachStateFor('applied') });
+    renderWithServices(<CoachScreen />, services);
+    expect(screen.getByTestId(TID.bagPicker)).toBeEnabled();
+    act(() => services.telemetry.setState({ shotState: shotStateEvent('pouring') }));
+    expect(screen.getByTestId(TID.newBag)).toBeDisabled();
+    expect(screen.getByTestId(TID.bagPicker)).toBeDisabled();
+    act(() => services.telemetry.setState({ shotState: shotStateEvent('finished') }));
+    expect(screen.getByTestId(TID.bagPicker)).toBeEnabled();
   });
 
   it('disables the header actions while the coach is busy', () => {
