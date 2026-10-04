@@ -1199,6 +1199,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         await task();
       }),
     dismissError() {
+      // Dismissing also drops a pending load problem, which would otherwise
+      // put the banner straight back; a mismatched shot raises it again.
+      loadProblem = null;
       setError(null);
       emit();
     },

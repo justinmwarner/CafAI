@@ -561,6 +561,20 @@ describe('coach engine', () => {
     expect(engine.getState().error).toBeNull();
   });
 
+  it('lets the user dismiss the load-problem banner', async () => {
+    await throughTemplatePick();
+    engine.dispose();
+    engine = build();
+    machine.loaded = { ...baseProfile, title: 'Picked in another skin', target_weight: 99 };
+    await engine.start();
+    await vi.waitFor(() => expect(engine.getState().error).toMatch(/Picked in another skin/));
+    engine.dismissError();
+    expect(engine.getState().error).toBeNull();
+    scripts.push(() => [text('Noted.')]);
+    await engine.sendText('Hello');
+    expect(engine.getState().error).toBeNull();
+  });
+
   it('says at start-up when the machine runs another profile, and loads the version only on Retry', async () => {
     await throughTemplatePick();
     engine.dispose();
