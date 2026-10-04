@@ -386,10 +386,14 @@ says which reading was taken and MORNING.md lists it among the top questions.
   Supersedes D35 for v1's yield.
 - **D58. The browser floor stays; CafAI warns on an older engine
   (QUESTIONS #4).** The build target stays chrome91 (D50). An inline ES5
-  script in `index.html` reads the Chromium version: below 91 the app shows
+  script in `index.html` checks the engine: below Chromium 91 the app shows
   a dismissible warning, and if the app never starts it shows a plain page
-  with Exit to Decaid and Decaid settings. iOS WebKit, which has no Chromium
-  version, gets no warning.
+  with Exit to Decaid and Decaid settings. Decaid sets the WebView's user
+  agent to the literal "Decent", so the check cannot read a version there:
+  it probes for private brand checks (`#x in obj`), syntax that shipped in
+  Chromium 91, and uses a version from the user agent only where one exists
+  (a desktop browser) and only for the message. An engine it cannot judge
+  gets no warning.
 - **D59. v1 gets its own Decaid library entry whenever its content differs
   (QUESTIONS #5).** The owner has no preference. Under D57, v1's
   `target_weight` usually differs from the bundled stop, so Decaid keeps

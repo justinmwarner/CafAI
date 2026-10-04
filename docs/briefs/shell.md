@@ -13,11 +13,26 @@ nothing more:
 
 1. **Inline check in `index.html`.** A small classic `<script>` (ES5 only: no
    arrow functions, `let`/`const`, template literals, or anything Chromium
-   49 could not parse) placed before the module script. It reads the Chromium
-   major version from `navigator.userAgent` (`Chrome/NN`; Android WebViews
-   carry it) and records the result on `window.__CAFAI_ENGINE__`, e.g.
-   `{ chromium: 85, supported: false }` (`chromium: null`, `supported: null`
-   when there is no Chrome token, e.g. iOS WebKit: never warn there).
+   49 could not parse) placed before the module script. **Inside Decaid's
+   WebView `navigator.userAgent` is the literal string "Decent"**
+   (`docs/verified/01-platform.md` line 191), so support is decided by
+   feature detection (correction sent to the agent after launch):
+   - `chromium` (message only): the major version from
+     `navigator.userAgentData.brands` when present, else `Chrome/NN` in the
+     user agent, else null;
+   - `supported`: false when a known `chromium` is below 91; otherwise a
+     syntax probe, `new Function('class A { #x; static has(o) { return #x in
+     o; } } return A.has(new A());')`: private brand checks shipped in V8 9.1
+     (Chromium 91), so a SyntaxError means older than the floor (false),
+     success means true, any other error (e.g. a CSP EvalError) means null
+     (unknown: never warn on unknown);
+   - the result, with what decided it, goes on `window.__CAFAI_ENGINE__`,
+     e.g. `{ chromium: null, supported: false, reason: 'probe' }`. The
+     messages name the version only when it is known;
+   - one `console.info` line, `[CafAI] engine check: {...}` (chromium,
+     supported, reason only), so the hardware session can read the result
+     from Decaid's saved WebView console (`GET /api/v1/webview/logs`). Never
+     an error-level line: the Chromium 91 smoke test fails on those.
 2. **Start-up watchdog in the same script.** If the app never starts
    (an engine that cannot parse the bundle or run modules leaves `#root`
    empty; `src/main.tsx` renders "Starting CafAI…" into `#root` as its first
