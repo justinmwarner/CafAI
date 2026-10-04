@@ -272,6 +272,21 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     }
   }
 
+  /**
+   * True when the workflow carries this version exactly as CafAI loads it:
+   * same title and same brewing content. Two bags whose v1 use the same
+   * template have identical content, so content alone would leave the other
+   * bag's title and coffee details on the machine.
+   */
+  function carriesVersion(profile: WireProfile | ProfileJson | undefined, version: ProfileVersion): boolean {
+    if (!profile || profile.title !== version.title) return false;
+    try {
+      return coach.profileId(profile) === coach.profileId(version.profile);
+    } catch {
+      return false;
+    }
+  }
+
   function loadedNotice(title: string) {
     return telemetry.getState().machineConnected
       ? noticePart('success', `Loaded ${title} on the machine.`)
@@ -865,7 +880,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (!s || !version) return;
     try {
       const workflow = await api.getWorkflow();
-      if (runsVersion(workflow.profile, version)) return;
+      if (carriesVersion(workflow.profile, version)) return;
       await activate(s, version.profile);
       addMessage('system', [loadedNotice(version.title)]);
     } catch (error) {
@@ -886,7 +901,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (!s || !version) return;
     try {
       const workflow = await api.getWorkflow();
-      if (!workflow.profile || runsVersion(workflow.profile, version)) return;
+      if (!workflow.profile || carriesVersion(workflow.profile, version)) return;
       loadProblem = {
         versionId: version.id,
         message: `The machine is running "${workflow.profile.title}", not ${version.title}. Tap Retry to load it.`,

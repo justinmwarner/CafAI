@@ -673,6 +673,32 @@ describe('coach engine', () => {
     expect(notices.at(-1)).toMatchObject({ text: 'Loaded Kiambu AA v1 on the machine.' });
   });
 
+  it('reloads a bag whose v1 has the same brewing content as the other bag, so its title and coffee win', async () => {
+    await throughTemplatePick(); // Kiambu AA v1 from d-flow
+    const kiambu = engine.getState().activeBag!.id;
+    await engine.newBag();
+    scripts.push(() => [
+      toolUse('t-save-b', TOOL.saveBagDetails, { name: 'Sumatra', roaster: null, origin: null, roastLevel: 'medium', process: null, notes: null }),
+      toolUse('t-tpl-b', TOOL.proposeTemplates, {
+        suggestions: [
+          { templateId: 'd-flow', confidence: 'high', reason: 'Balanced.' },
+          { templateId: 'londonium', confidence: 'low', reason: 'Heavier.' },
+        ],
+      }),
+    ]);
+    await engine.sendText('Sumatra, medium');
+    scripts.push(() => [text('Loaded.')]);
+    await engine.pickTemplate('t-tpl-b', 'd-flow');
+    expect(machine.loaded.title).toBe('Sumatra v1');
+
+    const before = apiCalls.filter((c) => c.method === 'activateProfile').length;
+    await engine.selectBag(kiambu);
+    const activations = apiCalls.filter((c) => c.method === 'activateProfile');
+    expect(activations).toHaveLength(before + 1);
+    expect(machine.loaded.title).toBe('Kiambu AA v1');
+    expect(activations.at(-1)!.args[1]).toMatchObject({ coffeeName: 'Kiambu AA' });
+  });
+
   it('closes the taste chips and keeps the typed answer as feedback when the user types', async () => {
     await throughShot();
     scripts.push(() => [text('Noted.')]);
