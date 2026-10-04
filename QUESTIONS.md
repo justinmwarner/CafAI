@@ -7,10 +7,12 @@ CafAI assumed tonight and what would change if the guess is wrong.
    `PUT /api/v1/workflow` returns before Decaid uploads the profile to the
    machine, and there is no success signal (only `profileUploadFailed` on
    `ws/v1/devices`). CafAI shows "Loaded vN on the machine" when the PUT
-   succeeds. If uploads take seconds, a quick shot could run the previous
-   version and its data would be credited to the new one. Needs a timing check
-   on a real DE1 or the simulator; the fix would be a short "loading" hold or
-   watching for the error.
+   succeeds, and credits a shot to a version only when the shot record's
+   workflow carries that version's profile (D41). That catches shots run from
+   any other profile, but not a shot pulled while the upload is still in
+   flight: the record already names the new profile while the DE1 may still
+   run the old one. Needs a timing check on a real DE1 or the simulator; the
+   fix would be a short "loading" hold or watching for the error.
 
 2. **Is `claude-opus-5-5` the right default model?** The research brief names
    it as the flagship and the build rules (tool_choice auto only) are written
@@ -23,9 +25,9 @@ CafAI assumed tonight and what would change if the guess is wrong.
    Bounds come from Decaid's bundled profiles and the research table (e.g.
    brew temperature +/-2 °C per step within 84-94 °C for D-Flow). v1 starts at
    each template's own `target_weight` (Blooming 60 g, D-Flow 50 g, Londonium
-   42 g), regardless of dose. The coffee heuristics in the prompt are an
-   explicitly marked placeholder. A barista's review would change numbers,
-   not code.
+   42 g, Rao Allongé 135 g, Gentle and Sweet 36 g), regardless of dose. The
+   coffee heuristics in the prompt are an explicitly marked placeholder. A
+   barista's review would change numbers, not code.
 
 4. **Is the real WebView floor really Chromium 91?** CafAI is verified in a
    real Chromium 91, and Decaid's sources prove older engines exist on some

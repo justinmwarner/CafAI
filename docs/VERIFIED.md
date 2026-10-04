@@ -21,7 +21,7 @@ Detailed, cited write-ups:
 - [verified/02-api.md](verified/02-api.md): REST and WebSocket contracts, with
   23 example payloads in [verified/examples/](verified/examples/).
 - [verified/03-profiles.md](verified/03-profiles.md): Profile v2 fields,
-  limits, identity hashing, and the three coach templates with lever bounds.
+  limits, identity hashing, and the five coach templates with lever bounds.
 - [CREMA_PORT_PLAN.md](CREMA_PORT_PLAN.md): module-by-module Crema audit.
 
 The Decaid clone is shallow and untagged, so its release number cannot be
@@ -125,7 +125,9 @@ decaid-mcp fixtures were captured from). CafAI shows the live version from
   target_volume_count_start)[0:20]`. Title, notes and author are not hashed.
 - Templates copied byte-for-byte to `src/coach/templates/source/`:
   Blooming Espresso (`profile:7438cb7266f60558b48f`), D-Flow / default
-  (`profile:59036f8846b1ed3b4255`), Londonium (`profile:729d284747718d27c93a`).
+  (`profile:59036f8846b1ed3b4255`), Londonium (`profile:729d284747718d27c93a`),
+  Rao Allongé (`profile:372f1be4c5e3641bbfe2`) and Gentle and Sweet
+  (`profile:1baa29bd9d9dc6d47f2a`).
 
 ## 4. Crema (web/ only)
 

@@ -96,10 +96,16 @@ evidence lives. "Repo wins" means a cloned source contradicted
 - **D19. Yield writes two places.** Stop-at-weight reads the workflow's
   `context.targetYield`, not the profile's `target_weight` (repo wins). The
   yield lever sets both, in the same `PUT /api/v1/workflow`.
-- **D20. Templates: Blooming Espresso, D-Flow / default, Londonium** (copied
-  byte-for-byte from Decaid's bundled profiles). Adaptive was rejected: 20
-  steps, 18 coupled scan steps, `target_weight` 0. Lever bounds come from
-  `docs/verified/03-profiles.md` section 9.
+- **D20. Templates: Blooming Espresso, D-Flow / default, Londonium, Rao
+  Allongé, Gentle and Sweet** (copied byte-for-byte from Decaid's bundled
+  profiles; Decent's Streamline skin offers the last two as default
+  favourites). Five, so the coach can show the brief's "2 to 5". Adaptive was
+  rejected (20 steps, 18 coupled scan steps, `target_weight` 0), as were
+  Blooming Allongé (repeats Blooming's bloom), Extractamundo Dos (a third
+  light-roast template whose stored 6.0000000000000036 bar a lever could never
+  write back) and Classic Italian (flat 9 bar). Lever bounds come from
+  `docs/verified/03-profiles.md` section 9; every yield lever needs a
+  connected scale, since stop-at-weight does.
 - **D21. v1 deduplicates to Decaid's bundled default.** Decaid's profile id is
   a hash of execution content only (title excluded), so "<Bean> v1" with every
   lever at its template value *is* the bundled default: `POST /profiles`
@@ -158,8 +164,43 @@ evidence lives. "Repo wins" means a cloned source contradicted
 - **D34. "Lock it in" is a change too.** `variable: "none"` shows a card and
   is confirmed like any other proposal; its iteration outcome is `kept`.
 - **D35. v1's yield is the template's `target_weight`.** Blooming 60 g,
-  D-Flow 50 g, Londonium 42 g, written to `context.targetYield` so the shot
-  stops there. Changing it is a lever like any other.
+  D-Flow 50 g, Londonium 42 g, Rao Allongé 135 g, Gentle and Sweet 36 g,
+  written to `context.targetYield` so the shot stops there. Changing it is a
+  lever like any other. The yield hard bound is 120 g or the template's own
+  `target_weight`, whichever is larger, so the Allongé's own default passes.
+- **D41. A shot counts only for the version the machine ran.** The finished
+  shot's `workflow.profile` must match the bag's active version, by title or
+  by Decaid's content id (sha256 of the execution fields). Otherwise the chat
+  says the shot ran something else, no feedback is asked, and nothing is
+  logged against the version. Another skin, or a profile picked on the
+  machine, would otherwise put the wrong shot into the bag's history.
+- **D42. Switching bags loads that bag's version.** Selecting a bag reads
+  `GET /workflow` and, when the machine runs something else, PUTs the bag's
+  active version. A failed load stays on the error banner with Retry until a
+  later upload succeeds. "Loaded on the machine" is said only while the
+  machine is connected; otherwise the chat says Decaid loads it on connect.
+  At start-up CafAI only reports a mismatch (the same banner, with Retry):
+  opening the skin never changes the machine by itself.
+- **D43. A failed confirm is not a decline.** When the upload or activation
+  of a confirmed change fails, the change card stays pending with the error
+  and Retry repeats the same activation. The model hears only the outcome
+  the user finally gets.
+- **D44. Typing past a card closes it.** Pending UI calls are answered
+  `{"answered":false}` (ENGINE_PROTOCOL rule 7) and their cards show as set
+  aside, so a stale tap cannot fire later. A typed reply while a taste
+  question is open is logged as that iteration's feedback.
+- **D45. Each activation rewrites the workflow context.** Decaid merges
+  `context` per field and clears a field on explicit `null` (all but
+  `targetYield`; `docs/verified/02-api.md` section on PUT /workflow). CafAI
+  sends the bag's coffee and grinder fields and `null` for the ones it does
+  not know (`grinderId`, `beanBatchId`, a missing roaster or setting), so the
+  previous bag's grinder or batch never lands on this bag's shots.
+- **D46. "New bag" reuses an untouched bag.** While the current bag has no
+  saved details and no versions, New bag reopens it instead of leaving a
+  trail of empty bags.
+- **D47. An iteration nobody answered is `superseded`.** When the next shot
+  lands before the taste feedback, the older iteration is closed as
+  superseded (not kept or declined), and history says so.
 
 ## Storage
 
@@ -187,6 +228,17 @@ evidence lives. "Repo wins" means a cloned source contradicted
 - **D40. Chromium 91 is verified by running, not by reading.** The full coach
   loop runs in a real HeadlessChrome 91.0.4469.0 (`tools/chrome91/loop.mjs`)
   with zero page or console errors, and CI repeats it.
+- **D48. The chat follows the newest message itself.** x-chat's auto-scroll
+  follows new messages but not a card that grows after streaming, which left
+  confirm buttons below the fold. CafAI turns it off and sticks to the bottom
+  while the user is within 96 px of it; once they scroll up, it leaves the
+  scroll alone.
+- **D49. The skin zip carries LICENSE and NOTICE.** The zip is the
+  distributed object code, so the GPL text and the credits travel with it;
+  the release script refuses a zip without them.
+- **D50. The resolved build target is asserted.** plugin-legacy re-derives
+  `build.target` from `modernTargets` (and warns that it overrode it); a build
+  plugin fails the build unless the result is `chrome91`.
 
 ## Licensing
 
