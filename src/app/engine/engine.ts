@@ -26,6 +26,7 @@ import {
 } from '../../coach/contract.ts';
 import type { ShotRecord, TelemetryStore, WireProfile, Workflow, WorkflowContext } from '../../api/types.ts';
 import { isShotRunning as shotInProgress } from '../../api/workflow.ts';
+import { redactKeyLike } from '../../storage/redact.ts';
 import type { ProfileJson, ShotSummary } from '../../coach/types.ts';
 import type { ContentBlock, Effort, PendingUiCall, RunnerTool, ToolResultBlock } from '../../llm/types.ts';
 import type {
@@ -384,13 +385,15 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     switch (name) {
       case TOOL.saveBagDetails: {
         const details = value as SaveBagDetails;
+        // The bag name travels to Decaid (coffee name, profile titles): never a key.
+        const clean = (text: string | null) => (text === null ? null : redactKeyLike(text, 'key removed'));
         await persistBag(s, {
-          name: details.name.trim(),
-          roaster: details.roaster,
-          origin: details.origin,
+          name: clean(details.name.trim()) || 'New bag',
+          roaster: clean(details.roaster),
+          origin: clean(details.origin),
           roastLevel: details.roastLevel,
-          process: details.process,
-          notes: details.notes,
+          process: clean(details.process),
+          notes: clean(details.notes),
         });
         emit();
         return { content: JSON.stringify({ saved: true }) };
@@ -1222,10 +1225,15 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   }
 
   async function sendText(text: string): Promise<void> {
-    const trimmed = text.trim();
-    if (!trimmed) return;
+    const typed = text.trim();
+    if (!typed) return;
     const s = session ?? (await createBag());
+    // A pasted API key never reaches the coach, the transcript or Decaid.
+    const trimmed = redactKeyLike(typed, '[API key removed]');
     addMessage('user', [{ kind: 'text', text: trimmed }]);
+    if (trimmed !== typed) {
+      addMessage('system', [noticePart('info', 'That looked like an API key, so CafAI took it out. Keys go in Settings.')]);
+    }
     emit();
     const tasteQuestion = s.pending.find((p) => p.name === TOOL.askUser);
     if (tasteQuestion) {

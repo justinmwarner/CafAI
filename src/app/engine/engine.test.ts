@@ -996,6 +996,31 @@ describe('coach engine', () => {
     });
   });
 
+  it('takes a pasted API key out before anything sees it', async () => {
+    await engine.newBag();
+    scripts.push(() => [
+      text('Lovely.'),
+      toolUse('t-save', TOOL.saveBagDetails, {
+        name: 'sk-ant-api03-pasted-key-1234567890',
+        roaster: null,
+        origin: null,
+        roastLevel: null,
+        process: null,
+        notes: 'from sk-ant-api03-pasted-key-1234567890',
+      }),
+      proposeTemplates,
+    ]);
+    await engine.sendText('sk-ant-api03-pasted-key-1234567890');
+    const sent = JSON.stringify(requests.at(-1));
+    expect(sent).not.toContain('sk-ant-');
+    expect(sent).toContain('[API key removed]');
+    const shown = JSON.stringify(engine.getState().messages);
+    expect(shown).not.toContain('sk-ant-');
+    expect(shown).toContain('That looked like an API key');
+    // Even if a model put one into the bag details, it never becomes the bag name.
+    expect(engine.getState().activeBag).toMatchObject({ name: 'key removed', notes: 'from key removed' });
+  });
+
   it('asks for starting profiles, not the bag details again, once the suggestions were set aside', async () => {
     await engine.newBag();
     scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);

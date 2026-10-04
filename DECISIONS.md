@@ -236,8 +236,11 @@ evidence lives. "Repo wins" means a cloned source contradicted
   while Decaid cannot be read, so one failed read cannot wipe the backup.
   Restored summaries come back with an empty series (the 1 Hz curves are not
   mirrored; the coach re-reads them from Decaid when needed).
-- **D37. A pasted key is redacted.** If the API key appears in any mirrored or
-  exported text (a note, a chat message), it is replaced with `[redacted]`.
+- **D37. A pasted key is redacted.** Anything shaped like an Anthropic key
+  (`sk-ant-` and key characters, whole or in part) is taken out of a chat
+  message before the coach, the transcript or Decaid see it (with a notice),
+  never becomes a bag name, roaster or note, and is replaced with
+  `[redacted]` in mirrored or exported text, as is the stored key itself.
 
 ## Build and verification
 

@@ -18,6 +18,7 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { closeEventTarget, createDbHandle, DURABLE, type LostReason } from './db.ts';
 import { StorageError } from './errors.ts';
 import type { SecretStore } from './types.ts';
+import { REDACTED, redactKeyLike } from './redact.ts';
 
 export const SECRETS_DB_NAME = 'cafai-secrets';
 const SECRETS_DB_VERSION = 1;
@@ -109,12 +110,13 @@ export async function isReady(secrets: Pick<SecretStore, 'getApiKey'>): Promise<
   return key !== null && key.trim() !== '';
 }
 
-export const REDACTED = '[redacted]';
+export { REDACTED };
 /** Shorter "keys" would redact ordinary words; real API keys are ~100 characters. */
 const MIN_SECRET_LENGTH = 8;
 
 /**
- * Replace every occurrence of the key in a piece of text (often JSON).
+ * Replace every occurrence of the key, and anything shaped like an Anthropic
+ * key, in a piece of text (often JSON).
  *
  * The key is not part of any record, but a user can paste it into a bag note or
  * the chat. Anything about to leave the device (the Decaid mirror, an export)
@@ -122,8 +124,8 @@ const MIN_SECRET_LENGTH = 8;
  * plain key for real API keys, so redacting inside JSON keeps it valid.
  */
 export function redactSecret(text: string, secret: string | null | undefined): string {
-  if (!secret || secret.length < MIN_SECRET_LENGTH) return text;
-  let result = text;
+  let result = redactKeyLike(text);
+  if (!secret || secret.length < MIN_SECRET_LENGTH) return result;
   const escaped = JSON.stringify(secret).slice(1, -1);
   for (const needle of escaped === secret ? [secret] : [escaped, secret]) {
     result = result.split(needle).join(REDACTED);
