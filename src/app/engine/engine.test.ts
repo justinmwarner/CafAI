@@ -511,7 +511,7 @@ describe('coach engine', () => {
     expect(state.versions.map((v) => `${v.version}:${v.status}`)).toEqual(['1:superseded', '2:active']);
     expect(state.canUndo).toBe(true);
     expect((await storage.iterations.listAll())[0]!.outcome).toBe('applied');
-    expect(parsed(lastUserTurn(requests)[0])).toEqual({ applied: true, variable: 'profile', version: 2, title: 'Kiambu AA v2' });
+    expect(parsed(lastUserTurn(requests)[0])).toEqual({ applied: true, variable: 'profile', version: 2, title: 'Kiambu AA v2', onMachine: true });
 
     scripts.push(() => [text('Back on v1.')]);
     await engine.undo();
@@ -723,6 +723,18 @@ describe('coach engine', () => {
     await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
     expect(engine.getState().error).toBeNull();
     expect((await storage.iterations.listAll()).map((i) => i.shotId)).toEqual(['shot-lost']);
+  });
+
+  it('tells the coach a version is saved but not on the machine while it is offline', async () => {
+    telemetry.setState({ machineConnected: false });
+    await throughTemplatePick();
+    const result = requests
+      .flat()
+      .flatMap((m) => m.content)
+      .find((b) => b.type === 'tool_result' && b.tool_use_id === 't-tpl');
+    expect(parsed(result!)).toMatchObject({ uploaded: true, onMachine: false });
+    const notices = engine.getState().messages.flatMap((m) => m.parts).filter((p) => p.kind === 'notice');
+    expect(notices.at(-1)).toMatchObject({ text: 'Saved Kiambu AA v1. Decaid loads it when the machine connects.' });
   });
 
   it('believes the machine when Decaid reports it refused the profile', async () => {

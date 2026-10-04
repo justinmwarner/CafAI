@@ -70,11 +70,14 @@ export interface TemplatePickedPayload {
   version: 1;
   title: string;
   uploaded: boolean;
+  /** False while the machine is not connected: Decaid loads the version when it connects. */
+  onMachine: boolean;
   note: string | null;
 }
 
 export type AdjustmentResultPayload =
-  | { applied: true; variable: string; version: number | null; title: string | null }
+  /** onMachine: as for a template pick; null when no profile changed (grind, dose, none). */
+  | { applied: true; variable: string; version: number | null; title: string | null; onMachine: boolean | null }
   | { applied: false; reason: string }
   | { applied: false; error: string };
 

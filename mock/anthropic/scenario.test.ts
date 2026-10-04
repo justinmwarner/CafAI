@@ -267,6 +267,19 @@ describe('scripted replies', () => {
     expect(reply.tools).toEqual([]);
   });
 
+  it('rules 1 and 5: a version saved while the machine is offline is not called loaded', () => {
+    const offlinePick = user(
+      toolResult('t_save', { saved: true }),
+      toolResult('t_tpl', { picked: 'blooming-espresso', version: 1, title: 'Kiambu AA v1', uploaded: true, onMachine: false, note: null }),
+    );
+    expect(ok(call([INTAKE, INTAKE_REPLY, offlinePick])).text).toBe(
+      'Saved Kiambu AA v1. Decaid loads it when the machine connects; pull a shot after that.',
+    );
+    const base = [...UP_TO_SHOT, shot(BLOOMING_LEVERS), SHOT_REPLY, answer(['Sour / sharp']), ANSWER_REPLY, SERIES, ADJUST_REPLY];
+    const offlineChange = user(toolResult('t_adj', { applied: true, variable: 'profile', version: 2, title: 'Kiambu AA v2', onMachine: false }));
+    expect(ok(call([...base, offlineChange])).text).toBe('Saved v2. Decaid loads it when the machine connects; pull another shot after that.');
+  });
+
   it('a question the user typed past is not a pick, a taste or a decision', () => {
     const typedPast = { answered: false, note: 'The user typed a message instead.' };
     const nudge = 'Got it. Pull a shot when you are ready, or tell me more about the coffee.';

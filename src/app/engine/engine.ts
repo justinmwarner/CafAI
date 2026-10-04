@@ -51,6 +51,7 @@ import {
   undoBlock,
   awaitingModel,
   type AdjustmentResultPayload,
+  type TemplatePickedPayload,
 } from './protocol.ts';
 import {
   NEW_BAG_PROMPT,
@@ -949,7 +950,15 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     ]);
     state = { ...state, busy: false };
     emit();
-    const answers = new Map([[call.id, toolResult(call.id, { picked: templateId, version: 1, title, uploaded, note })]]);
+    const picked: TemplatePickedPayload = {
+      picked: templateId,
+      version: 1,
+      title,
+      uploaded,
+      onMachine: uploaded && telemetry.getState().machineConnected,
+      note,
+    };
+    const answers = new Map([[call.id, toolResult(call.id, picked)]]);
     await sendUser(s, answers, UNANSWERED_TEXT, []);
   }
 
@@ -1125,7 +1134,13 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         clearStanding('load');
         addMessage('system', [loadedNotice(title)]);
       }
-      payload = { applied: true, variable: plan.variable, version: versionNumber, title };
+      payload = {
+        applied: true,
+        variable: plan.variable,
+        version: versionNumber,
+        title,
+        onMachine: title ? telemetry.getState().machineConnected : null,
+      };
     } catch (error) {
       // Nothing changed on the machine (a shot was running, Decaid refused):
       // keep the proposal open so Confirm can simply be tapped again.

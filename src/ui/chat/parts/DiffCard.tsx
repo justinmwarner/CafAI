@@ -72,7 +72,7 @@ function StatusLine({ part, showUndo, disabled, onUndo }: Pick<DiffCardProps, 'p
         <Stack direction="row" spacing={1} useFlexGap role="status" sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
           <CheckCircleIcon color="success" fontSize="small" />
           <Typography variant="body1" sx={{ flex: 1, fontWeight: 600 }}>
-            {part.versionLabel ? `Loaded as ${part.versionLabel}` : 'Confirmed. Make the change before your next shot.'}
+            {part.versionLabel ? `Saved as ${part.versionLabel}` : 'Confirmed. Make the change before your next shot.'}
           </Typography>
           {showUndo ? (
             <Button

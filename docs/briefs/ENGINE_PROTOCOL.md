@@ -39,7 +39,8 @@ All JSON payloads are compact `JSON.stringify` output.
 2. **Template picked**: one user message with the held auto-tool results of
    that turn (e.g. `save_bag_details`) followed by
    `{type:"tool_result", tool_use_id:<propose_templates id>, content:JSON}`
-   with JSON = `{"picked":"<templateId>","version":1,"title":"<Bag> v1","uploaded":true|false,"note":string|null}`.
+   with JSON = `{"picked":"<templateId>","version":1,"title":"<Bag> v1","uploaded":true|false,"onMachine":true|false,"note":string|null}`
+   (`onMachine` false: saved, but the machine is not connected; Decaid loads it on connect).
 3. **Shot completed**: a text block
    `"[event:shot_completed]\n" + JSON` with JSON =
    `{"shotRef":"latest","shotId":string,"version":number,"templateId":string,"levers":{"<leverId>":number,...},"doseG":number|null,"targetYieldG":number|null,"grinder":{"name":string|null,"setting":string|null},"summary":<ShotSummary without "series">}`.
@@ -50,7 +51,7 @@ All JSON payloads are compact `JSON.stringify` output.
 4. **Feedback**: tool_result for `ask_user` with JSON
    `{"selected":["<option>",...],"other":string|null}`.
 5. **Adjustment decision**: tool_result for `propose_adjustment` with JSON
-   `{"applied":true,"variable":"profile"|"grind"|"dose"|"none","version":number|null,"title":string|null}`
+   `{"applied":true,"variable":"profile"|"grind"|"dose"|"none","version":number|null,"title":string|null,"onMachine":boolean|null}`
    or `{"applied":false,"reason":"The user declined."}`
    or `{"applied":false,"error":"<upload error sentence>"}`.
 6. **Undo**: text `"[event:undo]\n" + JSON` with JSON
@@ -77,8 +78,10 @@ signature), streams text in small deltas, and streams tool inputs as several
 
 1. tool_result for `propose_adjustment`:
    `applied:true` -> text "Done. v{version} is on the machine. Pull another
-   shot and tell me how it tastes." (for grind/dose: "Make that change, then
-   pull another shot."). Otherwise -> text "OK, we keep v{n} as it is. Tell
+   shot and tell me how it tastes." (with `onMachine:false`: "Saved
+   v{version}. Decaid loads it when the machine connects; pull another shot
+   after that."; for grind/dose: "Make that change, then pull another
+   shot."). Otherwise -> text "OK, we keep v{n} as it is. Tell
    me what you would like to try instead." End turn.
 2. tool_result for a query tool (`get_shot_series`, `get_shot_summary`,
    `get_phase_stats`, `compare_shots`, `get_bag_history`) -> `propose_adjustment`
@@ -101,7 +104,11 @@ signature), streams text in small deltas, and streams tool inputs as several
    options:["Sour / sharp","Bitter / harsh","Balanced, sweet","Weak / watery"],
    multiSelect:false}`.
 5. tool_result for `propose_templates` -> text "Loaded {title}. Pull a shot
-   when you are ready; I will read the curves." End turn.
+   when you are ready; I will read the curves." (`uploaded:false`: "I saved
+   {title}, but it did not load on the machine. Tap Retry above, then pull a
+   shot."; `onMachine:false`: "Saved {title}. Decaid loads it when the
+   machine connects; pull a shot after that.") A result marked
+   `answered:false` is no pick. End turn.
 6. text starting `[event:undo]` -> text "Back on v{to}. Pull a shot when you
    are ready." End turn.
 7. Plain user text and no `save_bag_details` call anywhere earlier in the

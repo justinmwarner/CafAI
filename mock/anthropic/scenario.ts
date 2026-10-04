@@ -559,6 +559,9 @@ function decide(script: Script): Reply {
     if (payload.applied === true) {
       if (payload.variable === 'grind' || payload.variable === 'dose') return say('Make that change, then pull another shot.');
       if (payload.variable === 'none') return say('Locked in. Keep pulling shots like this one.');
+      if (payload.onMachine === false) {
+        return say(`Saved v${formatNumber(payload.version)}. Decaid loads it when the machine connects; pull another shot after that.`);
+      }
       return say(`Done. v${formatNumber(payload.version)} is on the machine. Pull another shot and tell me how it tastes.`);
     }
     return say(`OK, we keep v${currentVersion(messages)} as it is. Tell me what you would like to try instead.`);
@@ -614,6 +617,9 @@ function decide(script: Script): Reply {
     const title = typeof payload.title === 'string' ? payload.title : 'the profile';
     if (payload.uploaded === false) {
       return say(`I saved ${title}, but it did not load on the machine. Tap Retry above, then pull a shot.`);
+    }
+    if (payload.onMachine === false) {
+      return say(`Saved ${title}. Decaid loads it when the machine connects; pull a shot after that.`);
     }
     return say(`Loaded ${title}. Pull a shot when you are ready; I will read the curves.`);
   }
