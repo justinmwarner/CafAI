@@ -47,6 +47,20 @@ function mswWorkerInMockMode(mode: string): Plugin {
   };
 }
 
+// plugin-legacy re-derives build.target from `modernTargets` and warns that it
+// overrode the explicit target below (the result is the same chrome91). Fail
+// the build if the resolved target is ever anything else.
+function assertChrome91Target(): Plugin {
+  return {
+    name: 'cafai:assert-chrome91-target',
+    apply: 'build',
+    configResolved(config) {
+      const target = [config.build.target].flat().join(',');
+      if (target !== 'chrome91') throw new Error(`build.target resolved to "${target}"; CafAI must target chrome91.`);
+    },
+  };
+}
+
 // Decaid serves skins from a per-skin origin and the oldest supported tablets
 // run an immutable Chromium 91 WebView. Relative asset paths, a chrome91 syntax
 // target and usage-based core-js polyfills keep the bundle loadable there
@@ -73,6 +87,7 @@ export default defineConfig(({ mode }) => ({
       modernTargets: ['chrome >= 91'],
     }),
     mswWorkerInMockMode(mode),
+    assertChrome91Target(),
   ],
   define: {
     __CAFAI_VERSION__: JSON.stringify(process.env.npm_package_version ?? '0.0.0'),
