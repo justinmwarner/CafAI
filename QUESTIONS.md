@@ -26,8 +26,10 @@ CafAI assumed tonight and what would change if the guess is wrong.
    brew temperature +/-2 °C per step within 84-94 °C for D-Flow). v1 starts at
    each template's own `target_weight` (Blooming 60 g, D-Flow 50 g, Londonium
    42 g, Rao Allongé 135 g, Gentle and Sweet 36 g), regardless of dose. The
-   coffee heuristics in the prompt are an explicitly marked placeholder. A
-   barista's review would change numbers, not code.
+   Allongé is the outlier: Decent ships a 135 g stop while its own notes aim
+   for about 1:5 (90 g at an 18 g dose); CafAI keeps Decent's number so v1 is
+   the bundled profile. The coffee heuristics in the prompt are an explicitly
+   marked placeholder. A barista's review would change numbers, not code.
 
 4. **Is the real WebView floor really Chromium 91?** CafAI is verified in a
    real Chromium 91, and Decaid's sources prove older engines exist on some
@@ -54,4 +56,12 @@ CafAI assumed tonight and what would change if the guess is wrong.
 8. **Grind as a variable.** Grind moves are suggested in dial steps on the
    grinder's own scale, never clamped to a typed range (Crema's lesson). Should
    CafAI learn each grinder's step size (Decaid has a grinders API) instead of
-   trusting the model's "1 step finer"?
+   trusting the model's "1 step finer"? Today a move that names the new
+   setting updates Settings and Decaid's context; a relative one does not.
+
+9. **Is the bundled Gentle and Sweet the regenerated profile?** Decaid's own
+   curation audit once flagged an import of it for stale de1app frames. The
+   file CafAI copied has the new format and matches its notes, but nothing
+   proves it was regenerated (`docs/verified/03-profiles.md` 9.7). Cheap to
+   check on a machine: pull it once and compare the pressure curve with its
+   description.
