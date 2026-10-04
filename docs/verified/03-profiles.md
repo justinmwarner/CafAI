@@ -309,6 +309,7 @@ All five files are listed in `manifest.json`. Each has `version "2"`, `beverage_
 - **Temperature levers:** these apply one uniform Δ to *all* steps. Min and max refer to the named anchor step, and every step must also stay within 80–100.
 - **Columns:** "Gran." is the value granularity and "MaxΔ" is the maximum change per iteration.
 - **Yield levers:** these write `target_weight` **and** workflow `context.targetYield` (§11). Every yield lever **needs a scale** (`requiresScale`): stop-at-weight is measured by the scale, so without one the validator refuses a yield change.
+- **Where v1 starts (updated 2026-10-04, D57).** The "template value" column is the bundled file's value. v1's yield no longer starts there: it is the profile author's ratio times the dose Decaid has (12-25 g, else the 18 g reference), snapped to 1 g and kept in the dose window (`src/coach/start.ts`): Blooming and D-Flow 2.8x, Londonium and Gentle and Sweet 2x, Rao Allongé 5x. A dose outside 12-25 g also leaves the yield's dose window out (plain gram bounds). The Allongé's window is now 4.0-6.0x and Gentle and Sweet's tops out at 3.0x (rows below updated).
 
 ### 9.2 Template A: `Blooming_espresso.json`, "Blooming Espresso"
 
@@ -478,14 +479,14 @@ What each step does:
 
 There is no preinfusion (`target_volume_count_start 0`).
 
-**The 135 g default and the "5:1" notes disagree.** 135 g is 5:1 only for a 27 g dose; it is 1:7.5 for 18 g and 1:5.4 for 25 g, CafAI's largest dose. 180 ml at 4.5 ml/s is the notes' 40 s, so 135 g matches the time rather than the ratio. Decent's Profile Generator plugin puts an "Allongé" at 4.5–5.5 % TDS (`assets/plugins/decent-profile.reaplugin/plugin.js:5`), which at the notes' 24 % extraction is about 1:4.4–1:5.3. CafAI keeps 135 g as v1 (hash identity), makes it the lever's ceiling, and lets the ratio window run from 1:4 up to the 1:7.5 that the default is at 18 g. The template description tells the model that the style aims for about 1:5.
+**The 135 g default and the "5:1" notes disagree.** 135 g is 5:1 only for a 27 g dose; it is 1:7.5 for 18 g and 1:5.4 for 25 g, CafAI's largest dose. 180 ml at 4.5 ml/s is the notes' 40 s, so 135 g matches the time rather than the ratio. Decent's Profile Generator plugin puts an "Allongé" at 4.5–5.5 % TDS (`assets/plugins/decent-profile.reaplugin/plugin.js:5`), which at the notes' 24 % extraction is about 1:4.4–1:5.3. CafAI keeps 135 g as v1 (hash identity), makes it the lever's ceiling, and lets the ratio window run from 1:4 up to the 1:7.5 that the default is at 18 g. The template description tells the model that the style aims for about 1:5. *Superseded by D57 (2026-10-04): v1 now starts at 5×dose (90 g at 18 g) and the window is 1:4–1:6; 135 g stays the lever's ceiling.*
 
 **Why the levers act on step 1 only.** Both steps are named "hold at 4.5 ml/s". The confirm card appends step names to a linked lever with several paths (`describeLeverChange` in `src/coach/diff.ts`), so a lever on both steps would read "Flow rate: 4.5 ml/s -> 4.0 ml/s (hold at 4.5 ml/s)". The levers write step 1, and step 0 stays a fixed 2 s start. The names keep saying 4.5 ml/s after a flow change, and the flow lever's description says so.
 
 | Lever | Path | Label | Unit | Template | Min | Max | Gran. | MaxΔ | Why |
 |---|---|---|---|---|---|---|---|---|---|
 | temp | `steps[*].temperature` (uniform Δ; anchor `steps[1]`) | Brew temperature | °C | 92.0 | 88.0 | 96.0 | 0.5 | 2.0 | Light roasts run hot (RESEARCH §8: 93–96 °C). Both steps are equal, so every step stays within 88–96. |
-| yield | `target_weight` (+ `context.targetYield`) | Yield | g | 135 | max(50, 4.0×dose) | min(135, 7.5×dose) | 1 | 10 | **Needs a scale.** The ceiling is Decent's own default (v1 must stay valid; it is above the generic 120 g bound, see §5.2). 7.5×dose reaches it from an 18 g dose; 4.0×dose keeps it a long shot (RESEARCH §3: "Allongé up to ~1:5"). 10 g is 7 % of 135 g, about the same relative step as 4 g on the 42–60 g espresso yields (7–10 %). |
+| yield | `target_weight` (+ `context.targetYield`) | Yield | g | 135 | max(50, 4.0×dose) | min(135, 6.0×dose) | 1 | 10 | **Needs a scale.** The ceiling is Decent's own default (above the generic 120 g bound, see §5.2). Since D57 v1 starts at 5×dose (90 g at 18 g), so the window is 4.0–6.0×dose (Decent: "5:1 or 6:1", beginners about 4:1); it was 7.5×dose so the 135 g default passed at 18 g. 10 g is 7 % of 135 g, about the same relative step as 4 g on the 42–60 g espresso yields (7–10 %). |
 | flow | `steps[1].flow` | Flow rate | ml/s | 4.5 | 3.5 | 5.5 | 0.1 | 0.5 | The allongé's defining knob: contact time and pressure (RESEARCH 0.5–6, ±0.25–0.5). Below 3.5 it is no longer an allongé. Step 0 keeps 4.5 for its 2 s. |
 | maxPressure | `steps[1].limiter.value` | Max pressure | bar | 8.6 | 6.0 | 10.0 | 0.1 | 1.0 | The peak cap (RESEARCH 3–10; the same range as D-Flow's `pourPmax`). Granularity 0.1 because 8.6 is not on a 0.5 grid, and the template value must be representable. |
 
@@ -532,7 +533,7 @@ Steps 0 and 1 are the preinfusion (`target_volume_count_start` 2). Without a sca
 | Lever | Path | Label | Unit | Template | Min | Max | Gran. | MaxΔ | Why |
 |---|---|---|---|---|---|---|---|---|---|
 | temp | `steps[*].temperature` (uniform Δ; anchor `steps[3]`) | Brew temperature | °C | 88.0 | 84.0 | 92.0 | 0.5 | 2.0 | Primary taste lever. All steps are equal in this template. Medium to dark roasts (RESEARCH §8: 85–93 °C). |
-| yield | `target_weight` (+ `context.targetYield`) | Yield | g | 36 | max(25, 1.5×dose) | min(60, 2.5×dose) | 1 | 4 | **Needs a scale.** RESEARCH §8: dark 1:1.8–2.2 and medium 1:2–2.5; the 1.5 floor allows a short shot for milk. |
+| yield | `target_weight` (+ `context.targetYield`) | Yield | g | 36 | max(25, 1.5×dose) | min(60, 3.0×dose) | 1 | 4 | **Needs a scale.** RESEARCH §8: dark 1:1.8–2.2 and medium 1:2–2.5; the 1.5 floor allows a short shot for milk. The ceiling is 3.0×dose since D57 (Decent's guide: "1:2 or 1:3"; it was 2.5). |
 | peak | `steps[2].pressure` = `steps[3].pressure` | Peak pressure | bar | 6.0 | 4.0 | 8.0 | 0.5 | 1.0 | Body and intensity (RESEARCH 3–10, ±0.5–1). The cap of 8 keeps it a low-pressure profile. Linked so the 3 s rise and the hold share the target. Constraint: `peak − declineEnd ≥ 1.0`. |
 | declineEnd | `steps[4].pressure` | Decline end pressure | bar | 4.0 | 2.0 | 6.0 | 0.5 | 1.0 | The finish: lower is softer and less bitter (RESEARCH 2–8). The same range and constraint as Londonium. |
 | hold | `steps[3].seconds` | Peak hold time | s | 13 | 5 | 25 | 1 | 4 | How long the peak holds before the decline, after the fixed 3 s rise. Longer gives more body; shorter reaches the gentle decline sooner. Whole seconds encode exactly (§5.1). |

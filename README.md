@@ -67,6 +67,14 @@ npm run e2e           # Playwright, full loop against the mocks
 npm run release:zip   # release/cafai-<version>.zip (with LICENSE, NOTICE and the font licence)
 ```
 
+**Against the real Anthropic API (opt-in).** `npm test` never calls the API.
+To check CafAI's own client, prompt and tools against it (2-3 calls on the
+default model), run `ANTHROPIC_API_KEY=<your key> npm run test:live`. Add
+`LIVE_ALL_MODELS=1` to also try every model in Settings (one tiny call each),
+or use `LIVE_DRY_RUN=1` to run the same checks against the scripted fake with
+no key. Without a key the suite is skipped. The key is read from the
+environment only and never logged or written anywhere.
+
 **Against a real tablet or the Decaid simulator.** CafAI talks to
 `http://<page host>:8080`. When the dev server runs on your laptop, point it
 at the tablet once in the browser console:
