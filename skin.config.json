@@ -10,6 +10,10 @@
     "description",
     "version"
   ],
+  "licenseFiles": [
+    "LICENSE",
+    "NOTICE"
+  ],
   "zipBaseName": "cafai",
   "manifest": {
     "id": "cafai",

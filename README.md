@@ -54,7 +54,8 @@ settings page.
 
 ## Develop
 
-Requirements: Node 22.12+ (24 recommended), npm.
+Requirements: Node 22.22.2+ or 24.15+ (24 recommended; jsdom 30, used by the UI tests,
+needs one of these), npm. Older Node 24 releases run the suite with an engine warning.
 
 ```bash
 npm ci

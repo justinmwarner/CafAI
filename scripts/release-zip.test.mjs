@@ -3,6 +3,7 @@ import { buildManifest, validateBundle, validateManifest } from './release-zip.m
 
 const config = {
   manifestFiles: ['skin-manifest.json', 'manifest.json'],
+  licenseFiles: ['LICENSE', 'NOTICE'],
   requiredFields: ['id', 'name', 'description', 'version'],
   manifest: { id: 'cafai', name: 'CafAI', description: 'Coach' },
 };
@@ -29,6 +30,8 @@ describe('release bundle', () => {
     'index.html',
     'skin-manifest.json',
     'manifest.json',
+    'LICENSE',
+    'NOTICE',
     'assets/index-abc.js',
     'assets/polyfills-def.js',
     'assets/index-abc.css',
@@ -43,5 +46,10 @@ describe('release bundle', () => {
     expect(validateBundle([...good, 'assets/chunk-xyz.js'], config).join()).toMatch(/lazy chunks/);
     expect(validateBundle(good.filter((f) => f !== 'skin-manifest.json'), config).join()).toMatch(/skin-manifest/);
     expect(validateBundle([...good, 'mockServiceWorker.js'], config).join()).toMatch(/mockServiceWorker/);
+  });
+
+  it('requires the license and the notice at the root', () => {
+    expect(validateBundle(good.filter((f) => f !== 'LICENSE'), config).join()).toMatch(/LICENSE is not at the zip root/);
+    expect(validateBundle(good.filter((f) => f !== 'NOTICE'), config).join()).toMatch(/NOTICE is not at the zip root/);
   });
 });

@@ -6,8 +6,8 @@
 // builds the production bundle, writes the manifest(s) from skin.config.json
 // with the version from package.json, validates them, checks the bundle is a
 // single entry chunk (Decaid replaces skin files in place on update, so a
-// lazily loaded chunk could 404 in a running page), and zips dist/ into
-// release/cafai-<version>.zip.
+// lazily loaded chunk could 404 in a running page), and zips dist/ plus the
+// GPL LICENSE and the NOTICE (credits) into release/cafai-<version>.zip.
 //
 // Adapted from Crema's web/scripts/validate-manifest.mjs and its release:zip
 // npm script (https://github.com/yarneo/crema, GPL-3.0); modified for CafAI.
@@ -50,7 +50,7 @@ export function validateManifest(manifest, config, version) {
 /** Problems with the built file set, as sentences. Empty when valid. */
 export function validateBundle(fileNames, config) {
   const problems = [];
-  for (const required of ['index.html', ...config.manifestFiles]) {
+  for (const required of ['index.html', ...config.manifestFiles, ...(config.licenseFiles ?? [])]) {
     if (!fileNames.includes(required)) problems.push(`${required} is not at the zip root`);
   }
   if (fileNames.some((f) => f.endsWith('mockServiceWorker.js'))) {
@@ -98,6 +98,12 @@ function main() {
   }
 
   const files = walk(dist);
+  // The binary is distributed, so the license and the credits travel with it.
+  for (const file of config.licenseFiles ?? []) {
+    const source = path.join(root, file);
+    if (!existsSync(source)) fail(`${file} is missing from the repository root`);
+    files[file] = readFileSync(source);
+  }
   const bundleProblems = validateBundle(Object.keys(files), config);
   if (bundleProblems.length > 0) fail(bundleProblems.join('; '));
 
@@ -107,7 +113,7 @@ function main() {
   writeFileSync(zipPath, zipSync(files, { level: 9 }));
   console.log(
     `ok - ${path.relative(root, zipPath)}: ${Object.keys(files).length} files, ` +
-      `root has index.html + ${config.manifestFiles.join(' + ')}`,
+      `root has index.html + ${[...config.manifestFiles, ...(config.licenseFiles ?? [])].join(' + ')}`,
   );
 }
 
