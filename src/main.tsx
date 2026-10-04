@@ -7,7 +7,22 @@ import { detectHost } from './api/host.ts';
 const rootElement = document.getElementById('root')!;
 const root = createRoot(rootElement);
 
+const buttonStyle = {
+  minHeight: 48,
+  padding: '0 24px',
+  borderRadius: 8,
+  border: '1px solid rgba(239, 230, 220, 0.4)',
+  background: 'transparent',
+  color: '#efe6dc',
+  fontSize: 16,
+  fontFamily: 'inherit',
+  display: 'inline-flex',
+  alignItems: 'center',
+  textDecoration: 'none',
+} as const;
+
 function Message({ title, detail }: { title: string; detail?: string }) {
+  const host = detectHost(window);
   return (
     <div
       style={{
@@ -26,25 +41,15 @@ function Message({ title, detail }: { title: string; detail?: string }) {
     >
       <div style={{ fontSize: 22, fontWeight: 500 }}>{title}</div>
       {detail ? <div style={{ fontSize: 16, maxWidth: 520, opacity: 0.8 }}>{detail}</div> : null}
-      {/* A way back to the skin switcher even before (or without) the app. */}
-      <button
-        type="button"
-        data-testid="exit-to-skins"
-        onClick={() => detectHost(window).exitToSkinSwitcher()}
-        style={{
-          marginTop: 12,
-          minHeight: 48,
-          padding: '0 24px',
-          borderRadius: 8,
-          border: '1px solid rgba(239, 230, 220, 0.4)',
-          background: 'transparent',
-          color: '#efe6dc',
-          fontSize: 16,
-          fontFamily: 'inherit',
-        }}
-      >
-        Exit to Decaid
-      </button>
+      {/* A way back to the skin switcher and Decaid's settings even before (or without) the app. */}
+      <div style={{ display: 'flex', gap: 12, marginTop: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <button type="button" data-testid="exit-to-skins" onClick={() => host.exitToSkinSwitcher()} style={buttonStyle}>
+          Exit to Decaid
+        </button>
+        <a data-testid="open-decaid-settings" href={host.settingsUrl} style={buttonStyle}>
+          Decaid settings
+        </a>
+      </div>
     </div>
   );
 }

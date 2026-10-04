@@ -71,7 +71,8 @@ function BagPicker({ bags, activeBag, disabled }: { bags: Bag[]; activeBag: Bag 
         htmlInput: { 'data-testid': TID.bagPicker },
         inputLabel: { shrink: true },
       }}
-      sx={{ minWidth: 150, maxWidth: 280, flex: '1 1 180px', '& .MuiInputBase-root': { minHeight: 48 } }}
+      // The native select itself is the touch target: 12.5 px padding makes it 48 px tall.
+      sx={{ minWidth: 150, maxWidth: 280, flex: '1 1 180px', '& .MuiNativeSelect-select': { py: '12.5px' } }}
     >
       {activeBag ? null : (
         <option value="" disabled>

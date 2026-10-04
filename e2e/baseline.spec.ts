@@ -37,6 +37,12 @@ test('a way back to the skin switcher and Decaid settings is always on screen', 
   }
 });
 
+test('the model select is a full 48 px touch target', async ({ page }) => {
+  await openApp(page, '#/settings');
+  const box = await page.getByTestId(TID.modelSelect).boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(47.5);
+});
+
 test('settings keep the API key local and can forget it', async ({ page }) => {
   await openApp(page, '#/settings');
   await fillField(page, TID.apiKeyInput, 'sk-ant-e2e-secret');

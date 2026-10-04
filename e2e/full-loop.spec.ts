@@ -27,6 +27,8 @@ test('new bag to confirmed v2 and history', async ({ page }) => {
   expect(count).toBeLessThanOrEqual(5);
   await page.getByTestId(TID.templatePick('blooming-espresso')).click();
   await expect(page.getByTestId(TID.activeVersion)).toContainText('Kiambu AA v1');
+  // The native bag picker opens only from the select itself: a full touch target.
+  expect((await page.getByTestId(TID.bagPicker).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(47.5);
 
   // Pull the scripted fake shot from the machine panel.
   await page.getByTestId(TID.espressoButton).click();

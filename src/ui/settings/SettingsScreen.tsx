@@ -47,6 +47,8 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 const fieldSx = { '& .MuiInputBase-root': { minHeight: 48 } } as const;
+/** A native select opens only from the select element itself, so it is the 48 px target. */
+const selectSx = { ...fieldSx, '& .MuiNativeSelect-select': { py: '12.5px' } } as const;
 
 function ApiKeySection() {
   const { storage, coach } = useServices();
@@ -260,7 +262,7 @@ function CoachSettingsSection() {
           disabled={disabled}
           onChange={(event) => update({ model: event.target.value })}
           helperText={selected ? `${selected.note} ${price(selected)}.` : ' '}
-          sx={fieldSx}
+          sx={selectSx}
           slotProps={{
             select: { native: true },
             htmlInput: { 'data-testid': TID.modelSelect },
