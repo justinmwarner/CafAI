@@ -166,6 +166,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   const listeners = new Set<() => void>();
   let emitTimer: ReturnType<typeof setTimeout> | null = null;
   let unsubscribeShot: (() => void) | null = null;
+  let unsubscribeTelemetry: (() => void) | null = null;
+  /** Decaid reported the machine refused this version's upload; cleared by a successful load. */
+  let uploadFailedFor: string | null = null;
   let chain: Promise<void> = Promise.resolve();
 
   const nowIso = () => clock.now().toISOString();
@@ -721,6 +724,18 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     }
   }
 
+  /** Decaid says uploading the profile to the machine failed (ws/v1/devices). */
+  async function onUploadFailed(message: string): Promise<void> {
+    const s = session;
+    const version = activeVersion(s);
+    if (!s || !version) return;
+    uploadFailedFor = version.id;
+    setLoadProblem(version.id, `The machine did not take ${version.title}. Tap Retry to load it again.`);
+    addMessage('system', [noticePart('warning', `The machine did not take ${version.title}: ${message}`)]);
+    await persistConversation(s);
+    emit();
+  }
+
   /**
    * The shot being pulled belongs to the bag on screen: switching bags (or
    * starting one) mid-shot would check it against the wrong version and
@@ -738,6 +753,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (isShotRunning()) throw new Error('Wait for the shot to finish, then try again.');
     const context = workflowContext(s, versionId, profile, patch);
     await api.activateProfile(profile, context, { shotRunning: false });
+    uploadFailedFor = null;
     if (context.targetYield !== undefined) s.targetYieldG = context.targetYield;
     if (context.targetDoseWeight !== undefined) s.doseG = context.targetDoseWeight;
   }
@@ -812,6 +828,16 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         ),
       ]);
       setLoadProblem(current.id, `The machine is not running ${current.title}. Tap Retry to load it.`);
+      await persistConversation(s);
+      emit();
+      return;
+    }
+    if (uploadFailedFor === current.id) {
+      // Decaid's workflow names this version, but the machine refused it, so
+      // the shot ran whatever the machine had before.
+      addMessage('system', [
+        noticePart('warning', `The machine did not take ${current.title}, so that shot is not part of this dial-in. Tap Retry to load it.`),
+      ]);
       await persistConversation(s);
       emit();
       return;
@@ -1218,11 +1244,21 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       unsubscribeShot = telemetry.onShot((event) => {
         if (event.type === 'finished') void enqueue(() => handleShotFinished(event.shotId));
       });
+      // React only to reports that arrive while CafAI runs, not a stale one.
+      let lastError = telemetry.getState().connectionError;
+      unsubscribeTelemetry = telemetry.subscribe(() => {
+        const error = telemetry.getState().connectionError;
+        if (error === lastError) return;
+        const fresh = error !== null && (lastError === null || error.timestamp !== lastError.timestamp || error.kind !== lastError.kind);
+        lastError = error;
+        if (fresh && error.kind === 'profileUploadFailed') void enqueue(() => onUploadFailed(error.message));
+      });
       emit();
       void enqueue(checkMachineProfile);
     },
     dispose() {
       unsubscribeShot?.();
+      unsubscribeTelemetry?.();
       if (emitTimer) clearTimeout(emitTimer);
       listeners.clear();
     },

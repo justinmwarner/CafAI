@@ -725,6 +725,54 @@ describe('coach engine', () => {
     expect((await storage.iterations.listAll()).map((i) => i.shotId)).toEqual(['shot-lost']);
   });
 
+  it('believes the machine when Decaid reports it refused the profile', async () => {
+    const refusal = (timestamp: string) => ({
+      kind: 'profileUploadFailed',
+      severity: 'error',
+      timestamp,
+      deviceId: 'de1',
+      deviceName: 'DE1',
+      message: 'Could not upload the profile to the machine.',
+      suggestion: null,
+      details: null,
+    });
+    await throughTemplatePick();
+    telemetry.setState({ connectionError: refusal('2026-10-03T08:01:00.000000') });
+    await vi.waitFor(() => expect(engine.getState().error).toBe('The machine did not take Kiambu AA v1. Tap Retry to load it again.'));
+    const notices = engine.getState().messages.flatMap((m) => m.parts).filter((p) => p.kind === 'notice');
+    expect(notices.at(-1)).toMatchObject({ tone: 'warning', text: expect.stringContaining('did not take Kiambu AA v1') });
+
+    expect(await shotIsCredited('shot-refused')).toBe(false);
+    await engine.retry(); // loads the version again
+    expect(engine.getState().error).toBeNull();
+    expect(await shotIsCredited('shot-loaded')).toBe(true);
+  });
+
+  it('ignores a refusal Decaid reported before CafAI started', async () => {
+    await throughTemplatePick();
+    engine.dispose();
+    const v1 = machine.loaded;
+    const context = machine.context;
+    engine = build();
+    machine.loaded = v1;
+    machine.context = context;
+    telemetry.setState({
+      connectionError: {
+        kind: 'profileUploadFailed',
+        severity: 'error',
+        timestamp: '2026-10-03T07:00:00.000000',
+        deviceId: 'de1',
+        deviceName: 'DE1',
+        message: 'Could not upload the profile to the machine.',
+        suggestion: null,
+        details: null,
+      },
+    });
+    await engine.start();
+    await engine.retry(); // after the queued start-up check
+    expect(engine.getState().error).toBeNull();
+  });
+
   it('keeps the lost-shot Retry on the banner after the user talks to the coach', async () => {
     await throughTemplatePick();
     machine.missingShots.add('shot-lost');
