@@ -58,11 +58,15 @@ async function startMocks(): Promise<void> {
   // Mock mode only (npm run dev:mock / build:mock); this branch and the mocks
   // are compiled out of the production bundle.
   const speed = Number(new URLSearchParams(window.location.search).get('mockSpeed')) || 1;
-  const [{ startMockWorker }, { anthropicHandlers }] = await Promise.all([
+  const [{ startMockWorker }, { anthropicHandlers }, { startMockPersistence }] = await Promise.all([
     import('../mock/browser.ts'),
     import('../mock/anthropic/handlers.ts'),
+    import('../mock/persist.ts'),
   ]);
-  await startMockWorker({ extraHandlers: anthropicHandlers({ speed }) });
+  const mock = await startMockWorker({ extraHandlers: anthropicHandlers({ speed }) });
+  // ?mockPersist=1: the store an earlier page load saved is back before
+  // createServices() makes the app's first request.
+  startMockPersistence(mock.state);
 }
 
 async function boot(): Promise<void> {
