@@ -18,6 +18,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:live": "vitest run --config vitest.live.config.ts",
     "e2e": "playwright test",
     "smoke:chrome91": "node tools/chrome91/smoke.mjs --dist ../../dist-mock --wait \"document.querySelector('[data-testid=app-ready]')\" --hash \"?mockSpeed=25#/\" --name app",
     "release:zip": "node scripts/release-zip.mjs",
