@@ -2,6 +2,7 @@ import './ui/fonts.ts';
 import { createRoot } from 'react-dom/client';
 import { App, restoreRoute } from './app/App.tsx';
 import { createServices } from './app/createServices.ts';
+import { detectHost } from './api/host.ts';
 
 const rootElement = document.getElementById('root')!;
 const root = createRoot(rootElement);
@@ -25,6 +26,25 @@ function Message({ title, detail }: { title: string; detail?: string }) {
     >
       <div style={{ fontSize: 22, fontWeight: 500 }}>{title}</div>
       {detail ? <div style={{ fontSize: 16, maxWidth: 520, opacity: 0.8 }}>{detail}</div> : null}
+      {/* A way back to the skin switcher even before (or without) the app. */}
+      <button
+        type="button"
+        data-testid="exit-to-skins"
+        onClick={() => detectHost(window).exitToSkinSwitcher()}
+        style={{
+          marginTop: 12,
+          minHeight: 48,
+          padding: '0 24px',
+          borderRadius: 8,
+          border: '1px solid rgba(239, 230, 220, 0.4)',
+          background: 'transparent',
+          color: '#efe6dc',
+          fontSize: 16,
+          fontFamily: 'inherit',
+        }}
+      >
+        Exit to Decaid
+      </button>
     </div>
   );
 }

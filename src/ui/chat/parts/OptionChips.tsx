@@ -17,6 +17,8 @@ export interface OptionChipsProps {
   answer: { selected: string[]; otherText: string | null } | null;
   /** True while the coach is working; blocks a second answer. */
   disabled?: boolean;
+  /** The barista typed instead, or pulled another shot: the question is closed. */
+  expired?: boolean;
   onAnswer(selected: string[], otherText: string | null): void;
 }
 
@@ -27,7 +29,7 @@ const chipSx = { height: 48, minHeight: 48, borderRadius: 24, px: 0.75, fontSize
  * multi-select toggles and then sends. "Other" is always last and opens a
  * short text field, because the listed answers never cover every cup.
  */
-export function OptionChips({ question, options, multiSelect, answer, disabled = false, onAnswer }: OptionChipsProps) {
+export function OptionChips({ question, options, multiSelect, answer, disabled = false, expired = false, onAnswer }: OptionChipsProps) {
   const [selected, setSelected] = useState<string[]>([]);
   const [otherOpen, setOtherOpen] = useState(false);
   const [otherText, setOtherText] = useState('');
@@ -37,7 +39,7 @@ export function OptionChips({ question, options, multiSelect, answer, disabled =
   const listed = options.filter((o) => o !== OTHER_OPTION);
   const ordered = [...listed, OTHER_OPTION];
   const answered = answer !== null;
-  const locked = answered || disabled;
+  const locked = answered || disabled || expired;
   const trimmedOther = otherText.trim();
 
   const isChosen = (option: string) =>

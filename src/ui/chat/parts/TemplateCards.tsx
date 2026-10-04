@@ -21,14 +21,21 @@ export interface TemplateCardsProps {
   pickedTemplateId: string | null;
   /** True while the coach is working; blocks a second tap. */
   disabled?: boolean;
+  /** The barista typed instead of picking: the suggestions are closed. */
+  expired?: boolean;
   onPick(templateId: string): void;
 }
 
 /** The model's starting-profile suggestions. Tapping "Use this" creates and loads v1. */
-export function TemplateCards({ items, pickedTemplateId, disabled = false, onPick }: TemplateCardsProps) {
-  const locked = pickedTemplateId !== null;
+export function TemplateCards({ items, pickedTemplateId, disabled = false, expired = false, onPick }: TemplateCardsProps) {
+  const locked = pickedTemplateId !== null || expired;
   return (
     <Stack spacing={1} role="list" aria-label="Suggested starting profiles" sx={{ my: 0.5 }}>
+      {expired && pickedTemplateId === null ? (
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+          Set aside: you replied in the chat instead. Ask the coach to suggest again.
+        </Typography>
+      ) : null}
       {items.map((item) => {
         const picked = item.templateId === pickedTemplateId;
         return (

@@ -114,13 +114,17 @@ export function toChatMessages(messages: readonly CoachUiMessage[], busy: boolea
   return result;
 }
 
-/** The request id of the most recent applied diff: only that card may offer Undo. */
+/**
+ * The request id of the most recent applied diff that created a profile
+ * version: only that card may offer Undo, because Undo reverts the version.
+ * A manual change (grind, dose) creates no version, so it never offers one.
+ */
 export function latestAppliedDiffId(messages: readonly CoachUiMessage[]): string | null {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const parts = messages[i]?.parts ?? [];
     for (let j = parts.length - 1; j >= 0; j -= 1) {
       const part = parts[j];
-      if (part?.kind === 'diff' && part.status === 'applied') return part.requestId;
+      if (part?.kind === 'diff' && part.status === 'applied' && part.versionLabel !== null) return part.requestId;
     }
   }
   return null;
@@ -167,6 +171,7 @@ function TemplatesView({ data }: { data: unknown }) {
       items={part.items}
       pickedTemplateId={part.pickedTemplateId}
       disabled={busy}
+      expired={part.expired ?? false}
       onPick={(templateId) => actions.pickTemplate(part.requestId, templateId)}
     />
   );
@@ -183,6 +188,7 @@ function OptionsView({ data }: { data: unknown }) {
       multiSelect={part.multiSelect}
       answer={part.answer}
       disabled={busy}
+      expired={part.expired ?? false}
       onAnswer={(selected, otherText) => actions.answerOptions(part.requestId, selected, otherText)}
     />
   );
@@ -259,8 +265,44 @@ const FEATURES: ChatBoxFeatures = {
   helperText: false,
   suggestions: false,
   scrollToBottom: true,
-  autoScroll: { buffer: 200 },
+  // ChatSurface follows new content itself (see useStickToBottom): x-chat's
+  // buffer-based follow lets go when a tall card lands on a 602 px screen.
+  autoScroll: false,
 };
+
+const SCROLLER_SELECTOR = '.MuiChatMessageList-scroller';
+const CONTENT_SELECTOR = '.MuiChatMessageList-content';
+/** Within this many px of the bottom counts as "reading the newest message". */
+const STICK_THRESHOLD_PX = 96;
+
+/**
+ * Keep the newest message in view while the reader is at the bottom (or has
+ * just acted), including when a card grows after it renders; leave the
+ * scroll alone once they scroll up to read.
+ */
+function useStickToBottom(rootRef: { current: HTMLElement | null }, stickRef: { current: boolean }) {
+  useEffect(() => {
+    const root = rootRef.current;
+    const scroller = root?.querySelector<HTMLElement>(SCROLLER_SELECTOR) ?? null;
+    const content = root?.querySelector<HTMLElement>(CONTENT_SELECTOR) ?? null;
+    if (!scroller) return undefined;
+    const onScroll = () => {
+      stickRef.current = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < STICK_THRESHOLD_PX;
+    };
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    const observer =
+      typeof ResizeObserver === 'function'
+        ? new ResizeObserver(() => {
+            if (stickRef.current) scroller.scrollTop = scroller.scrollHeight;
+          })
+        : null;
+    if (observer && content) observer.observe(content);
+    return () => {
+      scroller.removeEventListener('scroll', onScroll);
+      observer?.disconnect();
+    };
+  }, [rootRef, stickRef]);
+}
 
 const SLOTS: ChatBoxSlots = {
   composerAttachButton: null,
@@ -344,21 +386,28 @@ export function ChatSurface(props: ChatSurfaceProps) {
   const chatMessages = useMemo(() => toChatMessages(messages, busy), [messages, busy]);
 
   // Keep the newest message in view: on mount and on a bag switch (the
-  // thread is replaced), and after the barista acted (sent, tapped a card),
-  // even if they had scrolled up a little to read.
+  // thread is replaced), after the barista acted (sent, tapped a card), and
+  // for everything that arrives while they are reading at the bottom.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const stickRef = useRef(true);
+  useStickToBottom(rootRef, stickRef);
+  const scrollToNewest = useCallback(() => {
+    const scroller = rootRef.current?.querySelector<HTMLElement>(SCROLLER_SELECTOR);
+    if (scroller) scroller.scrollTop = scroller.scrollHeight;
+    else listRef.current?.scrollToBottom();
+  }, []);
   const firstId = messages[0]?.id;
   useLayoutEffect(() => {
-    listRef.current?.scrollToBottom();
-  }, [firstId]);
-  const count = chatMessages.length;
-  const previousCount = useRef(count);
+    stickRef.current = true;
+    scrollToNewest();
+  }, [firstId, scrollToNewest]);
   useLayoutEffect(() => {
-    if (count > previousCount.current && followNextRef.current) {
+    if (followNextRef.current) {
       followNextRef.current = false;
-      listRef.current?.scrollToBottom({ behavior: 'smooth' });
+      stickRef.current = true;
     }
-    previousCount.current = count;
-  }, [count]);
+    if (stickRef.current) scrollToNewest();
+  }, [chatMessages, scrollToNewest]);
 
   const onComposerKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
     // Enter sends unless sending is blocked; then it does nothing, and the draft stays.
@@ -389,7 +438,7 @@ export function ChatSurface(props: ChatSurfaceProps) {
 
   return (
     <PartsContext.Provider value={partsContext}>
-      <Box data-testid={TID.chat} data-busy={busy || undefined} sx={chatSx}>
+      <Box ref={rootRef} data-testid={TID.chat} data-busy={busy || undefined} sx={chatSx}>
         <ChatBox
           adapter={adapter}
           messages={chatMessages}

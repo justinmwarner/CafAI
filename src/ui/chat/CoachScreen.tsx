@@ -232,10 +232,10 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
           {activeBag ? (
             <Chip
               data-testid={TID.activeVersion}
-              label={activeVersion?.title ?? 'No profile yet'}
+              label={activeVersion ? <VersionLabel title={activeVersion.title} version={activeVersion.version} /> : 'No profile yet'}
               color={activeVersion ? 'primary' : 'default'}
               variant={activeVersion ? 'filled' : 'outlined'}
-              sx={{ minHeight: 0, height: 36, fontWeight: 600, maxWidth: 220 }}
+              sx={{ minHeight: 0, height: 36, fontWeight: 600, maxWidth: 260, '& .MuiChip-label': { display: 'flex', minWidth: 0 } }}
             />
           ) : null}
           <Box sx={{ flex: '1 0 0', minWidth: 0 }} />
@@ -267,6 +267,24 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
       ) : null}
       {error ? <ErrorBanner error={error} /> : null}
       {body}
+    </Box>
+  );
+}
+
+/** "<long bag name>… v12": the name may shorten, the version never does. */
+function VersionLabel({ title, version }: { title: string; version: number }) {
+  const suffix = ` v${version}`;
+  const name = title.endsWith(suffix) ? title.slice(0, -suffix.length) : title;
+  return (
+    <Box component="span" sx={{ display: 'flex', minWidth: 0 }}>
+      <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {name}
+      </Box>
+      {name !== title ? (
+        <Box component="span" sx={{ flexShrink: 0, whiteSpace: 'pre' }}>
+          {suffix}
+        </Box>
+      ) : null}
     </Box>
   );
 }

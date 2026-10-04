@@ -107,6 +107,12 @@ function StatusLine({ part, showUndo, disabled, onUndo }: Pick<DiffCardProps, 'p
           Undone. Back on the previous version.
         </Typography>
       );
+    case 'expired':
+      return (
+        <Typography variant="body2" role="status" sx={{ color: 'text.secondary' }}>
+          Set aside: the conversation moved on. Nothing changed on the machine.
+        </Typography>
+      );
     case 'pending':
       return null;
   }
@@ -171,6 +177,12 @@ export function DiffCard({ part, disabled = false, showUndo, onConfirm, onDeclin
 
       {pending ? (
         <>
+          {part.error ? (
+            <Stack direction="row" spacing={1} role="alert" sx={{ mt: 1, alignItems: 'flex-start', color: 'error.main' }}>
+              <ErrorOutlineIcon fontSize="small" sx={{ mt: 0.25 }} />
+              <Typography variant="body2">{part.error}</Typography>
+            </Stack>
+          ) : null}
           <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
             {part.versionLabel
               ? `Confirm saves this as ${part.versionLabel} and loads it onto the machine.`
