@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { TID } from '../src/ui/testIds.ts';
-import { openApp, saveApiKey, sendChat } from './helpers.ts';
+import { everythingDecaidSaw, mirroredText, openApp, recordRequests, saveApiKey, sendChat } from './helpers.ts';
 
 /**
  * The whole dial-in loop against the mock: new bag -> template suggestions ->
@@ -9,6 +9,7 @@ import { openApp, saveApiKey, sendChat } from './helpers.ts';
  * in mock/anthropic (docs/briefs/ENGINE_PROTOCOL.md), Decaid is the MSW mock.
  */
 test('new bag to confirmed v2 and history', async ({ page }) => {
+  const seen = recordRequests(page);
   await openApp(page);
   await saveApiKey(page);
 
@@ -51,6 +52,20 @@ test('new bag to confirmed v2 and history', async ({ page }) => {
   await expect(page.getByTestId(TID.historyVersion(1))).toBeVisible();
   await expect(page.getByTestId(TID.historyVersion(2))).toBeVisible();
   await expect(page.getByTestId(TID.historyVersion(2))).toContainText('Brew temperature');
+
+  // Non-secret records reach Decaid's store (debounced); the API key never
+  // reaches Decaid at all: not in a request, the store, a shot, or the workflow.
+  await expect.poll(() => mirroredText(page), { timeout: 15_000 }).toContain('Kiambu AA v2');
+  expect(await everythingDecaidSaw(page)).not.toContain('sk-ant-e2e-test');
+  // The key goes to Anthropic in its header only, and nowhere else.
+  const isAnthropic = (url: string) => new URL(url).hostname === 'api.anthropic.com';
+  const toAnthropic = seen.filter((r) => isAnthropic(r.url));
+  expect(toAnthropic.length).toBeGreaterThan(0);
+  for (const request of toAnthropic) {
+    expect(request.headers['x-api-key']).toBe('sk-ant-e2e-test');
+    expect(request.body ?? '').not.toContain('sk-ant-e2e-test');
+  }
+  expect(JSON.stringify(seen.filter((r) => !isAnthropic(r.url)))).not.toContain('sk-ant-e2e-test');
 });
 
 test('undo returns the machine to the previous version', async ({ page }) => {

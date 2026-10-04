@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { TID } from '../src/ui/testIds.ts';
-import { openApp, fillField } from './helpers.ts';
+import { everythingDecaidSaw, fillField, openApp } from './helpers.ts';
 
 test('machine panel shows live status and the basic controls', async ({ page }) => {
   await openApp(page);
@@ -42,11 +42,7 @@ test('settings keep the API key local and can forget it', async ({ page }) => {
   await fillField(page, TID.apiKeyInput, 'sk-ant-e2e-secret');
   await page.getByTestId(TID.apiKeySave).click();
   await expect(page.locator('body')).not.toContainText('sk-ant-e2e-secret');
-  const mirrored = await page.evaluate(async () => {
-    const mock = (window as unknown as { __CAFAI_MOCK__?: { state?: unknown } }).__CAFAI_MOCK__;
-    return JSON.stringify(mock?.state ?? {});
-  });
-  expect(mirrored).not.toContain('sk-ant-e2e-secret');
+  expect(await everythingDecaidSaw(page)).not.toContain('sk-ant-e2e-secret');
   await page.getByTestId(TID.forgetKey).click();
   await page.getByTestId(TID.forgetKeyConfirm).click();
   await expect(page.getByTestId(TID.forgetKey)).toBeHidden();
