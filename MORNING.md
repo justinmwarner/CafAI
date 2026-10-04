@@ -9,8 +9,8 @@ passes everything in "done means". Nothing was pushed anywhere.
 |---|---|
 | Typecheck (`npm run typecheck`) | pass |
 | Lint (`npm run lint`) | pass |
-| Unit tests (`npm test`) | **1224/1224** in 90 files |
-| Playwright (`npm run e2e`) | **24/24** at 962x602, 1280x800, 1920x1200 |
+| Unit tests (`npm test`) | **1254/1254** in 91 files |
+| Playwright (`npm run e2e`) | **27/27** at 962x602, 1280x800, 1920x1200 |
 | Full loop against the mock | pass: new bag -> 2-5 templates -> pick -> "<Bean> v1" uploaded -> scripted shot -> taste chips -> one-change diff confirmed -> v2 -> history; undo back to v1 |
 | API key stays local | the full-loop e2e searches every request the page made, and everything the mock Decaid received or stored: the key only ever goes to Anthropic, in the `x-api-key` header |
 | Release zip (`npm run release:zip`) | builds `release/cafai-0.1.0.zip`: `index.html`, `skin-manifest.json`, `manifest.json`, `LICENSE`, `NOTICE`, `LICENSE-ROBOTO.txt` at the root, one entry chunk, no mock code |
@@ -46,10 +46,38 @@ were re-run against the fixes. The ones that mattered most:
   confirmed grind setting reaches Settings and Decaid; arrows render in
   Roboto; the scripted coach is stricter; LICENSE and NOTICE ship in the zip.
 
+A **second fresh-eyes pass** (another agent, 16 more exploratory specs: all
+five templates end to end, every prompt's position on screen, shot crediting,
+dropped shots, grinder flow, key leaks, production build) then found 1 major
+and 8 minor defects, all fixed with tests. Its own 36 defect specs, re-run
+against the fixes, pass (one of them races the coach's reply and passes on a
+rerun):
+
+- **A shot could still be credited to the wrong bag when two bags shared a
+  name** (the check accepted a matching title after a failed load). Every
+  activation now tags Decaid's workflow with CafAI's version id, and a shot
+  counts only when the tag and the brewing content match (D41).
+- A banner appearing above the chat, or a change card written at the coach's
+  length limits, could push the open question or Confirm below the fold; the
+  chat now re-follows when the view shrinks, and change cards put Confirm
+  before the reasoning.
+- Bag switching is disabled while a shot is pulled (a switch lost the shot).
+- The grinder saved in Settings now reaches the coach (with every shot) and
+  Decaid; a grind "move" to the current setting is refused.
+- Decaid's "profile upload failed" is believed: banner, Retry, and no shot
+  counted until the version loads. The lost-shot Retry survives chat turns.
+- Polish: 48 px selects, Decaid settings on the boot screens, "Saved as v2"
+  (and the coach told) while the machine is offline, set-aside questions
+  close their Other field, the coach re-offers set-aside suggestions,
+  library records only after a successful load, same-named bags told apart,
+  pasted API keys stripped before anything sees them.
+
 Left as they are: the live graph and the shot card can differ by about 0.2 s
 (the graph uses the live frames, the card Decaid's saved record); restoring
 from the Decaid backup is unit-tested only, because the mock store resets on
-every page load.
+every page load; there is no progress indicator during the ~15 s search for
+a lost shot; a grind setting Decaid missed while it was unreachable reaches
+it with the next profile load.
 
 ## Try it in two minutes
 
@@ -123,7 +151,7 @@ and Claude are scripted (MSW).
   coffee name, roaster and grinder strings go into the workflow context); a
   relative grind move ("1 step finer") leaves the stored setting as you last
   typed it; the machine panel does not show which profile is loaded (the coach
-  says so when it matters); no steam/hot-water parameter editors or
+  and the banner say so when it matters); no steam/hot-water parameter editors or
   device-connect screens (the client has `connectKind()`); no screensaver.
 
 ## What came from Crema (GPL-3.0, headers on every derived file)

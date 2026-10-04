@@ -265,7 +265,10 @@ evidence lives. "Repo wins" means a cloned source contradicted
   three of them do not fit). Only the reader scrolling up stops following;
   CafAI's own scrolls are recognized by position, because their scroll event
   can arrive after more content rendered (which once left the taste chips
-  below the fold after a shot). Sending or tapping a card resumes following.
+  below the fold after a shot). Sending or tapping a card resumes following,
+  and the view re-follows when it shrinks (a banner appears above the chat).
+  A change card shows what changes, then Confirm / Not now, then Why /
+  Expect, so even a card at the coach's length limits keeps Confirm in view.
   `e2e/chat-scroll.spec.ts` checks each prompt is inside the chat viewport at
   all three sizes.
 - **D49. The skin zip carries LICENSE, NOTICE and the font licence.** The
