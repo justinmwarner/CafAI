@@ -224,7 +224,9 @@ evidence lives. "Repo wins" means a cloned source contradicted
   something other than the bag's version, and a finished shot Decaid has not
   saved, come back on the banner after other errors and chat turns, each
   with its own Retry. Dismissing, switching bags or the fix itself clears
-  them.
+  them. *Since 2026-10-04 the banner follows the standing problem at once:
+  when one is solved or replaced, the banner clears or changes immediately
+  instead of at the next coach reply.*
 - **D53. No bag switching while a shot is pulled.** The bag picker and New
   bag are disabled during a shot (the engine refuses too): the shot belongs
   to the bag on screen, and a refused load mid-shot used to lose it.
@@ -247,6 +249,8 @@ evidence lives. "Repo wins" means a cloned source contradicted
   message before the coach, the transcript or Decaid see it (with a notice),
   never becomes a bag name, roaster or note, and is replaced with
   `[redacted]` in mirrored or exported text, as is the stored key itself.
+  *Since 2026-10-04 the typed "Other" answer to a question is redacted the
+  same way: it reaches the coach and, under D61, Decaid's shot notes.*
 
 ## Build and verification
 
@@ -363,9 +367,12 @@ says which reading was taken and MORNING.md lists it among the top questions.
   waits for Decaid's own upload; D42 holds). A failed barrier keeps the
   version active with the load banner and Retry, as D51. A shot that started
   while the version was still loading, or after its load failed, is not
-  credited. An older Decaid without the route keeps the overnight wording.
-  The upload's real duration and the group-head latch are measured on a real
-  DE1 (docs/HARDWARE_TEST_PLAN.md).
+  credited, with one allowance: Decaid answers the barrier only after its own
+  500 ms post-upload guard, and queues CafAI's espresso start behind the
+  upload, so a shot seen starting within 500 ms before the answer counts. An
+  older Decaid without the route (404/405) keeps the overnight wording, and
+  CafAI stops asking for that session. The upload's real duration and the
+  group-head latch are measured on a real DE1 (docs/HARDWARE_TEST_PLAN.md).
 - **D56. The default model stays `claude-opus-5-5`; the user picks another
   in Settings (QUESTIONS #2).** Nothing changes in the picker. A coach that
   runs on the user's own computer, like Crema's Mac server, so it uses a
@@ -393,7 +400,13 @@ says which reading was taken and MORNING.md lists it among the top questions.
   it probes for private brand checks (`#x in obj`), syntax that shipped in
   Chromium 91, and uses a version from the user agent only where one exists
   (a desktop browser) and only for the message. An engine it cannot judge
-  gets no warning.
+  gets no warning. The start-up fallback appears at once when the bundle
+  fails to parse or to load, and otherwise after 15 s without a first render
+  (generous on purpose: nobody has timed a cold start on a Decent tablet); it
+  removes itself if the app renders after all. One `console.info` line
+  records the verdict for Decaid's saved WebView log. In the desktop
+  Chromium 91.0.4469.0 the check reports supported, also with the "Decent"
+  user agent.
 - **D59. v1 gets its own Decaid library entry whenever its content differs
   (QUESTIONS #5).** The owner has no preference. Under D57, v1's
   `target_weight` usually differs from the bundled stop, so Decaid keeps
@@ -425,7 +438,10 @@ says which reading was taken and MORNING.md lists it among the top questions.
   without step data it says CafAI does not know the step and asks the user to
   note the new setting. Interpretation: Decaid has no "which way is finer",
   so CafAI assumes lower numbers are finer and preset lists run finest first.
-  Supersedes D45's `grinderId: null` for a linked grinder.
+  Supersedes D45's `grinderId: null` for a linked grinder. A linked grinder
+  that Decaid no longer lists stays linked and says so (directions only). A
+  backup or import brings a grinder link back only when this device names no
+  grinder, so a typed name is never paired with another grinder's link.
 - **D63. The bundled Gentle and Sweet is the regenerated profile
   (QUESTIONS #9).** It is byte-identical to Decaid a45961b's file. The stale
   de1app import differed in exactly three step temperatures (78.5, 78.5 and
