@@ -149,17 +149,22 @@ interface ApiCall {
   args: unknown[];
 }
 
-const machine = { loaded: SAMPLE_WORKFLOW.profile as ProfileJson, failActivations: 0, missingShots: new Set<string>() };
+const machine = { loaded: SAMPLE_WORKFLOW.profile as ProfileJson, failActivations: 0, failUpdates: 0, missingShots: new Set<string>() };
 
 function makeApi(calls: ApiCall[]): ApiPort {
   let ids = 0;
   // Like the machine: a shot runs whatever profile was activated last.
   machine.loaded = SAMPLE_WORKFLOW.profile as ProfileJson;
   machine.failActivations = 0;
+  machine.failUpdates = 0;
   machine.missingShots.clear();
   return {
     getWorkflow: async () => ({ ...SAMPLE_WORKFLOW, profile: machine.loaded }) as Workflow,
     updateWorkflow: async (patch) => {
+      if (machine.failUpdates > 0) {
+        machine.failUpdates -= 1;
+        throw new Error('Decaid is not reachable.');
+      }
       calls.push({ method: 'updateWorkflow', args: [patch] });
       return SAMPLE_WORKFLOW;
     },
@@ -624,6 +629,29 @@ describe('coach engine', () => {
     const patches = apiCalls.filter((c) => c.method === 'updateWorkflow').map((c) => c.args[0]);
     expect(patches.at(-1)).toEqual({ context: { grinderSetting: '13' } });
     expect(engine.getState().activeVersion?.version).toBe(1);
+  });
+
+  it('confirms a grind move even when Decaid cannot take the new setting', async () => {
+    await throughShot();
+    scripts.push(() => [
+      toolUse('t-grind', TOOL.proposeAdjustment, {
+        variable: 'grind',
+        lever: null,
+        value: null,
+        grind: { direction: 'coarser', amount: 1, setting: '15' },
+        summary: 'Grind 1 step coarser, to 15',
+        rationale: 'It ran slow.',
+        expectedEffect: 'A faster, brighter shot.',
+        tips: [],
+      }),
+    ]);
+    await engine.answerOptions('t-ask', ['Bitter'], null);
+    machine.failUpdates = 1;
+    scripts.push(() => [text('Turn the dial, then pull another shot.')]);
+    await engine.confirmChange('t-grind');
+    expect(engine.getState().error).toBeNull();
+    expect((await storage.settings.get()).grinderSetting).toBe('15');
+    expect((await storage.iterations.listAll())[0]!.outcome).toBe('applied');
   });
 
   it('says when the machine dropped mid-shot, and Retry picks the shot up once Decaid has it', async () => {
