@@ -209,6 +209,24 @@ evidence lives. "Repo wins" means a cloned source contradicted
 - **D47. An iteration nobody answered is `superseded`.** When the next shot
   lands before the taste feedback, the older iteration is closed as
   superseded (not kept or declined), and history says so.
+- **D51. Decaid's "profile upload failed" counts.** A `profileUploadFailed`
+  device report that arrives while CafAI runs marks the active version as
+  not loaded: a warning in the chat, the banner with Retry, and no shot
+  credited to that version until a load succeeds. A report from before CafAI
+  started is ignored. (A slow upload that never fails stays QUESTIONS #1.)
+- **D52. Some problems stand until they are solved.** The machine running
+  something other than the bag's version, and a finished shot Decaid has not
+  saved, come back on the banner after other errors and chat turns, each
+  with its own Retry. Dismissing, switching bags or the fix itself clears
+  them.
+- **D53. No bag switching while a shot is pulled.** The bag picker and New
+  bag are disabled during a shot (the engine refuses too): the shot belongs
+  to the bag on screen, and a refused load mid-shot used to lose it.
+- **D54. The grinder travels with every shot.** Each shot event carries the
+  grinder as last saved (Settings or a confirmed grind move), which
+  supersedes the intake one; saving a changed grinder writes it to Decaid's
+  context (best effort). A grind "move" to the setting already on the dial
+  goes back to the model as an error.
 
 ## Storage
 
