@@ -18,6 +18,8 @@ import type { ProfileJson, Template } from './types.ts';
 const bloomingT = getTemplate('blooming-espresso')!;
 const dflowT = getTemplate('d-flow')!;
 const londoniumT = getTemplate('londonium')!;
+const allongeT = getTemplate('allonge')!;
+const gentleT = getTemplate('gentle-and-sweet')!;
 
 /** Everything except the listed paths must be untouched. */
 function expectOnlyChanged(before: ProfileJson, after: ProfileJson, changed: Array<[number | null, string]>) {
@@ -93,6 +95,8 @@ describe('readLeverValues', () => {
       peak: 9,
       declineEnd: 3,
     });
+    expect(readLeverValues(allongeT, allongeT.profile)).toEqual({ temp: 92, yield: 135, flow: 4.5, maxPressure: 8.6 });
+    expect(readLeverValues(gentleT, gentleT.profile)).toEqual({ temp: 88, yield: 36, peak: 6, declineEnd: 4, hold: 13 });
   });
 
   it('refuses linked paths that disagree, because the profile was not built by a lever', () => {
@@ -149,6 +153,44 @@ describe('applyLever', () => {
 
   it('writes the yield to target_weight', () => {
     expect(applyLever(londoniumT, londoniumT.profile, 'yield', 44).target_weight).toBe(44);
+    expect(applyLever(allongeT, allongeT.profile, 'yield', 125).target_weight).toBe(125);
+  });
+
+  it('moves only the Allongé pour, leaving its 2 s start at 4.5 ml/s and 8.6 bar', () => {
+    const flow = applyLever(allongeT, allongeT.profile, 'flow', 4.1);
+    expect(flow.steps.map((s) => s.flow)).toEqual([4.5, 4.1]);
+    expectOnlyChanged(allongeT.profile, flow, [[1, 'flow']]);
+
+    const cap = applyLever(allongeT, allongeT.profile, 'maxPressure', 9.3);
+    expect(cap.steps.map((s) => s.limiter)).toEqual([
+      { value: 8.6, range: 0.6 },
+      { value: 9.3, range: 0.6 },
+    ]);
+    expectOnlyChanged(allongeT.profile, cap, [[1, 'limiter']]);
+
+    const warmer = applyLever(allongeT, allongeT.profile, 'temp', 94.5);
+    expect(warmer.steps.map((s) => s.temperature)).toEqual([94.5, 94.5]);
+  });
+
+  it('moves the Gentle and Sweet peak on both peak steps, and the hold and decline on one each', () => {
+    const peak = applyLever(gentleT, gentleT.profile, 'peak', 7);
+    expect(peak.steps.map((s) => s.pressure)).toEqual([undefined, undefined, 7, 7, 4]);
+    expectOnlyChanged(gentleT.profile, peak, [
+      [2, 'pressure'],
+      [3, 'pressure'],
+    ]);
+
+    const decline = applyLever(gentleT, gentleT.profile, 'declineEnd', 3);
+    expect(decline.steps.map((s) => s.pressure)).toEqual([undefined, undefined, 6, 6, 3]);
+    expectOnlyChanged(gentleT.profile, decline, [[4, 'pressure']]);
+
+    const hold = applyLever(gentleT, gentleT.profile, 'hold', 17);
+    expect(hold.steps.map((s) => s.seconds)).toEqual([2, 18, 3, 17, 30]);
+    expectOnlyChanged(gentleT.profile, hold, [[3, 'seconds']]);
+
+    const cooler = applyLever(gentleT, gentleT.profile, 'temp', 86);
+    expect(cooler.steps.map((s) => s.temperature)).toEqual([86, 86, 86, 86, 86]);
+    expectOnlyChanged(gentleT.profile, cooler, [0, 1, 2, 3, 4].map((i) => [i, 'temperature'] as [number, string]));
   });
 
   it('snaps to the lever granularity without float noise', () => {
@@ -203,6 +245,14 @@ describe('effectiveBounds', () => {
     expect(effectiveBounds(yieldOf(dflowT), 18)).toEqual({ min: 33, max: 54 });
     expect(effectiveBounds(yieldOf(londoniumT), 18)).toEqual({ min: 27, max: 50 });
     expect(effectiveBounds(yieldOf(bloomingT), 25)).toEqual({ min: 50, max: 80 });
+    expect(effectiveBounds(yieldOf(gentleT), 18)).toEqual({ min: 27, max: 45 });
+  });
+
+  it("reaches the Allongé's 135 g default from an 18 g dose and caps it there", () => {
+    expect(effectiveBounds(yieldOf(allongeT), 18)).toEqual({ min: 72, max: 135 });
+    expect(effectiveBounds(yieldOf(allongeT), 12)).toEqual({ min: 50, max: 90 });
+    expect(effectiveBounds(yieldOf(allongeT), 15)).toEqual({ min: 60, max: 112 });
+    expect(effectiveBounds(yieldOf(allongeT), 25)).toEqual({ min: 100, max: 135 });
   });
 
   it('uses the plain bounds when the dose is unknown, and ignores the dose for other levers', () => {

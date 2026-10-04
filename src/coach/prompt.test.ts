@@ -59,6 +59,19 @@ describe('buildSystemPrompt: content', () => {
     expect(prompt).toMatch(/peak pressure must stay at least 1\.0 bar above the decline end pressure/i);
   });
 
+  it('says every yield needs a scale, and gives the Allongé its long ratio and 10 g steps', () => {
+    const block = (id: string) => prompt.split('\n## ').find((b) => b.startsWith(`${id}: `))!;
+    for (const template of TEMPLATES) {
+      const line = block(template.id)
+        .split('\n')
+        .find((l) => l.startsWith('- `yield`'))!;
+      expect(line, template.id).toContain('It needs a connected scale.');
+    }
+    expect(block('allonge')).toMatch(/`yield` Yield: 50-135 g and 4\.0-7\.5 x dose, steps of 1 g, at most 10 g per change; template value 135 g/);
+    expect(block('gentle-and-sweet')).toMatch(/Constraint: Peak pressure must stay at least 1\.0 bar above the decline end pressure/);
+    expect(block('allonge')).not.toMatch(/Constraint:/);
+  });
+
   it('describes grind and dose as manual variables with their limits', () => {
     expect(prompt).toMatch(/grind.*more than 0 and at most 5/);
     expect(prompt).toMatch(/12-25 g.*at most 1 g/);

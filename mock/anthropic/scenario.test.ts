@@ -222,8 +222,8 @@ describe('scripted replies', () => {
       .suggestions;
     expect(suggestions.map((s) => [s.templateId, s.confidence])).toEqual([
       ['blooming-espresso', 'high'],
-      ['d-flow', 'medium'],
-      ['londonium', 'low'],
+      ['allonge', 'medium'],
+      ['d-flow', 'low'],
     ]);
   });
 
@@ -235,16 +235,11 @@ describe('scripted replies', () => {
     };
     expect(ranking('Italian Job, dark roast, natural')).toEqual({
       roast: 'dark',
-      order: ['londonium:high', 'd-flow:medium', 'blooming-espresso:low'],
+      order: ['londonium:high', 'gentle-and-sweet:medium', 'd-flow:low'],
     });
-    expect(ranking('Some blend, medium-light, honey')).toEqual({
-      roast: 'medium-light',
-      order: ['d-flow:high', 'blooming-espresso:medium', 'londonium:medium'],
-    });
-    expect(ranking('Mystery beans')).toEqual({
-      roast: null,
-      order: ['d-flow:high', 'blooming-espresso:medium', 'londonium:medium'],
-    });
+    const middle = ['d-flow:high', 'gentle-and-sweet:medium', 'blooming-espresso:medium', 'londonium:low'];
+    expect(ranking('Some blend, medium-light, honey')).toEqual({ roast: 'medium-light', order: middle });
+    expect(ranking('Mystery beans')).toEqual({ roast: null, order: middle });
   });
 
   it('rule 7: names the bag from the text before the first comma, at most 40 characters', () => {

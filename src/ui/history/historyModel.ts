@@ -1,6 +1,7 @@
 /**
  * Arranges a bag's stored versions and iterations for the history screen.
  */
+import { getTemplate } from '../../coach/index.ts';
 import type { IterationOutcome, IterationRecord, ProfileVersion, VersionStatus } from '../../storage/types.ts';
 
 export interface VersionGroup {
@@ -34,14 +35,9 @@ export function groupHistory(
   return { groups, unassigned };
 }
 
-const TEMPLATE_NAMES: Record<string, string> = {
-  'blooming-espresso': 'Blooming Espresso',
-  'd-flow': 'D-Flow',
-  londonium: 'Londonium',
-};
-
+/** The catalog's display name; an id no longer in the catalog is shown as words. */
 export function templateName(templateId: string): string {
-  const known = TEMPLATE_NAMES[templateId];
+  const known = getTemplate(templateId)?.name;
   if (known) return known;
   const words = templateId.replace(/[-_]+/g, ' ').trim();
   return words.charAt(0).toUpperCase() + words.slice(1);

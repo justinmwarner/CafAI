@@ -71,6 +71,8 @@ describe('labels', () => {
     expect(templateName('blooming-espresso')).toBe('Blooming Espresso');
     expect(templateName('d-flow')).toBe('D-Flow');
     expect(templateName('londonium')).toBe('Londonium');
+    expect(templateName('allonge')).toBe('Rao Allongé');
+    expect(templateName('gentle-and-sweet')).toBe('Gentle and Sweet');
     expect(templateName('some-new-template')).toBe('Some new template');
   });
 

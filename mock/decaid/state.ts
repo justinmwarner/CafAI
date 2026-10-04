@@ -31,6 +31,8 @@ import { clone } from '../../src/util/clone.ts';
 import blooming from '../../src/coach/templates/source/Blooming_espresso.json';
 import dflow from '../../src/coach/templates/source/D-Flow____default.json';
 import londonium from '../../src/coach/templates/source/Londonium.json';
+import allonge from '../../src/coach/templates/source/rao_allonge.json';
+import gentle from '../../src/coach/templates/source/Gentle_and_sweet1.json';
 import { fixtures } from '../fixtures/index.ts';
 import { createDataClock, formatLocalTimestamp, formatUtcTimestamp, type DataClock } from './clock.ts';
 import { DartError, MockHttpError } from './errors.ts';
@@ -207,6 +209,8 @@ const TEMPLATE_SOURCES: Array<{ filename: string; json: unknown }> = [
   { filename: 'Blooming_espresso.json', json: blooming },
   { filename: 'D-Flow____default.json', json: dflow },
   { filename: 'Londonium.json', json: londonium },
+  { filename: 'rao_allonge.json', json: allonge },
+  { filename: 'Gentle_and_sweet1.json', json: gentle },
 ];
 
 const DEFAULT_SETTINGS: DecaidSettings = {

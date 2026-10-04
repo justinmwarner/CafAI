@@ -179,5 +179,5 @@ export const EVENT = {
 } as const;
 
 /** Template ids, fixed for the conversation protocol (docs/briefs/ENGINE_PROTOCOL.md). */
-export const TEMPLATE_IDS = ['blooming-espresso', 'd-flow', 'londonium'] as const;
+export const TEMPLATE_IDS = ['blooming-espresso', 'd-flow', 'londonium', 'allonge', 'gentle-and-sweet'] as const;
 export type TemplateId = (typeof TEMPLATE_IDS)[number];

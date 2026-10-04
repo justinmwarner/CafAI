@@ -21,6 +21,8 @@ real engine agree. Tool names and input schemas: `src/coach/contract.ts`.
 | `blooming-espresso` | `temp`, `yield`, `bloom`, `piExit`, `flow` |
 | `d-flow` | `temp`, `yield`, `soak`, `soakWeight`, `pourFlow`, `pourPmax` |
 | `londonium` | `temp`, `yield`, `soak`, `peak`, `declineEnd` |
+| `allonge` | `temp`, `yield`, `flow`, `maxPressure` |
+| `gentle-and-sweet` | `temp`, `yield`, `peak`, `declineEnd`, `hold` |
 
 Bounds, granularity and max change per iteration:
 `docs/verified/03-profiles.md` section 9.
@@ -103,10 +105,10 @@ signature), streams text in small deltas, and streams tool inputs as several
    40 chars; roastLevel from the words light / medium-light / medium /
    medium-dark / dark; process from washed / natural / honey / anaerobic;
    origin and notes null or simple guesses) + tool_use `propose_templates`
-   with 3 suggestions ranked by roast: light -> blooming-espresso high, d-flow
-   medium, londonium low; dark -> londonium high, d-flow medium,
-   blooming-espresso low; otherwise d-flow high, blooming-espresso medium,
-   londonium medium.
+   with suggestions ranked by roast: light -> blooming-espresso high, allonge
+   medium, d-flow low; dark -> londonium high, gentle-and-sweet medium,
+   d-flow low; otherwise d-flow high, gentle-and-sweet medium,
+   blooming-espresso medium, londonium low.
 8. Anything else -> text "Got it. Pull a shot when you are ready, or tell me
    more about the coffee." End turn.
 

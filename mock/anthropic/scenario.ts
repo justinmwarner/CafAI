@@ -11,6 +11,7 @@
 import { EVENT, TEMPLATE_IDS, TOOL, type ProposeAdjustment, type RoastLevel } from '../../src/coach/contract.ts';
 import type { StopReason, TextBlock, ToolUseBlock } from '../../src/llm/types.ts';
 import { encodeAssistantTurn, type SseMessage } from './sse.ts';
+import { TEMPLATES } from '../../src/coach/templates/index.ts';
 
 type Raw = Record<string, unknown>;
 
@@ -246,7 +247,9 @@ const QUERY_TOOLS: readonly string[] = [
 ];
 
 /** Highest brew temperature each template allows (docs/verified/03-profiles.md section 9). */
-const TEMP_MAX: Record<string, number> = { 'blooming-espresso': 94, 'd-flow': 94, londonium: 92 };
+const TEMP_MAX: Record<string, number> = Object.fromEntries(
+  TEMPLATES.map((template) => [template.id, template.levers.find((lever) => lever.id === 'temp')?.max ?? Infinity]),
+);
 
 const TASTE_OPTIONS = ['Sour / sharp', 'Bitter / harsh', 'Balanced, sweet', 'Weak / watery'];
 
@@ -254,6 +257,8 @@ const TEMPLATE_REASONS: Record<(typeof TEMPLATE_IDS)[number], string> = {
   'blooming-espresso': 'A bloom pause suits light, dense beans and brings out their sweetness.',
   'd-flow': 'A gentle soak, then a steady pour. Forgiving and balanced for most roasts.',
   londonium: 'A lever-style pressure decline keeps darker roasts smooth and rich.',
+  allonge: 'A long, fast shot that makes very light roasts sweet and fruity.',
+  'gentle-and-sweet': 'A low 6 bar peak and a slow decline: easy, low in acidity, good with milk.',
 };
 
 const ORIGINS = [
@@ -479,19 +484,20 @@ function intake(script: Script, description: string): Reply {
     roastLevel === 'light'
       ? [
           ['blooming-espresso', 'high'],
-          ['d-flow', 'medium'],
-          ['londonium', 'low'],
+          ['allonge', 'medium'],
+          ['d-flow', 'low'],
         ]
       : roastLevel === 'dark'
         ? [
             ['londonium', 'high'],
-            ['d-flow', 'medium'],
-            ['blooming-espresso', 'low'],
+            ['gentle-and-sweet', 'medium'],
+            ['d-flow', 'low'],
           ]
         : [
             ['d-flow', 'high'],
+            ['gentle-and-sweet', 'medium'],
             ['blooming-espresso', 'medium'],
-            ['londonium', 'medium'],
+            ['londonium', 'low'],
           ];
   return {
     blocks: [

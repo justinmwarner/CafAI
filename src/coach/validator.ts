@@ -175,7 +175,7 @@ function validateProfileChange(input: ProposeAdjustment, ctx: ValidationContext)
 
   if (lever.requiresScale && !ctx.scaleConnected) {
     return fail([
-      `${lever.id}: needs a connected scale. ${lever.label} ends the step on grams in the cup, which only a scale can measure; without one the step's time limit decides. Choose another lever, or ask the user to connect a scale.`,
+      `${lever.id}: needs a connected scale. ${lever.label} is counted in grams in the cup, which only a scale can measure; without one the shot stops on time instead, so the change would do nothing. Choose another lever, or ask the user to connect a scale.`,
     ]);
   }
 
@@ -521,8 +521,22 @@ function outside(where: string, value: number, bound: Bound, digits: (n: number)
   return `${where}: ${digits(value)} ${bound.unit} is outside CafAI's hard bounds (${digits(bound.min)}-${digits(bound.max)} ${bound.unit}).`;
 }
 
-/** CafAI's hard bounds (docs/verified/03-profiles.md section 5.2); lever bounds are narrower. */
-function hardBoundIssues(profile: ProfileJson): string[] {
+/**
+ * The yield ceiling: 120 g, or the template's own target_weight when Decent
+ * ships more (Rao Allongé stops at 135 g, and its own default must pass).
+ * target_weight never reaches the machine (it is hashed; stop-at-weight reads
+ * context.targetYield), so this cannot wrap a wire value, and the other
+ * templates ship 36-60 g, so their ceiling stays 120 g.
+ */
+function maxTargetWeight(reference: ProfileJson): number {
+  return Math.max(120, reference.target_weight ?? 0);
+}
+
+/**
+ * CafAI's hard bounds (docs/verified/03-profiles.md section 5.2); lever bounds
+ * are narrower. `reference` is the template's bundled profile.
+ */
+function hardBoundIssues(reference: ProfileJson, profile: ProfileJson): string[] {
   const issues: string[] = [];
   const push = (issue: string | null) => {
     if (issue) issues.push(issue);
@@ -531,7 +545,10 @@ function hardBoundIssues(profile: ProfileJson): string[] {
   if (profile.target_volume_count_start < 0 || profile.target_volume_count_start > profile.steps.length) {
     issues.push('target_volume_count_start must be between 0 and the number of steps.');
   }
-  if (profile.target_weight !== null) push(outside('target_weight', profile.target_weight, { min: 15, max: 120, unit: 'g' }, whole));
+  if (profile.target_weight !== null) {
+    const bound: Bound = { min: 15, max: maxTargetWeight(reference), unit: 'g' };
+    push(outside('target_weight', profile.target_weight, bound, whole));
+  }
 
   profile.steps.forEach((step, i) => {
     const at = `steps[${i}]`;
@@ -575,6 +592,6 @@ export function checkStructure(template: Template, before: ProfileJson, after: P
   if (current.length > 0) {
     errors.push(`The current profile does not match the ${template.name} template: ${current.join(' ')}`);
   }
-  errors.push(...structureIssues(template, after), ...hardBoundIssues(after));
+  errors.push(...structureIssues(template, after), ...hardBoundIssues(template.profile, after));
   return errors;
 }

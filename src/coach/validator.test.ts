@@ -20,6 +20,8 @@ import { clone } from '../util/clone.ts';
 const bloomingT = getTemplate('blooming-espresso')!;
 const dflowT = getTemplate('d-flow')!;
 const londoniumT = getTemplate('londonium')!;
+const allongeT = getTemplate('allonge')!;
+const gentleT = getTemplate('gentle-and-sweet')!;
 
 const ctxFor = (template: Template, over: Partial<ValidationContext> = {}): ValidationContext => ({
   template,
@@ -89,11 +91,21 @@ describe('validateProposal: every lever of every template', () => {
         });
 
         it('snaps to the granularity and reports it', () => {
-          const raw = from + lv.granularity * 0.6;
+          // Toward the inside: a template value may sit at its ceiling (the Allongé's 135 g).
+          const direction = step(1) <= max ? 1 : -1;
+          const raw = from + direction * lv.granularity * 0.6;
           const plan = okPlan(validateProposal(lever(lv.id, raw), ctx));
-          expect(plan.to).toBe(step(1));
+          expect(plan.to).toBe(step(direction));
           expect(plan.notes.join(' ')).toMatch(/Rounded/);
           expect(min).toBeLessThanOrEqual(from);
+          expect(from).toBeLessThanOrEqual(max);
+        });
+
+        it('keeps the whole lever range inside the hard bounds and the structure', () => {
+          for (const value of [lv.min, lv.max]) {
+            const moved = applyLever(template, template.profile, lv.id, value);
+            expect(checkStructure(template, template.profile, moved), `${lv.id} = ${value}`).toEqual([]);
+          }
         });
 
         it('rejects a "change" to the current value', () => {
@@ -141,6 +153,53 @@ describe('validateProposal: messages and special rules', () => {
     const message = errorsOf(validateProposal(lever('soakWeight', 5), ctxFor(dflowT, { scaleConnected: false })));
     expect(message).toMatch(/needs a connected scale/);
     expect(okPlan(validateProposal(lever('soakWeight', 5), ctxFor(dflowT))).to).toBe(5);
+  });
+
+  it('refuses every yield change without a scale, since stop-at-weight needs one', () => {
+    for (const template of TEMPLATES) {
+      const from = readLeverValue(template, template.profile, 'yield');
+      const ctx = ctxFor(template, { scaleConnected: false });
+      expect(errorsOf(validateProposal(lever('yield', from - 1), ctx)), template.id).toMatch(/^yield: needs a connected scale/);
+      expect(okPlan(validateProposal(lever('yield', from - 1), ctxFor(template))).to, template.id).toBe(from - 1);
+    }
+    // Other levers still work without a scale.
+    expect(okPlan(validateProposal(lever('temp', 93), ctxFor(allongeT, { scaleConnected: false }))).to).toBe(93);
+  });
+
+  it('keeps the Allongé yield at or below its 135 g default, stepping down in up to 10 g', () => {
+    const ctx = ctxFor(allongeT); // 18 g: 72-135 g
+    expect(errorsOf(validateProposal(lever('yield', 136), ctx))).toMatch(/above this template's maximum of 135 g/);
+    const plan = okPlan(validateProposal(lever('yield', 125), ctx));
+    expect(plan.contextPatch).toEqual({ targetYield: 125 });
+    expect(plan.newProfile?.target_weight).toBe(125);
+    expect(errorsOf(validateProposal(lever('yield', 124), ctx))).toMatch(/change of 11 g from 135 g; at most 10 g per step/);
+
+    // A 12 g dose allows 50-90 g: 135 g is above it, so only steps back down are allowed.
+    const small = ctxFor(allongeT, { doseG: 12 });
+    expect(okPlan(validateProposal(lever('yield', 125), small)).to).toBe(125);
+    expect(errorsOf(validateProposal(lever('yield', 124), small))).toMatch(/at most 10 g per step.*Allowed range now: 125-134 g/);
+    const down = applyLever(allongeT, allongeT.profile, 'yield', 95);
+    expect(errorsOf(validateProposal(lever('yield', 100), ctxFor(allongeT, { doseG: 12, profile: down })))).toMatch(
+      /above the maximum for a 12\.0 g dose \(90 g, 1:7\.5\)/,
+    );
+  });
+
+  it('keeps the Gentle and Sweet peak at least 1 bar above the decline end', () => {
+    let profile = gentleT.profile;
+    for (const value of [5, 6]) profile = applyLever(gentleT, profile, 'declineEnd', value);
+    profile = applyLever(gentleT, profile, 'peak', 7);
+    const ctx = ctxFor(gentleT, { profile });
+    expect(errorsOf(validateProposal(lever('peak', 6.5), ctx))).toMatch(
+      /peak: 6\.5 bar leaves only 0\.5 bar above Decline end pressure \(6\.0 bar\).*Allowed range now: 7\.0-8\.0 bar/,
+    );
+    expect(okPlan(validateProposal(lever('peak', 8), ctx)).to).toBe(8);
+    // From either side: a decline end raised into the peak, or a peak lowered onto it.
+    const atFive = ctxFor(gentleT, { profile: applyLever(gentleT, gentleT.profile, 'declineEnd', 5) });
+    expect(errorsOf(validateProposal(lever('declineEnd', 5.5), atFive))).toMatch(
+      /declineEnd: 5\.5 bar leaves Peak pressure \(6\.0 bar\) only 0\.5 bar above it/,
+    );
+    expect(errorsOf(validateProposal(lever('peak', 5.5), atFive))).toMatch(/peak: 5\.5 bar leaves only 0\.5 bar above Decline end pressure/);
+    expect(okPlan(validateProposal(lever('declineEnd', 5), ctxFor(gentleT))).to).toBe(5);
   });
 
   it('keeps the Londonium peak at least 1 bar above the decline end', () => {
@@ -358,6 +417,78 @@ describe('checkStructure', () => {
     const odd = clone(base);
     odd.steps[0]!.name = 'Fill';
     expect(checkStructure(dflowT, odd, odd).join(' ')).toMatch(/current profile/i);
+  });
+});
+
+describe('checkStructure: Rao Allongé and Gentle and Sweet', () => {
+  const check = (template: Template, fn: (p: ProfileJson) => void) => {
+    const p = clone(template.profile);
+    fn(p);
+    return checkStructure(template, template.profile, p).join(' | ');
+  };
+
+  it('accepts the bundled defaults as they are', () => {
+    expect(checkStructure(allongeT, allongeT.profile, allongeT.profile)).toEqual([]);
+    expect(checkStructure(gentleT, gentleT.profile, gentleT.profile)).toEqual([]);
+  });
+
+  it('rejects pump, sensor, transition, name and step-count changes', () => {
+    expect(
+      check(allongeT, (p) => {
+        p.steps[1]!.pump = 'pressure';
+        p.steps[1]!.pressure = 9;
+        delete p.steps[1]!.flow;
+      }),
+    ).toMatch(/steps\[1\]\.pump must stay "flow"/);
+    expect(
+      check(gentleT, (p) => {
+        p.steps[3]!.pump = 'flow';
+        p.steps[3]!.flow = 2;
+        delete p.steps[3]!.pressure;
+      }),
+    ).toMatch(/steps\[3\]\.pump must stay "pressure"/);
+    expect(check(allongeT, (p) => (p.steps[0]!.sensor = 'water'))).toMatch(/steps\[0\]\.sensor/);
+    expect(check(gentleT, (p) => (p.steps[4]!.transition = 'fast'))).toMatch(/steps\[4\]\.transition/);
+    expect(check(allongeT, (p) => (p.steps[1]!.name = 'hold at 4.0 ml/s'))).toMatch(/steps\[1\]\.name/);
+    expect(check(allongeT, (p) => p.steps.pop())).toMatch(/2 steps/);
+    expect(check(gentleT, (p) => p.steps.push(clone(p.steps[4]!)))).toMatch(/5 steps/);
+  });
+
+  it('rejects exit and limiter changes', () => {
+    expect(check(gentleT, (p) => (p.steps[1]!.exit = { type: 'flow', condition: 'over', value: 4 }))).toMatch(/exit type/);
+    expect(check(gentleT, (p) => (p.steps[0]!.exit = { type: 'pressure', condition: 'under', value: 4 }))).toMatch(/exit condition/);
+    expect(check(gentleT, (p) => (p.steps[1]!.exit = null))).toMatch(/must keep its exit/);
+    expect(check(allongeT, (p) => (p.steps[1]!.exit = { type: 'pressure', condition: 'over', value: 9 }))).toMatch(/must not gain an exit/);
+    expect(check(allongeT, (p) => (p.steps[1]!.limiter = { value: 8.6, range: 0.2 }))).toMatch(/limiter range/);
+    expect(check(allongeT, (p) => (p.steps[0]!.limiter = null))).toMatch(/must keep its limiter/);
+    expect(check(gentleT, (p) => (p.steps[2]!.limiter = { value: 4, range: 1 }))).toMatch(/must not gain a limiter/);
+  });
+
+  it('rejects changes to numbers no lever owns, and a temperature that breaks the shape', () => {
+    // The Allongé's 2 s start keeps its flow and cap; only step 1 has levers.
+    expect(check(allongeT, (p) => (p.steps[0]!.flow = 4))).toMatch(/steps\[0\]\.flow changed from 4\.5 to 4/);
+    expect(check(allongeT, (p) => (p.steps[0]!.limiter!.value = 9))).toMatch(/steps\[0\]\.limiter\.value/);
+    expect(check(allongeT, (p) => (p.steps[1]!.seconds = 40))).toMatch(/steps\[1\]\.seconds/);
+    expect(check(allongeT, (p) => (p.target_volume = 150))).toMatch(/target_volume changed/);
+    expect(check(gentleT, (p) => (p.steps[1]!.flow = 6))).toMatch(/steps\[1\]\.flow/);
+    expect(check(gentleT, (p) => (p.steps[1]!.exit!.value = 3))).toMatch(/steps\[1\]\.exit\.value/);
+    expect(check(gentleT, (p) => (p.steps[3]!.limiter!.value = 3))).toMatch(/steps\[3\]\.limiter\.value/);
+    expect(check(gentleT, (p) => (p.steps[4]!.seconds = 20))).toMatch(/steps\[4\]\.seconds/);
+    expect(check(gentleT, (p) => (p.target_volume_count_start = 0))).toMatch(/target_volume_count_start/);
+    expect(check(gentleT, (p) => (p.steps[0]!.temperature = 90))).toMatch(/same amount/);
+  });
+
+  it("allows 135 g only for the template that ships it; everyone else's ceiling stays 120 g", () => {
+    expect(check(allongeT, (p) => (p.target_weight = 135))).toBe('');
+    expect(check(allongeT, (p) => (p.target_weight = 136))).toMatch(/target_weight: 136 g is outside CafAI's hard bounds \(15-135 g\)/);
+    expect(check(allongeT, (p) => (p.target_weight = 14))).toMatch(/\(15-135 g\)/);
+    expect(checkStructure(dflowT, dflowT.profile, applyLever(dflowT, dflowT.profile, 'yield', 120))).toEqual([]);
+    expect(checkStructure(dflowT, dflowT.profile, applyLever(dflowT, dflowT.profile, 'yield', 121)).join(' ')).toMatch(
+      /target_weight: 121 g is outside CafAI's hard bounds \(15-120 g\)/,
+    );
+    for (const template of [bloomingT, londoniumT, gentleT]) {
+      expect(check(template, (p) => (p.target_weight = 135)), template.id).toMatch(/\(15-120 g\)/);
+    }
   });
 });
 

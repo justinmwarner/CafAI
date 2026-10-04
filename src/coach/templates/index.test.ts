@@ -1,9 +1,37 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { ROAST_LEVELS, TEMPLATE_IDS } from '../contract.ts';
 import { applyLever, readLeverValues, snapToGranularity } from '../levers.ts';
 import { profileId } from '../profileId.ts';
 import { getTemplate, TEMPLATES } from './index.ts';
+import bloomingSource from './source/Blooming_espresso.json';
+import dflowSource from './source/D-Flow____default.json';
+import gentleSource from './source/Gentle_and_sweet1.json';
+import londoniumSource from './source/Londonium.json';
+import allongeSource from './source/rao_allonge.json';
+
+/** The bundled files as Decaid ships them (numbers as strings, extra keys). */
+const RAW_SOURCES: Record<string, unknown> = {
+  'Blooming_espresso.json': bloomingSource,
+  'D-Flow____default.json': dflowSource,
+  'Londonium.json': londoniumSource,
+  'rao_allonge.json': allongeSource,
+  'Gentle_and_sweet1.json': gentleSource,
+};
+
+/** Git blob ids at Decaid a45961b (source/SOURCES.md). */
+const BLOB_IDS: Record<string, string> = {
+  'Blooming_espresso.json': 'ad6bd97685fbf9c0aa81689e0e0003729a607c06',
+  'D-Flow____default.json': '7983ae71dc6a19826ee2f17596a22711bb0f961b',
+  'Londonium.json': '1daf983cefada0e60479a68318606c566a1b628e',
+  'rao_allonge.json': 'cc0cfa219aa6814eb599f203ec53469cb305673c',
+  'Gentle_and_sweet1.json': 'db86dcad62ce6277f934e703568f2df6a2c87a96',
+};
+
+const fileOf = (file: string) => file.replace('assets/defaultProfiles/', '');
 
 /** docs/verified/03-profiles.md section 9: template value, min, max, granularity, max change. */
 const LEVER_TABLE: Record<string, Record<string, [number, number, number, number, number]>> = {
@@ -29,11 +57,25 @@ const LEVER_TABLE: Record<string, Record<string, [number, number, number, number
     peak: [9, 6, 10, 0.5, 1],
     declineEnd: [3, 2, 6, 0.5, 1],
   },
+  allonge: {
+    temp: [92, 88, 96, 0.5, 2],
+    yield: [135, 50, 135, 1, 10],
+    flow: [4.5, 3.5, 5.5, 0.1, 0.5],
+    maxPressure: [8.6, 6, 10, 0.1, 1],
+  },
+  'gentle-and-sweet': {
+    temp: [88, 84, 92, 0.5, 2],
+    yield: [36, 25, 60, 1, 4],
+    peak: [6, 4, 8, 0.5, 1],
+    declineEnd: [4, 2, 6, 0.5, 1],
+    hold: [13, 5, 25, 1, 4],
+  },
 };
 
 describe('TEMPLATES', () => {
-  it('has the three protocol templates in order', () => {
+  it('has the five protocol templates in order', () => {
     expect(TEMPLATES.map((t) => t.id)).toEqual([...TEMPLATE_IDS]);
+    expect(TEMPLATE_IDS).toEqual(['blooming-espresso', 'd-flow', 'londonium', 'allonge', 'gentle-and-sweet']);
   });
 
   it('declares exactly the protocol lever ids, in order', () => {
@@ -47,6 +89,8 @@ describe('TEMPLATES', () => {
       'pourPmax',
     ]);
     expect(getTemplate('londonium')?.levers.map((l) => l.id)).toEqual(['temp', 'yield', 'soak', 'peak', 'declineEnd']);
+    expect(getTemplate('allonge')?.levers.map((l) => l.id)).toEqual(['temp', 'yield', 'flow', 'maxPressure']);
+    expect(getTemplate('gentle-and-sweet')?.levers.map((l) => l.id)).toEqual(['temp', 'yield', 'peak', 'declineEnd', 'hold']);
   });
 
   it('hashes every template to its bundled Decaid id', () => {
@@ -54,8 +98,27 @@ describe('TEMPLATES', () => {
       ['blooming-espresso', 'profile:7438cb7266f60558b48f'],
       ['d-flow', 'profile:59036f8846b1ed3b4255'],
       ['londonium', 'profile:729d284747718d27c93a'],
+      ['allonge', 'profile:372f1be4c5e3641bbfe2'],
+      ['gentle-and-sweet', 'profile:1baa29bd9d9dc6d47f2a'],
     ]);
     for (const template of TEMPLATES) expect(profileId(template.profile)).toBe(template.decaidDefaultId);
+  });
+
+  it('keeps each bundled file byte-for-byte, with LF line endings', () => {
+    for (const template of TEMPLATES) {
+      const file = fileOf(template.source.file);
+      const bytes = readFileSync(join(import.meta.dirname, 'source', file));
+      const blob = createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
+      expect(blob, file).toBe(BLOB_IDS[file]);
+      expect(bytes.includes(13), `${file} has a CR byte`).toBe(false);
+    }
+  });
+
+  it('hashes the raw bundled file, strings and extra keys included, to the same id', () => {
+    for (const template of TEMPLATES) {
+      const file = fileOf(template.source.file);
+      expect(profileId(RAW_SOURCES[file]), file).toBe(template.decaidDefaultId);
+    }
   });
 
   it('keeps the id when every lever is written back at its template value', () => {
@@ -91,7 +154,13 @@ describe('TEMPLATES', () => {
   });
 
   it('marks yield levers for the workflow context and scales their bounds with the dose', () => {
-    const ratios = { 'blooming-espresso': [2.0, 3.5], 'd-flow': [1.8, 3.0], londonium: [1.5, 2.8] } as const;
+    const ratios = {
+      'blooming-espresso': [2.0, 3.5],
+      'd-flow': [1.8, 3.0],
+      londonium: [1.5, 2.8],
+      allonge: [4.0, 7.5],
+      'gentle-and-sweet': [1.5, 2.5],
+    } as const;
     for (const template of TEMPLATES) {
       const yieldLever = template.levers.find((l) => l.id === 'yield')!;
       expect(yieldLever.workflowContextKey).toBe('targetYield');
@@ -102,39 +171,100 @@ describe('TEMPLATES', () => {
     }
   });
 
+  it('starts every yield inside its own lever bounds, with the Allongé yield at its ceiling', () => {
+    for (const template of TEMPLATES) {
+      const yieldLever = template.levers.find((l) => l.id === 'yield')!;
+      expect(template.profile.target_weight, template.id).toBeGreaterThanOrEqual(yieldLever.min);
+      expect(template.profile.target_weight, template.id).toBeLessThanOrEqual(yieldLever.max);
+    }
+    expect(getTemplate('allonge')?.profile.target_weight).toBe(135);
+    expect(getTemplate('allonge')?.levers.find((l) => l.id === 'yield')?.max).toBe(135);
+  });
+
   it('shifts temperature uniformly from the documented anchor step', () => {
-    const anchors = { 'blooming-espresso': 'steps[4].temperature', 'd-flow': 'steps[2].temperature', londonium: 'steps[4].temperature' };
+    const anchors = {
+      'blooming-espresso': 'steps[4].temperature',
+      'd-flow': 'steps[2].temperature',
+      londonium: 'steps[4].temperature',
+      allonge: 'steps[1].temperature',
+      'gentle-and-sweet': 'steps[3].temperature',
+    };
     for (const template of TEMPLATES) {
       const temp = template.levers.find((l) => l.id === 'temp')!;
       expect(temp.mode).toBe('uniformShift');
       expect(temp.paths).toEqual(['steps[*].temperature']);
       expect(temp.anchor).toBe(anchors[template.id as keyof typeof anchors]);
+      expect([temp.granularity, temp.maxDelta], template.id).toEqual([0.5, 2]);
+    }
+  });
+
+  it('keeps every step inside 80-100 °C across the whole temperature range', () => {
+    for (const template of TEMPLATES) {
+      const temp = template.levers.find((l) => l.id === 'temp')!;
+      const anchor = Number(/\[(\d+)\]/.exec(temp.anchor!)![1]);
+      const anchorValue = template.profile.steps[anchor]!.temperature;
+      for (const step of template.profile.steps) {
+        expect(step.temperature + (temp.min - anchorValue), `${template.id} ${step.name}`).toBeGreaterThanOrEqual(80);
+        expect(step.temperature + (temp.max - anchorValue), `${template.id} ${step.name}`).toBeLessThanOrEqual(100);
+      }
     }
   });
 
   it('links the paths that must move together', () => {
     const linked = TEMPLATES.flatMap((t) => t.levers.filter((l) => l.paths.length > 1).map((l) => `${t.id}.${l.id}`));
-    expect(linked).toEqual(['blooming-espresso.flow', 'd-flow.soak', 'londonium.declineEnd']);
+    expect(linked).toEqual(['blooming-espresso.flow', 'd-flow.soak', 'londonium.declineEnd', 'gentle-and-sweet.peak']);
     expect(getTemplate('blooming-espresso')?.levers.find((l) => l.id === 'flow')?.paths).toEqual(['steps[3].flow', 'steps[4].flow']);
     expect(getTemplate('d-flow')?.levers.find((l) => l.id === 'soak')?.paths).toEqual(['steps[0].pressure', 'steps[1].pressure']);
     expect(getTemplate('londonium')?.levers.find((l) => l.id === 'declineEnd')?.paths).toEqual([
       'steps[4].pressure',
       'steps[5].pressure',
     ]);
+    expect(getTemplate('gentle-and-sweet')?.levers.find((l) => l.id === 'peak')?.paths).toEqual([
+      'steps[2].pressure',
+      'steps[3].pressure',
+    ]);
   });
 
-  it('needs a scale only for the D-Flow soak weight', () => {
+  it('moves only the Allongé pour (step 1), never its fixed 2 s start', () => {
+    const allonge = getTemplate('allonge')!;
+    expect(allonge.levers.filter((l) => l.mode === 'linked').map((l) => [l.id, l.paths])).toEqual([
+      ['yield', ['target_weight']],
+      ['flow', ['steps[1].flow']],
+      ['maxPressure', ['steps[1].limiter.value']],
+    ]);
+    expect(allonge.profile.steps.map((s) => [s.name, s.flow, s.limiter])).toEqual([
+      ['hold at 4.5 ml/s', 4.5, { value: 8.6, range: 0.6 }],
+      ['hold at 4.5 ml/s', 4.5, { value: 8.6, range: 0.6 }],
+    ]);
+  });
+
+  it('needs a scale for every yield (stop-at-weight) and for the D-Flow soak weight', () => {
     const scaled = TEMPLATES.flatMap((t) => t.levers.filter((l) => l.requiresScale).map((l) => `${t.id}.${l.id}`));
-    expect(scaled).toEqual(['d-flow.soakWeight']);
+    expect(scaled).toEqual([
+      'blooming-espresso.yield',
+      'd-flow.yield',
+      'd-flow.soakWeight',
+      'londonium.yield',
+      'allonge.yield',
+      'gentle-and-sweet.yield',
+    ]);
     expect(getTemplate('d-flow')?.levers.find((l) => l.id === 'soakWeight')?.paths).toEqual(['steps[1].weight']);
   });
 
-  it('keeps the Londonium peak at least 1 bar above the decline end', () => {
-    expect(getTemplate('londonium')?.constraints).toEqual([
-      expect.objectContaining({ kind: 'minGap', higher: 'peak', lower: 'declineEnd', minGap: 1 }),
-    ]);
+  it('keeps the Londonium and Gentle and Sweet peaks at least 1 bar above the decline end', () => {
+    const gap = expect.objectContaining({ kind: 'minGap', higher: 'peak', lower: 'declineEnd', minGap: 1 });
+    expect(getTemplate('londonium')?.constraints).toEqual([gap]);
+    expect(getTemplate('gentle-and-sweet')?.constraints).toEqual([gap]);
     expect(getTemplate('blooming-espresso')?.constraints).toEqual([]);
     expect(getTemplate('d-flow')?.constraints).toEqual([]);
+    expect(getTemplate('allonge')?.constraints).toEqual([]);
+    // Each constraint names levers of its own template, and the template values satisfy it.
+    for (const template of TEMPLATES) {
+      const values = readLeverValues(template, template.profile);
+      for (const c of template.constraints) {
+        expect(values[c.higher]! - values[c.lower]!, `${template.id}: ${c.message}`).toBeGreaterThanOrEqual(c.minGap);
+      }
+    }
   });
 
   it('describes each template for the cards and the model', () => {
@@ -142,6 +272,8 @@ describe('TEMPLATES', () => {
       ['Blooming Espresso', 'Blooming', ['light', 'medium-light']],
       ['D-Flow', 'D-Flow', ['medium-light', 'medium']],
       ['Londonium', 'Lever', ['medium', 'medium-dark', 'dark']],
+      ['Rao Allongé', 'Allongé', ['light']],
+      ['Gentle and Sweet', 'Low pressure', ['medium', 'medium-dark', 'dark']],
     ]);
     for (const template of TEMPLATES) {
       expect(template.roastFit.every((r) => (ROAST_LEVELS as readonly string[]).includes(r))).toBe(true);
@@ -155,6 +287,8 @@ describe('TEMPLATES', () => {
       'assets/defaultProfiles/Blooming_espresso.json',
       'assets/defaultProfiles/D-Flow____default.json',
       'assets/defaultProfiles/Londonium.json',
+      'assets/defaultProfiles/rao_allonge.json',
+      'assets/defaultProfiles/Gentle_and_sweet1.json',
     ]);
   });
 
@@ -162,10 +296,18 @@ describe('TEMPLATES', () => {
     expect(getTemplate('blooming-espresso')?.shape).toMatch(/30 s bloom.*2\.2 ml\/s/);
     expect(getTemplate('d-flow')?.shape).toMatch(/3 bar.*4 g.*1\.7 ml\/s.*8\.5 bar/);
     expect(getTemplate('londonium')?.shape).toMatch(/12 s.*9 bar.*3 bar/);
+    expect(getTemplate('allonge')?.shape).toMatch(/4\.5 ml\/s.*8\.6 bar.*135 g/);
+    expect(getTemplate('gentle-and-sweet')?.shape).toMatch(/6 bar.*13 s.*4 bar/);
   });
 
   it('keeps the bundled titles and is frozen against accidental edits', () => {
-    expect(TEMPLATES.map((t) => t.profile.title)).toEqual(['Blooming Espresso', 'D-Flow / default', 'Londonium']);
+    expect(TEMPLATES.map((t) => t.profile.title)).toEqual([
+      'Blooming Espresso',
+      'D-Flow / default',
+      'Londonium',
+      'Rao Allongé',
+      'Gentle and sweet',
+    ]);
     const template = getTemplate('d-flow')!;
     expect(() => {
       template.profile.steps[0]!.temperature = 99;

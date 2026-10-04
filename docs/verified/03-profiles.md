@@ -9,7 +9,7 @@
 - **Stop-at-weight reads the workflow's `context.targetYield`, not the profile's `target_weight`** (`lib/src/controllers/de1_state_manager.dart:820-821`; `doc/Api.md:300-301`, which says "`targetYield` is the single source of truth for stop-at-weight").
 - **Identity:** `id = "profile:" + sha256(sortedKeyJson({version, beverage_type, steps, tank_temperature, target_weight, target_volume, target_volume_count_start}))[0:20]` (`lib/src/models/data/profile_hash.dart:6-23`). Title, notes and author never change the id. Step **names** do.
 - **No range validation.** Decaid does not range-check any profile number. The DE1 encoder silently wraps values it cannot represent. For example, a 16 bar target becomes byte 0, which is 0 bar (`lib/src/models/device/impl/de1/unified_de1/unified_de1.profile.dart:47`). CafAI must enforce the limits in §5 itself.
-- **Templates copied:** `Blooming_espresso.json` (blooming), `D-Flow____default.json` (D-Flow), `Londonium.json` (lever). They are in `src/coach/templates/source/` and are byte-identical to the commit's git blobs.
+- **Templates copied:** `Blooming_espresso.json` (blooming), `D-Flow____default.json` (D-Flow), `Londonium.json` (lever), `rao_allonge.json` (allongé) and `Gentle_and_sweet1.json` (low pressure). They are in `src/coach/templates/source/` and are byte-identical to the commit's git blobs.
 
 ## 1. Where the truth lives (Decaid)
 
@@ -146,21 +146,23 @@ Machine-representable ranges are derived from `unified_de1.profile.dart`. DE1 us
 |---|---|---|---|---|
 | step `temperature` | 0–127.5 °C, 0.5 resolution; wraps above 127.5 | none | 0–105, step 0.5 (`:18`) | 80.0–100.0 per step for these templates; multiples of 0.5 |
 | step `pressure` (target) | DE1 0–15.94 (1/16); Bengle 0–25.5 | none | 0–12, step 0.1 (`:22`) | 0–11 bar; levers ≤ 10 |
-| step `flow` (target) | same as pressure | none | 0–15, step 0.1 (`:19`) | 0–8 ml/s; levers ≤ 3.5 |
+| step `flow` (target) | same as pressure | none | 0–15, step 0.1 (`:19`) | 0–8 ml/s; levers ≤ 3.5, except the Rao Allongé flow (≤ 5.5) |
 | `exit.value` (pressure) | U8P4 0–15.94. App treats ≤ 0 as "weight-only" (`step_exit_arbiter.dart:26`). | none | 0–12, step 0.1 (`:45`) | 0–10 bar; levers 2–6 |
 | `exit.value` (flow) | U8P4 0–15.94 | none | 0–8, step 0.1 (`:45`) | 0–6 ml/s; fixed in templates |
 | `limiter.value` on pressure step (max flow) | U8P4. 0 = limiter not sent. | none | 0–8, step 0.1 (`:23`) | 0–8; fixed in templates |
-| `limiter.value` on flow step (max pressure) | U8P4 | none | 0–12, step 0.1 (`:24`) | 0–11; lever 6–10 (D-Flow) |
+| `limiter.value` on flow step (max pressure) | U8P4 | none | 0–12, step 0.1 (`:24`) | 0–11; levers 6–10 (D-Flow, Rao Allongé) |
 | `limiter.range` | U8P4 | none | 0–5, step 0.1 (`profile_editor.js:1693`); default 0.6 (`:50`) | fixed (template value) |
 | step `seconds` | 0–12.7 @0.1 s, 13–127 @1 s, above 127 clamps | none | 0–127, step 1 (`:31`) | 0–127; levers whole seconds |
 | step `volume` | 0–1023 ml integer (truncated); 1024+ corrupts | none | 0–500, step 1 (`:32`) | fixed (template value); never > 1023 |
 | step `weight` | not sent (app-side) | none (> 0 enables) | 0–500, step 1 (`:25`) | 0 or 1–20 g; lever 2–8 g (D-Flow) |
-| `target_weight` | not sent; hashed | none (nullable) | 0–1000, step 0.1 (`profile_editor.js:1707`) | 15–120 g; levers ratio-bounded; always mirrored to `context.targetYield` |
+| `target_weight` | not sent; hashed | none (nullable) | 0–1000, step 0.1 (`profile_editor.js:1707`) | 15–120 g, or up to the template's own `target_weight` if that is higher (Rao Allongé: 15–135 g); levers ratio-bounded; always mirrored to `context.targetYield` |
 | workflow `context.targetYield` | Bengle: firmware SAW register; DE1: app SAW | must be a JSON number; explicit null → 400; 0 = off (`doc/Api.md:298-306`) | tile | = `target_weight` |
 | `target_volume` | not sent (tail bytes 0) | none (nullable) | 0–500, step 1 (`profile_editor.js:1710`) | fixed (template value) |
 | `target_volume_count_start` | header byte | required; integer (`utils.dart:14-18`) | step picker 0..N (`profile_editor.js:1669-1672`) | fixed (template value); ≤ step count |
 | `tank_temperature` | MMR int32, `.round()` | required; no range check | 0–110, step 1 (`profile_editor.js:1667-1668`) | fixed (template value; 0 for espresso) |
 | step count | header byte; frame-address collision at 32 or more; de1app convention ≤ 20 | ≥ 1, no maximum | no cap | fixed (template); never above 20 |
+
+**The one template-specific bound.** Rao Allongé ships `target_weight` 135 g (`rao_allonge.json:41`), above the generic 120 g, and an all-levers-at-template-values version must pass validation because it *is* the bundled default. The validator therefore raises the `target_weight` ceiling to the template's own `target_weight` when that is higher (`maxTargetWeight` in `src/coach/validator.ts`). This is safe because `target_weight` never reaches the machine: it is hashed, and stop-at-weight reads `context.targetYield` (§0). The other four templates ship 36–60 g, so their ceiling stays 120 g (tested). Every per-step bound is unchanged and applies to all five templates.
 
 ## 6. Identity, hashing and lineage
 
@@ -201,8 +203,10 @@ These results come from the port, applied to edits of `D-Flow____default.json`:
 - Blooming Espresso `profile:7438cb7266f60558b48f`
 - D-Flow / default `profile:59036f8846b1ed3b4255`
 - Londonium `profile:729d284747718d27c93a`
+- Rao Allongé `profile:372f1be4c5e3641bbfe2`
+- Gentle and sweet `profile:1baa29bd9d9dc6d47f2a`
 
-Confirm these against a live Decaid with `GET /api/v1/profiles?includeHidden=true`. Defaults carry `metadata: {"source":"bundled","filename":…}` (`profile_controller.dart:51-55`).
+The last two were computed by three separate ports (`src/coach/profileId.ts`, the mock gateway's `mock/decaid/profiles.ts`, and a Python script), which agree. Confirm these against a live Decaid with `GET /api/v1/profiles?includeHidden=true`. Defaults carry `metadata: {"source":"bundled","filename":…}` (`profile_controller.dart:51-55`).
 
 **Porting gotcha.** Dart encodes an integral double as `93.0`. JavaScript `JSON.stringify(93)` gives `93`. A TypeScript port must format every double field Dart-style. `target_volume_count_start` is an int, so it encodes as `2`.
 
@@ -292,15 +296,19 @@ Other temperature notes:
 - **Lever (c): `Londonium.json`.** Damian Brakel's Londinium-R emulation. Its notes say it is "identical to the LRv2 profile, but renamed", and it is named in Decent's "good coffee" list of Londonium, D-Flow, Adaptive, Extractamundo, Allongé (RESEARCH §8).
   - Rejected: `advanced_spring_lever.json`, because of anomalous serialization (`version: null`, mixed types).
   - Rejected: `Traditional_lever_machine.json`, a basic `settings_2a` conversion that went through the lever-trio corruption and re-port (`doc/plans/archive/default-profiles-curation/audit.md:35-56`).
+- **Allongé (d): `rao_allonge.json`.** Very light roasts at a long ratio and a high flow, which none of the first three cover. Details and the rejected alternatives are in §9.6.
+- **Low pressure (e): `Gentle_and_sweet1.json`.** Beginners, milk drinks, and medium to dark roasts that turn harsh at 9 bar. Details and the rejected alternatives are in §9.7.
 
-All three files are listed in `manifest.json`. Each has `version "2"`, `beverage_type espresso` and `tank_temperature 0`.
+Decent's own Streamline skin offers exactly these two as default favourites, next to Default, Best practice and 80's Espresso (streamline-js `skin.tcl:2123` and `src/modules/profileManager.js:1278-1286`).
+
+All five files are listed in `manifest.json`. Each has `version "2"`, `beverage_type espresso` and `tank_temperature 0`.
 
 **How the lever tables read.**
 
 - **Linked paths:** paths joined with `=` are one lever that writes the same value to every listed path.
 - **Temperature levers:** these apply one uniform Δ to *all* steps. Min and max refer to the named anchor step, and every step must also stay within 80–100.
 - **Columns:** "Gran." is the value granularity and "MaxΔ" is the maximum change per iteration.
-- **Yield levers:** these write `target_weight` **and** workflow `context.targetYield` (§11).
+- **Yield levers:** these write `target_weight` **and** workflow `context.targetYield` (§11). Every yield lever **needs a scale** (`requiresScale`): stop-at-weight is measured by the scale, so without one the validator refuses a yield change.
 
 ### 9.2 Template A: `Blooming_espresso.json`, "Blooming Espresso"
 
@@ -331,7 +339,7 @@ Steps 0 and 1 are the preinfusion (`target_volume_count_start` 2).
 | Lever | Path | Label | Unit | Template | Min | Max | Gran. | MaxΔ | Why |
 |---|---|---|---|---|---|---|---|---|---|
 | temp | `steps[*].temperature` (uniform Δ; anchor `steps[4]`) | Brew temperature | °C | 92.0 | 86.0 | 94.0 | 0.5 | 2.0 | Main sour/bitter lever. It keeps the 97.5/90/92/98 shape. At the bounds, every step stays within 84–100. |
-| yield | `target_weight` (+ `context.targetYield`) | Yield | g | 60.0 | max(30, 2.0×dose) | min(80, 3.5×dose) | 1 | 4 | Strength and ratio; the RESEARCH ±2–4 g step. |
+| yield | `target_weight` (+ `context.targetYield`) | Yield | g | 60.0 | max(30, 2.0×dose) | min(80, 3.5×dose) | 1 | 4 | **Needs a scale.** Strength and ratio; the RESEARCH ±2–4 g step. |
 | bloom | `steps[2].seconds` | Bloom time | s | 30 | 10 | 40 | 1 | 5 | RESEARCH bloom bound 0–40 s; the minimum keeps the bloom meaningful. |
 | piExit | `steps[1].exit.value` | Bloom starts at pressure | bar | 4.0 | 2.0 | 6.0 | 0.5 | 1.0 | How saturated the puck is before the bloom (RESEARCH 1–6 bar). |
 | flow | `steps[3].flow` = `steps[4].flow` | Extraction flow | ml/s | 2.2 | 1.5 | 3.5 | 0.1 | 0.4 | Contact time and body (RESEARCH 0.5–6). It is linked so the ramp still lands on the hold value. |
@@ -368,7 +376,7 @@ Filling and Infusing are the preinfusion. Volume counting starts at Pouring.
 | Lever | Path | Label | Unit | Template | Min | Max | Gran. | MaxΔ | Why |
 |---|---|---|---|---|---|---|---|---|---|
 | temp | `steps[*].temperature` (uniform Δ; anchor `steps[2]`) | Brew temperature | °C | 88 | 84.0 | 94.0 | 0.5 | 2.0 | Primary taste lever. All steps are equal in this template. |
-| yield | `target_weight` (+ `context.targetYield`) | Yield | g | 50 | max(30, 1.8×dose) | min(70, 3.0×dose) | 1 | 4 | Ratio. |
+| yield | `target_weight` (+ `context.targetYield`) | Yield | g | 50 | max(30, 1.8×dose) | min(70, 3.0×dose) | 1 | 4 | **Needs a scale.** Ratio. |
 | soak | `steps[0].pressure` = `steps[1].pressure` | Fill & soak pressure | bar | 3.0 | 2.0 | 6.0 | 0.5 | 1.0 | Puck saturation (RESEARCH 1–6). The minimum stays above the Filling exit of 1.5, so the exit can still fire. |
 | soakWeight | `steps[1].weight` | Soak until (drips in cup) | g | 4 | 2 | 8 | 1 | 2 | D-Flow's signature knob: longer soak, more extraction. **Needs a scale.** Without one, the 60-s time limit governs. |
 | pourFlow | `steps[2].flow` | Pour flow | ml/s | 1.7 | 1.0 | 3.0 | 0.1 | 0.3 | Contact time and strength. |
@@ -412,7 +420,7 @@ Steps 5–6 rarely run on a well-prepared puck; the notes say they "assist with 
 | Lever | Path | Label | Unit | Template | Min | Max | Gran. | MaxΔ | Why |
 |---|---|---|---|---|---|---|---|---|---|
 | temp | `steps[*].temperature` (uniform Δ; anchor `steps[4]`) | Brew temperature | °C | 88.0 | 84.0 | 92.0 | 0.5 | 2.0 | Keeps the 89/88.5/88 shape. At the bounds, every step stays within 84–93. |
-| yield | `target_weight` (+ `context.targetYield`) | Yield | g | 42.0 | max(25, 1.5×dose) | min(60, 2.8×dose) | 1 | 4 | Ratio. Lever-style shots run shorter ratios. |
+| yield | `target_weight` (+ `context.targetYield`) | Yield | g | 42.0 | max(25, 1.5×dose) | min(60, 2.8×dose) | 1 | 4 | **Needs a scale.** Ratio. Lever-style shots run shorter ratios. |
 | soak | `steps[2].seconds` | Soak time | s | 12 | 4 | 24 | 1 | 4 | Preinfusion time (RESEARCH 0–30, ±2–5). |
 | peak | `steps[3].pressure` | Peak pressure | bar | 9.0 | 6.0 | 10.0 | 0.5 | 1.0 | Body and intensity (RESEARCH 3–10). The "Trendy 6 bar" family sits at the low end. |
 | declineEnd | `steps[4].pressure` = `steps[5].pressure` | Decline end pressure | bar | 3.0 | 2.0 | 6.0 | 0.5 | 1.0 | Tail of the shot: lower is gentler and less bitter (RESEARCH 2–8). Linked so the hold matches where the decline ends. Constraint: `peak − declineEnd ≥ 1.0`. |
@@ -446,6 +454,98 @@ Steps 5–6 rarely run on a well-prepared puck; the notes say they "assist with 
 
 **Hash test.** A patch that leaves every lever at its template value must hash to the template's expected id (unit test).
 
+### 9.6 Template D: `rao_allonge.json`, "Rao Allongé"
+
+CafAI id `allonge`. `target_weight 135`, `target_volume 180`, `target_volume_count_start 0`, expected id `profile:372f1be4c5e3641bbfe2` (`rao_allonge.json:40-43`).
+
+Selection:
+
+- **Why.** Allongé is on Decent's "good coffee" list (RESEARCH §8), and it covers what the first three do not: very light roasts brewed long, at a high flow. Its notes: "An amazing long espresso for light roasts … 5:1 ratio, 35-40 seconds, coarse espresso grind. If close to the right pressure, make 0.5g dose adjustments to get to an 8-9 bar peak. The very high flow rate means small grind adjustments cause big pressure changes. An advanced technique, allongé averages 24% extraction." (`rao_allonge.json:4`). Decaid's curation kept this 2-step file as the canonical Rao Allongé (`doc/plans/archive/default-profiles-curation/curation.md:190-191`).
+- **Rejected: `Blooming_allonge.json`.** It has 6 steps (two fills with exits, a ramp-down, a 30 s bloom, a ramp and a hold), so it repeats Blooming Espresso's bloom. Its notes call it "a very advanced technique" with a "very fine grind". It also ships 135 g.
+- **Rejected: `adaptive_allonge.json`.** It has 20 steps, like `adaptive_espresso.json` (§9.1).
+
+| # | name | pump | sensor | trans. | target | °C | sec (max) | vol | weight | exit | limiter |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | hold at 4.5 ml/s | flow | coffee | fast | 4.5 ml/s | 92.0 | 2 | 500 | 0.0 | — | {8.6, 0.6} = max 8.6 bar |
+| 1 | hold at 4.5 ml/s | flow | coffee | fast | 4.5 ml/s | 92.0 | 60 | 500 | 0 (parses to 0.0) | — | {8.6, 0.6} = max 8.6 bar |
+
+Steps: `rao_allonge.json:7-38`. Each step also carries an inactive `pressure` key ("0"), which is ignored. Both steps have the same name, and both names are hashed.
+
+What each step does:
+
+- **Step 0.** A 2 s start at 4.5 ml/s with pressure capped at 8.6 bar. It has no exit. An archived Decaid plan treats frame 0 as this profile's preinfusion and suggests `target_volume_count_start` 1 (`doc/plans/archive/imported-shot-fixes/fix-262-263-imported-shots.md:107`), but the shipped file keeps 0, so volume counts from the first frame.
+- **Step 1.** The rest of the shot: a steady 4.5 ml/s for up to 60 s, with pressure capped at 8.6 bar (soft band 0.6). Pressure builds as the coarse puck resists; the notes aim for an 8–9 bar peak in 35–40 s. Stop-at-weight normally ends it at 135 g. Without a scale, the app-side volumetric stop at 180 ml does (§8.2), which is 40 s at 4.5 ml/s.
+
+There is no preinfusion (`target_volume_count_start 0`).
+
+**The 135 g default and the "5:1" notes disagree.** 135 g is 5:1 only for a 27 g dose; it is 1:7.5 for 18 g and 1:5.4 for 25 g, CafAI's largest dose. 180 ml at 4.5 ml/s is the notes' 40 s, so 135 g matches the time rather than the ratio. Decent's Profile Generator plugin puts an "Allongé" at 4.5–5.5 % TDS (`assets/plugins/decent-profile.reaplugin/plugin.js:5`), which at the notes' 24 % extraction is about 1:4.4–1:5.3. CafAI keeps 135 g as v1 (hash identity), makes it the lever's ceiling, and lets the ratio window run from 1:4 up to the 1:7.5 that the default is at 18 g. The template description tells the model that the style aims for about 1:5.
+
+**Why the levers act on step 1 only.** Both steps are named "hold at 4.5 ml/s". The confirm card appends step names to a linked lever with several paths (`describeLeverChange` in `src/coach/diff.ts`), so a lever on both steps would read "Flow rate: 4.5 ml/s -> 4.0 ml/s (hold at 4.5 ml/s)". The levers write step 1, and step 0 stays a fixed 2 s start. The names keep saying 4.5 ml/s after a flow change, and the flow lever's description says so.
+
+| Lever | Path | Label | Unit | Template | Min | Max | Gran. | MaxΔ | Why |
+|---|---|---|---|---|---|---|---|---|---|
+| temp | `steps[*].temperature` (uniform Δ; anchor `steps[1]`) | Brew temperature | °C | 92.0 | 88.0 | 96.0 | 0.5 | 2.0 | Light roasts run hot (RESEARCH §8: 93–96 °C). Both steps are equal, so every step stays within 88–96. |
+| yield | `target_weight` (+ `context.targetYield`) | Yield | g | 135 | max(50, 4.0×dose) | min(135, 7.5×dose) | 1 | 10 | **Needs a scale.** The ceiling is Decent's own default (v1 must stay valid; it is above the generic 120 g bound, see §5.2). 7.5×dose reaches it from an 18 g dose; 4.0×dose keeps it a long shot (RESEARCH §3: "Allongé up to ~1:5"). 10 g is 7 % of 135 g, about the same relative step as 4 g on the 42–60 g espresso yields (7–10 %). |
+| flow | `steps[1].flow` | Flow rate | ml/s | 4.5 | 3.5 | 5.5 | 0.1 | 0.5 | The allongé's defining knob: contact time and pressure (RESEARCH 0.5–6, ±0.25–0.5). Below 3.5 it is no longer an allongé. Step 0 keeps 4.5 for its 2 s. |
+| maxPressure | `steps[1].limiter.value` | Max pressure | bar | 8.6 | 6.0 | 10.0 | 0.1 | 1.0 | The peak cap (RESEARCH 3–10; the same range as D-Flow's `pourPmax`). Granularity 0.1 because 8.6 is not on a 0.5 grid, and the template value must be representable. |
+
+There are no cross-lever constraints.
+
+**Fixed:**
+
+- step 0 entirely: its 2 s, 4.5 ml/s and {8.6, 0.6} limiter
+- step 1's 60 s cap, and both limiter ranges of 0.6
+- all `volume` 500, both `weight` values (0.0), and no exits
+- `target_volume` 180, `target_volume_count_start` 0, `tank_temperature` 0
+- all names (both "hold at 4.5 ml/s"), pumps, sensors and transitions
+
+### 9.7 Template E: `Gentle_and_sweet1.json`, "Gentle and sweet"
+
+CafAI id `gentle-and-sweet`, card name "Gentle and Sweet". `target_weight 36.0`, `target_volume 36.0`, `target_volume_count_start 2`, expected id `profile:1baa29bd9d9dc6d47f2a` (`Gentle_and_sweet1.json:87-90`).
+
+Selection:
+
+- **Why.** It covers beginners, milk drinks, and dark roasts that turn harsh at 9 bar; with Londonium, the darker end gets two templates. Its notes: "This is a very easy espresso to successfully make and is suggested if you are having difficulty making good drinks. The pressure rises to only 6 bar and then slowly descends to 4 bar. The resulting espresso should be free of channeling, have low acidity and quite pleasant to drink straight or with milk." (`Gentle_and_sweet1.json:5`). Every value is inside CafAI's generic bounds.
+- **Rejected: `Extractamundo_Dos.json`,** although it is on the "good coffee" list. It is a third light-roast profile (for high-extraction grinders at high flow). Its 67.5 and 74.5 °C steps fall below the 80 °C per-step bound and would need anchor-based temperature bounds (§10.11). Its 6 bar step is stored as `6.0000000000000036`, which is off any lever grid, so a pressure lever could not write the template value back and keep the id.
+- **Rejected: `Classic_Italian_espresso.json`.** It is a flat 9 bar at 94 °C, which RESEARCH §8 associates with owners who struggled.
+- **Provenance.** Decaid's curation audit found that an earlier import of this file had taken stale de1app frames; so had Classic Italian espresso, Default, 7g basket and Preinfuse then 45ml (`doc/plans/archive/default-profiles-curation/audit.md:45-48`). Three of those (7g basket, Classic Italian, Preinfuse then 45ml) now ship a different step layout from the one the audit recorded (`audit.md:160, 168, 187`), so the set was regenerated after the audit. Default and this file kept their layouts (`audit.md:175, 183`), so the layout alone cannot prove this file was regenerated. It does have the regenerated format that Classic Italian and Default share (`type: pressure`, no `legacy_profile_type`, de1app's generated step names), and its values match its notes (6 bar, then 4 bar).
+
+| # | name | pump | sensor | trans. | target | °C | sec (max) | vol | weight | exit | limiter |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | preinfusion temp boost | flow | coffee | fast | 8.0 ml/s | 88.0 | 2.0 | 0.0 | 0.0 | pressure over 4.0 | — |
+| 1 | preinfusion | flow | coffee | fast | 8.0 ml/s | 88.0 | 18.0 | 0.0 | 0.0 | pressure over 4.0 | — |
+| 2 | forced rise without limit | pressure | coffee | fast | 6.0 bar | 88.0 | 3.0 | 0.0 | 0.0 | — | — |
+| 3 | rise and hold | pressure | coffee | fast | 6.0 bar | 88.0 | 13.0 | 0.0 | 0.0 | — | {4.0, 1.0} = max 4.0 ml/s |
+| 4 | decline | pressure | coffee | smooth | 4.0 bar | 88.0 | 30.0 | 0.0 | 0.0 | — | {4.0, 1.0} = max 4.0 ml/s |
+
+Steps: `Gentle_and_sweet1.json:8-85` (names at lines 9, 26, 43, 55, 71). Inactive keys: `pressure 1.0` on steps 0–1 and `flow 0.0` on steps 2–4.
+
+What each step does:
+
+- **Steps 0–1.** Fill at 8 ml/s, as fast as the pump goes, until pressure passes 4 bar (at most 2 + 18 s). Despite its name, step 0 has no temperature boost here, because every step is 88 °C. The name comes from de1app's generator; Default (`Default1.json`) does boost that step, to 90 °C.
+- **Step 2.** Raises the pressure to 6 bar for 3 s with no flow limit, so the puck pressurises quickly.
+- **Step 3.** Holds 6 bar for up to 13 s. Flow is capped at 4 ml/s (soft band 1.0), so a channel cannot gush.
+- **Step 4.** Lowers the pressure smoothly from 6 to 4 bar over 30 s, with the same flow cap. Stop-at-weight normally ends the shot here, at 36 g.
+
+Steps 0 and 1 are the preinfusion (`target_volume_count_start` 2). Without a scale, the volumetric stop counts 36 ml from step 2 (§8.2).
+
+| Lever | Path | Label | Unit | Template | Min | Max | Gran. | MaxΔ | Why |
+|---|---|---|---|---|---|---|---|---|---|
+| temp | `steps[*].temperature` (uniform Δ; anchor `steps[3]`) | Brew temperature | °C | 88.0 | 84.0 | 92.0 | 0.5 | 2.0 | Primary taste lever. All steps are equal in this template. Medium to dark roasts (RESEARCH §8: 85–93 °C). |
+| yield | `target_weight` (+ `context.targetYield`) | Yield | g | 36 | max(25, 1.5×dose) | min(60, 2.5×dose) | 1 | 4 | **Needs a scale.** RESEARCH §8: dark 1:1.8–2.2 and medium 1:2–2.5; the 1.5 floor allows a short shot for milk. |
+| peak | `steps[2].pressure` = `steps[3].pressure` | Peak pressure | bar | 6.0 | 4.0 | 8.0 | 0.5 | 1.0 | Body and intensity (RESEARCH 3–10, ±0.5–1). The cap of 8 keeps it a low-pressure profile. Linked so the 3 s rise and the hold share the target. Constraint: `peak − declineEnd ≥ 1.0`. |
+| declineEnd | `steps[4].pressure` | Decline end pressure | bar | 4.0 | 2.0 | 6.0 | 0.5 | 1.0 | The finish: lower is softer and less bitter (RESEARCH 2–8). The same range and constraint as Londonium. |
+| hold | `steps[3].seconds` | Peak hold time | s | 13 | 5 | 25 | 1 | 4 | How long the peak holds before the decline, after the fixed 3 s rise. Longer gives more body; shorter reaches the gentle decline sooner. Whole seconds encode exactly (§5.1). |
+
+**Fixed:**
+
+- the 8.0 ml/s fill, its 4.0 bar exits, and its 2 s and 18 s caps
+- the 3 s forced rise and the 30 s decline time
+- the 4.0 ml/s flow limits and their 1.0 range, and no limiter on steps 0–2
+- all `volume` 0.0 and all `weight` 0.0
+- `target_volume` 36, `target_volume_count_start` 2, `tank_temperature` 0
+- names, pumps, sensors and transitions
+
 ## 10. Disagreements with RESEARCH.md (repo wins)
 
 1. **Required fields.** RESEARCH says a new profile must include `tank_temperature`, `target_volume`, `target_volume_count_start` and `version` (TL;DR, Rec. 4). The repo requires non-empty `title`, non-empty `steps`, `tank_temperature` and `target_volume_count_start`. `target_volume` and `version` are optional (`profile.dart:59-74, 86`; `rest_v1.yml:6391-6395`; `profile_handler_create_test.dart:85-116`).
@@ -458,7 +558,7 @@ Steps 5–6 rarely run on a well-prepared puck; the notes say they "assist with 
 8. **"Duplicate titles are allowed".** True, but it misses the converse: identical execution content cannot be stored twice, whatever the title. POST returns the existing record (`profile_controller.dart:236-242`). Crema's `duplicateProfile` comment (`crema/web/src/domain/profile-edit.ts:71-77`) wrongly assumes a rename creates a separate profile.
 9. **"Edits change the id".** Only execution edits change it. Title, notes and author edits keep the id. Renaming a step *does* change it.
 10. **Rec. 4 activation flow** omits `context.targetYield`. Without it, the shot stops at the old yield.
-11. **Temperature bound "80–100 °C" per step.** This cannot be universal: bundled profiles deliberately use 67.5 °C (Extractamundo Dos) and 70 °C (TurboBloom). Bounds must be delta/anchor-based. 80–100 holds for the three chosen templates.
+11. **Temperature bound "80–100 °C" per step.** This cannot be universal: bundled profiles deliberately use 67.5 °C (Extractamundo Dos) and 70 °C (TurboBloom). Bounds must be delta/anchor-based. 80–100 holds for the five chosen templates across each template's whole temperature range (tested).
 12. **Smaller nuances:**
     - `tools/ingest_profiles.py` converts only `settings_2c`. It rejects basic `settings_2a`/`2b` profiles (`:66-73`).
     - The bundled names are "Londonium" and "Extractamundo Dos!" (RESEARCH writes "Londinium" and "Extramundo Dos").
@@ -482,7 +582,7 @@ Steps 5–6 rarely run on a well-prepared puck; the notes say they "assist with 
 10. **On errors, show `message`, not just `error`.** Handle 500 on a structurally broken profile as a CafAI bug.
 11. **Percent-encode ids in paths** (`encodeURIComponent("profile:…")`). The handler decodes once.
 12. **Activate** with `PUT /api/v1/workflow {profile: <full>, context: {targetYield, targetDoseWeight}}`. Confirm by hashing the profile in the PUT response or in a re-GET.
-13. **D-Flow soak weight needs a scale.** The template's weight exits only work with a scale connected and the gateway mode not `full`. Warn the user when no scale is connected.
+13. **D-Flow soak weight needs a scale.** The template's weight exits only work with a scale connected and the gateway mode not `full`. Warn the user when no scale is connected. The same holds for stop-at-weight, so every template's yield lever is marked `requiresScale` too.
 14. **Store CafAI state locally.** Record `metadata` is free-form and persists for user records. It is unreliable for deduped or default records, because re-seeding overwrites default metadata. Keep authoritative coach state in IndexedDB.
 
 ## 12. Open questions (ranked by cost of a wrong guess)
