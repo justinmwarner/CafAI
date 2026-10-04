@@ -245,18 +245,35 @@ describe('effectiveBounds', () => {
     expect(effectiveBounds(yieldOf(dflowT), 18)).toEqual({ min: 33, max: 54 });
     expect(effectiveBounds(yieldOf(londoniumT), 18)).toEqual({ min: 27, max: 50 });
     expect(effectiveBounds(yieldOf(bloomingT), 25)).toEqual({ min: 50, max: 80 });
-    expect(effectiveBounds(yieldOf(gentleT), 18)).toEqual({ min: 27, max: 45 });
+    expect(effectiveBounds(yieldOf(gentleT), 18)).toEqual({ min: 27, max: 54 });
   });
 
-  it("reaches the Allongé's 135 g default from an 18 g dose and caps it there", () => {
-    expect(effectiveBounds(yieldOf(allongeT), 18)).toEqual({ min: 72, max: 135 });
-    expect(effectiveBounds(yieldOf(allongeT), 12)).toEqual({ min: 50, max: 90 });
-    expect(effectiveBounds(yieldOf(allongeT), 15)).toEqual({ min: 60, max: 112 });
+  it('keeps the Allongé between 4x and 6x the dose, under its 135 g ceiling', () => {
+    expect(effectiveBounds(yieldOf(allongeT), 18)).toEqual({ min: 72, max: 108 });
+    expect(effectiveBounds(yieldOf(allongeT), 12)).toEqual({ min: 50, max: 72 });
+    expect(effectiveBounds(yieldOf(allongeT), 15)).toEqual({ min: 60, max: 90 });
     expect(effectiveBounds(yieldOf(allongeT), 25)).toEqual({ min: 100, max: 135 });
+  });
+
+  it('lets Gentle and Sweet reach 1:3', () => {
+    expect(effectiveBounds(yieldOf(gentleT), 15)).toEqual({ min: 25, max: 45 });
+    expect(effectiveBounds(yieldOf(gentleT), 20)).toEqual({ min: 30, max: 60 });
   });
 
   it('uses the plain bounds when the dose is unknown, and ignores the dose for other levers', () => {
     expect(effectiveBounds(yieldOf(bloomingT), null)).toEqual({ min: 30, max: 80 });
     expect(effectiveBounds(findLever(bloomingT, 'temp'), 18)).toEqual({ min: 86, max: 94 });
+  });
+
+  it('treats a dose outside 12-25 g as unknown', () => {
+    // Without the rule a 7 g dose turned Blooming's window upside down (30-24 g) and 30 g lifted its floor to 60 g.
+    for (const dose of [7, 11.9, 25.1, 30, 0, -18, Number.NaN]) {
+      for (const template of TEMPLATES) {
+        const lever = yieldOf(template);
+        expect(effectiveBounds(lever, dose), `${template.id} at ${dose} g`).toEqual({ min: lever.min, max: lever.max });
+      }
+    }
+    expect(effectiveBounds(yieldOf(bloomingT), 12)).toEqual({ min: 30, max: 42 });
+    expect(effectiveBounds(yieldOf(bloomingT), 25)).toEqual({ min: 50, max: 80 });
   });
 });

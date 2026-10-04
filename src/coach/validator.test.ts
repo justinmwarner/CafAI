@@ -5,8 +5,9 @@ import { describe, expect, it } from 'vitest';
 
 import type { ProposeAdjustment } from './contract.ts';
 import { applyLever, effectiveBounds, readLeverValue, snapToGranularity } from './levers.ts';
+import { buildStartingProfile } from './start.ts';
 import { getTemplate, TEMPLATES } from './templates/index.ts';
-import type { ProfileJson, Template } from './types.ts';
+import type { GrinderInfo, ProfileJson, Template } from './types.ts';
 import {
   checkStructure,
   validateProposal,
@@ -60,8 +61,10 @@ describe('validateProposal: every lever of every template', () => {
   for (const template of TEMPLATES) {
     for (const lv of template.levers) {
       describe(`${template.id}.${lv.id}`, () => {
-        const ctx = ctxFor(template);
-        const from = readLeverValue(template, template.profile, lv.id);
+        // From v1 as the engine builds it for an 18 g dose (D57): the yield
+        // starts inside its dose window, unlike the Allongé's bundled 135 g.
+        const ctx = ctxFor(template, { profile: buildStartingProfile(template, 18) });
+        const from = readLeverValue(template, ctx.profile, lv.id);
         const { min, max } = effectiveBounds(lv, ctx.doseG);
         const step = (n: number) => snapToGranularity(from + n * lv.granularity, lv.granularity);
 
@@ -73,7 +76,7 @@ describe('validateProposal: every lever of every template', () => {
           expect([plan.from, plan.to]).toEqual([from, to]);
           expect(plan.createsVersion).toBe(true);
           expect(readLeverValue(template, plan.newProfile!, lv.id)).toBe(to);
-          expect(checkStructure(template, template.profile, plan.newProfile!)).toEqual([]);
+          expect(checkStructure(template, ctx.profile, plan.newProfile!)).toEqual([]);
           expect(plan.diffLines).toHaveLength(1);
           expect(plan.diffLines[0]).toContain(lv.label);
         });
@@ -91,7 +94,7 @@ describe('validateProposal: every lever of every template', () => {
         });
 
         it('snaps to the granularity and reports it', () => {
-          // Toward the inside: a template value may sit at its ceiling (the Allongé's 135 g).
+          // Toward the inside: a starting value may sit at its ceiling.
           const direction = step(1) <= max ? 1 : -1;
           const raw = from + direction * lv.granularity * 0.6;
           const plan = okPlan(validateProposal(lever(lv.id, raw), ctx));
@@ -166,22 +169,53 @@ describe('validateProposal: messages and special rules', () => {
     expect(okPlan(validateProposal(lever('temp', 93), ctxFor(allongeT, { scaleConnected: false }))).to).toBe(93);
   });
 
-  it('keeps the Allongé yield at or below its 135 g default, stepping down in up to 10 g', () => {
-    const ctx = ctxFor(allongeT); // 18 g: 72-135 g
+  it('keeps the Allongé yield between 4x and 6x the dose, stepping in up to 10 g from v1', () => {
+    const v1 = buildStartingProfile(allongeT, 18); // 90 g; an 18 g dose allows 72-108 g
+    const ctx = ctxFor(allongeT, { profile: v1 });
+    const plan = okPlan(validateProposal(lever('yield', 100), ctx));
+    expect(plan.contextPatch).toEqual({ targetYield: 100 });
+    expect(plan.newProfile?.target_weight).toBe(100);
+    expect(errorsOf(validateProposal(lever('yield', 101), ctx))).toMatch(
+      /change of 11 g from 90 g; at most 10 g per step\. Allowed range now: 80-100 g/,
+    );
+    const longer = ctxFor(allongeT, { profile: applyLever(allongeT, v1, 'yield', 100) });
+    expect(okPlan(validateProposal(lever('yield', 108), longer)).to).toBe(108);
+    expect(errorsOf(validateProposal(lever('yield', 109), longer))).toMatch(/above the maximum for an 18\.0 g dose \(108 g, 1:6\.0\)/);
+    const shorter = ctxFor(allongeT, { profile: applyLever(allongeT, v1, 'yield', 80) });
+    expect(errorsOf(validateProposal(lever('yield', 71), shorter))).toMatch(/below the minimum for an 18\.0 g dose \(72 g, 1:4\.0\)/);
     expect(errorsOf(validateProposal(lever('yield', 136), ctx))).toMatch(/above this template's maximum of 135 g/);
-    const plan = okPlan(validateProposal(lever('yield', 125), ctx));
-    expect(plan.contextPatch).toEqual({ targetYield: 125 });
-    expect(plan.newProfile?.target_weight).toBe(125);
-    expect(errorsOf(validateProposal(lever('yield', 124), ctx))).toMatch(/change of 11 g from 135 g; at most 10 g per step/);
 
-    // A 12 g dose allows 50-90 g: 135 g is above it, so only steps back down are allowed.
-    const small = ctxFor(allongeT, { doseG: 12 });
-    expect(okPlan(validateProposal(lever('yield', 125), small)).to).toBe(125);
-    expect(errorsOf(validateProposal(lever('yield', 124), small))).toMatch(/at most 10 g per step.*Allowed range now: 125-134 g/);
+    // The bundled 135 g stop (v1 before D57) is 1:7.5 at 18 g: only steps back toward the window pass.
+    const bundled = ctxFor(allongeT);
+    expect(okPlan(validateProposal(lever('yield', 125), bundled)).to).toBe(125);
+    expect(errorsOf(validateProposal(lever('yield', 124), bundled))).toMatch(
+      /change of 11 g from 135 g; at most 10 g per step\. Allowed range now: 125-134 g/,
+    );
+
+    // A 12 g dose allows 50-72 g; a 25 g dose reaches the 135 g ceiling (1:5.4).
     const down = applyLever(allongeT, allongeT.profile, 'yield', 95);
     expect(errorsOf(validateProposal(lever('yield', 100), ctxFor(allongeT, { doseG: 12, profile: down })))).toMatch(
-      /above the maximum for a 12\.0 g dose \(90 g, 1:7\.5\)/,
+      /above the maximum for a 12\.0 g dose \(72 g, 1:6\.0\)/,
     );
+    const big = ctxFor(allongeT, { doseG: 25, profile: buildStartingProfile(allongeT, 25) }); // 125 g
+    expect(okPlan(validateProposal(lever('yield', 135), big)).to).toBe(135);
+  });
+
+  it('lets Gentle and Sweet run to 1:3', () => {
+    const ctx = ctxFor(gentleT, { doseG: 15, profile: applyLever(gentleT, gentleT.profile, 'yield', 42) });
+    expect(okPlan(validateProposal(lever('yield', 45), ctx)).to).toBe(45);
+    expect(errorsOf(validateProposal(lever('yield', 46), ctx))).toMatch(/above the maximum for a 15\.0 g dose \(45 g, 1:3\.0\)/);
+  });
+
+  it('treats a dose outside 12-25 g as unknown: the plain gram bounds apply', () => {
+    // A 7 g dose turned Blooming's window upside down (30-24 g) and 30 g lifted its floor to 60 g.
+    for (const doseG of [7, 30]) {
+      const ctx = ctxFor(bloomingT, { doseG });
+      expect(okPlan(validateProposal(lever('yield', 56), ctx)).to, `${doseG} g`).toBe(56);
+      const message = errorsOf(validateProposal(lever('yield', 81), ctx));
+      expect(message).toMatch(/above this template's maximum of 80 g/);
+      expect(message).not.toMatch(/dose/);
+    }
   });
 
   it('keeps the Gentle and Sweet peak at least 1 bar above the decline end', () => {
@@ -260,15 +294,20 @@ describe('validateProposal: grind', () => {
       newProfile: null,
       createsVersion: false,
       contextPatch: {},
+      grindSettingFrom: null,
     });
     expect(plan.diffLines).toEqual(['Grind 1 step finer (now 14.5)']);
-    expect(plan.manualSteps).toEqual(['Set the grinder 1 step finer before the next shot.']);
+    expect(plan.manualSteps).toEqual([
+      "Turn the grinder 1 step finer before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings.",
+    ]);
   });
 
   it('records an absolute setting exactly as given', () => {
     const plan = okPlan(validateProposal(grind('coarser', 2, '16'), ctxFor(dflowT)));
     expect(plan.contextPatch).toEqual({ grinderSetting: '16' });
     expect(plan.diffLines).toEqual(['Grind 2 steps coarser: 14.5 -> 16']);
+    expect(plan.manualSteps).toEqual(['Set the grinder to 16 (2 steps coarser) before the next shot.']);
+    expect(plan.grindSettingFrom).toBe('model');
   });
 
   it('never clamps a setting to some typed range', () => {
@@ -299,6 +338,145 @@ describe('validateProposal: grind', () => {
         ),
       ),
     ).toMatch(/"value" must be null/);
+  });
+});
+
+describe("validateProposal: grind with Decaid's grinder library (D62)", () => {
+  const NICHE: GrinderInfo = { model: 'Niche Zero', settingType: 'numeric', smallStep: 0.5, bigStep: 2, values: null };
+  const DITTING: GrinderInfo = {
+    model: 'Ditting 807',
+    settingType: 'preset',
+    smallStep: null,
+    bigStep: null,
+    values: ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8'],
+  };
+  const grind = (direction: 'finer' | 'coarser', amount: number | null, setting: string | null) =>
+    proposal({ variable: 'grind', grind: { direction, amount, setting } });
+  const on = (grinder: GrinderInfo | null, grinderSetting: string | null) => ctxFor(dflowT, { grinder, grinderSetting });
+
+  it("turns a relative move into the new setting and says the step came from Decaid's library", () => {
+    const plan = okPlan(validateProposal(grind('finer', 1, null), on(NICHE, '15')));
+    expect(plan).toMatchObject({
+      variable: 'grind',
+      newProfile: null,
+      createsVersion: false,
+      contextPatch: { grinderSetting: '14.5' },
+      diffLines: ['Grind 1 step finer: 15 -> 14.5'],
+      manualSteps: ['Set the grinder to 14.5 before the next shot (Decaid lists 0.5 steps for your Niche Zero).'],
+      grindSettingFrom: 'decaid',
+      notes: [],
+    });
+  });
+
+  it("prints the new setting with the step's decimals", () => {
+    const plan = okPlan(validateProposal(grind('coarser', 2, null), on(NICHE, '15')));
+    expect(plan.contextPatch).toEqual({ grinderSetting: '16.0' });
+    expect(plan.diffLines).toEqual(['Grind 2 steps coarser: 15 -> 16.0']);
+    const whole = { ...NICHE, model: 'Eureka Mignon', smallStep: 1 };
+    expect(okPlan(validateProposal(grind('finer', 1, null), on(whole, '15'))).manualSteps).toEqual([
+      'Set the grinder to 14 before the next shot (Decaid lists steps of 1 for your Eureka Mignon).',
+    ]);
+  });
+
+  it("checks a setting the model names and counts it in Decaid's steps", () => {
+    const plan = okPlan(validateProposal(grind('finer', null, '14'), on(NICHE, '15')));
+    expect(plan.contextPatch).toEqual({ grinderSetting: '14' });
+    expect(plan.diffLines).toEqual(['Grind 2 steps finer: 15 -> 14']);
+    expect(plan.manualSteps).toEqual(['Set the grinder to 14 before the next shot (Decaid lists 0.5 steps for your Niche Zero).']);
+    expect(plan.grindSettingFrom).toBe('decaid');
+    // The model's amount disagrees with its setting: the setting wins, and the card says why.
+    const mismatch = okPlan(validateProposal(grind('finer', 1, '14'), on(NICHE, '15')));
+    expect(mismatch.diffLines).toEqual(['Grind 2 steps finer: 15 -> 14']);
+    expect(mismatch.notes).toEqual(['Decaid lists 0.5 steps for your Niche Zero, so 15 to 14 is 2 steps, not 1.']);
+  });
+
+  it('answers the model with the step for an off-grid, wrong-way, too-far or negative move', () => {
+    const ctx = on(NICHE, '15');
+    expect(errorsOf(validateProposal(grind('finer', null, '14.3'), ctx))).toMatch(
+      /^grind\.setting "14\.3" is not a whole number of steps from 15\. Your grinder moves in steps of 0\.5/,
+    );
+    expect(errorsOf(validateProposal(grind('finer', null, '16'), ctx))).toMatch(
+      /^grind\.setting "16" is coarser than 15 \(lower numbers are finer\), but grind\.direction is "finer"\. Your grinder moves in steps of 0\.5/,
+    );
+    expect(errorsOf(validateProposal(grind('finer', null, '12'), ctx))).toMatch(
+      /^grind\.setting "12" is 6 steps from 15; move at most 5 steps per shot\. Your grinder moves in steps of 0\.5/,
+    );
+    expect(errorsOf(validateProposal(grind('finer', 2, null), on(NICHE, '0.5')))).toMatch(
+      /^grind: 2 steps finer from 0\.5 would be -0\.5, below 0\. Your grinder moves in steps of 0\.5/,
+    );
+    expect(errorsOf(validateProposal(grind('finer', null, '-1'), ctx))).toMatch(/^grind\.setting "-1" is below 0\./);
+    expect(errorsOf(validateProposal(grind('finer', 1.5, null), ctx))).toMatch(/^grind\.amount 1\.5 is not a whole number of steps\. Your grinder moves in steps of 0\.5/);
+    expect(errorsOf(validateProposal(grind('finer', 1, '15.0'), ctx))).toMatch(/"15\.0" is the setting the grinder is on now/);
+    // The usual limits still come first.
+    expect(errorsOf(validateProposal(grind('finer', 6, null), ctx))).toMatch(/more than 0 and at most 5/);
+  });
+
+  it('moves along a preset list, finest first, and refuses settings outside it', () => {
+    const plan = okPlan(validateProposal(grind('finer', 1, null), on(DITTING, 'E4')));
+    expect(plan).toMatchObject({
+      contextPatch: { grinderSetting: 'E3' },
+      diffLines: ['Grind 1 step finer: E4 -> E3'],
+      manualSteps: ['Set the grinder to E3 before the next shot (Decaid lists 8 settings for your Ditting 807).'],
+      grindSettingFrom: 'decaid',
+    });
+    expect(okPlan(validateProposal(grind('coarser', null, 'E6'), on(DITTING, 'E4'))).diffLines).toEqual(['Grind 2 steps coarser: E4 -> E6']);
+    expect(errorsOf(validateProposal(grind('finer', 3, null), on(DITTING, 'E2')))).toMatch(
+      /goes past the end of the list: the finest setting, "E1", is 1 step finer/,
+    );
+    expect(errorsOf(validateProposal(grind('coarser', 2, null), on(DITTING, 'E7')))).toMatch(/the coarsest setting, "E8", is 1 step coarser/);
+    expect(errorsOf(validateProposal(grind('finer', 1, 'E9'), on(DITTING, 'E4')))).toMatch(/^grind\.setting "E9" is not one of your grinder's settings\./);
+    expect(errorsOf(validateProposal(grind('finer', 1, 'E5'), on(DITTING, 'E4')))).toMatch(/^grind\.setting "E5" is coarser than "E4" in the list/);
+  });
+
+  it("keeps an unsized move unsized, naming Decaid's step for the user", () => {
+    const plan = okPlan(validateProposal(grind('finer', null, null), on(NICHE, '15')));
+    expect(plan.contextPatch).toEqual({});
+    expect(plan.diffLines).toEqual(['Grind a little finer (now 15)']);
+    expect(plan.manualSteps).toEqual([
+      'Turn the grinder a little finer before the next shot (Decaid lists 0.5 steps for your Niche Zero), then note the new setting in Settings.',
+    ]);
+    expect(plan.grindSettingFrom).toBeNull();
+  });
+
+  it('keeps the move as given when Decaid has no step data, as before', () => {
+    const noStep: Array<GrinderInfo | null | undefined> = [undefined, null, { ...NICHE, smallStep: null }, { ...DITTING, values: null }, { ...DITTING, values: [] }];
+    for (const grinder of noStep) {
+      const ctx = grinder === undefined ? ctxFor(dflowT) : ctxFor(dflowT, { grinder });
+      const relative = okPlan(validateProposal(grind('finer', 1, null), ctx));
+      expect(relative.contextPatch).toEqual({});
+      expect(relative.diffLines).toEqual(['Grind 1 step finer (now 14.5)']);
+      expect(relative.manualSteps).toEqual([
+        "Turn the grinder 1 step finer before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings.",
+      ]);
+      // Off any 0.5 grid, yet passed through: there is no grid to check it against.
+      const given = okPlan(validateProposal(grind('coarser', 2, '15.2'), ctx));
+      expect(given.contextPatch).toEqual({ grinderSetting: '15.2' });
+      expect(given.manualSteps).toEqual(['Set the grinder to 15.2 (2 steps coarser) before the next shot.']);
+      expect(given.grindSettingFrom).toBe('model');
+      expect(given.notes).toEqual([]);
+    }
+  });
+
+  it("keeps the move as given when the current setting cannot be read, still naming Decaid's step", () => {
+    for (const grinderSetting of [null, 'two turns', '-2']) {
+      const ctx = on(NICHE, grinderSetting);
+      const relative = okPlan(validateProposal(grind('finer', 1, null), ctx));
+      expect(relative.contextPatch, String(grinderSetting)).toEqual({});
+      expect(relative.manualSteps).toEqual([
+        'Turn the grinder 1 step finer before the next shot (Decaid lists 0.5 steps for your Niche Zero), then note the new setting in Settings.',
+      ]);
+      const given = okPlan(validateProposal(grind('finer', 1, '13.3'), ctx));
+      expect(given.contextPatch).toEqual({ grinderSetting: '13.3' });
+      expect(given.manualSteps).toEqual(['Set the grinder to 13.3 (1 step finer) before the next shot.']);
+      expect(given.grindSettingFrom).toBe('model');
+    }
+    const preset = okPlan(validateProposal(grind('finer', 1, null), on(DITTING, 'fine')));
+    expect(preset.contextPatch).toEqual({});
+    expect(preset.manualSteps).toEqual([
+      'Turn the grinder 1 step finer before the next shot (Decaid lists 8 settings for your Ditting 807), then note the new setting in Settings.',
+    ]);
+    // Same as before: a "new" setting equal to the one on the dial is refused.
+    expect(errorsOf(validateProposal(grind('finer', 1, 'two turns'), on(NICHE, 'two turns')))).toMatch(/is the setting the grinder is on now/);
   });
 });
 

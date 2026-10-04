@@ -154,12 +154,14 @@ describe('TEMPLATES', () => {
   });
 
   it('marks yield levers for the workflow context and scales their bounds with the dose', () => {
+    // D57: the Allongé window is 4-6 x dose (was 4-7.5, only so its 135 g stop passed at 18 g);
+    // Gentle and Sweet reaches 1:3 (was 1:2.5; Decent pulls it "1:2 or 1:3").
     const ratios = {
       'blooming-espresso': [2.0, 3.5],
       'd-flow': [1.8, 3.0],
       londonium: [1.5, 2.8],
-      allonge: [4.0, 7.5],
-      'gentle-and-sweet': [1.5, 2.5],
+      allonge: [4.0, 6.0],
+      'gentle-and-sweet': [1.5, 3.0],
     } as const;
     for (const template of TEMPLATES) {
       const yieldLever = template.levers.find((l) => l.id === 'yield')!;
@@ -171,7 +173,7 @@ describe('TEMPLATES', () => {
     }
   });
 
-  it('starts every yield inside its own lever bounds, with the Allongé yield at its ceiling', () => {
+  it('keeps every bundled stop inside its own lever bounds, with the Allongé stop at its ceiling', () => {
     for (const template of TEMPLATES) {
       const yieldLever = template.levers.find((l) => l.id === 'yield')!;
       expect(template.profile.target_weight, template.id).toBeGreaterThanOrEqual(yieldLever.min);
@@ -179,6 +181,45 @@ describe('TEMPLATES', () => {
     }
     expect(getTemplate('allonge')?.profile.target_weight).toBe(135);
     expect(getTemplate('allonge')?.levers.find((l) => l.id === 'yield')?.max).toBe(135);
+  });
+
+  it("gives every template its author's brew ratio for v1 (D57), inside its own dose window", () => {
+    expect(TEMPLATES.map((t) => [t.id, t.startRatio])).toEqual([
+      ['blooming-espresso', 2.8],
+      ['d-flow', 2.8],
+      ['londonium', 2.0],
+      ['allonge', 5.0],
+      ['gentle-and-sweet', 2.0],
+    ]);
+    for (const template of TEMPLATES) {
+      const ratioWindow = template.levers.find((l) => l.id === 'yield')!.doseRatio!;
+      expect(template.startRatio, template.id).toBeGreaterThanOrEqual(ratioWindow.min);
+      expect(template.startRatio, template.id).toBeLessThanOrEqual(ratioWindow.max);
+    }
+  });
+
+  it('no longer promises the Allongé a 135 g stop: it stops at about 5x the dose', () => {
+    const allonge = getTemplate('allonge')!;
+    expect(allonge.shape).not.toMatch(/135/);
+    expect(allonge.description).not.toMatch(/135/);
+    expect(allonge.shape).toMatch(/about 5x the dose/);
+    expect(allonge.description).toMatch(/about 5x the dose \(90 g for 18 g\)/);
+  });
+
+  it('tells the coach where the Blooming pour tops out, so it does not propose yields it cannot reach', () => {
+    const description = getTemplate('blooming-espresso')!.description;
+    expect(description).toMatch(/stops 26 s after the bloom/);
+    expect(description).toMatch(/22\.5 s x the flow \(about 57 g at 2\.2 ml\/s\)/);
+    expect(description).toMatch(/more yield needs more flow/);
+    // The pour after the bloom: a 5 s ramp from 0 to the flow, 20 s at it, and a 1 s pump-off tail.
+    const steps = getTemplate('blooming-espresso')!.profile.steps;
+    expect(steps.slice(3).map((s) => [s.name, s.seconds, s.transition])).toEqual([
+      ['ramp', 5, 'smooth'],
+      ['flat flow', 20, 'fast'],
+      ['reset temperature', 1, 'fast'],
+    ]);
+    expect(steps[5]!.flow).toBe(0);
+    expect(5 / 2 + 20).toBe(22.5);
   });
 
   it('shifts temperature uniformly from the documented anchor step', () => {
@@ -296,7 +337,7 @@ describe('TEMPLATES', () => {
     expect(getTemplate('blooming-espresso')?.shape).toMatch(/30 s bloom.*2\.2 ml\/s/);
     expect(getTemplate('d-flow')?.shape).toMatch(/3 bar.*4 g.*1\.7 ml\/s.*8\.5 bar/);
     expect(getTemplate('londonium')?.shape).toMatch(/12 s.*9 bar.*3 bar/);
-    expect(getTemplate('allonge')?.shape).toMatch(/4\.5 ml\/s.*8\.6 bar.*135 g/);
+    expect(getTemplate('allonge')?.shape).toMatch(/4\.5 ml\/s.*8\.6 bar.*5x the dose/);
     expect(getTemplate('gentle-and-sweet')?.shape).toMatch(/6 bar.*13 s.*4 bar/);
   });
 

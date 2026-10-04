@@ -18,8 +18,10 @@
  */
 import { EVENT, TOOL } from './contract.ts';
 import { formatLeverValue } from './diff.ts';
+import { REFERENCE_DOSE_G } from './dose.ts';
 import { COACH_HEURISTICS, type CoachHeuristics } from './heuristics.ts';
 import { decimalsOf, readLeverValue } from './levers.ts';
+import { startingYield, startRatioOf } from './start.ts';
 import { CHANNELING_THRESHOLDS } from './summary/analysis.ts';
 import { HIGH_STALL_BAR, LOW_STALL_BAR } from './summary/phases.ts';
 import type { Lever, Template } from './types.ts';
@@ -32,14 +34,27 @@ export interface SystemPromptOptions {
 
 const number = (lever: Lever, value: number) => value.toFixed(decimalsOf(lever.granularity));
 
+/**
+ * Where the lever starts. v1's yield follows the dose (D57), so the bundled
+ * stop would mislead the model (the Allongé's 135 g is 1:7.5 at 18 g); the
+ * line gives the ratio and its value at the reference dose instead, which
+ * keeps the prompt identical for every bag.
+ */
+function startText(template: Template, lever: Lever): string {
+  if (lever.id === 'yield') {
+    const grams = formatLeverValue(lever, startingYield(template, REFERENCE_DOSE_G));
+    return `v1 starts at ${startRatioOf(template).toFixed(1)} x dose (${grams} for ${REFERENCE_DOSE_G} g)`;
+  }
+  return `template value ${formatLeverValue(lever, readLeverValue(template, template.profile, lever.id))}`;
+}
+
 function leverLine(template: Template, lever: Lever): string {
   const ratio = lever.doseRatio ? ` and ${lever.doseRatio.min.toFixed(1)}-${lever.doseRatio.max.toFixed(1)} x dose` : '';
   const scale = lever.requiresScale ? ' It needs a connected scale.' : '';
-  const value = readLeverValue(template, template.profile, lever.id);
   return (
     `- \`${lever.id}\` ${lever.label}: ${number(lever, lever.min)}-${number(lever, lever.max)} ${lever.unit}${ratio}, ` +
     `steps of ${formatLeverValue(lever, lever.granularity)}, at most ${formatLeverValue(lever, lever.maxDelta)} per change; ` +
-    `template value ${formatLeverValue(lever, value)}.${scale} ${lever.description}`
+    `${startText(template, lever)}.${scale} ${lever.description}`
   );
 }
 

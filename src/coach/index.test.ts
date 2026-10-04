@@ -39,6 +39,8 @@ describe('the coach barrel', () => {
       'DEFAULT_TASTE_OPTIONS',
       'versionTitle',
       'buildVersionProfile',
+      'startingYield',
+      'buildStartingProfile',
     ]) {
       expect(coach, name).toHaveProperty(name);
     }

@@ -130,8 +130,34 @@ export interface Template {
   source: { repo: string; file: string; commit: string };
   /** Normalized bundled profile (numbers, active targets only), bundled title. */
   profile: ProfileJson;
+  /**
+   * The profile author's brew ratio (yield / dose), where v1's yield starts
+   * (D57): startingYield() multiplies it by the dose. Every bundled template
+   * sets it; without one, v1 keeps the template's own stop at the 18 g
+   * reference dose. Optional only so test fakes built before D57 still compile.
+   */
+  startRatio?: number;
   levers: Lever[];
   constraints: LeverConstraint[];
+}
+
+/**
+ * A grinder from Decaid's grinder library (GET /api/v1/grinders), reduced to
+ * what the coach needs to size a grind move (D62). Decaid lists no range and
+ * no "which way is finer": CafAI assumes lower numbers are finer and that a
+ * preset list runs finest first.
+ */
+export interface GrinderInfo {
+  /** Decaid's `model`, e.g. "Niche Zero". */
+  model: string;
+  /** `numeric`: a dial moved in small steps; `preset`: a list of named settings. */
+  settingType: 'numeric' | 'preset';
+  /** Decaid's `settingSmallStep`, e.g. 0.5; null when Decaid has none. */
+  smallStep: number | null;
+  /** Decaid's `settingBigStep`; null when Decaid has none. */
+  bigStep: number | null;
+  /** Decaid's `settingValues` for a preset grinder; null when Decaid has none. */
+  values: readonly string[] | null;
 }
 
 /** Current value of each lever of a profile built from a template. */

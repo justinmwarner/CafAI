@@ -8,7 +8,7 @@ import { COACH_HEURISTICS } from './heuristics.ts';
 import { formatLeverValue } from './diff.ts';
 import { readLeverValue } from './levers.ts';
 import { buildSystemPrompt } from './prompt.ts';
-import { TEMPLATES } from './templates/index.ts';
+import { getTemplate, TEMPLATES } from './templates/index.ts';
 
 const prompt = buildSystemPrompt(TEMPLATES);
 
@@ -46,7 +46,13 @@ describe('buildSystemPrompt: content', () => {
         expect(line, `${template.id}.${lever.id}`).toBeDefined();
         expect(line).toContain(`${formatLeverValue(lever, lever.min).replace(` ${lever.unit}`, '')}-${formatLeverValue(lever, lever.max)}`);
         expect(line).toContain(`at most ${formatLeverValue(lever, lever.maxDelta)} per change`);
-        expect(line).toContain(`template value ${formatLeverValue(lever, readLeverValue(template, template.profile, lever.id))}`);
+        if (lever.id === 'yield') {
+          // v1's yield follows the dose (D57), so the bundled stop is not where it starts.
+          expect(line).toMatch(/; v1 starts at \d\.\d x dose \(\d+ g for 18 g\)\./);
+          expect(line).not.toContain('template value');
+        } else {
+          expect(line).toContain(`template value ${formatLeverValue(lever, readLeverValue(template, template.profile, lever.id))}`);
+        }
         expect(line).toContain(lever.description);
       }
     }
@@ -67,9 +73,36 @@ describe('buildSystemPrompt: content', () => {
         .find((l) => l.startsWith('- `yield`'))!;
       expect(line, template.id).toContain('It needs a connected scale.');
     }
-    expect(block('allonge')).toMatch(/`yield` Yield: 50-135 g and 4\.0-7\.5 x dose, steps of 1 g, at most 10 g per change; template value 135 g/);
+    expect(block('allonge')).toMatch(
+      /`yield` Yield: 50-135 g and 4\.0-6\.0 x dose, steps of 1 g, at most 10 g per change; v1 starts at 5\.0 x dose \(90 g for 18 g\)\. It needs a connected scale\./,
+    );
     expect(block('gentle-and-sweet')).toMatch(/Constraint: Peak pressure must stay at least 1\.0 bar above the decline end pressure/);
     expect(block('allonge')).not.toMatch(/Constraint:/);
+  });
+
+  it("says where each template's v1 yield starts: the author's ratio, and its grams at 18 g", () => {
+    const yieldLine = (id: string) =>
+      prompt
+        .split('\n## ')
+        .find((b) => b.startsWith(`${id}: `))!
+        .split('\n')
+        .find((l) => l.startsWith('- `yield`'))!;
+    expect(yieldLine('blooming-espresso')).toContain('2.0-3.5 x dose, steps of 1 g, at most 4 g per change; v1 starts at 2.8 x dose (50 g for 18 g).');
+    expect(yieldLine('d-flow')).toContain('1.8-3.0 x dose, steps of 1 g, at most 4 g per change; v1 starts at 2.8 x dose (50 g for 18 g).');
+    expect(yieldLine('londonium')).toContain('1.5-2.8 x dose, steps of 1 g, at most 4 g per change; v1 starts at 2.0 x dose (36 g for 18 g).');
+    expect(yieldLine('allonge')).toContain('4.0-6.0 x dose, steps of 1 g, at most 10 g per change; v1 starts at 5.0 x dose (90 g for 18 g).');
+    expect(yieldLine('gentle-and-sweet')).toContain('1.5-3.0 x dose, steps of 1 g, at most 4 g per change; v1 starts at 2.0 x dose (36 g for 18 g).');
+    // The bundled stops (60, 42, 135 g) would mislead the model about v1.
+    for (const id of ['blooming-espresso', 'londonium', 'allonge']) {
+      const start = yieldLine(id).split('per change; ')[1]!;
+      expect(start, id).not.toContain(`${getTemplate(id)!.profile.target_weight} g`);
+    }
+  });
+
+  it("tells the model where the Blooming pour tops out and that the Allongé stops near 5x the dose", () => {
+    expect(prompt).toContain('about 57 g at 2.2 ml/s');
+    expect(prompt).toContain('It stops at about 5x the dose (90 g for 18 g).');
+    expect(prompt).toContain('Shape: One steady 4.5 ml/s pour capped at 8.6 bar, stopping at about 5x the dose.');
   });
 
   it('describes grind and dose as manual variables with their limits', () => {

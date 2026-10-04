@@ -8,6 +8,10 @@
  * reviewed for these templates yet. Replace `COACH_HEURISTICS` (or pass
  * `buildSystemPrompt(templates, { heuristics })`) once a coffee professional
  * has written the real rules; nothing else needs to change.
+ *
+ * One deliberate departure from RESEARCH section 8: the medium-roast ratio
+ * says 1:2.5-1:3, around D-Flow's own 1:2.8 start (D57). RESEARCH's 1:2-1:2.5
+ * would have the coach shorten every D-Flow v1 by reflex.
  */
 
 export interface CoachHeuristics {
@@ -23,7 +27,7 @@ export const COACH_HEURISTICS: CoachHeuristics = {
     'Starting points from general espresso practice, not verified rules. The shot data and the user\'s taste always win.',
     'Choosing a template:',
     '- Light roasts, especially washed and high-grown: blooming-espresso, ratio about 1:2.5-1:4.',
-    '- Medium roasts: d-flow (blooming-espresso also works), ratio about 1:2-1:2.5.',
+    '- Medium roasts: d-flow (blooming-espresso also works), ratio about 1:2.5-1:3.',
     '- Dark roasts: londonium, ratio about 1:1.8-1:2.2.',
     '- Naturals and anaerobics usually want 1-2 °C less than a washed coffee of the same roast.',
     'Taste to next move, in this order, one per shot:',

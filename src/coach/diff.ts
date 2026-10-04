@@ -11,8 +11,9 @@
  * empty card.
  */
 import type { ProposeAdjustment } from './contract.ts';
+import { decaidStepNote } from './grinder.ts';
 import { decimalsOf, findLever } from './levers.ts';
-import type { Lever, ProfileJson, ProfileStep, StepExit, Template } from './types.ts';
+import type { GrinderInfo, Lever, ProfileJson, ProfileStep, StepExit, Template } from './types.ts';
 
 const ARROW = '->';
 
@@ -112,15 +113,37 @@ export function describeManualChange(input: ManualInput, current: ManualSettings
   throw new Error('describeManualChange is for grind, dose and "none"; use describeLeverChange for profile levers.');
 }
 
-/** What the user's hands must do before the next shot (empty for profile changes and "none"). */
-export function describeManualSteps(input: ManualInput): string[] {
+/** What the grind text knows about the user's grinder. */
+export interface GrindTextOptions {
+  /** The grinder linked from Decaid's library, when there is one. */
+  grinder?: GrinderInfo | null;
+  /** The new setting was worked out from, or checked against, Decaid's step or list. */
+  fromDecaid?: boolean;
+}
+
+/**
+ * What the user's hands must do before the next shot (empty for profile
+ * changes and "none"). A grind step says where its numbers come from, as the
+ * owner asked (D62): "Set the grinder to 14.5 before the next shot (Decaid
+ * lists 0.5 steps for your Niche Zero)." Without a new setting the user turns
+ * the grinder and notes where it landed, since the next shot is read against it.
+ */
+export function describeManualSteps(input: ManualInput, options: GrindTextOptions = {}): string[] {
   if (input.variable === 'dose' && input.value !== null) {
     return [`Weigh ${input.value.toFixed(1)} g of coffee for the next shot.`];
   }
   if (input.variable === 'grind' && input.grind) {
     const setting = cleanSetting(input.grind.setting);
-    if (setting !== null) return [`Set the grinder to ${setting} (${grindMove(input.grind)}) before the next shot.`];
-    return [`Set the grinder ${grindMove(input.grind, 'a little ')} before the next shot.`];
+    const decaid = decaidStepNote(options.grinder);
+    if (setting !== null) {
+      if (options.fromDecaid && decaid !== null) return [`Set the grinder to ${setting} before the next shot (${decaid}).`];
+      return [`Set the grinder to ${setting} (${grindMove(input.grind)}) before the next shot.`];
+    }
+    const move = grindMove(input.grind, 'a little ');
+    if (decaid !== null) return [`Turn the grinder ${move} before the next shot (${decaid}), then note the new setting in Settings.`];
+    return [
+      `Turn the grinder ${move} before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings.`,
+    ];
   }
   return [];
 }

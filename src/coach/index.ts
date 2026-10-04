@@ -31,6 +31,8 @@ export {
   readLeverValues,
   snapToGranularity,
 } from './levers.ts';
+export { knownDose, REFERENCE_DOSE_G } from './dose.ts';
+export { buildStartingProfile, startingYield, startRatioOf } from './start.ts';
 
 // Validation and change text
 export {
@@ -50,8 +52,10 @@ export {
   describeManualSteps,
   diffProfiles,
   formatLeverValue,
+  type GrindTextOptions,
   type ManualSettings,
 } from './diff.ts';
+export { decaidStepNote } from './grinder.ts';
 
 // Shots
 export { resampleSeries, shotPhases, summarizeShot, summaryForModel } from './summary/summarize.ts';

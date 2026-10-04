@@ -8,6 +8,7 @@
  * that before anything is applied.
  */
 import { clone } from '../util/clone.ts';
+import { knownDose } from './dose.ts';
 import type { Lever, LeverValues, ProfileJson, Template } from './types.ts';
 
 /** A lever or path that does not fit the profile or template. */
@@ -197,12 +198,14 @@ export function applyLever(template: Template, profile: ProfileJson, leverId: st
 /**
  * The lever's bounds for this dose. A dose-relative lever (yield) narrows to
  * [max(min, ratio.min x dose), min(max, ratio.max x dose)], rounded inward to
- * its granularity. Without a known dose the plain bounds apply.
+ * its granularity. Without a known dose (unknown, or outside 12-25 g) the
+ * plain bounds apply.
  */
 export function effectiveBounds(lever: Lever, doseG: number | null): { min: number; max: number } {
-  if (!lever.doseRatio || doseG === null || !(doseG > 0)) return { min: lever.min, max: lever.max };
+  const dose = knownDose(doseG);
+  if (!lever.doseRatio || dose === null) return { min: lever.min, max: lever.max };
   return {
-    min: Math.max(lever.min, ceilToGrid(lever.doseRatio.min * doseG, lever.granularity)),
-    max: Math.min(lever.max, floorToGrid(lever.doseRatio.max * doseG, lever.granularity)),
+    min: Math.max(lever.min, ceilToGrid(lever.doseRatio.min * dose, lever.granularity)),
+    max: Math.min(lever.max, floorToGrid(lever.doseRatio.max * dose, lever.granularity)),
   };
 }

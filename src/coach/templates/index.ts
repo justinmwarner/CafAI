@@ -7,7 +7,9 @@
  * granularity and per-iteration maximum change come from
  * docs/verified/03-profiles.md section 9. Everything not reachable through a
  * lever stays exactly as Decaid ships it, so a version with every lever at its
- * template value hashes to the bundled default's id.
+ * template value hashes to the bundled default's id. v1 itself starts at the
+ * author's brew ratio times the dose (`startRatio`, start.ts), not at the
+ * bundled stop.
  *
  * The registry is deep-frozen: clone() a profile before changing it.
  */
@@ -64,17 +66,24 @@ function yieldLever(min: number, max: number, ratio: { min: number; max: number 
   };
 }
 
+// After the bloom the pour runs a 5 s ramp, 20 s at the flow and a 1 s
+// pump-off tail, then the profile ends: about 22.5 s x flow of water (49.5 ml
+// at 2.2 ml/s) on top of the ~8 g the bloom drips. The description says so,
+// so the coach does not propose yields the pour can never reach.
 const blooming: Template = {
   id: 'blooming-espresso',
   name: 'Blooming Espresso',
   style: 'Blooming',
   shape: 'Fill at 4 ml/s, 30 s bloom with the pump off, then a flat 2.2 ml/s pour',
   description:
-    "Scott Rao's blooming shot: wet the puck, let it rest with the pump off, then pour at a steady flow. High, sweet extraction for light and complex coffees, especially washed ones.",
+    "Scott Rao's blooming shot: wet the puck, let it rest with the pump off, then pour at a steady flow. High, sweet extraction for light and complex coffees, especially washed ones. Its pour stops 26 s after the bloom, so the cup tops out near the bloom's drip plus about 22.5 s x the flow (about 57 g at 2.2 ml/s); above that, more yield needs more flow.",
   roastFit: ['light', 'medium-light'],
   decaidDefaultId: 'profile:7438cb7266f60558b48f',
   source: source('Blooming_espresso.json'),
   profile: normalizeProfile(bloomingSource),
+  // 1:2.8 (D57): Rao's bloom post reaches 24% extraction at 8.5% TDS, and
+  // Decent's best-practice light profile pulls "18g in, 50g out".
+  startRatio: 2.8,
   levers: [
     temperatureLever('steps[4].temperature', 86, 94, 'keeping the hot fill, the cooler bloom and the 92 °C pour'),
     yieldLever(30, 80, { min: 2.0, max: 3.5 }),
@@ -132,6 +141,8 @@ const dflow: Template = {
   decaidDefaultId: 'profile:59036f8846b1ed3b4255',
   source: source('D-Flow____default.json'),
   profile: normalizeProfile(dflowSource),
+  // 1:2.8 (D57): Damian's D-Flow plugin stops at 50 g for 18 g by default.
+  startRatio: 2.8,
   levers: [
     temperatureLever('steps[2].temperature', 84, 94, 'and all three steps share one temperature'),
     yieldLever(30, 70, { min: 1.8, max: 3.0 }),
@@ -212,6 +223,9 @@ const londonium: Template = {
   decaidDefaultId: 'profile:729d284747718d27c93a',
   source: source('Londonium.json'),
   profile: normalizeProfile(londoniumSource),
+  // 1:2 (D57): the profile is identical to Damian's LRv2, which stops at 36 g,
+  // and Decent pulls a Londinium 18 g -> 36 g.
+  startRatio: 2.0,
   levers: [
     temperatureLever('steps[4].temperature', 84, 92, 'keeping the 89 / 88.5 / 88 °C shape'),
     yieldLever(25, 60, { min: 1.5, max: 2.8 }),
@@ -265,19 +279,21 @@ const allonge: Template = {
   id: 'allonge',
   name: 'Rao Allongé',
   style: 'Allongé',
-  shape: 'One steady 4.5 ml/s pour capped at 8.6 bar, stopping at 135 g',
+  shape: 'One steady 4.5 ml/s pour capped at 8.6 bar, stopping at about 5x the dose',
   description:
-    "Scott Rao's allongé: a long, fast shot at a steady 4.5 ml/s through a coarse espresso grind, aiming for an 8-9 bar peak in 35-40 s at about 1:5 (the default stop of 135 g is longer for doses under 27 g). A fruit bomb for very light, washed, high-grown coffees. Advanced: small grind or dose moves swing the pressure a lot.",
+    "Scott Rao's allongé: a long, fast shot at a steady 4.5 ml/s through a coarse espresso grind, aiming for an 8-9 bar peak in 35-40 s. It stops at about 5x the dose (90 g for 18 g). A fruit bomb for very light, washed, high-grown coffees. Advanced: small grind or dose moves swing the pressure a lot.",
   roastFit: ['light'],
   decaidDefaultId: 'profile:372f1be4c5e3641bbfe2',
   source: source('rao_allonge.json'),
   profile: normalizeProfile(allongeSource),
+  // 1:5 (D57): its own notes say "5:1 ratio".
+  startRatio: 5.0,
   levers: [
     temperatureLever('steps[1].temperature', 88, 96, 'and both steps share one temperature'),
-    // Decent's own 135 g stop is the ceiling (it is v1, so it must stay valid)
-    // and is 1:7.5 at an 18 g dose, so the ratio window reaches it. The notes
-    // aim for about 1:5, which the window also covers.
-    yieldLever(50, 135, { min: 4.0, max: 7.5 }, 10),
+    // 4-6 x dose: Decent pours an allongé "5:1 or 6:1", and beginners about
+    // 4:1. The 135 g ceiling is Decent's bundled stop (1:5.4 at a 25 g dose),
+    // which D35's hard bound keeps valid; v1 no longer starts there (D57).
+    yieldLever(50, 135, { min: 4.0, max: 6.0 }, 10),
     {
       id: 'flow',
       label: 'Flow rate',
@@ -319,9 +335,12 @@ const gentle: Template = {
   decaidDefaultId: 'profile:1baa29bd9d9dc6d47f2a',
   source: source('Gentle_and_sweet1.json'),
   profile: normalizeProfile(gentleSource),
+  // 1:2 (D57): Decent's guide calls for "a 1:2 ratio", and the file ships 36 g.
+  startRatio: 2.0,
   levers: [
     temperatureLever('steps[3].temperature', 84, 92, 'and all five steps share one temperature'),
-    yieldLever(25, 60, { min: 1.5, max: 2.5 }),
+    // Up to 3 x dose: Decent's guide pulls it "1:2 or 1:3".
+    yieldLever(25, 60, { min: 1.5, max: 3.0 }),
     {
       id: 'peak',
       label: 'Peak pressure',

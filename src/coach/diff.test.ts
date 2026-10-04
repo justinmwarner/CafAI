@@ -7,6 +7,7 @@ import { clone } from '../util/clone.ts';
 import { describeLeverChange, describeManualChange, describeManualSteps, diffProfiles, formatLeverValue } from './diff.ts';
 import { applyLever, findLever } from './levers.ts';
 import { getTemplate } from './templates/index.ts';
+import type { GrinderInfo } from './types.ts';
 
 const bloomingT = getTemplate('blooming-espresso')!;
 const dflowT = getTemplate('d-flow')!;
@@ -70,7 +71,12 @@ describe('describeManualChange (Crema leadChange, one variable)', () => {
   });
 
   it('turns manual changes into instructions for the hands', () => {
-    expect(describeManualSteps(grind('finer', 1, null))).toEqual(['Set the grinder 1 step finer before the next shot.']);
+    expect(describeManualSteps(grind('finer', 1, null))).toEqual([
+      "Turn the grinder 1 step finer before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings.",
+    ]);
+    expect(describeManualSteps(grind('coarser', null, null))).toEqual([
+      "Turn the grinder a little coarser before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings.",
+    ]);
     expect(describeManualSteps(grind('coarser', 2, '16'))).toEqual([
       'Set the grinder to 16 (2 steps coarser) before the next shot.',
     ]);
@@ -78,6 +84,44 @@ describe('describeManualChange (Crema leadChange, one variable)', () => {
       'Weigh 18.5 g of coffee for the next shot.',
     ]);
     expect(describeManualSteps({ variable: 'none', value: null, grind: null })).toEqual([]);
+  });
+});
+
+describe("grind text with Decaid's grinder library (D62)", () => {
+  const niche: GrinderInfo = { model: 'Niche Zero', settingType: 'numeric', smallStep: 0.5, bigStep: 2, values: null };
+  const ditting: GrinderInfo = { model: 'Ditting 807', settingType: 'preset', smallStep: null, bigStep: null, values: ['E1', 'E2', 'E3'] };
+  const grind = (direction: 'finer' | 'coarser', amount: number | null, setting: string | null) => ({
+    variable: 'grind' as const,
+    value: null,
+    grind: { direction, amount, setting },
+  });
+
+  it("says the new setting and that the step came from Decaid's library", () => {
+    expect(describeManualChange(grind('finer', 1, '14.5'), { doseG: 18, grinderSetting: '15' })).toBe('Grind 1 step finer: 15 -> 14.5');
+    expect(describeManualSteps(grind('finer', 1, '14.5'), { grinder: niche, fromDecaid: true })).toEqual([
+      'Set the grinder to 14.5 before the next shot (Decaid lists 0.5 steps for your Niche Zero).',
+    ]);
+    expect(describeManualSteps(grind('coarser', 1, 'E3'), { grinder: ditting, fromDecaid: true })).toEqual([
+      'Set the grinder to E3 before the next shot (Decaid lists 3 settings for your Ditting 807).',
+    ]);
+  });
+
+  it("names Decaid's step when CafAI could not work out the new setting", () => {
+    expect(describeManualSteps(grind('finer', 1, null), { grinder: niche })).toEqual([
+      'Turn the grinder 1 step finer before the next shot (Decaid lists 0.5 steps for your Niche Zero), then note the new setting in Settings.',
+    ]);
+  });
+
+  it("does not credit Decaid for a setting it did not check, or claim a step it does not have", () => {
+    expect(describeManualSteps(grind('finer', 1, '13.3'), { grinder: niche, fromDecaid: false })).toEqual([
+      'Set the grinder to 13.3 (1 step finer) before the next shot.',
+    ]);
+    expect(describeManualSteps(grind('finer', 1, '13'), { grinder: { ...niche, smallStep: null }, fromDecaid: true })).toEqual([
+      'Set the grinder to 13 (1 step finer) before the next shot.',
+    ]);
+    expect(describeManualSteps(grind('finer', 2, null), { grinder: { ...niche, smallStep: null } })).toEqual([
+      "Turn the grinder 2 steps finer before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings.",
+    ]);
   });
 });
 

@@ -7,9 +7,10 @@
  *
  * Crema dropped implausible values quietly. CafAI never does: anything out of
  * bounds is an error sentence addressed to the model (returned as an is_error
- * tool result so it can retry), never a quiet fix. The one adjustment made is
- * snapping to a lever's granularity, which is reported in `notes` and in the
- * plan's `to` value.
+ * tool result so it can retry), never a quiet fix. The adjustments made are
+ * snapping to a lever's granularity, reported in `notes` and in the plan's
+ * `to` value, and, when Decaid lists the grinder's step, turning a relative
+ * grind move into the new setting (grinder.ts), which the card shows.
  *
  * One variable per iteration: a template lever (a new profile version), the
  * grind or the dose (manual steps, no new version), or `none` to lock in a
@@ -17,6 +18,8 @@
  */
 import type { AdjustmentVariable, ProposeAdjustment, ProposeTemplates } from './contract.ts';
 import { describeLeverChange, describeManualChange, describeManualSteps, formatLeverValue } from './diff.ts';
+import { DOSE_RULES, knownDose } from './dose.ts';
+import { GRIND_MAX_STEPS, resolveGrindMove, sameSettingError } from './grinder.ts';
 import {
   applyLever,
   ceilToGrid,
@@ -31,7 +34,11 @@ import {
   snapToGranularity,
 } from './levers.ts';
 import { TEMPLATES } from './templates/index.ts';
-import type { Lever, ProfileJson, ProfileStep, Template } from './types.ts';
+import type { GrinderInfo, Lever, ProfileJson, ProfileStep, Template } from './types.ts';
+
+// Defined beside the code that needs them first (levers and grinder moves);
+// re-exported here, where the rest of CafAI has always found them.
+export { DOSE_RULES, GRIND_MAX_STEPS };
 
 export interface ValidationContext {
   template: Template;
@@ -42,6 +49,13 @@ export interface ValidationContext {
   scaleConnected: boolean;
   /** Current grinder setting as written on the grinder, when known. */
   grinderSetting: string | null;
+  /**
+   * The grinder linked from Decaid's library, when there is one. With its
+   * small step or its list of settings, a grind move becomes (or is checked
+   * against) a setting on the grinder's own grid. Absent or null: the grind
+   * move is passed through as before.
+   */
+  grinder?: GrinderInfo | null;
 }
 
 /** Workflow context fields to write together with the change. */
@@ -75,15 +89,16 @@ export interface ChangePlan {
   createsVersion: boolean;
   /** Adjustments the validator made, e.g. rounding to the lever's step. */
   notes: string[];
+  /**
+   * Grind plans only: where the new setting (contextPatch.grinderSetting)
+   * came from. `decaid`: worked out from, or checked against, the step or
+   * list in Decaid's grinder library; `model`: the model's own, unchecked;
+   * null: no new setting (the user notes it in Settings).
+   */
+  grindSettingFrom?: 'decaid' | 'model' | null;
 }
 
 export type Validation = { ok: true; plan: ChangePlan } | { ok: false; errors: string[] };
-
-/** Manual dose rules: sane grams, and small steps so the shot stays comparable. */
-export const DOSE_RULES = { min: 12, max: 25, maxDelta: 1, granularity: 0.1 } as const;
-
-/** Largest grind move per iteration, in steps of the grinder's own dial. */
-export const GRIND_MAX_STEPS = 5;
 
 const SLACK = 1e-9;
 
@@ -194,16 +209,18 @@ function validateProfileChange(input: ProposeAdjustment, ctx: ValidationContext)
 
   if (to > lever.max + SLACK) return fail([`${id}: ${v(to)} is above this template's maximum of ${v(lever.max)}.${tail}`]);
   if (to < lever.min - SLACK) return fail([`${id}: ${v(to)} is below this template's minimum of ${v(lever.min)}.${tail}`]);
-  if (lever.doseRatio && ctx.doseG !== null) {
+  // A dose outside 12-25 g counts as unknown: effectiveBounds ignores it, and so do these messages.
+  const dose = knownDose(ctx.doseG);
+  if (lever.doseRatio && dose !== null) {
     const ratio = lever.doseRatio;
     if (to > bounds.max + SLACK && !(from > bounds.max && to < from)) {
       return fail([
-        `${id}: ${v(to)} is above the maximum for ${doseWords(ctx.doseG)} (${v(bounds.max)}, 1:${ratio.max.toFixed(1)}).${tail}`,
+        `${id}: ${v(to)} is above the maximum for ${doseWords(dose)} (${v(bounds.max)}, 1:${ratio.max.toFixed(1)}).${tail}`,
       ]);
     }
     if (to < bounds.min - SLACK && !(from < bounds.min && to > from)) {
       return fail([
-        `${id}: ${v(to)} is below the minimum for ${doseWords(ctx.doseG)} (${v(bounds.min)}, 1:${ratio.min.toFixed(1)}).${tail}`,
+        `${id}: ${v(to)} is below the minimum for ${doseWords(dose)} (${v(bounds.min)}, 1:${ratio.min.toFixed(1)}).${tail}`,
       ]);
     }
   }
@@ -278,17 +295,23 @@ function validateGrind(input: ProposeAdjustment, ctx: ValidationContext): Valida
   }
   if (errors.length > 0 || !grind) return fail(errors);
 
-  // The setting is passed through exactly as written: it is the grinder's own
-  // dial, which no typed range can second-guess. Only a "new" setting equal
-  // to the current one is refused: it would be a move that changes nothing.
-  const setting = grind.setting?.trim() ? grind.setting.trim() : null;
+  // With a grinder from Decaid's library and a current setting CafAI can
+  // read, the move is worked out on (or checked against) the grinder's own
+  // grid. Otherwise the setting is passed through exactly as written: it is
+  // the grinder's own dial, which no typed range can second-guess. Only a
+  // "new" setting equal to the current one is refused: it changes nothing.
   const current = ctx.grinderSetting?.trim() ? ctx.grinderSetting.trim() : null;
-  if (setting !== null && current !== null && setting === current) {
-    return fail([
-      `grind.setting "${setting}" is the setting the grinder is on now. Give the new setting after the move (${grind.direction}), or null if you do not know it.`,
-    ]);
-  }
-  const normalized: ProposeAdjustment = { ...input, grind: { ...grind, setting } };
+  const dial = resolveGrindMove(ctx.grinder, current, grind);
+  if (dial && !dial.ok) return fail([dial.error]);
+  const given = grind.setting?.trim() ? grind.setting.trim() : null;
+  if (!dial && given !== null && current !== null && given === current) return fail([sameSettingError(given, grind.direction)]);
+
+  const setting = dial ? dial.move.setting : given;
+  const fromDecaid = dial !== null && setting !== null;
+  const normalized: ProposeAdjustment = {
+    ...input,
+    grind: { ...grind, amount: dial ? dial.move.steps : grind.amount, setting },
+  };
   return {
     ok: true,
     plan: {
@@ -301,10 +324,11 @@ function validateGrind(input: ProposeAdjustment, ctx: ValidationContext): Valida
       newProfile: null,
       contextPatch: setting !== null ? { grinderSetting: setting } : {},
       diffLines: [describeManualChange(normalized, { doseG: ctx.doseG, grinderSetting: ctx.grinderSetting })],
-      manualSteps: describeManualSteps(normalized),
+      manualSteps: describeManualSteps(normalized, { grinder: ctx.grinder ?? null, fromDecaid }),
       summary: input.summary.trim(),
       createsVersion: false,
-      notes: [],
+      notes: dial ? dial.move.notes : [],
+      grindSettingFrom: setting === null ? null : fromDecaid ? 'decaid' : 'model',
     },
   };
 }
