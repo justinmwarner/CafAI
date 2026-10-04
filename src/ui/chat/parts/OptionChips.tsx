@@ -39,15 +39,19 @@ export function OptionChips({ question, options, multiSelect, answer, disabled =
   const listed = options.filter((o) => o !== OTHER_OPTION);
   const ordered = [...listed, OTHER_OPTION];
   const answered = answer !== null;
-  const locked = answered || disabled || expired;
+  /** Answered, or set aside because the user typed in the chat instead. */
+  const closed = answered || expired;
+  const locked = closed || disabled;
   const trimmedOther = otherText.trim();
 
   const isChosen = (option: string) =>
     answered
       ? answer.selected.includes(option) || (option === OTHER_OPTION && answer.otherText !== null)
-      : option === OTHER_OPTION
-        ? otherOpen
-        : selected.includes(option);
+      : expired
+        ? false
+        : option === OTHER_OPTION
+          ? otherOpen
+          : selected.includes(option);
 
   const tap = (option: string) => {
     if (locked) return;
@@ -76,7 +80,7 @@ export function OptionChips({ question, options, multiSelect, answer, disabled =
     }
   };
 
-  const showSend = !answered && (multiSelect || otherOpen);
+  const showSend = !closed && (multiSelect || otherOpen);
 
   return (
     <Box component="form" onSubmit={send} sx={{ my: 0.5 }} aria-labelledby={questionId}>
@@ -117,7 +121,12 @@ export function OptionChips({ question, options, multiSelect, answer, disabled =
           Other: “{answer.otherText}”
         </Typography>
       ) : null}
-      {!answered && otherOpen ? (
+      {expired && !answered ? (
+        <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
+          Set aside: you answered in the chat instead.
+        </Typography>
+      ) : null}
+      {!closed && otherOpen ? (
         <TextField
           autoFocus
           fullWidth

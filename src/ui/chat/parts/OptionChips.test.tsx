@@ -95,6 +95,20 @@ describe('OptionChips', () => {
     expect(onAnswer).not.toHaveBeenCalled();
   });
 
+  it('closes a half-typed Other when the question is set aside', async () => {
+    const onAnswer = vi.fn();
+    const props = { question: 'How did it taste?', options: OPTIONS, multiSelect: false, answer: null, onAnswer };
+    const view = renderThemed(<OptionChips {...props} />);
+    await userEvent.click(screen.getByTestId(TID.optionChip('Other')));
+    await userEvent.type(screen.getByTestId(TID.otherInput), 'Quite th');
+    view.rerender(<OptionChips {...props} expired />);
+    expect(screen.queryByTestId(TID.otherInput)).toBeNull();
+    expect(screen.queryByTestId(TID.optionsSubmit)).toBeNull();
+    expect(screen.getByText('Set aside: you answered in the chat instead.')).toBeInTheDocument();
+    expect(screen.getByTestId(TID.optionChip('Other'))).toHaveAttribute('aria-checked', 'false');
+    expect(onAnswer).not.toHaveBeenCalled();
+  });
+
   it('ignores taps while the coach is busy', async () => {
     const onAnswer = setup({ disabled: true });
     await userEvent.click(screen.getByTestId(TID.optionChip('Sour / sharp')), { pointerEventsCheck: 0 });
