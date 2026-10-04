@@ -121,6 +121,11 @@ signature), streams text in small deltas, and streams tool inputs as several
    medium, d-flow low; dark -> londonium high, gentle-and-sweet medium,
    d-flow low; otherwise d-flow high, gentle-and-sweet medium,
    blooming-espresso medium, londonium low.
+7b. Plain user text, bag details saved, but no `propose_templates` result
+   that picked a template (the suggestions were set aside) -> text "Here are
+   the starting profiles again. Tap one to begin." + tool_use
+   `propose_templates` with the rule 7 ranking for the saved roast level (or
+   the roast words of the bag description).
 8. Anything else -> text "Got it. Pull a shot when you are ready, or tell me
    more about the coffee." End turn.
 

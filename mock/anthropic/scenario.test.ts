@@ -283,8 +283,15 @@ describe('scripted replies', () => {
   it('a question the user typed past is not a pick, a taste or a decision', () => {
     const typedPast = { answered: false, note: 'The user typed a message instead.' };
     const nudge = 'Got it. Pull a shot when you are ready, or tell me more about the coffee.';
+    // Typing past the suggestions is no pick: rule 7b offers them again.
     const pastTemplates = user(toolResult('t_save', { saved: true }), toolResult('t_tpl', typedPast), text('Which is sweetest?'));
-    expect(ok(call([INTAKE, INTAKE_REPLY, pastTemplates])).text).toBe(nudge);
+    const again = ok(call([INTAKE, INTAKE_REPLY, pastTemplates]));
+    expect(again.text).toBe('Here are the starting profiles again. Tap one to begin.');
+    expect(again.tools.map((t) => t.name)).toEqual([TOOL.proposeTemplates]);
+    expect((again.tools[0]?.input as { suggestions: Array<{ templateId: string }> }).suggestions[0]?.templateId).toBe(
+      'blooming-espresso',
+    );
+    expectValidInputs(again.tools);
 
     const pastTaste = user(toolResult('t_ask', typedPast), text('Is the grinder too coarse?'));
     const taste = ok(call([...UP_TO_SHOT, shot(BLOOMING_LEVERS), SHOT_REPLY, pastTaste]));

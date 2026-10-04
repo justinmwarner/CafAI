@@ -37,7 +37,7 @@ const PLACEHOLDERS: Record<CoachPhase, string> = {
   awaiting_shot: 'Pull a shot, or ask the coach',
   awaiting_feedback: 'Tap an answer, or say how it tasted',
   awaiting_confirmation: 'Confirm the change, or ask a question',
-  idle: 'Ask the coach',
+  idle: 'Ask for starting profiles, or ask a question',
 };
 
 /** Controller calls report failures through CoachState.error; this only stops unhandled rejections. */

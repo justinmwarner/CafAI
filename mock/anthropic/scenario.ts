@@ -479,9 +479,7 @@ function detectOrigin(text: string): string | null {
   return ORIGINS.find((o) => new RegExp(`\\b${o}\\b`, 'i').test(text)) ?? null;
 }
 
-function intake(script: Script, description: string): Reply {
-  const name = (description.split(',')[0] ?? '').trim().slice(0, 40).trim() || 'My coffee';
-  const roastLevel = detectRoast(description);
+function suggestionsFor(roastLevel: RoastLevel | null) {
   const ranking: Array<[(typeof TEMPLATE_IDS)[number], 'high' | 'medium' | 'low']> =
     roastLevel === 'light'
       ? [
@@ -501,6 +499,37 @@ function intake(script: Script, description: string): Reply {
             ['blooming-espresso', 'medium'],
             ['londonium', 'low'],
           ];
+  return ranking.map(([templateId, confidence]) => ({ templateId, confidence, reason: TEMPLATE_REASONS[templateId] }));
+}
+
+/** The roast level saved at intake (the save_bag_details call), else read from the bag description. */
+function savedRoast(messages: Message[]): RoastLevel | null {
+  for (const message of messages) {
+    if (message.role !== 'assistant') continue;
+    for (const block of toolUses(message)) {
+      if (block.name !== TOOL.saveBagDetails || !isRecord(block.input)) continue;
+      const level = block.input.roastLevel;
+      if (typeof level === 'string') return level as RoastLevel;
+    }
+  }
+  const description = messages.find((m) => m.role === 'user')?.content.find((b) => b.type === 'text');
+  return typeof description?.text === 'string' ? detectRoast(description.text) : null;
+}
+
+/** True once a template was picked (a propose_templates result naming one). */
+function templatePicked(messages: Message[]): boolean {
+  return messages.some(
+    (message, i) =>
+      message.role === 'user' &&
+      namedResults(messages, i).some(
+        (r) => r.name === TOOL.proposeTemplates && isRecord(r.payload) && typeof r.payload.picked === 'string',
+      ),
+  );
+}
+
+function intake(script: Script, description: string): Reply {
+  const name = (description.split(',')[0] ?? '').trim().slice(0, 40).trim() || 'My coffee';
+  const roastLevel = detectRoast(description);
   return {
     blocks: [
       { type: 'text', text: 'Lovely. Here is where I would start.' },
@@ -521,13 +550,7 @@ function intake(script: Script, description: string): Reply {
         type: 'tool_use',
         id: script.newToolId(),
         name: TOOL.proposeTemplates,
-        input: {
-          suggestions: ranking.map(([templateId, confidence]) => ({
-            templateId,
-            confidence,
-            reason: TEMPLATE_REASONS[templateId],
-          })),
-        },
+        input: { suggestions: suggestionsFor(roastLevel) },
       },
     ],
     stopReason: 'tool_use',
@@ -635,6 +658,23 @@ function decide(script: Script): Reply {
   const plain = texts.find((t) => !t.startsWith('[event:') && !t.startsWith(EVENT.context));
   const saved = messages.some((m) => m.role === 'assistant' && toolUses(m).some((b) => b.name === TOOL.saveBagDetails));
   if (plain !== undefined && !saved) return intake(script, plain);
+
+  // 7b. Described, but no starting profile picked (the suggestions were set
+  // aside): offer them again.
+  if (plain !== undefined && !templatePicked(messages)) {
+    return {
+      blocks: [
+        { type: 'text', text: 'Here are the starting profiles again. Tap one to begin.' },
+        {
+          type: 'tool_use',
+          id: script.newToolId(),
+          name: TOOL.proposeTemplates,
+          input: { suggestions: suggestionsFor(savedRoast(messages)) },
+        },
+      ],
+      stopReason: 'tool_use',
+    };
+  }
 
   // 8. Anything else.
   return say('Got it. Pull a shot when you are ready, or tell me more about the coffee.');

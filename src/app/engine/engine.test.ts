@@ -981,6 +981,16 @@ describe('coach engine', () => {
     });
   });
 
+  it('asks for starting profiles, not the bag details again, once the suggestions were set aside', async () => {
+    await engine.newBag();
+    scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);
+    await engine.sendText('Kiambu AA, light, washed');
+    scripts.push(() => [text('Blooming is the sweetest of them.')]);
+    await engine.sendText('Which is sweetest?');
+    expect(engine.getState().activeVersion).toBeNull();
+    expect(engine.getState().phase).toBe('idle');
+  });
+
   it('closes template cards and change cards that were answered by typing', async () => {
     await throughProposal();
     scripts.push(() => [text('Sure, ask away.')]);

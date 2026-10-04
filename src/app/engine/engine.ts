@@ -189,7 +189,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (names.includes(TOOL.proposeAdjustment)) return 'awaiting_confirmation';
     if (names.includes(TOOL.askUser)) return 'awaiting_feedback';
     if (names.includes(TOOL.proposeTemplates)) return 'choosing_template';
-    if (!activeVersion(s)) return 'intake';
+    // Described, but no profile yet (e.g. the suggestions were set aside).
+    if (!activeVersion(s)) return s.conversation.apiMessages.length === 0 ? 'intake' : 'idle';
     return 'awaiting_shot';
   }
 
