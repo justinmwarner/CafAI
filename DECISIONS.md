@@ -228,11 +228,17 @@ evidence lives. "Repo wins" means a cloned source contradicted
 - **D40. Chromium 91 is verified by running, not by reading.** The full coach
   loop runs in a real HeadlessChrome 91.0.4469.0 (`tools/chrome91/loop.mjs`)
   with zero page or console errors, and CI repeats it.
-- **D48. The chat follows the newest message itself.** x-chat's auto-scroll
-  follows new messages but not a card that grows after streaming, which left
-  confirm buttons below the fold. CafAI turns it off and sticks to the bottom
-  while the user is within 96 px of it; once they scroll up, it leaves the
-  scroll alone.
+- **D48. The chat follows the newest message itself** (`src/ui/chat/followNewest.ts`).
+  x-chat's auto-scroll follows new messages but not a card that grows after
+  streaming, which left confirm buttons below the fold. CafAI turns it off
+  and keeps the newest message in view: its end, or its start when it is
+  taller than the view (template cards are listed best first; at 962x602
+  three of them do not fit). Only the reader scrolling up stops following;
+  CafAI's own scrolls are recognized by position, because their scroll event
+  can arrive after more content rendered (which once left the taste chips
+  below the fold after a shot). Sending or tapping a card resumes following.
+  `e2e/chat-scroll.spec.ts` checks each prompt is inside the chat viewport at
+  all three sizes.
 - **D49. The skin zip carries LICENSE and NOTICE.** The zip is the
   distributed object code, so the GPL text and the credits travel with it;
   the release script refuses a zip without them.

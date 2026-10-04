@@ -33,7 +33,6 @@ import type {
   ChatMessagePart,
   ChatPartRendererMap,
   ChatPartRendererProps,
-  MessageListRootHandle,
 } from '@mui/x-chat/headless';
 import type { CoachUiMessage, CoachUiPart } from '../../app/types.ts';
 import { TID } from '../testIds.ts';
@@ -43,6 +42,7 @@ import { Notice } from './parts/Notice.tsx';
 import { OptionChips } from './parts/OptionChips.tsx';
 import { ShotCard } from './parts/ShotCard.tsx';
 import { TemplateCards } from './parts/TemplateCards.tsx';
+import { createFollowNewest, type FollowNewest, type NewestMessage } from './followNewest.ts';
 
 export interface ChatSurfaceProps {
   messages: readonly CoachUiMessage[];
@@ -265,43 +265,47 @@ const FEATURES: ChatBoxFeatures = {
   helperText: false,
   suggestions: false,
   scrollToBottom: true,
-  // ChatSurface follows new content itself (see useStickToBottom): x-chat's
+  // ChatSurface follows new content itself (followNewest.ts): x-chat's
   // buffer-based follow lets go when a tall card lands on a 602 px screen.
   autoScroll: false,
 };
 
 const SCROLLER_SELECTOR = '.MuiChatMessageList-scroller';
 const CONTENT_SELECTOR = '.MuiChatMessageList-content';
-/** Within this many px of the bottom counts as "reading the newest message". */
-const STICK_THRESHOLD_PX = 96;
+const MESSAGE_SELECTOR = '.MuiChatMessage-root';
+
+function newestMessage(scroller: HTMLElement): NewestMessage | null {
+  const all = scroller.querySelectorAll<HTMLElement>(MESSAGE_SELECTOR);
+  const element = all[all.length - 1];
+  if (!element) return null;
+  const top = element.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+  return { key: element, top, height: element.offsetHeight };
+}
 
 /**
- * Keep the newest message in view while the reader is at the bottom (or has
- * just acted), including when a card grows after it renders; leave the
- * scroll alone once they scroll up to read.
+ * Wire followNewest.ts to x-chat's scroller: follow every resize of the
+ * thread (a card that grows after it renders included) and every scroll.
  */
-function useStickToBottom(rootRef: { current: HTMLElement | null }, stickRef: { current: boolean }) {
+function useFollowNewest(rootRef: { current: HTMLElement | null }): { current: FollowNewest | null } {
+  const followerRef = useRef<FollowNewest | null>(null);
   useEffect(() => {
-    const root = rootRef.current;
-    const scroller = root?.querySelector<HTMLElement>(SCROLLER_SELECTOR) ?? null;
-    const content = root?.querySelector<HTMLElement>(CONTENT_SELECTOR) ?? null;
+    const scroller = rootRef.current?.querySelector<HTMLElement>(SCROLLER_SELECTOR) ?? null;
+    const content = rootRef.current?.querySelector<HTMLElement>(CONTENT_SELECTOR) ?? null;
     if (!scroller) return undefined;
-    const onScroll = () => {
-      stickRef.current = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < STICK_THRESHOLD_PX;
-    };
+    const follower = createFollowNewest(scroller, () => newestMessage(scroller));
+    followerRef.current = follower;
+    const onScroll = () => follower.onScroll();
     scroller.addEventListener('scroll', onScroll, { passive: true });
-    const observer =
-      typeof ResizeObserver === 'function'
-        ? new ResizeObserver(() => {
-            if (stickRef.current) scroller.scrollTop = scroller.scrollHeight;
-          })
-        : null;
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => follower.update()) : null;
     if (observer && content) observer.observe(content);
+    follower.update();
     return () => {
       scroller.removeEventListener('scroll', onScroll);
       observer?.disconnect();
+      followerRef.current = null;
     };
-  }, [rootRef, stickRef]);
+  }, [rootRef]);
+  return followerRef;
 }
 
 const SLOTS: ChatBoxSlots = {
@@ -341,7 +345,6 @@ export function ChatSurface(props: ChatSurfaceProps) {
     sendBlockedRef.current = sendBlocked;
   });
 
-  const listRef = useRef<MessageListRootHandle | null>(null);
   const followNextRef = useRef(false);
 
   const adapter = useMemo<ChatAdapter>(
@@ -385,29 +388,23 @@ export function ChatSurface(props: ChatSurfaceProps) {
 
   const chatMessages = useMemo(() => toChatMessages(messages, busy), [messages, busy]);
 
-  // Keep the newest message in view: on mount and on a bag switch (the
-  // thread is replaced), after the barista acted (sent, tapped a card), and
-  // for everything that arrives while they are reading at the bottom.
+  // Keep the newest message in view (followNewest.ts): on mount and on a bag
+  // switch (the thread is replaced), after the barista acted (sent, tapped a
+  // card), and for everything that arrives while they follow the thread.
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const stickRef = useRef(true);
-  useStickToBottom(rootRef, stickRef);
-  const scrollToNewest = useCallback(() => {
-    const scroller = rootRef.current?.querySelector<HTMLElement>(SCROLLER_SELECTOR);
-    if (scroller) scroller.scrollTop = scroller.scrollHeight;
-    else listRef.current?.scrollToBottom();
-  }, []);
+  const followerRef = useFollowNewest(rootRef);
   const firstId = messages[0]?.id;
   useLayoutEffect(() => {
-    stickRef.current = true;
-    scrollToNewest();
-  }, [firstId, scrollToNewest]);
+    followerRef.current?.reset();
+    followerRef.current?.update();
+  }, [firstId, followerRef]);
   useLayoutEffect(() => {
     if (followNextRef.current) {
       followNextRef.current = false;
-      stickRef.current = true;
+      followerRef.current?.resume();
     }
-    if (stickRef.current) scrollToNewest();
-  }, [chatMessages, scrollToNewest]);
+    followerRef.current?.update();
+  }, [chatMessages, followerRef]);
 
   const onComposerKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
     // Enter sends unless sending is blocked; then it does nothing, and the draft stays.
@@ -419,8 +416,6 @@ export function ChatSurface(props: ChatSurfaceProps) {
 
   const slotProps = useMemo<ChatBoxSlotProps>(
     () => ({
-      // ChatMessageList forwards its ref to MessageListRoot, whose handle scrolls.
-      messageList: { ref: listRef } as ChatBoxSlotProps['messageList'],
       composerRoot: { variant: 'compact', onSubmit: onComposerSubmit },
       composerInput: {
         placeholder,
@@ -477,6 +472,9 @@ const chatSx = {
     paddingBottom: '2px',
   },
   '& .MuiChatComposer-textArea': { fontSize: '1rem' },
+  // followNewest.ts owns the scroll position; the browser's scroll anchoring
+  // would move it on its own when content above the view changes size.
+  '& .MuiChatMessageList-scroller': { overflowAnchor: 'none' },
   // Matches x-chat's compact-composer selector so the 48 px touch target wins.
   '& .MuiChatComposer-root.MuiChatComposer-variantCompact .MuiChatComposer-sendButton': { width: 48, height: 48 },
 } as const;
