@@ -12,7 +12,8 @@
   ],
   "licenseFiles": [
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "LICENSE-ROBOTO.txt"
   ],
   "zipBaseName": "cafai",
   "manifest": {

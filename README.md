@@ -63,7 +63,7 @@ npm run dev:mock      # the app against the built-in Decaid + Claude mocks
 npm run dev           # the app against a real Decaid (see below)
 npm run typecheck && npm run lint && npm test
 npm run e2e           # Playwright, full loop against the mocks
-npm run release:zip   # release/cafai-<version>.zip (with LICENSE and NOTICE)
+npm run release:zip   # release/cafai-<version>.zip (with LICENSE, NOTICE and the font licence)
 ```
 
 **Against a real tablet or the Decaid simulator.** CafAI talks to

@@ -7,7 +7,8 @@
 // with the version from package.json, validates them, checks the bundle is a
 // single entry chunk (Decaid replaces skin files in place on update, so a
 // lazily loaded chunk could 404 in a running page), and zips dist/ plus the
-// GPL LICENSE and the NOTICE (credits) into release/cafai-<version>.zip.
+// licence files named in skin.config.json (the GPL LICENSE, the NOTICE with
+// credits, the Roboto font's OFL text) into release/cafai-<version>.zip.
 //
 // Adapted from Crema's web/scripts/validate-manifest.mjs and its release:zip
 // npm script (https://github.com/yarneo/crema, GPL-3.0); modified for CafAI.

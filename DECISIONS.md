@@ -241,9 +241,10 @@ evidence lives. "Repo wins" means a cloned source contradicted
   below the fold after a shot). Sending or tapping a card resumes following.
   `e2e/chat-scroll.spec.ts` checks each prompt is inside the chat viewport at
   all three sizes.
-- **D49. The skin zip carries LICENSE and NOTICE.** The zip is the
-  distributed object code, so the GPL text and the credits travel with it;
-  the release script refuses a zip without them.
+- **D49. The skin zip carries LICENSE, NOTICE and the font licence.** The
+  zip is the distributed object code, so the GPL text and the credits travel
+  with it, and the bundled Roboto files bring their SIL OFL 1.1 text
+  (`LICENSE-ROBOTO.txt`); the release script refuses a zip without them.
 - **D50. The resolved build target is asserted.** plugin-legacy re-derives
   `build.target` from `modernTargets` (and warns that it overrode it); a build
   plugin fails the build unless the result is `chrome91`.

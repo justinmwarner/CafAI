@@ -13,7 +13,7 @@ passes everything in "done means". Nothing was pushed anywhere.
 | Playwright (`npm run e2e`) | **24/24** at 962x602, 1280x800, 1920x1200 |
 | Full loop against the mock | pass: new bag -> 2-5 templates -> pick -> "<Bean> v1" uploaded -> scripted shot -> taste chips -> one-change diff confirmed -> v2 -> history; undo back to v1 |
 | API key stays local | the full-loop e2e searches every request the page made, and everything the mock Decaid received or stored: the key only ever goes to Anthropic, in the `x-api-key` header |
-| Release zip (`npm run release:zip`) | builds `release/cafai-0.1.0.zip`: `index.html`, `skin-manifest.json`, `manifest.json`, `LICENSE`, `NOTICE` at the root, one entry chunk, no mock code |
+| Release zip (`npm run release:zip`) | builds `release/cafai-0.1.0.zip`: `index.html`, `skin-manifest.json`, `manifest.json`, `LICENSE`, `NOTICE`, `LICENSE-ROBOTO.txt` at the root, one entry chunk, no mock code |
 | Real Chromium 91 | the full loop also runs in HeadlessChrome 91.0.4469.0 with zero page or console errors (`npm run smoke:chrome91:loop`) |
 | README | dev setup, tablet install, credits |
 
