@@ -162,19 +162,6 @@ export function DiffCard({ part, disabled = false, showUndo, onConfirm, onDeclin
         </Box>
       ) : null}
 
-      <Typography variant="body2" sx={{ mt: 1 }}>
-        <Box component="span" sx={{ color: 'text.secondary' }}>
-          Why:{' '}
-        </Box>
-        {part.rationale}
-      </Typography>
-      <Typography variant="body2" sx={{ mt: 0.5 }}>
-        <Box component="span" sx={{ color: 'text.secondary' }}>
-          Expect:{' '}
-        </Box>
-        {part.expectedEffect}
-      </Typography>
-
       {pending ? (
         <>
           {part.error ? (
@@ -214,6 +201,23 @@ export function DiffCard({ part, disabled = false, showUndo, onConfirm, onDeclin
           <StatusLine part={part} showUndo={showUndo} disabled={disabled} onUndo={onUndo} />
         </Box>
       )}
+
+      {/* The reasoning comes after the decision, so even the longest card the
+          coach may write keeps Confirm in view when it arrives (962x602). */}
+      <Box data-testid={TID.diffReason} sx={{ mt: 1.25, pt: 1, borderTop: 1, borderColor: 'divider' }}>
+        <Typography variant="body2">
+          <Box component="span" sx={{ color: 'text.secondary' }}>
+            Why:{' '}
+          </Box>
+          {part.rationale}
+        </Typography>
+        <Typography variant="body2" sx={{ mt: 0.5 }}>
+          <Box component="span" sx={{ color: 'text.secondary' }}>
+            Expect:{' '}
+          </Box>
+          {part.expectedEffect}
+        </Typography>
+      </Box>
     </Paper>
   );
 }

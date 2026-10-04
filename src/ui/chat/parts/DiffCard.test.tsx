@@ -103,4 +103,13 @@ describe('DiffCard', () => {
     setup(part({ status: 'applied', versionLabel: null }));
     expect(screen.getByText('Confirmed. Make the change before your next shot.')).toBeInTheDocument();
   });
+
+  it('puts the decision before the reasoning, so Confirm stays in view on the longest card', () => {
+    setup(part({ rationale: 'r'.repeat(400), expectedEffect: 'e'.repeat(200) }));
+    const confirm = screen.getByTestId(TID.diffConfirm);
+    const reason = screen.getByTestId(TID.diffReason);
+    expect(confirm.compareDocumentPosition(reason) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(reason).toHaveTextContent('r'.repeat(400));
+    expect(reason).toHaveTextContent('e'.repeat(200));
+  });
 });

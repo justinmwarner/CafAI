@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { REVEAL_MARGIN_PX, createFollowNewest, type ScrollBox } from './followNewest.ts';
 
 /** A thread of stacked messages in a scroller that clamps like a browser. */
-function thread(viewport = 400) {
+function thread(initialViewport = 400) {
   const messages: Array<{ height: number }> = [];
   let top = 0;
+  let viewport = initialViewport;
   const box: ScrollBox = {
     get scrollTop() {
       return top;
@@ -15,7 +16,9 @@ function thread(viewport = 400) {
     get scrollHeight() {
       return Math.max(viewport, messages.reduce((sum, m) => sum + m.height, 0));
     },
-    clientHeight: viewport,
+    get clientHeight() {
+      return viewport;
+    },
   };
   const follower = createFollowNewest(box, () => {
     const last = messages[messages.length - 1];
@@ -34,6 +37,11 @@ function thread(viewport = 400) {
     readerScrollsTo(to: number) {
       box.scrollTop = to;
       follower.onScroll();
+    },
+    /** A banner appears above the chat (or a keyboard opens): the view gets shorter. */
+    resizeView(height: number) {
+      viewport = height;
+      top = Math.min(top, Math.max(0, box.scrollHeight - height)); // the browser re-clamps
     },
     gapToBottom: () => box.scrollHeight - box.scrollTop - box.clientHeight,
     topOf: (index: number) => messages.slice(0, index).reduce((sum, m) => sum + m.height, 0),
@@ -140,6 +148,17 @@ describe('following the newest message', () => {
     t.add(60);
     t.follower.update();
     expect(t.gapToBottom()).toBe(0);
+  });
+
+  it('keeps the newest prompt in view when the view shrinks under it', () => {
+    const t = thread(400);
+    for (let i = 0; i < 5; i++) t.add(150);
+    t.follower.update();
+    t.follower.onScroll();
+    t.resizeView(310); // the "machine is running…" banner appears
+    t.follower.update(); // the resize observer fires
+    expect(t.gapToBottom()).toBe(0);
+    expect(t.follower.following).toBe(true);
   });
 
   it('starts over on a new thread', () => {

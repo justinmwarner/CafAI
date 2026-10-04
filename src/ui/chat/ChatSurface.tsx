@@ -284,7 +284,8 @@ function newestMessage(scroller: HTMLElement): NewestMessage | null {
 
 /**
  * Wire followNewest.ts to x-chat's scroller: follow every resize of the
- * thread (a card that grows after it renders included) and every scroll.
+ * thread (a card that grows after it renders included) and of the view, and
+ * every scroll.
  */
 function useFollowNewest(rootRef: { current: HTMLElement | null }): { current: FollowNewest | null } {
   const followerRef = useRef<FollowNewest | null>(null);
@@ -298,6 +299,9 @@ function useFollowNewest(rootRef: { current: HTMLElement | null }): { current: F
     scroller.addEventListener('scroll', onScroll, { passive: true });
     const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => follower.update()) : null;
     if (observer && content) observer.observe(content);
+    // The view itself shrinks when a banner appears above the chat (or an
+    // on-screen keyboard resizes the page): keep the newest prompt in view.
+    if (observer) observer.observe(scroller);
     follower.update();
     return () => {
       scroller.removeEventListener('scroll', onScroll);
