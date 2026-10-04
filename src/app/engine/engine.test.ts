@@ -561,6 +561,33 @@ describe('coach engine', () => {
     expect(engine.getState().error).toBeNull();
   });
 
+  it('says at start-up when the machine runs another profile, and loads the version only on Retry', async () => {
+    await throughTemplatePick();
+    engine.dispose();
+    engine = build(); // a page load; the fake machine keeps running what it is told below
+    machine.loaded = { ...baseProfile, title: 'Picked in another skin', target_weight: 99 };
+    await engine.start();
+    await vi.waitFor(() =>
+      expect(engine.getState().error).toBe('The machine is running "Picked in another skin", not Kiambu AA v1. Tap Retry to load it.'),
+    );
+    expect(machine.loaded.title).toBe('Picked in another skin');
+    await engine.retry();
+    expect(machine.loaded.title).toBe('Kiambu AA v1');
+    expect(engine.getState().error).toBeNull();
+  });
+
+  it('starts quietly when the machine already runs the active version', async () => {
+    await throughTemplatePick();
+    const v1 = machine.loaded;
+    engine.dispose();
+    engine = build();
+    machine.loaded = v1;
+    await engine.start();
+    await engine.retry(); // runs after the queued start-up check
+    expect(engine.getState().error).toBeNull();
+    expect(engine.getState().activeVersion?.title).toBe('Kiambu AA v1');
+  });
+
   it('remembers the new grinder setting after a confirmed grind change, here and in Decaid', async () => {
     await throughShot();
     scripts.push(() => [

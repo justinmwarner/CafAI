@@ -875,6 +875,28 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     emit();
   }
 
+  /**
+   * At start-up, say so when the machine runs something other than the active
+   * bag's version (another skin, or a profile picked on the machine). Loading
+   * it is left to the user's Retry: opening CafAI alone never changes the machine.
+   */
+  async function checkMachineProfile(): Promise<void> {
+    const s = session;
+    const version = activeVersion(s);
+    if (!s || !version) return;
+    try {
+      const workflow = await api.getWorkflow();
+      if (!workflow.profile || runsVersion(workflow.profile, version)) return;
+      loadProblem = {
+        versionId: version.id,
+        message: `The machine is running "${workflow.profile.title}", not ${version.title}. Tap Retry to load it.`,
+      };
+      emit();
+    } catch {
+      // Decaid unreachable: nothing to compare yet.
+    }
+  }
+
   async function retryActivation(versionId: string): Promise<void> {
     const s = session;
     const version = s?.versions.find((v) => v.id === versionId);
@@ -1125,6 +1147,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         if (event.type === 'finished') void enqueue(() => handleShotFinished(event.shotId));
       });
       emit();
+      void enqueue(checkMachineProfile);
     },
     dispose() {
       unsubscribeShot?.();
