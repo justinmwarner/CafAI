@@ -8,15 +8,27 @@
  *
  *   await page.evaluate(() => window.__CAFAI_MOCK__.player.start());
  *   await page.evaluate(() => window.__CAFAI_MOCK__.state.setMachineConnected(false));
+ *   await page.evaluate(() => window.__CAFAI_MOCK__.state.getMachineProfile().title);
  *
- * URL switches, read once at start: ?mockSpeed=N (wall-clock compression),
- * ?mockMachine=0 and ?mockScale=0 (start disconnected), ?mockGhc=1 (shots
- * start on the machine), ?mockExamples=0 (no example shot or CafAI profile).
+ * URL switches, read once at start (mock/decaid/urlOptions.ts):
+ *   ?mockSpeed=N            wall-clock compression of shots and activities
+ *   ?mockMachine=0          start with the machine disconnected
+ *   ?mockScale=0            start with the scale disconnected
+ *   ?mockGhc=1              shots start on the machine (group-head controller)
+ *   ?mockExamples=0         no example shot or example CafAI profile
+ *   ?mockUploadMs=N         the machine takes a new profile N ms after a
+ *                           workflow PUT (default 800; wall clock, not scaled
+ *                           by mockSpeed; 0 is at once)
+ *   ?mockNoMachineProfile=1 POST /api/v1/machine/profile answers 404 "Route
+ *                           not found", like an older Decaid
+ *   ?mockGrinders=0         Decaid's grinder library starts empty (by default
+ *                           it holds three test grinders)
  */
 import { setupWorker, type SetupWorker } from 'msw/browser';
-import { createDecaidMock, type CreateDecaidMockOptions, type MockHandler } from './decaid/index.ts';
+import { createDecaidMock, type MockHandler, type CreateDecaidMockOptions } from './decaid/index.ts';
 import type { MockDecaid } from './decaid/state.ts';
 import type { ShotPlayer } from './decaid/shotPlayer.ts';
+import { mockOptionsFromUrl } from './decaid/urlOptions.ts';
 
 export interface CafaiMockHandle {
   state: MockDecaid;
@@ -37,18 +49,6 @@ export interface StartMockWorkerOptions {
 /** How e2e code can type the global: `(window as CafaiMockWindow).__CAFAI_MOCK__`. */
 export type CafaiMockWindow = Window & { __CAFAI_MOCK__?: CafaiMockHandle };
 
-function urlOptions(search: string): CreateDecaidMockOptions {
-  const params = new URLSearchParams(search);
-  const options: CreateDecaidMockOptions = {};
-  const speed = Number(params.get('mockSpeed'));
-  if (params.has('mockSpeed') && Number.isFinite(speed) && speed > 0) options.speed = speed;
-  if (params.get('mockMachine') === '0') options.machineConnected = false;
-  if (params.get('mockScale') === '0') options.scaleConnected = false;
-  if (params.get('mockGhc') === '1') options.ghc = true;
-  if (params.get('mockExamples') === '0') options.seedExamples = false;
-  return options;
-}
-
 /**
  * Chromium 91 (the floor of Decent's tablets) has no crypto.randomUUID, which
  * MSW's page runtime may call. Mock builds only; the app itself uses newId().
@@ -67,7 +67,7 @@ function polyfillRandomUuid(): void {
 
 export async function startMockWorker(options: StartMockWorkerOptions = {}): Promise<CafaiMockHandle & { worker: SetupWorker }> {
   polyfillRandomUuid();
-  const fromUrl = urlOptions(window.location.search);
+  const fromUrl = mockOptionsFromUrl(window.location.search);
   const mock = createDecaidMock({ ...fromUrl, ...options.mock, speed: options.speed ?? options.mock?.speed ?? fromUrl.speed ?? 1 });
   const worker = setupWorker(...mock.handlers, ...(options.extraHandlers ?? []), ...mock.fallback);
   await worker.start({

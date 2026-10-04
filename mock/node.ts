@@ -21,7 +21,7 @@ export interface MockServer {
   state: MockDecaid;
   player: ShotPlayer;
   setSpeed(speed: number): void;
-  /** Stop the player and close the server. */
+  /** Stop the player and any profile upload, and close the server. */
   close(): void;
 }
 
@@ -35,6 +35,7 @@ export function createMockServer(extraHandlers: MockHandler[] = [], options: Cre
     setSpeed: (speed) => mock.player.setSpeed(speed),
     close() {
       mock.player.dispose();
+      mock.state.dispose();
       server.close();
     },
   };

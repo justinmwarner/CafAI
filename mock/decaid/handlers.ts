@@ -8,11 +8,17 @@
  * 400 `{error, message}` for bad input, KV misses as 200 `null`, ETags with
  * 304 on the conditional routes). Unknown routes on :8080 answer shelf's
  * plain-text 404 (see `decaidFallbackHandlers`).
+ *
+ * Machine writes queue behind each other as on Decaid's DE1 write queue
+ * (machine.ts): POST /machine/profile and every state request but idle wait
+ * for a profile upload in flight. The grinder routes follow
+ * grinders_handler.dart (grinders.ts).
  */
 import { http, HttpResponse, type HttpHandler } from 'msw';
 import type { MachineStateName } from '../../src/api/types.ts';
 import { fixtures } from '../fixtures/index.ts';
 import { MockHttpError } from './errors.ts';
+import { isPlainObject } from './json.ts';
 import { sha256Hex } from './sha256.ts';
 import type { ShotPlayer } from './shotPlayer.ts';
 import type { MockDecaid } from './state.ts';
@@ -87,7 +93,14 @@ function parseBody(text: string): unknown {
 
 /** Decaid's FormatException text for a body jsonDecode cannot read. */
 function invalidJson(text: string): string {
+  if (!text.trim()) return 'FormatException: Unexpected end of input (at character 1)';
   return `FormatException: Unexpected character (at character 1)\n${text.slice(0, 40)}`;
+}
+
+/** GrindersHandler runs every body through jsonDecode, so an empty one is a FormatException too. */
+function parseGrinderBody(text: string): unknown {
+  if (!text.trim()) throw new SyntaxError('empty body');
+  return JSON.parse(text) as unknown;
 }
 
 /** The raw path segments after /api/v1/store (Decaid never decodes them). */
@@ -143,7 +156,7 @@ export function decaidHttpHandlers(state: MockDecaid, player: ShotPlayer): HttpH
       requireMachine();
       return json(state.getMachineSnapshot());
     }),
-    route('put', '/machine/state/:newState', ({ params }) => {
+    route('put', '/machine/state/:newState', async ({ params }) => {
       requireMachine();
       const name = params.newState ?? '';
       if (!(MACHINE_STATES as readonly string[]).includes(name)) {
@@ -162,7 +175,29 @@ export function decaidHttpHandlers(state: MockDecaid, player: ShotPlayer): HttpH
         return json(fixtures.errorBlockNoScale(), 400);
       }
       state.machineCommands.push(name);
-      player.command(name);
+      if (name === 'idle') {
+        // Decaid stops at once, outside the write queue (De1Controller.requestMachineState).
+        player.command(name);
+        return json(null);
+      }
+      // Every other request queues behind earlier machine writes, an upload in flight included.
+      await state.runMachineWrite(() => {
+        requireMachine();
+        player.command(name);
+      });
+      return json(null);
+    }),
+    route('post', '/machine/profile', async ({ bodyText }) => {
+      if (!state.machineProfileRoute) return plain('Route not found', 404);
+      requireMachine();
+      let body: unknown;
+      try {
+        body = JSON.parse(bodyText) as unknown;
+      } catch {
+        return json({ error: 'Invalid JSON body' }, 400);
+      }
+      if (!isPlainObject(body)) return json({ error: 'Invalid JSON body' }, 400);
+      await state.loadMachineProfile(body);
       return json(null);
     }),
     route('get', '/machine/capabilities', () => json({ capabilities: state.getCapabilities() })),
@@ -270,6 +305,34 @@ export function decaidHttpHandlers(state: MockDecaid, player: ShotPlayer): HttpH
       return json(state.updateShot(params.id ?? '', body));
     }),
     route('delete', '/shots/:id', ({ params }) => json(state.deleteShot(params.id ?? ''))),
+
+    // ---- grinder library -------------------------------------------------------------------
+    route('get', '/grinders', ({ request, url }) =>
+      conditional(request, state.listGrinders({ includeArchived: url.searchParams.get('includeArchived') })),
+    ),
+    route('get', '/grinders/:id', ({ params }) => json(state.getGrinder(params.id ?? ''))),
+    route('post', '/grinders', ({ bodyText }) => {
+      let body: unknown;
+      try {
+        body = parseGrinderBody(bodyText);
+      } catch {
+        return json({ error: invalidJson(bodyText) }, 400);
+      }
+      return json(state.createGrinder(body), 201);
+    }),
+    route('put', '/grinders/:id', ({ params, bodyText }) => {
+      const id = params.id ?? '';
+      // Decaid looks the grinder up before it reads the body.
+      state.getGrinder(id);
+      let body: unknown;
+      try {
+        body = parseGrinderBody(bodyText);
+      } catch {
+        return json({ error: invalidJson(bodyText) }, 400);
+      }
+      return json(state.updateGrinder(id, body));
+    }),
+    route('delete', '/grinders/:id', ({ params }) => json(state.deleteGrinder(params.id ?? ''))),
 
     // ---- key-value store (raw namespace and key) -------------------------------------------
     route('get', '/store/:namespace', ({ request, url }) => {

@@ -1,17 +1,20 @@
 /**
- * The mock DE1: plays shots that follow the active workflow profile, plus
- * steam / hot water / flush, sleep and tare.
+ * The mock DE1: plays shots of the profile the machine holds (machine.ts),
+ * plus steam / hot water / flush, sleep and tare.
  *
  * A shot is a deterministic simulation: 5 Hz machine frames with local
  * zone-less timestamps, ~2 s of preparingForShot, then the profile's steps
  * (flow steps hold flow, pressure steps hold pressure, smooth steps ramp,
  * exits, step weight exits and limiters honoured), preinfusion for frames
  * below target_volume_count_start and pouring after, and a puck model that
- * turns pumped water into cup weight. Stop-at-weight uses
- * workflow.context.targetYield exactly like Decaid's shot sequencer, and the
- * shotState frames, the decision bodies and the persisted ShotRecord follow
- * shot_sequencer.dart / de1_state_manager.dart. Wall-clock playback can be
- * compressed with `speed`; data timestamps stay realistic.
+ * turns pumped water into cup weight. Decaid's shot sequencer reads the
+ * workflow, not the machine: stop-at-weight uses workflow.context.targetYield,
+ * and with no scale the volumetric stop uses context.targetWaterVolume or the
+ * workflow profile's target_volume, exactly like shot_sequencer.dart. The
+ * shotState frames, the decision bodies and the persisted ShotRecord (a copy
+ * of the workflow at shot end) follow shot_sequencer.dart /
+ * de1_state_manager.dart. Wall-clock playback can be compressed with
+ * `speed`; data timestamps stay realistic.
  */
 import type {
   MachineSnapshot,
@@ -43,7 +46,10 @@ const HEADSPACE_ML = 8;
 const FILL_FLOW = 6;
 const MAX_FLOW = 8;
 const MAX_PRESSURE = 12;
+/** Puck resistance in bar per (ml/s)² once wet: a fine espresso grind. */
 const R0 = 2.4;
+/** Decaid's default volumeFlowMultiplier: the volume stop looks this many seconds of flow ahead. */
+const VOLUME_LOOK_AHEAD_S = 0.3;
 const DRIP_START = 0.4;
 const RISE_TAU_S = 1.2;
 const DRIP_TAU_S = 3;
@@ -56,9 +62,22 @@ const MAX_STEPS_S = 150;
 export type MockActivity = 'espresso' | 'steam' | 'hotWater' | 'flush' | 'steamRinse' | 'cleaning' | 'descaling' | 'airPurge';
 
 export interface ShotSimulationInput {
+  /** The profile the machine runs. */
   profile: WireProfile;
   /** context.targetYield; 0 turns stop-at-weight off. */
   targetYield: number;
+  /**
+   * Decaid's volumetric stop in ml, used only while no scale reports:
+   * context.targetWaterVolume, else the workflow profile's target_volume.
+   * Defaults to `profile.target_volume`; null or 0 is off.
+   */
+  targetVolume?: number | null;
+  /** The frame Decaid counts volume from (the workflow profile's target_volume_count_start); defaults to the profile's. */
+  volumeCountStart?: number;
+  /** Decaid's volumeFlowMultiplier setting (default 0.3). */
+  volumeFlowMultiplier?: number;
+  /** How hard the wet puck resists, in bar per (ml/s)²: 2.4 (default) is an espresso grind, about 0.4 a coarse allongé grind. */
+  puckResistance?: number;
   doseG: number;
   scaleConnected: boolean;
   /** gatewayMode "full": Decaid neither stops at weight nor honours step weights. */
@@ -77,7 +96,7 @@ export interface SimFrame {
   atMs: number;
   machine: MachineSnapshot;
   scale: WeightSnapshot | null;
-  /** ml pumped since profileFrame >= target_volume_count_start. */
+  /** ml pumped since the frame Decaid counts from (target_volume_count_start). */
   volume: number;
   /** shotState frames to publish after this machine frame. */
   events: ShotStateEvent[];
@@ -130,8 +149,16 @@ function targetOf(step: ProfileStep): number {
 export function createShotSimulation(input: ShotSimulationInput): ShotSimulation {
   const steps = input.profile.steps as ProfileStep[];
   const countStart = input.profile.target_volume_count_start;
+  const volumeCountStart = input.volumeCountStart ?? countStart;
   const saturationMl = Math.max(8, input.doseG * 0.8);
+  const puckResistance = input.puckResistance !== undefined && input.puckResistance > 0 ? input.puckResistance : R0;
   const stopAtWeight = input.scaleConnected && input.targetYield > 0 && !input.bypassSaw;
+  // shot_sequencer.dart ~464-486: the volume stop applies only when no scale
+  // sample is there (scale == null or lost), SAW is not bypassed and the
+  // machine has no stop-at-weight of its own (a DE1 never has).
+  const targetVolume = (input.targetVolume === undefined ? input.profile.target_volume : input.targetVolume) ?? 0;
+  const stopAtVolume = !input.scaleConnected && !input.bypassSaw && targetVolume > 0;
+  const volumeLookAheadS = input.volumeFlowMultiplier ?? VOLUME_LOOK_AHEAD_S;
   const random = seededRandom(input.seed ?? 1);
   const temps = input.startTemperatures ?? { mix: 89.9, group: 88.05, steam: 148 };
 
@@ -242,7 +269,7 @@ export function createShotSimulation(input: ShotSimulationInput): ShotSimulation
   function physics(step: ProfileStep | null): { pressure: number; flow: number } {
     const fill = Math.min(1, absorbed / saturationMl);
     const erosion = 0.55 + 0.45 * Math.exp(-wetSeconds / 30);
-    const resistance = R0 * fill ** 3 * erosion;
+    const resistance = puckResistance * fill ** 3 * erosion;
     const headspaceFull = headspace >= HEADSPACE_ML - 1e-9;
     let targets = { pressure: 0, flow: 0 };
 
@@ -375,7 +402,7 @@ export function createShotSimulation(input: ShotSimulationInput): ShotSimulation
     lastTargets = targets;
     stepElapsed += DT;
     stepsSeconds += DT;
-    if (stepIndex >= countStart) volume += Math.max(0, flow) * DT;
+    if (stepIndex >= volumeCountStart) volume += Math.max(0, flow) * DT;
     const temperatures = temperaturesFor(step);
     const substate = stepIndex < countStart ? 'preinfusion' : 'pouring';
     const machine = snapshot(atMs, 'espresso', substate, targets, stepIndex, temperatures.targetMix, temperatures.targetGroup);
@@ -410,6 +437,23 @@ export function createShotSimulation(input: ShotSimulationInput): ShotSimulation
         ),
         events,
       );
+    }
+
+    if (stopAtVolume) {
+      // Strictly greater, with the reported flow as the look-ahead, as Decaid does.
+      const projectedVolume = volume + machine.flow * volumeLookAheadS;
+      if (projectedVolume > targetVolume) {
+        return enterStopping(
+          atMs,
+          machine,
+          stopDecision(
+            'targetVolume',
+            `Target volume ${dartDouble(targetVolume)}ml reached (projected: ${dartDouble(projectedVolume)}). Stopping shot.`,
+            { targetVolume, projectedVolume },
+          ),
+          events,
+        );
+      }
     }
 
     // Step exits, decided on this sample and taking effect on the next.
@@ -634,6 +678,13 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
       persist(sim);
       state.lastProfileFrame = sim.lastProfileFrame;
     }
+    // Without a scale there is no stopping tail, so the last frame is still
+    // mid-pour: Decaid asks the DE1 for idle after its own stop, and the DE1
+    // goes idle by itself after pouringDone.
+    if (state.getMachineSnapshot().state.state === 'espresso') {
+      resting = 'idle';
+      emitResting();
+    }
     state.publishShotState(idleEvent());
     measurements = [];
     settle();
@@ -689,16 +740,24 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
 
   function beginEspresso(): void {
     const workflow = state.getWorkflow();
+    const settings = state.getSettings();
     const current = state.getMachineSnapshot();
+    const multiplier = settings.volumeFlowMultiplier;
     shotCount += 1;
     shotId = newId();
     measurements = [];
     simulation = createShotSimulation({
-      profile: workflow.profile,
+      // The DE1 brews what it holds, which lags the workflow while an upload
+      // runs; Decaid's sequencer takes its targets from the workflow
+      // (de1_state_manager.dart _startShotSequencer).
+      profile: state.getMachineProfile(),
       targetYield: workflow.context?.targetYield ?? 0,
+      targetVolume: workflow.context?.targetWaterVolume ?? workflow.profile.target_volume,
+      volumeCountStart: workflow.profile.target_volume_count_start,
+      volumeFlowMultiplier: typeof multiplier === 'number' && Number.isFinite(multiplier) ? multiplier : undefined,
       doseG: workflow.context?.targetDoseWeight ?? 18,
       scaleConnected: state.isScaleConnected(),
-      bypassSaw: state.getSettings().gatewayMode === 'full',
+      bypassSaw: settings.gatewayMode === 'full',
       startMs: state.clock.now(),
       shotId,
       staleFrame: state.lastProfileFrame,

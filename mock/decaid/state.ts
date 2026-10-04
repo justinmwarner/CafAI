@@ -25,9 +25,11 @@ import type {
   ShotStateEvent,
   WaterLevels,
   WeightSnapshot,
+  WireProfile,
   Workflow,
 } from '../../src/api/types.ts';
 import { clone } from '../../src/util/clone.ts';
+import { newId } from '../../src/util/id.ts';
 import blooming from '../../src/coach/templates/source/Blooming_espresso.json';
 import dflow from '../../src/coach/templates/source/D-Flow____default.json';
 import londonium from '../../src/coach/templates/source/Londonium.json';
@@ -36,7 +38,9 @@ import gentle from '../../src/coach/templates/source/Gentle_and_sweet1.json';
 import { fixtures } from '../fixtures/index.ts';
 import { createDataClock, formatLocalTimestamp, formatUtcTimestamp, type DataClock } from './clock.ts';
 import { DartError, MockHttpError } from './errors.ts';
+import { createGrinderRecord, seedGrinders, sortGrinders, updateGrinderRecord, type GrinderRecord } from './grinders.ts';
 import { deepMergeJson, isPlainObject, type JsonObject } from './json.ts';
+import { createMachineProfile, DEFAULT_UPLOAD_MS } from './machine.ts';
 import { buildProfileRecord, normalizeProfile, profileHash } from './profiles.ts';
 import { normalizeWorkflow, validateWorkflowPatch } from './workflow.ts';
 
@@ -62,6 +66,15 @@ export interface MockDecaidOptions {
   settings?: Partial<DecaidSettings>;
   /** Seed the example CafAI profile record and the example shot (default true). Bundled defaults are always seeded. */
   seedExamples?: boolean;
+  /** Seed three test grinders in Decaid's grinder library (default true). */
+  seedGrinders?: boolean;
+  /**
+   * How long the DE1 takes to take a new profile, in wall-clock ms (default
+   * 800; not scaled by the player's speed). 0 uploads at once.
+   */
+  uploadMs?: number;
+  /** false: POST /api/v1/machine/profile answers 404 "Route not found", like an older Decaid (default true). */
+  machineProfileRoute?: boolean;
   /** Wall clock in epoch ms (default Date.now). */
   now?: () => number;
 }
@@ -152,7 +165,26 @@ export interface MockDecaid {
 
   // Workflow
   getWorkflow(): Workflow;
+  /** PUT /workflow; a profile that differs from the machine's starts an upload (see machine.ts). */
   updateWorkflow(body: unknown): Workflow;
+
+  // The machine's own profile, separate from the workflow's (machine.ts)
+  /** The profile the DE1 holds and a shot runs (a copy). */
+  getMachineProfile(): WireProfile;
+  /** An upload to the DE1 is in flight. */
+  isUploadingProfile(): boolean;
+  /**
+   * POST /machine/profile with a parsed body: waits for any upload in flight,
+   * uploads when the machine holds something else, then resolves. Rejects
+   * with Decaid's 500 bodies (no machine; a profile it cannot read).
+   */
+  loadMachineProfile(profile: unknown): Promise<void>;
+  /** Run a machine write behind every write queued before it (Decaid's DE1 write queue). */
+  runMachineWrite<T>(write: () => T | Promise<T>): Promise<T>;
+  /** false: POST /machine/profile is missing, as on an older Decaid. */
+  readonly machineProfileRoute: boolean;
+  /** Stop timers (an upload in flight); the mock is not used after this. */
+  dispose(): void;
 
   // Profiles
   listProfiles(query: { visibility?: string | null; includeHidden?: string | boolean | null; parentId?: string | null }): ProfileRecord[];
@@ -173,6 +205,17 @@ export interface MockDecaid {
   updateShot(id: string, body: unknown): ShotRecord;
   deleteShot(id: string): { success: true; id: string };
   addShot(record: ShotRecord): void;
+
+  // Grinders (Decaid's grinder library, grinders.ts)
+  /** Newest edit first; archived ones only with includeArchived "true". */
+  listGrinders(query?: { includeArchived?: string | boolean | null }): GrinderRecord[];
+  getGrinder(id: string): GrinderRecord;
+  /** POST /grinders: 400 for a missing model or a field of the wrong type. */
+  createGrinder(body: unknown): GrinderRecord;
+  /** PUT /grinders/{id}: a shallow merge; 404 for an unknown id. */
+  updateGrinder(id: string, body: unknown): GrinderRecord;
+  /** A hard delete; success even for an unknown id. */
+  deleteGrinder(id: string): { success: true; id: string };
 
   // Key-value store (namespaces and keys are raw, never decoded)
   kvKeys(namespace: string): string[];
@@ -242,6 +285,14 @@ function toProfileError(error: unknown, typeErrorStatus: 400 | 500): MockHttpErr
     return new MockHttpError(500, { error: 'Internal server error', message: error.message });
   }
   return new MockHttpError(500, { error: 'Internal server error', message: String(error) });
+}
+
+/** De1Handler answers an unexpected exception on a machine route with 500 {error, st} (de1handler.dart _mapDe1WriteErrors). */
+function machineRouteError(error: unknown): MockHttpError {
+  return new MockHttpError(500, {
+    error: error instanceof Error ? error.message : String(error),
+    st: '#0      Profile.fromJson (package:reaprime/src/models/data/profile.dart)\n#1      De1Handler._profileHandler (package:reaprime/src/services/webserver/de1handler.dart)',
+  });
 }
 
 function stableStringify(value: unknown): string {
@@ -319,6 +370,8 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
     if (record.isDefault || options.seedExamples !== false) profiles.set(record.id, record);
   }
   let shots: ShotRecord[] = options.seedExamples === false ? [] : [fixtures.shotRecord()];
+  const grinders = new Map<string, GrinderRecord>();
+  if (options.seedGrinders !== false) for (const grinder of seedGrinders()) grinders.set(grinder.id, grinder);
   const kv = new Map<string, Map<string, unknown>>();
   let shotState: ShotStateEvent = {
     event: 'state',
@@ -335,6 +388,14 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
   };
   const faults: Array<MockFault & { remaining: number }> = [];
   const requests: MockRequestLog[] = [];
+  const uploadMs = options.uploadMs !== undefined && Number.isFinite(options.uploadMs) ? Math.max(0, options.uploadMs) : DEFAULT_UPLOAD_MS;
+  const machine = createMachineProfile({
+    initial: workflow.profile,
+    uploadMs,
+    isConnected: () => machineConnected,
+    wanted: () => workflow.profile,
+    notConnected: () => new MockHttpError(500, fixtures.errorMachineNotConnected() as Record<string, unknown>),
+  });
 
   function machineEntry(): DeviceEntry {
     return { name: machineDevice.name, id: machineDevice.id, state: machineConnected ? 'connected' : 'disconnected', type: 'machine', available: machineConnected };
@@ -401,6 +462,12 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
     return record;
   }
 
+  function requireGrinder(id: string): GrinderRecord {
+    const grinder = grinders.get(id);
+    if (!grinder) throw new MockHttpError(404, { error: 'Grinder not found' });
+    return grinder;
+  }
+
   function kvNamespace(namespace: string): Map<string, unknown> {
     let box = kv.get(namespace);
     if (!box) {
@@ -419,6 +486,7 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
       if (connected === machineConnected) return;
       machineConnected = connected;
       if (!connected) {
+        machine.disconnected();
         connectionError = makeConnectionError(
           'machineDisconnected',
           'The machine disconnected.',
@@ -428,6 +496,9 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
       } else if (connectionError?.kind === 'machineDisconnected') {
         connectionError = null;
       }
+      // Decaid uploads a changed profile when the machine connects; queue it
+      // before devices reports the connect, so a barrier sent in answer waits for it.
+      if (connected) machine.sync();
       emitDevices();
       if (connected) {
         snapshot = { ...snapshot, timestamp: localNow() };
@@ -542,7 +613,33 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
       } catch (error) {
         throw toProfileError(error, 500);
       }
+      // The answer comes first; the DE1 gets the profile afterwards.
+      machine.sync();
       return clone(workflow);
+    },
+
+    // ---- the machine's own profile ---------------------------------------------------------
+    getMachineProfile: () => machine.current(),
+    isUploadingProfile: () => machine.uploading(),
+    async loadMachineProfile(body) {
+      requireMachine();
+      let profile: WireProfile;
+      try {
+        profile = normalizeProfile(body);
+      } catch (error) {
+        throw machineRouteError(error);
+      }
+      await machine.write(async () => {
+        requireMachine();
+        await machine.upload(profile);
+      });
+    },
+    runMachineWrite(write) {
+      return machine.write(write);
+    },
+    machineProfileRoute: options.machineProfileRoute !== false,
+    dispose() {
+      machine.dispose();
     },
 
     // ---- profiles ---------------------------------------------------------------------
@@ -812,6 +909,27 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
     },
     addShot(record) {
       shots = [...shots.filter((shot) => shot.id !== record.id), clone(record)];
+    },
+
+    // ---- grinders -----------------------------------------------------------------------
+    listGrinders(query = {}) {
+      const includeArchived = query.includeArchived === true || query.includeArchived === 'true';
+      return clone(sortGrinders([...grinders.values()].filter((grinder) => includeArchived || !grinder.archived)));
+    },
+    getGrinder: (id) => clone(requireGrinder(id)),
+    createGrinder(body) {
+      const grinder = createGrinderRecord(body, newId(), localNow());
+      grinders.set(grinder.id, grinder);
+      return clone(grinder);
+    },
+    updateGrinder(id, body) {
+      const updated = updateGrinderRecord(requireGrinder(id), body, localNow());
+      grinders.set(id, updated);
+      return clone(updated);
+    },
+    deleteGrinder(id) {
+      grinders.delete(id);
+      return { success: true, id };
     },
 
     // ---- kv -----------------------------------------------------------------------------

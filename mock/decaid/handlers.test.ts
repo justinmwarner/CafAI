@@ -137,6 +137,48 @@ describe('key-value store over HTTP', () => {
   });
 });
 
+describe('grinder library over HTTP', () => {
+  const ids = (body: unknown) => (body as Array<{ id: string }>).map((grinder) => grinder.id);
+
+  it('lists the seeded grinders with a strong ETag and honours If-None-Match', async () => {
+    const first = await call('/grinders');
+    expect(first.status).toBe(200);
+    expect((first.body as Array<{ model: string }>).map((grinder) => grinder.model)).toEqual(['Niche Zero', 'Comandante C40 MK4', 'Baratza Encore ESP']);
+    const etag = first.headers.get('ETag');
+    expect(etag).toMatch(/^"[0-9a-f]{16}"$/);
+    expect((await fetch(`${BASE}/grinders`, { headers: { 'If-None-Match': etag! } })).status).toBe(304);
+  });
+
+  it('creates with 201, reads by id, archives with a PUT, and deletes for good', async () => {
+    const created = await call('/grinders', { method: 'POST', body: JSON.stringify({ model: 'Lagom P64', settingSmallStep: 0.25 }) });
+    expect(created.status).toBe(201);
+    const id = (created.body as { id: string }).id;
+    expect(await call(`/grinders/${id}`)).toMatchObject({ status: 200, body: created.body });
+    expect(await call(`/grinders/${id}`, { method: 'PUT', body: JSON.stringify({ archived: true }) })).toMatchObject({
+      status: 200,
+      body: { id, archived: true, settingSmallStep: 0.25 },
+    });
+    expect(ids((await call('/grinders')).body)).not.toContain(id);
+    expect(ids((await call('/grinders?includeArchived=true')).body)).toContain(id);
+    expect(await call(`/grinders/${id}`, { method: 'DELETE' })).toMatchObject({ status: 200, body: { success: true, id } });
+    expect(await call(`/grinders/${id}`)).toMatchObject({ status: 404, body: { error: 'Grinder not found' } });
+  });
+
+  it('answers 400 to a missing model or unreadable JSON, 404 to an unknown id before reading the body, 200 to any delete', async () => {
+    expect(await call('/grinders', { method: 'POST', body: '{}' })).toMatchObject({
+      status: 400,
+      body: { error: "type 'Null' is not a subtype of type 'String' in type cast" },
+    });
+    for (const body of ['not json', undefined]) {
+      const reply = await call('/grinders', { method: 'POST', body });
+      expect(reply.status, String(body)).toBe(400);
+      expect((reply.body as { error: string }).error).toMatch(/^FormatException: /);
+    }
+    expect(await call('/grinders/unknown', { method: 'PUT', body: 'not json' })).toMatchObject({ status: 404, body: { error: 'Grinder not found' } });
+    expect(await call('/grinders/unknown', { method: 'DELETE' })).toMatchObject({ status: 200, body: { success: true, id: 'unknown' } });
+  });
+});
+
 describe('faults and the request log', () => {
   it('serves an injected failure once and logs every request', async () => {
     mock.state.failNext({ method: 'GET', path: '/api/v1/workflow', status: 503, body: { error: 'global_admission_limit' }, headers: { 'Retry-After': '1' } });

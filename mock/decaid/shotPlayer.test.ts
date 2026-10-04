@@ -3,7 +3,9 @@ import { parseDecaidTimestamp } from '../../src/api/time.ts';
 import type { MachineSnapshot, ShotStateEvent } from '../../src/api/types.ts';
 import blooming from '../../src/coach/templates/source/Blooming_espresso.json';
 import dflow from '../../src/coach/templates/source/D-Flow____default.json';
+import gentle from '../../src/coach/templates/source/Gentle_and_sweet1.json';
 import londonium from '../../src/coach/templates/source/Londonium.json';
+import allonge from '../../src/coach/templates/source/rao_allonge.json';
 import { normalizeProfile } from './profiles.ts';
 import { createShotPlayer, createShotSimulation, type ShotSimulationInput, type SimFrame } from './shotPlayer.ts';
 import { createMockDecaid } from './state.ts';
@@ -212,6 +214,12 @@ describe('createShotSimulation', () => {
     expect(recorded(frames)).toHaveLength(60);
   });
 
+  it('without a scale, a profile with no target_volume runs to the machine end', () => {
+    // D-Flow's target_volume is 0: off.
+    const frames = run(input(dflow, { scaleConnected: false }));
+    expect(events(frames).find((e) => e.decision?.kind === 'stop')!.decision!.reason).toBe('machineEnded');
+  });
+
   it('skipStep moves to the next step', () => {
     const simulation = createShotSimulation(input(londonium));
     const seen: number[] = [];
@@ -222,6 +230,81 @@ describe('createShotSimulation', () => {
       seen.push(frame.machine.profileFrame);
     }
     expect(seen[19]! + 1).toBeLessThanOrEqual(seen[21]!);
+  });
+});
+
+describe('the volumetric stop (shot_sequencer.dart, pouring state)', () => {
+  const stopEvent = (frames: SimFrame[]) => events(frames).find((e) => e.decision?.kind === 'stop')!;
+  const lastVolume = (frames: SimFrame[]) => recorded(frames).at(-1)!.volume;
+
+  it('Gentle and Sweet without a scale stops at its 36 ml target_volume', () => {
+    const frames = run(input(gentle, { scaleConnected: false }));
+    const stop = stopEvent(frames);
+    expect(stop).toMatchObject({
+      event: 'decision',
+      state: 'pouring',
+      shotId: 'shot-1',
+      decision: { kind: 'stop', reason: 'targetVolume', data: { targetVolume: 36 } },
+    });
+    expect(stop.decision!.details).toMatch(/^Target volume 36\.0ml reached \(projected: [\d.]+\)\. Stopping shot\.$/);
+    const projected = (stop.decision!.data as { projectedVolume: number }).projectedVolume;
+    expect(projected).toBeGreaterThan(36);
+    expect(projected).toBeLessThan(37.5);
+    expect(lastVolume(frames)).toBeGreaterThan(33);
+    expect(lastVolume(frames)).toBeLessThanOrEqual(36);
+    // No scale, so there is no yield to settle: finished at once.
+    expect(events(frames).filter((e) => e.event === 'state').map((e) => e.state)).toEqual(['preheating', 'pouring', 'finished']);
+  });
+
+  it('the Allongé, ground coarse enough to hold its 4.5 ml/s, stops near its 180 ml', () => {
+    const frames = run(input(allonge, { scaleConnected: false, targetYield: 0, puckResistance: 0.4 }));
+    expect(stopEvent(frames).decision).toMatchObject({ reason: 'targetVolume', data: { targetVolume: 180 } });
+    expect(stopEvent(frames).decision!.details).toMatch(/^Target volume 180\.0ml reached/);
+    expect(lastVolume(frames)).toBeGreaterThan(175);
+    expect(lastVolume(frames)).toBeLessThanOrEqual(180);
+  });
+
+  it('at the default espresso grind the Allongé cannot pump 180 ml in its 62 s, so the machine ends it', () => {
+    const frames = run(input(allonge, { scaleConnected: false, targetYield: 0 }));
+    expect(stopEvent(frames).decision!.reason).toBe('machineEnded');
+    expect(lastVolume(frames)).toBeLessThan(180);
+  });
+
+  it('looks ahead by flow x volumeFlowMultiplier, like Decaid', () => {
+    const plain = lastVolume(run(input(gentle, { scaleConnected: false, volumeFlowMultiplier: 0 })));
+    const ahead = lastVolume(run(input(gentle, { scaleConnected: false, volumeFlowMultiplier: 3 })));
+    expect(plain).toBeGreaterThan(35.5);
+    expect(ahead).toBeLessThan(plain - 3);
+  });
+
+  it("takes the target from the input over the profile's own (context.targetWaterVolume)", () => {
+    const frames = run(input(gentle, { scaleConnected: false, targetVolume: 20 }));
+    expect(stopEvent(frames).decision).toMatchObject({ reason: 'targetVolume', data: { targetVolume: 20 } });
+    expect(lastVolume(frames)).toBeLessThanOrEqual(20);
+    expect(lastVolume(frames)).toBeGreaterThan(17);
+  });
+
+  it('a null or 0 target is off', () => {
+    for (const targetVolume of [null, 0]) {
+      expect(stopEvent(run(input(gentle, { scaleConnected: false, targetVolume }))).decision!.reason, String(targetVolume)).toBe('machineEnded');
+    }
+  });
+
+  it('never applies while a scale reports: that is stop-at-weight territory, even with targetYield 0', () => {
+    expect(stopEvent(run(input(gentle, { targetYield: 0 }))).decision!.reason).toBe('machineEnded');
+    expect(stopEvent(run(input(gentle))).decision!.reason).toBe('targetWeight');
+  });
+
+  it('never applies in gatewayMode "full"', () => {
+    expect(stopEvent(run(input(gentle, { scaleConnected: false, bypassSaw: true }))).decision!.reason).toBe('machineEnded');
+  });
+
+  it('counts from volumeCountStart when the workflow profile counts from elsewhere than the running one', () => {
+    const frames = run(input(gentle, { scaleConnected: false, volumeCountStart: 4 }));
+    expect(recorded(frames).filter((f) => f.machine.profileFrame < 4).every((f) => f.volume === 0)).toBe(true);
+    expect(stopEvent(frames).decision!.reason).toBe('targetVolume');
+    // The substate still follows the running profile's own count start.
+    expect(recorded(frames).some((f) => f.machine.profileFrame === 2 && f.machine.state.substate === 'pouring')).toBe(true);
   });
 });
 
@@ -345,8 +428,81 @@ describe('createShotPlayer', () => {
   });
 
   it('will not start without a machine', () => {
-    const { player } = setup({ machineConnected: false });
+    const { state, player } = setup({ machineConnected: false });
     expect(player.start()).toBe(false);
+    expect(state.getShotIds()).toEqual([]);
+  });
+
+  /** The workflow profile at 80 °C under a new title: easy to tell apart in the frames. */
+  function cooler(state: ReturnType<typeof setup>['state']) {
+    const profile = state.getWorkflow().profile;
+    return { ...profile, title: 'Guji Hambela v2', steps: profile.steps.map((step) => ({ ...step, temperature: 80 })) };
+  }
+  const targetTemps = (record: { measurements: Array<{ machine: MachineSnapshot }> }) =>
+    record.measurements.filter((m) => m.machine.state.substate !== 'preparingForShot').map((m) => m.machine.targetGroupTemperature);
+
+  it('a shot started on the machine during an upload runs the old profile, while its record names the new one', async () => {
+    const { state, player } = setup();
+    const old = state.getMachineProfile();
+    state.updateWorkflow({ profile: cooler(state) });
+    expect(state.isUploadingProfile()).toBe(true);
+    expect(player.start(), 'a group-head press does not wait for the upload').toBe(true);
+    await vi.advanceTimersByTimeAsync(12_000);
+    expect(player.activity).toBeNull();
+
+    const record = state.getShot(player.lastShotId!);
+    expect(record.workflow.profile.title, 'the record copies the workflow at shot end').toBe('Guji Hambela v2');
+    const temps = targetTemps(record);
+    expect(temps.length).toBeGreaterThan(20);
+    expect(temps.every((t) => t !== 80)).toBe(true);
+    expect(new Set(temps)).toEqual(new Set(old.steps.map((step) => step.temperature)));
+    expect(state.getMachineProfile().title, 'the upload finished meanwhile').toBe('Guji Hambela v2');
+  });
+
+  it('a shot started after the upload runs the new profile', async () => {
+    const { state, player } = setup();
+    state.updateWorkflow({ profile: cooler(state) });
+    await vi.advanceTimersByTimeAsync(800);
+    player.start();
+    await vi.advanceTimersByTimeAsync(12_000);
+    expect(targetTemps(state.getShot(player.lastShotId!)).every((t) => t === 80)).toBe(true);
+  });
+
+  it("without a scale it stops at the workflow profile's target_volume and the machine goes idle", async () => {
+    const { state, player, machine } = setup({ scaleConnected: false });
+    expect(state.getWorkflow().profile.target_volume).toBe(36);
+    player.start();
+    await vi.advanceTimersByTimeAsync(12_000);
+    const record = state.getShot(player.lastShotId!);
+    expect(record.stopReason).toBe('targetVolume');
+    expect(record.measurements.at(-1)!.volume).toBeGreaterThan(33);
+    expect(record.measurements.at(-1)!.volume).toBeLessThanOrEqual(36);
+    expect(state.getMachineSnapshot().state).toEqual({ state: 'idle', substate: 'idle' });
+    expect(machine.at(-1)!.state).toEqual({ state: 'idle', substate: 'idle' });
+  });
+
+  it("context.targetWaterVolume overrides the profile's target_volume", async () => {
+    const { state, player } = setup({ scaleConnected: false });
+    state.updateWorkflow({ context: { targetWaterVolume: 20 } });
+    player.start();
+    await vi.advanceTimersByTimeAsync(12_000);
+    const record = state.getShot(player.lastShotId!);
+    expect(record.stopReason).toBe('targetVolume');
+    expect(record.measurements.at(-1)!.volume).toBeLessThanOrEqual(20);
+    expect(record.measurements.at(-1)!.volume).toBeGreaterThan(16);
+  });
+
+  it("uses Decaid's volumeFlowMultiplier setting for the look-ahead", async () => {
+    const first = setup({ scaleConnected: false, settings: { volumeFlowMultiplier: 0 } });
+    first.player.start();
+    await vi.advanceTimersByTimeAsync(12_000);
+    const plain = first.state.getShot(first.player.lastShotId!).measurements.at(-1)!.volume!;
+    vi.useRealTimers();
+    const second = setup({ scaleConnected: false, settings: { volumeFlowMultiplier: 3 } });
+    second.player.start();
+    await vi.advanceTimersByTimeAsync(12_000);
+    const ahead = second.state.getShot(second.player.lastShotId!).measurements.at(-1)!.volume!;
+    expect(ahead).toBeLessThan(plain - 3);
   });
 
   it('emits idle frames on request, and whenIdle resolves after a shot', async () => {

@@ -41,3 +41,6 @@ export { DECAID_ORIGIN_PATTERN, MACHINE_STATES } from './handlers.ts';
 export { WS_CHANNEL_PATHS } from './ws.ts';
 export { createShotSimulation, FRAME_MS, type ShotSimulationInput, type SimFrame } from './shotPlayer.ts';
 export { normalizeProfile, profileHash, metadataHash, compoundHash } from './profiles.ts';
+export { DEFAULT_UPLOAD_MS, sameProfile } from './machine.ts';
+export { MOCK_GRINDER_IDS, seedGrinders, type GrinderRecord } from './grinders.ts';
+export { mockOptionsFromUrl } from './urlOptions.ts';
