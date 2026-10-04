@@ -36,8 +36,11 @@ nothing more:
 2. **Start-up watchdog in the same script.** If the app never starts
    (an engine that cannot parse the bundle or run modules leaves `#root`
    empty; `src/main.tsx` renders "Starting CafAI…" into `#root` as its first
-   act), then after about 8 s, or at once on a script `SyntaxError` caught by
-   a `window` `error` listener, replace the page with a plain message: "CafAI
+   act), then after about 15 s (8 s in the first version; raised in review,
+   because nobody has timed a cold start on a Decent tablet), or at once on a
+   script `SyntaxError` caught by a `window` `error` listener or a failed load
+   of the bundle itself (a capture-phase `error` listener, added in review),
+   replace the page with a plain message: "CafAI
    could not start on this tablet's browser engine (Chromium NN). It needs
    Chromium 91 or newer." plus two full-size (48 px) controls: **Exit to
    Decaid** (`window.decentApp.exitToDashboard()` when it exists, else the
