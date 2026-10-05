@@ -122,6 +122,17 @@ export type CoachPhase =
   | 'awaiting_confirmation'
   | 'idle';
 
+/**
+ * How far CafAI's last load of a version got (D55):
+ * - loading: in Decaid's workflow; CafAI waits for the machine to hold it;
+ * - loaded: Decaid's barrier said the machine holds it;
+ * - waiting: no machine; Decaid uploads it when the machine connects;
+ * - failed: the machine has not confirmed it (the barrier failed, or Decaid
+ *   reported that the upload failed);
+ * - assumed: an older Decaid without the barrier, so the workflow is trusted.
+ */
+export type VersionLoad = 'loading' | 'loaded' | 'waiting' | 'failed' | 'assumed';
+
 export interface CoachState {
   ready: boolean;
   bags: Bag[];
@@ -138,6 +149,20 @@ export interface CoachState {
   error: string | null;
   /** True when the last profile change can be undone. */
   canUndo: boolean;
+  /**
+   * How far the active version's load got this session (D55); null when
+   * CafAI has not loaded it since it started (or there is no active
+   * version). Optional: a controller that does not track it leaves it out.
+   */
+  activeLoad?: VersionLoad | null;
+  /**
+   * Counts the moments the engine looks at the machine's profile: every 30 s
+   * while the page is in view, and when it comes back into view (the look
+   * itself waits while something else is going on). The Profile line reads
+   * Decaid's workflow on the same beat, so it and the banner change together.
+   * Optional: without it the line keeps its own 30 s clock.
+   */
+  machineTick?: number;
 }
 
 export interface CoachController {

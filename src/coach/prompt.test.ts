@@ -128,9 +128,26 @@ describe('buildSystemPrompt: content', () => {
       '"settingType"',
       '"step"',
       '"values"',
+      '"linked"',
+      '"onMachine"',
+      '"loadError"',
     ]) {
       expect(prompt).toContain(key);
     }
+  });
+
+  it('tells a connected machine that has not confirmed a version from one that is away (loadError)', () => {
+    const loop = prompt.slice(prompt.indexOf('# The loop'), prompt.indexOf('# Template catalog'));
+    const picked = loop.split('\n').find((line) => line.startsWith('2. Template picked.'))!;
+    const decision = loop.split('\n').find((line) => line.startsWith('5. Decision.'))!;
+    expect(picked).toContain('"uploaded":true|false,"onMachine":true|false|null,"loadError":string|null,"note":string|null}');
+    expect(decision).toContain('"onMachine":true|false|null,"loadError":string|null}');
+    for (const line of [picked, decision]) {
+      expect(line).toMatch(/If loadError is set, the machine is connected but has not confirmed the version/);
+      expect(line).toMatch(/tap Retry above/);
+      expect(line).toMatch(/never say that Decaid loads it when the machine connects/);
+    }
+    expect(picked).toMatch(/If onMachine is false the machine is not connected/);
   });
 
   it('tells the model the dose at intake and where v1 stops (D57)', () => {
@@ -143,7 +160,7 @@ describe('buildSystemPrompt: content', () => {
 
   it("gives the grinder object with its dial from Decaid's grinder library, at intake and with every shot (D62)", () => {
     const grinder =
-      '"grinder":{"name":string|null,"setting":string|null,"settingType":"numeric"|"preset"|null,"step":number|null,"values":string[]|null}';
+      '"grinder":{"name":string|null,"setting":string|null,"settingType":"numeric"|"preset"|null,"step":number|null,"values":string[]|null,"linked":boolean}';
     const loop = prompt.slice(prompt.indexOf('# The loop'), prompt.indexOf('# Template catalog'));
     const intake = loop.split('\n').find((line) => line.startsWith('1. Intake.'))!;
     const shot = loop.split('\n').find((line) => line.startsWith('3. Shot completed.'))!;
@@ -158,6 +175,12 @@ describe('buildSystemPrompt: content', () => {
     expect(manual).toMatch(/CafAI works the setting out from the steps, or checks yours against Decaid's grinder library/);
     expect(manual).toMatch(/lower numbers are finer/);
     expect(manual).toMatch(/finest first/);
+  });
+
+  it('asks for directions only for a linked grinder Decaid has no steps for, as Settings tells the user (D62)', () => {
+    const manual = prompt.slice(prompt.indexOf('# Manual variables'), prompt.indexOf('# Reading a shot'));
+    expect(manual).toMatch(/"linked" is true when the grinder is linked from Decaid's grinder library/);
+    expect(manual).toMatch(/linked but step and values are null.*give the direction and the amount only, with setting null/);
   });
 
   it('names exactly the attached tools and claims nothing else', () => {

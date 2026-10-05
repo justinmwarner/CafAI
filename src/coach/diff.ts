@@ -117,7 +117,7 @@ export function describeManualChange(input: ManualInput, current: ManualSettings
 export interface GrindTextOptions {
   /** The grinder linked from Decaid's library, when there is one. */
   grinder?: GrinderInfo | null;
-  /** The new setting was worked out from, or checked against, Decaid's step or list. */
+  /** The new setting was worked out from, or checked against, Decaid's step or list; otherwise it is the coach's estimate. */
   fromDecaid?: boolean;
 }
 
@@ -125,8 +125,9 @@ export interface GrindTextOptions {
  * What the user's hands must do before the next shot (empty for profile
  * changes and "none"). A grind step says where its numbers come from, as the
  * owner asked (D62): "Set the grinder to 14.5 before the next shot (Decaid
- * lists 0.5 steps for your Niche Zero)." Without a new setting the user turns
- * the grinder and notes where it landed, since the next shot is read against it.
+ * lists 0.5 steps for your Niche Zero)." A setting nobody checked is the
+ * coach's estimate and says so. Without a new setting the user turns the
+ * grinder and notes where it landed, since the next shot is read against it.
  */
 export function describeManualSteps(input: ManualInput, options: GrindTextOptions = {}): string[] {
   if (input.variable === 'dose' && input.value !== null) {
@@ -136,8 +137,11 @@ export function describeManualSteps(input: ManualInput, options: GrindTextOption
     const setting = cleanSetting(input.grind.setting);
     const decaid = decaidStepNote(options.grinder);
     if (setting !== null) {
-      if (options.fromDecaid && decaid !== null) return [`Set the grinder to ${setting} before the next shot (${decaid}).`];
-      return [`Set the grinder to ${setting} (${grindMove(input.grind)}) before the next shot.`];
+      const plain = `Set the grinder to ${setting} (${grindMove(input.grind)}) before the next shot.`;
+      if (options.fromDecaid) return [decaid !== null ? `Set the grinder to ${setting} before the next shot (${decaid}).` : plain];
+      // The model's own number: the dial may land elsewhere, and the next shot is read against where it does.
+      const why = decaid === null ? "CafAI doesn't know your grinder's step size" : "CafAI couldn't check it against your grinder's steps";
+      return [`${plain} That is the coach's estimate: ${why}, so note where the dial really lands in Settings.`];
     }
     const move = grindMove(input.grind, 'a little ');
     if (decaid !== null) return [`Turn the grinder ${move} before the next shot (${decaid}), then note the new setting in Settings.`];

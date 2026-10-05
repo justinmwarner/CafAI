@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ZodType } from 'zod';
-import { createCoachEngine, type CoachEngine } from './engine.ts';
+import { createCoachEngine, type CoachEngine, type PageVisibility } from './engine.ts';
 import type { OutboxTimers } from './outbox.ts';
 import type { ApiPort, ChangePlan, CoachPort, LlmPort, ProposalContext } from './ports.ts';
 import { message, progressNoticePart } from './uiMessages.ts';
@@ -275,6 +275,7 @@ function makeApi(calls: ApiCall[]): ApiPort {
   };
   return {
     getWorkflow: async () => {
+      calls.push({ method: 'getWorkflow', args: [] });
       if (machine.failWorkflowReads > 0) {
         machine.failWorkflowReads -= 1;
         throw new Error('Decaid is not reachable.');
@@ -404,6 +405,24 @@ function manualTimers() {
   };
 }
 
+/** Whether the page is in view, as the test sets it; hide() and show() tell the engine, like visibilitychange. */
+function fakeVisibility() {
+  let visible = true;
+  const listeners = new Set<() => void>();
+  const set = (next: boolean) => {
+    visible = next;
+    for (const listener of [...listeners]) listener();
+  };
+  const visibility: PageVisibility = {
+    visible: () => visible,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => void listeners.delete(listener);
+    },
+  };
+  return { visibility, hide: () => set(false), show: () => set(true), listeners: () => listeners.size };
+}
+
 /** One scripted assistant turn per model call. */
 type Script = () => ContentBlock[];
 
@@ -524,6 +543,9 @@ describe('coach engine', () => {
   let scripts: Script[];
   let engine: CoachEngine;
   let timers: ReturnType<typeof manualTimers>;
+  /** The machine check's 30 s beat, fired by hand. */
+  let checks: ReturnType<typeof manualTimers>;
+  let view: ReturnType<typeof fakeVisibility>;
   /** The engine's clock: tests move it on to space events apart. */
   let nowMs: number;
 
@@ -538,6 +560,8 @@ describe('coach engine', () => {
       clock: { now: () => new Date(nowMs), sleep: async () => {} },
       newId: (prefix) => `${prefix}-${++counter}-${Math.random().toString(16).slice(2, 6)}`,
       timers: timers.timers,
+      checkTimers: checks.timers,
+      visibility: view.visibility,
     });
   }
 
@@ -549,6 +573,8 @@ describe('coach engine', () => {
     requests = [];
     scripts = [];
     timers = manualTimers();
+    checks = manualTimers();
+    view = fakeVisibility();
     nowMs = Date.parse('2026-10-03T08:00:00Z');
     engine = build();
     await engine.start();
@@ -729,7 +755,14 @@ describe('coach engine', () => {
     expect(state.versions.map((v) => `${v.version}:${v.status}`)).toEqual(['1:superseded', '2:active']);
     expect(state.canUndo).toBe(true);
     expect((await storage.iterations.listAll())[0]!.outcome).toBe('applied');
-    expect(parsed(lastUserTurn(requests)[0])).toEqual({ applied: true, variable: 'profile', version: 2, title: 'Kiambu AA v2', onMachine: true });
+    expect(parsed(lastUserTurn(requests)[0])).toEqual({
+      applied: true,
+      variable: 'profile',
+      version: 2,
+      title: 'Kiambu AA v2',
+      onMachine: true,
+      loadError: null,
+    });
 
     scripts.push(() => [text('Back on v1.')]);
     await engine.undo();
@@ -951,7 +984,7 @@ describe('coach engine', () => {
       .flat()
       .flatMap((m) => m.content)
       .find((b) => b.type === 'tool_result' && b.tool_use_id === 't-tpl');
-    expect(parsed(result!)).toMatchObject({ uploaded: true, onMachine: false });
+    expect(parsed(result!)).toMatchObject({ uploaded: true, onMachine: false, loadError: null });
     const notices = engine.getState().messages.flatMap((m) => m.parts).filter((p) => p.kind === 'notice');
     expect(notices.at(-1)).toMatchObject({ text: 'Saved Kiambu AA v1. Decaid loads it when the machine connects.' });
     // No machine to wait for: Decaid's barrier is not asked.
@@ -1084,7 +1117,7 @@ describe('coach engine', () => {
       .find((b) => b.type === 'text' && b.text.startsWith('[event:shot_completed]'));
     const payload = JSON.parse((shotEvent as { text: string }).text.split('\n')[1]!);
     // Typed in Settings, not linked to Decaid's grinder library: no steps to tell.
-    expect(payload.grinder).toEqual({ name: 'Niche Zero', setting: '13', settingType: null, step: null, values: null });
+    expect(payload.grinder).toEqual({ name: 'Niche Zero', setting: '13', settingType: null, step: null, values: null, linked: false });
   });
 
   it('keeps the bag on screen while a shot is pulled', async () => {
@@ -1406,7 +1439,13 @@ describe('coach engine', () => {
         text: 'Kiambu AA v1 is saved, but the machine has not confirmed it. The machine did not answer over Bluetooth in time. Check that it is awake, then try again.',
       });
       expect(engine.getState().error).toBe('The machine has not confirmed Kiambu AA v1. Tap Retry to load it again.');
-      expect(parsed(lastUserTurn(requests)[1])).toMatchObject({ uploaded: true, onMachine: false });
+      // Connected, so not "Decaid loads it when the machine connects": the coach hears why instead.
+      expect(parsed(lastUserTurn(requests)[1])).toMatchObject({
+        uploaded: true,
+        onMachine: null,
+        loadError: 'The machine did not answer over Bluetooth in time. Check that it is awake, then try again.',
+        note: null,
+      });
 
       expect(await shotIsCredited('shot-early')).toBe(false);
       expect(notices().at(-1)).toMatchObject({
@@ -1447,7 +1486,14 @@ describe('coach engine', () => {
       machine.barrier = busyError();
       scripts.push(() => [text('Saved v2.')]);
       await engine.confirmChange('t-adj');
-      expect(parsed(lastUserTurn(requests)[0])).toEqual({ applied: true, variable: 'profile', version: 2, title: 'Kiambu AA v2', onMachine: false });
+      expect(parsed(lastUserTurn(requests)[0])).toEqual({
+        applied: true,
+        variable: 'profile',
+        version: 2,
+        title: 'Kiambu AA v2',
+        onMachine: null,
+        loadError: 'The machine is busy with other changes. Wait a moment, then try again.',
+      });
       expect(engine.getState().activeVersion?.version).toBe(2);
       expect(allParts().find((p) => p.kind === 'diff')).toMatchObject({ status: 'applied' });
       expect(notices().at(-1)).toMatchObject({ tone: 'warning', text: expect.stringContaining('Kiambu AA v2 is saved, but the machine has not confirmed it.') });
@@ -1872,6 +1918,7 @@ describe('coach engine', () => {
         doseG: 16,
         uploaded: true,
         onMachine: true,
+        loadError: null,
         note: null,
       });
     });
@@ -1981,7 +2028,8 @@ describe('coach engine', () => {
       machine.createError = new GatewayError(0, '/api/v1/profiles', 'Could not reach Decaid.', 'network');
       await pickWithDose(16);
       expect(callsOf('createProfileVersion')).toHaveLength(1);
-      expect(pickedPayload()).toMatchObject({ uploaded: false, note: 'Could not reach Decaid.' });
+      // Not loaded at all: neither on the machine nor waiting for it to connect.
+      expect(pickedPayload()).toMatchObject({ uploaded: false, onMachine: null, loadError: null, note: 'Could not reach Decaid.' });
     });
 
     it('keeps the note when Decaid already had this exact profile', async () => {
@@ -2041,7 +2089,7 @@ describe('coach engine', () => {
         tips: [],
       });
 
-    const nicheOn = (setting: string) => ({ name: 'Niche Zero', setting, settingType: 'numeric', step: 0.5, values: null });
+    const nicheOn = (setting: string) => ({ name: 'Niche Zero', setting, settingType: 'numeric', step: 0.5, values: null, linked: true });
 
     it("reads the linked grinder at start and tells the coach its dial at intake and with every shot", async () => {
       await startLinked('g-niche', NICHE, '15');
@@ -2137,7 +2185,14 @@ describe('coach engine', () => {
         context: { grinderId: 'g-encore', grinderModel: 'Baratza Encore ESP', grinderSetting: '5' },
       });
       await throughTemplateCards();
-      expect(intakeGrinder()).toEqual({ name: 'Baratza Encore ESP', setting: '5', settingType: 'preset', step: null, values: ENCORE.values });
+      expect(intakeGrinder()).toEqual({
+        name: 'Baratza Encore ESP',
+        setting: '5',
+        settingType: 'preset',
+        step: null,
+        values: ENCORE.values,
+        linked: true,
+      });
     });
 
     it('keeps the steps it has when a read fails, and asks again on the next refresh', async () => {
@@ -2156,14 +2211,21 @@ describe('coach engine', () => {
       await saveInSettings('g-encore', ENCORE, '5');
       expect(engine.getState().error).toBeNull();
       await throughShot();
-      expect(intakeGrinder()).toEqual({ name: 'Baratza Encore ESP', setting: '5', settingType: null, step: null, values: null });
+      expect(intakeGrinder()).toEqual({ name: 'Baratza Encore ESP', setting: '5', settingType: null, step: null, values: null, linked: true });
 
       await engine.refresh();
       await grinderSettled();
       scripts.push(() => [text('Again?'), askTaste]);
       telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: 'targetWeight' });
       await vi.waitFor(() => expect(shotEvents()).toHaveLength(2));
-      expect(shotEvents()[1]!.grinder).toEqual({ name: 'Baratza Encore ESP', setting: '5', settingType: 'preset', step: null, values: ENCORE.values });
+      expect(shotEvents()[1]!.grinder).toEqual({
+        name: 'Baratza Encore ESP',
+        setting: '5',
+        settingType: 'preset',
+        step: null,
+        values: ENCORE.values,
+        linked: true,
+      });
     });
 
     it('starts even when the grinder cannot be read, and a grinder Decaid no longer has gives no steps', async () => {
@@ -2178,7 +2240,8 @@ describe('coach engine', () => {
       await saveInSettings('g-gone', null, '7', 'Old grinder');
       expect(callsOf('getGrinder').at(-1)!.args).toEqual(['g-gone']);
       await throughTemplateCards();
-      expect(intakeGrinder()).toEqual({ name: 'Old grinder', setting: '7', settingType: null, step: null, values: null });
+      // Still linked, so the coach gives directions only.
+      expect(intakeGrinder()).toEqual({ name: 'Old grinder', setting: '7', settingType: null, step: null, values: null, linked: true });
     });
 
     it('reads nothing when no grinder is linked, and forgets the steps when it is unlinked', async () => {
@@ -2188,7 +2251,7 @@ describe('coach engine', () => {
       expect(callsOf('getGrinder')).toHaveLength(1);
       expect(callsOf('updateWorkflow').at(-1)!.args[0]).toEqual({ context: { grinderId: null, grinderModel: 'Niche Zero', grinderSetting: '15' } });
       await throughShot();
-      expect(intakeGrinder()).toEqual({ name: 'Niche Zero', setting: '15', settingType: null, step: null, values: null });
+      expect(intakeGrinder()).toEqual({ name: 'Niche Zero', setting: '15', settingType: null, step: null, values: null, linked: false });
 
       // Without Decaid's steps a relative move stays as the coach gave it.
       scripts.push(() => [grindMove({ direction: 'finer', amount: 1, setting: null })]);
@@ -2222,6 +2285,278 @@ describe('coach engine', () => {
       expect(callsOf('updateWorkflow').at(-1)!.args[0]).toEqual({
         context: { grinderId: 'g-niche', grinderModel: 'Niche Zero', grinderSetting: '14.5' },
       });
+    });
+
+    it('reads the grinder again with every shot: one Decaid no longer lists gets directions only, no old step', async () => {
+      await startLinked('g-niche', NICHE, '15');
+      await throughTemplatePick();
+      expect(callsOf('getGrinder')).toHaveLength(1);
+      // Deleted from Decaid's grinder library while CafAI runs.
+      machine.grinders.delete('g-niche');
+      scripts.push(() => [text('Got it.'), askTaste]);
+      telemetry.emitShot({ type: 'started', shotId: 'shot-1' });
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' });
+      await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+      await grinderSettled();
+      expect(callsOf('getGrinder').length).toBeGreaterThan(1);
+      // The shot event already says so: still linked, no steps.
+      expect(shotEvents().map((e) => e.grinder)).toEqual([
+        { name: 'Niche Zero', setting: '15', settingType: null, step: null, values: null, linked: true },
+      ]);
+
+      scripts.push(() => [grindMove({ direction: 'finer', amount: 1, setting: null })]);
+      await engine.answerOptions('t-ask', [OTHER_OPTION], 'Muddy');
+      expect(lastProposalContext?.grinder).toBeNull();
+      const card = allParts().find((p) => p.kind === 'diff');
+      expect(card).toMatchObject({
+        lines: ['Grind 1 step finer (now 15)'],
+        manualSteps: ["Turn the grinder 1 step finer before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings."],
+      });
+      expect(JSON.stringify(card)).not.toContain('Decaid lists');
+    });
+
+    it('reads the grinder again when the page comes back into view, not while it is hidden', async () => {
+      await startLinked('g-niche', NICHE, '15');
+      view.hide();
+      expect(callsOf('getGrinder')).toHaveLength(1);
+      machine.grinders.set('g-niche', { ...NICHE, smallStep: 1 });
+      view.show();
+      await grinderSettled();
+      expect(callsOf('getGrinder')).toHaveLength(2);
+      await throughTemplateCards();
+      expect(intakeGrinder()).toMatchObject({ step: 1 });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // D66, D52: another profile loaded behind CafAI's back
+  // -------------------------------------------------------------------------
+
+  describe("watching the machine's profile (D66, D52)", () => {
+    const otherProfile = (title: string, targetWeight = 99): ProfileJson => ({ ...baseProfile, title, target_weight: targetWeight });
+    const workflowReads = () => callsOf('getWorkflow').length;
+    const pouring = {
+      event: 'state',
+      timestamp: '2026-10-03T08:00:00.000000',
+      shotId: 'shot-live',
+      state: 'pouring',
+      machineState: null,
+      machineSubstate: null,
+      profileFrame: null,
+      scaleConnected: true,
+      scaleLost: false,
+      machineHasAutonomousSAW: false,
+      decision: null,
+    } as const;
+
+    it('looks every 30 s and puts another profile on the banner with Retry', async () => {
+      await throughTemplatePick();
+      expect(checks.delays()).toEqual([30_000]);
+      const beat = engine.getState().machineTick ?? -1;
+      machine.loaded = otherProfile('Default');
+      checks.fire();
+      expect(engine.getState().machineTick).toBe(beat + 1);
+      await vi.waitFor(() =>
+        expect(engine.getState().error).toBe('The machine is running "Default", not Kiambu AA v1. Tap Retry to load it.'),
+      );
+      expect(checks.delays()).toEqual([30_000]);
+      await engine.retry();
+      expect(machine.loaded.title).toBe('Kiambu AA v1');
+      expect(engine.getState().error).toBeNull();
+    });
+
+    it('never changes the machine itself (D42), and says nothing while the version is on it', async () => {
+      await throughTemplatePick();
+      const activations = callsOf('activateProfile').length;
+      const reads = workflowReads();
+      checks.fire();
+      await drain();
+      expect(workflowReads()).toBe(reads + 1);
+      expect(engine.getState().error).toBeNull();
+      machine.loaded = otherProfile('Default');
+      checks.fire();
+      await vi.waitFor(() => expect(engine.getState().error).toMatch(/"Default"/));
+      expect(callsOf('activateProfile')).toHaveLength(activations);
+      expect(callsOf('loadProfileOnMachine')).toHaveLength(1);
+    });
+
+    it('does not bring a dismissed mismatch back on every beat, but raises another profile (D52)', async () => {
+      await throughTemplatePick();
+      machine.loaded = otherProfile('Default');
+      checks.fire();
+      await vi.waitFor(() => expect(engine.getState().error).toMatch(/"Default"/));
+      engine.dismissError();
+      for (let i = 0; i < 3; i++) {
+        checks.fire();
+        await drain();
+      }
+      expect(engine.getState().error).toBeNull();
+
+      machine.loaded = otherProfile('Picked in another skin', 98);
+      checks.fire();
+      await vi.waitFor(() =>
+        expect(engine.getState().error).toBe('The machine is running "Picked in another skin", not Kiambu AA v1. Tap Retry to load it.'),
+      );
+    });
+
+    it('raises the same profile again once the version was back on the machine in between', async () => {
+      await throughTemplatePick();
+      const v1 = machine.loaded;
+      machine.loaded = otherProfile('Default');
+      checks.fire();
+      await vi.waitFor(() => expect(engine.getState().error).toMatch(/"Default"/));
+      engine.dismissError();
+      machine.loaded = v1; // loaded again in Decaid
+      checks.fire();
+      await drain();
+      expect(engine.getState().error).toBeNull();
+      machine.loaded = otherProfile('Default');
+      checks.fire();
+      await vi.waitFor(() => expect(engine.getState().error).toMatch(/"Default"/));
+    });
+
+    it('does not look while a shot runs or a version loads, but keeps the beat', async () => {
+      await throughProposal();
+      machine.loaded = otherProfile('Default');
+      telemetry.setState({ shotState: pouring });
+      const reads = workflowReads();
+      const beat = engine.getState().machineTick ?? -1;
+      checks.fire();
+      await drain();
+      expect(workflowReads()).toBe(reads);
+      expect(engine.getState().machineTick).toBe(beat + 1);
+      telemetry.setState({ shotState: null });
+
+      // A confirmed change on its way to the machine.
+      machine.barrier = 'hold';
+      scripts.push(() => [text('Done.')]);
+      const confirming = engine.confirmChange('t-adj');
+      await vi.waitFor(() => expect(machine.held).not.toBeNull());
+      machine.loaded = otherProfile('Default');
+      const during = workflowReads();
+      checks.fire();
+      expect(workflowReads()).toBe(during);
+      machine.loaded = callsOf('activateProfile').at(-1)!.args[0] as ProfileJson;
+      machine.held!.resolve('loaded');
+      await confirming;
+      await drain();
+      expect(workflowReads()).toBe(during);
+      expect(engine.getState().error).toBeNull();
+    });
+
+    it('looks when the page comes back into view, and not while it is hidden', async () => {
+      await throughTemplatePick();
+      machine.loaded = otherProfile('Default');
+      view.hide();
+      const beat = engine.getState().machineTick ?? -1;
+      const reads = workflowReads();
+      checks.fire();
+      await drain();
+      expect(engine.getState().machineTick).toBe(beat);
+      expect(workflowReads()).toBe(reads);
+      view.show();
+      expect(engine.getState().machineTick).toBe(beat + 1);
+      await vi.waitFor(() => expect(engine.getState().error).toMatch(/"Default"/));
+    });
+
+    it('names a same-named profile as another bag’s or version’s, not the same title twice (D41)', async () => {
+      await throughTemplatePick();
+      // Another bag's "Kiambu AA v1": the same profile, tagged with that bag's version.
+      machine.context = { ...machine.context, extras: { cafai: { versionId: 'ver-other', bagId: 'bag-other' } } };
+      checks.fire();
+      await vi.waitFor(() =>
+        expect(engine.getState().error).toBe(
+          'The machine is running a different "Kiambu AA v1" (another bag or version). Tap Retry to load this bag\'s version.',
+        ),
+      );
+      engine.dismissError();
+      expect(await shotIsCredited('shot-twin')).toBe(false);
+      expect(notices().at(-1)).toMatchObject({
+        tone: 'warning',
+        text: 'That shot ran a different "Kiambu AA v1" (another bag or version), so it is not part of this dial-in.',
+      });
+      // The banner after the shot; the next beat does not stack the same mismatch on it.
+      expect(engine.getState().error).toBe('The machine is not running Kiambu AA v1. Tap Retry to load it.');
+      engine.dismissError();
+      checks.fire();
+      await drain();
+      expect(engine.getState().error).toBeNull();
+    });
+
+    it('stops looking when disposed', async () => {
+      await throughTemplatePick();
+      expect(checks.delays()).toEqual([30_000]);
+      expect(view.listeners()).toBe(1);
+      engine.dispose();
+      expect(checks.delays()).toEqual([]);
+      expect(view.listeners()).toBe(0);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // D55: the active version's load state, for the Profile line
+  // -------------------------------------------------------------------------
+
+  describe("the active version's load state (D55)", () => {
+    it('is loading while Decaid uploads the version, then loaded', async () => {
+      expect(engine.getState().activeLoad).toBeNull();
+      await throughTemplateCards();
+      machine.barrier = 'hold';
+      scripts.push(() => [text('Loaded.')]);
+      const picking = engine.pickTemplate('t-tpl', 'd-flow');
+      await vi.waitFor(() => expect(machine.held).not.toBeNull());
+      expect(engine.getState().activeLoad).toBe('loading');
+      machine.held!.resolve('loaded');
+      await picking;
+      expect(engine.getState().activeLoad).toBe('loaded');
+    });
+
+    it('is failed after a failed barrier or a refusal Decaid reported, until a load works', async () => {
+      machine.barrier = busyError();
+      await throughTemplatePick();
+      expect(engine.getState().activeLoad).toBe('failed');
+      machine.barrier = 'loaded';
+      await engine.retry();
+      expect(engine.getState().activeLoad).toBe('loaded');
+
+      telemetry.setState({
+        connectionError: {
+          kind: 'profileUploadFailed',
+          severity: 'error',
+          timestamp: '2026-10-03T08:05:00.000000',
+          deviceId: 'de1',
+          deviceName: 'DE1',
+          message: 'Could not upload the profile to the machine.',
+          suggestion: null,
+          details: null,
+        },
+      });
+      await vi.waitFor(() => expect(engine.getState().activeLoad).toBe('failed'));
+    });
+
+    it('is waiting with no machine, and assumed on an older Decaid', async () => {
+      telemetry.setState({ machineConnected: false });
+      await throughTemplatePick();
+      expect(engine.getState().activeLoad).toBe('waiting');
+
+      machine.barrier = 'unsupported';
+      telemetry.setState({ machineConnected: true });
+      await drain();
+      expect(engine.getState().activeLoad).toBe('assumed');
+      await anotherBag('Sumatra', 'londonium');
+      expect(engine.getState().activeLoad).toBe('assumed');
+    });
+
+    it('is unknown after a reload, until CafAI loads a version', async () => {
+      await throughTemplatePick();
+      const v1 = machine.loaded;
+      engine.dispose();
+      engine = build();
+      machine.loaded = v1;
+      await engine.start();
+      expect(engine.getState().activeVersion?.title).toBe('Kiambu AA v1');
+      expect(engine.getState().activeLoad).toBeNull();
+      expect(engine.getState().machineTick).toBe(0);
     });
   });
 });

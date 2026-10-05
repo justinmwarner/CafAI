@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useCoach, useServices, useTelemetry } from '../../app/services.tsx';
-import { createRefresher, isActiveBagVersion, readLoadedProfile, type LoadedProfileReading, type Refresher } from './loadedProfileModel.ts';
+import {
+  createRefresher,
+  isActiveBagVersion,
+  profileMark,
+  readLoadedProfile,
+  type LoadedProfileReading,
+  type ProfileMark,
+  type Refresher,
+} from './loadedProfileModel.ts';
 
 /** How long the coach must be quiet before the workflow is read again. */
 export const LOADED_PROFILE_DEBOUNCE_MS = 500;
@@ -10,16 +18,19 @@ export const LOADED_PROFILE_POLL_MS = 30_000;
 export interface LoadedProfileState {
   /** The title of the profile in Decaid's workflow; null until a read succeeds. */
   title: string | null;
-  /** The workflow carries the active bag's version: CafAI's tag names it and the titles match. */
-  thisBag: boolean;
+  /** Beside the title: the bag's version on the machine, on its way there, or not confirmed. */
+  mark: ProfileMark;
 }
 
 /**
  * The profile Decaid's workflow carries (D66). Decaid has no workflow stream,
  * so it is read on mount, after the coach acts (a new active version, bag or
  * chat message, debounced), when a shot finishes, when the machine connects,
- * and every 30 s while the page is visible. One request at a time; a failed
- * read keeps what was there and says nothing.
+ * and every 30 s while the page is visible, also when it comes back into
+ * view. The 30 s reads follow the engine's beat (machineTick), when it keeps
+ * one: the engine looks for another profile on the same beat, so this line
+ * and the Retry banner change together rather than up to 30 s apart. One
+ * request at a time; a failed read keeps what was there and says nothing.
  */
 export function useLoadedProfile(): LoadedProfileState {
   const { decaid, telemetry } = useServices();
@@ -27,6 +38,9 @@ export function useLoadedProfile(): LoadedProfileState {
   const versionId = useCoach((s) => s.activeVersion?.id ?? null);
   const versionTitle = useCoach((s) => s.activeVersion?.title ?? null);
   const bagId = useCoach((s) => s.activeBag?.id ?? null);
+  const load = useCoach((s) => s.activeLoad);
+  const beat = useCoach((s) => s.machineTick);
+  const ownClock = beat === undefined;
   // Changes when a message arrives or the last one is replaced, not while it streams.
   const chat = useCoach((s) => `${s.messages.length}:${s.messages[s.messages.length - 1]?.id ?? ''}`);
   const [reading, setReading] = useState<LoadedProfileReading | null>(null);
@@ -47,24 +61,38 @@ export function useLoadedProfile(): LoadedProfileState {
     const stopShots = telemetry.onShot((event) => {
       if (event.type === 'finished') reads.now();
     });
-    const poll = setInterval(() => {
-      if (document.visibilityState !== 'hidden') reads.now();
-    }, LOADED_PROFILE_POLL_MS);
-    // Back from the background: catch up now rather than at the next tick.
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') reads.now();
-    };
-    document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
       mounted = false;
       reads.dispose();
       refresher.current = null;
       stopShots();
+    };
+  }, [decaid, telemetry]);
+
+  // A coach that keeps no beat (a fake in tests and previews): a clock of our own.
+  useEffect(() => {
+    if (!ownClock) return;
+    const poll = setInterval(() => {
+      if (document.visibilityState !== 'hidden') refresher.current?.now();
+    }, LOADED_PROFILE_POLL_MS);
+    // Back from the background: catch up now rather than at the next tick.
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') refresher.current?.now();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
       clearInterval(poll);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [decaid, telemetry]);
+  }, [ownClock]);
+
+  const lastBeat = useRef(beat);
+  useEffect(() => {
+    if (beat === lastBeat.current) return;
+    lastBeat.current = beat;
+    refresher.current?.now();
+  }, [beat]);
 
   const coachKey = `${versionId ?? ''}|${bagId ?? ''}|${chat}`;
   const lastCoachKey = useRef(coachKey);
@@ -81,8 +109,9 @@ export function useLoadedProfile(): LoadedProfileState {
     wasConnected.current = connected;
   }, [connected]);
 
+  const isBagVersion = reading !== null && isActiveBagVersion(reading, { bagId, versionId, title: versionTitle });
   return {
     title: reading?.title ?? null,
-    thisBag: reading !== null && isActiveBagVersion(reading, { bagId, versionId, title: versionTitle }),
+    mark: profileMark(isBagVersion, load, connected),
   };
 }

@@ -280,6 +280,46 @@ describe('scripted replies', () => {
     expect(ok(call([...base, offlineChange])).text).toBe('Saved v2. Decaid loads it when the machine connects; pull another shot after that.');
   });
 
+  it('rules 1 and 5: a version the connected machine has not confirmed asks for Retry, not for the machine to connect', () => {
+    const notConfirmed = 'The machine did not answer over Bluetooth in time.';
+    const pick = (onMachine: boolean | null) =>
+      user(
+        toolResult('t_save', { saved: true }),
+        toolResult('t_tpl', {
+          picked: 'blooming-espresso',
+          version: 1,
+          title: 'Kiambu AA v1',
+          yieldG: 50,
+          doseG: 18,
+          uploaded: true,
+          onMachine,
+          loadError: notConfirmed,
+          note: null,
+        }),
+      );
+    const retryPick = 'I saved Kiambu AA v1, but the machine has not confirmed it. Tap Retry above, then pull a shot.';
+    expect(ok(call([INTAKE, INTAKE_REPLY, pick(null)])).text).toBe(retryPick);
+    // The reason wins over an "offline" reading of onMachine.
+    expect(ok(call([INTAKE, INTAKE_REPLY, pick(false)])).text).toBe(retryPick);
+
+    const base = [...UP_TO_SHOT, shot(BLOOMING_LEVERS), SHOT_REPLY, answer(['Sour / sharp']), ANSWER_REPLY, SERIES, ADJUST_REPLY];
+    const change = user(
+      toolResult('t_adj', { applied: true, variable: 'profile', version: 2, title: 'Kiambu AA v2', onMachine: null, loadError: notConfirmed }),
+    );
+    expect(ok(call([...base, change])).text).toBe('Saved v2, but the machine has not confirmed it. Tap Retry above, then pull another shot.');
+
+    // No reason: the replies stay as they were.
+    const loaded = user(
+      toolResult('t_save', { saved: true }),
+      toolResult('t_tpl', { picked: 'blooming-espresso', version: 1, title: 'Kiambu AA v1', uploaded: true, onMachine: true, loadError: null, note: null }),
+    );
+    expect(ok(call([INTAKE, INTAKE_REPLY, loaded])).text).toBe('Loaded Kiambu AA v1. Pull a shot when you are ready; I will read the curves.');
+    const applied = user(
+      toolResult('t_adj', { applied: true, variable: 'profile', version: 2, title: 'Kiambu AA v2', onMachine: true, loadError: null }),
+    );
+    expect(ok(call([...base, applied])).text).toBe('Done. v2 is on the machine. Pull another shot and tell me how it tastes.');
+  });
+
   it('a question the user typed past is not a pick, a taste or a decision', () => {
     const typedPast = { answered: false, note: 'The user typed a message instead.' };
     const nudge = 'Got it. Pull a shot when you are ready, or tell me more about the coffee.';
@@ -453,6 +493,20 @@ describe('scripted replies', () => {
       expect(grindAfter(numeric('15', null)).grind.setting).toBe('14');
       expect(grindAfter({ name: 'DF64', setting: '15', settingType: null, step: null, values: null }).grind.setting).toBe('14');
       expect(grindAfter({ name: 'DF64', setting: '15' }).grind.setting).toBe('14');
+      expect(grindAfter({ name: 'Comandante C40', setting: '24', settingType: null, step: null, values: null, linked: false }).grind.setting).toBe('23');
+    });
+
+    it('gives directions only for a linked grinder Decaid has no steps for, as Settings tells the user', () => {
+      // Decaid no longer lists it (a 404), or lists it without a step: nothing to size a setting with.
+      expect(grindAfter({ name: 'Niche Zero', setting: '15', settingType: null, step: null, values: null, linked: true })).toMatchObject({
+        variable: 'grind',
+        grind: { direction: 'finer', amount: 1, setting: null },
+        summary: 'Grind 1 step finer',
+      });
+      expect(grindAfter({ ...numeric('15', null), linked: true }).grind.setting).toBeNull();
+      // Linked with its steps: worked out as before.
+      expect(grindAfter({ ...numeric('15', 0.5), linked: true }).grind.setting).toBe('14.5');
+      expect(grindAfter({ ...preset('5'), linked: true }).grind.setting).toBe('4');
     });
 
     it('reads the intake context the same way before any shot', () => {

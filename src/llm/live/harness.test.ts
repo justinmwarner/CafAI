@@ -1,5 +1,5 @@
 import { describe, expect, inject, it, vi } from 'vitest';
-import { UNANSWERED_TEXT, intakeBlocks, toolResult, userMessage } from '../../app/engine/protocol.ts';
+import { UNANSWERED_TEXT, grinderPayload, intakeBlocks, toolResult, userMessage } from '../../app/engine/protocol.ts';
 import { AUTO_TOOLS, TOOL, type ToolName } from '../../coach/contract.ts';
 import { COACH_TOOL_SPECS, TEMPLATES, buildSystemPrompt } from '../../coach/index.ts';
 import {
@@ -41,7 +41,7 @@ const SAVE_INPUT = { name: 'Kiambu AA', roaster: null, origin: 'Kenya', roastLev
 const ASK_INPUT = { question: 'Milk or straight?', options: ['Straight', 'With milk'], multiSelect: false };
 
 const INTAKE = userMessage(
-  intakeBlocks('Kiambu AA, light roast, washed', { grinder: { name: null, setting: null }, scaleConnected: true }),
+  intakeBlocks('Kiambu AA, light roast, washed', { grinder: grinderPayload(null, null, null, false), scaleConnected: true, doseG: null }),
 );
 const REPLY: LlmMessage = {
   role: 'assistant',
@@ -277,10 +277,15 @@ describe('errorResults', () => {
 describe('the template pick', () => {
   const payload = templatePickedPayload('d-flow', 'Kiambu AA');
 
-  it('has the ENGINE_PROTOCOL rule 2 shape', () => {
+  it('has the ENGINE_PROTOCOL rule 2 shape: v1 at the 18 g reference (no dose in Decaid), on a connected machine', () => {
     expect(JSON.stringify(payload)).toBe(
-      '{"picked":"d-flow","version":1,"title":"Kiambu AA v1","uploaded":true,"onMachine":true,"note":null}',
+      '{"picked":"d-flow","version":1,"title":"Kiambu AA v1","yieldG":50,"doseG":null,"uploaded":true,"onMachine":true,"loadError":null,"note":null}',
     );
+    expect(templatePickedPayload('allonge', 'Kiambu AA')).toMatchObject({ yieldG: 90, doseG: null });
+  });
+
+  it('refuses a template outside the catalog', () => {
+    expect(() => templatePickedPayload('turbo', 'Kiambu AA')).toThrow('turbo');
   });
 
   it('answers every call of the last turn in tool_use order, as engine.ts sendUser does', () => {

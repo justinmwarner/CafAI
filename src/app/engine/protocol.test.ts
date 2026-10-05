@@ -46,56 +46,86 @@ const summary: ShotSummary = {
 };
 
 describe('engine protocol', () => {
-  it('builds the intake turn with a [context] block', () => {
+  it('builds the intake turn with a [context] block (rule 1)', () => {
     const blocks = intakeBlocks('Kenya Kiambu, light, washed', {
-      grinder: { name: 'Niche', setting: '12' },
+      grinder: grinderPayload('Niche', '12', null, false),
       scaleConnected: true,
+      doseG: null,
     });
     expect(blocks).toEqual([
       { type: 'text', text: 'Kenya Kiambu, light, washed' },
-      { type: 'text', text: '[context]\n{"grinder":{"name":"Niche","setting":"12"},"scaleConnected":true}' },
+      {
+        type: 'text',
+        text: '[context]\n{"grinder":{"name":"Niche","setting":"12","settingType":null,"step":null,"values":null,"linked":false},"scaleConnected":true,"doseG":null}',
+      },
     ]);
   });
 
   it("puts the dose and the linked grinder's dial in the intake context (rule 1)", () => {
     const blocks = intakeBlocks('Kenya Kiambu, light, washed', {
-      grinder: grinderPayload('Niche Zero', '15', NICHE),
+      grinder: grinderPayload('Niche Zero', '15', NICHE, true),
       scaleConnected: true,
       doseG: 18,
     });
     expect(blocks[1]).toEqual({
       type: 'text',
-      text: '[context]\n{"grinder":{"name":"Niche Zero","setting":"15","settingType":"numeric","step":0.5,"values":null},"scaleConnected":true,"doseG":18}',
+      text: '[context]\n{"grinder":{"name":"Niche Zero","setting":"15","settingType":"numeric","step":0.5,"values":null,"linked":true},"scaleConnected":true,"doseG":18}',
     });
   });
 
   describe('grinderPayload', () => {
     it("gives a numeric grinder's small step and no values", () => {
-      expect(grinderPayload('Niche Zero', '15', NICHE)).toEqual({
+      expect(grinderPayload('Niche Zero', '15', NICHE, true)).toEqual({
         name: 'Niche Zero',
         setting: '15',
         settingType: 'numeric',
         step: 0.5,
         values: null,
+        linked: true,
       });
     });
 
     it("gives a preset grinder's settings, in Decaid's order, and no step", () => {
-      const payload = grinderPayload('Baratza Encore ESP', '5', ENCORE);
-      expect(payload).toEqual({ name: 'Baratza Encore ESP', setting: '5', settingType: 'preset', step: null, values: ENCORE.values });
+      const payload = grinderPayload('Baratza Encore ESP', '5', ENCORE, true);
+      expect(payload).toEqual({
+        name: 'Baratza Encore ESP',
+        setting: '5',
+        settingType: 'preset',
+        step: null,
+        values: ENCORE.values,
+        linked: true,
+      });
       expect(payload.values).not.toBe(ENCORE.values);
     });
 
     it('says null for everything Decaid does not know', () => {
-      expect(grinderPayload('DF64', '14', null)).toEqual({ name: 'DF64', setting: '14', settingType: null, step: null, values: null });
-      expect(grinderPayload(null, null, { ...NICHE, smallStep: null })).toMatchObject({ settingType: 'numeric', step: null, values: null });
+      expect(grinderPayload('DF64', '14', null, false)).toEqual({
+        name: 'DF64',
+        setting: '14',
+        settingType: null,
+        step: null,
+        values: null,
+        linked: false,
+      });
+      expect(grinderPayload(null, null, { ...NICHE, smallStep: null }, true)).toMatchObject({ settingType: 'numeric', step: null, values: null });
       for (const smallStep of [0, -0.5, Number.NaN, Number.POSITIVE_INFINITY]) {
-        expect(grinderPayload('Niche Zero', '15', { ...NICHE, smallStep }).step, String(smallStep)).toBeNull();
+        expect(grinderPayload('Niche Zero', '15', { ...NICHE, smallStep }, true).step, String(smallStep)).toBeNull();
       }
-      expect(grinderPayload('Encore', '5', { ...ENCORE, values: [] })).toMatchObject({ settingType: 'preset', values: null });
+      expect(grinderPayload('Encore', '5', { ...ENCORE, values: [] }, true)).toMatchObject({ settingType: 'preset', values: null });
       // A step on a preset grinder, or a list on a numeric one, is not how its dial moves.
-      expect(grinderPayload('Encore', '5', { ...ENCORE, smallStep: 1 }).step).toBeNull();
-      expect(grinderPayload('Niche Zero', '15', { ...NICHE, values: ['1', '2'] }).values).toBeNull();
+      expect(grinderPayload('Encore', '5', { ...ENCORE, smallStep: 1 }, true).step).toBeNull();
+      expect(grinderPayload('Niche Zero', '15', { ...NICHE, values: ['1', '2'] }, true).values).toBeNull();
+    });
+
+    it('keeps a link Decaid no longer lists: linked, but nothing about its dial (directions only)', () => {
+      expect(grinderPayload('Niche Zero', '15', null, true)).toEqual({
+        name: 'Niche Zero',
+        setting: '15',
+        settingType: null,
+        step: null,
+        values: null,
+        linked: true,
+      });
     });
   });
 
@@ -117,13 +147,13 @@ describe('engine protocol', () => {
       levers: { temp: 88 },
       doseG: 18,
       targetYieldG: 36,
-      grinder: { name: 'Niche Zero', setting: '13' },
+      grinder: grinderPayload('Niche Zero', '13', null, false),
       summary: summaryForModel(summary),
     });
     expect(block.text.startsWith('[event:shot_completed]\n')).toBe(true);
     const payload = JSON.parse(block.text.split('\n')[1]!);
     expect(payload.levers.temp).toBe(88);
-    expect(payload.grinder).toEqual({ name: 'Niche Zero', setting: '13' });
+    expect(payload.grinder).toEqual({ name: 'Niche Zero', setting: '13', settingType: null, step: null, values: null, linked: false });
     expect(payload.summary.series).toBeUndefined();
     expect(payload.summary.yieldG).toBe(36.4);
   });
@@ -137,11 +167,11 @@ describe('engine protocol', () => {
       levers: { temp: 88 },
       doseG: 18,
       targetYieldG: 50,
-      grinder: grinderPayload('Baratza Encore ESP', '5', ENCORE),
+      grinder: grinderPayload('Baratza Encore ESP', '5', ENCORE, true),
       summary: summaryForModel(summary),
     });
     expect(block.text).toContain(
-      '"grinder":{"name":"Baratza Encore ESP","setting":"5","settingType":"preset","step":null,"values":["1","2","3","4","5","6","7","8","9","10","11","12"]}',
+      '"grinder":{"name":"Baratza Encore ESP","setting":"5","settingType":"preset","step":null,"values":["1","2","3","4","5","6","7","8","9","10","11","12"],"linked":true}',
     );
   });
 

@@ -41,6 +41,13 @@ export async function createServices(win: Window): Promise<AppServices> {
     llm: createLlmPort(storage.secrets),
     clock: { now: () => new Date(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
     newId,
+    visibility: {
+      visible: () => win.document.visibilityState !== 'hidden',
+      subscribe(listener) {
+        win.document.addEventListener('visibilitychange', listener);
+        return () => win.document.removeEventListener('visibilitychange', listener);
+      },
+    },
   });
 
   telemetry.start();

@@ -39,18 +39,29 @@ All JSON payloads are compact `JSON.stringify` output.
    `doseG` is Decaid's dose (`context.targetDoseWeight`) when CafAI coaches
    from it (12-25 g, D57), else null (none set, or outside that range).
    `<grinder>` =
-   `{"name":string|null,"setting":string|null,"settingType":"numeric"|"preset"|null,"step":number|null,"values":string[]|null}`:
+   `{"name":string|null,"setting":string|null,"settingType":"numeric"|"preset"|null,"step":number|null,"values":string[]|null,"linked":boolean}`:
    `name` and `setting` as last saved in Settings; `settingType`, `step` (a
    numeric dial's `settingSmallStep`) and `values` (a preset grinder's
    `settingValues`, finest first) describe the grinder linked from Decaid's
    grinder library (D62). They are null when no grinder is linked or Decaid
    has no data for it (`step` is always null on a preset grinder, `values`
-   on a numeric one).
+   on a numeric one). `linked` is true when Settings links a grinder from
+   Decaid's library, also when Decaid no longer lists it or has no step data
+   for it: then `step` and `values` are null and the coach gives directions
+   only (no setting), as Settings tells the user. The engine reads the
+   linked grinder at start, after `refresh()`, with every shot (when it
+   starts and when it finishes) and when the page comes back into view.
 2. **Template picked**: one user message with the held auto-tool results of
    that turn (e.g. `save_bag_details`) followed by
    `{type:"tool_result", tool_use_id:<propose_templates id>, content:JSON}`
-   with JSON = `{"picked":"<templateId>","version":1,"title":"<Bag> v1","yieldG":number,"doseG":number|null,"uploaded":true|false,"onMachine":true|false,"note":string|null}`
-   (`onMachine` false: saved, but the machine is not connected; Decaid loads it on connect).
+   with JSON = `{"picked":"<templateId>","version":1,"title":"<Bag> v1","yieldG":number,"doseG":number|null,"uploaded":true|false,"onMachine":true|false|null,"loadError":string|null,"note":string|null}`.
+   `onMachine` is true once the machine holds v1 (Decaid's barrier confirmed
+   it, or an older Decaid without the barrier with the machine connected);
+   false only while the machine is not connected (saved; Decaid loads it on
+   connect); null otherwise: the load failed (`uploaded` false, see `note`)
+   or the connected machine has not confirmed it. `loadError` is the reason
+   the machine did not confirm the version although it is connected
+   (Decaid's barrier failed, D55; the banner offers Retry), else null.
    `yieldG` is where v1 stops (its `target_weight` and the workflow's
    `targetYield`): the template's start ratio times the dose CafAI read from
    Decaid at the pick, or times 18 g when that dose is unknown or outside
@@ -68,7 +79,9 @@ All JSON payloads are compact `JSON.stringify` output.
 4. **Feedback**: tool_result for `ask_user` with JSON
    `{"selected":["<option>",...],"other":string|null}`.
 5. **Adjustment decision**: tool_result for `propose_adjustment` with JSON
-   `{"applied":true,"variable":"profile"|"grind"|"dose"|"none","version":number|null,"title":string|null,"onMachine":boolean|null}`
+   `{"applied":true,"variable":"profile"|"grind"|"dose"|"none","version":number|null,"title":string|null,"onMachine":boolean|null,"loadError":string|null}`
+   (`onMachine` and `loadError` as in rule 2, for the new version;
+   `onMachine` is also null when no profile changed: grind, dose, none)
    or `{"applied":false,"reason":"The user declined."}`
    or `{"applied":false,"error":"<upload error sentence>"}`.
 6. **Undo**: text `"[event:undo]\n" + JSON` with JSON
@@ -100,11 +113,13 @@ rule does not name (e.g. `yieldG`, `doseG`) leave its reply unchanged.
    `{variable:"none"}` when the rejected one was already a grind move.
    tool_result for `propose_adjustment`:
    `applied:true` -> text "Done. v{version} is on the machine. Pull another
-   shot and tell me how it tastes." (with `onMachine:false`: "Saved
-   v{version}. Decaid loads it when the machine connects; pull another shot
-   after that."; for grind/dose: "Make that change, then pull another
-   shot."). Otherwise -> text "OK, we keep v{n} as it is. Tell
-   me what you would like to try instead." End turn.
+   shot and tell me how it tastes." (with a `loadError`: "Saved v{version},
+   but the machine has not confirmed it. Tap Retry above, then pull another
+   shot."; else with `onMachine:false`: "Saved v{version}. Decaid loads it
+   when the machine connects; pull another shot after that."; for
+   grind/dose: "Make that change, then pull another shot."). Otherwise ->
+   text "OK, we keep v{n} as it is. Tell me what you would like to try
+   instead." End turn.
 2. tool_result for a query tool (`get_shot_series`, `get_shot_summary`,
    `get_phase_stats`, `compare_shots`, `get_bag_history`) -> `propose_adjustment`
    chosen from the most recent `ask_user` answer and the most recent
@@ -121,9 +136,10 @@ rule does not name (e.g. `yieldG`, `doseG`) leave its reply unchanged.
      `step`, the current setting minus that step, printed on the dial's grid
      the way CafAI's validator prints it (`"15"` with step 0.5 is `"14.5"`,
      `"14.25"` is `"13.75"`); with `values`, the entry before the current
-     setting in the list; with neither, the current setting minus 1 when it
-     is a plain number. null when none applies (no setting, a setting off
-     the dial or not in the list, or a move below 0 or past the first entry).
+     setting in the list; with neither, null for a linked grinder (`linked`
+     true: directions only), else the current setting minus 1 when it is a
+     plain number. null when none applies (no setting, a setting off the
+     dial or not in the list, or a move below 0 or past the first entry).
    Fill summary/rationale/expectedEffect/tips with short plausible text.
 3. tool_result for `ask_user` -> text "Thanks. Let me look at the pressure
    curve." + tool_use `get_shot_series` `{shot:"latest", metric:"pressure", fromS:null, toS:null}`.
@@ -134,9 +150,10 @@ rule does not name (e.g. `yieldG`, `doseG`) leave its reply unchanged.
 5. tool_result for `propose_templates` -> text "Loaded {title}. Pull a shot
    when you are ready; I will read the curves." (`uploaded:false`: "I saved
    {title}, but it did not load on the machine. Tap Retry above, then pull a
-   shot."; `onMachine:false`: "Saved {title}. Decaid loads it when the
-   machine connects; pull a shot after that.") A result marked
-   `answered:false` is no pick. End turn.
+   shot."; else with a `loadError`: "I saved {title}, but the machine has not
+   confirmed it. Tap Retry above, then pull a shot."; else `onMachine:false`:
+   "Saved {title}. Decaid loads it when the machine connects; pull a shot
+   after that.") A result marked `answered:false` is no pick. End turn.
 6. text starting `[event:undo]` -> text "Back on v{to}. Pull a shot when you
    are ready." End turn.
 7. Plain user text and no `save_bag_details` call anywhere earlier in the

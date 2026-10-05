@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Workflow } from '../../api/types.ts';
 import { SAMPLE_WORKFLOW } from '../testing/fakeServices.ts';
-import { createRefresher, isActiveBagVersion, readLoadedProfile, type LoadedProfileReading } from './loadedProfileModel.ts';
+import { createRefresher, isActiveBagVersion, profileMark, readLoadedProfile, type LoadedProfileReading } from './loadedProfileModel.ts';
 
 function workflow(title: string, extras?: Record<string, unknown>): Workflow {
   return {
@@ -71,6 +71,37 @@ describe('isActiveBagVersion', () => {
 
   it('a tag without a bag id still names a unique version', () => {
     expect(isActiveBagVersion(reading({ bagId: null }), ACTIVE)).toBe(true);
+  });
+});
+
+describe('profileMark', () => {
+  it('marks the bag version as this bag’s only once the machine holds it (D55)', () => {
+    expect(profileMark(true, 'loaded', true)).toBe('thisBag');
+    // Confirmed before the machine dropped: still the bag's version, which Decaid loads again on connect.
+    expect(profileMark(true, 'loaded', false)).toBe('thisBag');
+  });
+
+  it('says loading while the machine takes it, and not confirmed after a failed load', () => {
+    expect(profileMark(true, 'loading', true)).toBe('loading');
+    expect(profileMark(true, 'failed', true)).toBe('notConfirmed');
+    expect(profileMark(true, 'failed', false)).toBe('notConfirmed');
+  });
+
+  it('trusts the workflow while connected when nothing is known against it: an older Decaid, or no load since start', () => {
+    for (const load of ['assumed', null, undefined] as const) {
+      expect(profileMark(true, load, true), String(load)).toBe('thisBag');
+      // Never "on the machine" while it is not connected (D42).
+      expect(profileMark(true, load, false), String(load)).toBeNull();
+    }
+    // Saved while offline: Decaid loads it on connect; the line says so already.
+    expect(profileMark(true, 'waiting', false)).toBeNull();
+    expect(profileMark(true, 'waiting', true)).toBeNull();
+  });
+
+  it('says nothing about a profile that is not the bag version', () => {
+    for (const load of ['loading', 'loaded', 'waiting', 'failed', 'assumed', null, undefined] as const) {
+      expect(profileMark(false, load, true), String(load)).toBeNull();
+    }
   });
 });
 

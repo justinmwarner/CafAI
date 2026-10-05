@@ -395,7 +395,9 @@ function libraryDial(grinder: Raw): GrinderInfo | null {
  * One step finer than the dial now, or null when it cannot be named. With
  * Decaid's step or list the move is worked out the way CafAI's validator
  * does it (and printed the same: "15" with step 0.5 is "14.5"; with a list,
- * the previous entry). Without them, a plain number goes down by 1, as the
+ * the previous entry). A grinder linked from Decaid's library without them
+ * (Decaid no longer lists it, or has no step for it) gets directions only,
+ * as Settings tells the user. Otherwise a plain number goes down by 1, as the
  * script did before the grinder library: the common convention is that a
  * lower number is finer.
  */
@@ -408,6 +410,7 @@ function finerSetting(messages: Message[]): string | null {
     const move = resolveGrindMove(dial, setting, { direction: 'finer', amount: 1, setting: null });
     return move?.ok ? move.move.setting : null;
   }
+  if (grinder.linked === true) return null;
   if (!/^\d+(\.\d+)?$/.test(setting)) return null;
   const finer = Number(setting) - 1;
   return finer >= 0 ? String(Math.round(finer * 100) / 100) : null;
@@ -650,6 +653,10 @@ function decide(script: Script): Reply {
     if (payload.applied === true) {
       if (payload.variable === 'grind' || payload.variable === 'dose') return say('Make that change, then pull another shot.');
       if (payload.variable === 'none') return say('Locked in. Keep pulling shots like this one.');
+      // Connected, but not confirmed: the banner's Retry, not a wait for the machine to connect.
+      if (typeof payload.loadError === 'string') {
+        return say(`Saved v${formatNumber(payload.version)}, but the machine has not confirmed it. Tap Retry above, then pull another shot.`);
+      }
       if (payload.onMachine === false) {
         return say(`Saved v${formatNumber(payload.version)}. Decaid loads it when the machine connects; pull another shot after that.`);
       }
@@ -708,6 +715,9 @@ function decide(script: Script): Reply {
     const title = typeof payload.title === 'string' ? payload.title : 'the profile';
     if (payload.uploaded === false) {
       return say(`I saved ${title}, but it did not load on the machine. Tap Retry above, then pull a shot.`);
+    }
+    if (typeof payload.loadError === 'string') {
+      return say(`I saved ${title}, but the machine has not confirmed it. Tap Retry above, then pull a shot.`);
     }
     if (payload.onMachine === false) {
       return say(`Saved ${title}. Decaid loads it when the machine connects; pull a shot after that.`);

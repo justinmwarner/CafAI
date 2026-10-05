@@ -78,7 +78,7 @@ describe('describeManualChange (Crema leadChange, one variable)', () => {
       "Turn the grinder a little coarser before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings.",
     ]);
     expect(describeManualSteps(grind('coarser', 2, '16'))).toEqual([
-      'Set the grinder to 16 (2 steps coarser) before the next shot.',
+      "Set the grinder to 16 (2 steps coarser) before the next shot. That is the coach's estimate: CafAI doesn't know your grinder's step size, so note where the dial really lands in Settings.",
     ]);
     expect(describeManualSteps({ variable: 'dose', value: 18.5, grind: null })).toEqual([
       'Weigh 18.5 g of coffee for the next shot.',
@@ -113,8 +113,9 @@ describe("grind text with Decaid's grinder library (D62)", () => {
   });
 
   it("does not credit Decaid for a setting it did not check, or claim a step it does not have", () => {
+    // Decaid has the step, but the setting on the dial could not be placed on it.
     expect(describeManualSteps(grind('finer', 1, '13.3'), { grinder: niche, fromDecaid: false })).toEqual([
-      'Set the grinder to 13.3 (1 step finer) before the next shot.',
+      "Set the grinder to 13.3 (1 step finer) before the next shot. That is the coach's estimate: CafAI couldn't check it against your grinder's steps, so note where the dial really lands in Settings.",
     ]);
     expect(describeManualSteps(grind('finer', 1, '13'), { grinder: { ...niche, smallStep: null }, fromDecaid: true })).toEqual([
       'Set the grinder to 13 (1 step finer) before the next shot.',
@@ -122,6 +123,17 @@ describe("grind text with Decaid's grinder library (D62)", () => {
     expect(describeManualSteps(grind('finer', 2, null), { grinder: { ...niche, smallStep: null } })).toEqual([
       "Turn the grinder 2 steps finer before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings.",
     ]);
+  });
+
+  it("says a setting nobody could check is the coach's estimate (D62: the user is told)", () => {
+    // A typed grinder, or a linked one without step data: the model's number is a guess.
+    for (const grinder of [undefined, null, { ...niche, smallStep: null }]) {
+      expect(describeManualSteps(grind('finer', 1, '23'), { grinder, fromDecaid: false })).toEqual([
+        "Set the grinder to 23 (1 step finer) before the next shot. That is the coach's estimate: CafAI doesn't know your grinder's step size, so note where the dial really lands in Settings.",
+      ]);
+    }
+    // Worked out on Decaid's steps: no caveat.
+    expect(describeManualSteps(grind('finer', 1, '14.5'), { grinder: niche, fromDecaid: true })[0]).not.toContain('estimate');
   });
 });
 

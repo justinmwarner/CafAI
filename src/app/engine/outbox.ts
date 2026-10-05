@@ -42,7 +42,7 @@ export interface Outbox {
 
 export const OUTBOX_RETRY_MS = 30_000;
 
-const browserTimers: OutboxTimers = {
+export const browserTimers: OutboxTimers = {
   setTimeout: (callback, ms) => setTimeout(callback, ms),
   clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
 };

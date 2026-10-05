@@ -3,13 +3,15 @@
  *
  * Decaid has no workflow stream, so the panel reads GET /workflow at the
  * moments the profile can change; `createRefresher` keeps that to one request
- * at a time. The panel marks the profile as the bag's own only when CafAI's
- * tag names the bag's active version and the titles match (D41): a title
- * alone is not enough (two bags can share a name), and the tag alone is not
- * either (another skin can load its own profile and leave the tag behind,
- * since Decaid merges `extras` key by key).
+ * at a time. The panel takes the profile for the bag's version only when
+ * CafAI's tag names the bag's active version and the titles match (D41): a
+ * title alone is not enough (two bags can share a name), and the tag alone is
+ * not either (another skin can load its own profile and leave the tag behind,
+ * since Decaid merges `extras` key by key). It marks it "This bag" only once
+ * the machine holds it (`profileMark`, D55).
  */
 import type { Workflow } from '../../api/types.ts';
+import type { VersionLoad } from '../../app/types.ts';
 
 /** CafAI's key in the workflow's context.extras (written at every activation). */
 const TAG_KEY = 'cafai';
@@ -43,6 +45,35 @@ export function readLoadedProfile(workflow: Workflow): LoadedProfileReading {
 export function isActiveBagVersion(reading: LoadedProfileReading, active: ActiveBagVersion): boolean {
   if (reading.versionId === null || reading.versionId !== active.versionId || reading.title !== active.title) return false;
   return reading.bagId === null || reading.bagId === active.bagId;
+}
+
+/** What the line says beside the title: the bag's version on the machine, on its way there, or not confirmed. */
+export type ProfileMark = 'thisBag' | 'loading' | 'notConfirmed' | null;
+
+/**
+ * The mark for a workflow profile (D66). The bag's version is "This bag" only
+ * once the machine holds it (D55): Decaid's barrier confirmed it, or nothing
+ * is known against it (an older Decaid without the barrier, or no load since
+ * CafAI started, as after a reload) and the machine is connected (D42: never
+ * on the machine while it is away). While it loads, and after a load that
+ * failed, the line says so instead. `load` is undefined when the coach does
+ * not track it.
+ */
+export function profileMark(isBagVersion: boolean, load: VersionLoad | null | undefined, connected: boolean): ProfileMark {
+  if (!isBagVersion) return null;
+  switch (load) {
+    case 'loaded':
+      return 'thisBag';
+    case 'loading':
+      return 'loading';
+    case 'failed':
+      return 'notConfirmed';
+    case 'waiting':
+      // Saved while the machine was away: the line already says Decaid loads it on connect.
+      return null;
+    default:
+      return connected ? 'thisBag' : null;
+  }
 }
 
 export interface Refresher {

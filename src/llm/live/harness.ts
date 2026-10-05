@@ -15,7 +15,7 @@ import {
   type TemplatePickedPayload,
 } from '../../app/engine/protocol.ts';
 import { AUTO_TOOLS, TEMPLATE_IDS, TOOL, TOOL_INPUTS, type ProposeTemplates, type ToolName } from '../../coach/contract.ts';
-import { COACH_TOOL_SPECS, versionTitle } from '../../coach/index.ts';
+import { COACH_TOOL_SPECS, getTemplate, startingYield, versionTitle } from '../../coach/index.ts';
 import { redactKeyLike } from '../../storage/redact.ts';
 import { describeIssues, toToolDefinition, zodValidator } from '../schema.ts';
 import {
@@ -221,9 +221,25 @@ export function bagNameOf(messages: readonly LlmMessage[]): string {
   return name;
 }
 
-/** A successful pick: v1 saved and loaded on a connected machine. */
+/**
+ * A successful pick, exactly as the engine sends it when Decaid has no dose:
+ * v1 stops at the template's start ratio times the 18 g reference (D57), and
+ * is saved and loaded on a connected machine.
+ */
 export function templatePickedPayload(templateId: string, bagName: string): TemplatePickedPayload {
-  return { picked: templateId, version: 1, title: versionTitle(bagName, 1), uploaded: true, onMachine: true, note: null };
+  const template = getTemplate(templateId);
+  if (!template) throw new Error(`No template ${templateId} in the catalog.`);
+  return {
+    picked: templateId,
+    version: 1,
+    title: versionTitle(bagName, 1),
+    yieldG: startingYield(template, null),
+    doseG: null,
+    uploaded: true,
+    onMachine: true,
+    loadError: null,
+    note: null,
+  };
 }
 
 /**

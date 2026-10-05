@@ -306,7 +306,9 @@ describe('validateProposal: grind', () => {
     const plan = okPlan(validateProposal(grind('coarser', 2, '16'), ctxFor(dflowT)));
     expect(plan.contextPatch).toEqual({ grinderSetting: '16' });
     expect(plan.diffLines).toEqual(['Grind 2 steps coarser: 14.5 -> 16']);
-    expect(plan.manualSteps).toEqual(['Set the grinder to 16 (2 steps coarser) before the next shot.']);
+    expect(plan.manualSteps).toEqual([
+      "Set the grinder to 16 (2 steps coarser) before the next shot. That is the coach's estimate: CafAI doesn't know your grinder's step size, so note where the dial really lands in Settings.",
+    ]);
     expect(plan.grindSettingFrom).toBe('model');
   });
 
@@ -451,7 +453,9 @@ describe("validateProposal: grind with Decaid's grinder library (D62)", () => {
       // Off any 0.5 grid, yet passed through: there is no grid to check it against.
       const given = okPlan(validateProposal(grind('coarser', 2, '15.2'), ctx));
       expect(given.contextPatch).toEqual({ grinderSetting: '15.2' });
-      expect(given.manualSteps).toEqual(['Set the grinder to 15.2 (2 steps coarser) before the next shot.']);
+      expect(given.manualSteps).toEqual([
+        "Set the grinder to 15.2 (2 steps coarser) before the next shot. That is the coach's estimate: CafAI doesn't know your grinder's step size, so note where the dial really lands in Settings.",
+      ]);
       expect(given.grindSettingFrom).toBe('model');
       expect(given.notes).toEqual([]);
     }
@@ -467,7 +471,9 @@ describe("validateProposal: grind with Decaid's grinder library (D62)", () => {
       ]);
       const given = okPlan(validateProposal(grind('finer', 1, '13.3'), ctx));
       expect(given.contextPatch).toEqual({ grinderSetting: '13.3' });
-      expect(given.manualSteps).toEqual(['Set the grinder to 13.3 (1 step finer) before the next shot.']);
+      expect(given.manualSteps).toEqual([
+        "Set the grinder to 13.3 (1 step finer) before the next shot. That is the coach's estimate: CafAI couldn't check it against your grinder's steps, so note where the dial really lands in Settings.",
+      ]);
       expect(given.grindSettingFrom).toBe('model');
     }
     const preset = okPlan(validateProposal(grind('finer', 1, null), on(DITTING, 'fine')));

@@ -29,9 +29,10 @@ export function userMessage(blocks: ContentBlock[]): LlmMessage {
 /**
  * The grinder as the model hears it (rules 1 and 3): name and setting as
  * last saved, and how its dial moves when it is linked to Decaid's grinder
- * library (D62). The library fields are optional only so callers written
- * before them (the live API harness) still compile; the engine always sends
- * them, built by grinderPayload().
+ * library (D62). The engine always sends every field, built by
+ * grinderPayload(). The library fields stay optional only because the live
+ * API check (src/llm/live/anthropic.live.ts) still builds its intake with the
+ * older shape.
  */
 export interface GrinderPayload {
   name: string | null;
@@ -42,18 +43,30 @@ export interface GrinderPayload {
   step?: number | null;
   /** A preset grinder's settings, finest first; null when unknown. */
   values?: string[] | null;
+  /**
+   * Settings links this grinder from Decaid's library, also when Decaid no
+   * longer lists it or has no step data for it: then the coach gives
+   * directions only, as Settings tells the user.
+   */
+  linked?: boolean;
 }
 
 /** The grinder for the model: as last saved, with what Decaid's grinder library says about its dial. */
-export function grinderPayload(name: string | null, setting: string | null, grinder: GrinderInfo | null): Required<GrinderPayload> {
-  const step = grinder?.settingType === 'numeric' ? grinder.smallStep : null;
-  const values = grinder?.settingType === 'preset' ? grinder.values : null;
+export function grinderPayload(
+  name: string | null,
+  setting: string | null,
+  dial: GrinderInfo | null,
+  linked: boolean,
+): Required<GrinderPayload> {
+  const step = dial?.settingType === 'numeric' ? dial.smallStep : null;
+  const values = dial?.settingType === 'preset' ? dial.values : null;
   return {
     name,
     setting,
-    settingType: grinder?.settingType ?? null,
+    settingType: dial?.settingType ?? null,
     step: step !== null && Number.isFinite(step) && step > 0 ? step : null,
     values: values && values.length > 0 ? [...values] : null,
+    linked,
   };
 }
 
@@ -61,8 +74,9 @@ export interface IntakeContext {
   grinder: GrinderPayload;
   scaleConnected: boolean;
   /**
-   * The dose in Decaid when CafAI coaches from it (12-25 g), else null.
-   * Optional only so callers written before it still compile.
+   * The dose in Decaid when CafAI coaches from it (12-25 g), else null. The
+   * engine always sends it; optional only for the live API check's intake
+   * (see GrinderPayload).
    */
   doseG?: number | null;
 }
@@ -105,23 +119,29 @@ export interface TemplatePickedPayload {
   picked: string;
   version: 1;
   title: string;
-  /**
-   * Where v1 stops, in grams: the author's ratio times doseG, or times 18 g
-   * (D57). It and doseG are optional only so callers written before D57 (the
-   * live API harness) still compile; the engine always sends both.
-   */
-  yieldG?: number;
+  /** Where v1 stops, in grams: the author's ratio times doseG, or times 18 g (D57). */
+  yieldG: number;
   /** The dose v1's yield was worked out from; null when v1 assumed 18 g (none in Decaid, or outside 12-25 g). */
-  doseG?: number | null;
+  doseG: number | null;
   uploaded: boolean;
-  /** False while the machine is not connected: Decaid loads the version when it connects. */
-  onMachine: boolean;
+  /**
+   * True once the machine holds v1. False only while the machine is not
+   * connected: Decaid loads the version when it connects. Null otherwise: the
+   * load failed (uploaded false, see note) or the connected machine has not
+   * confirmed it (loadError).
+   */
+  onMachine: boolean | null;
+  /** Why the connected machine has not confirmed the version (Decaid's barrier failed, D55); null otherwise. */
+  loadError: string | null;
   note: string | null;
 }
 
 export type AdjustmentResultPayload =
-  /** onMachine: as for a template pick; null when no profile changed (grind, dose, none). */
-  | { applied: true; variable: string; version: number | null; title: string | null; onMachine: boolean | null }
+  /**
+   * onMachine and loadError: as for a template pick, for the new version;
+   * onMachine is also null when no profile changed (grind, dose, none).
+   */
+  | { applied: true; variable: string; version: number | null; title: string | null; onMachine: boolean | null; loadError: string | null }
   | { applied: false; reason: string }
   | { applied: false; error: string };
 

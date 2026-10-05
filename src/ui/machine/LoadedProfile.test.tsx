@@ -6,6 +6,7 @@ import type { CoachState, CoachUiMessage } from '../../app/types.ts';
 import { makeBag, makeVersion } from '../../storage/testing/fixtures.ts';
 import { createFakeServices, SAMPLE_WORKFLOW, type FakeServices } from '../testing/fakeServices.ts';
 import { renderWithServices } from '../testing/renderWithServices.tsx';
+import { theme } from '../theme.ts';
 import { LoadedProfile } from './LoadedProfile.tsx';
 import { LOADED_PROFILE_DEBOUNCE_MS, LOADED_PROFILE_POLL_MS } from './useLoadedProfile.ts';
 
@@ -141,6 +142,84 @@ describe('LoadedProfile: what it shows', () => {
     expect(getComputedStyle(title!).whiteSpace).toBe('nowrap');
     // The mark sits beside the title and never shrinks away.
     expect(line()).toHaveTextContent('This bag');
+  });
+});
+
+describe('LoadedProfile: the bag version on its way to the machine (D55)', () => {
+  const ON_MACHINE = () => workflow('Kiambu AA v2', { versionId: 'ver_2', bagId: 'bag_1' });
+
+  it('says loading… while the machine takes the version, and This bag only once it holds it', async () => {
+    const services = createFakeServices({ coach: { ...ON_V2, activeLoad: 'loading' } });
+    serveWorkflow(services, ON_MACHINE());
+    await renderLine(services);
+    expect(line()).toHaveTextContent('Kiambu AA v2');
+    expect(line()).toHaveTextContent('loading…');
+    expect(line()).not.toHaveTextContent('This bag');
+
+    act(() => services.coach.setState({ activeLoad: 'loaded' }));
+    expect(line()).toHaveTextContent('This bag');
+    expect(line()).not.toHaveTextContent('loading…');
+  });
+
+  it('says not confirmed, in the warning colour, after a load that failed', async () => {
+    const services = createFakeServices({ coach: { ...ON_V2, activeLoad: 'failed' } });
+    serveWorkflow(services, ON_MACHINE());
+    await renderLine(services);
+    expect(line()).toHaveTextContent('Kiambu AA v2');
+    expect(line()).not.toHaveTextContent('This bag');
+    expect(screen.getByText('not confirmed')).toHaveStyle({ color: theme.palette.warning.main });
+  });
+
+  it('claims nothing for a version saved while the machine is away; Decaid loads it on connect', async () => {
+    const services = createFakeServices({
+      coach: { ...ON_V2, activeLoad: 'waiting' },
+      telemetry: { machineConnected: false },
+    });
+    serveWorkflow(services, ON_MACHINE());
+    await renderLine(services);
+    expect(line()).toHaveTextContent('Decaid loads it when the machine connects');
+    expect(line()).not.toHaveTextContent('This bag');
+    expect(line()).not.toHaveTextContent('loading…');
+  });
+
+  it('trusts the workflow when CafAI has not loaded the version since it started, but only while connected', async () => {
+    const services = createFakeServices({ coach: { ...ON_V2, activeLoad: null } });
+    serveWorkflow(services, ON_MACHINE());
+    await renderLine(services);
+    expect(line()).toHaveTextContent('This bag');
+    act(() => services.telemetry.setState({ machineConnected: false }));
+    expect(line()).not.toHaveTextContent('This bag');
+  });
+
+  it('says nothing of a load when the workflow carries another profile', async () => {
+    const services = createFakeServices({ coach: { ...ON_V2, activeLoad: 'failed' } });
+    serveWorkflow(services, workflow('Default', { versionId: 'ver_2', bagId: 'bag_1' }));
+    await renderLine(services);
+    expect(line()).toHaveTextContent('Default');
+    expect(line()).not.toHaveTextContent('not confirmed');
+  });
+});
+
+describe("LoadedProfile: on the engine's beat", () => {
+  it('reads Decaid’s workflow when the engine looks at the machine, with no clock of its own', async () => {
+    vi.useFakeTimers();
+    const services = createFakeServices({ coach: { ...ON_V2, machineTick: 0 } });
+    const decaid = serveWorkflow(services, workflow('Kiambu AA v2', { versionId: 'ver_2', bagId: 'bag_1' }));
+    await renderLine(services);
+    expect(reads(services)).toBe(1);
+    await wait(LOADED_PROFILE_POLL_MS * 2);
+    expect(reads(services)).toBe(1);
+
+    // Another skin loaded a profile; the engine's next look and this line see it together.
+    decaid.set(workflow('Default', { versionId: 'ver_2', bagId: 'bag_1' }));
+    await act(async () => services.coach.setState({ machineTick: 1 }));
+    expect(reads(services)).toBe(2);
+    expect(line()).toHaveTextContent('Default');
+    expect(line()).not.toHaveTextContent('This bag');
+
+    // The engine looks when the page comes back into view, and so the line reads then.
+    await act(async () => void document.dispatchEvent(new Event('visibilitychange')));
+    expect(reads(services)).toBe(2);
   });
 });
 

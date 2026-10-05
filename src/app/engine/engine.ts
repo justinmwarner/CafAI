@@ -9,6 +9,10 @@
  *   profile on its own.
  * - A version is "on the machine" only once Decaid says the machine holds it
  *   (D55): every activation is a workflow PUT followed by Decaid's barrier.
+ * - Decaid has no workflow stream, so CafAI looks at the workflow every 30 s
+ *   while the page is in view, and when it comes back into view, and says
+ *   when the machine runs another profile (D66). Looking never changes the
+ *   machine (D42).
  * - Writes to Decaid that fail (a grinder setting, a shot's notes) wait in an
  *   outbox and go out again when Decaid is back (D64).
  * - v1 starts from the dose Decaid has at the pick (D57). Grind moves use the
@@ -62,8 +66,9 @@ import type {
   CoachUiPart,
   NoticeProgress,
   TemplateCardItem,
+  VersionLoad,
 } from '../types.ts';
-import { createOutbox, type OutboxTimers } from './outbox.ts';
+import { browserTimers, createOutbox, type OutboxTimers } from './outbox.ts';
 import type { ApiPort, ChangePlan, Clock, CoachPort, LlmPort, ShotSource } from './ports.ts';
 import {
   UNANSWERED_SHOT,
@@ -116,7 +121,20 @@ export interface EngineDeps {
   shotFetch?: { attempts: number; delayMs: number };
   /** Timers for the outbox's retry every 30 s (the browser's by default). */
   timers?: OutboxTimers;
+  /** Timers for the look at the machine's profile every 30 s (the browser's by default). */
+  checkTimers?: OutboxTimers;
+  /** Whether the page is in view, and when that changes (always in view by default). */
+  visibility?: PageVisibility;
 }
+
+/** The page's visibility: the WebView runs on with the page hidden behind another app or a dark screen. */
+export interface PageVisibility {
+  visible(): boolean;
+  /** Calls `listener` when the page is shown or hidden; returns the unsubscribe. */
+  subscribe(listener: () => void): () => void;
+}
+
+const ALWAYS_VISIBLE: PageVisibility = { visible: () => true, subscribe: () => () => undefined };
 
 export interface CoachEngine extends CoachController {
   start(): Promise<void>;
@@ -144,15 +162,8 @@ interface Session {
   numbers: Promise<void>;
 }
 
-/**
- * What CafAI knows about a version on the machine (D55):
- * - loading: Decaid has it in the workflow; CafAI waits for the machine;
- * - loaded: Decaid's barrier said the machine holds it;
- * - waiting: no machine; Decaid uploads it when the machine connects;
- * - failed: the barrier failed (Decaid keeps retrying its own upload);
- * - assumed: an older Decaid without the barrier, so the workflow is trusted.
- */
-type LoadStatus = 'loading' | 'loaded' | 'waiting' | 'failed' | 'assumed';
+/** What CafAI knows about a version on the machine (D55); see VersionLoad. A failed barrier leaves Decaid retrying its own upload. */
+type LoadStatus = VersionLoad;
 
 type LoadOutcome = { status: 'loaded' | 'waiting' | 'assumed' } | { status: 'failed'; reason: string };
 
@@ -189,6 +200,13 @@ const SEARCH_NOTICE = 'Looking for that shot in Decaid…';
  * that window started after the upload.
  */
 const UPLOAD_GUARD_MS = 500;
+/**
+ * How often CafAI looks at Decaid's workflow while the page is in view.
+ * Decaid has no workflow stream, so this is how a profile loaded behind
+ * CafAI's back (another skin, the machine's own screen) shows up before a
+ * shot is wasted on it.
+ */
+export const MACHINE_CHECK_MS = 30_000;
 const GRINDER_WRITE = 'grinder';
 const shotWriteKey = (shotId: string) => `shot:${shotId}`;
 
@@ -211,6 +229,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   const { storage, telemetry, api, coach, llm, clock } = deps;
   const effort: Effort = deps.effort ?? 'medium';
   const shotFetch = deps.shotFetch ?? { attempts: 6, delayMs: 500 };
+  const checkTimers = deps.checkTimers ?? browserTimers;
+  const visibility = deps.visibility ?? ALWAYS_VISIBLE;
 
   let state: CoachState = {
     ready: false,
@@ -224,6 +244,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     hasApiKey: false,
     error: null,
     canUndo: false,
+    activeLoad: null,
+    machineTick: 0,
   };
   let settings: Settings = { model: 'claude-opus-5-5', grinderName: null, grinderSetting: null, activeBagId: null };
   let session: Session | null = null;
@@ -271,6 +293,18 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   let linkedGrinder: { id: string; info: GrinderInfo | null } | null = null;
   /** Numbers the grinder reads, so a slow answer never overwrites a newer one. */
   let grinderReads = 0;
+  /** True while Decaid's barrier runs: a version is on its way to the machine. */
+  let barrierInFlight = false;
+  /**
+   * The profile CafAI last said the machine runs instead of the active
+   * version (version, title and content), so the 30 s look raises each
+   * mismatch once: a banner the user dismissed stays dismissed (D52).
+   */
+  let mismatchSeen: string | null = null;
+  let checkTimer: unknown = null;
+  let checkQueued = false;
+  let disposed = false;
+  let unsubscribeVisibility: (() => void) | null = null;
   const outbox = createOutbox({ timers: deps.timers });
   const shotWrites = new Map<string, ShotWrite>();
   let chain: Promise<void> = Promise.resolve();
@@ -302,6 +336,14 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     return Boolean(current && current.parentVersionId && current.change && current.status === 'active');
   }
 
+  /** How far the active version's load got (D55); null when CafAI has not loaded it since it started. */
+  function activeLoad(s: Session | null): LoadStatus | null {
+    const version = activeVersion(s);
+    if (!version) return null;
+    if (uploadFailedFor === version.id) return 'failed';
+    return machineLoad?.versionId === version.id ? machineLoad.status : null;
+  }
+
   function emit(): void {
     if (emitTimer) {
       clearTimeout(emitTimer);
@@ -318,6 +360,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       versions: session ? [...session.versions].sort((a, b) => a.version - b.version) : [],
       phase: computePhase(session),
       canUndo: !state.busy && canUndo(session),
+      activeLoad: activeLoad(session),
     };
     for (const listener of [...listeners]) listener();
   }
@@ -514,7 +557,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
 
   /** The grinder as the model hears it: as last saved, with its dial when Decaid knows it. */
   function grinderForModel() {
-    return grinderPayload(settings.grinderName, settings.grinderSetting, grinderInfo());
+    return grinderPayload(settings.grinderName, settings.grinderSetting, grinderInfo(), (settings.grinderId ?? null) !== null);
   }
 
   // -------------------------------------------------------------------------
@@ -1021,6 +1064,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     const workflow = await api.activateProfile(profile, context, { shotRunning: false });
     // This context carried the grinder as last saved: a grinder write that waits is done.
     outbox.drop(GRINDER_WRITE);
+    // The workflow carries a bag's version again: a profile seen there before is news if it comes back.
+    mismatchSeen = null;
     setMachineLoad(versionId, 'loading');
     if (context.targetYield !== undefined) s.targetYieldG = context.targetYield;
     if (context.targetDoseWeight !== undefined) s.doseG = context.targetDoseWeight;
@@ -1045,12 +1090,15 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       state = { ...state, busy: true };
       const progressId = showProgress(null, `Loading ${title} on the machine…`, { value: null, label: null });
       emit();
+      barrierInFlight = true;
       try {
         const answer = await api.loadProfileOnMachine(profile);
         if (answer === 'unsupported') barrierSupported = false;
         outcome = { status: answer === 'loaded' ? 'loaded' : answer === 'offline' ? 'waiting' : 'assumed' };
       } catch (error) {
         outcome = { status: 'failed', reason: describe(error) };
+      } finally {
+        barrierInFlight = false;
       }
       hideProgress(progressId);
     }
@@ -1073,9 +1121,19 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     } else addMessage('system', [loadedNotice(title)]);
   }
 
-  /** `onMachine` for the model: only what the barrier confirmed (or, without one, a connected machine). */
-  function onMachine(outcome: LoadOutcome): boolean {
+  /**
+   * `onMachine` for the model: true for what the barrier confirmed (or,
+   * without one, a connected machine); false only while no machine is
+   * connected, which the coach reads as "Decaid loads it on connect"; null
+   * when a connected machine has not confirmed it (loadError says why).
+   */
+  function onMachine(outcome: LoadOutcome): boolean | null {
+    if (outcome.status === 'failed') return null;
     return outcome.status === 'loaded' || (outcome.status === 'assumed' && telemetry.getState().machineConnected);
+  }
+
+  function loadError(outcome: LoadOutcome): string | null {
+    return outcome.status === 'failed' ? outcome.reason : null;
   }
 
   /**
@@ -1098,9 +1156,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       return; // Decaid unreachable: the next connect looks again.
     }
     if (!workflow.profile || !carriesVersion(workflow, version)) {
-      if (workflow.profile) {
-        setLoadProblem(version.id, `The machine is running "${workflow.profile.title}", not ${version.title}. Tap Retry to load it.`);
-      }
+      if (workflow.profile) raiseMismatch(version, workflow.profile);
       emit();
       return;
     }
@@ -1234,13 +1290,18 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (record.workflow?.profile && !ranVersion(record.workflow, current)) {
       // The machine ran something else (another bag's profile, or a load that
       // failed): crediting this shot to the active version would corrupt the dial-in.
+      const ran = record.workflow.profile.title;
       addMessage('system', [
         noticePart(
           'warning',
-          `That shot ran "${record.workflow.profile.title}", not ${current.title}, so it is not part of this dial-in.`,
+          ran === current.title
+            ? `That shot ran a different "${ran}" (another bag or version), so it is not part of this dial-in.`
+            : `That shot ran "${ran}", not ${current.title}, so it is not part of this dial-in.`,
         ),
       ]);
       setLoadProblem(current.id, `The machine is not running ${current.title}. Tap Retry to load it.`);
+      // Said once: the 30 s look does not raise the same profile again.
+      mismatchSeen = mismatchKey(current, record.workflow.profile);
       await persistConversation(s);
       return;
     }
@@ -1389,12 +1450,14 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     // Where v1 stops and why, before the load: the barista may want another dose.
     const dose = { decaidG: decaidDoseG, knownG: doseG, assumedG: coach.referenceDoseG, range: coach.doseRange };
     addMessage('system', [noticePart('info', startingYieldText(title, yieldG, dose))]);
-    let onMachineNow = false;
+    // Not loaded at all (uploaded false) is neither on the machine nor waiting for it.
+    let onMachineNow: boolean | null = null;
+    let notConfirmed: string | null = null;
     if (workflow) {
       const outcome = await confirmOnMachine(version.id, title, workflow.profile);
       reportLoad(version.id, title, outcome);
       onMachineNow = onMachine(outcome);
-      if (outcome.status === 'failed') note = note ? `${note} ${outcome.reason}` : outcome.reason;
+      notConfirmed = loadError(outcome);
     } else {
       setLoadProblem(version.id, `Could not load ${title} on the machine. Tap Retry to try again.`);
       addMessage('system', [noticePart('error', `${title} is saved, but loading it on the machine failed: ${note}`)]);
@@ -1409,6 +1472,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       doseG,
       uploaded,
       onMachine: onMachineNow,
+      loadError: notConfirmed,
       note,
     };
     const answers = new Map([[call.id, toolResult(call.id, picked)]]);
@@ -1439,22 +1503,98 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   }
 
   /**
-   * At start-up, say so when the machine runs something other than the active
-   * bag's version (another skin, or a profile picked on the machine). Loading
-   * it is left to the user's Retry: opening CafAI alone never changes the machine.
+   * At start-up, every 30 s and when the page comes back into view, say so
+   * when the machine runs something other than the active bag's version
+   * (another skin, or a profile picked on the machine). Loading it is left to
+   * the user's Retry: CafAI looking never changes the machine (D42).
    */
   async function checkMachineProfile(): Promise<void> {
     const s = session;
     const version = activeVersion(s);
     if (!s || !version) return;
+    let workflow: Workflow;
     try {
-      const workflow = await api.getWorkflow();
-      if (!workflow.profile || carriesVersion(workflow, version)) return;
-      setLoadProblem(version.id, `The machine is running "${workflow.profile.title}", not ${version.title}. Tap Retry to load it.`);
-      emit();
+      workflow = await api.getWorkflow();
     } catch {
-      // Decaid unreachable: nothing to compare yet.
+      return; // Decaid unreachable: nothing to compare yet.
     }
+    if (!workflow.profile) return;
+    if (carriesVersion(workflow, version)) {
+      mismatchSeen = null;
+      return;
+    }
+    if (raiseMismatch(version, workflow.profile)) emit();
+  }
+
+  /** The profile the machine runs instead of `version`, as the 30 s look remembers it. */
+  function mismatchKey(version: ProfileVersion, profile: WireProfile): string {
+    let content: string;
+    try {
+      content = coach.profileId(profile);
+    } catch {
+      content = '';
+    }
+    return `${version.id}\n${profile.title}\n${content}`;
+  }
+
+  /** The machine has the version's title but not the version (D41): never the same title twice. */
+  function runningOther(title: string, version: ProfileVersion): string {
+    return title === version.title
+      ? `The machine is running a different "${title}" (another bag or version). Tap Retry to load this bag's version.`
+      : `The machine is running "${title}", not ${version.title}. Tap Retry to load it.`;
+  }
+
+  /**
+   * Put "the machine runs another profile" on the banner, once per profile:
+   * the same mismatch found again (every 30 s) never brings back a banner the
+   * user dismissed (D52); a different profile does. True when raised.
+   */
+  function raiseMismatch(version: ProfileVersion, profile: WireProfile): boolean {
+    const key = mismatchKey(version, profile);
+    if (key === mismatchSeen) return false;
+    mismatchSeen = key;
+    setLoadProblem(version.id, runningOther(profile.title, version));
+    return true;
+  }
+
+  /** Nothing else is going on: no reply or action in progress, no shot, no version on its way to the machine. */
+  function quiet(): boolean {
+    return !state.busy && !isShotRunning() && !barrierInFlight;
+  }
+
+  /**
+   * The beat of the machine check (MACHINE_CHECK_MS, and the page coming back
+   * into view). The Profile line reads Decaid's workflow on it (machineTick),
+   * so it and the banner change together; the look itself waits for a quiet
+   * moment, and at most one waits at a time.
+   */
+  function machineBeat(): void {
+    if (disposed || !visibility.visible()) return;
+    state = { ...state, machineTick: (state.machineTick ?? 0) + 1 };
+    emit();
+    if (checkQueued || !quiet()) return;
+    checkQueued = true;
+    void enqueue(async () => {
+      checkQueued = false;
+      if (quiet()) await checkMachineProfile();
+    });
+  }
+
+  function scheduleMachineBeats(): void {
+    if (disposed) return;
+    checkTimer = checkTimers.setTimeout(() => {
+      checkTimer = null;
+      machineBeat();
+      scheduleMachineBeats();
+    }, MACHINE_CHECK_MS);
+  }
+
+  /** Back in view after a while: what Decaid holds may have changed meanwhile. */
+  function onVisibilityChange(): void {
+    if (!visibility.visible()) return;
+    // The linked grinder may have left Decaid's library (D62).
+    loadGrinder();
+    machineBeat();
   }
 
   async function retryActivation(versionId: string): Promise<void> {
@@ -1619,10 +1759,12 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     // Applied: the version exists and is active even if the machine has not
     // confirmed it yet; CafAI's own notice and banner say so (D55).
     let onMachineNow: boolean | null = null;
+    let notConfirmed: string | null = null;
     if (loading && title) {
       const outcome = await confirmOnMachine(loading.versionId, title, loading.profile);
       reportLoad(loading.versionId, title, outcome);
       onMachineNow = onMachine(outcome);
+      notConfirmed = loadError(outcome);
     }
     const payload: AdjustmentResultPayload = {
       applied: true,
@@ -1630,6 +1772,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       version: versionNumber,
       title,
       onMachine: onMachineNow,
+      loadError: notConfirmed,
     };
     state = { ...state, busy: false };
     emit();
@@ -1760,6 +1903,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       if (active) await openSession(active);
       state = { ...state, ready: true };
       unsubscribeShot = telemetry.onShot((event) => {
+        // The linked grinder may have left Decaid's library while CafAI runs
+        // (D62): read it with every shot, in the background, so the shot
+        // event and the next grind move use what Decaid lists now.
+        loadGrinder();
         // How far the version had got matters at the start, not when the shot is handled.
         if (event.type === 'started') {
           shotStart = { shotId: event.shotId, early: earlyLoad() };
@@ -1788,12 +1935,18 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         if (connected || reachable) void outbox.flush();
         if (connected) void enqueue(onMachineConnected);
       });
+      unsubscribeVisibility = visibility.subscribe(onVisibilityChange);
       emit();
       void enqueue(checkMachineProfile);
+      scheduleMachineBeats();
     },
     dispose() {
+      disposed = true;
       unsubscribeShot?.();
       unsubscribeTelemetry?.();
+      unsubscribeVisibility?.();
+      if (checkTimer !== null) checkTimers.clearTimeout(checkTimer);
+      checkTimer = null;
       outbox.dispose();
       if (emitTimer) clearTimeout(emitTimer);
       listeners.clear();
