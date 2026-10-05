@@ -12,7 +12,8 @@ back to Decaid's dashboard and settings on every screen.
 
 - Skin id: `cafai` (never changes; it keys the skin's saved data in Decaid)
 - Runs in Decaid's WebView, down to the Chromium 91 engine of older Decent
-  tablets, at 962x602 CSS px and up
+  tablets, at 962x602 CSS px and up (an older engine gets a warning, and a
+  page with a way back to Decaid if CafAI cannot start at all)
 - Bring your own Anthropic API key; it stays on the tablet
 
 ## How the coach works
@@ -23,14 +24,20 @@ back to Decaid's dashboard and settings on every screen.
    D-Flow, Londonium, Rao Allongé, Gentle and Sweet) that declare which
    fields may change and how far.
 3. **v1.** Tap one: CafAI creates "<Bean> v1" and loads it on the machine.
+   v1 stops at the profile author's ratio times the dose set in Decaid (18 g
+   when there is none), and the chat says so. CafAI says "Loaded" only once
+   Decaid confirms the machine holds the profile.
 4. **Shot.** Pull a shot. CafAI reads the shot from Decaid, summarizes it
    (aggregates plus a 1-per-second series) and gives the coach named query
    tools to look closer (no code execution).
-5. **Feedback.** Tap how it tasted (the last option is always "Other").
+5. **Feedback.** Tap how it tasted (the last option is always "Other"), and
+   rate the shot with stars if you like. Both go to the shot's record in
+   Decaid, so they show there and in Visualizer.
 6. **One change.** The coach proposes the next version or a manual step such
    as grind, changing one variable at a time. You see a plain-language diff
    and confirm it before anything is uploaded. Undo returns to the previous
-   version.
+   version. Link your grinder from Decaid's grinder library in Settings and
+   grind moves come with the new setting worked out on its own steps.
 
 The model can only move declared template levers within their bounds; it can
 never change pump type, step order or count, sensors, or exit types.
@@ -135,6 +142,10 @@ source commits they were read from, in [docs/VERIFIED.md](docs/VERIFIED.md).
   skin's IndexedDB and mirrored to Decaid's key-value store (namespace
   `cafai`) so it survives a browser-storage reset. Export it any time as JSON
   from History.
+- Your taste answer and star rating for a shot are also written to that
+  shot's record in Decaid (notes and enjoyment), which Decaid may upload to
+  Visualizer if you set that up. Notes you wrote yourself are never
+  overwritten.
 - Calls go straight from the tablet to `api.anthropic.com`.
 
 ## Credits and license
