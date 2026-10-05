@@ -52,9 +52,13 @@ ticks: they decide the next changes.
 1. Select CafAI in Decaid. Expected: the app within a few seconds, no
    warning bar under the top bar.
 2. Open `http://<tablet>:8080/api/v1/webview/logs` and find the line
-   `[CafAI] engine check: {...}`. Record it. Expected: `"supported":true`.
-   Decaid reports the WebView's user agent as "Decent", so CafAI cannot read a
-   version; it probes for syntax that arrived in Chromium 91.
+   `[CafAI] engine check: {...}`. Record it. Expected:
+   `{"chromium":null,"supported":true,"reason":"probe"}`. Decaid reports the
+   WebView's user agent as "Decent", so CafAI cannot read a version; it
+   probes for syntax that arrived in Chromium 91 (the desktop Chromium
+   91.0.4469.0 with the "Decent" user agent gives exactly this line).
+   `"supported":false` means an engine older than 91 (a warning bar shows);
+   `null` means the probe could not run.
 3. Record the WebView's own version: on the tablet, Android Settings -> Apps
    -> show system apps -> Android System WebView (or Chrome) -> version.
    Expected: 91 or newer.
@@ -89,10 +93,15 @@ ticks: they decide the next changes.
    Decaid's source measures it.
 3. The machine panel's **Profile** line shows "<Bean> v1", marked as this
    bag's.
-4. v1's yield (D57): `/api/v1/workflow` -> `profile.target_weight` and
+4. v1's yield (D57): the chat says where v1 stops, e.g. "Kiambu AA v1 stops
+   at 50 g: 2.8 x the 18.0 g dose in Decaid." (with no dose in Decaid, or one
+   outside 12-25 g, it says v1 assumes 18 g and asks you to set the real
+   dose). `/api/v1/workflow` -> `profile.target_weight` and
    `context.targetYield` equal the template's ratio times your dose
    (Blooming Espresso and D-Flow 2.8x, Londonium and Gentle and Sweet 2x, Rao
-   Allongé 5x; at 18 g: 50, 50, 36, 36 and 90 g).
+   Allongé 5x; at 18 g: 50, 50, 36, 36 and 90 g). In Decaid's profile
+   library, "<Bean> v1" sits under the template's bundled profile as its
+   parent (D59).
 5. Pull the shot with CafAI's **Espresso** button. Expected: it stops at that
    weight (plus the scale's usual overshoot).
 
@@ -109,10 +118,14 @@ ticks: they decide the next changes.
    group-head button while "Loading…" still shows. Record what the machine
    did. Expected: the DE1 ignores the press until the upload is complete
    (Decaid documents a firmware latch), or the shot runs the new profile.
-   If a shot starts while "Loading…" is still shown, CafAI must say it is not
-   part of the dial-in because it started before the machine finished
-   loading.
-4. Offline: disconnect the machine (switch it off, or disconnect it in
+   If a shot starts while "Loading…" is still shown, CafAI must say "That
+   shot started before the machine finished loading <Bean> vN, so it is not
+   part of this dial-in."
+4. If the barrier ever fails (no answer within 20 s, or a Bluetooth error),
+   the chat says "<Bean> vN is saved, but the machine has not confirmed it."
+   with the reason, and the banner offers Retry. Record when and how it
+   happened.
+5. Offline: disconnect the machine (switch it off, or disconnect it in
    Decaid) and confirm a change. Expected: "Saved … Decaid loads it when the
    machine connects." Reconnect. Expected: "Loaded … on the machine." once
    Decaid's own upload is done.
@@ -165,9 +178,11 @@ credits. Nothing to judge on the spot: send the files.
 1. Answer so the coach proposes a grind move (a taste it does not
    recognise, e.g. "Other: runs too fast and thin").
 2. The change card names the new setting and that the step came from
-   Decaid. **Check the direction on your grinder:** is the new setting finer?
-   CafAI assumes lower numbers are finer and that a preset list runs finest
-   first. Record yes or no.
+   Decaid, e.g. "Grind 1 step finer: 15 -> 14.5" and "Set the grinder to 14.5
+   before the next shot (Decaid lists 0.5 steps for your Niche Zero)."
+   **Check the direction on your grinder:** is the new setting finer? CafAI
+   assumes lower numbers are finer and that a preset list runs finest first.
+   Record yes or no.
 3. Confirm. Settings shows the new setting; `/api/v1/workflow` ->
    `context.grinderSetting` has it, and the next shot's record carries it.
 
