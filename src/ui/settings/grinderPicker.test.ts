@@ -1,16 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import type { Grinder } from '../../api/grinders.ts';
+import { GatewayError } from '../../api/types.ts';
 import {
   grinderLabel,
   grinderPatch,
+  grinderView,
   LIBRARY_HINT,
+  libraryAfterError,
   missingGrinderLabel,
   MISSING_LINE,
   NO_STEP_LINE,
   NOT_LISTED,
   presetOptions,
   stepLine,
+  UNREACHABLE_LINE,
   usesPresetSetting,
+  type GrinderForm,
   type GrinderLibrary,
 } from './grinderPicker.ts';
 
@@ -54,6 +59,81 @@ describe('stepLine: what CafAI will use', () => {
   it('has the hint for grinders Decaid does not know, and a line for a link Decaid lost', () => {
     expect(LIBRARY_HINT).toBe("Add your grinder to Decaid's grinder library (for example with the DYE2 plugin) and CafAI will use its step size.");
     expect(MISSING_LINE).toBe('Decaid no longer lists this grinder, so the coach gives directions only.');
+  });
+
+  it('has a line for a linked grinder while Decaid cannot be reached', () => {
+    expect(UNREACHABLE_LINE).toBe("Decaid can't be reached right now, so CafAI can't show this grinder's steps.");
+  });
+});
+
+describe("libraryAfterError: what a failed read of Decaid's list means", () => {
+  it('a Decaid without the grinder library (404) answered: it lists no grinders', () => {
+    expect(libraryAfterError(new GatewayError(404, '/api/v1/grinders', 'Route not found', 'http'))).toEqual({ status: 'ready', grinders: [] });
+  });
+
+  it('anything else means the list cannot be read right now', () => {
+    for (const error of [
+      new GatewayError(0, '/api/v1/grinders', 'Could not reach Decaid.', 'network'),
+      new GatewayError(0, '/api/v1/grinders', 'Decaid did not answer in time.', 'timeout'),
+      new GatewayError(500, '/api/v1/grinders', 'Internal Server Error', 'http'),
+      new TypeError('Failed to fetch'),
+    ]) {
+      expect(libraryAfterError(error), error.message).toEqual({ status: 'unavailable' });
+    }
+  });
+});
+
+describe('grinderView: what the grinder fields show', () => {
+  const form = (pick: string, fields: Partial<GrinderForm> = {}): GrinderForm => ({ pick, name: 'Niche Zero', setting: '14', ...fields });
+  const LOADING: GrinderLibrary = { status: 'loading' };
+  const EMPTY: GrinderLibrary = { status: 'ready', grinders: [] };
+  const UNAVAILABLE: GrinderLibrary = { status: 'unavailable' };
+
+  it('a grinder Decaid lists: the picker with its step line, and its setting control', () => {
+    expect(grinderView(form('g-niche'), READY)).toEqual({ picker: true, picked: NICHE, lostLink: false, name: false, setting: 'text', line: stepLine(NICHE) });
+    expect(grinderView(form('g-encore'), READY)).toMatchObject({ picked: ENCORE, setting: 'preset', line: 'Decaid lists 3 settings for this grinder.' });
+  });
+
+  it('"Not in Decaid\'s list": the typed name and a free-text setting, with the hint', () => {
+    expect(grinderView(form(NOT_LISTED), READY)).toEqual({ picker: true, picked: null, lostLink: false, name: true, setting: 'text', line: LIBRARY_HINT });
+  });
+
+  it('a link Decaid no longer lists is kept and says so, also when Decaid lists no grinders at all', () => {
+    for (const library of [READY, EMPTY]) {
+      expect(grinderView(form('g-gone'), library), library.status).toEqual({
+        picker: true,
+        picked: null,
+        lostLink: true,
+        name: false,
+        setting: 'text',
+        line: MISSING_LINE,
+      });
+    }
+  });
+
+  it('no grinder linked and none in Decaid: the free-text fields and the hint, no picker', () => {
+    for (const library of [EMPTY, UNAVAILABLE]) {
+      expect(grinderView(form(NOT_LISTED), library), library.status).toEqual({
+        picker: false,
+        picked: null,
+        lostLink: false,
+        name: true,
+        setting: 'text',
+        line: LIBRARY_HINT,
+      });
+    }
+  });
+
+  it('a linked grinder while Decaid cannot be reached: the free-text fields and why the steps are missing', () => {
+    expect(grinderView(form('g-niche'), UNAVAILABLE)).toEqual({ picker: false, picked: null, lostLink: false, name: true, setting: 'text', line: UNREACHABLE_LINE });
+  });
+
+  it("the setting control waits for its kind: the settings, and a linked grinder's entry in Decaid's list", () => {
+    expect(grinderView(null, LOADING).setting).toBe('pending');
+    expect(grinderView(null, READY).setting).toBe('pending');
+    expect(grinderView(form('g-encore'), LOADING)).toEqual({ picker: true, picked: null, lostLink: false, name: false, setting: 'pending', line: null });
+    // Typed, not linked: free text whatever Decaid lists, so it shows at once.
+    expect(grinderView(form(NOT_LISTED), LOADING)).toMatchObject({ picker: true, name: true, setting: 'text', line: null });
   });
 });
 
@@ -104,6 +184,16 @@ describe('grinderPatch: what Save writes', () => {
       grinderName: 'Old grinder',
       grinderSetting: '7',
     });
+  });
+
+  it('Decaid lists no grinders: a link is kept as one it no longer lists, a typed name stays unlinked', () => {
+    const empty: GrinderLibrary = { status: 'ready', grinders: [] };
+    expect(grinderPatch({ pick: 'g-niche', name: 'Niche Zero', setting: '15' }, empty, linked)).toEqual({
+      grinderId: 'g-niche',
+      grinderName: 'Niche Zero',
+      grinderSetting: '15',
+    });
+    expect(grinderPatch({ pick: NOT_LISTED, name: 'DF64', setting: '15' }, empty, linked)).toEqual({ grinderId: null, grinderName: 'DF64', grinderSetting: '15' });
   });
 
   it("without Decaid's list a link stays only while the name is unchanged", () => {

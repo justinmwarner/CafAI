@@ -3,9 +3,11 @@
  * grinder. The key goes straight to the secret store and is never shown
  * again; the UI only ever knows whether one is saved. The grinder can be
  * linked to Decaid's grinder library, whose step size the coach then uses
- * (GrinderFields.tsx).
+ * (GrinderFields.tsx). A key pasted into another field never becomes a
+ * setting: storage takes it out (src/storage/settings.ts) and the screen says
+ * so.
  */
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -26,12 +28,17 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { listGrinders } from '../../api/grinders.ts';
 import type { ModelInfo } from '../../llm/types.ts';
 import { useCoach, useServices } from '../../app/services.tsx';
+import { containsKeyLike } from '../../storage/redact.ts';
 import type { Settings } from '../../storage/types.ts';
 import { TID } from '../testIds.ts';
 import { GrinderFields } from './GrinderFields.tsx';
-import { grinderPatch, NOT_LISTED, type GrinderForm, type GrinderLibrary } from './grinderPicker.ts';
+import { grinderPatch, libraryAfterError, NOT_LISTED, type GrinderForm, type GrinderLibrary } from './grinderPicker.ts';
+import { revealInColumn } from './reveal.ts';
 
 type Message = { tone: 'success' | 'error'; text: string };
+
+/** Said when saving took a pasted API key out of a field, as the chat says it (D37). */
+export const KEY_TAKEN_OUT = 'That looked like an API key, so CafAI took it out. Keys go in the API key field above.';
 
 function errorText(error: unknown): string {
   return error instanceof Error && error.message ? error.message : String(error);
@@ -205,18 +212,48 @@ interface Form {
   grinder: GrinderForm;
 }
 
+function formFrom(settings: Settings): Form {
+  return {
+    model: settings.model,
+    grinder: {
+      pick: settings.grinderId ?? NOT_LISTED,
+      name: settings.grinderName ?? '',
+      setting: settings.grinderSetting ?? '',
+    },
+  };
+}
+
+/** The fields a person can type a pasted key into. */
+const TYPED_FIELDS = ['model', 'grinderName', 'grinderSetting'] as const;
+
+/** Did saving take key-shaped text out of what was sent? Storage does that; this only tells. */
+function tookKeyOut(sent: Partial<Settings>, saved: Settings): boolean {
+  return TYPED_FIELDS.some((field) => {
+    const value = sent[field];
+    return typeof value === 'string' && containsKeyLike(value) && !containsKeyLike(saved[field] ?? '');
+  });
+}
+
 type SavedGrinder = Pick<Settings, 'grinderId' | 'grinderName'>;
 
 /** Decaid answers in well under a second when it is there; do not hold the picker longer than this. */
 const GRINDER_LIST_TIMEOUT_MS = 5000;
 
-function CoachSettingsSection() {
+function CoachSettingsSection({ column }: { column: RefObject<HTMLElement | null> }) {
   const { storage, coach, models, decaid } = useServices();
   const [form, setForm] = useState<Form | null>(null);
   const [saved, setSaved] = useState<SavedGrinder>({ grinderId: null, grinderName: null });
   const [library, setLibrary] = useState<GrinderLibrary>({ status: 'loading' });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<Message | null>(null);
+  const [keyNotice, setKeyNotice] = useState(false);
+  // Grinder picks and saves so far: each pick brings the setting control and
+  // Save into view, each save what it says (written under Save).
+  const [picks, setPicks] = useState(0);
+  const [saves, setSaves] = useState(0);
+  const settingRef = useRef<HTMLDivElement>(null);
+  const saveRef = useRef<HTMLButtonElement>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let live = true;
@@ -225,14 +262,7 @@ function CoachSettingsSection() {
       .then((settings) => {
         if (live) {
           setSaved({ grinderId: settings.grinderId ?? null, grinderName: settings.grinderName });
-          setForm({
-            model: settings.model,
-            grinder: {
-              pick: settings.grinderId ?? NOT_LISTED,
-              name: settings.grinderName ?? '',
-              setting: settings.grinderSetting ?? '',
-            },
-          });
+          setForm(formFrom(settings));
         }
       })
       .catch((error: unknown) => {
@@ -243,43 +273,63 @@ function CoachSettingsSection() {
     };
   }, [storage]);
 
-  // Decaid's grinder library, read each time the screen opens. Any failure
-  // (unreachable, or a Decaid without the library) shows the free-text fields.
+  // Decaid's grinder library, read each time the screen opens. An empty list
+  // is an answer too (a link it lacks is kept and says so); while Decaid
+  // cannot be reached the free-text fields show.
   useEffect(() => {
     let live = true;
     listGrinders(decaid, { timeoutMs: GRINDER_LIST_TIMEOUT_MS })
       .then((grinders) => {
-        if (live) setLibrary(grinders.length > 0 ? { status: 'ready', grinders } : { status: 'unavailable' });
+        if (live) setLibrary({ status: 'ready', grinders });
       })
-      .catch(() => {
-        if (live) setLibrary({ status: 'unavailable' });
+      .catch((error: unknown) => {
+        if (live) setLibrary(libraryAfterError(error));
       });
     return () => {
       live = false;
     };
   }, [decaid]);
 
+  // Before paint: at 962x602 the setting, Save and the messages under it sit below the fold.
+  useLayoutEffect(() => {
+    if (picks === 0 || !column.current || !settingRef.current) return;
+    revealInColumn(column.current, settingRef.current, saveRef.current);
+  }, [picks, column]);
+  useLayoutEffect(() => {
+    if (saves === 0 || !column.current || !saveRef.current) return;
+    revealInColumn(column.current, saveRef.current, resultRef.current);
+  }, [saves, column]);
+
   const save = async (event: FormEvent) => {
     event.preventDefault();
     if (!form || saving) return;
     setSaving(true);
     setMessage(null);
+    setKeyNotice(false);
     try {
       // Only CafAI's own settings: the engine carries the grinder to Decaid's workflow.
-      const next = await storage.settings.update({ model: form.model, ...grinderPatch(form.grinder, library, saved) });
+      const sent = { model: form.model, ...grinderPatch(form.grinder, library, saved) };
+      const next = await storage.settings.update(sent);
       setSaved({ grinderId: next.grinderId ?? null, grinderName: next.grinderName });
+      // The fields show what was really saved, not what was typed.
+      setForm(formFrom(next));
+      setKeyNotice(tookKeyOut(sent, next));
       setMessage({ tone: 'success', text: 'Settings saved.' });
+      setSaves((count) => count + 1);
       await coach.refresh();
     } catch (error) {
       setMessage({ tone: 'error', text: `Could not save the settings: ${errorText(error)}` });
+      setSaves((count) => count + 1);
     } finally {
       setSaving(false);
     }
   };
 
   const update = (patch: Partial<Form>) => setForm((current) => (current ? { ...current, ...patch } : current));
-  const updateGrinder = (patch: Partial<GrinderForm>) =>
+  const updateGrinder = (patch: Partial<GrinderForm>) => {
     setForm((current) => (current ? { ...current, grinder: { ...current.grinder, ...patch } } : current));
+    if (patch.pick !== undefined) setPicks((count) => count + 1);
+  };
   const selected = models.find((m) => m.id === form?.model);
   const disabled = form === null || saving;
 
@@ -309,21 +359,42 @@ function CoachSettingsSection() {
             </option>
           ))}
         </TextField>
-        <GrinderFields form={form?.grinder ?? null} library={library} savedName={saved.grinderName} disabled={disabled} onChange={updateGrinder} />
+        <GrinderFields
+          form={form?.grinder ?? null}
+          library={library}
+          savedName={saved.grinderName}
+          disabled={disabled}
+          onChange={updateGrinder}
+          settingRef={settingRef}
+        />
         <Typography variant="body2" sx={{ color: 'text.secondary', mt: -1 }}>
           The coach uses your grinder and its dial setting to say how far to turn it.
         </Typography>
         <Box>
-          <Button type="submit" variant="contained" data-testid={TID.settingsSave} disabled={disabled} sx={{ minHeight: 48, px: 3 }}>
+          <Button
+            ref={saveRef}
+            type="submit"
+            variant="contained"
+            data-testid={TID.settingsSave}
+            disabled={disabled}
+            sx={{ minHeight: 48, px: 3 }}
+          >
             Save settings
           </Button>
         </Box>
       </Box>
-      {message ? (
-        <Alert severity={message.tone} sx={{ mt: 1.5 }} onClose={() => setMessage(null)}>
-          {message.text}
-        </Alert>
-      ) : null}
+      <Box ref={resultRef}>
+        {message ? (
+          <Alert severity={message.tone} sx={{ mt: 1.5 }} onClose={() => setMessage(null)}>
+            {message.text}
+          </Alert>
+        ) : null}
+        {keyNotice ? (
+          <Alert severity="info" sx={{ mt: 1.5 }} onClose={() => setKeyNotice(false)}>
+            {KEY_TAKEN_OUT}
+          </Alert>
+        ) : null}
+      </Box>
     </Section>
   );
 }
@@ -357,14 +428,16 @@ function AboutSection() {
 }
 
 export function SettingsScreen() {
+  // The column scrolls inside itself; the page never does (AppShell).
+  const column = useRef<HTMLDivElement>(null);
   return (
-    <Box sx={{ height: '100%', minHeight: 0, overflowY: 'auto' }}>
+    <Box ref={column} sx={{ height: '100%', minHeight: 0, overflowY: 'auto' }}>
       <Stack spacing={2} sx={{ p: 2, maxWidth: 760 }}>
         <Typography variant="h6" component="h1">
           Settings
         </Typography>
         <ApiKeySection />
-        <CoachSettingsSection />
+        <CoachSettingsSection column={column} />
         <AboutSection />
       </Stack>
     </Box>

@@ -5,19 +5,17 @@
  * grinder). State and saving live in SettingsScreen.tsx; the rules in
  * grinderPicker.ts.
  */
+import type { ReactNode, Ref } from 'react';
 import Box from '@mui/material/Box';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { TID } from '../testIds.ts';
 import {
   grinderLabel,
-  LIBRARY_HINT,
+  grinderView,
   missingGrinderLabel,
-  MISSING_LINE,
   NOT_LISTED,
   presetOptions,
-  stepLine,
-  usesPresetSetting,
   type GrinderForm,
   type GrinderLibrary,
 } from './grinderPicker.ts';
@@ -26,6 +24,8 @@ const fieldSx = { '& .MuiInputBase-root': { minHeight: 48 } } as const;
 /** A native select opens only from the select element itself, so it is the 48 px target. */
 const selectSx = { ...fieldSx, '& .MuiNativeSelect-select': { py: '12.5px' } } as const;
 
+const SETTING_LABEL = 'Current grinder setting';
+
 export interface GrinderFieldsProps {
   form: GrinderForm | null;
   library: GrinderLibrary;
@@ -33,20 +33,69 @@ export interface GrinderFieldsProps {
   savedName: string | null;
   disabled: boolean;
   onChange(patch: Partial<GrinderForm>): void;
+  /** The setting control, whichever it is, so the screen can bring it into view. */
+  settingRef?: Ref<HTMLDivElement>;
 }
 
-export function GrinderFields({ form, library, savedName, disabled, onChange }: GrinderFieldsProps) {
+export function GrinderFields({ form, library, savedName, disabled, onChange, settingRef }: GrinderFieldsProps) {
   const pick = form?.pick ?? NOT_LISTED;
+  const view = grinderView(form, library);
   const grinders = library.status === 'ready' ? library.grinders : [];
-  const picked = grinders.find((grinder) => grinder.id === pick) ?? null;
-  const lostLink = library.status === 'ready' && pick !== NOT_LISTED && picked === null;
-  const showName = library.status === 'unavailable' || pick === NOT_LISTED;
-  const line = picked ? stepLine(picked) : lostLink ? MISSING_LINE : LIBRARY_HINT;
-  const preset = picked !== null && usesPresetSetting(picked);
+
+  let setting: ReactNode;
+  if (view.setting === 'pending') {
+    // Its kind (list or free text) is not known yet: a list must never show as free text first.
+    setting = (
+      <TextField
+        ref={settingRef}
+        size="small"
+        label={SETTING_LABEL}
+        placeholder="Loading…"
+        value=""
+        disabled
+        sx={fieldSx}
+        slotProps={{ inputLabel: { shrink: true } }}
+      />
+    );
+  } else if (view.setting === 'preset' && view.picked) {
+    setting = (
+      <TextField
+        ref={settingRef}
+        select
+        size="small"
+        label={SETTING_LABEL}
+        value={form?.setting ?? ''}
+        disabled={disabled}
+        onChange={(event) => onChange({ setting: event.target.value })}
+        sx={selectSx}
+        slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
+      >
+        {presetOptions(view.picked, form?.setting ?? '').map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </TextField>
+    );
+  } else {
+    setting = (
+      <TextField
+        ref={settingRef}
+        size="small"
+        label={SETTING_LABEL}
+        placeholder="e.g. 14"
+        value={form?.setting ?? ''}
+        disabled={disabled}
+        onChange={(event) => onChange({ setting: event.target.value })}
+        sx={fieldSx}
+        slotProps={{ htmlInput: { 'data-testid': TID.grinderSetting, maxLength: 20 }, inputLabel: { shrink: true } }}
+      />
+    );
+  }
 
   return (
     <>
-      {library.status !== 'unavailable' ? (
+      {view.picker ? (
         <TextField
           select
           size="small"
@@ -54,12 +103,12 @@ export function GrinderFields({ form, library, savedName, disabled, onChange }: 
           value={pick}
           disabled={disabled || library.status !== 'ready'}
           onChange={(event) => onChange({ pick: event.target.value })}
-          helperText={library.status === 'ready' ? line : ' '}
+          helperText={view.line ?? ' '}
           sx={selectSx}
           slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
         >
           {library.status === 'loading' ? <option value={pick}>Loading Decaid's grinders…</option> : null}
-          {lostLink ? <option value={pick}>{missingGrinderLabel(savedName)}</option> : null}
+          {view.lostLink ? <option value={pick}>{missingGrinderLabel(savedName)}</option> : null}
           {grinders.map((grinder) => (
             <option key={grinder.id} value={grinder.id}>
               {grinderLabel(grinder)}
@@ -68,8 +117,8 @@ export function GrinderFields({ form, library, savedName, disabled, onChange }: 
           {library.status === 'ready' ? <option value={NOT_LISTED}>Not in Decaid's list</option> : null}
         </TextField>
       ) : null}
-      <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: showName ? '3fr 2fr' : '1fr 1fr' } }}>
-        {showName ? (
+      <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: view.name ? '3fr 2fr' : '1fr 1fr' } }}>
+        {view.name ? (
           <TextField
             size="small"
             label="Grinder"
@@ -81,39 +130,11 @@ export function GrinderFields({ form, library, savedName, disabled, onChange }: 
             slotProps={{ htmlInput: { 'data-testid': TID.grinderName, maxLength: 60 }, inputLabel: { shrink: true } }}
           />
         ) : null}
-        {preset && picked ? (
-          <TextField
-            select
-            size="small"
-            label="Current grinder setting"
-            value={form?.setting ?? ''}
-            disabled={disabled}
-            onChange={(event) => onChange({ setting: event.target.value })}
-            sx={selectSx}
-            slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
-          >
-            {presetOptions(picked, form?.setting ?? '').map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </TextField>
-        ) : (
-          <TextField
-            size="small"
-            label="Current grinder setting"
-            placeholder="e.g. 14"
-            value={form?.setting ?? ''}
-            disabled={disabled}
-            onChange={(event) => onChange({ setting: event.target.value })}
-            sx={fieldSx}
-            slotProps={{ htmlInput: { 'data-testid': TID.grinderSetting, maxLength: 20 }, inputLabel: { shrink: true } }}
-          />
-        )}
+        {setting}
       </Box>
-      {library.status === 'unavailable' ? (
+      {!view.picker && view.line ? (
         <Typography variant="body2" sx={{ mt: -1 }}>
-          {LIBRARY_HINT}
+          {view.line}
         </Typography>
       ) : null}
     </>

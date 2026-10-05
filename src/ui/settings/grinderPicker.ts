@@ -1,12 +1,14 @@
 /**
- * The grinder part of the Settings screen as plain functions: what the
- * picker offers, the line that tells the user what CafAI will use, and what
- * Save writes. SettingsScreen.tsx only renders these.
+ * The grinder part of the Settings screen as plain functions: which fields
+ * show, what the picker offers, the line that tells the user what CafAI will
+ * use, and what Save writes. SettingsScreen.tsx and GrinderFields.tsx only
+ * render these.
  *
  * Decaid's grinder library knows how a dial moves (a step size, or a list of
  * settings) but nothing else, so the line says only that, in Decaid's terms.
  */
 import { grinderSteps, type Grinder } from '../../api/grinders.ts';
+import { GatewayError } from '../../api/types.ts';
 import type { Settings } from '../../storage/types.ts';
 
 /** The picker's value for "Not in Decaid's list" (a grinder id is never empty). */
@@ -15,9 +17,24 @@ export const NOT_LISTED = '';
 export const LIBRARY_HINT = "Add your grinder to Decaid's grinder library (for example with the DYE2 plugin) and CafAI will use its step size.";
 export const NO_STEP_LINE = 'Decaid has no step size for this grinder, so the coach gives directions only.';
 export const MISSING_LINE = 'Decaid no longer lists this grinder, so the coach gives directions only.';
+export const UNREACHABLE_LINE = "Decaid can't be reached right now, so CafAI can't show this grinder's steps.";
 
-/** Decaid's grinders, or that there are none to offer (Decaid unreachable, or an empty library). */
+/**
+ * Decaid's grinders as far as Settings knows them. `ready` means Decaid
+ * answered, and its list may be empty (no grinders yet, or a Decaid without
+ * the library); `unavailable` means the list cannot be read right now.
+ */
 export type GrinderLibrary = { status: 'loading' } | { status: 'ready'; grinders: Grinder[] } | { status: 'unavailable' };
+
+/**
+ * What a failed read of Decaid's list means. A Decaid without the grinder
+ * library answers 404: it lists nothing, as the engine reads it too (a link
+ * then gives directions only). Anything else may pass, so a link is not
+ * called lost on its account.
+ */
+export function libraryAfterError(error: unknown): GrinderLibrary {
+  return error instanceof GatewayError && error.status === 404 ? { status: 'ready', grinders: [] } : { status: 'unavailable' };
+}
 
 export interface GrinderForm {
   /** NOT_LISTED, or a grinder id (possibly one Decaid no longer lists). */
@@ -77,12 +94,64 @@ export function presetOptions(grinder: Grinder, current: string): Array<{ value:
 }
 
 /**
- * The grinder fields Save writes. With Decaid's list, the pick decides: a
+ * How the current setting is entered. `pending` until its kind is known:
+ * the settings are read and, for a linked grinder, Decaid's list too (a
+ * preset grinder's setting is a list, never free text, not even for a moment).
+ */
+export type SettingControl = 'pending' | 'text' | 'preset';
+
+export interface GrinderView {
+  /** The "Grinder from Decaid" picker is shown (while Decaid's list loads too). */
+  picker: boolean;
+  /** The linked grinder, when Decaid lists it. */
+  picked: Grinder | null;
+  /** The form links a grinder Decaid answered without; the link is kept (directions only). */
+  lostLink: boolean;
+  /** The free-text grinder name is shown. */
+  name: boolean;
+  setting: SettingControl;
+  /** The line that says what CafAI will use; null while Decaid's list loads. */
+  line: string | null;
+}
+
+/**
+ * What the grinder fields show. With no grinder linked and none in Decaid,
+ * there is nothing to pick, so only the free-text fields and the hint show.
+ * A link Decaid answered without, an empty list included, stays picked and
+ * says so (D62); while Decaid cannot be reached, the line says that instead.
+ */
+export function grinderView(form: GrinderForm | null, library: GrinderLibrary): GrinderView {
+  const pick = form?.pick ?? NOT_LISTED;
+  const linked = pick !== NOT_LISTED;
+  const grinders = library.status === 'ready' ? library.grinders : [];
+  const picked = grinders.find((grinder) => grinder.id === pick) ?? null;
+  const lostLink = library.status === 'ready' && linked && picked === null;
+  const setting: SettingControl =
+    form === null || (linked && library.status === 'loading') ? 'pending' : usesPresetSetting(picked) ? 'preset' : 'text';
+  let line: string | null;
+  if (library.status === 'loading') line = null;
+  else if (picked) line = stepLine(picked);
+  else if (lostLink) line = MISSING_LINE;
+  else if (linked) line = UNREACHABLE_LINE;
+  else line = LIBRARY_HINT;
+  return {
+    picker: library.status === 'loading' || grinders.length > 0 || lostLink,
+    picked,
+    lostLink,
+    name: !linked || library.status === 'unavailable',
+    setting,
+    line,
+  };
+}
+
+/**
+ * The grinder fields Save writes. With Decaid's answer, the pick decides: a
  * listed grinder links its id and names it by its model, "Not in Decaid's
- * list" keeps the typed name unlinked, and a link Decaid lost is kept until
- * the user picks something else. Without the list (unreachable, empty, or
- * still loading) the name is free text, and a link survives only while that
- * name is unchanged: a renamed grinder is another grinder.
+ * list" keeps the typed name unlinked, and a link Decaid lost (from a list
+ * that may be empty) is kept until the user picks something else. Without
+ * the list (unreachable, or still loading) the name is free text, and a link
+ * survives only while that name is unchanged: a renamed grinder is another
+ * grinder.
  */
 export function grinderPatch(
   form: GrinderForm,
