@@ -5,7 +5,7 @@
  * these shapes.
  */
 import { EVENT } from '../../coach/contract.ts';
-import type { ShotSummary } from '../../coach/types.ts';
+import type { GrinderInfo, ShotSummary } from '../../coach/types.ts';
 import type { ContentBlock, LlmMessage, TextBlock, ToolResultBlock, ToolUseBlock } from '../../llm/types.ts';
 
 export function textBlock(text: string): TextBlock {
@@ -26,9 +26,45 @@ export function userMessage(blocks: ContentBlock[]): LlmMessage {
   return { role: 'user', content: blocks };
 }
 
+/**
+ * The grinder as the model hears it (rules 1 and 3): name and setting as
+ * last saved, and how its dial moves when it is linked to Decaid's grinder
+ * library (D62). The library fields are optional only so callers written
+ * before them (the live API harness) still compile; the engine always sends
+ * them, built by grinderPayload().
+ */
+export interface GrinderPayload {
+  name: string | null;
+  setting: string | null;
+  /** Null when no grinder from Decaid's library is linked, or Decaid has no record of it. */
+  settingType?: GrinderInfo['settingType'] | null;
+  /** A numeric dial's small step; null when unknown. */
+  step?: number | null;
+  /** A preset grinder's settings, finest first; null when unknown. */
+  values?: string[] | null;
+}
+
+/** The grinder for the model: as last saved, with what Decaid's grinder library says about its dial. */
+export function grinderPayload(name: string | null, setting: string | null, grinder: GrinderInfo | null): Required<GrinderPayload> {
+  const step = grinder?.settingType === 'numeric' ? grinder.smallStep : null;
+  const values = grinder?.settingType === 'preset' ? grinder.values : null;
+  return {
+    name,
+    setting,
+    settingType: grinder?.settingType ?? null,
+    step: step !== null && Number.isFinite(step) && step > 0 ? step : null,
+    values: values && values.length > 0 ? [...values] : null,
+  };
+}
+
 export interface IntakeContext {
-  grinder: { name: string | null; setting: string | null };
+  grinder: GrinderPayload;
   scaleConnected: boolean;
+  /**
+   * The dose in Decaid when CafAI coaches from it (12-25 g), else null.
+   * Optional only so callers written before it still compile.
+   */
+  doseG?: number | null;
 }
 
 /** The first user turn of a bag: the user's words plus the app context block. */
@@ -48,7 +84,7 @@ export interface ShotCompletedPayload {
   doseG: number | null;
   targetYieldG: number | null;
   /** The grinder as the user last saved it (Settings, or a confirmed grind move). */
-  grinder: { name: string | null; setting: string | null };
+  grinder: GrinderPayload;
   summary: Omit<ShotSummary, 'series'>;
 }
 
@@ -69,6 +105,14 @@ export interface TemplatePickedPayload {
   picked: string;
   version: 1;
   title: string;
+  /**
+   * Where v1 stops, in grams: the author's ratio times doseG, or times 18 g
+   * (D57). It and doseG are optional only so callers written before D57 (the
+   * live API harness) still compile; the engine always sends both.
+   */
+  yieldG?: number;
+  /** The dose v1's yield was worked out from; null when v1 assumed 18 g (none in Decaid, or outside 12-25 g). */
+  doseG?: number | null;
   uploaded: boolean;
   /** False while the machine is not connected: Decaid loads the version when it connects. */
   onMachine: boolean;

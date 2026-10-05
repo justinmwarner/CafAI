@@ -41,6 +41,41 @@ export function noticePart(tone: 'info' | 'success' | 'warning' | 'error', text:
   return { kind: 'notice', tone, text };
 }
 
+/** The dose behind v1's yield (D57). */
+export interface StartingDose {
+  /** Decaid's dose as read at the pick; null when there was none to read. */
+  decaidG: number | null;
+  /** That dose when CafAI coaches from it, else null. */
+  knownG: number | null;
+  /** What v1 assumes otherwise (Decent's stock 18 g basket). */
+  assumedG: number;
+  /** The doses CafAI coaches from. */
+  range: { min: number; max: number };
+}
+
+const grams = (value: number) => (Number.isInteger(value) ? String(value) : value.toFixed(1));
+
+/**
+ * Where v1 stops and why, in CafAI's own words after a template pick (D57).
+ * The ratio is the stop's own, so the numbers always add up, even where the
+ * yield lever's bounds moved the stop off the author's ratio (Londonium at
+ * 12 g). Without a dose CafAI can use, it says so and what fixes it.
+ */
+export function startingYieldText(title: string, yieldG: number, dose: StartingDose): string {
+  if (dose.knownG !== null) {
+    return `${title} stops at ${grams(yieldG)} g: ${(yieldG / dose.knownG).toFixed(1)} x the ${dose.knownG.toFixed(1)} g dose in Decaid.`;
+  }
+  const assumed = `${grams(dose.assumedG)} g`;
+  const why =
+    dose.decaidG === null
+      ? 'CafAI found no dose in Decaid'
+      : `The ${dose.decaidG.toFixed(1)} g dose in Decaid is outside ${dose.range.min}-${dose.range.max} g`;
+  return (
+    `${title} stops at ${grams(yieldG)} g: ${(yieldG / dose.assumedG).toFixed(1)} x ${assumed}. ` +
+    `${why}, so v1 assumes ${assumed}. Set your real dose in Decaid and CafAI will use it.`
+  );
+}
+
 /** A notice with a progress bar while CafAI works; transient, never stored. */
 export function progressNoticePart(text: string, progress: NoticeProgress): CoachUiPart {
   return { kind: 'notice', tone: 'info', text, progress };

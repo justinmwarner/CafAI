@@ -113,9 +113,51 @@ describe('buildSystemPrompt: content', () => {
 
   it('documents every event marker and payload the engine sends', () => {
     for (const marker of Object.values(EVENT)) expect(prompt).toContain(marker);
-    for (const key of ['"shotRef"', '"levers"', '"targetYieldG"', '"picked"', '"uploaded"', '"selected"', '"other"', '"applied"', '"answered":false']) {
+    for (const key of [
+      '"shotRef"',
+      '"levers"',
+      '"targetYieldG"',
+      '"picked"',
+      '"yieldG"',
+      '"doseG"',
+      '"uploaded"',
+      '"selected"',
+      '"other"',
+      '"applied"',
+      '"answered":false',
+      '"settingType"',
+      '"step"',
+      '"values"',
+    ]) {
       expect(prompt).toContain(key);
     }
+  });
+
+  it('tells the model the dose at intake and where v1 stops (D57)', () => {
+    const loop = prompt.slice(prompt.indexOf('# The loop'), prompt.indexOf('# Template catalog'));
+    expect(loop).toContain('"scaleConnected":boolean,"doseG":number|null}');
+    expect(loop).toMatch(/doseG is the dose set in Decaid when CafAI coaches from it \(12-25 g\), else null/);
+    expect(loop).toContain('{"picked":"<templateId>","version":1,"title":"<Bag> v1","yieldG":number,"doseG":number|null,"uploaded":true|false,');
+    expect(loop).toMatch(/yieldG is where v1 stops: the template's start ratio times doseG, or times 18 g when doseG is null/);
+  });
+
+  it("gives the grinder object with its dial from Decaid's grinder library, at intake and with every shot (D62)", () => {
+    const grinder =
+      '"grinder":{"name":string|null,"setting":string|null,"settingType":"numeric"|"preset"|null,"step":number|null,"values":string[]|null}';
+    const loop = prompt.slice(prompt.indexOf('# The loop'), prompt.indexOf('# Template catalog'));
+    const intake = loop.split('\n').find((line) => line.startsWith('1. Intake.'))!;
+    const shot = loop.split('\n').find((line) => line.startsWith('3. Shot completed.'))!;
+    expect(intake).toContain(grinder);
+    expect(shot).toContain('"grinder":{the same fields as at intake}');
+  });
+
+  it("asks for moves in the grinder's own steps when Decaid knows them, and says CafAI works them out or checks them", () => {
+    const manual = prompt.slice(prompt.indexOf('# Manual variables'), prompt.indexOf('# Reading a shot'));
+    expect(manual).toMatch(/When step or values is known, move in those steps and give the new setting/);
+    expect(manual).toContain('from "15" with step 0.5, one step finer is "14.5"');
+    expect(manual).toMatch(/CafAI works the setting out from the steps, or checks yours against Decaid's grinder library/);
+    expect(manual).toMatch(/lower numbers are finer/);
+    expect(manual).toMatch(/finest first/);
   });
 
   it('names exactly the attached tools and claims nothing else', () => {

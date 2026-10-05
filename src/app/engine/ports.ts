@@ -18,7 +18,7 @@ import type {
   WorkflowPatch,
 } from '../../api/types.ts';
 import type { ProposeAdjustment, ToolName } from '../../coach/contract.ts';
-import type { LeverValues, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
+import type { GrinderInfo, LeverValues, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
 import type { LlmProvider, RunRequest, RunResult, ToolDefinition, ToolValidation } from '../../llm/types.ts';
 import type { IterationRecord, ProfileVersion } from '../../storage/types.ts';
 
@@ -48,6 +48,12 @@ export interface ProposalContext {
   doseG: number | null;
   scaleConnected: boolean;
   grinderSetting: string | null;
+  /**
+   * The grinder linked from Decaid's library, with its steps (D62): a
+   * relative grind move becomes the new setting, and a named one is checked
+   * against the grinder's grid. Null when none is linked or it is not read.
+   */
+  grinder?: GrinderInfo | null;
 }
 
 export type ProposalValidation = { ok: true; plan: ChangePlan } | { ok: false; errors: string[] };
@@ -68,6 +74,18 @@ export interface CoachPort {
   summarizeShot(record: ShotRecord): ShotSummary;
   versionTitle(bagName: string, version: number): string;
   buildVersionProfile(template: Template, base: ProfileJson, title: string, bagName: string): ProfileJson;
+  /**
+   * v1's profile for this dose (D57): the bundled profile with target_weight
+   * at the author's ratio times the dose, or times referenceDoseG when the
+   * dose is unknown or outside doseRange.
+   */
+  buildStartingProfile(template: Template, doseG: number | null): ProfileJson;
+  /** The dose when CafAI coaches from it (inside doseRange), else null. */
+  knownDose(doseG: number | null): number | null;
+  /** The dose v1 assumes when Decaid has none CafAI coaches from (Decent's stock basket). */
+  readonly referenceDoseG: number;
+  /** The doses CafAI coaches from, in grams. */
+  readonly doseRange: { min: number; max: number };
   /** Decaid's content-hash id of a profile (title excluded); throws on unusable input. */
   profileId(profile: unknown): string;
   /** Drops any model-sent "Other" and appends OTHER_OPTION last. */
@@ -110,6 +128,12 @@ export interface ApiPort {
   loadProfileOnMachine(profile: WireProfile): Promise<MachineProfileStatus>;
   /** PUT /shots/{id}: Decaid deep-merges the annotations; the notes string is replaced. */
   updateShot(id: string, patch: ShotUpdateRequest): Promise<ShotRecord>;
+  /**
+   * GET /grinders/{id}: the grinder in Decaid's grinder library, reduced to
+   * how its dial moves (D62). Null when Decaid has no grinder with that id;
+   * throws when Decaid cannot be read.
+   */
+  getGrinder(id: string): Promise<GrinderInfo | null>;
 }
 
 export interface Clock {

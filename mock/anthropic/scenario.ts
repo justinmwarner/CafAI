@@ -9,6 +9,8 @@
  * assistant turn it produced coming back modified (append-only history).
  */
 import { EVENT, TEMPLATE_IDS, TOOL, type ProposeAdjustment, type RoastLevel } from '../../src/coach/contract.ts';
+import { resolveGrindMove } from '../../src/coach/grinder.ts';
+import type { GrinderInfo } from '../../src/coach/types.ts';
 import type { StopReason, TextBlock, ToolUseBlock } from '../../src/llm/types.ts';
 import { encodeAssistantTurn, type SseMessage } from './sse.ts';
 import { TEMPLATES } from '../../src/coach/templates/index.ts';
@@ -363,24 +365,52 @@ function latestShot(messages: Message[]): Raw | null {
 }
 
 /**
- * The dial setting now, when it is a plain number: from the latest shot event
- * or, before any shot, the intake context block. The prompt asks for the
- * absolute setting whenever it is known; the script assumes the common
- * convention that a lower number is finer.
+ * The grinder as last told: from the latest shot event or, before any shot,
+ * the intake context block. A shot event from before the grinder was sent
+ * carries none.
  */
-function dialSetting(messages: Message[]): number | null {
-  let setting: number | null = null;
+function latestGrinder(messages: Message[]): Raw | null {
+  let grinder: Raw | null = null;
   for (const message of messages) {
     if (message.role !== 'user') continue;
     for (const text of textsOf(message)) {
       if (!text.startsWith(EVENT.context) && !text.startsWith(EVENT.shotCompleted)) continue;
-      const grinder = eventPayload(text)?.grinder;
-      if (!isRecord(grinder)) continue; // a shot event from before the grinder was sent
-      const value = typeof grinder.setting === 'string' ? grinder.setting.trim() : '';
-      setting = /^\d+(\.\d+)?$/.test(value) ? Number(value) : null;
+      const told = eventPayload(text)?.grinder;
+      if (isRecord(told)) grinder = told;
     }
   }
-  return setting;
+  return grinder;
+}
+
+/** The dial Decaid's grinder library describes (a numeric `step` or a list of `values`), else null. */
+function libraryDial(grinder: Raw): GrinderInfo | null {
+  const model = typeof grinder.name === 'string' ? grinder.name : '';
+  const step = num(grinder.step);
+  if (step !== null && step > 0) return { model, settingType: 'numeric', smallStep: step, bigStep: null, values: null };
+  const values = Array.isArray(grinder.values) ? grinder.values.filter((v): v is string => typeof v === 'string') : [];
+  return values.length > 0 ? { model, settingType: 'preset', smallStep: null, bigStep: null, values } : null;
+}
+
+/**
+ * One step finer than the dial now, or null when it cannot be named. With
+ * Decaid's step or list the move is worked out the way CafAI's validator
+ * does it (and printed the same: "15" with step 0.5 is "14.5"; with a list,
+ * the previous entry). Without them, a plain number goes down by 1, as the
+ * script did before the grinder library: the common convention is that a
+ * lower number is finer.
+ */
+function finerSetting(messages: Message[]): string | null {
+  const grinder = latestGrinder(messages);
+  if (!grinder) return null;
+  const setting = typeof grinder.setting === 'string' ? grinder.setting.trim() : '';
+  const dial = libraryDial(grinder);
+  if (dial) {
+    const move = resolveGrindMove(dial, setting, { direction: 'finer', amount: 1, setting: null });
+    return move?.ok ? move.move.setting : null;
+  }
+  if (!/^\d+(\.\d+)?$/.test(setting)) return null;
+  const finer = Number(setting) - 1;
+  return finer >= 0 ? String(Math.round(finer * 100) / 100) : null;
 }
 
 function proposal(
@@ -468,8 +498,7 @@ function chooseAdjustment(messages: Message[]): ProposeAdjustment {
 }
 
 function grindFiner(messages: Message[]): ProposeAdjustment {
-  const dial = dialSetting(messages);
-  const finer = dial !== null && dial - 1 >= 0 ? String(Math.round((dial - 1) * 100) / 100) : null;
+  const finer = finerSetting(messages);
   return proposal(
     { variable: 'grind', lever: null, value: null, grind: { direction: 'finer', amount: 1, setting: finer } },
     finer === null ? 'Grind 1 step finer' : `Grind 1 step finer, to ${finer}`,

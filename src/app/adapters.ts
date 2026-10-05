@@ -6,14 +6,19 @@ import {
   createProfileVersion,
   type DecaidClient,
 } from '../api/index.ts';
+import { getGrinder, grinderSteps, type Grinder } from '../api/grinders.ts';
 import { loadProfileOnMachine } from '../api/machineProfile.ts';
 import {
   COACH_TOOL_SPECS,
+  DOSE_RULES,
+  REFERENCE_DOSE_G,
   TEMPLATES,
+  buildStartingProfile,
   buildSystemPrompt,
   buildVersionProfile,
   createShotSource,
   getTemplate,
+  knownDose,
   profileId,
   readLeverValues,
   runQueryTool,
@@ -22,6 +27,7 @@ import {
   versionTitle,
   withOther,
 } from '../coach/index.ts';
+import type { GrinderInfo } from '../coach/types.ts';
 import { createAnthropicProvider, resolveModel, runConversation, toToolDefinition, zodValidator } from '../llm/index.ts';
 import type { SecretStore } from '../storage/types.ts';
 import type { ApiPort, CoachPort, LlmPort, ShotSource } from './engine/ports.ts';
@@ -42,6 +48,10 @@ export function createCoachPort(): CoachPort {
     summarizeShot,
     versionTitle,
     buildVersionProfile,
+    buildStartingProfile,
+    knownDose,
+    referenceDoseG: REFERENCE_DOSE_G,
+    doseRange: { min: DOSE_RULES.min, max: DOSE_RULES.max },
     profileId,
     withOther: (options) => withOther([...options]),
     async runQuery(name, input, context) {
@@ -78,6 +88,22 @@ export function createLlmPort(secrets: SecretStore): LlmPort {
   };
 }
 
+/**
+ * A grinder from Decaid's library as the coach sizes a move with it (D62):
+ * only what can move a dial survives, so a blank preset entry or a step of 0
+ * never becomes a grind setting.
+ */
+export function grinderInfo(grinder: Grinder): GrinderInfo {
+  const steps = grinderSteps(grinder);
+  return {
+    model: grinder.model,
+    settingType: grinder.settingType,
+    smallStep: steps.kind === 'numeric' ? steps.smallStep : null,
+    bigStep: steps.kind === 'numeric' ? steps.bigStep : null,
+    values: steps.kind === 'preset' ? steps.values : null,
+  };
+}
+
 export function createApiPort(decaid: DecaidClient): ApiPort {
   return {
     getWorkflow: () => decaid.getWorkflow(),
@@ -89,5 +115,9 @@ export function createApiPort(decaid: DecaidClient): ApiPort {
     // Not on DecaidClient (other modules fake that interface): its own transport to the same origin.
     loadProfileOnMachine: (profile) => loadProfileOnMachine(decaid, profile),
     updateShot: (id, patch) => decaid.updateShot(id, patch),
+    async getGrinder(id) {
+      const grinder = await getGrinder(decaid, id);
+      return grinder ? grinderInfo(grinder) : null;
+    },
   };
 }

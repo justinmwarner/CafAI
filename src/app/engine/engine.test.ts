@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ZodType } from 'zod';
 import { createCoachEngine, type CoachEngine } from './engine.ts';
 import type { OutboxTimers } from './outbox.ts';
-import type { ApiPort, ChangePlan, CoachPort, LlmPort } from './ports.ts';
+import type { ApiPort, ChangePlan, CoachPort, LlmPort, ProposalContext } from './ports.ts';
 import { message, progressNoticePart } from './uiMessages.ts';
 import { OTHER_OPTION, TOOL, type ProposeAdjustment } from '../../coach/contract.ts';
-import type { ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
+import { DOSE_RULES, knownDose, REFERENCE_DOSE_G } from '../../coach/dose.ts';
+import { validateProposal as validateWithCoach } from '../../coach/validator.ts';
+import type { GrinderInfo, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
 import type { MachineProfileStatus } from '../../api/machineProfile.ts';
 import { GatewayError, type ShotAnnotations, type ShotRecord, type WireProfile, type Workflow, type WorkflowContext } from '../../api/types.ts';
 import type { ContentBlock, LlmMessage, PendingUiCall, RunResult, ToolResultBlock } from '../../llm/types.ts';
@@ -59,7 +61,26 @@ function makeTemplate(id: string, name: string, profile: ProfileJson = baseProfi
   };
 }
 
-const TEMPLATES = [makeTemplate('d-flow', 'D-Flow'), makeTemplate('londonium', 'Londonium', { ...baseProfile, target_weight: 42 })];
+// D-Flow starts at the author's 1:2.8 (D57); the fake Londonium has no ratio, so v1 keeps its stop at 18 g.
+const TEMPLATES = [
+  { ...makeTemplate('d-flow', 'D-Flow'), startRatio: 2.8 },
+  makeTemplate('londonium', 'Londonium', { ...baseProfile, target_weight: 42 }),
+];
+
+/** v1's ratio as the coach works it out: the author's, else the template's own stop at the 18 g reference dose. */
+const startRatio = (template: Template) => template.startRatio ?? (template.profile.target_weight ?? 36) / REFERENCE_DOSE_G;
+
+const NICHE: GrinderInfo = { model: 'Niche Zero', settingType: 'numeric', smallStep: 0.5, bigStep: 2, values: null };
+const ENCORE: GrinderInfo = {
+  model: 'Baratza Encore ESP',
+  settingType: 'preset',
+  smallStep: null,
+  bigStep: null,
+  values: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
+};
+
+/** What the engine handed the coach with the last proposal it had checked. */
+let lastProposalContext: ProposalContext | null = null;
 
 const summary: ShotSummary = {
   shotId: 'shot-1',
@@ -126,6 +147,9 @@ const coach: CoachPort = {
   toolDescription: (name) => `desc ${name}`,
   readLeverValues: (_t, p) => ({ temp: p.steps[0]!.temperature }),
   validateProposal(input, context) {
+    lastProposalContext = context;
+    // Grind moves need no lever: the coach's own validator works them out on Decaid's grinder (D62).
+    if (input.variable === 'grind') return validateWithCoach(input, context);
     if (input.variable === 'profile') {
       if (input.lever !== 'temp' || input.value === null) return { ok: false, errors: ['Only temp exists here.'] };
       if (Math.abs(input.value - context.profile.steps[0]!.temperature) > 2) {
@@ -137,6 +161,13 @@ const coach: CoachPort = {
   summarizeShot: () => summary,
   versionTitle: (name, n) => `${name} v${n}`,
   buildVersionProfile: (_t, base, title) => ({ ...base, title }),
+  buildStartingProfile: (template, doseG) => ({
+    ...template.profile,
+    target_weight: Math.round(startRatio(template) * (knownDose(doseG) ?? REFERENCE_DOSE_G)),
+  }),
+  knownDose,
+  referenceDoseG: REFERENCE_DOSE_G,
+  doseRange: { min: DOSE_RULES.min, max: DOSE_RULES.max },
   profileId: (p) => `id:${JSON.stringify((p as ProfileJson).steps)}:${(p as ProfileJson).target_weight}`,
   withOther: (options) => [...options.filter((o) => o.toLowerCase() !== 'other'), OTHER_OPTION],
   async runQuery(name, input, context) {
@@ -172,7 +203,29 @@ const machine = {
   /** Shot annotations as Decaid keeps them: deep-merged, notes replaced. */
   annotations: new Map<string, ShotAnnotations>(),
   failShotUpdates: 0,
+  /** How many more GET /workflow calls fail. */
+  failWorkflowReads: 0,
+  /** Decaid's grinder library, by id (D62). */
+  grinders: new Map<string, GrinderInfo>(),
+  /** How many more grinder reads fail. */
+  failGrinderReads: 0,
+  /** Grinder reads wait until the test calls `releaseGrinderReads()`. */
+  holdGrinderReads: false,
+  heldGrinderReads: [] as Array<() => void>,
+  /** Every grinder read so far, so a test can wait until the engine has its answer. */
+  grinderReads: [] as Array<Promise<unknown>>,
+  /** POST /profiles answers 400 for any parent (a Decaid without the template's bundled default). */
+  parentMissing: false,
+  /** POST /profiles answers with a record Decaid already had (the same content). */
+  dedupe: false,
+  /** The next POST /profiles fails with this error. */
+  createError: null as Error | null,
 };
+
+function releaseGrinderReads(): void {
+  machine.holdGrinderReads = false;
+  for (const release of machine.heldGrinderReads.splice(0)) release();
+}
 
 function mergeContext(base: WorkflowContext, patch: WorkflowContext): WorkflowContext {
   return { ...base, ...patch, extras: { ...base.extras, ...patch.extras } };
@@ -206,13 +259,41 @@ function makeApi(calls: ApiCall[]): ApiPort {
   machine.held = null;
   machine.annotations.clear();
   machine.failShotUpdates = 0;
+  machine.failWorkflowReads = 0;
+  machine.grinders.clear();
+  machine.failGrinderReads = 0;
+  machine.holdGrinderReads = false;
+  machine.heldGrinderReads = [];
+  machine.grinderReads = [];
+  machine.parentMissing = false;
+  machine.dedupe = false;
+  machine.createError = null;
   const shotRecord = (id: string) => {
     const workflow = { ...SAMPLE_WORKFLOW, profile: machine.loaded, context: machine.context };
     const annotations = machine.annotations.get(id);
     return { id, timestamp: '', createdAt: '', updatedAt: '', workflow, measurements: [], ...(annotations ? { annotations } : {}) } as ShotRecord;
   };
   return {
-    getWorkflow: async () => ({ ...SAMPLE_WORKFLOW, profile: machine.loaded, context: machine.context }) as Workflow,
+    getWorkflow: async () => {
+      if (machine.failWorkflowReads > 0) {
+        machine.failWorkflowReads -= 1;
+        throw new Error('Decaid is not reachable.');
+      }
+      return { ...SAMPLE_WORKFLOW, profile: machine.loaded, context: machine.context } as Workflow;
+    },
+    getGrinder: (id) => {
+      calls.push({ method: 'getGrinder', args: [id] });
+      const read = (async () => {
+        if (machine.holdGrinderReads) await new Promise<void>((resolve) => machine.heldGrinderReads.push(resolve));
+        if (machine.failGrinderReads > 0) {
+          machine.failGrinderReads -= 1;
+          throw new GatewayError(0, `/api/v1/grinders/${id}`, 'Could not reach Decaid.', 'network');
+        }
+        return machine.grinders.get(id) ?? null;
+      })();
+      machine.grinderReads.push(read);
+      return read;
+    },
     updateWorkflow: async (patch) => {
       if (machine.failUpdates > 0) {
         machine.failUpdates -= 1;
@@ -255,6 +336,14 @@ function makeApi(calls: ApiCall[]): ApiPort {
     },
     createProfileVersion: async (request) => {
       calls.push({ method: 'createProfileVersion', args: [request] });
+      if (machine.createError) {
+        const error = machine.createError;
+        machine.createError = null;
+        throw error;
+      }
+      if (request.parentId !== undefined && machine.parentMissing) {
+        throw new GatewayError(400, '/api/v1/profiles', `Invalid argument(s): Parent profile not found: ${request.parentId}`);
+      }
       ids += 1;
       return {
         record: {
@@ -269,7 +358,7 @@ function makeApi(calls: ApiCall[]): ApiPort {
           updatedAt: '',
           metadata: null,
         },
-        deduped: false,
+        deduped: machine.dedupe,
       };
     },
     getShot: async (id) => {
@@ -807,7 +896,7 @@ describe('coach engine', () => {
     expect((await storage.settings.get()).grinderSetting).toBe('13');
     const patches = apiCalls.filter((c) => c.method === 'updateWorkflow').map((c) => c.args[0]);
     // The whole grinder as last saved: one write per key, the latest wins (D64).
-    expect(patches.at(-1)).toEqual({ context: { grinderModel: null, grinderSetting: '13' } });
+    expect(patches.at(-1)).toEqual({ context: { grinderId: null, grinderModel: null, grinderSetting: '13' } });
     expect(engine.getState().activeVersion?.version).toBe(1);
   });
 
@@ -984,7 +1073,7 @@ describe('coach engine', () => {
     await storage.settings.update({ grinderName: 'Niche Zero', grinderSetting: '13' });
     await engine.refresh();
     const patches = apiCalls.filter((c) => c.method === 'updateWorkflow').map((c) => c.args[0]);
-    expect(patches.at(-1)).toEqual({ context: { grinderModel: 'Niche Zero', grinderSetting: '13' } });
+    expect(patches.at(-1)).toEqual({ context: { grinderId: null, grinderModel: 'Niche Zero', grinderSetting: '13' } });
 
     scripts.push(() => [text('Got it.'), askTaste]);
     telemetry.emitShot({ type: 'finished', shotId: 'shot-g', stopReason: 'targetWeight' });
@@ -994,7 +1083,8 @@ describe('coach engine', () => {
       .flatMap((m) => m.content)
       .find((b) => b.type === 'text' && b.text.startsWith('[event:shot_completed]'));
     const payload = JSON.parse((shotEvent as { text: string }).text.split('\n')[1]!);
-    expect(payload.grinder).toEqual({ name: 'Niche Zero', setting: '13' });
+    // Typed in Settings, not linked to Decaid's grinder library: no steps to tell.
+    expect(payload.grinder).toEqual({ name: 'Niche Zero', setting: '13', settingType: null, step: null, values: null });
   });
 
   it('keeps the bag on screen while a shot is pulled', async () => {
@@ -1367,7 +1457,8 @@ describe('coach engine', () => {
     it('keeps the old wording on an older Decaid without the route, and stops asking it', async () => {
       machine.barrier = 'unsupported';
       await throughProposal();
-      expect(notices().find((p) => p.text.includes('Kiambu AA v1'))).toMatchObject({ tone: 'success', text: 'Loaded Kiambu AA v1 on the machine.' });
+      const loadNotice = notices().find((p) => p.text.includes('Kiambu AA v1') && !p.text.includes(' stops at '));
+      expect(loadNotice).toMatchObject({ tone: 'success', text: 'Loaded Kiambu AA v1 on the machine.' });
       expect(callsOf('loadProfileOnMachine')).toHaveLength(1);
 
       scripts.push(() => [text('Done.')]);
@@ -1476,7 +1567,7 @@ describe('coach engine', () => {
       expect(grinderWrites()).toEqual([]);
 
       decaidBack();
-      await vi.waitFor(() => expect(grinderWrites()).toEqual([{ context: { grinderModel: null, grinderSetting: '15' } }]));
+      await vi.waitFor(() => expect(grinderWrites()).toEqual([{ context: { grinderId: null, grinderModel: null, grinderSetting: '15' } }]));
       expect(notices().filter((p) => p.text.startsWith("Decaid can't be reached"))).toHaveLength(1);
       expect(timers.delays()).toEqual([]);
     });
@@ -1488,7 +1579,7 @@ describe('coach engine', () => {
       await engine.refresh();
       expect(notices().at(-1)).toMatchObject({ tone: 'warning', text: unreachable('14') });
       machineReconnects();
-      await vi.waitFor(() => expect(grinderWrites().at(-1)).toEqual({ context: { grinderModel: 'Niche Zero', grinderSetting: '14' } }));
+      await vi.waitFor(() => expect(grinderWrites().at(-1)).toEqual({ context: { grinderId: null, grinderModel: 'Niche Zero', grinderSetting: '14' } }));
     });
 
     it('sends only the latest grinder', async () => {
@@ -1501,7 +1592,7 @@ describe('coach engine', () => {
       decaidBack();
       await vi.waitFor(() => expect(grinderWrites()).toHaveLength(1));
       await drain();
-      expect(grinderWrites()).toEqual([{ context: { grinderModel: null, grinderSetting: '13' } }]);
+      expect(grinderWrites()).toEqual([{ context: { grinderId: null, grinderModel: null, grinderSetting: '13' } }]);
     });
 
     it('tries again every 30 s while a write waits, and stops when it is through', async () => {
@@ -1517,7 +1608,7 @@ describe('coach engine', () => {
       expect(grinderWrites()).toEqual([]);
 
       timers.fire();
-      await vi.waitFor(() => expect(grinderWrites()).toEqual([{ context: { grinderModel: null, grinderSetting: '14' } }]));
+      await vi.waitFor(() => expect(grinderWrites()).toEqual([{ context: { grinderId: null, grinderModel: null, grinderSetting: '14' } }]));
       expect(timers.delays()).toEqual([]);
     });
 
@@ -1528,7 +1619,7 @@ describe('coach engine', () => {
       await engine.refresh();
       scripts.push(() => [text('Got it.'), askTaste]);
       telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: 'targetWeight' });
-      await vi.waitFor(() => expect(grinderWrites()).toEqual([{ context: { grinderModel: null, grinderSetting: '14' } }]));
+      await vi.waitFor(() => expect(grinderWrites()).toEqual([{ context: { grinderId: null, grinderModel: null, grinderSetting: '14' } }]));
       await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
     });
 
@@ -1740,6 +1831,397 @@ describe('coach engine', () => {
       expect(seen.map((s) => s.label)).toEqual(['Try 2 of 6', 'Try 3 of 6', 'Try 4 of 6', 'Try 5 of 6', 'Try 6 of 6']);
       expect(progressNotices()).toEqual([]);
       expect(engine.getState().error).toBe('Decaid has not saved that shot yet.');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // D57, D59: v1 starts from the dose, under the template's library entry
+  // -------------------------------------------------------------------------
+
+  describe('v1 from the dose (D57, D59)', () => {
+    /** Decaid's dose, as the user or another skin set it (null: none). */
+    function setDecaidDose(doseG: number | null) {
+      const { targetDoseWeight: _previous, ...rest } = machine.context;
+      machine.context = doseG === null ? rest : { ...rest, targetDoseWeight: doseG };
+    }
+
+    /** Open a bag with Decaid's 18 g dose, then change the dose in Decaid before the pick. */
+    async function pickWithDose(doseG: number | null) {
+      await throughTemplateCards();
+      setDecaidDose(doseG);
+      scripts.push(() => [text('Loaded. Pull a shot.')]);
+      await engine.pickTemplate('t-tpl', 'd-flow');
+    }
+
+    const v1Activation = () => callsOf('activateProfile')[0]!.args as [ProfileJson, WorkflowContext];
+    const pickedPayload = () => parsed(lastUserTurn(requests)[1]);
+    const yieldNotices = () => notices().filter((p) => p.text.includes(' stops at '));
+
+    it('starts v1 at the author ratio times a dose changed in Decaid after the bag opened (16 g)', async () => {
+      await pickWithDose(16);
+      const [profile, context] = v1Activation();
+      expect(profile.target_weight).toBe(45);
+      expect(context.targetYield).toBe(45);
+      expect(engine.getState().activeVersion?.profile.target_weight).toBe(45);
+      expect(yieldNotices()).toEqual([{ kind: 'notice', tone: 'info', text: 'Kiambu AA v1 stops at 45 g: 2.8 x the 16.0 g dose in Decaid.' }]);
+      expect(pickedPayload()).toEqual({
+        picked: 'd-flow',
+        version: 1,
+        title: 'Kiambu AA v1',
+        yieldG: 45,
+        doseG: 16,
+        uploaded: true,
+        onMachine: true,
+        note: null,
+      });
+    });
+
+    it('starts v1 at 50 g for an 18 g dose', async () => {
+      await pickWithDose(18);
+      const [profile, context] = v1Activation();
+      expect(profile.target_weight).toBe(50);
+      expect(context).toMatchObject({ targetYield: 50, targetDoseWeight: 18 });
+      expect(yieldNotices().map((p) => p.text)).toEqual(['Kiambu AA v1 stops at 50 g: 2.8 x the 18.0 g dose in Decaid.']);
+      expect(pickedPayload()).toMatchObject({ yieldG: 50, doseG: 18 });
+    });
+
+    it('assumes 18 g when Decaid has no dose, and says how to change that', async () => {
+      await pickWithDose(null);
+      const [profile, context] = v1Activation();
+      expect(profile.target_weight).toBe(50);
+      expect(context.targetYield).toBe(50);
+      expect(context).not.toHaveProperty('targetDoseWeight');
+      expect(yieldNotices().map((p) => p.text)).toEqual([
+        'Kiambu AA v1 stops at 50 g: 2.8 x 18 g. CafAI found no dose in Decaid, so v1 assumes 18 g. Set your real dose in Decaid and CafAI will use it.',
+      ]);
+      expect(pickedPayload()).toMatchObject({ yieldG: 50, doseG: null });
+    });
+
+    it('treats a 7 g dose as unknown, and never writes it back over a dose the user sets later', async () => {
+      await pickWithDose(7);
+      const [profile, context] = v1Activation();
+      expect(profile.target_weight).toBe(50);
+      expect(context.targetYield).toBe(50);
+      expect(context).not.toHaveProperty('targetDoseWeight');
+      expect(yieldNotices().map((p) => p.text)).toEqual([
+        'Kiambu AA v1 stops at 50 g: 2.8 x 18 g. The 7.0 g dose in Decaid is outside 12-25 g, so v1 assumes 18 g. Set your real dose in Decaid and CafAI will use it.',
+      ]);
+      expect(pickedPayload()).toMatchObject({ yieldG: 50, doseG: null });
+
+      // The user sets the real dose, as the notice says; loading v2 must not put 7 g back.
+      setDecaidDose(18);
+      scripts.push(() => [text('Got it.'), askTaste]);
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' });
+      await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+      scripts.push(() => [proposeTemp]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      scripts.push(() => [text('Done.')]);
+      await engine.confirmChange('t-adj');
+      expect(engine.getState().activeVersion?.version).toBe(2);
+      expect(callsOf('activateProfile')).toHaveLength(2);
+      expect(callsOf('activateProfile')[1]!.args[1]).not.toHaveProperty('targetDoseWeight');
+      expect(machine.context.targetDoseWeight).toBe(18);
+    });
+
+    it("keeps the session's dose when Decaid cannot be read at the pick", async () => {
+      await throughTemplateCards(); // the bag opened with Decaid's 18 g
+      setDecaidDose(16);
+      machine.failWorkflowReads = 1;
+      scripts.push(() => [text('Loaded.')]);
+      await engine.pickTemplate('t-tpl', 'd-flow');
+      expect(v1Activation()[0].target_weight).toBe(50);
+      expect(pickedPayload()).toMatchObject({ yieldG: 50, doseG: 18 });
+      expect(engine.getState().error).toBeNull();
+    });
+
+    it('says where v1 stops before it says the machine holds it', async () => {
+      await pickWithDose(18);
+      const texts = notices().map((p) => p.text);
+      const stops = texts.indexOf('Kiambu AA v1 stops at 50 g: 2.8 x the 18.0 g dose in Decaid.');
+      expect(stops).toBeGreaterThanOrEqual(0);
+      expect(stops).toBeLessThan(texts.indexOf('Loaded Kiambu AA v1 on the machine.'));
+    });
+
+    it('tells the coach the dose CafAI coaches from at intake', async () => {
+      await throughTemplateCards();
+      const intake = (requests[0]![0]!.content[1] as { text: string }).text;
+      expect(JSON.parse(intake.split('\n')[1]!)).toMatchObject({ scaleConnected: true, doseG: 18 });
+
+      setDecaidDose(7);
+      await anotherBag('Sumatra', 'londonium');
+      const second = requests.find((messages) => messages.length === 1 && JSON.stringify(messages).includes('Sumatra'))!;
+      expect(JSON.parse((second[0]!.content[1] as { text: string }).text.split('\n')[1]!)).toMatchObject({ doseG: null });
+    });
+
+    it("records v1 under the template's bundled default in Decaid's library", async () => {
+      await pickWithDose(16);
+      const creates = callsOf('createProfileVersion');
+      expect(creates).toHaveLength(1);
+      expect(creates[0]!.args[0]).toMatchObject({
+        parentId: 'profile:d-flow',
+        metadata: { source: 'cafai', version: 1, templateId: 'd-flow' },
+      });
+      expect(engine.getState().activeVersion?.decaidProfileId).toBe('profile:1');
+    });
+
+    it('records v1 without a parent when Decaid answers 400 for it', async () => {
+      machine.parentMissing = true;
+      await pickWithDose(16);
+      const requests400 = callsOf('createProfileVersion').map((c) => c.args[0] as { parentId?: string; profile: ProfileJson });
+      expect(requests400).toHaveLength(2);
+      expect(requests400[0]!.parentId).toBe('profile:d-flow');
+      expect(requests400[1]).not.toHaveProperty('parentId');
+      expect(requests400[1]!.profile).toEqual(requests400[0]!.profile);
+      expect(engine.getState().activeVersion?.decaidProfileId).toBe('profile:1');
+      expect(pickedPayload()).toMatchObject({ uploaded: true, onMachine: true, note: null });
+      expect(engine.getState().error).toBeNull();
+    });
+
+    it('does not post again when the library write failed for another reason', async () => {
+      machine.createError = new GatewayError(0, '/api/v1/profiles', 'Could not reach Decaid.', 'network');
+      await pickWithDose(16);
+      expect(callsOf('createProfileVersion')).toHaveLength(1);
+      expect(pickedPayload()).toMatchObject({ uploaded: false, note: 'Could not reach Decaid.' });
+    });
+
+    it('keeps the note when Decaid already had this exact profile', async () => {
+      machine.dedupe = true;
+      await pickWithDose(18);
+      expect(pickedPayload()).toMatchObject({
+        uploaded: true,
+        note: 'Decaid already had this exact profile and kept its library entry; the machine shows the new title.',
+      });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // D62: the grinder linked from Decaid's grinder library
+  // -------------------------------------------------------------------------
+
+  describe("Decaid's grinder in the engine (D62)", () => {
+    /** Until every grinder read so far has answered and the engine has taken the answer. */
+    const grinderSettled = () => Promise.allSettled(machine.grinderReads);
+
+    /** A page load with this grinder linked in Settings. */
+    async function startLinked(id: string, info: GrinderInfo | null, setting: string, name = info?.model ?? 'Old grinder') {
+      engine.dispose();
+      engine = build();
+      if (info) machine.grinders.set(id, info);
+      await storage.settings.update({ grinderId: id, grinderName: name, grinderSetting: setting });
+      await engine.start();
+      await grinderSettled();
+    }
+
+    /** Settings saved (grinderId, grinderName, grinderSetting), then coach.refresh(), as the Settings screen does. */
+    async function saveInSettings(id: string | null, info: GrinderInfo | null, setting: string, name = info?.model ?? null) {
+      if (id !== null && info) machine.grinders.set(id, info);
+      await storage.settings.update({ grinderId: id, grinderName: name, grinderSetting: setting });
+      await engine.refresh();
+      await grinderSettled();
+    }
+
+    const intakeGrinder = () => JSON.parse((requests[0]![0]!.content[1] as { text: string }).text.split('\n')[1]!).grinder;
+
+    /** Every shot event the coach heard, oldest first. */
+    function shotEvents(): Array<Record<string, unknown>> {
+      return (requests.at(-1) ?? [])
+        .flatMap((m) => m.content)
+        .flatMap((b) => (b.type === 'text' && b.text.startsWith('[event:shot_completed]') ? [JSON.parse(b.text.split('\n')[1]!)] : []));
+    }
+
+    const grindMove = (grind: { direction: 'finer' | 'coarser'; amount: number | null; setting: string | null }, id = 't-grind') =>
+      toolUse(id, TOOL.proposeAdjustment, {
+        variable: 'grind',
+        lever: null,
+        value: null,
+        grind,
+        summary: 'Grind 1 step finer',
+        rationale: 'It ran fast.',
+        expectedEffect: 'A slower, sweeter shot.',
+        tips: [],
+      });
+
+    const nicheOn = (setting: string) => ({ name: 'Niche Zero', setting, settingType: 'numeric', step: 0.5, values: null });
+
+    it("reads the linked grinder at start and tells the coach its dial at intake and with every shot", async () => {
+      await startLinked('g-niche', NICHE, '15');
+      expect(callsOf('getGrinder').map((c) => c.args)).toEqual([['g-niche']]);
+      await throughShot();
+      expect(intakeGrinder()).toEqual(nicheOn('15'));
+      expect(shotEvents().map((e) => e.grinder)).toEqual([nicheOn('15')]);
+    });
+
+    it('sends the linked grinder with every activation (D62 supersedes D45)', async () => {
+      await startLinked('g-niche', NICHE, '15');
+      await throughTemplatePick();
+      expect(callsOf('activateProfile').at(-1)!.args[1]).toMatchObject({ grinderId: 'g-niche', grinderModel: 'Niche Zero', grinderSetting: '15' });
+    });
+
+    it('works a relative grind move out on the grinder, and the setting reaches Settings, Decaid and the next shot', async () => {
+      await startLinked('g-niche', NICHE, '15');
+      await throughShot();
+      scripts.push(() => [grindMove({ direction: 'finer', amount: 1, setting: null })]);
+      await engine.answerOptions('t-ask', [OTHER_OPTION], 'Muddy');
+      expect(engine.getState().phase).toBe('awaiting_confirmation');
+      expect(lastProposalContext?.grinder).toEqual(NICHE);
+      expect(allParts().find((p) => p.kind === 'diff')).toMatchObject({
+        lines: ['Grind 1 step finer: 15 -> 14.5'],
+        manualSteps: ['Set the grinder to 14.5 before the next shot (Decaid lists 0.5 steps for your Niche Zero).'],
+      });
+
+      scripts.push(() => [text('Make that change, then pull another shot.')]);
+      await engine.confirmChange('t-grind');
+      expect((await storage.settings.get()).grinderSetting).toBe('14.5');
+      expect(callsOf('updateWorkflow').at(-1)!.args[0]).toEqual({
+        context: { grinderId: 'g-niche', grinderModel: 'Niche Zero', grinderSetting: '14.5' },
+      });
+
+      scripts.push(() => [text('Got it.'), askTaste]);
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: 'targetWeight' });
+      await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+      expect(shotEvents().map((e) => e.grinder)).toEqual([nicheOn('15'), nicheOn('14.5')]);
+    });
+
+    it('sends a worked-out setting Decaid could not take through the outbox, with the grinder id', async () => {
+      await startLinked('g-niche', NICHE, '15');
+      await throughShot();
+      scripts.push(() => [grindMove({ direction: 'finer', amount: 1, setting: null })]);
+      await engine.answerOptions('t-ask', [OTHER_OPTION], 'Muddy');
+      machine.failUpdates = 1;
+      scripts.push(() => [text('Make that change, then pull another shot.')]);
+      await engine.confirmChange('t-grind');
+      expect(notices().at(-1)).toMatchObject({
+        tone: 'warning',
+        text: "Decaid can't be reached right now. CafAI will send grinder setting 14.5 as soon as it can.",
+      });
+      expect(callsOf('updateWorkflow')).toEqual([]);
+
+      decaidBack();
+      await vi.waitFor(() =>
+        expect(callsOf('updateWorkflow').map((c) => c.args[0])).toEqual([
+          { context: { grinderId: 'g-niche', grinderModel: 'Niche Zero', grinderSetting: '14.5' } },
+        ]),
+      );
+    });
+
+    it("checks a setting the coach names against a preset grinder's list, inside the model run", async () => {
+      await startLinked('g-encore', ENCORE, '5');
+      await throughShot();
+      scripts.push(() => [grindMove({ direction: 'finer', amount: 1, setting: '4.5' }, 't-off-list')]);
+      scripts.push(() => [grindMove({ direction: 'finer', amount: 1, setting: '4' })]);
+      await engine.answerOptions('t-ask', [OTHER_OPTION], 'Muddy');
+      const refused = lastUserTurn(requests)[0] as { tool_use_id: string; is_error?: boolean; content: string };
+      expect(refused).toMatchObject({ tool_use_id: 't-off-list', is_error: true });
+      expect(refused.content).toContain('grind.setting "4.5" is not one of your grinder\'s settings.');
+      expect(allParts().find((p) => p.kind === 'diff')).toMatchObject({
+        manualSteps: ['Set the grinder to 4 before the next shot (Decaid lists 12 settings for your Baratza Encore ESP).'],
+      });
+    });
+
+    it('reads the grinder again after every refresh, and writes a changed one with its id', async () => {
+      await startLinked('g-niche', NICHE, '15');
+      await engine.refresh(); // nothing changed: read again, nothing written
+      await grinderSettled();
+      expect(callsOf('getGrinder').map((c) => c.args)).toEqual([['g-niche'], ['g-niche']]);
+      expect(callsOf('updateWorkflow')).toEqual([]);
+
+      // Another grinder with the same name and setting: only the id changed.
+      await saveInSettings('g-niche-2', NICHE, '15');
+      expect(callsOf('getGrinder').at(-1)!.args).toEqual(['g-niche-2']);
+      expect(callsOf('updateWorkflow').map((c) => c.args[0])).toEqual([
+        { context: { grinderId: 'g-niche-2', grinderModel: 'Niche Zero', grinderSetting: '15' } },
+      ]);
+
+      await saveInSettings('g-encore', ENCORE, '5');
+      expect(callsOf('updateWorkflow').at(-1)!.args[0]).toEqual({
+        context: { grinderId: 'g-encore', grinderModel: 'Baratza Encore ESP', grinderSetting: '5' },
+      });
+      await throughTemplateCards();
+      expect(intakeGrinder()).toEqual({ name: 'Baratza Encore ESP', setting: '5', settingType: 'preset', step: null, values: ENCORE.values });
+    });
+
+    it('keeps the steps it has when a read fails, and asks again on the next refresh', async () => {
+      await startLinked('g-niche', NICHE, '15');
+      machine.failGrinderReads = 1;
+      await engine.refresh();
+      await grinderSettled();
+      expect(engine.getState().error).toBeNull();
+      await throughTemplateCards();
+      expect(intakeGrinder()).toEqual(nicheOn('15'));
+    });
+
+    it("never uses another grinder's steps: a failed read for a new grinder leaves none until a read works", async () => {
+      await startLinked('g-niche', NICHE, '15');
+      machine.failGrinderReads = 1;
+      await saveInSettings('g-encore', ENCORE, '5');
+      expect(engine.getState().error).toBeNull();
+      await throughShot();
+      expect(intakeGrinder()).toEqual({ name: 'Baratza Encore ESP', setting: '5', settingType: null, step: null, values: null });
+
+      await engine.refresh();
+      await grinderSettled();
+      scripts.push(() => [text('Again?'), askTaste]);
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: 'targetWeight' });
+      await vi.waitFor(() => expect(shotEvents()).toHaveLength(2));
+      expect(shotEvents()[1]!.grinder).toEqual({ name: 'Baratza Encore ESP', setting: '5', settingType: 'preset', step: null, values: ENCORE.values });
+    });
+
+    it('starts even when the grinder cannot be read, and a grinder Decaid no longer has gives no steps', async () => {
+      engine.dispose();
+      engine = build();
+      machine.failGrinderReads = 1;
+      await storage.settings.update({ grinderId: 'g-niche', grinderName: 'Niche Zero', grinderSetting: '15' });
+      await engine.start();
+      await grinderSettled();
+      expect(engine.getState()).toMatchObject({ ready: true, error: null });
+
+      await saveInSettings('g-gone', null, '7', 'Old grinder');
+      expect(callsOf('getGrinder').at(-1)!.args).toEqual(['g-gone']);
+      await throughTemplateCards();
+      expect(intakeGrinder()).toEqual({ name: 'Old grinder', setting: '7', settingType: null, step: null, values: null });
+    });
+
+    it('reads nothing when no grinder is linked, and forgets the steps when it is unlinked', async () => {
+      expect(callsOf('getGrinder')).toEqual([]);
+      await startLinked('g-niche', NICHE, '15');
+      await saveInSettings(null, null, '15', 'Niche Zero');
+      expect(callsOf('getGrinder')).toHaveLength(1);
+      expect(callsOf('updateWorkflow').at(-1)!.args[0]).toEqual({ context: { grinderId: null, grinderModel: 'Niche Zero', grinderSetting: '15' } });
+      await throughShot();
+      expect(intakeGrinder()).toEqual({ name: 'Niche Zero', setting: '15', settingType: null, step: null, values: null });
+
+      // Without Decaid's steps a relative move stays as the coach gave it.
+      scripts.push(() => [grindMove({ direction: 'finer', amount: 1, setting: null })]);
+      await engine.answerOptions('t-ask', [OTHER_OPTION], 'Muddy');
+      expect(lastProposalContext?.grinder).toBeNull();
+      scripts.push(() => [text('Make that change, then pull another shot.')]);
+      await engine.confirmChange('t-grind');
+      expect((await storage.settings.get()).grinderSetting).toBe('15');
+    });
+
+    it('works a relative move out again at Confirm when a reload brought the card back before the grinder was read', async () => {
+      await startLinked('g-niche', NICHE, '15');
+      await throughShot();
+      scripts.push(() => [grindMove({ direction: 'finer', amount: 1, setting: null })]);
+      await engine.answerOptions('t-ask', [OTHER_OPTION], 'Muddy');
+      expect(allParts().find((p) => p.kind === 'diff')).toMatchObject({ manualSteps: [expect.stringContaining('Set the grinder to 14.5')] });
+
+      // A page load: the card comes back from storage while the grinder is still being read.
+      engine.dispose();
+      engine = build();
+      machine.grinders.set('g-niche', NICHE);
+      machine.holdGrinderReads = true;
+      await engine.start();
+      expect(engine.getState().phase).toBe('awaiting_confirmation');
+      releaseGrinderReads();
+      await grinderSettled();
+
+      scripts.push(() => [text('Make that change, then pull another shot.')]);
+      await engine.confirmChange('t-grind');
+      expect((await storage.settings.get()).grinderSetting).toBe('14.5');
+      expect(callsOf('updateWorkflow').at(-1)!.args[0]).toEqual({
+        context: { grinderId: 'g-niche', grinderModel: 'Niche Zero', grinderSetting: '14.5' },
+      });
     });
   });
 });

@@ -35,17 +35,34 @@ All JSON payloads are compact `JSON.stringify` output.
    message asking for origin, roast, process and notes; it is NOT sent. The
    user's reply is sent as:
    `[{type:"text", text:<user text>}, {type:"text", text:"[context]\n" + JSON}]`
-   where JSON = `{"grinder":{"name":string|null,"setting":string|null},"scaleConnected":boolean}`.
+   where JSON = `{"grinder":<grinder>,"scaleConnected":boolean,"doseG":number|null}`.
+   `doseG` is Decaid's dose (`context.targetDoseWeight`) when CafAI coaches
+   from it (12-25 g, D57), else null (none set, or outside that range).
+   `<grinder>` =
+   `{"name":string|null,"setting":string|null,"settingType":"numeric"|"preset"|null,"step":number|null,"values":string[]|null}`:
+   `name` and `setting` as last saved in Settings; `settingType`, `step` (a
+   numeric dial's `settingSmallStep`) and `values` (a preset grinder's
+   `settingValues`, finest first) describe the grinder linked from Decaid's
+   grinder library (D62). They are null when no grinder is linked or Decaid
+   has no data for it (`step` is always null on a preset grinder, `values`
+   on a numeric one).
 2. **Template picked**: one user message with the held auto-tool results of
    that turn (e.g. `save_bag_details`) followed by
    `{type:"tool_result", tool_use_id:<propose_templates id>, content:JSON}`
-   with JSON = `{"picked":"<templateId>","version":1,"title":"<Bag> v1","uploaded":true|false,"onMachine":true|false,"note":string|null}`
+   with JSON = `{"picked":"<templateId>","version":1,"title":"<Bag> v1","yieldG":number,"doseG":number|null,"uploaded":true|false,"onMachine":true|false,"note":string|null}`
    (`onMachine` false: saved, but the machine is not connected; Decaid loads it on connect).
+   `yieldG` is where v1 stops (its `target_weight` and the workflow's
+   `targetYield`): the template's start ratio times the dose CafAI read from
+   Decaid at the pick, or times 18 g when that dose is unknown or outside
+   12-25 g (D57). `doseG` is the dose used when it is known, else null.
+   v1 is posted to Decaid's library with the template's bundled default as
+   `parentId` (D59); when Decaid answers 400 for it, v1 is posted again
+   without a parent.
 3. **Shot completed**: a text block
    `"[event:shot_completed]\n" + JSON` with JSON =
-   `{"shotRef":"latest","shotId":string,"version":number,"templateId":string,"levers":{"<leverId>":number,...},"doseG":number|null,"targetYieldG":number|null,"grinder":{"name":string|null,"setting":string|null},"summary":<ShotSummary without "series">}`.
-   `grinder` is what the user last saved (Settings or a confirmed grind move);
-   it supersedes the intake context.
+   `{"shotRef":"latest","shotId":string,"version":number,"templateId":string,"levers":{"<leverId>":number,...},"doseG":number|null,"targetYieldG":number|null,"grinder":<grinder>,"summary":<ShotSummary without "series">}`.
+   `grinder` (fields as in rule 1) is what the user last saved (Settings or
+   a confirmed grind move); it supersedes the intake context.
    If UI tool calls are still pending, their tool_results come first in the
    same message (rule 7).
 4. **Feedback**: tool_result for `ask_user` with JSON
@@ -74,7 +91,8 @@ Decide from the LAST user message (first matching rule wins). Map each
 tool_result to its tool name through the previous assistant turn's tool_use
 ids. Every reply starts with a `thinking` block (empty text, deterministic
 signature), streams text in small deltas, and streams tool inputs as several
-`input_json_delta` pieces.
+`input_json_delta` pieces. Every payload field above is accepted; the ones a
+rule does not name (e.g. `yieldG`, `doseG`) leave its reply unchanged.
 
 1. tool_result for `propose_adjustment` with `is_error` (CafAI rejected it)
    -> text "That one is outside what this profile allows. Here is another
@@ -98,9 +116,14 @@ signature), streams text in small deltas, and streams tool inputs as several
      move only inside the template's yield range, else the grind move);
    - contains "Balanced" -> `{variable:"none"}`;
    - otherwise -> `{variable:"grind", grind:{direction:"finer", amount:1, setting}}`,
-     where setting is the current dial minus 1 when the latest shot event's
-     (or, before any shot, the intake context's) grinder setting is a plain
-     number, else null.
+     where setting comes from the latest grinder object (the latest shot
+     event's or, before any shot, the intake context's): with a numeric
+     `step`, the current setting minus that step, printed on the dial's grid
+     the way CafAI's validator prints it (`"15"` with step 0.5 is `"14.5"`,
+     `"14.25"` is `"13.75"`); with `values`, the entry before the current
+     setting in the list; with neither, the current setting minus 1 when it
+     is a plain number. null when none applies (no setting, a setting off
+     the dial or not in the list, or a move below 0 or past the first entry).
    Fill summary/rationale/expectedEffect/tips with short plausible text.
 3. tool_result for `ask_user` -> text "Thanks. Let me look at the pressure
    curve." + tool_use `get_shot_series` `{shot:"latest", metric:"pressure", fromS:null, toS:null}`.

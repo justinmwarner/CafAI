@@ -11,6 +11,9 @@
  *   (D55): every activation is a workflow PUT followed by Decaid's barrier.
  * - Writes to Decaid that fail (a grinder setting, a shot's notes) wait in an
  *   outbox and go out again when Decaid is back (D64).
+ * - v1 starts from the dose Decaid has at the pick (D57). Grind moves use the
+ *   steps of the grinder linked from Decaid's library (D62), read in the
+ *   background so a slow or failed read never holds anything up.
  * - Engine actions are serialized, so a shot that finishes mid-reply is
  *   handled after the reply, never interleaved with it.
  * - Everything is persisted as it happens (the WebView may be unloaded after
@@ -29,17 +32,18 @@ import {
   type SaveBagDetails,
   type ToolName,
 } from '../../coach/contract.ts';
-import type {
-  ShotAnnotations,
-  ShotRecord,
-  TelemetryStore,
-  WireProfile,
-  Workflow,
-  WorkflowContext,
+import {
+  GatewayError,
+  type ShotAnnotations,
+  type ShotRecord,
+  type TelemetryStore,
+  type WireProfile,
+  type Workflow,
+  type WorkflowContext,
 } from '../../api/types.ts';
 import { isShotRunning as shotInProgress } from '../../api/workflow.ts';
 import { redactKeyLike } from '../../storage/redact.ts';
-import type { ProfileJson, ShotSummary } from '../../coach/types.ts';
+import type { GrinderInfo, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
 import type { ContentBlock, Effort, PendingUiCall, RunnerTool, ToolResultBlock } from '../../llm/types.ts';
 import type {
   AppliedChange,
@@ -64,6 +68,7 @@ import type { ApiPort, ChangePlan, Clock, CoachPort, LlmPort, ShotSource } from 
 import {
   UNANSWERED_SHOT,
   UNANSWERED_TEXT,
+  grinderPayload,
   intakeBlocks,
   shotCompletedBlock,
   summaryForModel,
@@ -91,6 +96,7 @@ import {
   setDiffStatus,
   setShotStars,
   shotPart,
+  startingYieldText,
   templatesPart,
   updatePart,
   withoutTransient,
@@ -122,6 +128,8 @@ interface PendingCall {
   name: ToolName;
   input: unknown;
   plan?: ChangePlan;
+  /** Rebuilt from the stored transcript (a reload), maybe before the grinder's steps were read. */
+  recovered?: boolean;
 }
 
 interface Session {
@@ -132,6 +140,8 @@ interface Session {
   held: ToolResultBlock[];
   doseG: number | null;
   targetYieldG: number | null;
+  /** The read of Decaid's dose and yield that started when the session opened. */
+  numbers: Promise<void>;
 }
 
 /**
@@ -253,6 +263,14 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   let barrierSupported = true;
   /** The shot being pulled, as it started. */
   let shotStart: ShotStart | null = null;
+  /**
+   * The grinder linked in Settings, as Decaid's grinder library last
+   * described it (D62), with the id it was read for: info is null when
+   * Decaid has no grinder with that id. Null until a read answered.
+   */
+  let linkedGrinder: { id: string; info: GrinderInfo | null } | null = null;
+  /** Numbers the grinder reads, so a slow answer never overwrites a newer one. */
+  let grinderReads = 0;
   const outbox = createOutbox({ timers: deps.timers });
   const shotWrites = new Map<string, ShotWrite>();
   let chain: Promise<void> = Promise.resolve();
@@ -372,6 +390,11 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     return shotInProgress(telemetry.getState());
   }
 
+  /** Where a version stops, in grams: its own target_weight, else what Decaid had. */
+  function versionYield(s: Session, profile: ProfileJson): number {
+    return profile.target_weight ?? s.targetYieldG ?? DEFAULT_YIELD_G;
+  }
+
   function workflowContext(
     s: Session,
     versionId: string,
@@ -379,9 +402,12 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     patch: ChangePlan['contextPatch'] = {},
   ): WorkflowContext {
     const context: WorkflowContext = {
-      targetYield: patch.targetYield ?? profile.target_weight ?? s.targetYieldG ?? DEFAULT_YIELD_G,
+      targetYield: patch.targetYield ?? versionYield(s, profile),
     };
-    const dose = patch.targetDoseWeight ?? s.doseG;
+    // A dose CafAI does not coach from counts as unknown (D57), so it is never
+    // written back: the user may have set the real one in Decaid since, as
+    // CafAI's notice asked.
+    const dose = patch.targetDoseWeight ?? coach.knownDose(s.doseG);
     if (dose) context.targetDoseWeight = dose;
     // Decaid merges the context field by field, so anything left over from the
     // previous coffee (another skin's bean batch, the old roaster) would stick
@@ -389,7 +415,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     context.coffeeName = s.bag.name || null;
     context.coffeeRoaster = s.bag.roaster ?? null;
     context.beanBatchId = null;
-    context.grinderId = null;
+    // The grinder linked from Decaid's library (D62); null clears another skin's.
+    context.grinderId = settings.grinderId ?? null;
     context.grinderModel = settings.grinderName ?? null;
     context.grinderSetting = settings.grinderSetting ?? null;
     // Which CafAI version this is: shot records keep the workflow, so a shot
@@ -453,16 +480,59 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   }
 
   // -------------------------------------------------------------------------
+  // The grinder linked from Decaid's grinder library (D62)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Read the linked grinder's dial from Decaid's grinder library, in the
+   * background: nothing waits for it, and nothing fails because of it. The
+   * newest read wins. A read that fails keeps what CafAI had for that grinder
+   * (or nothing); the next refresh asks again.
+   */
+  function loadGrinder(): void {
+    const id = settings.grinderId ?? null;
+    const read = ++grinderReads;
+    if (id === null) {
+      linkedGrinder = null;
+      return;
+    }
+    api.getGrinder(id).then(
+      (info) => {
+        if (read === grinderReads) linkedGrinder = { id, info };
+      },
+      () => {
+        // Decaid unreachable (or a Decaid without the library): keep what CafAI has.
+      },
+    );
+  }
+
+  /** The linked grinder's dial, when Decaid's library described it; never another grinder's. */
+  function grinderInfo(): GrinderInfo | null {
+    const id = settings.grinderId ?? null;
+    return id !== null && linkedGrinder?.id === id ? linkedGrinder.info : null;
+  }
+
+  /** The grinder as the model hears it: as last saved, with its dial when Decaid knows it. */
+  function grinderForModel() {
+    return grinderPayload(settings.grinderName, settings.grinderSetting, grinderInfo());
+  }
+
+  // -------------------------------------------------------------------------
   // Writes to Decaid that must not be lost (D64)
   // -------------------------------------------------------------------------
 
   /**
    * Write the grinder as last saved to Decaid's workflow context, so the next
-   * shots carry it (D54). A write Decaid cannot take now waits in the outbox;
-   * the chat says so once, and nothing when it goes through later.
+   * shots carry it (D54), with its id in Decaid's grinder library (D62). A
+   * write Decaid cannot take now waits in the outbox; the chat says so once,
+   * and nothing when it goes through later.
    */
   async function sendGrinder(): Promise<void> {
-    const grinder = { grinderModel: settings.grinderName ?? null, grinderSetting: settings.grinderSetting ?? null };
+    const grinder = {
+      grinderId: settings.grinderId ?? null,
+      grinderModel: settings.grinderName ?? null,
+      grinderSetting: settings.grinderSetting ?? null,
+    };
     const sent = await outbox.put(GRINDER_WRITE, () => api.updateWorkflow({ context: grinder }));
     const s = session;
     if (sent || !s) return;
@@ -598,6 +668,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       doseG: s.doseG,
       scaleConnected: telemetry.getState().scaleConnected,
       grinderSetting: settings.grinderSetting,
+      grinder: grinderInfo(),
     };
   }
 
@@ -811,7 +882,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       } else if (use.name === TOOL.proposeAdjustment) {
         const context = proposalContext(s);
         const plan = context ? coach.validateProposal(validation.value as ProposeAdjustment, context) : null;
-        if (plan?.ok) s.pending.push({ id: use.id, name: use.name, input: validation.value, plan: plan.plan });
+        if (plan?.ok) s.pending.push({ id: use.id, name: use.name, input: validation.value, plan: plan.plan, recovered: true });
         else s.held.push(toolResult(use.id, 'This proposal no longer applies to the active version.', true));
       } else {
         s.pending.push({ id: use.id, name: use.name as ToolName, input: validation.value });
@@ -836,6 +907,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       held: [],
       doseG: null,
       targetYieldG: null,
+      numbers: Promise.resolve(),
     };
     session = s;
     // A stored progress notice (an older build, a crash) describes work that is long over.
@@ -847,7 +919,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     }
     settings = await storage.settings.update({ activeBagId: bag.id });
     emit();
-    void loadWorkflowNumbers(s);
+    // In the background; the intake turn waits for it (it tells the coach the dose).
+    s.numbers = loadWorkflowNumbers(s);
   }
 
   async function createBag(): Promise<Session> {
@@ -1227,7 +1300,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       levers: template ? coach.readLeverValues(template, current.profile) : {},
       doseG: summary.doseG ?? s.doseG,
       targetYieldG: summary.targetYieldG ?? s.targetYieldG,
-      grinder: { name: settings.grinderName, setting: settings.grinderSetting },
+      grinder: grinderForModel(),
       summary: summaryForModel(summary),
     });
     emit();
@@ -1240,6 +1313,21 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
 
   function requireCall(s: Session, requestId: string, name: ToolName): PendingCall | null {
     return s.pending.find((p) => p.id === requestId && p.name === name) ?? null;
+  }
+
+  /**
+   * POST v1 to Decaid's library under the template's bundled default (D59),
+   * so the library shows where it came from. A Decaid without that default
+   * (an older build, or one that never bundled it) answers 400 for the
+   * parent: v1 is then recorded without one.
+   */
+  async function recordV1(template: Template, request: { profile: ProfileJson; metadata: Record<string, unknown> }) {
+    try {
+      return await api.createProfileVersion({ ...request, parentId: template.decaidDefaultId });
+    } catch (error) {
+      if (!(error instanceof GatewayError) || error.status !== 400) throw error;
+      return api.createProfileVersion(request);
+    }
   }
 
   async function pickTemplate(requestId: string, templateId: string): Promise<void> {
@@ -1256,15 +1344,23 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     state = { ...state, busy: true };
     emit();
 
+    // v1 follows the dose (D57), and the dose may have changed in Decaid since
+    // the bag opened: read it again (after the read the session started, so
+    // that one cannot land last). A failed read keeps the session's dose.
+    await s.numbers;
+    await loadWorkflowNumbers(s);
+    const decaidDoseG = s.doseG;
+    const doseG = coach.knownDose(decaidDoseG);
     const title = coach.versionTitle(s.bag.name, 1);
-    const profile = coach.buildVersionProfile(template, template.profile, title, s.bag.name);
+    const profile = coach.buildVersionProfile(template, coach.buildStartingProfile(template, decaidDoseG), title, s.bag.name);
+    const yieldG = versionYield(s, profile);
     const versionId = deps.newId('ver');
     let decaidProfileId: string | null = null;
     let uploaded = true;
     let note: string | null = null;
     let workflow: Workflow | null = null;
     try {
-      const created = await api.createProfileVersion({
+      const created = await recordV1(template, {
         profile,
         metadata: { source: 'cafai', bagId: s.bag.id, version: 1, templateId },
       });
@@ -1290,6 +1386,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     };
     await saveVersions(s, [version]);
     await persistBag(s, { templateId, activeVersionId: version.id });
+    // Where v1 stops and why, before the load: the barista may want another dose.
+    const dose = { decaidG: decaidDoseG, knownG: doseG, assumedG: coach.referenceDoseG, range: coach.doseRange };
+    addMessage('system', [noticePart('info', startingYieldText(title, yieldG, dose))]);
     let onMachineNow = false;
     if (workflow) {
       const outcome = await confirmOnMachine(version.id, title, workflow.profile);
@@ -1306,6 +1405,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       picked: templateId,
       version: 1,
       title,
+      yieldG,
+      doseG,
       uploaded,
       onMachine: onMachineNow,
       note,
@@ -1406,9 +1507,17 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     const s = session;
     if (!s) return;
     const call = requireCall(s, requestId, TOOL.proposeAdjustment);
-    const plan = call?.plan;
-    if (!call || !plan) return;
+    if (!call?.plan) return;
     const input = call.input as ProposeAdjustment;
+    // A grind move rebuilt after a reload may have been worked out before the
+    // grinder's steps were read again (they load in the background): work it
+    // out again, so Confirm saves the setting its card shows.
+    if (call.recovered && call.plan.variable === 'grind') {
+      const context = proposalContext(s);
+      const again = context ? coach.validateProposal(input, context) : null;
+      if (again?.ok) call.plan = again.plan;
+    }
+    const plan = call.plan;
     setMessages(setDiffStatus(state.messages, requestId, 'applying'));
     state = { ...state, busy: true };
     emit();
@@ -1468,11 +1577,12 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         await api.updateWorkflow({ context: { targetDoseWeight: plan.to } });
         s.doseG = plan.to;
       } else if (plan.variable === 'grind') {
-        // When the move names the new dial setting, the next shots carry it,
-        // in CafAI and in Decaid's workflow context. A relative move ("1 step
-        // finer") leaves the stored setting as the user last entered it. The
-        // dial is turned by hand, so an unreachable Decaid does not block the
-        // confirm; the outbox sends the setting once Decaid is back (D64).
+        // The new dial setting (the coach's, or worked out from a relative
+        // move on the grinder's steps in Decaid's library, D62) goes with the
+        // next shots, in CafAI and in Decaid's workflow context. A move CafAI
+        // cannot size leaves the stored setting as the user last entered it.
+        // The dial is turned by hand, so an unreachable Decaid does not block
+        // the confirm; the outbox sends the setting once Decaid is back (D64).
         const setting = plan.contextPatch.grinderSetting ?? input.grind?.setting ?? null;
         if (setting) {
           settings = await storage.settings.update({ grinderSetting: setting });
@@ -1617,9 +1727,12 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       }
     }
     if (s.conversation.apiMessages.length === 0) {
+      // A bag started by typing opened a moment ago: let its dose read finish.
+      await s.numbers;
       const blocks = intakeBlocks(trimmed, {
-        grinder: { name: settings.grinderName, setting: settings.grinderSetting },
+        grinder: grinderForModel(),
         scaleConnected: telemetry.getState().scaleConnected,
+        doseG: coach.knownDose(s.doseG),
       });
       await sendUser(s, new Map(), UNANSWERED_TEXT, blocks);
     } else {
@@ -1640,6 +1753,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     },
     async start() {
       await refreshFromStorage();
+      loadGrinder();
       const bags = (await storage.bags.list()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
       state = { ...state, bags };
       const active = bags.find((b) => b.id === settings.activeBagId);
@@ -1727,7 +1841,12 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       enqueue(async () => {
         const before = settings;
         await refreshFromStorage();
-        const grinderChanged = settings.grinderName !== before.grinderName || settings.grinderSetting !== before.grinderSetting;
+        const grinderChanged =
+          settings.grinderName !== before.grinderName ||
+          settings.grinderSetting !== before.grinderSetting ||
+          (settings.grinderId ?? null) !== (before.grinderId ?? null);
+        // The grinder's steps may have changed in Decaid's library too: read them again, in the background.
+        loadGrinder();
         // After an import the bag list (and the active bag's records) may differ.
         const bags = (await storage.bags.list()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
         state = { ...state, bags };

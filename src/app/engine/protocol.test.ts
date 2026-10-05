@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   awaitingModel,
+  grinderPayload,
   intakeBlocks,
   shotCompletedBlock,
   summaryForModel,
@@ -9,7 +10,16 @@ import {
   undoBlock,
 } from './protocol.ts';
 import type { LlmMessage } from '../../llm/types.ts';
-import type { ShotSummary } from '../../coach/types.ts';
+import type { GrinderInfo, ShotSummary } from '../../coach/types.ts';
+
+const NICHE: GrinderInfo = { model: 'Niche Zero', settingType: 'numeric', smallStep: 0.5, bigStep: 2, values: null };
+const ENCORE: GrinderInfo = {
+  model: 'Baratza Encore ESP',
+  settingType: 'preset',
+  smallStep: null,
+  bigStep: null,
+  values: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
+};
 
 const summary: ShotSummary = {
   shotId: 's1',
@@ -47,6 +57,48 @@ describe('engine protocol', () => {
     ]);
   });
 
+  it("puts the dose and the linked grinder's dial in the intake context (rule 1)", () => {
+    const blocks = intakeBlocks('Kenya Kiambu, light, washed', {
+      grinder: grinderPayload('Niche Zero', '15', NICHE),
+      scaleConnected: true,
+      doseG: 18,
+    });
+    expect(blocks[1]).toEqual({
+      type: 'text',
+      text: '[context]\n{"grinder":{"name":"Niche Zero","setting":"15","settingType":"numeric","step":0.5,"values":null},"scaleConnected":true,"doseG":18}',
+    });
+  });
+
+  describe('grinderPayload', () => {
+    it("gives a numeric grinder's small step and no values", () => {
+      expect(grinderPayload('Niche Zero', '15', NICHE)).toEqual({
+        name: 'Niche Zero',
+        setting: '15',
+        settingType: 'numeric',
+        step: 0.5,
+        values: null,
+      });
+    });
+
+    it("gives a preset grinder's settings, in Decaid's order, and no step", () => {
+      const payload = grinderPayload('Baratza Encore ESP', '5', ENCORE);
+      expect(payload).toEqual({ name: 'Baratza Encore ESP', setting: '5', settingType: 'preset', step: null, values: ENCORE.values });
+      expect(payload.values).not.toBe(ENCORE.values);
+    });
+
+    it('says null for everything Decaid does not know', () => {
+      expect(grinderPayload('DF64', '14', null)).toEqual({ name: 'DF64', setting: '14', settingType: null, step: null, values: null });
+      expect(grinderPayload(null, null, { ...NICHE, smallStep: null })).toMatchObject({ settingType: 'numeric', step: null, values: null });
+      for (const smallStep of [0, -0.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+        expect(grinderPayload('Niche Zero', '15', { ...NICHE, smallStep }).step, String(smallStep)).toBeNull();
+      }
+      expect(grinderPayload('Encore', '5', { ...ENCORE, values: [] })).toMatchObject({ settingType: 'preset', values: null });
+      // A step on a preset grinder, or a list on a numeric one, is not how its dial moves.
+      expect(grinderPayload('Encore', '5', { ...ENCORE, smallStep: 1 }).step).toBeNull();
+      expect(grinderPayload('Niche Zero', '15', { ...NICHE, values: ['1', '2'] }).values).toBeNull();
+    });
+  });
+
   it('encodes tool results as JSON text, flagging errors only when asked', () => {
     expect(toolResult('t1', { picked: 'd-flow' })).toEqual({
       type: 'tool_result',
@@ -74,6 +126,23 @@ describe('engine protocol', () => {
     expect(payload.grinder).toEqual({ name: 'Niche Zero', setting: '13' });
     expect(payload.summary.series).toBeUndefined();
     expect(payload.summary.yieldG).toBe(36.4);
+  });
+
+  it("carries the linked grinder's dial in the shot event (rule 3)", () => {
+    const block = shotCompletedBlock({
+      shotRef: 'latest',
+      shotId: 's1',
+      version: 1,
+      templateId: 'd-flow',
+      levers: { temp: 88 },
+      doseG: 18,
+      targetYieldG: 50,
+      grinder: grinderPayload('Baratza Encore ESP', '5', ENCORE),
+      summary: summaryForModel(summary),
+    });
+    expect(block.text).toContain(
+      '"grinder":{"name":"Baratza Encore ESP","setting":"5","settingType":"preset","step":null,"values":["1","2","3","4","5","6","7","8","9","10","11","12"]}',
+    );
   });
 
   it('formats the undo event', () => {

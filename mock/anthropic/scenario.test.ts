@@ -390,6 +390,114 @@ describe('scripted replies', () => {
     expect(reply.tools[0]?.input).toMatchObject({ grind: { setting: '12' }, summary: 'Grind 1 step finer, to 12' });
   });
 
+  describe("rule 2: a grind move on the grinder's own steps (D62)", () => {
+    /** A shot event whose grinder carries Decaid's grinder library fields. */
+    const shotWith = (grinder: Record<string, unknown>) =>
+      user(
+        text(
+          '[event:shot_completed]\n' +
+            JSON.stringify({
+              shotRef: 'latest',
+              shotId: 'shot-2',
+              version: 1,
+              templateId: 'blooming-espresso',
+              levers: BLOOMING_LEVERS,
+              doseG: 18,
+              targetYieldG: 50,
+              grinder,
+              summary: { shotId: 'shot-2', durationS: 27, yieldG: 50, doseG: 18 },
+            }),
+        ),
+      );
+    const grindAfter = (grinder: Record<string, unknown>) => {
+      const reply = ok(call([...UP_TO_SHOT, shotWith(grinder), SHOT_REPLY, answer(['Other'], 'Muddy'), ANSWER_REPLY, SERIES]));
+      expectValidInputs(reply.tools);
+      return reply.tools[0]?.input as { variable: string; grind: { direction: string; amount: number; setting: string | null }; summary: string };
+    };
+    const numeric = (setting: string | null, step: number | null) => ({ name: 'Niche Zero', setting, settingType: 'numeric', step, values: null });
+    const ENCORE_VALUES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+    const preset = (setting: string | null) => ({ name: 'Baratza Encore ESP', setting, settingType: 'preset', step: null, values: ENCORE_VALUES });
+
+    it('takes one numeric step off the dial, printed on its grid', () => {
+      expect(grindAfter(numeric('15', 0.5))).toMatchObject({
+        variable: 'grind',
+        grind: { direction: 'finer', amount: 1, setting: '14.5' },
+        summary: 'Grind 1 step finer, to 14.5',
+      });
+      expect(grindAfter(numeric('15', 1)).grind.setting).toBe('14');
+      expect(grindAfter(numeric('15.0', 0.5)).grind.setting).toBe('14.5');
+      expect(grindAfter(numeric('14.25', 0.5)).grind.setting).toBe('13.75');
+      expect(grindAfter(numeric('2', 0.25)).grind.setting).toBe('1.75');
+      expect(grindAfter(numeric('0.5', 0.5)).grind.setting).toBe('0.0');
+    });
+
+    it('moves to the previous entry of a preset list', () => {
+      expect(grindAfter(preset('5'))).toMatchObject({ grind: { setting: '4' }, summary: 'Grind 1 step finer, to 4' });
+      expect(grindAfter(preset('10')).grind.setting).toBe('9');
+      // Half-step labels and letters: the list, not arithmetic.
+      const halves = { name: 'Eureka', setting: '2', settingType: 'preset', step: null, values: ['1', '1.5', '2', '2.5', '3'] };
+      expect(grindAfter(halves).grind.setting).toBe('1.5');
+      const letters = { name: 'Ditting', setting: 'C', settingType: 'preset', step: null, values: ['A', 'B', 'C', 'D'] };
+      expect(grindAfter(letters).grind.setting).toBe('B');
+    });
+
+    it('names no setting when the move would leave the dial or the list', () => {
+      expect(grindAfter(numeric('0', 0.5))).toMatchObject({ grind: { setting: null }, summary: 'Grind 1 step finer' });
+      expect(grindAfter(preset('1')).grind.setting).toBeNull();
+      // A setting the grinder cannot be on: neither a number nor in the list.
+      expect(grindAfter(numeric('2 turns', 0.5)).grind.setting).toBeNull();
+      expect(grindAfter(preset('5.5')).grind.setting).toBeNull();
+    });
+
+    it('falls back to minus 1 when Decaid has no step data', () => {
+      expect(grindAfter(numeric('15', null)).grind.setting).toBe('14');
+      expect(grindAfter({ name: 'DF64', setting: '15', settingType: null, step: null, values: null }).grind.setting).toBe('14');
+      expect(grindAfter({ name: 'DF64', setting: '15' }).grind.setting).toBe('14');
+    });
+
+    it('reads the intake context the same way before any shot', () => {
+      const intake = user(
+        text('Kiambu AA, light roast, washed.'),
+        text(
+          '[context]\n{"grinder":{"name":"Niche Zero","setting":"15","settingType":"numeric","step":0.5,"values":null},"scaleConnected":true,"doseG":18}',
+        ),
+      );
+      // A rejected change before any shot event: the replacement grind move reads the intake's grinder.
+      const rejected = user({ type: 'tool_result', tool_use_id: 't_adj', content: 'temp: outside the bounds', is_error: true });
+      const reply = ok(call([intake, INTAKE_REPLY, PICKED, LOADED_REPLY, user(text('Make it sweeter')), ADJUST_REPLY, rejected]));
+      expect(reply.tools[0]?.input).toMatchObject({ variable: 'grind', grind: { setting: '14.5' } });
+    });
+  });
+
+  it("accepts the dose and the grinder's dial in the payloads, and keeps every reply (D57, D62)", () => {
+    const intake = user(
+      text('Kiambu AA, light roast, washed, from Kenya.'),
+      text(
+        '[context]\n{"grinder":{"name":"Niche Zero","setting":"14","settingType":"numeric","step":0.5,"values":null},"scaleConnected":true,"doseG":16}',
+      ),
+    );
+    expect(ok(call([intake])).tools.map((t) => t.name)).toEqual([TOOL.saveBagDetails, TOOL.proposeTemplates]);
+    const picked = user(
+      toolResult('t_save', { saved: true }),
+      toolResult('t_tpl', {
+        picked: 'blooming-espresso',
+        version: 1,
+        title: 'Kiambu AA v1',
+        yieldG: 45,
+        doseG: 16,
+        uploaded: true,
+        onMachine: true,
+        note: null,
+      }),
+    );
+    expect(ok(call([intake, INTAKE_REPLY, picked])).text).toBe('Loaded Kiambu AA v1. Pull a shot when you are ready; I will read the curves.');
+    const offline = user(
+      toolResult('t_save', { saved: true }),
+      toolResult('t_tpl', { picked: 'blooming-espresso', version: 1, title: 'Kiambu AA v1', yieldG: 50, doseG: null, uploaded: true, onMachine: false, note: null }),
+    );
+    expect(ok(call([intake, INTAKE_REPLY, offline])).text).toBe('Saved Kiambu AA v1. Decaid loads it when the machine connects; pull a shot after that.');
+  });
+
   it('rule 1: a change CafAI rejected is replaced by another one, not read as declined', () => {
     const base = [...UP_TO_SHOT, shot(BLOOMING_LEVERS), SHOT_REPLY, answer(['Sour / sharp']), ANSWER_REPLY, SERIES, ADJUST_REPLY];
     const rejected = user({ type: 'tool_result', tool_use_id: 't_adj', content: 'yield: 137 g is above this template', is_error: true });

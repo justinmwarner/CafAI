@@ -10,7 +10,9 @@ import {
   replaceParts,
   setShotStars,
   shotPart,
+  startingYieldText,
   withoutTransient,
+  type StartingDose,
 } from './uiMessages.ts';
 
 const at = '2026-10-03T08:00:00.000Z';
@@ -69,5 +71,38 @@ describe('message updates', () => {
     expect(result[0]!.parts[0]).toEqual({ kind: 'shot', shotId: 'shot-1', summary, stars: 4 });
     expect(result[1]).toBe(messages[1]);
     expect(setShotStars(messages, 'shot-unknown', 4)).toEqual(messages);
+  });
+});
+
+describe("where v1 stops (D57)", () => {
+  const dose = (decaidG: number | null, knownG: number | null): StartingDose => ({
+    decaidG,
+    knownG,
+    assumedG: 18,
+    range: { min: 12, max: 25 },
+  });
+
+  it('names the dose in Decaid that v1 was worked out from', () => {
+    expect(startingYieldText('Kiambu AA v1', 50, dose(18, 18))).toBe('Kiambu AA v1 stops at 50 g: 2.8 x the 18.0 g dose in Decaid.');
+    expect(startingYieldText('Kiambu AA v1', 45, dose(16, 16))).toBe('Kiambu AA v1 stops at 45 g: 2.8 x the 16.0 g dose in Decaid.');
+    expect(startingYieldText('Sumatra v1', 37, dose(18.5, 18.5))).toBe('Sumatra v1 stops at 37 g: 2.0 x the 18.5 g dose in Decaid.');
+  });
+
+  it("gives the ratio of the stop itself when the lever's bounds moved it", () => {
+    // Londonium at 12 g: 2.0 x 12 = 24 g sits under its 25 g minimum, so v1 stops at 25 g.
+    expect(startingYieldText('Sumatra v1', 25, dose(12, 12))).toBe('Sumatra v1 stops at 25 g: 2.1 x the 12.0 g dose in Decaid.');
+  });
+
+  it('says v1 assumes 18 g when Decaid has no dose, and how to change that', () => {
+    expect(startingYieldText('Kiambu AA v1', 50, dose(null, null))).toBe(
+      'Kiambu AA v1 stops at 50 g: 2.8 x 18 g. CafAI found no dose in Decaid, so v1 assumes 18 g. Set your real dose in Decaid and CafAI will use it.',
+    );
+  });
+
+  it("says v1 assumes 18 g when Decaid's dose is outside 12-25 g", () => {
+    expect(startingYieldText('Kiambu AA v1', 50, dose(7, null))).toBe(
+      'Kiambu AA v1 stops at 50 g: 2.8 x 18 g. The 7.0 g dose in Decaid is outside 12-25 g, so v1 assumes 18 g. Set your real dose in Decaid and CafAI will use it.',
+    );
+    expect(startingYieldText('Kiambu AA v1', 90, dose(30, null))).toContain('The 30.0 g dose in Decaid is outside 12-25 g');
   });
 });
