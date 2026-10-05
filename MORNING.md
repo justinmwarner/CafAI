@@ -1,7 +1,12 @@
-# Good morning: CafAI overnight build
+# Good morning: CafAI after your answers (2026-10-04)
 
-CafAI (skin id `cafai`) is built, committed in small steps on `main`, and
-passes everything in "done means". Nothing was pushed anywhere.
+Your nine answers in QUESTIONS.md are all done. Each is an owner decision
+(D55-D63), and each that changed behaviour went through its own brief,
+tests and review. The overnight gaps that need no hardware are closed, there
+is an opt-in test against the real Anthropic API, and
+`docs/HARDWARE_TEST_PLAN.md` is the checklist for the first session on a
+real DE1. Everything is committed in small steps on `main`; nothing was
+pushed.
 
 ## Done means: status
 
@@ -9,75 +14,156 @@ passes everything in "done means". Nothing was pushed anywhere.
 |---|---|
 | Typecheck (`npm run typecheck`) | pass |
 | Lint (`npm run lint`) | pass |
-| Unit tests (`npm test`) | **1254/1254** in 91 files |
-| Playwright (`npm run e2e`) | **27/27** at 962x602, 1280x800, 1920x1200 |
-| Full loop against the mock | pass: new bag -> 2-5 templates -> pick -> "<Bean> v1" uploaded -> scripted shot -> taste chips -> one-change diff confirmed -> v2 -> history; undo back to v1 |
-| API key stays local | the full-loop e2e searches every request the page made, and everything the mock Decaid received or stored: the key only ever goes to Anthropic, in the `x-api-key` header |
-| Release zip (`npm run release:zip`) | builds `release/cafai-0.1.0.zip`: `index.html`, `skin-manifest.json`, `manifest.json`, `LICENSE`, `NOTICE`, `LICENSE-ROBOTO.txt` at the root, one entry chunk, no mock code |
-| Real Chromium 91 | the full loop also runs in HeadlessChrome 91.0.4469.0 with zero page or console errors (`npm run smoke:chrome91:loop`) |
-| README | dev setup, tablet install, credits |
+| Unit tests (`npm test`) | **1823/1823** in 115 files (overnight: 1254 in 91) |
+| Playwright (`npm run e2e`) | **93/93** at 962x602, 1280x800 and 1920x1200 (overnight: 27) |
+| `npm run verify` (all of the above, build and release zip) | pass |
+| Real Chromium 91 (`npm run build:mock && npm run smoke:chrome91 && npm run smoke:chrome91:loop`) | pass: the app loads with no console or page errors, and the whole coach loop runs, now waiting for the machine to confirm each load |
+| Live API test (`npm run test:live`) | skipped here (no key on this machine); its dry run against the scripted coach passes |
+| Fresh-eyes verifier | found 1 major, 5 minor and 3 polish defects; all fixed, and its own repro spec passes against the fixes (8/8) |
+
+## Your answers, one by one
+
+1. **Can CafAI GET the profile and wait until the machine has it?** No
+   endpoint reads the profile back. But `POST /api/v1/machine/profile` with
+   the same profile answers only once the machine has acknowledged the
+   upload, so CafAI now waits on it after every load. The chat says "Loading
+   <Bean> vN on the machine…", then "Loaded …". A shot that started while
+   the version was still loading is not credited. The four options and why
+   the others lost are in D55. Measuring the real timing needs a DE1: hardware
+   plan sections 3-5.
+2. **Default model.** Unchanged (`claude-opus-5-5`); you pick another in
+   Settings. Running the coach from your own computer, like Crema's Mac
+   server, is on the roadmap with what to check first (`docs/ROADMAP.md`).
+   `ANTHROPIC_API_KEY=<key> npm run test:live` proves the default and, with
+   `LIVE_ALL_MODELS=1`, every picker id against the real API (D56).
+3. **Lever bounds and starting yields.** v1 now stops at the profile
+   author's own ratio times the dose in Decaid: Blooming and D-Flow 1:2.8,
+   Londonium and Gentle and Sweet 1:2, the Allongé 1:5. A dose outside
+   12-25 g, or none, counts as 18 g. The chat says where v1 stops and why.
+   The Allongé's window is 4-6x (it promised 135 g before), Gentle and
+   Sweet's tops out at 3x; every other bound was checked and stays (D57).
+4. **Chromium 91.** The target stays. An older engine gets a dismissible
+   warning, and a start that fails shows a page with Exit to Decaid and
+   Decaid settings. Decaid's WebView calls itself "Decent", so the check
+   tests for Chromium 91 syntax; in the real Chromium 91 it reports
+   supported (D58).
+5. **v1 in Decaid's library.** Following from #3, v1 usually differs from
+   the bundled profile, so it gets its own entry, filed under the bundled
+   profile as its parent (D59).
+6. **Storage across iOS updates.** Unchanged, and now proved end to end: a
+   new test empties CafAI's browser storage and checks that everything but
+   the key comes back from Decaid's backup (D60).
+7. **Feedback to Decaid's shot record.** The taste answer goes into the
+   shot's notes (your own notes are kept; CafAI only swaps its own line) and
+   `extras.cafai`. An optional five-star rating on the shot card goes into
+   `enjoyment`. Failed writes are retried (D61). *My reading:* enjoyment
+   only when you rate the shot, never derived from the taste (question 4
+   below).
+8. **Grind and Decaid's grinders.** Settings links a grinder from Decaid's
+   grinder library. Its step, or its list of settings, turns "1 step finer"
+   into the new setting and checks the coach's numbers. The card says where
+   the step came from, or that the setting is the coach's estimate when
+   CafAI doesn't know the step (D62, D73). *My reading:* lower numbers are
+   finer (question 2 below).
+9. **Gentle and Sweet.** It is byte-identical to Decaid's current file, and
+   tests pin the regenerated values. A pressure curve cannot tell it from
+   the stale import; the 88 °C target in every frame and the profile id can.
+   That is the check in hardware plan section 6 (D63).
+
+Every answer is in QUESTIONS.md under "Answered", with its decision and
+commits.
+
+## The other gaps from last night
+
+- **Lost-shot search:** the chat shows "Looking for that shot in Decaid…"
+  with a progress bar and "Try n of 6" (D65).
+- **A grind setting Decaid missed:** failed writes to Decaid (grinder,
+  shot notes) wait and go out again when Decaid is back, within 30 s, or
+  before the next shot (D64).
+- **Which profile is loaded:** the machine panel has a Profile line. It is
+  marked as the bag's version only once the machine has it, and it changes
+  together with the banner when something else loads a profile (D66, D70,
+  D72).
+- **Restoring from the Decaid backup:** now an end-to-end test; the mock
+  keeps its store across a reload on request (D67).
+- **The live API test:** opt-in, skipped without `ANTHROPIC_API_KEY`, and
+  never part of `npm test` (D68).
+- **Decaid's own simulator on your computer (asked after the session):**
+  it works today with Decaid's Windows download (Try Demo Mode) and
+  `npm run dev`; `npm run dev:sim` pairs it with the scripted coach so it
+  costs no API tokens. Steps and limits: [docs/SIMULATOR.md](docs/SIMULATOR.md)
+  (from Decaid's source; not yet run against a live Decaid here) (D74).
 
 ## Fresh-eyes verification
 
-When the build was done, a separate agent that had not written any of it
-drove the built app end to end (13 exploratory Playwright specs at 962x602,
-reading the network and IndexedDB as it went) and reported 6 major defects,
-11 minor ones and some polish. All were fixed with tests, and its own specs
-were re-run against the fixes. The ones that mattered most:
+A separate agent that had not seen the code drove the built app at 962x602
+with 26 new exploratory spec files (in the scratch clone, `.verify/e2e-qa/`,
+numbered 40-56), and re-ran the earlier verifiers' 89 QA tests (84 still
+pass; the 5 that fail do so because of today's intended changes). It found:
 
-- **A shot could be credited to the wrong version** (for example after
-  switching bags, the machine still ran the other bag's profile). A shot now
-  counts only when its record shows the bag's active version; switching bags
-  loads that bag's version; at start-up a mismatch is shown with Retry.
-- **Cards the user typed past stayed tappable but did nothing.** They now
-  close ("set aside"), and a typed taste answer is logged as feedback.
-- **New prompts landed below the fold at 962x602.** The chat now keeps each
-  new prompt in view; a message taller than the view (three or more template
-  cards) shows from its start, so the best suggestion is the one you see.
-  Re-running the verifier's own scroll check after the first fix caught one
-  more case (the taste options after a shot); `e2e/chat-scroll.spec.ts` now
-  checks every step at all three sizes.
-- **Undo could appear on a card that created no version**; **the start-up
-  and error screens had no way back to Decaid.** Both fixed.
-- Smaller: a failed confirm stays retryable; "Loaded on the machine" only
-  when it is connected; the previous coffee's roaster, batch and grinder no
-  longer stick to new shots; repeated New bag taps reuse the empty bag; a
-  shot lost when the machine drops mid-shot is reported, with Retry; a
-  confirmed grind setting reaches Settings and Decaid; arrows render in
-  Roboto; the scripted coach is stricter; LICENSE and NOTICE ship in the zip.
+- **Major:** an API key pasted into Settings' grinder fields went to
+  Decaid's workflow, every later shot record and the coach. Settings now
+  takes key-shaped text out of every field and says so (D69).
+- **Minor:**
+  - A profile loaded behind CafAI's back went unnoticed until a shot was
+    wasted; CafAI now looks every 30 s (D70).
+  - After a failed load the coach said to wait for the machine to connect
+    while the banner said Retry; the coach now hears `loadError` (D71).
+  - A deleted grinder kept its step text, and a setting nobody checked had
+    no caveat (D73).
+- **Polish:**
+  - "This bag" showed before the machine had the version (D72).
+  - A notice named the same title twice.
+  - Settings put Save below the fold after a pick.
 
-A **second fresh-eyes pass** (another agent, 16 more exploratory specs: all
-five templates end to end, every prompt's position on screen, shot crediting,
-dropped shots, grinder flow, key leaks, production build) then found 1 major
-and 8 minor defects, all fixed with tests. Its own 36 defect specs, re-run
-against the fixes, pass (one of them races the coach's reply and passes on a
-rerun):
+All are fixed with tests, and the verifier's own repro spec passes against
+the fixes. The chat missed following the newest message once in 21 runs,
+and did not do it again in 18 more, one batch with the CPU slowed 4x. It is
+recorded, not chased.
 
-- **A shot could still be credited to the wrong bag when two bags shared a
-  name** (the check accepted a matching title after a failed load). Every
-  activation now tags Decaid's workflow with CafAI's version id, and a shot
-  counts only when the tag and the brewing content match (D41).
-- A banner appearing above the chat, or a change card written at the coach's
-  length limits, could push the open question or Confirm below the fold; the
-  chat now re-follows when the view shrinks, and change cards put Confirm
-  before the reasoning.
-- Bag switching is disabled while a shot is pulled (a switch lost the shot).
-- The grinder saved in Settings now reaches the coach (with every shot) and
-  Decaid; a grind "move" to the current setting is refused.
-- Decaid's "profile upload failed" is believed: banner, Retry, and no shot
-  counted until the version loads. The lost-shot Retry survives chat turns.
-- Polish: 48 px selects, Decaid settings on the boot screens, "Saved as v2"
-  (and the coach told) while the machine is offline, set-aside questions
-  close their Other field, the coach re-offers set-aside suggestions,
-  library records only after a successful load, same-named bags told apart,
-  pasted API keys stripped before anything sees them.
+## Still open
 
-Left as they are: the live graph and the shot card can differ by about 0.2 s
-(the graph uses the live frames, the card Decaid's saved record); restoring
-from the Decaid backup is unit-tested only, because the mock store resets on
-every page load; there is no progress indicator during the ~15 s search for
-a lost shot; a grind setting Decaid missed while it was unreachable reaches
-it with the next profile load.
+- **Nothing has touched a real DE1 or the real API.** The hardware plan
+  covers the first session; `npm run test:live` covers the API.
+- **Coffee knowledge is still the placeholder** heuristics block (now
+  aligned with D-Flow's start ratio).
+- Not built: teaching mode, personas, bag photos, voice, other providers in
+  the UI, steam and hot-water editors, device-connect screens, a
+  screensaver, and the local coach (roadmap).
+- Writes waiting for Decaid live in memory only (D64).
+
+## Top 5 questions for you
+
+1. **Does Decaid's barrier behave on a real DE1 as its source says?**
+   Crediting shots now depends on it (D55); the hardware plan measures it.
+2. **Which way is finer on your grinder?** Decaid's library has no
+   direction; CafAI assumes lower numbers are finer and preset lists run
+   finest first (D62).
+3. **Are the new starting yields what you want?** At 18 g: Blooming 50 g
+   (Decent ships 60), Londonium 36 (42), the Allongé 90 (135). One number per
+   template if not (D57).
+4. **Enjoyment only from your stars?** Every answered shot gets notes;
+   `enjoyment` only when you rate it (D61).
+5. **Should CafAI also check each shot's targets against the version?**
+   Decide after the hardware session's saved shots (D55 option 2).
+
+More, ranked: [QUESTIONS.md](QUESTIONS.md). Decisions:
+[DECISIONS.md](DECISIONS.md). The first machine session:
+[docs/HARDWARE_TEST_PLAN.md](docs/HARDWARE_TEST_PLAN.md). Last night's
+report (what works, what came from Crema) is `git show c878e4b:MORNING.md`;
+README has the current overview.
+
+## How the morning ran
+
+I coordinated and did not edit product code or tests. Three research agents
+read Decaid's source and the coffee sources. Then six workstream agents
+(engine, platform, coach, shell, restore e2e, live API) worked in parallel,
+in separate git worktrees with non-overlapping files, followed by a seventh
+that wired the dose and the grinder into the engine. All six first stopped
+at the usage limit within minutes; their worktrees were re-created and each
+was resumed with SendMessage. Every diff was reviewed before it was merged.
+Only I ran Playwright, one run at a time. The verifier ran last, and two
+fix agents, then a third, closed what it found.
 
 ## Try it in two minutes
 
@@ -87,113 +173,8 @@ npm run dev:mock
 # open http://localhost:5173/?mockSpeed=20
 ```
 
-Settings -> any key (for example `sk-ant-demo`; the mock accepts anything
-except `sk-ant-invalid` and `sk-ant-overloaded`) -> Coach -> New bag -> type
-"Kiambu AA, light roast, washed" -> tap a template -> Espresso -> tap "Sour /
-sharp" -> Confirm -> History. Everything you see is the real app; only Decaid
-and Claude are scripted (MSW).
-
-## What works
-
-- **Baseline skin:** machine and scale link state from `ws/v1/devices`,
-  machine state in plain words, group/steam temperatures, water, scale;
-  espresso, steam, flush, hot water, stop, sleep/wake, tare (with the
-  group-head-controller rule); a uPlot live shot graph fed imperatively;
-  Exit to Decaid's dashboard (Skins page) and Decaid's settings UI on every
-  screen, including start-up and error screens; heartbeat on real input;
-  safe-area handling; hash routes that survive Decaid's background reload.
-- **Coach loop (chat first):** bag intake, 2-5 template suggestions with
-  confidence from five templates (Blooming Espresso, D-Flow, Londonium, Rao
-  Allongé, Gentle and Sweet), "<Bean> v1" created and activated (full ten-key
-  profile plus `context.targetYield` in one `PUT /workflow`), shot summary
-  (aggregates + 1 Hz series + decaid-mcp channeling indicators) with five
-  named query tools, tappable taste options with "Other" last, one bounded
-  change per iteration as a plain-language diff with Confirm, Undo, and the
-  per-bean version history with each iteration's shot, feedback, change and
-  outcome.
-- **Guard rails:** templates declare levers with bounds, step size and max
-  change per iteration; the model cannot touch pump, sensor, exit type, step
-  count or order; anything out of bounds is rejected back to the model, never
-  clamped. Every model output is schema-validated (zod) before use;
-  `tool_choice` is always `auto` with strict tool schemas. A shot is logged
-  against a version only if the machine actually ran it.
-- **Storage:** IndexedDB repositories that commit before returning, JSON
-  export (with a copy fallback for the WebView) and import, a debounced backup
-  to Decaid's KV store (`cafai` namespace) that restores an empty store. The
-  API key lives in a separate local database: never exported, mirrored,
-  logged or shown again.
-- **LLM:** a browser-safe streaming Anthropic client (fetch + SSE parser that
-  works on Chromium 91), retries before the first byte, friendly errors, an
-  append-only transcript that replays thinking blocks unchanged, prompt
-  caching. Default model `claude-opus-5-5`; Opus 5, Sonnet 5, Haiku 4.5 and
-  Fable 5.1 in Settings.
-- **Tooling:** Vitest, Playwright, ESLint with Chromium 91 API bans, CI on
-  every push (plus an informational Chromium 91 job), a release workflow that
-  zips and publishes on a `v*` tag (a manual run keeps the zip as an
-  artifact).
-
-## What is stubbed or not done
-
-- **Never run against real hardware or the real API.** Everything was verified
-  against the verified-from-source mocks; there was no DE1, no Decaid
-  simulator and no API key. First real-world risks are listed in
-  QUESTIONS.md (#1 and #2).
-- **Coffee knowledge is a placeholder:** the heuristics block in the system
-  prompt (`src/coach/heuristics.ts`, marked `placeholder`) and the template
-  library and its lever bounds are first drafts, as planned ("not tonight").
-- **Not built (clean seams left):** teaching mode, personas, cross-user
-  learning, bag photos (an `image` content block exists in the LLM types),
-  voice, other providers in the UI (`LlmProvider` interface; Crema's OpenAI
-  path was not ported because it has no streaming or tools), plugins, Crema's
-  Mac server and Classic skin.
-- **Smaller gaps:** taste feedback is not written back to Decaid's shot record
-  (`annotations.enjoyment`); Decaid bean/grinder entities are not linked (only
-  coffee name, roaster and grinder strings go into the workflow context); a
-  relative grind move ("1 step finer") leaves the stored setting as you last
-  typed it; the machine panel does not show which profile is loaded (the coach
-  and the banner say so when it matters); no steam/hot-water parameter editors or
-  device-connect screens (the client has `connectKind()`); no screensaver.
-
-## What came from Crema (GPL-3.0, headers on every derived file)
-
-- `src/api`: the gateway client (deadlines, error unwrapping, single-device
-  connect, required-field fill), devices, the live-socket logic (now frames +
-  telemetry with backoff and devices-only link state), the KV client, with
-  their tests.
-- `src/coach`: profile normalization and plan, curves and phases (shot
-  analysis), proposal validation (rewritten as the bounded validator), parts
-  of the advisor prompt, the diff headline logic, `last()`, with tests.
-- `src/llm`: Anthropic request building and error wording, JSON extraction
-  helpers, with tests.
-- `src/storage`: settings normalization and the settings mirror, fixed so it
-  actually writes (Crema's never fired), with its "key never mirrored" test.
-- `src/ui`: safe-area handling (as-is) and the tablet harness
-  (`dev/tablet.html`, `dev/vite.probe.config.ts`).
-- Release tooling: the manifest validation behind `scripts/release-zip.mjs`.
-
-Credits are in README and NOTICE (Crema by yarneo, and its MimojaCafe
-lineage). Because Crema is GPLv3 without "or later", CafAI is GPL-3.0-only.
-
-## Top 5 questions for you
-
-1. **Does a shot pulled right after Confirm run the new profile?** Decaid
-   uploads the profile after the workflow PUT returns and never confirms
-   success. CafAI now refuses to credit a shot whose record shows another
-   profile, but a shot pulled while the upload is still in flight would look
-   right. Needs a timing check on a real DE1; the fix would be a short
-   "loading" hold.
-2. **Is `claude-opus-5-5` the right default?** Untested against the live API
-   (no key here); one line in `src/llm/models.ts` changes it.
-3. **Are the lever bounds and starting yields right for your coffee?**
-   v1 yields are the templates' own (Blooming 60 g, D-Flow 50 g, Londonium
-   42 g, Rao Allongé 135 g, Gentle and Sweet 36 g) regardless of dose; bounds
-   come from Decaid's profiles and the research table.
-4. **Is Chromium 91 really the floor?** Verified there; Decaid's sources show
-   older engines exist on some tablets without naming a floor.
-5. **Should "<Bean> v1" get its own entry in Decaid's profile library?** An
-   unchanged template is, by Decaid's content hash, the bundled default; the
-   machine shows CafAI's title, the library keeps the bundled one.
-
-More, ranked by the cost of a wrong guess: [QUESTIONS.md](QUESTIONS.md).
-Decisions and every place a source contradicted the research:
-[DECISIONS.md](DECISIONS.md), [docs/VERIFIED.md](docs/VERIFIED.md).
+Settings -> any key (for example `sk-ant-demo`) -> pick "Niche Zero" under
+Grinder from Decaid, setting 15 -> Coach -> New bag -> "Kiambu AA, light
+roast, washed" -> tap a template (watch "Loading … on the machine…") ->
+Espresso -> rate it and tap "Sour / sharp" -> Confirm -> History.
+`?mockUploadMs=3000` makes the machine load slow enough to watch.

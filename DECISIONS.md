@@ -515,3 +515,19 @@ says which reading was taken and MORNING.md lists it among the top questions.
   gives directions only, and the engine re-reads the linked grinder with each
   shot and when the page comes back into view. A shot that ran another bag's
   same-named version is described without repeating the title.
+
+## After the morning session (2026-10-05)
+
+- **D74. Testing against Decaid's own simulator.** The owner asked to test
+  CafAI on their computer against a simulator. Decaid's ready-made Windows
+  build has a simulated machine and scale (Try Demo Mode, or Settings >
+  Advanced > Simulated Devices), with its real API on localhost:8080, so
+  `npm run dev` works against it unchanged. `npm run dev:sim` (mock mode with
+  `?mockDecaid=0`) pairs that real Decaid with the scripted coach, so testing
+  spends no API tokens. In that mode no MSW service worker starts: MSW wraps
+  `WebSocket` and reports sockets open before they connect, which would
+  defeat CafAI's reconnect backoff, so the scripted coach answers from inside
+  the page's `fetch` and every Decaid call is untouched. Mock mode keeps its
+  own Vite cache so the two dev servers can run side by side. The steps, and
+  what the simulator cannot test, are in docs/SIMULATOR.md; nothing there has
+  been run against a live Decaid yet.
