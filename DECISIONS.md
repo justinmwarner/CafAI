@@ -478,3 +478,40 @@ says which reading was taken and MORNING.md lists it among the top questions.
   `ANTHROPIC_API_KEY`, and is skipped when the variable is unset. `npm test`
   never runs it, even with the variable set. The key is never logged or
   written anywhere.
+
+## Fixes from the morning's fresh-eyes pass (2026-10-04)
+
+- **D69. A key never becomes a setting.** The verifier pasted the API key
+  into Settings' grinder fields, and it travelled to Decaid's workflow, every
+  later shot record (shared with Visualizer) and the coach. Settings
+  normalization now takes key-shaped text out of the grinder name, the
+  grinder setting, the model and the grinder link, on every read and write
+  (so an older record is cleaned when read), and the screen says when it did,
+  as the chat does (D37).
+- **D70. CafAI notices another profile within 30 s.** Every 30 s while the
+  page is visible and nothing else is going on, and when it comes back into
+  view, the engine repeats its start-up look at Decaid's workflow: report
+  only, it never loads anything (D42). A mismatch goes on the banner with
+  Retry once per profile: a dismissed one stays dismissed (D52), a different
+  profile is raised again. The Profile line reads the workflow on the same
+  beat, so the two change together.
+- **D71. The coach hears whether the machine confirmed a load.** In the
+  template-picked and applied-change results, `onMachine` is true once the
+  machine holds the version, false only while the machine is not connected,
+  and null when the load failed or a connected machine has not confirmed it;
+  `loadError` carries the reason (ENGINE_PROTOCOL rules 2 and 5). Before,
+  a failed confirmation read as "the machine is not connected" and the coach
+  told the user to wait instead of tapping Retry.
+- **D72. "This bag" only once the machine has the version.** The Profile line
+  says "loading…" while CafAI waits for the machine, "not confirmed" (warning
+  colour) after a failed load, and marks the bag's version only when the load
+  is confirmed (or assumed on an older Decaid, or after a reload, while the
+  machine is connected).
+- **D73. A grind setting nobody could check says so.** A setting the coach
+  gave without Decaid's step data ends with "That is the coach's estimate:
+  CafAI doesn't know your grinder's step size, so note where the dial really
+  lands in Settings." A linked grinder that Decaid no longer describes counts
+  as having no step data (the grinder payload carries `linked`), so the coach
+  gives directions only, and the engine re-reads the linked grinder with each
+  shot and when the page comes back into view. A shot that ran another bag's
+  same-named version is described without repeating the title.
