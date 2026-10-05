@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   awaitingModel,
   grinderPayload,
@@ -8,6 +8,8 @@ import {
   toolResult,
   unansweredToolUses,
   undoBlock,
+  type GrinderPayload,
+  type IntakeContext,
 } from './protocol.ts';
 import type { LlmMessage } from '../../llm/types.ts';
 import type { GrinderInfo, ShotSummary } from '../../coach/types.ts';
@@ -71,6 +73,12 @@ describe('engine protocol', () => {
       type: 'text',
       text: '[context]\n{"grinder":{"name":"Niche Zero","setting":"15","settingType":"numeric","step":0.5,"values":null,"linked":true},"scaleConnected":true,"doseG":18}',
     });
+  });
+
+  it('leaves nothing out of the grinder or the intake context: unknown is null (rules 1 and 3)', () => {
+    // Checked by the typecheck: every sender (the engine, the live API check) builds the full shapes.
+    expectTypeOf<GrinderPayload>().toEqualTypeOf<Required<GrinderPayload>>();
+    expectTypeOf<IntakeContext>().toEqualTypeOf<Required<IntakeContext>>();
   });
 
   describe('grinderPayload', () => {

@@ -29,26 +29,24 @@ export function userMessage(blocks: ContentBlock[]): LlmMessage {
 /**
  * The grinder as the model hears it (rules 1 and 3): name and setting as
  * last saved, and how its dial moves when it is linked to Decaid's grinder
- * library (D62). The engine always sends every field, built by
- * grinderPayload(). The library fields stay optional only because the live
- * API check (src/llm/live/anthropic.live.ts) still builds its intake with the
- * older shape.
+ * library (D62). Every field is always sent, null when unknown; build it with
+ * grinderPayload().
  */
 export interface GrinderPayload {
   name: string | null;
   setting: string | null;
   /** Null when no grinder from Decaid's library is linked, or Decaid has no record of it. */
-  settingType?: GrinderInfo['settingType'] | null;
+  settingType: GrinderInfo['settingType'] | null;
   /** A numeric dial's small step; null when unknown. */
-  step?: number | null;
+  step: number | null;
   /** A preset grinder's settings, finest first; null when unknown. */
-  values?: string[] | null;
+  values: string[] | null;
   /**
    * Settings links this grinder from Decaid's library, also when Decaid no
    * longer lists it or has no step data for it: then the coach gives
    * directions only, as Settings tells the user.
    */
-  linked?: boolean;
+  linked: boolean;
 }
 
 /** The grinder for the model: as last saved, with what Decaid's grinder library says about its dial. */
@@ -57,7 +55,7 @@ export function grinderPayload(
   setting: string | null,
   dial: GrinderInfo | null,
   linked: boolean,
-): Required<GrinderPayload> {
+): GrinderPayload {
   const step = dial?.settingType === 'numeric' ? dial.smallStep : null;
   const values = dial?.settingType === 'preset' ? dial.values : null;
   return {
@@ -73,12 +71,8 @@ export function grinderPayload(
 export interface IntakeContext {
   grinder: GrinderPayload;
   scaleConnected: boolean;
-  /**
-   * The dose in Decaid when CafAI coaches from it (12-25 g), else null. The
-   * engine always sends it; optional only for the live API check's intake
-   * (see GrinderPayload).
-   */
-  doseG?: number | null;
+  /** The dose in Decaid when CafAI coaches from it (12-25 g), else null. */
+  doseG: number | null;
 }
 
 /** The first user turn of a bag: the user's words plus the app context block. */

@@ -2415,7 +2415,7 @@ describe('coach engine', () => {
       await vi.waitFor(() => expect(engine.getState().error).toMatch(/"Default"/));
     });
 
-    it('does not look while a shot runs or a version loads, but keeps the beat', async () => {
+    it('does not look while a shot runs or a version loads, but keeps the beat, and looks once right after the load', async () => {
       await throughProposal();
       machine.loaded = otherProfile('Default');
       telemetry.setState({ shotState: pouring });
@@ -2427,7 +2427,7 @@ describe('coach engine', () => {
       expect(engine.getState().machineTick).toBe(beat + 1);
       telemetry.setState({ shotState: null });
 
-      // A confirmed change on its way to the machine.
+      // A confirmed change on its way to the machine: two beats meanwhile, one look after it.
       machine.barrier = 'hold';
       scripts.push(() => [text('Done.')]);
       const confirming = engine.confirmChange('t-adj');
@@ -2435,10 +2435,52 @@ describe('coach engine', () => {
       machine.loaded = otherProfile('Default');
       const during = workflowReads();
       checks.fire();
+      checks.fire();
+      expect(engine.getState().machineTick).toBe(beat + 3);
+      await Promise.resolve();
       expect(workflowReads()).toBe(during);
       machine.loaded = callsOf('activateProfile').at(-1)!.args[0] as ProfileJson;
       machine.held!.resolve('loaded');
       await confirming;
+      await drain();
+      expect(workflowReads()).toBe(during + 1);
+      expect(engine.getState().error).toBeNull();
+    });
+
+    it('looks right after the reply when the beat came while the coach was replying, not at the next beat (D70)', async () => {
+      await throughTemplateCards();
+      let during = -1;
+      scripts.push(() => {
+        // Another skin loads a profile while the reply arrives, and the beat comes then (twice, even).
+        machine.loaded = otherProfile('Default');
+        during = workflowReads();
+        checks.fire();
+        checks.fire();
+        return [text('Loaded. Pull a shot.')];
+      });
+      await engine.pickTemplate('t-tpl', 'd-flow');
+      await drain();
+      expect(workflowReads()).toBe(during + 1);
+      expect(engine.getState().error).toBe('The machine is running "Default", not Kiambu AA v1. Tap Retry to load it.');
+      // Once per profile still (D52): the next beat does not raise it again.
+      engine.dismissError();
+      checks.fire();
+      await drain();
+      expect(engine.getState().error).toBeNull();
+    });
+
+    it('a look that waited for the reply does not look while a shot is running by then', async () => {
+      await throughTemplateCards();
+      let during = -1;
+      scripts.push(() => {
+        // The beat comes while the coach replies, and a shot starts before the reply ends.
+        machine.loaded = otherProfile('Default');
+        during = workflowReads();
+        checks.fire();
+        telemetry.setState({ shotState: pouring });
+        return [text('Loaded. Pull a shot.')];
+      });
+      await engine.pickTemplate('t-tpl', 'd-flow');
       await drain();
       expect(workflowReads()).toBe(during);
       expect(engine.getState().error).toBeNull();

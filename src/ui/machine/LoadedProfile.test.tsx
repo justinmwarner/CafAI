@@ -8,7 +8,7 @@ import { createFakeServices, SAMPLE_WORKFLOW, type FakeServices } from '../testi
 import { renderWithServices } from '../testing/renderWithServices.tsx';
 import { theme } from '../theme.ts';
 import { LoadedProfile } from './LoadedProfile.tsx';
-import { LOADED_PROFILE_DEBOUNCE_MS, LOADED_PROFILE_POLL_MS } from './useLoadedProfile.ts';
+import { LOADED_PROFILE_POLL_MS } from './useLoadedProfile.ts';
 
 const BAG = makeBag({ id: 'bag_1', name: 'Kiambu AA', activeVersionId: 'ver_2' });
 const V2 = makeVersion({ id: 'ver_2', bagId: 'bag_1', version: 2, title: 'Kiambu AA v2' });
@@ -224,8 +224,7 @@ describe("LoadedProfile: on the engine's beat", () => {
 });
 
 describe('LoadedProfile: when it reads again', () => {
-  it('after the coach changes the active version, debounced', async () => {
-    vi.useFakeTimers();
+  it('at once when the coach changes the active version', async () => {
     const services = createFakeServices({ coach: ON_V2 });
     const decaid = serveWorkflow(services, workflow('Kiambu AA v2', { versionId: 'ver_2', bagId: 'bag_1' }));
     await renderLine(services);
@@ -235,28 +234,83 @@ describe('LoadedProfile: when it reads again', () => {
     act(() => services.coach.setState({ activeVersion: V3, versions: [V2, V3] }));
     // The old reading no longer matches the new version: no mark until it is read.
     expect(line()).not.toHaveTextContent('This bag');
-    await wait(LOADED_PROFILE_DEBOUNCE_MS - 1);
-    expect(reads(services)).toBe(1);
-    await wait(1);
     expect(reads(services)).toBe(2);
+    await act(async () => {});
     expect(line()).toHaveTextContent('Kiambu AA v3');
     expect(line()).toHaveTextContent('This bag');
   });
 
-  it('after a new chat message, once for a burst, and not for streaming text', async () => {
-    vi.useFakeTimers();
-    const services = createFakeServices({ coach: { ...ON_V2, messages: [message('m1', 'Hello')] } });
+  it('at once when the active bag changes', async () => {
+    const services = createFakeServices({ coach: ON_V2 });
+    const decaid = serveWorkflow(services, workflow('Kiambu AA v2', { versionId: 'ver_2', bagId: 'bag_1' }));
     await renderLine(services);
 
+    const sumatra = makeBag({ id: 'bag_2', name: 'Sumatra', activeVersionId: 'ver_9' });
+    const sumatraV1 = makeVersion({ id: 'ver_9', bagId: 'bag_2', version: 1, title: 'Sumatra v1' });
+    decaid.set(workflow('Sumatra v1', { versionId: 'ver_9', bagId: 'bag_2' }));
+    await act(async () => services.coach.setState({ activeBag: sumatra, activeVersion: sumatraV1, versions: [sumatraV1] }));
+    expect(reads(services)).toBe(2);
+    expect(line()).toHaveTextContent('Sumatra v1');
+    expect(line()).toHaveTextContent('This bag');
+  });
+
+  it('when the load state changes, as when Retry loads the same version again', async () => {
+    // The engine's beat found another profile; the line shows it too.
+    const services = createFakeServices({ coach: { ...ON_V2, activeLoad: 'loaded', machineTick: 3 } });
+    const decaid = serveWorkflow(services, workflow('Gentle and sweet', { versionId: 'ver_2', bagId: 'bag_1' }));
+    await renderLine(services);
+    expect(line()).toHaveTextContent('Gentle and sweet');
+
+    // Retry: CafAI puts v2 in the workflow again and waits for the machine.
+    decaid.set(workflow('Kiambu AA v2', { versionId: 'ver_2', bagId: 'bag_1' }));
+    await act(async () => services.coach.setState({ activeLoad: 'loading' }));
+    expect(reads(services)).toBe(2);
+    expect(line()).toHaveTextContent('Kiambu AA v2');
+    expect(line()).toHaveTextContent('loading…');
+
+    await act(async () => services.coach.setState({ activeLoad: 'loaded' }));
+    expect(line()).toHaveTextContent('This bag');
+  });
+
+  it('not again when the machine confirms the version the line shows: a profile loaded behind CafAI meanwhile waits for the beat', async () => {
+    const services = createFakeServices({ coach: { ...ON_V2, activeLoad: 'loading', machineTick: 0 } });
+    const decaid = serveWorkflow(services, workflow('Kiambu AA v2', { versionId: 'ver_2', bagId: 'bag_1' }));
+    await renderLine(services);
+    expect(line()).toHaveTextContent('loading…');
+
+    // Another skin loads a profile just as the machine confirms v2.
+    decaid.set(workflow('Default', { versionId: 'ver_2', bagId: 'bag_1' }));
+    await act(async () => services.coach.setState({ activeLoad: 'loaded' }));
+    expect(reads(services)).toBe(1);
+    expect(line()).toHaveTextContent('Kiambu AA v2');
+    expect(line()).toHaveTextContent('This bag');
+
+    // The engine's beat: it looks for another profile, and the line reads, together (D70).
+    await act(async () => services.coach.setState({ machineTick: 1 }));
+    expect(reads(services)).toBe(2);
+    expect(line()).toHaveTextContent('Default');
+    expect(line()).not.toHaveTextContent('This bag');
+  });
+
+  it('not on a chat message: a profile loaded behind CafAI while the coach replies shows on the beat (D70)', async () => {
+    vi.useFakeTimers();
+    const services = createFakeServices({ coach: { ...ON_V2, activeLoad: 'loaded', machineTick: 0, messages: [message('m1', 'Hello')] } });
+    const decaid = serveWorkflow(services, workflow('Kiambu AA v2', { versionId: 'ver_2', bagId: 'bag_1' }));
+    await renderLine(services);
+    expect(reads(services)).toBe(1);
+
+    decaid.set(workflow('Default', { versionId: 'ver_2', bagId: 'bag_1' }));
     act(() => services.coach.setState({ messages: [message('m1', 'Hello'), message('m2', 'Loaded')] }));
     act(() => services.coach.setState({ messages: [message('m1', 'Hello'), message('m2', 'Loaded'), message('m3', 'Pull a shot')] }));
-    await wait(LOADED_PROFILE_DEBOUNCE_MS);
-    expect(reads(services)).toBe(2);
-
-    // A streaming reply grows the last message in place.
     act(() => services.coach.setState({ messages: [message('m1', 'Hello'), message('m2', 'Loaded'), message('m3', 'Pull a shot now')] }));
-    await wait(LOADED_PROFILE_DEBOUNCE_MS * 2);
+    await wait(5_000);
+    expect(reads(services)).toBe(1);
+    expect(line()).toHaveTextContent('Kiambu AA v2');
+    expect(line()).toHaveTextContent('This bag');
+
+    await act(async () => services.coach.setState({ machineTick: 1 }));
     expect(reads(services)).toBe(2);
+    expect(line()).toHaveTextContent('Default');
   });
 
   it('when a shot finishes', async () => {
@@ -344,9 +398,11 @@ describe('LoadedProfile: when it reads again', () => {
     const services = createFakeServices({ coach: ON_V2 });
     const { unmount } = await renderLine(services);
     act(() => services.coach.setState({ activeVersion: V3 }));
+    expect(reads(services)).toBe(2);
     unmount();
+    services.coach.setState({ activeVersion: V2 });
     services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: null });
     await vi.advanceTimersByTimeAsync(LOADED_PROFILE_POLL_MS * 2);
-    expect(reads(services)).toBe(1);
+    expect(reads(services)).toBe(2);
   });
 });

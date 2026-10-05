@@ -1565,14 +1565,16 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   /**
    * The beat of the machine check (MACHINE_CHECK_MS, and the page coming back
    * into view). The Profile line reads Decaid's workflow on it (machineTick),
-   * so it and the banner change together; the look itself waits for a quiet
-   * moment, and at most one waits at a time.
+   * so it and the banner change together (D70). The look goes on the engine's
+   * queue, at most one waiting: a beat while CafAI is busy (a reply, a load)
+   * looks right after that action instead of 30 s later, and only if nothing
+   * else is going on by then.
    */
   function machineBeat(): void {
     if (disposed || !visibility.visible()) return;
     state = { ...state, machineTick: (state.machineTick ?? 0) + 1 };
     emit();
-    if (checkQueued || !quiet()) return;
+    if (checkQueued) return;
     checkQueued = true;
     void enqueue(async () => {
       checkQueued = false;

@@ -10,8 +10,6 @@ import {
   type Refresher,
 } from './loadedProfileModel.ts';
 
-/** How long the coach must be quiet before the workflow is read again. */
-export const LOADED_PROFILE_DEBOUNCE_MS = 500;
 /** Another skin or the machine's own screen can change the profile at any time. */
 export const LOADED_PROFILE_POLL_MS = 30_000;
 
@@ -24,12 +22,14 @@ export interface LoadedProfileState {
 
 /**
  * The profile Decaid's workflow carries (D66). Decaid has no workflow stream,
- * so it is read on mount, after the coach acts (a new active version, bag or
- * chat message, debounced), when a shot finishes, when the machine connects,
- * and every 30 s while the page is visible, also when it comes back into
- * view. The 30 s reads follow the engine's beat (machineTick), when it keeps
- * one: the engine looks for another profile on the same beat, so this line
- * and the Retry banner change together rather than up to 30 s apart. One
+ * so it is read on mount, at once when CafAI changes it (another bag or
+ * version, or a load: Retry loads the same version again), when a shot
+ * finishes, when the machine connects, and on the engine's beat (machineTick:
+ * every 30 s while the page is visible, and when it comes back into view).
+ * A profile loaded behind CafAI's back shows on that beat, when the engine
+ * looks for it too, so this line and the Retry banner change together (D70);
+ * a chat message is no reason to read, or the line would run ahead of the
+ * banner. A coach that keeps no beat gets a 30 s clock of the line's own. One
  * request at a time; a failed read keeps what was there and says nothing.
  */
 export function useLoadedProfile(): LoadedProfileState {
@@ -41,10 +41,9 @@ export function useLoadedProfile(): LoadedProfileState {
   const load = useCoach((s) => s.activeLoad);
   const beat = useCoach((s) => s.machineTick);
   const ownClock = beat === undefined;
-  // Changes when a message arrives or the last one is replaced, not while it streams.
-  const chat = useCoach((s) => `${s.messages.length}:${s.messages[s.messages.length - 1]?.id ?? ''}`);
   const [reading, setReading] = useState<LoadedProfileReading | null>(null);
   const refresher = useRef<Refresher | null>(null);
+  const isBagVersion = reading !== null && isActiveBagVersion(reading, { bagId, versionId, title: versionTitle });
 
   useEffect(() => {
     let mounted = true;
@@ -53,7 +52,8 @@ export function useLoadedProfile(): LoadedProfileState {
         decaid.getWorkflow().then((workflow) => {
           if (mounted) setReading(readLoadedProfile(workflow));
         }),
-      LOADED_PROFILE_DEBOUNCE_MS,
+      // Every read here is wanted at once; nothing asks for a debounced one.
+      0,
     );
     refresher.current = reads;
     reads.now();
@@ -94,13 +94,17 @@ export function useLoadedProfile(): LoadedProfileState {
     refresher.current?.now();
   }, [beat]);
 
-  const coachKey = `${versionId ?? ''}|${bagId ?? ''}|${chat}`;
+  // CafAI's own change shows at once. A load of the version the line already
+  // shows (the machine confirming it, Retry after it was not confirmed) cannot
+  // change the title, so that is not read again: anything else that changed
+  // meanwhile came from behind CafAI's back and shows on the beat, with the banner.
+  const coachKey = `${bagId ?? ''}|${versionId ?? ''}|${load ?? ''}`;
   const lastCoachKey = useRef(coachKey);
   useEffect(() => {
     if (coachKey === lastCoachKey.current) return;
     lastCoachKey.current = coachKey;
-    refresher.current?.soon();
-  }, [coachKey]);
+    if (!isBagVersion) refresher.current?.now();
+  }, [coachKey, isBagVersion]);
 
   // Decaid loads the workflow's profile when the machine connects.
   const wasConnected = useRef(connected);
@@ -109,7 +113,6 @@ export function useLoadedProfile(): LoadedProfileState {
     wasConnected.current = connected;
   }, [connected]);
 
-  const isBagVersion = reading !== null && isActiveBagVersion(reading, { bagId, versionId, title: versionTitle });
   return {
     title: reading?.title ?? null,
     mark: profileMark(isBagVersion, load, connected),
