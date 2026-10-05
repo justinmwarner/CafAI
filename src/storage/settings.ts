@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Derived from Crema web/src/settings.ts (https://github.com/yarneo/crema @ 628cd714),
-// Copyright (C) 2026 Yarden (yarneo). Modified for CafAI: settings without the API key, null blanks, default model injected, plus the fill-blanks rule of web/src/main.ts hydrateSettings.
+// Copyright (C) 2026 Yarden (yarneo). Modified for CafAI: settings without the API key (pasted keys taken out of every field), null blanks, default model injected, plus the fill-blanks rule of web/src/main.ts hydrateSettings.
 /**
  * CafAI's non-secret settings: normalising what was stored, applying edits,
  * and merging in a restored copy.
@@ -10,7 +10,14 @@
  * falls back to its default instead of breaking start-up. Only the known
  * fields survive, so the record can never carry an API key into the mirror or
  * an export, whatever a caller passed in.
+ *
+ * Nor can a field: an API key pasted into the grinder fields would travel on
+ * from here to Decaid's workflow, every later shot record (which Decaid shares
+ * with Visualizer) and the coach, so anything key-shaped is taken out (D37).
+ * Every read and write passes through here, so a record saved before that
+ * rule is cleaned when it is read.
  */
+import { containsKeyLike, redactKeyLike } from './redact.ts';
 import type { Settings } from './types.ts';
 
 export function defaultSettings(defaultModel: string): Settings {
@@ -25,18 +32,30 @@ function textOrNull(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
 }
 
-/** An id is opaque, but an empty one points at nothing. */
+/**
+ * The text with anything key-shaped (a whole key or its first characters)
+ * taken out, or null when nothing else is left. Text without a key comes back
+ * exactly as it was.
+ */
+function withoutKeyLike(value: string | null): string | null {
+  if (value === null || !containsKeyLike(value)) return value;
+  const rest = redactKeyLike(value, ' ').replace(/\s+/g, ' ').trim();
+  return rest === '' ? null : rest;
+}
+
+/** An id is opaque, but an empty one points at nothing, and a key-shaped one is no grinder's. */
 function idOrNull(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() !== '' ? value : null;
+  return typeof value === 'string' && value.trim() !== '' && !containsKeyLike(value) ? value : null;
 }
 
 export function normalizeSettings(raw: unknown, defaultModel: string): Settings {
   if (!isRecord(raw)) return defaultSettings(defaultModel);
-  const model = raw['model'];
+  // A key is never a model id: with it taken out, an empty model is the default.
+  const model = withoutKeyLike(textOrNull(raw['model']));
   return {
-    model: typeof model === 'string' && model.trim() !== '' ? model : defaultModel,
-    grinderName: textOrNull(raw['grinderName']),
-    grinderSetting: textOrNull(raw['grinderSetting']),
+    model: model !== null && model.trim() !== '' ? model : defaultModel,
+    grinderName: withoutKeyLike(textOrNull(raw['grinderName'])),
+    grinderSetting: withoutKeyLike(textOrNull(raw['grinderSetting'])),
     // Settings saved before grinders could be linked have no id: not linked.
     grinderId: idOrNull(raw['grinderId']),
     activeBagId: textOrNull(raw['activeBagId']),

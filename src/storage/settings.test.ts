@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { createDbHandle, openCafaiDb, SETTINGS_KEY } from './db.ts';
+import { buildMirrorEntries, exportFromMirror } from './mirror.ts';
+import { createDataPorter } from './porter.ts';
+import { createRepositories } from './repositories.ts';
 import { applySettingsPatch, defaultSettings, fillBlankSettings, normalizeSettings } from './settings.ts';
-import { API_KEY, MODEL, makeSettings } from './testing/fixtures.ts';
+import type { CafaiExport, Settings } from './types.ts';
+import { API_KEY, MODEL, makeSettings, uniqueDbName } from './testing/fixtures.ts';
+
+/** A made-up key, built at run time so no key-shaped literal sits in the source. */
+const PASTED_KEY = ['sk', 'ant', 'api03', 'nOtArEaLkEy0123456789', 'AbCdEfGhIjKlMnOpQrStUvWxYz_0123456789AA'].join('-');
 
 describe('defaultSettings', () => {
   it('uses the default model and leaves everything else blank', () => {
@@ -49,6 +57,48 @@ describe('normalizeSettings', () => {
   });
 });
 
+describe('normalizeSettings: a pasted API key is taken out (D37)', () => {
+  it('takes a key out of the grinder fields; a field left empty is null', () => {
+    const raw = makeSettings({ grinderName: PASTED_KEY, grinderSetting: ` ${PASTED_KEY} `, activeBagId: 'bag_1' });
+    expect(normalizeSettings(raw, MODEL)).toEqual(makeSettings({ activeBagId: 'bag_1' }));
+  });
+
+  it('keeps the rest of a field that holds a key among other text', () => {
+    const raw = makeSettings({ grinderName: `Niche Zero ${PASTED_KEY}`, grinderSetting: `${PASTED_KEY} 14` });
+    expect(normalizeSettings(raw, MODEL)).toEqual(makeSettings({ grinderName: 'Niche Zero', grinderSetting: '14' }));
+    const twice = makeSettings({ grinderName: `${PASTED_KEY} Niche ${PASTED_KEY} Zero`, grinderSetting: `14${PASTED_KEY}` });
+    expect(normalizeSettings(twice, MODEL)).toMatchObject({ grinderName: 'Niche Zero', grinderSetting: '14' });
+  });
+
+  it('takes out the start of a key too, as a field with a length limit keeps it', () => {
+    // The Settings fields take 60 (name) and 20 (setting) characters.
+    const raw = makeSettings({ grinderName: `Niche ${PASTED_KEY}`.slice(0, 60), grinderSetting: PASTED_KEY.slice(0, 20) });
+    expect(normalizeSettings(raw, MODEL)).toEqual(makeSettings({ grinderName: 'Niche', grinderSetting: null }));
+  });
+
+  it('never takes a key for a model id: the default model is used', () => {
+    expect(normalizeSettings(makeSettings({ model: PASTED_KEY }), MODEL).model).toBe(MODEL);
+    expect(normalizeSettings(makeSettings({ model: `  ${PASTED_KEY.slice(0, 30)}` }), MODEL).model).toBe(MODEL);
+    expect(normalizeSettings(makeSettings({ model: `claude-sonnet-5 ${PASTED_KEY}` }), MODEL).model).toBe('claude-sonnet-5');
+  });
+
+  it('never links a key-shaped grinder id (the id travels to Decaid)', () => {
+    expect(normalizeSettings(makeSettings({ grinderId: PASTED_KEY, grinderName: 'Niche Zero' }), MODEL)).toEqual(
+      makeSettings({ grinderName: 'Niche Zero' }),
+    );
+  });
+
+  it('changes nothing in a record without a key', () => {
+    const stored = makeSettings({ model: 'claude-haiku-4-5', grinderName: ' Niche  Zero ', grinderSetting: ' 14 ', grinderId: 'g-1', activeBagId: 'bag_1' });
+    expect(normalizeSettings(stored, MODEL)).toEqual(stored);
+  });
+
+  it('leaves nothing key-shaped in any field', () => {
+    const raw = { model: PASTED_KEY, grinderName: PASTED_KEY, grinderSetting: PASTED_KEY, grinderId: PASTED_KEY, activeBagId: 'bag_1', apiKey: PASTED_KEY };
+    expect(JSON.stringify(normalizeSettings(raw, MODEL))).not.toContain('sk-ant-');
+  });
+});
+
 describe('applySettingsPatch', () => {
   it('applies the patched fields and keeps the rest', () => {
     const current = makeSettings({ grinderName: 'Niche Zero' });
@@ -78,6 +128,100 @@ describe('applySettingsPatch', () => {
     expect(applySettingsPatch(linked, { grinderSetting: '13.5' }, MODEL).grinderId).toBe('g-1');
     expect(applySettingsPatch(linked, { grinderId: undefined }, MODEL).grinderId).toBe('g-1');
     expect(applySettingsPatch(linked, { grinderId: null }, MODEL).grinderId).toBeNull();
+  });
+
+  it('takes a pasted key out of the patch and applies the rest', () => {
+    const current = makeSettings({ model: 'claude-haiku-4-5', grinderName: 'Niche Zero', grinderSetting: '14', activeBagId: 'bag_1' });
+    const patch = { model: PASTED_KEY, grinderName: `Lagom 01 ${PASTED_KEY}`, grinderSetting: PASTED_KEY.slice(0, 20) };
+    const next = applySettingsPatch(current, patch, MODEL);
+    expect(next).toEqual({ ...current, model: MODEL, grinderName: 'Lagom 01', grinderSetting: null });
+    expect(JSON.stringify(next)).not.toContain('sk-ant-');
+  });
+});
+
+describe('a key in the settings never reaches storage, the backup or an import', () => {
+  function setup() {
+    const name = uniqueDbName();
+    const handle = createDbHandle((onLost) => openCafaiDb(name, onLost));
+    const db = () => handle.get();
+    const repos = createRepositories({ db, onWrite: () => undefined, defaultModel: MODEL });
+    const porter = createDataPorter({
+      db,
+      secrets: { getApiKey: async () => null },
+      mirror: { schedulePush: () => undefined },
+      appVersion: '1.2.3',
+      defaultModel: MODEL,
+      now: () => new Date('2026-10-04T09:30:00.000Z'),
+    });
+    return { db, repos, porter };
+  }
+
+  const withKey = (): Settings => ({
+    model: PASTED_KEY,
+    grinderName: `Niche Zero ${PASTED_KEY}`,
+    grinderSetting: PASTED_KEY.slice(0, 20),
+    grinderId: null,
+    activeBagId: 'bag_1',
+  });
+  const cleaned = makeSettings({ grinderName: 'Niche Zero', activeBagId: 'bag_1' });
+
+  function exportWith(settings: Settings): CafaiExport {
+    return {
+      format: 'cafai-export',
+      schemaVersion: 1,
+      exportedAt: '2026-10-04T09:00:00.000Z',
+      appVersion: '1.2.3',
+      settings,
+      bags: [],
+      versions: [],
+      iterations: [],
+      conversations: [],
+    };
+  }
+
+  it('a save from Settings stores the settings without the key', async () => {
+    const { db, repos } = setup();
+    expect(await repos.settings.update(withKey())).toEqual(cleaned);
+    expect(JSON.stringify(await (await db()).get('settings', SETTINGS_KEY))).not.toContain('sk-ant-');
+  });
+
+  it('a record saved before this fix is read without the key, and written back clean at the next save', async () => {
+    const { db, repos } = setup();
+    await (await db()).put('settings', withKey(), SETTINGS_KEY);
+    expect(await repos.settings.get()).toEqual(cleaned);
+    await repos.settings.update({ activeBagId: 'bag_2' });
+    const raw = await (await db()).get('settings', SETTINGS_KEY);
+    expect(raw).toEqual({ ...cleaned, activeBagId: 'bag_2' });
+  });
+
+  it('an import holding a key stores the settings without it, replace and merge alike', async () => {
+    for (const mode of ['replace', 'merge'] as const) {
+      const { db, repos, porter } = setup();
+      await porter.importAll(exportWith(withKey()), mode);
+      expect(await repos.settings.get(), mode).toEqual(cleaned);
+      expect(JSON.stringify(await (await db()).get('settings', SETTINGS_KEY)), mode).not.toContain('sk-ant-');
+    }
+  });
+
+  it('an import without a key is stored as before', async () => {
+    const settings = makeSettings({ model: 'claude-sonnet-5', grinderName: 'Lagom 01', grinderSetting: '0.4', grinderId: 'g-1', activeBagId: 'bag_1' });
+    for (const mode of ['replace', 'merge'] as const) {
+      const { repos, porter } = setup();
+      await porter.importAll(exportWith(settings), mode);
+      expect(await repos.settings.get(), mode).toEqual(settings);
+    }
+  });
+
+  it("the backup in Decaid holds the settings without the key, not a redaction mark", () => {
+    const snapshot = { settings: withKey(), bags: [], versions: [], iterations: [], conversations: [] };
+    expect(buildMirrorEntries(snapshot, null, MODEL).entries.get('settings')).toBe(JSON.stringify(cleaned));
+    const plain = makeSettings({ model: 'claude-sonnet-5', grinderName: 'Lagom 01', grinderSetting: '0.4', activeBagId: 'bag_1' });
+    expect(buildMirrorEntries({ ...snapshot, settings: plain }, null, MODEL).entries.get('settings')).toBe(JSON.stringify(plain));
+  });
+
+  it('a restored backup holding a key comes back without it', () => {
+    const restored = exportFromMirror({ settings: withKey() }, { appVersion: '1.2.3', defaultModel: MODEL, now: () => new Date(0) });
+    expect(restored?.settings).toEqual(cleaned);
   });
 });
 
