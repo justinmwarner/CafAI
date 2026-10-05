@@ -55,15 +55,25 @@ function Message({ title, detail }: { title: string; detail?: string }) {
 }
 
 async function startMocks(): Promise<void> {
-  // Mock mode only (npm run dev:mock / build:mock); this branch and the mocks
-  // are compiled out of the production bundle.
-  const speed = Number(new URLSearchParams(window.location.search).get('mockSpeed')) || 1;
-  const [{ startMockWorker }, { anthropicHandlers }, { startMockPersistence }] = await Promise.all([
-    import('../mock/browser.ts'),
-    import('../mock/anthropic/handlers.ts'),
-    import('../mock/persist.ts'),
-  ]);
-  const mock = await startMockWorker({ extraHandlers: anthropicHandlers({ speed }) });
+  // Mock mode only (npm run dev:mock, dev:sim, build:mock); this branch and
+  // the mocks are compiled out of the production bundle. mock/plan.ts decides
+  // which mocks start.
+  const [{ mockPlanFromUrl }, { anthropicHandlers }, { startCoachOnlyMock }, { startMockWorker }, { startMockPersistence }] =
+    await Promise.all([
+      import('../mock/plan.ts'),
+      import('../mock/anthropic/handlers.ts'),
+      import('../mock/coachOnly.ts'),
+      import('../mock/browser.ts'),
+      import('../mock/persist.ts'),
+    ]);
+  const plan = mockPlanFromUrl(window.location.search);
+  const coach = anthropicHandlers({ speed: plan.coachSpeed });
+  if (!plan.decaid) {
+    // The scripted coach alone, against a real Decaid (docs/SIMULATOR.md).
+    startCoachOnlyMock(coach);
+    return;
+  }
+  const mock = await startMockWorker({ extraHandlers: coach });
   // ?mockPersist=1: the store an earlier page load saved is back before
   // createServices() makes the app's first request.
   startMockPersistence(mock.state);

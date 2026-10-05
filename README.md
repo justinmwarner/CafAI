@@ -69,6 +69,7 @@ needs one of these), npm. Older Node 24 releases run the suite with an engine wa
 npm ci
 npm run dev:mock      # the app against the built-in Decaid + Claude mocks
 npm run dev           # the app against a real Decaid (see below)
+npm run dev:sim       # a real Decaid with the scripted Claude, no API key (docs/SIMULATOR.md)
 npm run typecheck && npm run lint && npm test
 npm run e2e           # Playwright, full loop against the mocks
 npm run release:zip   # release/cafai-<version>.zip (with LICENSE, NOTICE and the font licence)
@@ -82,9 +83,14 @@ or use `LIVE_DRY_RUN=1` to run the same checks against the scripted fake with
 no key. Without a key the suite is skipped. The key is read from the
 environment only and never logged or written anywhere.
 
-**Against a real tablet or the Decaid simulator.** CafAI talks to
-`http://<page host>:8080`. When the dev server runs on your laptop, point it
-at the tablet once in the browser console:
+**Against Decaid's simulator.** Decaid can simulate a machine and scale on
+your computer. [docs/SIMULATOR.md](docs/SIMULATOR.md) walks through it on
+Windows, with the real coach (`npm run dev`) or the scripted one
+(`npm run dev:sim`), and says what the simulator cannot test.
+
+**Against a real tablet.** CafAI talks to `http://<page host>:8080`. When the
+dev server runs on your laptop, point it at the tablet once in the browser
+console:
 
 ```js
 localStorage.reaHostname = '192.168.1.42' // the tablet's IP
@@ -98,7 +104,9 @@ also runs Decaid.
 the app: a stateful Decaid (REST + WebSockets, a scripted shot that follows
 the active profile and stops at the target yield) and a scripted Claude that
 follows `docs/briefs/ENGINE_PROTOCOL.md`. `?mockSpeed=20` speeds the shot up.
-The production build never contains the mocks or a service worker.
+`?mockDecaid=0` starts only the scripted Claude, so every Decaid call goes to
+a real Decaid (`npm run dev:sim` opens it). The production build never
+contains the mocks or a service worker.
 
 **Tablet viewports.** `dev/tablet.html` frames the app at real Decent tablet
 sizes (962x602, 1007x602, 1140x712, 1280x800, 1920x1200, iPad) and injects

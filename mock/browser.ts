@@ -23,6 +23,14 @@
  *                           not found", like an older Decaid
  *   ?mockGrinders=0         Decaid's grinder library starts empty (by default
  *                           it holds three test grinders)
+ *
+ * Read in src/main.tsx, also once at start:
+ *   ?mockDecaid=0           this mock does not start at all: only the scripted
+ *                           coach answers (mock/plan.ts, mock/coachOnly.ts) and
+ *                           every Decaid call goes to a real Decaid, such as
+ *                           Decaid's simulator (docs/SIMULATOR.md). No
+ *                           window.__CAFAI_MOCK__, and ?mockPersist does nothing.
+ *   ?mockPersist=1          keep the store across page loads (mock/persist.ts)
  */
 import { setupWorker, type SetupWorker } from 'msw/browser';
 import { createDecaidMock, type MockHandler, type CreateDecaidMockOptions } from './decaid/index.ts';

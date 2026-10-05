@@ -67,6 +67,10 @@ function assertChrome91Target(): Plugin {
 // (verified in real Chromium 91 by tools/chrome91/smoke.mjs).
 export default defineConfig(({ mode }) => ({
   base: './',
+  // Mock mode's own dependency cache: its extra plugin changes the optimizer's
+  // config hash, so with one shared cache `npm run dev` and a mock-mode server
+  // (dev:mock, dev:sim) running side by side would keep re-optimizing it.
+  cacheDir: mode === 'mock' ? 'node_modules/.vite-mock' : undefined,
   resolve: {
     alias: [
       // @mui/x-chat lazily imports `remend` to repair half-streamed markdown.
