@@ -25,7 +25,13 @@ out of the morning session of 2026-10-04; the questions you answered are in
    you prefer Decent's shipped stops, it is one number per template
    (`startRatio`). Known edge: Blooming's pour tops out near 57 g at its
    default flow, so at doses of 21 g and up v1 ends on the profile's own
-   timer a little short of its target.
+   timer a little short of its target. *Seen since (2026-10-06):* both
+   CafAI's mock and Decaid 0.8.7's own simulator end Blooming v1 at 42-48 g
+   from 18 g, on the profile's timer, so the 50 g stop never fires there. If
+   a real DE1 does the same, the cup's yield is set by the pour's length,
+   not the stop, and a yield change does nothing (the scripted coach now
+   moves the grinder instead). Hardware plan: note the yield of the first
+   Blooming v1 shot.
 4. **Enjoyment only from your stars (D61).** CafAI writes the taste to
    Decaid's notes for every answered shot, but `enjoyment` only when you tap
    stars on the shot card; it never derives a number from the taste options.

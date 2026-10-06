@@ -103,7 +103,10 @@ ticks: they decide the next changes.
    library, "<Bean> v1" sits under the template's bundled profile as its
    parent (D59).
 5. Pull the shot with CafAI's **Espresso** button. Expected: it stops at that
-   weight (plus the scale's usual overshoot).
+   weight (plus the scale's usual overshoot). Write down the yield and why
+   the shot ended (`stopReason` in `/api/v1/shots/<id>`): on CafAI's mock and
+   on Decaid 0.8.7's simulator, Blooming Espresso v1 ran out of profile at
+   42-48 g from 18 g and never reached its 50 g stop (QUESTIONS #3).
 
 ## 4. A shot pulled right after Confirm (the QUESTIONS #1 race)
 
