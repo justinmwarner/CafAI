@@ -49,8 +49,10 @@ Closing the window ends Decaid within seconds. 0.8.7 exits with code
 `scripts/create_release_aliases.sh`, `doc/RELEASE.md`); flag
 (`lib/src/cli/cli_args.dart`, `lib/main.dart`); screens and ports
 (`lib/src/onboarding_feature/`, `lib/src/ui/webserver_port_conflict_app.dart`,
-`lib/src/webui_support/webui_service.dart`). Not tried: the download,
-Windows' own warning and network prompt.*
+`lib/src/webui_support/webui_service.dart`). Tried (0.8.7): the download
+(its sha256 matches the release's SHA256SUMS), the flags, the start and
+closing the window. Not seen: Windows' unknown-publisher warning and network
+prompt (Decaid was started from a shell).*
 
 ## 2. Turn on the simulated machine and scale
 
@@ -204,7 +206,9 @@ Decaid shows skins in Microsoft WebView2. If it is missing, Decaid says
 `lib/src/skin_feature/simulated_webview_device.dart`,
 `lib/src/controllers/de1_state_manager.dart`,
 `windows/runner/flutter_window.cpp`, `lib/src/skin_feature/skin_view.dart`).
-Not tried.*
+Tried (0.8.7): `--skin-path` with a production build showed CafAI connected
+in Decaid's window (WebView2 is Chromium 154). Not tried: the ZIP install,
+the simulated tablet sizes, gateway modes with CafAI.*
 
 ## 5. What the simulator can and cannot test
 
