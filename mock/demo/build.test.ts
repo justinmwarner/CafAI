@@ -288,8 +288,8 @@ describe('the versions and iterations', () => {
     expect(outcomes).toEqual([
       ['Santos', 1, 'pending'],
       ['Kiambu AA', 1, 'applied'],
-      // The engine's undo of v3 marks the latest applied iteration on v2 as undone: here the grind move.
-      ['Kiambu AA', 2, 'undone'],
+      // v3 was confirmed from a typed request, so no iteration made it and undoing it changes none: the grind move stays applied.
+      ['Kiambu AA', 2, 'applied'],
       ['Kiambu AA', 2, 'declined'],
       ['Kiambu AA', 4, 'pending'],
     ]);

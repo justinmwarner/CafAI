@@ -2601,4 +2601,120 @@ describe('coach engine', () => {
       expect(engine.getState().machineTick).toBe(0);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Undo marks only the iteration whose confirmed change made the version
+  // -------------------------------------------------------------------------
+
+  describe('undo and the iterations', () => {
+    const askTasteAgain = (id: string) =>
+      toolUse(id, TOOL.askUser, { question: 'How did it taste?', options: ['Sour', 'Bitter', 'other'], multiSelect: false });
+    /** Brew temperature to `value` °C: a new version on Confirm. */
+    const tempTo = (id: string, value: number) => toolUse(id, TOOL.proposeAdjustment, { ...(proposeTemp as { input: object }).input, value });
+    /** A by-hand move at the grinder: no new version. */
+    const grindFiner = toolUse('t-grind', TOOL.proposeAdjustment, {
+      variable: 'grind',
+      lever: null,
+      value: null,
+      grind: { direction: 'finer', amount: 1, setting: '13' },
+      summary: 'Grind 1 step finer, to 13',
+      rationale: 'It ran fast.',
+      expectedEffect: 'A slower, sweeter shot.',
+      tips: [],
+    });
+
+    /** A shot on the active version a minute after the last one; the coach asks how it tasted. */
+    async function pullShot(shotId: string, askId: string) {
+      nowMs += 60_000;
+      scripts.push(() => [text('Got it.'), askTasteAgain(askId)]);
+      telemetry.emitShot({ type: 'finished', shotId, stopReason: 'targetWeight' });
+      await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+    }
+
+    /** Shot 1 on v1, answered; v2 (88 -> 89 °C) confirmed on its iteration. */
+    async function throughV2() {
+      await throughProposal();
+      scripts.push(() => [text('Done.')]);
+      await engine.confirmChange('t-adj');
+      expect(engine.getState().activeVersion?.version).toBe(2);
+    }
+
+    async function undo(reply: string) {
+      scripts.push(() => [text(reply)]);
+      await engine.undo();
+    }
+
+    const versionStatuses = () => engine.getState().versions.map((v) => `${v.version}:${v.status}`);
+    const outcomes = async () => (await storage.iterations.listAll()).map((i) => [i.shotId, i.change?.variable ?? null, i.outcome]);
+
+    it('marks the iteration whose confirmed change made the version', async () => {
+      await throughV2();
+      await undo('Back on v1.');
+      expect(versionStatuses()).toEqual(['1:active', '2:undone']);
+      expect(await outcomes()).toEqual([['shot-1', 'profile', 'undone']]);
+    });
+
+    it('marks only the later of two versioned changes in a row, and the earlier on a second undo', async () => {
+      await throughV2();
+      await pullShot('shot-2', 't-ask-2');
+      scripts.push(() => [tempTo('t-adj-2', 90)]);
+      await engine.answerOptions('t-ask-2', ['Sour'], null);
+      scripts.push(() => [text('Done.')]);
+      await engine.confirmChange('t-adj-2');
+      expect(engine.getState().activeVersion?.version).toBe(3);
+
+      await undo('Back on v2.');
+      expect(versionStatuses()).toEqual(['1:superseded', '2:active', '3:undone']);
+      expect(await outcomes()).toEqual([
+        ['shot-1', 'profile', 'applied'],
+        ['shot-2', 'profile', 'undone'],
+      ]);
+
+      await undo('Back on v1.');
+      expect(versionStatuses()).toEqual(['1:active', '2:undone', '3:undone']);
+      expect(await outcomes()).toEqual([
+        ['shot-1', 'profile', 'undone'],
+        ['shot-2', 'profile', 'undone'],
+      ]);
+    });
+
+    it('changes no iteration when the version came from a typed request, not even a by-hand change before it (D76)', async () => {
+      await throughV2();
+      // Shot 2 on v2: a by-hand grind move, confirmed.
+      await pullShot('shot-2', 't-ask-2');
+      scripts.push(() => [grindFiner]);
+      await engine.answerOptions('t-ask-2', ['Sour'], null);
+      scripts.push(() => [text('Turn the dial, then pull another shot.')]);
+      await engine.confirmChange('t-grind');
+      // Shot 3 on v2: v3 proposed, Not now.
+      await pullShot('shot-3', 't-ask-3');
+      scripts.push(() => [tempTo('t-adj-3', 90)]);
+      await engine.answerOptions('t-ask-3', ['Sour'], null);
+      scripts.push(() => [text('Staying on v2.')]);
+      await engine.declineChange('t-adj-3');
+      // Typed: v3 again, confirmed. No iteration waits for a decision, so none records it.
+      scripts.push(() => [tempTo('t-adj-3b', 90)]);
+      await engine.sendText('I want the hotter one after all.');
+      scripts.push(() => [text('Done.')]);
+      await engine.confirmChange('t-adj-3b');
+      expect(engine.getState().activeVersion?.version).toBe(3);
+
+      await undo('Back on v2.');
+      expect(versionStatuses()).toEqual(['1:superseded', '2:active', '3:undone']);
+      expect(await outcomes()).toEqual([
+        ['shot-1', 'profile', 'applied'],
+        ['shot-2', 'grind', 'applied'],
+        ['shot-3', null, 'declined'],
+      ]);
+      // The rest of Undo is as before: the v3 card that was applied says undone.
+      const diffs = allParts().filter((p): p is Extract<CoachUiPart, { kind: 'diff' }> => p.kind === 'diff');
+      expect(diffs.map((d) => [d.requestId, d.status])).toEqual([
+        ['t-adj', 'applied'],
+        ['t-grind', 'applied'],
+        ['t-adj-3', 'declined'],
+        ['t-adj-3b', 'undone'],
+      ]);
+      expect(notices().at(-2)).toMatchObject({ text: 'Back on Kiambu AA v2.' });
+    });
+  });
 });

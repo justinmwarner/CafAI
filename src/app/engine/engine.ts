@@ -218,6 +218,21 @@ function taggedVersionId(context: WorkflowContext | undefined): string | null {
   return typeof versionId === 'string' ? versionId : null;
 }
 
+/**
+ * Whether this iteration's confirmed change made `version`: a shot on the
+ * version's parent, applied, with the very change the version records. The
+ * latest applied shot on the parent is not always it: only a profile change
+ * makes a version, so a by-hand grind or dose move or a kept recipe never is,
+ * and a change confirmed from a typed request was recorded on no iteration.
+ */
+function madeVersion(iteration: IterationRecord, version: ProfileVersion): boolean {
+  const { change } = iteration;
+  const made = version.change;
+  if (iteration.outcome !== 'applied' || change?.variable !== 'profile' || !made) return false;
+  if (version.parentVersionId === null || iteration.profileVersionId !== version.parentVersionId) return false;
+  return change.variable === made.variable && change.lever === made.lever && change.from === made.from && change.to === made.to;
+}
+
 function describe(error: unknown): string {
   if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' && error.message) {
     return error.message;
@@ -1817,10 +1832,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     ]);
     await persistBag(s, { activeVersionId: parent.id });
     const iterations = await bagIterations(s);
-    const applied = [...iterations]
-      .reverse()
-      .find((i) => i.outcome === 'applied' && i.profileVersionId === parent.id);
-    if (applied) await putIteration({ ...applied, outcome: 'undone' });
+    const maker = [...iterations].reverse().find((i) => madeVersion(i, current));
+    if (maker) await putIteration({ ...maker, outcome: 'undone' });
     setMessages(
       updatePart(
         state.messages,
