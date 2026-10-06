@@ -539,7 +539,9 @@ says which reading was taken and MORNING.md lists it among the top questions.
   and the timer waited for "finished". It now stops at the first `pouringDone`
   frame or at the frame Decaid stopped on, whichever comes first; the graph
   keeps plotting the drips. The mock's stopping phase now lasts 4 s, as
-  Decaid's does.
+  Decaid's does. *Amended by D78:* the timer stops on the last frame Decaid
+  records, one frame before the one it stopped on, so the panel and the
+  shot card give the same time.
 
 ## Demo mode (2026-10-06)
 
@@ -573,3 +575,25 @@ says which reading was taken and MORNING.md lists it among the top questions.
   the shot whose applied profile change matches the undone version's change,
   and none when no shot made it. A by-hand grind or dose change, or a kept
   recipe, is never marked undone: they make no version.
+- **D78. One shot time and one yield on every screen.** The demo's verifier
+  saw the panel say 60.6 s and 44.5 g next to a card saying 62.4 s and
+  41.5 g. A shot's time is now the pour, from the first frame after preheat
+  to the last frame Decaid recorded (it stops recording at its stop decision,
+  before its 4-5 s stopping phase), on the card, for the coach (`durationS`)
+  and on the panel's timer, which therefore stops one frame earlier than D75
+  said. The yield is Decaid's `actualYield` (the cup's weight once the drips
+  settle), else the last weight; once the shot's card is in the chat, the
+  panel shows the card's time and yield. Decaid's Visualizer upload times a
+  shot the same way; its own History and shot screen count from the start of
+  preheat, in whole seconds. Summaries saved earlier keep their old times
+  (preheat included). While a shot runs, the panel names the profile's step
+  ("Pulling a shot: pause" during Blooming's bloom, Decent's own step name).
+- **D79. Only an answer to a taste question is the shot's taste.** The coach
+  may ask other questions with `ask_user` (the puck, a preference); their
+  answers stayed in the chat but were also saved as the shot's taste, shown
+  as "Taste:" in History and written to Decaid's shot notes, where a
+  follow-up would replace the real taste. A question is a taste question
+  when it mentions taste (taste, tastes, tasted, tasting); the prompt and the
+  tool description ask the coach to word the taste question so and to keep
+  the word out of others. Cards set aside now say why (typed, Undo, a new
+  shot), and a keep card says "Nothing to change: keep this recipe."
