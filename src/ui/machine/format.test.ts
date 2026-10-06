@@ -37,6 +37,21 @@ describe('describeMachineState', () => {
     expect(describeMachineState('espresso', null, true)).toBe('Pulling a shot');
   });
 
+  it("names the profile's running step during preinfusion and the pour", () => {
+    // Blooming Espresso's bloom: the pump is off for 30 s, but the substate says pouring.
+    expect(describeMachineState('espresso', 'pouring', true, 'pause')).toBe('Pulling a shot: pause');
+    expect(describeMachineState('espresso', 'preinfusion', true, 'Fill')).toBe('Pulling a shot: Fill');
+    expect(describeMachineState('skipStep', 'pouring', true, 'ramp')).toBe('Pulling a shot: ramp');
+    // Preheat shows the last shot's step, and the end is no step.
+    expect(describeMachineState('espresso', 'preparingForShot', true, 'pause')).toBe('Pulling a shot: preheating');
+    expect(describeMachineState('espresso', 'pouringDone', true, 'pause')).toBe('Pulling a shot: ending');
+    // No usable name: the phase, as before.
+    expect(describeMachineState('espresso', 'pouring', true, '  ')).toBe('Pulling a shot: pouring');
+    expect(describeMachineState('espresso', 'pouring', true, null)).toBe('Pulling a shot: pouring');
+    expect(describeMachineState('steam', 'pouring', true, 'pause')).toBe('Steaming');
+    expect(describeMachineState('espresso', 'pouring', false, 'pause')).toBe('Not connected');
+  });
+
   it('covers the maintenance states', () => {
     expect(describeMachineState('booting', 'idle', true)).toBe('Starting up');
     expect(describeMachineState('cleaning', 'cleaningGroup', true)).toBe('Cleaning');

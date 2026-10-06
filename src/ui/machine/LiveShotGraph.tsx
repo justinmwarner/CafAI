@@ -6,19 +6,28 @@
  * Samples never touch React state. They go into a plain buffer and reach the
  * canvas through uPlot's setData at most once per animation frame; the timer
  * and the legend readouts are written straight into their DOM nodes. React
- * re-renders this component twice per shot (started, finished), not per frame.
+ * re-renders this component a few times per shot (started, finished, its
+ * card), not per frame.
  *
  * The timer counts the pour only. After the pour Decaid stays in its stopping
  * state for 4-5 s (the cup weight settles, the shot is stored) before it says
- * finished: the graph plots on through it, the timer stops where the pour did.
+ * finished: the graph plots on through it, the timer stops where the pour did,
+ * on the last frame Decaid records (shotBuffer.ts).
+ *
+ * Once the chat has the shot's card, the timer and the weight show the card's
+ * numbers: the pour time and Decaid's yield, the cup weight Decaid settles on
+ * after the drips (`actualYield`). The weight read live can differ from it a
+ * little, and the panel must not say one number while the card says another.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { keyframes } from '@mui/material/styles';
-import { useServices } from '../../app/services.tsx';
+import { useCoach, useServices } from '../../app/services.tsx';
+import type { CoachUiMessage } from '../../app/types.ts';
+import type { ShotSummary } from '../../coach/types.ts';
 import { FONT_FAMILY, graphColors } from '../theme.ts';
 import { TID } from '../testIds.ts';
 import { formatSeconds } from './format.ts';
@@ -48,10 +57,34 @@ const LEGEND: readonly LegendItem[] = [
 ];
 
 // Blank until there is a shot; "— bar" beside every key reads as a fault.
-const legendValue = (item: LegendItem, values: ShotValues | null) => {
-  const value = values?.[item.key];
-  return value === null || value === undefined ? '' : `${value.toFixed(1)} ${item.unit}`;
-};
+const reading = (value: number | null | undefined, unit: string) =>
+  value === null || value === undefined ? '' : `${value.toFixed(1)} ${unit}`;
+
+const legendValue = (item: LegendItem, values: ShotValues | null) => reading(values?.[item.key], item.unit);
+
+/** The numbers on a shot's card in the chat. */
+interface CardNumbers {
+  durationS: number;
+  yieldG: number | null;
+}
+
+/** The summary on the chat's card for a shot, newest first; null while there is none. */
+function cardSummary(messages: readonly CoachUiMessage[], shotId: string | null): ShotSummary | null {
+  if (shotId === null) return null;
+  for (let m = messages.length - 1; m >= 0; m -= 1) {
+    for (const part of messages[m]!.parts) {
+      if (part.kind === 'shot' && part.shotId === shotId) return part.summary;
+    }
+  }
+  return null;
+}
+
+/** The card's time and yield for a finished shot, once the chat has its card. */
+function useCardNumbers(shotId: string | null): CardNumbers | null {
+  const durationS = useCoach((s) => cardSummary(s.messages, shotId)?.durationS ?? null);
+  const yieldG = useCoach((s) => cardSummary(s.messages, shotId)?.yieldG ?? null);
+  return useMemo(() => (durationS === null ? null : { durationS, yieldG }), [durationS, yieldG]);
+}
 
 const finiteMax = (value: number | null | undefined) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
 
@@ -152,6 +185,11 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
   const timer = useRef<HTMLSpanElement>(null);
   const readouts = useRef<Partial<Record<SeriesKey, HTMLSpanElement | null>>>({});
   const [phase, setPhase] = useState<Phase>('empty');
+  /** The shot on screen once it has finished; its card's numbers replace the live ones. */
+  const [finishedShotId, setFinishedShotId] = useState<string | null>(null);
+  const card = useCardNumbers(finishedShotId);
+  const shownCard = useRef<CardNumbers | null>(null);
+  const repaint = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const host = plotHost.current;
@@ -165,16 +203,19 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
     const paint = () => {
       frame = null;
       plot.setData(buffer.data);
-      if (timer.current) timer.current.textContent = formatSeconds(buffer.elapsedS());
+      const numbers = shownCard.current;
+      if (timer.current) timer.current.textContent = formatSeconds(numbers ? numbers.durationS : buffer.elapsedS());
       const latest = buffer.latest();
       for (const item of LEGEND) {
         const node = readouts.current[item.key];
-        if (node) node.textContent = legendValue(item, latest);
+        if (!node) continue;
+        node.textContent = numbers && item.key === 'weight' ? reading(numbers.yieldG, item.unit) : legendValue(item, latest);
       }
     };
     const schedule = () => {
       if (frame === null) frame = nextFrame(paint);
     };
+    repaint.current = schedule;
 
     const stopSamples = telemetry.onSample((sample) => {
       if (!buffer.push(sample)) return;
@@ -189,6 +230,9 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
       if (event.type === 'started') {
         buffer.reset();
         if (frame !== null) cancelFrame(frame);
+        // The last shot's card numbers go with it, before this paint.
+        shownCard.current = null;
+        setFinishedShotId(null);
         // Paint at once so uPlot never redraws from emptied arrays with stale indexes.
         paint();
         showingShot = true;
@@ -196,6 +240,7 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
       } else {
         // Keep the finished shot on screen until the next one starts.
         setPhase(buffer.length > 0 ? 'done' : 'empty');
+        setFinishedShotId(buffer.length > 0 ? event.shotId : null);
       }
     });
     // Decaid's stopping (or finished) frame carries the timestamp of the
@@ -227,9 +272,18 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
       observer?.disconnect();
       window.removeEventListener('resize', resize);
       if (frame !== null) cancelFrame(frame);
+      repaint.current = null;
       plot.destroy();
     };
   }, [telemetry]);
+
+  // Once in, the card's numbers stay until the next shot starts, even when the
+  // chat moves to another bag and the card leaves the messages.
+  useEffect(() => {
+    if (card === null || shownCard.current === card) return;
+    shownCard.current = card;
+    repaint.current?.();
+  }, [card]);
 
   const caption = phase === 'live' ? 'Live shot' : phase === 'done' ? 'Last shot' : 'Shot graph';
   return (

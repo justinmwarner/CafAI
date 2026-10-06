@@ -1,14 +1,60 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ShotRecord } from '../../api/types.ts';
+import type { ShotRecord, ShotSnapshot } from '../../api/types.ts';
 import { syntheticShotRecord } from '../__fixtures__/syntheticShot.ts';
 import shot01 from '../__fixtures__/decaid-mcp/shot-01.json';
 import shot07 from '../__fixtures__/decaid-mcp/shot-07.json';
+import shot09 from '../__fixtures__/decaid-mcp/shot-09.json';
 import example from '../../../docs/verified/examples/shot-record.json';
-import { resampleSeries, shotPhases, summarizeShot, summaryForModel } from './summarize.ts';
+import { pourSeconds, resampleSeries, shotPhases, summarizeShot, summaryForModel } from './summarize.ts';
 import { shotRows } from './analysis.ts';
+import { elapsedSeconds, parseTimestampMicros } from './time.ts';
 
 const asRecord = (value: unknown) => value as ShotRecord;
+const oneDecimal = (value: number) => Number(value.toFixed(1));
+
+/** A zone-less Decaid timestamp for microseconds read as UTC, as parseTimestampMicros reads them. */
+function stampMicros(micros: number): string {
+  const date = new Date(Math.floor(micros / 1000));
+  const pad = (n: number, width = 2) => String(n).padStart(width, '0');
+  return (
+    `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}T` +
+    `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}.${pad(micros % 1_000_000, 6)}`
+  );
+}
+
+/**
+ * The record as if Decaid had kept recording through its stopping phase:
+ * a pouringDone frame, then idle frames for 4 s while the cup drips, and
+ * Decaid's settled weight as the yield. (Decaid itself stops recording at
+ * its stop decision, so its own records never carry this tail.)
+ */
+function withStoppingTail(record: ShotRecord): { record: ShotRecord; finalWeight: number } {
+  const last = record.measurements[record.measurements.length - 1]!;
+  const lastMicros = parseTimestampMicros(last.machine.timestamp)!;
+  let weight = last.scale!.weight;
+  const tail: ShotSnapshot[] = [];
+  for (let i = 1; i <= 16; i += 1) {
+    const drip = 0.5 * Math.exp(-i / 4);
+    weight += drip;
+    const timestamp = stampMicros(lastMicros + i * 250_000);
+    const state = i === 1 ? { state: 'espresso', substate: 'pouringDone' } : { state: 'idle', substate: 'idle' };
+    tail.push({
+      machine: { ...last.machine, timestamp, state, pressure: 0, flow: 0 },
+      scale: { ...last.scale!, timestamp, weight: Number(weight.toFixed(2)), weightFlow: drip * 4 },
+      volume: last.volume,
+    });
+  }
+  const finalWeight = oneDecimal(weight);
+  return {
+    record: {
+      ...record,
+      measurements: [...record.measurements, ...tail],
+      annotations: { ...record.annotations, actualYield: finalWeight },
+    },
+    finalWeight,
+  };
+}
 
 describe('summarizeShot: the verified example record', () => {
   const summary = summarizeShot(asRecord(example));
@@ -18,7 +64,8 @@ describe('summarizeShot: the verified example record', () => {
       shotId: '3f6b0a9e-8c1d-4e52-9b7a-2d4f61c08e17',
       timestamp: '2026-10-03T08:15:02.731455',
       profileTitle: 'Guji Hambela v1',
-      durationS: 35,
+      // The pour, 4.62 s to 34.96 s on the shot clock: preheat is not shot time.
+      durationS: 30.3,
       doseG: 18,
       yieldG: 36.3,
       ratio: 2.02,
@@ -90,6 +137,63 @@ describe('summarizeShot: real Decaid shots', () => {
     const { series: _series, ...aggregates } = summarizeShot(asRecord(shot07));
     expect(JSON.stringify(aggregates).length).toBeLessThan(1200);
     expect(JSON.stringify(summarizeShot(asRecord(shot07))).length).toBeLessThan(7000);
+  });
+});
+
+describe('summarizeShot: the time is the pour, the yield what is in the cup', () => {
+  it("times the pour from the first frame after preheat to the last frame Decaid recorded, as Decaid's Visualizer upload does", () => {
+    // Decaid records from preheat and stops recording at its stop decision.
+    // shot-01: preinfusion at 12:47:19.889141, last frame 12:47:58.859324,
+    // after 6.5 s of preheat (45.5 s from the first frame).
+    expect(summarizeShot(asRecord(shot01)).durationS).toBe(39);
+    // Blooming: 11:22:30.098650 to 11:23:34.312355, after 2.8 s of preheat.
+    expect(summarizeShot(asRecord(shot07)).durationS).toBe(64.2);
+    // Aborted on the first preinfusion frame: no pour to time.
+    expect(summarizeShot(asRecord(shot09)).durationS).toBe(0);
+  });
+
+  it('ends the time where the pour ends when a record carries the stopping tail', () => {
+    const plain = syntheticShotRecord();
+    const { record: tailed } = withStoppingTail(plain);
+    const firstPour = plain.measurements.find((m) => m.machine.state.substate !== 'preparingForShot')!;
+    const lastPour = plain.measurements[plain.measurements.length - 1]!;
+    const poured = oneDecimal(elapsedSeconds(firstPour.machine.timestamp, lastPour.machine.timestamp)!);
+
+    expect(summarizeShot(tailed).durationS).toBe(poured);
+    expect(summarizeShot(plain).durationS).toBe(poured);
+    // The other times stay on the shot clock, which runs on through preheat and the tail.
+    expect(summarizeShot(tailed).series.tS.at(-1)).toBeGreaterThan(poured + 3 + 3.9);
+  });
+
+  it("takes the yield after the drips: Decaid's settled weight, else the record's final weight", () => {
+    const plain = syntheticShotRecord();
+    const { record: tailed, finalWeight } = withStoppingTail(plain);
+    expect(summarizeShot(tailed).yieldG).toBe(finalWeight);
+
+    const pouredWeight = plain.measurements[plain.measurements.length - 1]!.scale!.weight;
+    expect(finalWeight).toBeGreaterThan(pouredWeight + 1);
+    const unannotated: ShotRecord = { ...tailed, annotations: { actualDoseWeight: 18 } };
+    expect(summarizeShot(unannotated).yieldG).toBe(finalWeight);
+  });
+
+  it('times a record without machine substates from its first sample to its last', () => {
+    const record = syntheticShotRecord();
+    const bare: ShotRecord = {
+      ...record,
+      measurements: record.measurements.map((m) => ({ ...m, machine: { ...m.machine, state: { state: 'espresso', substate: '' } } })),
+    };
+    const first = record.measurements[0]!.machine.timestamp;
+    const last = record.measurements[record.measurements.length - 1]!.machine.timestamp;
+    expect(summarizeShot(bare).durationS).toBe(oneDecimal(elapsedSeconds(first, last)!));
+  });
+
+  it('pourSeconds: a pour the machine reports done at once lasts no time, and preheat alone is no pour', () => {
+    const rows = shotRows(syntheticShotRecord({ endS: 12 }));
+    const preheat = rows.filter((row) => row.substate === 'preparingForShot');
+    expect(pourSeconds(preheat)).toBeNull();
+    expect(pourSeconds([])).toBeNull();
+    const doneAtOnce = [...preheat, { ...rows[preheat.length]!, substate: 'pouringDone' }, { ...rows[preheat.length + 1]!, substate: 'idle' }];
+    expect(pourSeconds(doneAtOnce)).toBe(0);
   });
 });
 

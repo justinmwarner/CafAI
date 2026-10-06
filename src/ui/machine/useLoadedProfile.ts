@@ -4,7 +4,9 @@ import {
   createRefresher,
   isActiveBagVersion,
   profileMark,
+  profileStepNames,
   readLoadedProfile,
+  sameStepNames,
   type LoadedProfileReading,
   type ProfileMark,
   type Refresher,
@@ -18,6 +20,8 @@ export interface LoadedProfileState {
   title: string | null;
   /** Beside the title: the bag's version on the machine, on its way there, or not confirmed. */
   mark: ProfileMark;
+  /** The same profile's step names, in order; null until a read finds steps. Kept while the content is the same. */
+  stepNames: readonly string[] | null;
 }
 
 /**
@@ -31,6 +35,8 @@ export interface LoadedProfileState {
  * a chat message is no reason to read, or the line would run ahead of the
  * banner. A coach that keeps no beat gets a 30 s clock of the line's own. One
  * request at a time; a failed read keeps what was there and says nothing.
+ * The same read gives the profile's step names, so the state line can name
+ * the running step without a read of its own.
  */
 export function useLoadedProfile(): LoadedProfileState {
   const { decaid, telemetry } = useServices();
@@ -42,6 +48,7 @@ export function useLoadedProfile(): LoadedProfileState {
   const beat = useCoach((s) => s.machineTick);
   const ownClock = beat === undefined;
   const [reading, setReading] = useState<LoadedProfileReading | null>(null);
+  const [stepNames, setStepNames] = useState<readonly string[] | null>(null);
   const refresher = useRef<Refresher | null>(null);
   const isBagVersion = reading !== null && isActiveBagVersion(reading, { bagId, versionId, title: versionTitle });
 
@@ -50,7 +57,10 @@ export function useLoadedProfile(): LoadedProfileState {
     const reads = createRefresher(
       () =>
         decaid.getWorkflow().then((workflow) => {
-          if (mounted) setReading(readLoadedProfile(workflow));
+          if (!mounted) return;
+          setReading(readLoadedProfile(workflow));
+          const names = profileStepNames(workflow);
+          setStepNames((current) => (sameStepNames(current, names) ? current : names));
         }),
       // Every read here is wanted at once; nothing asks for a debounced one.
       0,
@@ -116,5 +126,6 @@ export function useLoadedProfile(): LoadedProfileState {
   return {
     title: reading?.title ?? null,
     mark: profileMark(isBagVersion, load, connected),
+    stepNames,
   };
 }

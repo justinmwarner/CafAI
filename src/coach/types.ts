@@ -190,6 +190,12 @@ export interface ShotSummary {
   shotId: string;
   timestamp: string;
   profileTitle: string | null;
+  /**
+   * The length of the pour: from the first sample after preheat to the last
+   * one before the pour is over (summary/summarize.ts pourSeconds), the time
+   * the machine panel's timer shows too. Not a time on the clock the other
+   * times use, whose t = 0 is the start of preheat.
+   */
   durationS: number;
   doseG: number | null;
   yieldG: number | null;

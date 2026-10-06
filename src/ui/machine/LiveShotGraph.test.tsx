@@ -1,23 +1,80 @@
 // @vitest-environment jsdom
 import { Profiler } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, screen } from '@testing-library/react';
+import { act, cleanup, screen, within } from '@testing-library/react';
 import { formatLocalTimestamp } from '../../../mock/decaid/clock.ts';
 import { normalizeProfile } from '../../../mock/decaid/profiles.ts';
 import { createShotSimulation } from '../../../mock/decaid/shotPlayer.ts';
 import { createTelemetryStore } from '../../api/telemetry.ts';
 import { createFakeWebSocket } from '../../api/testing/fakeWebSocket.ts';
 import { parseDecaidTimestamp } from '../../api/time.ts';
-import type { LiveSample, ShotStateEvent } from '../../api/types.ts';
+import type { LiveSample, MachineSnapshot, ShotRecord, ShotSnapshot, ShotStateEvent, WeightSnapshot } from '../../api/types.ts';
+import type { CoachUiMessage } from '../../app/types.ts';
+import { syntheticShotRecord } from '../../coach/__fixtures__/syntheticShot.ts';
+import shot07 from '../../coach/__fixtures__/decaid-mcp/shot-07.json';
+import { summarizeShot } from '../../coach/summary/summarize.ts';
 import blooming from '../../coach/templates/source/Blooming_espresso.json';
+import type { ShotSummary } from '../../coach/types.ts';
 import { TID } from '../testIds.ts';
-import { createFakeServices, IDLE_TELEMETRY } from '../testing/fakeServices.ts';
+import { createFakeServices, IDLE_TELEMETRY, SAMPLE_WORKFLOW } from '../testing/fakeServices.ts';
 import { renderWithServices } from '../testing/renderWithServices.tsx';
 import { fakePlots, resetFakePlots } from '../testing/uplotMock.ts';
 import { formatSeconds } from './format.ts';
 import { LiveShotGraph } from './LiveShotGraph.tsx';
 
 vi.mock('uplot', () => import('../testing/uplotMock.ts'));
+
+/** The number beside a legend key, e.g. legendReadout('Weight') -> "36.4 g". */
+function legendReadout(label: string): string {
+  const item = within(screen.getByRole('list', { name: /legend/i })).getByText(label).closest('li')!;
+  return item.lastElementChild?.textContent ?? '';
+}
+
+/** The chat's shot card for a shot, as the coach engine posts it. */
+function shotCard(shotId: string, summary: ShotSummary): CoachUiMessage {
+  return { id: `message-${shotId}`, role: 'system', parts: [{ kind: 'shot', shotId, summary }], createdAt: '2026-10-06T08:00:00.000Z' };
+}
+
+/** A summary with the numbers a test cares about. */
+function summaryWith(shotId: string, durationS: number, yieldG: number | null): ShotSummary {
+  return { ...summarizeShot(syntheticShotRecord({ id: shotId })), shotId, durationS, yieldG };
+}
+
+/** The graph on the real telemetry store, fed through fake sockets as Decaid would feed it. */
+function mountOnRealTelemetry() {
+  const ws = createFakeWebSocket();
+  const telemetry = createTelemetryStore({
+    client: { getDevices: async () => [], getMachineState: () => Promise.reject(new Error('no machine')) },
+    wsOrigin: 'ws://localhost:8080',
+    WebSocketImpl: ws.WebSocketImpl as unknown as typeof WebSocket,
+    visibility: null,
+    // No watchdog and no reconnects here.
+    timers: { setTimeout: () => null, clearTimeout: () => {} },
+  });
+  const services = { ...createFakeServices(), telemetry };
+  renderWithServices(<LiveShotGraph />, services);
+  telemetry.start();
+  for (const socket of ws.sockets) socket.open();
+  const send = (path: string, frame: unknown) => act(() => void ws.latest(`/ws/v1/${path}`).message(frame));
+  return { services, telemetry, send };
+}
+
+/** A ws/v1/machine/shotState frame decided on `machine`. */
+function stateOn(state: ShotStateEvent['state'], machine: MachineSnapshot, shotId: string | null, decision: ShotStateEvent['decision'] = null): ShotStateEvent {
+  return {
+    event: decision ? 'decision' : 'state',
+    timestamp: machine.timestamp,
+    shotId,
+    state,
+    machineState: machine.state.state,
+    machineSubstate: machine.state.substate,
+    profileFrame: machine.profileFrame,
+    scaleConnected: true,
+    scaleLost: false,
+    machineHasAutonomousSAW: false,
+    decision,
+  };
+}
 
 let frames: (() => void)[] = [];
 const runFrames = () =>
@@ -139,7 +196,7 @@ describe('LiveShotGraph', () => {
     expect(screen.getByText('Live shot')).toBeInTheDocument();
   });
 
-  it('stops the timer when Decaid starts stopping, and plots on until the shot is finished', () => {
+  it('stops the timer on the frame before the one Decaid stopped on, and plots on until the shot is finished', () => {
     const { services } = renderWithServices(<LiveShotGraph />);
     const plot = fakePlots[0]!;
     const timer = screen.getByTestId(TID.shotTimer);
@@ -151,12 +208,13 @@ describe('LiveShotGraph', () => {
       services.telemetry.emitSample(sample(0, 'preparingForShot', 0));
       services.telemetry.emitSample(sample(2, 'preinfusion', 2));
       services.telemetry.emitSample(sample(16));
-      // The frame Decaid stopped on (target weight), then its stopping frame.
+      services.telemetry.emitSample(sample(31.4));
+      // The frame Decaid stopped on (target weight), which its record leaves out, then its stopping frame.
       services.telemetry.emitSample(sample(31.6));
       services.telemetry.setState({ shotState: shotState('stopping', 31.6) });
     });
     runFrames();
-    expect(timer.textContent).toBe('29.6 s');
+    expect(timer.textContent).toBe('29.4 s');
 
     // Decaid settles the yield and stores the shot before it says finished.
     act(() => {
@@ -164,7 +222,7 @@ describe('LiveShotGraph', () => {
     });
     runFrames();
     expect(plot.setDataCalls.at(-1)!.at(-1)).toBeCloseTo(34.1, 6);
-    expect(timer.textContent).toBe('29.6 s');
+    expect(timer.textContent).toBe('29.4 s');
     expect(screen.getByText('Live shot')).toBeInTheDocument();
 
     act(() => {
@@ -173,11 +231,11 @@ describe('LiveShotGraph', () => {
     });
     runFrames();
     expect(screen.getByText('Last shot')).toBeInTheDocument();
-    expect(timer.textContent).toBe('29.6 s');
+    expect(timer.textContent).toBe('29.4 s');
   });
 
-  it('stops the timer at the first pouringDone frame, before the stopping frame arrives', () => {
-    // Decaid 0.8.7's simulator: the pour ran 61.6 s; the panel said 66.6 s.
+  it('stops the timer on the last pour frame when pouringDone comes before the stopping frame', () => {
+    // Decaid 0.8.7's simulator: preinfusion to pouringDone took 61.6 s; the panel said 66.6 s.
     const { services } = renderWithServices(<LiveShotGraph />);
     const timer = screen.getByTestId(TID.shotTimer);
     act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
@@ -185,10 +243,11 @@ describe('LiveShotGraph', () => {
       services.telemetry.emitSample(sample(0, 'preparingForShot', 0));
       services.telemetry.emitSample(sample(1.7, 'preinfusion', 2));
       services.telemetry.emitSample(sample(40));
+      services.telemetry.emitSample(sample(63.1));
       for (const t of [63.3, 63.4, 63.5]) services.telemetry.emitSample(sample(t, 'pouringDone', 0));
     });
     runFrames();
-    expect(timer.textContent).toBe('61.6 s');
+    expect(timer.textContent).toBe('61.4 s');
 
     act(() => {
       services.telemetry.setState({ shotState: shotState('stopping', 63.3, { machineSubstate: 'pouringDone' }) });
@@ -197,7 +256,7 @@ describe('LiveShotGraph', () => {
       services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'machineEnded' });
     });
     runFrames();
-    expect(timer.textContent).toBe('61.6 s');
+    expect(timer.textContent).toBe('61.4 s');
   });
 
   it('runs the timer again for the next shot', () => {
@@ -206,6 +265,7 @@ describe('LiveShotGraph', () => {
     act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
     act(() => {
       services.telemetry.emitSample(sample(2, 'preinfusion'));
+      services.telemetry.emitSample(sample(29.8));
       services.telemetry.emitSample(sample(30));
       services.telemetry.setState({ shotState: shotState('stopping', 30) });
       services.telemetry.emitSample(sample(34, 'idle', 0));
@@ -213,7 +273,7 @@ describe('LiveShotGraph', () => {
       services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' });
     });
     runFrames();
-    expect(timer.textContent).toBe('28.0 s');
+    expect(timer.textContent).toBe('27.8 s');
 
     act(() => {
       services.telemetry.setState({ shotState: shotState('preheating', 100, { shotId: 'shot-2' }) });
@@ -244,21 +304,9 @@ describe('LiveShotGraph', () => {
     expect(timer.textContent).toBe('5.5 s');
   });
 
-  it("times a whole mock shot through the real telemetry store: the pour, not Decaid's stopping phase", () => {
-    const ws = createFakeWebSocket();
-    const telemetry = createTelemetryStore({
-      client: { getDevices: async () => [], getMachineState: () => Promise.reject(new Error('no machine')) },
-      wsOrigin: 'ws://localhost:8080',
-      WebSocketImpl: ws.WebSocketImpl as unknown as typeof WebSocket,
-      visibility: null,
-      // No watchdog and no reconnects here.
-      timers: { setTimeout: () => null, clearTimeout: () => {} },
-    });
-    renderWithServices(<LiveShotGraph />, { ...createFakeServices(), telemetry });
+  it("times a whole mock shot through the real telemetry store as its shot card does: the pour Decaid records, not its stopping phase", () => {
+    const { services, telemetry, send } = mountOnRealTelemetry();
     const timer = screen.getByTestId(TID.shotTimer);
-    telemetry.start();
-    for (const socket of ws.sockets) socket.open();
-    const send = (path: string, frame: unknown) => act(() => void ws.latest(`/ws/v1/${path}`).message(frame));
     send('machine/shotState', shotState('idle', 0, { shotId: null, machineState: 'idle', machineSubstate: 'idle' }));
 
     const simulation = createShotSimulation({
@@ -270,31 +318,169 @@ describe('LiveShotGraph', () => {
       shotId: 'shot-1',
       staleFrame: 0,
     });
-    let pourStart: number | null = null;
-    let stoppedOn: number | null = null;
+    // What Decaid would store: preheat up to the frame before its stop decision.
+    const recorded: ShotSnapshot[] = [];
+    let finalWeight: number | null = null;
+    let stoppedOn: string | null = null;
     let atStopping: string | null = null;
     for (let frame = simulation.next(); frame; frame = simulation.next()) {
-      const at = parseDecaidTimestamp(frame.machine.timestamp);
       if (frame.scale) send('scale/snapshot', frame.scale);
       send('machine/snapshot', frame.machine);
-      if (pourStart === null && frame.machine.state.substate !== 'preparingForShot') pourStart = at;
+      if (frame.recorded) recorded.push({ machine: frame.machine, scale: frame.scale, volume: frame.volume });
+      finalWeight = frame.scale?.weight ?? finalWeight;
       for (const event of frame.events) {
         send('machine/shotState', event);
         if (event.state === 'stopping' && stoppedOn === null) {
-          stoppedOn = at;
+          stoppedOn = event.timestamp;
           runFrames();
           atStopping = timer.textContent;
         }
       }
     }
     runFrames();
-    telemetry.stop();
 
     expect(stoppedOn, 'the mock shot stops at the target weight').not.toBeNull();
-    const poured = formatSeconds((stoppedOn! - pourStart!) / 1000);
-    expect(atStopping).toBe(poured);
+    expect(recorded.some((m) => m.machine.timestamp === stoppedOn)).toBe(false);
+    // Decaid's settled yield: the cup once the drips have stopped.
+    const record: ShotRecord = {
+      id: 'shot-1',
+      timestamp: recorded[0]!.machine.timestamp,
+      createdAt: '2026-10-03T06:16:00.000000Z',
+      updatedAt: '2026-10-03T06:16:00.000000Z',
+      measurements: recorded,
+      workflow: { ...SAMPLE_WORKFLOW, profile: normalizeProfile(blooming) },
+      annotations: { actualDoseWeight: 18, actualYield: finalWeight! },
+      stopReason: simulation.stopReason ?? 'targetWeight',
+    };
+    const summary = summarizeShot(record);
+    const time = formatSeconds(summary.durationS);
+    const cup = `${summary.yieldG!.toFixed(1)} g`;
+
+    expect(atStopping).toBe(time);
     expect(screen.getByText('Last shot')).toBeInTheDocument();
-    expect(timer.textContent).toBe(poured);
+    expect(timer.textContent).toBe(time);
+    expect(legendReadout('Weight')).toBe(cup);
+
+    // The card for the shot changes neither number.
+    act(() => services.coach.setState({ messages: [shotCard('shot-1', summary)] }));
+    runFrames();
+    expect(timer.textContent).toBe(time);
+    expect(legendReadout('Weight')).toBe(cup);
+    telemetry.stop();
+  });
+
+  it("a real Decaid shot with Decaid's stopping tail: the time is the card's as it stops, the weight the card's once it is in", () => {
+    // Decaid 0.8.6 Blooming Espresso, stopped at the target weight. Its record
+    // ends on the frame before the stop; the stop frame and 4 s of drips
+    // reach the panel live but not the record.
+    const record = shot07 as unknown as ShotRecord;
+    const summary = summarizeShot(record);
+    expect(summary).toMatchObject({ durationS: 64.2, yieldG: 58.8 });
+
+    const { services, telemetry, send } = mountOnRealTelemetry();
+    const timer = screen.getByTestId(TID.shotTimer);
+    const first = record.measurements[0]!.machine;
+    send('machine/shotState', stateOn('idle', { ...first, state: { state: 'idle', substate: 'idle' } }, null));
+    send('machine/shotState', stateOn('preheating', first, record.id));
+    let pouring = false;
+    for (const measurement of record.measurements) {
+      if (measurement.scale) send('scale/snapshot', measurement.scale);
+      send('machine/snapshot', measurement.machine);
+      if (!pouring && measurement.machine.state.substate !== 'preparingForShot') {
+        pouring = true;
+        send('machine/shotState', stateOn('pouring', measurement.machine, record.id));
+      }
+    }
+
+    const last = record.measurements[record.measurements.length - 1]!;
+    const lastAt = parseDecaidTimestamp(last.machine.timestamp);
+    const at = (ms: number) => formatLocalTimestamp(lastAt + ms);
+    const weightAt = (ms: number, weight: number): WeightSnapshot => ({ ...last.scale!, timestamp: at(ms - 40), weight, weightFlow: 0.4 });
+    const stop: MachineSnapshot = { ...last.machine, timestamp: at(270) };
+    send('scale/snapshot', weightAt(270, 58.1));
+    send('machine/snapshot', stop);
+    send(
+      'machine/shotState',
+      stateOn('pouring', stop, record.id, { kind: 'stop', reason: 'targetWeight', details: 'Target weight 60.0g reached.', data: null }),
+    );
+    send('machine/shotState', stateOn('stopping', stop, record.id));
+    runFrames();
+    expect(timer.textContent).toBe('64.2 s');
+
+    // The stopping phase: pouringDone, then idle while the cup drips.
+    let tail: MachineSnapshot = stop;
+    for (let i = 1; i <= 16; i += 1) {
+      const ms = 270 + i * 250;
+      const state = i === 1 ? { state: 'espresso', substate: 'pouringDone' } : { state: 'idle', substate: 'idle' };
+      tail = { ...last.machine, timestamp: at(ms), state, pressure: 0, flow: 0 };
+      send('scale/snapshot', weightAt(ms, Math.min(58.6, 58.1 + i * 0.05)));
+      send('machine/snapshot', tail);
+    }
+    send('machine/shotState', stateOn('finished', tail, record.id));
+    send('machine/shotState', stateOn('idle', tail, null));
+    runFrames();
+    expect(screen.getByText('Last shot')).toBeInTheDocument();
+    expect(timer.textContent).toBe('64.2 s');
+    // Until the card is in, the panel shows the cup as it last read it.
+    expect(legendReadout('Weight')).toBe('58.6 g');
+
+    act(() => services.coach.setState({ messages: [shotCard(record.id, summary)] }));
+    runFrames();
+    expect(timer.textContent).toBe('64.2 s');
+    expect(legendReadout('Weight')).toBe('58.8 g');
+    telemetry.stop();
+  });
+
+  it("shows the card's time and yield once the coach has the card for that shot, and drops them for the next shot", () => {
+    const { services } = renderWithServices(<LiveShotGraph />);
+    const timer = screen.getByTestId(TID.shotTimer);
+    act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+    act(() => {
+      services.telemetry.emitSample(sample(0, 'preparingForShot', 0));
+      services.telemetry.emitSample(sample(2, 'preinfusion', 2));
+      services.telemetry.emitSample(sample(30));
+      services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' });
+    });
+    runFrames();
+    expect(timer.textContent).toBe('28.0 s');
+    expect(legendReadout('Weight')).toBe('45.0 g');
+
+    // Another shot's card says nothing about this one.
+    act(() => services.coach.setState({ messages: [shotCard('shot-0', summaryWith('shot-0', 25, 40))] }));
+    runFrames();
+    expect(timer.textContent).toBe('28.0 s');
+    expect(legendReadout('Weight')).toBe('45.0 g');
+
+    act(() =>
+      services.coach.setState({
+        messages: [shotCard('shot-0', summaryWith('shot-0', 25, 40)), shotCard('shot-1', summaryWith('shot-1', 27.8, 46.2))],
+      }),
+    );
+    runFrames();
+    expect(timer.textContent).toBe('27.8 s');
+    expect(legendReadout('Weight')).toBe('46.2 g');
+
+    // The chat moves to another bag: the numbers stay until the next shot.
+    act(() => services.coach.setState({ messages: [] }));
+    runFrames();
+    expect(timer.textContent).toBe('27.8 s');
+    expect(legendReadout('Weight')).toBe('46.2 g');
+
+    // A card without a yield (no usable scale) shows none, and the panel follows it.
+    act(() => services.coach.setState({ messages: [shotCard('shot-1', summaryWith('shot-1', 27.8, null))] }));
+    runFrames();
+    expect(legendReadout('Weight')).toBe('');
+
+    act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-2' }));
+    expect(timer.textContent).toBe('0.0 s');
+    expect(legendReadout('Weight')).toBe('');
+    act(() => {
+      services.telemetry.emitSample(sample(102, 'preinfusion'));
+      services.telemetry.emitSample(sample(104));
+    });
+    runFrames();
+    expect(timer.textContent).toBe('2.0 s');
+    expect(legendReadout('Weight')).toBe('156.0 g');
   });
 
   it('picks up a shot that was already running when it mounted', () => {

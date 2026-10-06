@@ -144,7 +144,12 @@ export function getShotSeries(
   const hi = toS ?? Number.POSITIVE_INFINITY;
   const keep = tS.map((t, i) => (t >= lo && t <= hi ? i : -1)).filter((i) => i >= 0);
   if (keep.length === 0) {
-    return fail(`No samples between ${fromS ?? 0} and ${toS ?? 'the end'} s; the shot lasted ${shot.summary.durationS.toFixed(1)} s.`);
+    // durationS is the pour, not the end of this clock: say where the samples end.
+    const end = tS[tS.length - 1];
+    if (end === undefined) return fail('This shot has no samples.');
+    return fail(
+      `No samples between ${fromS ?? 0} and ${toS ?? 'the end'} s; the samples end at ${end.toFixed(1)} s on the shot clock (t = 0 is the start of preheat).`,
+    );
   }
   return ok({
     shotId: shot.summary.shotId,

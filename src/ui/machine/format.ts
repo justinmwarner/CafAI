@@ -41,6 +41,13 @@ const SHOT_PHASES: Record<string, string> = {
   pouringDone: 'ending',
 };
 
+/**
+ * Substates during which the machine runs a profile step. A step can hold the
+ * pump off (Blooming's 30 s bloom still reports `pouring`), so its name says
+ * more than the substate.
+ */
+const STEP_SUBSTATES: ReadonlySet<string> = new Set(['preinfusion', 'pouring']);
+
 /** "someFutureState" -> "Some future state". */
 function humanize(name: string): string {
   const words = name
@@ -51,16 +58,22 @@ function humanize(name: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-/** The machine state as a short phrase: "Ready", "Pulling a shot: preinfusion", "Not connected". */
+/**
+ * The machine state as a short phrase: "Ready", "Pulling a shot: preinfusion",
+ * "Not connected". `stepName` is the running profile step's name, when the
+ * profile is known; it replaces the phase while a step runs.
+ */
 export function describeMachineState(
   state: string | null | undefined,
   substate: string | null | undefined,
   connected: boolean,
+  stepName?: string | null,
 ): string {
   if (!connected) return 'Not connected';
   if (!state) return 'Connected';
   if (SHOT_STATES.has(state)) {
-    const phase = substate ? SHOT_PHASES[substate] : undefined;
+    const step = substate && STEP_SUBSTATES.has(substate) ? stepName?.trim() : undefined;
+    const phase = step || (substate ? SHOT_PHASES[substate] : undefined);
     return phase ? `Pulling a shot: ${phase}` : 'Pulling a shot';
   }
   return STATE_WORDS[state] ?? humanize(state);

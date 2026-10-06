@@ -3,9 +3,11 @@ import { Profiler } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { normalizeProfile } from '../../../mock/decaid/profiles.ts';
 import { GatewayError, type MachineSnapshot, type TelemetryState } from '../../api/types.ts';
+import blooming from '../../coach/templates/source/Blooming_espresso.json';
 import { TID } from '../testIds.ts';
-import { createFakeServices, IDLE_TELEMETRY, type FakeServices } from '../testing/fakeServices.ts';
+import { createFakeServices, IDLE_TELEMETRY, SAMPLE_WORKFLOW, type FakeServices } from '../testing/fakeServices.ts';
 import { renderWithServices } from '../testing/renderWithServices.tsx';
 import { MachinePanel } from './MachinePanel.tsx';
 
@@ -87,6 +89,31 @@ describe('MachinePanel status', () => {
   it('names the shot phase while pulling', async () => {
     await renderPanel(createFakeServices({ telemetry: PULLING }));
     expect(screen.getByTestId(TID.machineState)).toHaveTextContent('Pulling a shot: preinfusion');
+  });
+
+  it("names the running step of the profile in Decaid's workflow, from the Profile line's read", async () => {
+    // Blooming Espresso's bloom: 30 s with the pump off, which the machine reports as pouring.
+    const bloom = machine({ state: { state: 'espresso', substate: 'pouring' }, profileFrame: 2, pressure: 0, flow: 0 });
+    const services = createFakeServices({ telemetry: { machine: bloom } });
+    services.decaid.getWorkflow = async () => {
+      services.decaid.calls.push({ method: 'getWorkflow', args: [] });
+      return { ...SAMPLE_WORKFLOW, profile: normalizeProfile(blooming) };
+    };
+    await renderPanel(services);
+    const line = screen.getByTestId(TID.machineState);
+    expect(line).toHaveTextContent('Pulling a shot: pause');
+
+    act(() => services.telemetry.setState({ machine: { ...bloom, profileFrame: 3, pressure: 6 } }));
+    expect(line).toHaveTextContent('Pulling a shot: ramp');
+    // Preheat still shows the last shot's step; a step the profile does not have is unnamed.
+    act(() => services.telemetry.setState({ machine: { ...bloom, state: { state: 'espresso', substate: 'preparingForShot' } } }));
+    expect(line).toHaveTextContent('Pulling a shot: preheating');
+    act(() => services.telemetry.setState({ machine: { ...bloom, profileFrame: 9 } }));
+    expect(line).toHaveTextContent('Pulling a shot: pouring');
+    act(() => services.telemetry.setState({ machine: { ...bloom, state: { state: 'espresso', substate: 'pouringDone' } } }));
+    expect(line).toHaveTextContent('Pulling a shot: ending');
+
+    expect(services.decaid.calls.filter((call) => call.method === 'getWorkflow')).toHaveLength(1);
   });
 
   it('follows telemetry changes', async () => {

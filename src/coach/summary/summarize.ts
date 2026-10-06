@@ -6,15 +6,26 @@
  * start of preheat (`preparingForShot`), not pump start; the phases list says
  * where preheat ends. profileFrame is stale until the first preinfusion or
  * pouring sample, so phases before it are "preheat" whatever the frame says.
+ *
+ * durationS is not a time on that clock but the pour (`pourSeconds`), which
+ * is what the machine panel's timer counts too. Decaid records from preheat
+ * and stops recording at its stop decision, leaving out the frame it stopped
+ * on and its 4-5 s stopping phase, so the pour ends on the last recorded
+ * frame; Decaid's own Visualizer upload times a shot over the same frames.
+ *
  * Dose is annotations.actualDoseWeight ?? workflow.context.targetDoseWeight;
- * yield is annotations.actualYield ?? the last scale weight; the target yield
- * is workflow.context.targetYield (0 = stop-at-weight off).
+ * yield is annotations.actualYield (Decaid's weight once the cup has settled
+ * after the stop) ?? the last scale weight; the target yield is
+ * workflow.context.targetYield (0 = stop-at-weight off).
  */
 import type { ShotRecord } from '../../api/types.ts';
 import type { ProfileStep, ShotPhase, ShotSeries, ShotSummary } from '../types.ts';
 import { analyseShot, shotRows, type ShotRow } from './analysis.ts';
 
 const POUR_SUBSTATES = new Set(['preinfusion', 'pouring']);
+const PREHEAT_SUBSTATE = 'preparingForShot';
+/** Decaid's sequencer ends the pour at the first frame the machine reports in one of these (shot_sequencer.dart). */
+const POUR_OVER_SUBSTATES = new Set(['pouringDone', 'idle']);
 
 /** A sample counts for a grid second only if it is this close to it. */
 const MAX_SAMPLE_GAP_S = 0.6;
@@ -91,6 +102,25 @@ export function resampleValues(
 export function pourStartIndex(rows: readonly ShotRow[]): number {
   const index = rows.findIndex((row) => row.substate !== null && POUR_SUBSTATES.has(row.substate));
   return index < 0 ? 0 : index;
+}
+
+const pourIsOver = (row: ShotRow) => row.substate !== null && POUR_OVER_SUBSTATES.has(row.substate);
+
+/**
+ * Seconds of pour: from the first sample after preheat to the last one
+ * before the machine reports the pour over. In Decaid's own records that is
+ * the last sample; a record that carries a stopping tail ends before it.
+ * The machine panel's timer applies the same rule to the live frames
+ * (src/ui/machine/shotBuffer.ts). Null when nothing was poured.
+ */
+export function pourSeconds(rows: readonly ShotRow[]): number | null {
+  const start = rows.findIndex((row) => row.substate !== PREHEAT_SUBSTATE);
+  if (start < 0) return null;
+  let end = start;
+  if (!pourIsOver(rows[start]!)) {
+    while (end + 1 < rows.length && !pourIsOver(rows[end + 1]!)) end += 1;
+  }
+  return rows[end]!.t - rows[start]!.t;
 }
 
 /**
@@ -174,7 +204,7 @@ export function summarizeShot(record: ShotRecord): ShotSummary {
     shotId: record.id,
     timestamp: record.timestamp,
     profileTitle: record.workflow?.profile?.title ?? null,
-    durationS: r1(metrics.durationS) ?? 0,
+    durationS: r1(pourSeconds(rows)) ?? 0,
     doseG: r1(doseG),
     yieldG: r1(yieldG),
     ratio: doseG !== null && yieldG !== null ? r2(yieldG / doseG) : null,

@@ -229,6 +229,10 @@ describe('buildSystemPrompt: content', () => {
 
   it('reads the clock, the stall pressure and the channeling flags correctly', () => {
     expect(prompt).toMatch(/t = 0 is the first sample, the start of preheat/);
+    // The shot time is the pour, as on the shot card and the machine panel, not a time on that clock.
+    expect(prompt).toContain(
+      'durationS is not a time on that clock but the length of the pour, from the end of preheat to the end of the pour: the shot time the user sees on the shot card and the machine panel.',
+    );
     expect(prompt).toMatch(/STALL PRESSURE/);
     for (const flag of ['pressure_dip_after_peak', 'flow_instability', 'pump_scale_divergence', 'early_first_drops', 'resistance_falling']) {
       expect(prompt).toContain(flag);

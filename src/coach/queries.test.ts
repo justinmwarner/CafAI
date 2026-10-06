@@ -90,11 +90,20 @@ describe('getShotSeries', () => {
     expect(values[tS.indexOf(1)]).toBeNull(); // preheat: no pressure
   });
 
-  it('refuses a backwards or empty window', () => {
+  it('refuses a backwards or empty window, saying where the samples end on the shot clock', () => {
     expect(error(getShotSeries(source, 'latest', 'flow', 20, 10))).toMatch(/fromS .* after toS/);
-    expect(error(getShotSeries(source, 'latest', 'flow', 100, 120))).toMatch(
-      /^No samples between 100 and 120 s; the shot lasted 3\d\.\d s\.$/,
+    const summary = summarizeShot(syntheticShotRecord({ id: 'shot-a' }));
+    const end = summary.series.tS[summary.series.tS.length - 1]!;
+    expect(error(getShotSeries(source, 'latest', 'flow', 100, 120))).toBe(
+      `No samples between 100 and 120 s; the samples end at ${end.toFixed(1)} s on the shot clock (t = 0 is the start of preheat).`,
     );
+    // Not the shot's time: durationS is the pour, which starts after 3 s of preheat.
+    expect(end).toBeGreaterThan(summary.durationS + 2.5);
+  });
+
+  it('says when a shot has no samples at all', () => {
+    const empty = createShotSource([{ ...syntheticShotRecord({ id: 'shot-e' }), measurements: [] }]);
+    expect(error(getShotSeries(empty, 'latest', 'pressure', 10, 20))).toBe('This shot has no samples.');
   });
 });
 

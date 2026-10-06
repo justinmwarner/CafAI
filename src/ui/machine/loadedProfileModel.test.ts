@@ -1,7 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Workflow } from '../../api/types.ts';
 import { SAMPLE_WORKFLOW } from '../testing/fakeServices.ts';
-import { createRefresher, isActiveBagVersion, profileMark, readLoadedProfile, type LoadedProfileReading } from './loadedProfileModel.ts';
+import { normalizeProfile } from '../../../mock/decaid/profiles.ts';
+import blooming from '../../coach/templates/source/Blooming_espresso.json';
+import {
+  createRefresher,
+  isActiveBagVersion,
+  profileMark,
+  profileStepNames,
+  readLoadedProfile,
+  sameStepNames,
+  type LoadedProfileReading,
+} from './loadedProfileModel.ts';
 
 function workflow(title: string, extras?: Record<string, unknown>): Workflow {
   return {
@@ -42,6 +52,29 @@ describe('readLoadedProfile', () => {
   it('survives a profile without a title', () => {
     const odd = { ...SAMPLE_WORKFLOW, profile: { ...SAMPLE_WORKFLOW.profile, title: undefined } } as unknown as Workflow;
     expect(readLoadedProfile(odd).title).toBe('');
+  });
+});
+
+describe('profileStepNames', () => {
+  it("lists the workflow profile's steps in order, as the machine numbers them (profileFrame)", () => {
+    const bloomingWorkflow: Workflow = { ...SAMPLE_WORKFLOW, profile: normalizeProfile(blooming) };
+    expect(profileStepNames(bloomingWorkflow)).toEqual(['preinfusion start', 'preinfusion', 'pause', 'ramp', 'flat flow', 'reset temperature']);
+  });
+
+  it('has nothing to name without steps, and blanks a step without a usable name', () => {
+    expect(profileStepNames(SAMPLE_WORKFLOW)).toBeNull();
+    const noSteps = { ...SAMPLE_WORKFLOW, profile: { ...SAMPLE_WORKFLOW.profile, steps: undefined } } as unknown as Workflow;
+    expect(profileStepNames(noSteps)).toBeNull();
+    const odd = { ...SAMPLE_WORKFLOW, profile: { ...SAMPLE_WORKFLOW.profile, steps: [{ name: ' Fill ' }, { name: 3 }, null] } } as unknown as Workflow;
+    expect(profileStepNames(odd)).toEqual(['Fill', '', '']);
+  });
+
+  it('sameStepNames compares by content, so a read that changes nothing keeps the list', () => {
+    expect(sameStepNames(['Fill', 'Pour'], ['Fill', 'Pour'])).toBe(true);
+    expect(sameStepNames(['Fill', 'Pour'], ['Fill'])).toBe(false);
+    expect(sameStepNames(['Fill'], ['Soak'])).toBe(false);
+    expect(sameStepNames(null, null)).toBe(true);
+    expect(sameStepNames(null, ['Fill'])).toBe(false);
   });
 });
 

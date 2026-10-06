@@ -84,9 +84,20 @@ function ConnectionRow() {
   );
 }
 
-function StateLine() {
+/** The name of step `frame` (the machine's 0-based profileFrame), when the profile has one. */
+function stepNameAt(stepNames: readonly string[] | null, frame: unknown): string | null {
+  return typeof frame === 'number' && Number.isInteger(frame) && frame >= 0 ? (stepNames?.[frame] ?? null) : null;
+}
+
+/** "Pulling a shot: pause" during Blooming's bloom: the step says why the pump is off. */
+function StateLine({ stepNames }: { stepNames: readonly string[] | null }) {
   const text = useTelemetry((s) =>
-    describeMachineState(s.machine?.state?.state ?? null, s.machine?.state?.substate ?? null, s.machineConnected),
+    describeMachineState(
+      s.machine?.state?.state ?? null,
+      s.machine?.state?.substate ?? null,
+      s.machineConnected,
+      stepNameAt(stepNames, s.machine?.profileFrame),
+    ),
   );
   return (
     <Typography data-testid={TID.machineState} variant="h5" component="p" aria-live="polite" sx={{ mt: 0.25 }}>
@@ -179,17 +190,19 @@ function ConnectionErrorNotice() {
 }
 
 export function MachineStatus() {
+  // The Profile line reads Decaid's workflow; the state line names the running step from the same read.
+  const [stepNames, setStepNames] = useState<readonly string[] | null>(null);
   return (
     <Box component="section" aria-label="Machine status">
       <ConnectionRow />
-      <StateLine />
+      <StateLine stepNames={stepNames} />
       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', columnGap: 1, mt: 0.75 }}>
         <GroupTemperature />
         <SteamTemperature />
         <WaterLevel />
         <ScaleWeight />
       </Box>
-      <LoadedProfile />
+      <LoadedProfile onStepNames={setStepNames} />
       <ConnectionErrorNotice />
     </Box>
   );

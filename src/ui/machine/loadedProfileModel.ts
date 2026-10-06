@@ -42,6 +42,27 @@ export function readLoadedProfile(workflow: Workflow): LoadedProfileReading {
   };
 }
 
+/**
+ * The workflow profile's step names in order; the machine names the running
+ * step by its index (`profileFrame`). Decaid's sequencer and its own shot
+ * screen take the steps from the workflow too. Null without steps; a step
+ * without a usable name is ''.
+ */
+export function profileStepNames(workflow: Workflow): string[] | null {
+  const steps: unknown = workflow.profile?.steps;
+  if (!Array.isArray(steps) || steps.length === 0) return null;
+  return steps.map((step: unknown) => {
+    const name = typeof step === 'object' && step !== null ? (step as { name?: unknown }).name : undefined;
+    return typeof name === 'string' ? name.trim() : '';
+  });
+}
+
+/** Same names in the same order: a read that changed nothing keeps the old list (and re-renders nothing). */
+export function sameStepNames(a: readonly string[] | null, b: readonly string[] | null): boolean {
+  if (a === null || b === null) return a === b;
+  return a.length === b.length && a.every((name, index) => name === b[index]);
+}
+
 export function isActiveBagVersion(reading: LoadedProfileReading, active: ActiveBagVersion): boolean {
   if (reading.versionId === null || reading.versionId !== active.versionId || reading.title !== active.title) return false;
   return reading.bagId === null || reading.bagId === active.bagId;

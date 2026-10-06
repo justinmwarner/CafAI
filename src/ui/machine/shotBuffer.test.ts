@@ -131,58 +131,80 @@ describe('shot buffer', () => {
   });
 });
 
-describe('shot buffer: the clock stops when the pour ends', () => {
-  it('at the first pouringDone frame, while later frames are still plotted', () => {
-    // Decaid 0.8.7's simulator: preinfusion to pouringDone took 61.6 s, then
-    // about 5 s of its stopping phase followed.
-    const buffer = pouring(2, 30);
-    expect(buffer.push(frame(63.6, 'pouringDone'))).toBe(true);
-    expect(buffer.pourEndS()).toBe(63.6);
-    expect(buffer.elapsedS()).toBeCloseTo(61.6, 6);
+// Decaid records a shot from preheat to the frame before its stop decision:
+// neither the frame it stopped on nor the stopping tail is in the record
+// (shot_sequencer.dart, docs/verified/02-api.md). The clock stops on the
+// pour's last recorded frame, so it reads what the shot card reads.
+describe("shot buffer: the clock stops on the pour's last frame", () => {
+  it('the frame before the first pouringDone frame, while later frames are still plotted', () => {
+    // Decaid 0.8.7's simulator: preinfusion at 1.71 s, pouringDone at 63.31 s,
+    // then about 5 s of its stopping phase.
+    const buffer = pouring(1.71, 30, 63.06);
+    expect(buffer.push(frame(63.31, 'pouringDone'))).toBe(true);
+    expect(buffer.pourEndS()).toBeCloseTo(63.06, 6);
+    expect(buffer.elapsedS()).toBeCloseTo(61.35, 6);
 
-    expect(buffer.push(frame(63.7, 'pouringDone'))).toBe(true);
+    expect(buffer.push(frame(63.56, 'pouringDone'))).toBe(true);
     for (let tS = 64; tS <= 68.6; tS += 0.5) expect(buffer.push(frame(tS, 'idle'))).toBe(true);
-    expect(lastX(buffer)).toBeCloseTo(66.5, 6);
-    expect(buffer.pourEndS()).toBe(63.6);
-    expect(buffer.elapsedS()).toBeCloseTo(61.6, 6);
+    expect(lastX(buffer)).toBeCloseTo(66.79, 6);
+    expect(buffer.pourEndS()).toBeCloseTo(63.06, 6);
+    expect(buffer.elapsedS()).toBeCloseTo(61.35, 6);
   });
 
-  it('endPour: at the frame Decaid stopped on, found by its timestamp', () => {
+  it('the frame before an idle frame: the machine stopped without pouringDone (a stop from the app)', () => {
+    const buffer = pouring(2, 20, 20.25);
+    buffer.push(frame(20.5, 'idle'));
+    expect(buffer.elapsedS()).toBeCloseTo(18.25, 6);
+  });
+
+  it('endPour: the frame before the one Decaid stopped on, found by its timestamp', () => {
     const buffer = pouring(2, 20, 20.2);
     // The stopping frame came in after two more machine frames.
     buffer.push(frame(20.4, 'idle'));
     buffer.push(frame(20.6, 'idle'));
-    expect(buffer.endPour(stampAt(20.2))).toBe(true);
     expect(buffer.pourEndS()).toBeCloseTo(20.2, 6);
-    expect(buffer.elapsedS()).toBeCloseTo(18.2, 6);
+    expect(buffer.endPour(stampAt(20.2))).toBe(true);
+    expect(buffer.pourEndS()).toBeCloseTo(20, 6);
+    expect(buffer.elapsedS()).toBeCloseTo(18, 6);
     buffer.push(frame(24.6, 'idle'));
-    expect(buffer.elapsedS()).toBeCloseTo(18.2, 6);
+    expect(buffer.elapsedS()).toBeCloseTo(18, 6);
   });
 
-  it('endPour: a frame ahead of the plot when the stop frame is still on its way', () => {
+  it('endPour: the latest frame when the frame Decaid stopped on is still on its way', () => {
     const buffer = pouring(2, 20);
     expect(buffer.endPour(stampAt(20.2))).toBe(true);
-    expect(buffer.elapsedS()).toBeCloseTo(18.2, 6);
+    expect(buffer.elapsedS()).toBeCloseTo(18, 6);
     expect(buffer.push(frame(20.2, 'pouring'))).toBe(true);
     expect(lastX(buffer)).toBeCloseTo(18.2, 6);
-    expect(buffer.elapsedS()).toBeCloseTo(18.2, 6);
+    expect(buffer.elapsedS()).toBeCloseTo(18, 6);
   });
 
   it('whichever end comes first wins, whatever order the sockets deliver them in', () => {
     // Stop at weight: Decaid stops on a pouring frame; the machine reports
     // pouringDone a frame later and Decaid says finished about 4 s after that.
-    const byWeight = pouring(2, 20);
+    const byWeight = pouring(2, 19.8, 20);
     expect(byWeight.endPour(stampAt(20))).toBe(true);
     byWeight.push(frame(20.2, 'pouringDone'));
     expect(byWeight.endPour(stampAt(24.2))).toBe(false);
-    expect(byWeight.elapsedS()).toBeCloseTo(18, 6);
+    expect(byWeight.elapsedS()).toBeCloseTo(17.8, 6);
 
     // The same, with the stopping frame arriving after the pouringDone frame.
-    const late = pouring(2, 20);
+    const late = pouring(2, 19.8, 20);
     late.push(frame(20.2, 'pouringDone'));
-    expect(late.elapsedS()).toBeCloseTo(18.2, 6);
-    expect(late.endPour(stampAt(20))).toBe(true);
     expect(late.elapsedS()).toBeCloseTo(18, 6);
+    expect(late.endPour(stampAt(20))).toBe(true);
+    expect(late.elapsedS()).toBeCloseTo(17.8, 6);
+  });
+
+  it('a pour that is over on its first frame lasts no time', () => {
+    const doneAtOnce = createShotBuffer();
+    doneAtOnce.push(frame(0, 'preparingForShot'));
+    doneAtOnce.push(frame(2, 'pouringDone'));
+    expect(doneAtOnce.elapsedS()).toBe(0);
+
+    const stoppedOnFirst = pouring(2);
+    expect(stoppedOnFirst.endPour(stampAt(2))).toBe(true);
+    expect(stoppedOnFirst.elapsedS()).toBe(0);
   });
 
   it('endPour without a timestamp that fits this pour stops the clock at the latest frame', () => {
@@ -201,7 +223,8 @@ describe('shot buffer: the clock stops when the pour ends', () => {
     expect(buffer.pourEndS()).toBeNull();
 
     buffer.push(frame(2, 'preinfusion'));
-    buffer.push(frame(3, 'pouringDone'));
+    buffer.push(frame(3, 'pouring'));
+    buffer.push(frame(4, 'pouringDone'));
     expect(buffer.elapsedS()).toBe(1);
     buffer.reset();
     expect(buffer.pourEndS()).toBeNull();

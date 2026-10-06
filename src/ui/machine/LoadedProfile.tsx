@@ -9,7 +9,7 @@
  * "This bag" once the machine holds the version, "loading…" while it takes
  * it, "not confirmed" (in the warning colour) after a load that failed.
  */
-import { useId } from 'react';
+import { useEffect, useId } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import CheckCircleRounded from '@mui/icons-material/CheckCircleRounded';
@@ -53,11 +53,20 @@ function Mark({ mark }: { mark: ProfileMark }) {
   return null;
 }
 
-export function LoadedProfile() {
-  const { title, mark } = useLoadedProfile();
+export interface LoadedProfileProps {
+  /** Told the profile's step names after each read that changes them, so the state line needs no read of its own. */
+  onStepNames?: (names: readonly string[] | null) => void;
+}
+
+export function LoadedProfile({ onStepNames }: LoadedProfileProps) {
+  const { title, mark, stepNames } = useLoadedProfile();
   const connected = useTelemetry((s) => s.machineConnected);
   const labelId = useId();
   const shown = title === null ? DASH : title.trim() || 'Untitled profile';
+
+  useEffect(() => {
+    onStepNames?.(stepNames);
+  }, [onStepNames, stepNames]);
 
   return (
     <Box role="group" aria-labelledby={labelId} sx={{ mt: 0.75, minWidth: 0 }}>

@@ -183,6 +183,7 @@ export type PreinfusionEndSource = 'substate' | 'profile_frame' | 'heuristic';
 
 export interface ShotMetrics {
   rowCount: number;
+  /** First sample to last, preheat included (decaid-mcp's duration); the summary's durationS is the pour (pourSeconds). */
   durationS: number | null;
   /** First time the cup weight exceeds 0.3 g; null without a (tared) scale. */
   timeToFirstDropS: number | null;
