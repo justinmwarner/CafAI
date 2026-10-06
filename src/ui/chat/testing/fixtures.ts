@@ -332,6 +332,7 @@ export function conversation(stage: ConversationStage): CoachUiMessage[] {
         options: TASTE_OPTIONS,
         multiSelect: stage === 'options-multi',
         answer: asking ? null : { selected: ['Sour / sharp'], otherText: null },
+        taste: stage !== 'options-multi',
       },
     ]),
   );

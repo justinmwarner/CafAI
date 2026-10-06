@@ -1,5 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { cafaiNotesLine, lastCafaiNotes, mergeNotes, tasteWords } from './shotNotes.ts';
+import { cafaiNotesLine, isTasteQuestion, lastCafaiNotes, mergeNotes, tasteWords } from './shotNotes.ts';
+
+describe('isTasteQuestion', () => {
+  it('is true when the question mentions taste, in any case', () => {
+    for (const question of [
+      'How did it taste?',
+      'How does it TASTE now?',
+      'What tastes come through?',
+      'Tasted better than the last one?',
+      'Tasting it again, what stands out?',
+    ]) {
+      expect(isTasteQuestion(question), question).toBe(true);
+    }
+  });
+
+  it('is false for any other question', () => {
+    for (const question of ['What does the puck look like?', 'How was the shot?', 'Which grinder do you use?', 'Any aftertaste?']) {
+      expect(isTasteQuestion(question), question).toBe(false);
+    }
+  });
+});
 
 describe('tasteWords', () => {
   it('lists the options picked, with what was typed in place of Other', () => {

@@ -65,6 +65,7 @@ import type {
   CoachUiMessage,
   CoachUiPart,
   NoticeProgress,
+  SetAsideReason,
   TemplateCardItem,
   VersionLoad,
 } from '../types.ts';
@@ -85,7 +86,7 @@ import {
   type AdjustmentResultPayload,
   type TemplatePickedPayload,
 } from './protocol.ts';
-import { EXTRAS_KEY, cafaiNotesLine, lastCafaiNotes, mergeNotes, tasteWords } from './shotNotes.ts';
+import { EXTRAS_KEY, cafaiNotesLine, isTasteQuestion, lastCafaiNotes, mergeNotes, tasteWords } from './shotNotes.ts';
 import {
   NEW_BAG_PROMPT,
   appendText,
@@ -98,6 +99,7 @@ import {
   progressNoticePart,
   removeMessage,
   replaceParts,
+  setAside,
   setDiffStatus,
   setShotStars,
   shotPart,
@@ -148,6 +150,8 @@ interface PendingCall {
   plan?: ChangePlan;
   /** Rebuilt from the stored transcript (a reload), maybe before the grinder's steps were read. */
   recovered?: boolean;
+  /** Confirm was tapped and the change is being applied: the phase no longer waits for it. */
+  confirming?: boolean;
 }
 
 interface Session {
@@ -337,7 +341,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
 
   function computePhase(s: Session | null): CoachPhase {
     if (!s) return 'no_bag';
-    const names = s.pending.map((p) => p.name);
+    // A change being applied and loaded is no longer waiting for Confirm.
+    const names = s.pending.filter((p) => !p.confirming).map((p) => p.name);
     if (names.includes(TOOL.proposeAdjustment)) return 'awaiting_confirmation';
     if (names.includes(TOOL.askUser)) return 'awaiting_feedback';
     if (names.includes(TOOL.proposeTemplates)) return 'choosing_template';
@@ -798,7 +803,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       s.pending.push({ id: call.id, name, input: call.input });
     } else if (name === TOOL.askUser) {
       const input = call.input as AskUser;
-      addMessage('assistant', [optionsPart(call.id, input.question, coach.withOther(input.options), input.multiSelect)]);
+      addMessage('assistant', [
+        optionsPart(call.id, input.question, coach.withOther(input.options), input.multiSelect, isTasteQuestion(input.question)),
+      ]);
       s.pending.push({ id: call.id, name, input: call.input });
     } else if (name === TOOL.proposeAdjustment) {
       const input = call.input as ProposeAdjustment;
@@ -818,6 +825,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
           rationale: `${input.rationale}${tips}${notes}`,
           expectedEffect: input.expectedEffect,
           versionLabel: plan.createsVersion ? coach.versionTitle(s.bag.name, next) : null,
+          // Keeping the recipe is no change by hand: the card says so.
+          keep: plan.variable === 'none',
         }),
       ]);
       s.pending.push({ id: call.id, name, input, plan });
@@ -880,13 +889,15 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
 
   /**
    * Answer every tool call the model is waiting on (in tool_use order), then
-   * add `extra` blocks, append the user turn, and run the model.
+   * add `extra` blocks, append the user turn, and run the model. Cards left
+   * unanswered are set aside, and say why: `setAsideFor`.
    */
   async function sendUser(
     s: Session,
     answers: Map<string, ToolResultBlock>,
     fallback: unknown,
     extra: ContentBlock[],
+    setAsideFor: SetAsideReason,
   ): Promise<void> {
     const order = unansweredToolUses(s.conversation.apiMessages).map((u) => u.id);
     const byId = new Map<string, ToolResultBlock>();
@@ -897,11 +908,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (implicit.length > 0) {
       let messages = state.messages;
       for (const id of implicit) {
-        messages = updatePart(messages, byRequestId(id), (part) => {
-          if (part.kind === 'templates' || part.kind === 'options') return { ...part, expired: true };
-          if (part.kind === 'diff' && part.status === 'pending') return { ...part, status: 'expired' };
-          return part;
-        });
+        messages = updatePart(messages, byRequestId(id), (part) => setAside(part, setAsideFor));
       }
       setMessages(messages);
     }
@@ -1380,7 +1387,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       summary: summaryForModel(summary),
     });
     emit();
-    await sendUser(s, new Map(), UNANSWERED_SHOT, [block]);
+    await sendUser(s, new Map(), UNANSWERED_SHOT, [block], 'shot');
   }
 
   // -------------------------------------------------------------------------
@@ -1491,7 +1498,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       note,
     };
     const answers = new Map([[call.id, toolResult(call.id, picked)]]);
-    await sendUser(s, answers, UNANSWERED_TEXT, []);
+    await sendUser(s, answers, UNANSWERED_TEXT, [], 'other');
   }
 
   /**
@@ -1648,16 +1655,16 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     const said = tasteWords(selected, other);
     if (said) addMessage('user', [{ kind: 'text', text: said }]);
     emit();
-    const iteration = await latestPendingIteration(s);
+    // Only the answer to the taste question is the shot's taste; any other
+    // answer (the puck, a preference) stays in the chat and goes to the coach.
+    const { question } = call.input as AskUser;
+    const iteration = isTasteQuestion(question) ? await latestPendingIteration(s) : undefined;
     if (iteration) {
-      await putIteration({
-        ...iteration,
-        feedback: { question: (call.input as AskUser).question, selected, otherText: other },
-      });
+      await putIteration({ ...iteration, feedback: { question, selected, otherText: other } });
       noteTaste(s, iteration, selected, other);
     }
     const answers = new Map([[call.id, toolResult(call.id, { selected, other })]]);
-    await sendUser(s, answers, { answered: false, note: 'Not answered.' }, []);
+    await sendUser(s, answers, { answered: false, note: 'Not answered.' }, [], 'other');
   }
 
   async function confirmChange(requestId: string): Promise<void> {
@@ -1675,6 +1682,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       if (again?.ok) call.plan = again.plan;
     }
     const plan = call.plan;
+    call.confirming = true;
     setMessages(setDiffStatus(state.messages, requestId, 'applying'));
     state = { ...state, busy: true };
     emit();
@@ -1767,6 +1775,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       // Nothing changed in Decaid (a shot was running, Decaid refused): keep
       // the proposal open so Confirm can simply be tapped again.
       const reason = describe(error);
+      call.confirming = false;
       setMessages(setDiffStatus(state.messages, requestId, 'pending', reason));
       state = { ...state, busy: false };
       setError(`The change was not loaded: ${reason}`, () => confirmChange(requestId));
@@ -1793,7 +1802,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     };
     state = { ...state, busy: false };
     emit();
-    await sendUser(s, new Map([[call.id, toolResult(call.id, payload)]]), { answered: false, note: 'Not answered.' }, []);
+    await sendUser(s, new Map([[call.id, toolResult(call.id, payload)]]), { answered: false, note: 'Not answered.' }, [], 'other');
   }
 
   async function declineChange(requestId: string): Promise<void> {
@@ -1806,7 +1815,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     const iteration = await latestPendingIteration(s);
     if (iteration) await putIteration({ ...iteration, proposal: call.input as ProposeAdjustment, outcome: 'declined' });
     const payload: AdjustmentResultPayload = { applied: false, reason: 'The user declined.' };
-    await sendUser(s, new Map([[call.id, toolResult(call.id, payload)]]), { answered: false, note: 'Not answered.' }, []);
+    await sendUser(s, new Map([[call.id, toolResult(call.id, payload)]]), { answered: false, note: 'Not answered.' }, [], 'other');
   }
 
   async function undo(): Promise<void> {
@@ -1845,9 +1854,13 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     reportLoad(parent.id, parent.title, await confirmOnMachine(parent.id, parent.title, workflow.profile));
     state = { ...state, busy: false };
     emit();
-    await sendUser(s, new Map(), { answered: false, note: 'The user undid the last change.' }, [
-      undoBlock({ from: current.version, to: parent.version, title: parent.title }),
-    ]);
+    await sendUser(
+      s,
+      new Map(),
+      { answered: false, note: 'The user undid the last change.' },
+      [undoBlock({ from: current.version, to: parent.version, title: parent.title })],
+      'undo',
+    );
   }
 
   async function rateShot(shotId: string, stars: number): Promise<void> {
@@ -1873,7 +1886,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       addMessage('system', [noticePart('info', 'That looked like an API key, so CafAI took it out. Keys go in Settings.')]);
     }
     emit();
-    const tasteQuestion = s.pending.find((p) => p.name === TOOL.askUser);
+    // Typed while the taste question is open, it is the taste; typed under
+    // any other question, it is a reply like any other.
+    const tasteQuestion = s.pending.find((p) => p.name === TOOL.askUser && isTasteQuestion((p.input as AskUser).question));
     if (tasteQuestion) {
       const iteration = await latestPendingIteration(s);
       if (iteration && !iteration.feedback) {
@@ -1892,9 +1907,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         scaleConnected: telemetry.getState().scaleConnected,
         doseG: coach.knownDose(s.doseG),
       });
-      await sendUser(s, new Map(), UNANSWERED_TEXT, blocks);
+      await sendUser(s, new Map(), UNANSWERED_TEXT, blocks, 'typed');
     } else {
-      await sendUser(s, new Map(), UNANSWERED_TEXT, [textBlock(trimmed)]);
+      await sendUser(s, new Map(), UNANSWERED_TEXT, [textBlock(trimmed)], 'typed');
     }
   }
 

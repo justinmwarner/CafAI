@@ -24,6 +24,8 @@ describe('COACH_TOOL_SPECS', () => {
   it('states the rules the validators enforce', () => {
     expect(COACH_TOOL_SPECS.ask_user.description).toMatch(/2-5 short options/);
     expect(COACH_TOOL_SPECS.ask_user.description).toMatch(/Never include "Other"; the app adds it/);
+    expect(COACH_TOOL_SPECS.ask_user.description).toMatch(/with the word "taste" in the question \(e\.g\. "How did it taste\?"\)/);
+    expect(COACH_TOOL_SPECS.ask_user.description).toMatch(/only the answer to a question that mentions taste is saved as the shot's taste/);
     expect(COACH_TOOL_SPECS.propose_adjustment.description).toMatch(/ONE variable/);
     expect(COACH_TOOL_SPECS.propose_adjustment.description).toMatch(/lever ids and bounds from the template catalog/);
     expect(COACH_TOOL_SPECS.propose_adjustment.description).toMatch(/12-25 g, at most 1 g/);

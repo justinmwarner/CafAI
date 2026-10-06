@@ -195,6 +195,54 @@ describe('ChatSurface', () => {
     rerender({ messages: [...base, textMessage('b', 'assistant', 'Lovely')], busy: false });
     expect(screen.queryByText('Thinking…')).toBeNull();
   });
+
+  it('shows no thinking row while a change card applies: the card has its own bar', () => {
+    renderSurface({ messages: conversation('applying'), busy: true });
+    expect(screen.getByText('Loading Kiambu AA v2 onto the machine…')).toBeInTheDocument();
+    expect(screen.queryByText('Thinking…')).toBeNull();
+  });
+
+  it('never shows the marker of bold that is still streaming, and shows the text bold once it closes', () => {
+    const base = [textMessage('a', 'user', 'Sour / sharp')];
+    const { rerender } = renderSurface({ messages: [...base, textMessage('b', 'assistant', 'That usually means **under-extr', true)], busy: true });
+    expect(screen.getByTestId(TID.chat)).toHaveTextContent('That usually means under-extr');
+    expect(screen.getByTestId(TID.chat).textContent).not.toContain('*');
+
+    rerender({ messages: [...base, textMessage('b', 'assistant', 'That usually means **under-extraction**.')], busy: false });
+    expect(screen.getByText('under-extraction').tagName).toBe('STRONG');
+    expect(screen.getByTestId(TID.chat).textContent).not.toContain('*');
+  });
+
+  it('shows finished text exactly as the coach wrote it, an unclosed marker included', () => {
+    renderSurface({ messages: [textMessage('a', 'assistant', 'Keep the **ratio')] });
+    expect(screen.getByText('Keep the **ratio')).toBeInTheDocument();
+  });
+
+  it('spaces paragraphs and lists apart, and keeps a single line break inside its paragraph', () => {
+    renderSurface({ messages: [textMessage('a', 'assistant', 'It ran fast.\nAnd sour.\n\nGrind finer next.\n- same dose')] });
+    const first = screen.getByText(/It ran fast\./);
+    expect(first.tagName).toBe('P');
+    expect(first.querySelectorAll('br')).toHaveLength(1);
+    expect(getComputedStyle(first).marginTop).toBe('0px');
+    const second = screen.getByText('Grind finer next.');
+    expect(second.tagName).toBe('P');
+    expect(getComputedStyle(second).marginTop).toBe('12px');
+    const list = screen.getByText('same dose').closest('ul')!;
+    expect(getComputedStyle(list).marginTop).toBe('12px');
+    expect(getComputedStyle(list).marginBottom).toBe('0px');
+  });
+
+  it('tells each card why it was set aside', () => {
+    const setAside = (stage: 'templates' | 'options', reason: 'shot' | 'undo') =>
+      conversation(stage).map((m) => ({
+        ...m,
+        parts: m.parts.map((p) => (p.kind === stage ? { ...p, expired: true, setAsideReason: reason } : p)),
+      }));
+    const { rerender } = renderSurface({ messages: setAside('options', 'shot') });
+    expect(screen.getByText('Set aside: a new shot came in.')).toBeInTheDocument();
+    rerender({ messages: setAside('templates', 'undo') });
+    expect(screen.getByText('Set aside when you tapped Undo. Ask the coach to suggest again.')).toBeInTheDocument();
+  });
 });
 
 describe('toChatMessages', () => {

@@ -101,12 +101,26 @@ describe('OptionChips', () => {
     const view = renderThemed(<OptionChips {...props} />);
     await userEvent.click(screen.getByTestId(TID.optionChip('Other')));
     await userEvent.type(screen.getByTestId(TID.otherInput), 'Quite th');
-    view.rerender(<OptionChips {...props} expired />);
+    view.rerender(<OptionChips {...props} expired setAsideReason="typed" />);
     expect(screen.queryByTestId(TID.otherInput)).toBeNull();
     expect(screen.queryByTestId(TID.optionsSubmit)).toBeNull();
     expect(screen.getByText('Set aside: you answered in the chat instead.')).toBeInTheDocument();
     expect(screen.getByTestId(TID.optionChip('Other'))).toHaveAttribute('aria-checked', 'false');
     expect(onAnswer).not.toHaveBeenCalled();
+  });
+
+  it.each<[Parameters<typeof OptionChips>[0]['setAsideReason'], string]>([
+    ['typed', 'Set aside: you answered in the chat instead.'],
+    ['undo', 'Set aside when you tapped Undo.'],
+    ['shot', 'Set aside: a new shot came in.'],
+    ['other', 'Set aside: the conversation moved on.'],
+    // A chat stored before CafAI recorded why.
+    [undefined, 'Set aside: the conversation moved on.'],
+  ])('says why the question was set aside (%s)', (reason, text) => {
+    setup({ expired: true, ...(reason ? { setAsideReason: reason } : {}) });
+    expect(screen.getByText(text)).toBeInTheDocument();
+    expect(screen.queryAllByText(/^Set aside/)).toHaveLength(1);
+    expect(screen.getByTestId(TID.optionChip('Sour / sharp'))).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('ignores taps while the coach is busy', async () => {

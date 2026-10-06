@@ -3,6 +3,7 @@
  * Numbers are shown to one decimal, the precision the shot summary is
  * rounded to, so cards and the model talk about the same values.
  */
+import type { SetAsideReason } from '../../app/types.ts';
 import type { Confidence } from '../../coach/contract.ts';
 import type { ShotSummary } from '../../coach/types.ts';
 
@@ -61,6 +62,24 @@ export function describeChannelingFlag(flag: string): string {
 
 export function confidenceLabel(confidence: Confidence): string {
   return `${confidence.charAt(0).toUpperCase()}${confidence.slice(1)} confidence`;
+}
+
+/**
+ * Why a card was set aside, as one sentence. `typed` is the card's own
+ * wording for a reply typed in the chat; a card stored before CafAI recorded
+ * the reason reads as the conversation having moved on.
+ */
+export function setAsideNote(reason: SetAsideReason | undefined, typed: string): string {
+  switch (reason) {
+    case 'typed':
+      return typed;
+    case 'undo':
+      return 'Set aside when you tapped Undo.';
+    case 'shot':
+      return 'Set aside: a new shot came in.';
+    default:
+      return 'Set aside: the conversation moved on.';
+  }
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

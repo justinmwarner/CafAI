@@ -7,8 +7,10 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import CheckIcon from '@mui/icons-material/Check';
 import EditIcon from '@mui/icons-material/Edit';
+import type { SetAsideReason } from '../../../app/types.ts';
 import { OTHER_OPTION } from '../../../coach/contract.ts';
 import { TID } from '../../testIds.ts';
+import { setAsideNote } from '../format.ts';
 
 export interface OptionChipsProps {
   question: string;
@@ -17,8 +19,10 @@ export interface OptionChipsProps {
   answer: { selected: string[]; otherText: string | null } | null;
   /** True while the coach is working; blocks a second answer. */
   disabled?: boolean;
-  /** The barista typed instead, or pulled another shot: the question is closed. */
+  /** Set aside unanswered (the barista typed instead, tapped Undo, pulled another shot): the question is closed. */
   expired?: boolean;
+  /** Why it was set aside, for the note under the chips. */
+  setAsideReason?: SetAsideReason;
   onAnswer(selected: string[], otherText: string | null): void;
 }
 
@@ -29,7 +33,16 @@ const chipSx = { height: 48, minHeight: 48, borderRadius: 24, px: 0.75, fontSize
  * multi-select toggles and then sends. "Other" is always last and opens a
  * short text field, because the listed answers never cover every cup.
  */
-export function OptionChips({ question, options, multiSelect, answer, disabled = false, expired = false, onAnswer }: OptionChipsProps) {
+export function OptionChips({
+  question,
+  options,
+  multiSelect,
+  answer,
+  disabled = false,
+  expired = false,
+  setAsideReason,
+  onAnswer,
+}: OptionChipsProps) {
   const [selected, setSelected] = useState<string[]>([]);
   const [otherOpen, setOtherOpen] = useState(false);
   const [otherText, setOtherText] = useState('');
@@ -39,7 +52,7 @@ export function OptionChips({ question, options, multiSelect, answer, disabled =
   const listed = options.filter((o) => o !== OTHER_OPTION);
   const ordered = [...listed, OTHER_OPTION];
   const answered = answer !== null;
-  /** Answered, or set aside because the user typed in the chat instead. */
+  /** Answered, or set aside unanswered (the user typed in the chat, tapped Undo, pulled a shot). */
   const closed = answered || expired;
   const locked = closed || disabled;
   const trimmedOther = otherText.trim();
@@ -123,7 +136,7 @@ export function OptionChips({ question, options, multiSelect, answer, disabled =
       ) : null}
       {expired && !answered ? (
         <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
-          Set aside: you answered in the chat instead.
+          {setAsideNote(setAsideReason, 'Set aside: you answered in the chat instead.')}
         </Typography>
       ) : null}
       {!closed && otherOpen ? (

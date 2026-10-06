@@ -10,7 +10,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineOutlined';
 import UndoIcon from '@mui/icons-material/Undo';
 import { TID } from '../../testIds.ts';
-import { splitDiffLine } from '../format.ts';
+import { setAsideNote, splitDiffLine } from '../format.ts';
 import type { DiffPart } from './types.ts';
 
 export interface DiffCardProps {
@@ -72,7 +72,11 @@ function StatusLine({ part, showUndo, disabled, onUndo }: Pick<DiffCardProps, 'p
         <Stack direction="row" spacing={1} useFlexGap role="status" sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
           <CheckCircleIcon color="success" fontSize="small" />
           <Typography variant="body1" sx={{ flex: 1, fontWeight: 600 }}>
-            {part.versionLabel ? `Saved as ${part.versionLabel}` : 'Confirmed. Make the change before your next shot.'}
+            {part.versionLabel
+              ? `Saved as ${part.versionLabel}`
+              : part.keep
+                ? 'Kept. Pull the next shot the same way.'
+                : 'Confirmed. Make the change before your next shot.'}
           </Typography>
           {showUndo ? (
             <Button
@@ -110,7 +114,7 @@ function StatusLine({ part, showUndo, disabled, onUndo }: Pick<DiffCardProps, 'p
     case 'expired':
       return (
         <Typography variant="body2" role="status" sx={{ color: 'text.secondary' }}>
-          Set aside: the conversation moved on. Nothing changed on the machine.
+          {setAsideNote(part.setAsideReason, 'Set aside: the conversation moved on.')} Nothing changed on the machine.
         </Typography>
       );
     case 'pending':
@@ -173,7 +177,9 @@ export function DiffCard({ part, disabled = false, showUndo, onConfirm, onDeclin
           <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
             {part.versionLabel
               ? `Confirm saves this as ${part.versionLabel} and loads it onto the machine.`
-              : 'No new profile: this is a change you make by hand.'}
+              : part.keep
+                ? 'Nothing to change: keep this recipe.'
+                : 'No new profile: this is a change you make by hand.'}
           </Typography>
           <Stack direction="row" spacing={1} sx={{ mt: 1.25 }}>
             <Button

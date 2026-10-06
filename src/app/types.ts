@@ -41,6 +41,13 @@ export interface TemplateCardItem {
 /** `expired`: the conversation moved on (the user typed instead of tapping). */
 export type DiffStatus = 'pending' | 'applying' | 'applied' | 'declined' | 'failed' | 'undone' | 'expired';
 
+/**
+ * Why the engine set a card aside unanswered: the barista typed in the chat,
+ * tapped Undo, or a new shot came in; `other` for anything else (another card
+ * of the same turn was answered, say).
+ */
+export type SetAsideReason = 'typed' | 'undo' | 'shot' | 'other';
+
 export type CoachUiPart =
   | { kind: 'text'; text: string; streaming?: boolean }
   | {
@@ -51,6 +58,8 @@ export type CoachUiPart =
       pickedTemplateId: string | null;
       /** The user typed instead of picking; the cards no longer answer anything. */
       expired?: boolean;
+      /** Why the cards were set aside; absent in chats stored before CafAI recorded it. */
+      setAsideReason?: SetAsideReason;
     }
   | {
       kind: 'options';
@@ -63,6 +72,14 @@ export type CoachUiPart =
       answer: { selected: string[]; otherText: string | null } | null;
       /** The user typed instead of tapping (or pulled another shot); the chips are closed. */
       expired?: boolean;
+      /** Why the question was set aside; absent in chats stored before CafAI recorded it. */
+      setAsideReason?: SetAsideReason;
+      /**
+       * True when the question asks how the shot tasted (its text mentions
+       * taste): only its answer is the shot's taste. Absent in chats stored
+       * before CafAI marked it.
+       */
+      taste?: boolean;
     }
   | {
       kind: 'diff';
@@ -79,6 +96,14 @@ export type CoachUiPart =
       versionLabel: string | null;
       status: DiffStatus;
       error: string | null;
+      /**
+       * True when the proposal keeps the recipe as it is (variable "none"):
+       * nothing to change, by hand or on the machine. Absent for every other
+       * change, and in chats stored before CafAI marked it.
+       */
+      keep?: boolean;
+      /** Why the proposal was set aside (status `expired`); absent in chats stored before CafAI recorded it. */
+      setAsideReason?: SetAsideReason;
     }
   | {
       kind: 'shot';

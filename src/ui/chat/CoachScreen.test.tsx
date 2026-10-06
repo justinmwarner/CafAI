@@ -80,6 +80,23 @@ describe('CoachScreen', () => {
     expect(services.coach.calls).toEqual([{ method: 'selectBag', args: [SANTOS.id] }]);
   });
 
+  const placeholder = () => screen.getByTestId(TID.composerInput).getAttribute('placeholder');
+
+  it('invites the taste in the composer only while the open question is about the taste', () => {
+    renderCoach(coachStateFor('options-multi'));
+    expect(placeholder()).toBe('Tap an answer, or type your own');
+  });
+
+  it('invites the taste for an open question stored before CafAI marked taste questions', () => {
+    const state = coachStateFor('options-multi');
+    const messages = state.messages!.map((m) => ({
+      ...m,
+      parts: m.parts.map((p) => (p.kind === 'options' ? { ...p, taste: undefined } : p)),
+    }));
+    renderCoach({ ...state, messages });
+    expect(placeholder()).toBe('Tap an answer, or say how it tasted');
+  });
+
   it('tells same-named bags apart in the picker by when they were started', () => {
     const twin = { ...SANTOS, id: 'bag-twin', name: 'Kiambu AA', createdAt: '2026-09-20T07:00:00.000Z' };
     renderCoach({ ...coachStateFor('options'), bags: [KIAMBU, twin] });

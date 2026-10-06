@@ -104,6 +104,35 @@ describe('DiffCard', () => {
     expect(screen.getByText('Confirmed. Make the change before your next shot.')).toBeInTheDocument();
   });
 
+  const keep = (overrides: Partial<DiffPart> = {}) =>
+    part({ summary: 'Keep this recipe', lines: [], manualSteps: [], versionLabel: null, keep: true, ...overrides });
+
+  it('says a card that keeps the recipe changes nothing, not that it is a change by hand', () => {
+    setup(keep());
+    expect(screen.getByText('Nothing to change: keep this recipe.')).toBeInTheDocument();
+    expect(screen.queryByText(/by hand/)).toBeNull();
+    expect(screen.getByTestId(TID.diffConfirm)).toBeEnabled();
+  });
+
+  it('says to pull the next shot the same way once keeping the recipe is confirmed', () => {
+    setup(keep({ status: 'applied' }), { showUndo: true });
+    expect(screen.getByText('Kept. Pull the next shot the same way.')).toBeInTheDocument();
+    expect(screen.queryByText(/Make the change/)).toBeNull();
+  });
+
+  it.each<[DiffPart['setAsideReason'], string]>([
+    ['typed', 'Set aside: the conversation moved on. Nothing changed on the machine.'],
+    ['undo', 'Set aside when you tapped Undo. Nothing changed on the machine.'],
+    ['shot', 'Set aside: a new shot came in. Nothing changed on the machine.'],
+    ['other', 'Set aside: the conversation moved on. Nothing changed on the machine.'],
+    // A chat stored before CafAI recorded why.
+    [undefined, 'Set aside: the conversation moved on. Nothing changed on the machine.'],
+  ])('says why it was set aside (%s)', (reason, text) => {
+    setup(part({ status: 'expired', ...(reason ? { setAsideReason: reason } : {}) }));
+    expect(screen.getByRole('status')).toHaveTextContent(text);
+    expect(screen.queryByTestId(TID.diffConfirm)).toBeNull();
+  });
+
   it('puts the decision before the reasoning, so Confirm stays in view on the longest card', () => {
     setup(part({ rationale: 'r'.repeat(400), expectedEffect: 'e'.repeat(200) }));
     const confirm = screen.getByTestId(TID.diffConfirm);

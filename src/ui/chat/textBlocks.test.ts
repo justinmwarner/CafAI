@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseInline, parseRichText } from './textBlocks.ts';
+import { parseInline, parseRichText, withoutOpenMarkers } from './textBlocks.ts';
 
 const t = (text: string) => ({ kind: 'text', text });
 
@@ -71,5 +71,43 @@ describe('parseInline', () => {
 
   it('keeps HTML as literal text', () => {
     expect(parseInline('<img src=x onerror=alert(1)>')).toEqual([t('<img src=x onerror=alert(1)>')]);
+  });
+});
+
+describe('withoutOpenMarkers (a reply still streaming)', () => {
+  it('leaves out the marker of bold, emphasis or code that has not closed yet', () => {
+    expect(withoutOpenMarkers('That usually means **under-extr')).toBe('That usually means under-extr');
+    expect(withoutOpenMarkers('Pour it *slow')).toBe('Pour it slow');
+    expect(withoutOpenMarkers('See `get_phase')).toBe('See get_phase');
+  });
+
+  it('leaves out a marker that has only just arrived', () => {
+    expect(withoutOpenMarkers('That usually means **')).toBe('That usually means ');
+    expect(withoutOpenMarkers('That usually means *')).toBe('That usually means ');
+    expect(withoutOpenMarkers('See `')).toBe('See ');
+  });
+
+  it('leaves out the first half of a closing pair together with its opener', () => {
+    expect(withoutOpenMarkers('means **under-extraction*')).toBe('means under-extraction');
+  });
+
+  it('keeps complete spans, arithmetic and list markers as they are', () => {
+    for (const text of ['means **under-extraction**', '**Sour** means *under*, see `temp`.', '2 * 3', '* same dose', '`a **b`']) {
+      expect(withoutOpenMarkers(text), text).toBe(text);
+    }
+  });
+
+  it('leaves out every marker still open on the last line, around complete spans', () => {
+    expect(withoutOpenMarkers('**Grind** finer, then *taste')).toBe('**Grind** finer, then taste');
+    expect(withoutOpenMarkers('- **Grind fin')).toBe('- Grind fin');
+    expect(withoutOpenMarkers('Keep **bold `code')).toBe('Keep bold code');
+  });
+
+  it('keeps a code span that is still arriving as it is typed', () => {
+    expect(withoutOpenMarkers('Use `2*dose')).toBe('Use 2*dose');
+  });
+
+  it('changes only the last line: earlier lines are complete', () => {
+    expect(withoutOpenMarkers('Keep **this\nand **that')).toBe('Keep **this\nand that');
   });
 });

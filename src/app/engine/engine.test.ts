@@ -1228,7 +1228,7 @@ describe('coach engine', () => {
     scripts.push(() => [text('Noted.')]);
     await engine.sendText('Quite sour and thin');
     const options = engine.getState().messages.flatMap((m) => m.parts).find((p) => p.kind === 'options');
-    expect(options).toMatchObject({ expired: true });
+    expect(options).toMatchObject({ expired: true, setAsideReason: 'typed' });
     expect((await storage.iterations.listAll())[0]!.feedback).toEqual({
       question: 'How did it taste?',
       selected: [],
@@ -1276,7 +1276,7 @@ describe('coach engine', () => {
     scripts.push(() => [text('Sure, ask away.')]);
     await engine.sendText('Why temperature and not grind?');
     const diff = engine.getState().messages.flatMap((m) => m.parts).find((p) => p.kind === 'diff');
-    expect(diff).toMatchObject({ status: 'expired' });
+    expect(diff).toMatchObject({ status: 'expired', setAsideReason: 'typed' });
     const templates = engine.getState().messages.flatMap((m) => m.parts).find((p) => p.kind === 'templates');
     expect(templates).toMatchObject({ pickedTemplateId: 'd-flow' });
   });
@@ -2715,6 +2715,194 @@ describe('coach engine', () => {
         ['t-adj-3b', 'undone'],
       ]);
       expect(notices().at(-2)).toMatchObject({ text: 'Back on Kiambu AA v2.' });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // What the cards say, and which answer is the shot's taste
+  // -------------------------------------------------------------------------
+
+  describe('cards and the taste', () => {
+    const askPuck = (id: string) =>
+      toolUse(id, TOOL.askUser, {
+        question: 'What does the puck look like?',
+        options: ['Pinholes', 'Wet patches', 'Looks even'],
+        multiSelect: true,
+      });
+    const askTasteAs = (id: string) =>
+      toolUse(id, TOOL.askUser, { question: 'How did it taste?', options: ['Sour', 'Bitter', 'other'], multiSelect: false });
+    const keepRecipe = toolUse('t-keep', TOOL.proposeAdjustment, {
+      variable: 'none',
+      lever: null,
+      value: null,
+      grind: null,
+      summary: 'Keep this recipe',
+      rationale: 'Balanced and sweet at 30 s.',
+      expectedEffect: 'The same cup again.',
+      tips: [],
+    });
+    const optionCards = () => allParts().filter((p): p is Extract<CoachUiPart, { kind: 'options' }> => p.kind === 'options');
+    const diffCards = () => allParts().filter((p): p is Extract<CoachUiPart, { kind: 'diff' }> => p.kind === 'diff');
+    const card = (requestId: string) => allParts().find((p) => 'requestId' in p && p.requestId === requestId);
+    const feedback = async () => (await storage.iterations.listAll())[0]!.feedback;
+    const userBubbles = () =>
+      engine
+        .getState()
+        .messages.filter((m) => m.role === 'user')
+        .flatMap((m) => m.parts.map((p) => (p.kind === 'text' ? p.text : '')));
+
+    /** Shot 1 on v1; the coach answers it with `ask`. */
+    async function throughShotAsking(ask: ContentBlock) {
+      await throughTemplatePick();
+      scripts.push(() => [text('Got it.'), ask]);
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' });
+      await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+    }
+
+    it('marks a proposal to keep the recipe as a keep card, and no other change', async () => {
+      await throughShot();
+      scripts.push(() => [text('That is the cup. Keep it.'), keepRecipe]);
+      await engine.answerOptions('t-ask', ['Other'], 'Balanced and sweet');
+      expect(diffCards()).toEqual([expect.objectContaining({ requestId: 't-keep', keep: true, versionLabel: null, lines: [], manualSteps: [] })]);
+
+      scripts.push(() => [text('Pull the next one the same way.')]);
+      await engine.confirmChange('t-keep');
+      expect(card('t-keep')).toMatchObject({ status: 'applied', keep: true });
+      expect((await storage.iterations.listAll())[0]!.outcome).toBe('kept');
+
+      // A change made by hand, or one that makes a version, is no keep card.
+      await pullAnother('shot-2', 't-ask-2');
+      scripts.push(() => [toolUse('t-adj-2', TOOL.proposeAdjustment, { ...(proposeTemp as { input: object }).input })]);
+      await engine.answerOptions('t-ask-2', ['Sour'], null);
+      expect(card('t-adj-2')).not.toHaveProperty('keep');
+    });
+
+    async function pullAnother(shotId: string, askId: string) {
+      nowMs += 60_000;
+      scripts.push(() => [text('Got it.'), askTasteAs(askId)]);
+      telemetry.emitShot({ type: 'finished', shotId, stopReason: 'targetWeight' });
+      await vi.waitFor(() => expect(card(askId)).toBeDefined());
+    }
+
+    it('records that a card was set aside because the barista typed in the chat', async () => {
+      await throughShot();
+      scripts.push(() => [text('Noted.')]);
+      await engine.sendText('Can you explain the curve first?');
+      expect(card('t-ask')).toMatchObject({ expired: true, setAsideReason: 'typed' });
+    });
+
+    it('records that a card was set aside because a new shot came in', async () => {
+      await throughShot();
+      await pullAnother('shot-2', 't-ask-2');
+      expect(card('t-ask')).toMatchObject({ expired: true, setAsideReason: 'shot' });
+      expect(card('t-ask-2')).not.toHaveProperty('expired');
+      // The coach hears what it always heard.
+      expect(parsed(lastUserTurn(requests)[0])).toEqual({ answered: false, note: 'A new shot was pulled instead.' });
+    });
+
+    it('records that a card was set aside because the barista tapped Undo', async () => {
+      await throughProposal();
+      scripts.push(() => [text('Done. One more step while we are here:'), toolUse('t-adj-2', TOOL.proposeAdjustment, { ...(proposeTemp as { input: object }).input, value: 90 })]);
+      await engine.confirmChange('t-adj');
+      expect(engine.getState().canUndo).toBe(true);
+      expect(card('t-adj-2')).toMatchObject({ status: 'pending' });
+
+      scripts.push(() => [text('Back on v1.')]);
+      await engine.undo();
+      expect(card('t-adj-2')).toMatchObject({ status: 'expired', setAsideReason: 'undo' });
+      expect(parsed(lastUserTurn(requests)[0])).toEqual({ answered: false, note: 'The user undid the last change.' });
+    });
+
+    it('records that a card was set aside for anything else: here another card of the same turn was answered', async () => {
+      await throughShot();
+      scripts.push(() => [text('Two things.'), askPuck('t-puck'), proposeTemp]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      scripts.push(() => [text('Done.')]);
+      await engine.confirmChange('t-adj');
+      expect(card('t-puck')).toMatchObject({ expired: true, setAsideReason: 'other' });
+      expect(card('t-adj')).toMatchObject({ status: 'applied' });
+      expect(card('t-adj')).not.toHaveProperty('setAsideReason');
+    });
+
+    it('marks the question about the taste, and not a question about the puck', async () => {
+      await throughShot();
+      scripts.push(() => [text('And the puck?'), askPuck('t-puck')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      expect(optionCards().map((p) => [p.requestId, p.taste])).toEqual([
+        ['t-ask', true],
+        ['t-puck', false],
+      ]);
+    });
+
+    it('keeps the answer to another question out of the taste: no feedback, no notes line', async () => {
+      await throughShotAsking(askPuck('t-puck'));
+      scripts.push(() => [text('Pinholes mean channels.')]);
+      await engine.answerOptions('t-puck', ['Pinholes', 'Wet patches'], null);
+      await drain();
+      expect(await feedback()).toBeNull();
+      expect(callsOf('updateShot')).toEqual([]);
+      // It stays in the chat and reaches the coach as before.
+      expect(userBubbles().at(-1)).toBe('Pinholes, Wet patches');
+      expect(parsed(lastUserTurn(requests)[0])).toEqual({ selected: ['Pinholes', 'Wet patches'], other: null });
+    });
+
+    it('keeps the taste answer when the coach asks a follow-up about something else', async () => {
+      await throughShot();
+      scripts.push(() => [text('And the puck?'), askPuck('t-puck')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      await vi.waitFor(() => expect(callsOf('updateShot')).toHaveLength(1));
+      scripts.push(() => [text('Pinholes mean channels.')]);
+      await engine.answerOptions('t-puck', ['Pinholes'], 'near the edge');
+      await drain();
+      expect(await feedback()).toEqual({ question: 'How did it taste?', selected: ['Sour'], otherText: null });
+      expect(callsOf('updateShot')).toHaveLength(1);
+      expect(machine.annotations.get('shot-1')?.espressoNotes).toBe('Taste: Sour. Kiambu AA v1 (CafAI)');
+    });
+
+    it('still takes what was typed under Other on the taste question as the taste', async () => {
+      await throughShot();
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Other'], 'Sweet but hollow');
+      expect(await feedback()).toEqual({ question: 'How did it taste?', selected: ['Other'], otherText: 'Sweet but hollow' });
+      await vi.waitFor(() => expect(machine.annotations.get('shot-1')?.espressoNotes).toBe('Taste: Sweet but hollow. Kiambu AA v1 (CafAI)'));
+    });
+
+    it('keeps text typed while another question is open out of the taste', async () => {
+      await throughShotAsking(askPuck('t-puck'));
+      scripts.push(() => [text('Noted.')]);
+      await engine.sendText('A few pinholes near the edge');
+      await drain();
+      expect(await feedback()).toBeNull();
+      expect(callsOf('updateShot')).toEqual([]);
+      expect(card('t-puck')).toMatchObject({ expired: true, setAsideReason: 'typed' });
+    });
+
+    it('stops asking for a confirmation once Confirm is tapped, while the change applies and loads', async () => {
+      await throughProposal();
+      const seen: string[] = [];
+      engine.subscribe(() => {
+        const status = diffCards()[0]?.status;
+        const entry = `${status}:${engine.getState().phase}`;
+        if (status !== 'pending' && seen.at(-1) !== entry) seen.push(entry);
+      });
+      machine.barrier = 'hold';
+      scripts.push(() => [text('Done.')]);
+      const confirming = engine.confirmChange('t-adj');
+      await vi.waitFor(() => expect(machine.held).not.toBeNull());
+      expect(progressNotices().map((p) => p.text)).toEqual(['Loading Kiambu AA v2 on the machine…']);
+      expect(engine.getState().phase).toBe('awaiting_shot');
+      machine.held!.resolve('loaded');
+      await confirming;
+      expect(seen[0]).toBe('applying:awaiting_shot');
+      expect(seen.filter((entry) => entry.endsWith(':awaiting_confirmation'))).toEqual([]);
+    });
+
+    it('asks for the confirmation again when the change could not be loaded', async () => {
+      await throughProposal();
+      machine.failActivations = 1;
+      await engine.confirmChange('t-adj');
+      expect(card('t-adj')).toMatchObject({ status: 'pending' });
+      expect(engine.getState().phase).toBe('awaiting_confirmation');
     });
   });
 });

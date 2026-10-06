@@ -17,6 +17,18 @@ export const EXTRAS_KEY = 'cafai';
 /** The taste words kept in the notes line; the full reply goes to extras. */
 const MAX_TASTE_CHARS = 120;
 
+const TASTE_WORD = /\btast(?:e|es|ed|ing)\b/i;
+
+/**
+ * True when a question asks how the shot tasted: its text mentions taste
+ * ("How did it taste?"). Only its answer is the shot's taste (the iteration's
+ * feedback, this notes line, History); the coach is told to word it so. Any
+ * other question (the puck, a preference) stays in the chat.
+ */
+export function isTasteQuestion(question: string): boolean {
+  return TASTE_WORD.test(question);
+}
+
 /** The taste in words: the options picked (Other replaced by what was typed), or the typed reply. */
 export function tasteWords(selected: readonly string[], text: string | null): string {
   const typed = text?.trim() || null;

@@ -2,7 +2,15 @@
  * Building and updating the chat's display messages (CoachUiMessage).
  * Immutable updates only: the UI subscribes with Object.is selectors.
  */
-import type { CoachUiMessage, CoachUiPart, DiffStatus, NoticeProgress, TemplateCardItem, UiRole } from '../types.ts';
+import type {
+  CoachUiMessage,
+  CoachUiPart,
+  DiffStatus,
+  NoticeProgress,
+  SetAsideReason,
+  TemplateCardItem,
+  UiRole,
+} from '../types.ts';
 import type { ShotSummary } from '../../coach/types.ts';
 
 export const NEW_BAG_PROMPT =
@@ -17,11 +25,16 @@ export function templatesPart(requestId: string, items: TemplateCardItem[]): Coa
   return { kind: 'templates', requestId, items, pickedTemplateId: null };
 }
 
-export function optionsPart(requestId: string, question: string, options: string[], multiSelect: boolean): CoachUiPart {
-  return { kind: 'options', requestId, question, options, multiSelect, answer: null };
+/** `taste`: the question asks how the shot tasted (shotNotes.ts isTasteQuestion). */
+export function optionsPart(requestId: string, question: string, options: string[], multiSelect: boolean, taste: boolean): CoachUiPart {
+  return { kind: 'options', requestId, question, options, multiSelect, answer: null, taste };
 }
 
-export function diffPart(fields: {
+/** `keep`: the proposal keeps the recipe (variable "none"); only such a card carries the mark. */
+export function diffPart({
+  keep = false,
+  ...fields
+}: {
   requestId: string;
   summary: string;
   lines: string[];
@@ -29,8 +42,20 @@ export function diffPart(fields: {
   rationale: string;
   expectedEffect: string;
   versionLabel: string | null;
+  keep?: boolean;
 }): CoachUiPart {
-  return { kind: 'diff', ...fields, status: 'pending', error: null };
+  return { kind: 'diff', ...fields, ...(keep ? { keep } : {}), status: 'pending', error: null };
+}
+
+/**
+ * A card the conversation went past unanswered, closed with the reason, so it
+ * can say why. A change that was already decided, and every other part, stay
+ * as they are.
+ */
+export function setAside(part: CoachUiPart, reason: SetAsideReason): CoachUiPart {
+  if (part.kind === 'templates' || part.kind === 'options') return { ...part, expired: true, setAsideReason: reason };
+  if (part.kind === 'diff' && part.status === 'pending') return { ...part, status: 'expired', setAsideReason: reason };
+  return part;
 }
 
 export function shotPart(shotId: string, summary: ShotSummary): CoachUiPart {

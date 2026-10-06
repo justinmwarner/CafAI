@@ -42,4 +42,19 @@ describe('TemplateCards', () => {
     renderThemed(<TemplateCards items={TEMPLATE_ITEMS} pickedTemplateId={null} disabled onPick={() => {}} />);
     for (const item of TEMPLATE_ITEMS) expect(screen.getByTestId(TID.templatePick(item.templateId))).toBeDisabled();
   });
+
+  it.each<[Parameters<typeof TemplateCards>[0]['setAsideReason'], string]>([
+    ['typed', 'Set aside: you replied in the chat instead. Ask the coach to suggest again.'],
+    ['undo', 'Set aside when you tapped Undo. Ask the coach to suggest again.'],
+    ['shot', 'Set aside: a new shot came in. Ask the coach to suggest again.'],
+    ['other', 'Set aside: the conversation moved on. Ask the coach to suggest again.'],
+    // A chat stored before CafAI recorded why.
+    [undefined, 'Set aside: the conversation moved on. Ask the coach to suggest again.'],
+  ])('says why the suggestions were set aside (%s)', (reason, text) => {
+    renderThemed(
+      <TemplateCards items={TEMPLATE_ITEMS} pickedTemplateId={null} expired {...(reason ? { setAsideReason: reason } : {})} onPick={() => {}} />,
+    );
+    expect(screen.getByText(text)).toBeInTheDocument();
+    for (const item of TEMPLATE_ITEMS) expect(screen.getByTestId(TID.templatePick(item.templateId))).toBeDisabled();
+  });
 });

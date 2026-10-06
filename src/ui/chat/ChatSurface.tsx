@@ -111,16 +111,21 @@ function showsProgress(message: CoachUiMessage): boolean {
   return message.parts.some((part) => part.kind === 'notice' && part.progress !== undefined);
 }
 
+function applyingChange(messages: readonly CoachUiMessage[]): boolean {
+  return messages.some((message) => message.parts.some((part) => part.kind === 'diff' && part.status === 'applying'));
+}
+
 /**
  * x-chat messages for the thread, plus a "thinking" row while busy with
  * nothing streaming yet. A progress notice already says what CafAI is doing
- * (loading a profile, looking for a shot), so it gets no thinking row.
+ * (loading a profile, looking for a shot), and a change card that is being
+ * applied shows its own bar, so neither gets a thinking row.
  */
 export function toChatMessages(messages: readonly CoachUiMessage[], busy: boolean): ChatMessage[] {
   const result = messages.map(toChatMessage);
   const last = messages[messages.length - 1];
   const streamingNow = last !== undefined && last.role !== 'user' && isStreaming(last);
-  const working = last !== undefined && showsProgress(last);
+  const working = (last !== undefined && showsProgress(last)) || applyingChange(messages);
   if (busy && !streamingNow && !working) result.push(THINKING_MESSAGE);
   return result;
 }
@@ -184,6 +189,7 @@ function TemplatesView({ data }: { data: unknown }) {
       pickedTemplateId={part.pickedTemplateId}
       disabled={busy}
       expired={part.expired ?? false}
+      setAsideReason={part.setAsideReason}
       onPick={(templateId) => actions.pickTemplate(part.requestId, templateId)}
     />
   );
@@ -201,6 +207,7 @@ function OptionsView({ data }: { data: unknown }) {
       answer={part.answer}
       disabled={busy}
       expired={part.expired ?? false}
+      setAsideReason={part.setAsideReason}
       onAnswer={(selected, otherText) => actions.answerOptions(part.requestId, selected, otherText)}
     />
   );
@@ -261,7 +268,7 @@ function ThinkingView() {
 
 function TextView({ part, message }: ChatPartRendererProps<Extract<ChatMessagePart, { type: 'text' }>>) {
   // What the barista typed stays verbatim; model text gets the safe light formatting.
-  return message.role === 'user' ? <>{part.text}</> : <RichText text={part.text} />;
+  return message.role === 'user' ? <>{part.text}</> : <RichText text={part.text} streaming={part.state === 'streaming'} />;
 }
 
 type DataRendererProps = ChatPartRendererProps<Extract<ChatMessagePart, { type: `data-${string}` }>>;

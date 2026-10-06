@@ -19,12 +19,13 @@ import KeyIcon from '@mui/icons-material/Key';
 import LocalCafeIcon from '@mui/icons-material/LocalCafe';
 import UndoIcon from '@mui/icons-material/Undo';
 import type { Bag } from '../../storage/types.ts';
-import type { CoachPhase } from '../../app/types.ts';
+import type { CoachPhase, CoachUiMessage } from '../../app/types.ts';
 import { useCoach, useServices, useTelemetry } from '../../app/services.tsx';
 import { isShotRunning } from '../../api/workflow.ts';
 import { TID } from '../testIds.ts';
 import { ChatSurface } from './ChatSurface.tsx';
 import { formatDateTime } from './format.ts';
+import type { OptionsPart } from './parts/types.ts';
 
 export interface CoachScreenProps {
   /** Where the "add your API key" card links. */
@@ -40,6 +41,26 @@ const PLACEHOLDERS: Record<CoachPhase, string> = {
   awaiting_confirmation: 'Confirm the change, or ask a question',
   idle: 'Ask for starting profiles, or ask a question',
 };
+
+/** An open question that is not about the taste: what is typed is a reply, not the shot's taste. */
+const OTHER_QUESTION_PLACEHOLDER = 'Tap an answer, or type your own';
+
+/**
+ * True unless every open question is marked as not about the taste. A
+ * question stored before CafAI marked them keeps today's invitation.
+ */
+function asksForTaste(messages: readonly CoachUiMessage[]): boolean {
+  const open = messages
+    .flatMap((m) => m.parts)
+    .filter((p): p is OptionsPart => p.kind === 'options' && p.answer === null && !p.expired);
+  return open.length === 0 || open.some((p) => p.taste !== false);
+}
+
+/** The composer's hint: what the coach waits for. */
+function composerPlaceholder(phase: CoachPhase, messages: readonly CoachUiMessage[]): string {
+  if (phase === 'awaiting_feedback' && !asksForTaste(messages)) return OTHER_QUESTION_PLACEHOLDER;
+  return PLACEHOLDERS[phase];
+}
 
 /** Controller calls report failures through CoachState.error; this only stops unhandled rejections. */
 function fire(action: Promise<void>) {
@@ -195,6 +216,7 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
   const shotRunning = useTelemetry(isShotRunning);
 
   const listedBags = useMemo(() => pickerBags(bags, activeBag), [bags, activeBag]);
+  const placeholder = useMemo(() => composerPlaceholder(phase, messages), [phase, messages]);
   const showChat = ready && hasApiKey && activeBag !== null;
 
   let body: ReactNode;
@@ -217,7 +239,7 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
         <ChatSurface
           messages={messages}
           busy={busy}
-          placeholder={PLACEHOLDERS[phase]}
+          placeholder={placeholder}
           canUndo={canUndo}
           onSend={(text) => fire(coach.sendText(text))}
           onPickTemplate={(requestId, templateId) => fire(coach.pickTemplate(requestId, templateId))}

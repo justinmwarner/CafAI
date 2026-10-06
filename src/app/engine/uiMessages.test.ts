@@ -2,21 +2,69 @@ import { describe, expect, it } from 'vitest';
 import type { CoachUiMessage, CoachUiPart } from '../types.ts';
 import type { ShotSummary } from '../../coach/types.ts';
 import {
+  diffPart,
   isTransient,
   message,
   noticePart,
+  optionsPart,
   progressNoticePart,
   removeMessage,
   replaceParts,
+  setAside,
   setShotStars,
   shotPart,
   startingYieldText,
+  templatesPart,
   withoutTransient,
   type StartingDose,
 } from './uiMessages.ts';
 
 const at = '2026-10-03T08:00:00.000Z';
 const summary = { shotId: 'shot-1' } as ShotSummary;
+
+const change = {
+  requestId: 'tu-adj',
+  summary: 'Keep this recipe',
+  lines: [],
+  manualSteps: [],
+  rationale: 'Balanced and sweet.',
+  expectedEffect: 'The same cup again.',
+  versionLabel: null,
+};
+
+describe('cards', () => {
+  it('marks whether a question asks for the taste', () => {
+    expect(optionsPart('tu-ask', 'How did it taste?', ['Sour', 'Other'], false, true)).toEqual({
+      kind: 'options',
+      requestId: 'tu-ask',
+      question: 'How did it taste?',
+      options: ['Sour', 'Other'],
+      multiSelect: false,
+      answer: null,
+      taste: true,
+    });
+    expect(optionsPart('tu-puck', 'What does the puck look like?', ['Pinholes', 'Other'], true, false)).toMatchObject({ taste: false });
+  });
+
+  it('marks a change card that keeps the recipe, and only that one', () => {
+    expect(diffPart({ ...change, keep: true })).toEqual({ kind: 'diff', ...change, keep: true, status: 'pending', error: null });
+    expect(diffPart(change)).toEqual({ kind: 'diff', ...change, status: 'pending', error: null });
+    expect(diffPart({ ...change, keep: false })).not.toHaveProperty('keep');
+  });
+
+  it('sets a card aside with the reason, and leaves a decided change and other parts alone', () => {
+    const question = optionsPart('tu-ask', 'How did it taste?', ['Sour', 'Other'], false, true);
+    expect(setAside(question, 'typed')).toEqual({ ...question, expired: true, setAsideReason: 'typed' });
+    const cards = templatesPart('tu-tpl', []);
+    expect(setAside(cards, 'shot')).toEqual({ ...cards, expired: true, setAsideReason: 'shot' });
+    const pending = diffPart(change);
+    expect(setAside(pending, 'undo')).toEqual({ ...pending, status: 'expired', setAsideReason: 'undo' });
+    const applied = { ...pending, status: 'applied' as const };
+    expect(setAside(applied, 'other')).toBe(applied);
+    const shot = shotPart('shot-1', summary);
+    expect(setAside(shot, 'other')).toBe(shot);
+  });
+});
 
 describe('transient notices', () => {
   const loading = progressNoticePart('Loading Kiambu AA v2 on the machine…', { value: null, label: null });

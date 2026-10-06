@@ -21,7 +21,7 @@ export const COACH_TOOL_SPECS: Record<ToolName, { description: string; kind: 'ui
   [TOOL.askUser]: {
     kind: 'ui',
     description:
-      'Ask one short question with 2-5 short options (each at most 60 characters) for the user to tap. Never include "Other"; the app adds it as the last option, where the user can type. Set multiSelect true when several answers can apply. Use it for taste after every shot and for any choice the user should tap rather than type.',
+      'Ask one short question with 2-5 short options (each at most 60 characters) for the user to tap. Never include "Other"; the app adds it as the last option, where the user can type. Set multiSelect true when several answers can apply. Use it after every shot to ask how it tasted, with the word "taste" in the question (e.g. "How did it taste?"): only the answer to a question that mentions taste is saved as the shot\'s taste, so leave the word out of other questions. Use it too for any choice the user should tap rather than type.',
   },
   [TOOL.proposeAdjustment]: {
     kind: 'ui',

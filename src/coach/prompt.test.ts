@@ -158,6 +158,15 @@ describe('buildSystemPrompt: content', () => {
     expect(loop).toMatch(/yieldG is where v1 stops: the template's start ratio times doseG, or times 18 g when doseG is null/);
   });
 
+  it('asks for the word "taste" in the taste question, since only its answer is kept as the shot\'s taste', () => {
+    const loop = prompt.slice(prompt.indexOf('# The loop'), prompt.indexOf('# Template catalog'));
+    const shot = loop.split('\n').find((line) => line.startsWith('3. Shot completed.'))!;
+    const taste = loop.split('\n').find((line) => line.startsWith('4. Taste.'))!;
+    expect(shot).toContain('call ask_user for the taste, with the word "taste" in the question (for example "How did it taste?")');
+    expect(taste).toMatch(/CafAI keeps an answer as the shot's taste only when its question mentions taste/);
+    expect(taste).toMatch(/keep that word out of any other question/);
+  });
+
   it("gives the grinder object with its dial from Decaid's grinder library, at intake and with every shot (D62)", () => {
     const grinder =
       '"grinder":{"name":string|null,"setting":string|null,"settingType":"numeric"|"preset"|null,"step":number|null,"values":string[]|null,"linked":boolean}';
