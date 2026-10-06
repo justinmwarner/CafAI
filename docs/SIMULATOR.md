@@ -7,8 +7,9 @@ REST and WebSocket API on port 8080. No machine, no tablet.
 **How sure each step is.** Marked at the end of each part:
 
 - *Source*: read in Decaid's code (`decentespresso/decaid` at `a45961b`,
-  2026-10-01; paths below are in that repository). Decaid has not been
-  installed or run on this computer, so every Decaid step is source only.
+  2026-10-01; paths below are in that repository). Decaid 0.8.7+2847
+  (Windows release, commit b6e1d3f0) was run here on 2026-10-05; parts
+  marked *Tried* were checked against it.
 - *Tried*: run on this computer on 2026-10-05.
 - *Not tried*: neither.
 
@@ -16,27 +17,33 @@ REST and WebSocket API on port 8080. No machine, no tablet.
 
 1. Download `decaid-windows-x64-latest.zip` from
    <https://github.com/decentespresso/decaid/releases/latest> and unzip it
-   anywhere, for example `C:\Tools\Decaid`. There is no installer.
+   anywhere, for example `C:\Tools\Decaid`. There is no installer, and the
+   zip has no top-level folder: unzip it into its own folder.
 2. Start `Decaid.exe`. The Windows build is unsigned, so the first start may
    show an unknown-publisher warning: choose **More info**, then **Run
    anyway**.
 3. To skip the first-run screens for good (welcome, account, import), start
-   it once from PowerShell with a flag:
+   it once from PowerShell with these flags:
 
    ```powershell
    cd C:\Tools\Decaid
-   .\Decaid.exe --bypass-onboarding
+   .\Decaid.exe --bypass-onboarding --no-account
    ```
 
-   Without the flag, skip the account screen ("Link Your Decent Account")
-   with **Skip for now** (**Continue offline** when offline), and the import
-   screen with **Skip for now**.
+   `--no-account` also skips the account screen and Decent's credential
+   store. Without the flags, skip the account screen ("Link Your Decent
+   Account") with **Skip for now** (**Continue offline** when offline), and
+   the import screen with **Skip for now**.
 4. If Windows asks whether Decaid may use the network, allow private
    networks.
 
-Decaid needs ports 8080 (its API) and 3000 (its skin entry) free. With 8080
-taken it shows "Another Decaid app is running" and does not start; with 3000
-taken it serves no skin ("WebUI is not running"). Vite's 5173 is fine.
+Decaid needs ports 8080 (its API), 3000 (its skin entry, a redirect to the
+skin's own port) and 4001 (its API docs) free. With 8080 taken it shows
+"Another Decaid app is running" and does not start; with 3000 taken it serves
+no skin ("WebUI is not running"). Vite's 5173 is fine.
+
+Closing the window ends Decaid within seconds. 0.8.7 exits with code
+0xC000041D but keeps settings, shots and CafAI's backup.
 
 *Source: zip name, `Decaid.exe`, unsigned build (`.github/workflows/release.yml`,
 `scripts/create_release_aliases.sh`, `doc/RELEASE.md`); flag
@@ -65,6 +72,11 @@ Pick one:
   Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/v1/settings -ContentType 'application/json' -Body '{"simulatedDevices":["machine","scale"]}'
   ```
 
+  Decaid answers `null`, and the devices show as "discovered" until a scan:
+  `Invoke-RestMethod http://localhost:8080/api/v1/devices/scan` (about 15 s)
+  connects both. After a restart they connect by themselves within about
+  20 s.
+
 **Check:** open <http://localhost:8080/api/v1/devices> in a browser. It lists
 the simulated machine and scale as connected (the order may differ):
 
@@ -80,7 +92,8 @@ the simulated machine and scale as connected (the order may differ):
 *Source (`lib/src/device_discovery_feature/scan_flow_view.dart`,
 `lib/src/settings/advanced_page.dart`, `lib/src/settings/settings_controller.dart`,
 `lib/src/services/webserver/settings_handler.dart`,
-`lib/src/services/webserver/devices_handler.dart`). Not tried.*
+`lib/src/services/webserver/devices_handler.dart`). Tried (0.8.7): the POST,
+the scan and the JSON above.*
 
 ## 3. Run CafAI against it
 
@@ -113,6 +126,11 @@ From this repository (after `npm ci`), with Decaid running, pick a coach:
   instead. `&mockSpeed=20` speeds up only the coach's typing; the
   simulator's shots run in real time.
 
+Close other CafAI tabs first (such as `npm run dev` on localhost:5173). An
+open CafAI page joins the simulator as soon as Decaid starts, copies its bags
+into the simulator's backup (fresh pages then restore them), and notes every
+simulator shot in its own active bag.
+
 Both servers can run at once: mock mode keeps its own Vite cache.
 
 **A leftover `reaHostname`.** If this browser was ever pointed at a tablet,
@@ -128,15 +146,17 @@ it on each one you use.
 
 **Check which Decaid CafAI reached.** The machine panel says "Machine
 connected" and "Scale connected", and CafAI's Settings > About shows the
-simulator's Decaid version, not `0.8.6+2801` (the built-in mock's). Without a
-Decaid the panel says "Can't reach Decaid".
+simulator's Decaid version (`Decaid 0.8.7+2847`), not `0.8.6+2801` (the
+built-in mock's). Without a Decaid the panel says "Can't reach Decaid".
 
 *Tried: `npm run dev:sim` starts mock mode and asks to open `/?mockDecaid=0`.
 A mock-mode page at `/?mockDecaid=0` started with no `window.__CAFAI_MOCK__`,
 no service worker and the browser's own WebSocket; its calls to port 8080 went
 to the network, and the scripted coach answered a new bag with three template
 cards. Decaid was not running for this (the panel said "Can't reach Decaid").
-Not tried: CafAI against a running Decaid.*
+Tried: the full loop against Decaid 0.8.7 (new bag, v1 loaded, a simulator
+shot, a taste chip, v2 loaded, notes on the shot), in coach-only and normal
+mode.*
 
 ## 4. Run CafAI inside Decaid's window
 
@@ -158,6 +178,9 @@ npm run release:zip     # builds dist\ and release\cafai-<version>.zip
   Decaid serves the folder as it is, so after `npm run build` a reload shows
   the change. A path that is not a folder falls back to the default skin.
 
+  *Tried: no clicks needed. CafAI's console goes to Decaid's
+  `logs\webview_console.log`, labelled with the default skin's id.*
+
 **Tablet size:** Settings > Advanced > turn on **Simulated WebViews**, then
 **Simulated Device** > **Teclast P80X** (962×602 @ 1.33x). Decaid resizes its
 window and makes the page report the tablet's size, pixel ratio and touch.
@@ -167,9 +190,11 @@ system menu (the window icon, or right-click the title bar).
 
 **During a shot:** Settings > Advanced > **Gateway Mode** decides what Decaid
 does. **Disabled** (the default) opens Decaid's own shot screen in its window,
-over CafAI when CafAI runs inside it; **Tracking** leaves the skin on screen.
-Both stop the shot at the target weight. **Full** does not, and CafAI never
-stops a shot itself, so do not use Full.
+over CafAI when CafAI runs inside it. (Not seen with the default skin: a shot
+started over the API left streamline.js on screen. Not tried with CafAI.)
+**Tracking** leaves the skin on screen. Both stop the shot at the target
+weight. **Full** does not, and CafAI never stops a shot itself, so do not use
+Full.
 
 Decaid shows skins in Microsoft WebView2. If it is missing, Decaid says
 "WebView2 Runtime Missing" and offers **Install WebView2**.
@@ -188,8 +213,9 @@ It exercises:
 - Decaid's real REST and WebSocket API.
 - CafAI's wait for the machine to confirm a profile (the simulator confirms
   at once).
-- Espresso that follows the profile and stops at the target weight on the
-  simulated scale.
+- Espresso that follows the profile on the simulated scale; it stops at the
+  target weight only if the cup gets there first (Blooming Espresso v1 ran
+  out of steps at 47 g of 50 g, stopReason "machineEnded").
 - Saved shots, with CafAI's taste notes and star rating written to them.
 - Decaid's grinder library and key-value store: real storage, empty at first.
   CafAI's backup lands in its `cafai` namespace and stays across Decaid

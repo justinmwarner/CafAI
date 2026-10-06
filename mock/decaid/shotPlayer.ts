@@ -6,15 +6,16 @@
  * zone-less timestamps, ~2 s of preparingForShot, then the profile's steps
  * (flow steps hold flow, pressure steps hold pressure, smooth steps ramp,
  * exits, step weight exits and limiters honoured), preinfusion for frames
- * below target_volume_count_start and pouring after, and a puck model that
- * turns pumped water into cup weight. Decaid's shot sequencer reads the
- * workflow, not the machine: stop-at-weight uses workflow.context.targetYield,
- * and with no scale the volumetric stop uses context.targetWaterVolume or the
- * workflow profile's target_volume, exactly like shot_sequencer.dart. The
- * shotState frames, the decision bodies and the persisted ShotRecord (a copy
- * of the workflow at shot end) follow shot_sequencer.dart /
- * de1_state_manager.dart. Wall-clock playback can be compressed with
- * `speed`; data timestamps stay realistic.
+ * below target_volume_count_start and pouring after, a puck model that
+ * turns pumped water into cup weight, and, after a stop with weight in the
+ * cup, Decaid's ~4 s stopping phase (pouringDone, then idle) before
+ * finished. Decaid's shot sequencer reads the workflow, not the machine:
+ * stop-at-weight uses workflow.context.targetYield, and with no scale the
+ * volumetric stop uses context.targetWaterVolume or the workflow profile's
+ * target_volume, exactly like shot_sequencer.dart. The shotState frames, the
+ * decision bodies and the persisted ShotRecord (a copy of the workflow at
+ * shot end) follow shot_sequencer.dart / de1_state_manager.dart. Wall-clock
+ * playback can be compressed with `speed`; data timestamps stay realistic.
  */
 import type {
   MachineSnapshot,
@@ -36,7 +37,13 @@ import type { MockDecaid } from './state.ts';
 export const FRAME_MS = 200;
 const DT = FRAME_MS / 1000;
 const PREHEAT_FRAMES = 10;
-const STOPPING_FRAMES = 8;
+/**
+ * Decaid keeps a stopped shot in `stopping` until the cup weight settles or
+ * its 4 s backstop fires (shot_sequencer.dart), and only then says finished
+ * and stores the shot: 4-5 s on Decaid 0.8.7's simulator. The mock always
+ * waits the backstop out: 20 frames, 4 s.
+ */
+const STOPPING_FRAMES = 20;
 const ACTIVITY_FRAMES = 20;
 
 // Puck model: a headspace to fill, a puck that absorbs water (resistance

@@ -137,6 +137,19 @@ describe('createShotSimulation', () => {
     expect(up.every((f) => f.machine.targetFlow === 0 && f.machine.targetPressure === 9)).toBe(true);
   });
 
+  it("holds Decaid's stopping phase for about 4 s: pouringDone, then idle until finished", () => {
+    const frames = run(input(blooming));
+    const stopping = frames.findIndex((f) => f.events.some((e) => e.event === 'state' && e.state === 'stopping'));
+    const finished = frames.findIndex((f) => f.events.some((e) => e.event === 'state' && e.state === 'finished'));
+    expect(stopping).toBeGreaterThan(0);
+    expect(finished).toBe(frames.length - 1);
+    // shot_sequencer.dart waits for the cup weight to settle, with a 4 s backstop.
+    expect(seconds(frames.slice(stopping))).toBeCloseTo(4, 1);
+    // The pump stops at once; only Decaid's bookkeeping takes the time.
+    expect(substateRuns(frames.slice(stopping + 1))).toEqual(['espresso/pouringDone', 'idle/idle']);
+    expect(frames.slice(stopping).some((f) => f.recorded)).toBe(false);
+  });
+
   it('values sit on the DE1 fixed-point grids', () => {
     for (const frame of recorded(run(input(dflow)))) {
       expect(Number.isInteger(frame.machine.pressure * 4096)).toBe(true);
@@ -353,6 +366,24 @@ describe('createShotPlayer', () => {
     expect(record.createdAt).toMatch(/Z$/);
     expect(state.getMachineSnapshot().state).toEqual({ state: 'idle', substate: 'idle' });
     expect(state.lastProfileFrame).toBe(last.machine.profileFrame);
+  });
+
+  it('stays in stopping for about 4 s (wall time divided by the speed) and stores the shot only after it', async () => {
+    const { state, player } = setup();
+    const seen: Array<{ state: string; wallMs: number; dataMs: number; shots: number }> = [];
+    state.on('shotState', (event) => {
+      if (event.event !== 'state' || (event.state !== 'stopping' && event.state !== 'finished')) return;
+      seen.push({ state: event.state, wallMs: Date.now(), dataMs: parseDecaidTimestamp(event.timestamp), shots: state.getShotIds().length });
+    });
+    player.start();
+    await vi.advanceTimersByTimeAsync(12_000);
+
+    expect(seen.map((entry) => entry.state)).toEqual(['stopping', 'finished']);
+    const [stopping, finished] = seen as [(typeof seen)[number], (typeof seen)[number]];
+    expect((finished.dataMs - stopping.dataMs) / 1000).toBeCloseTo(4, 1);
+    expect(finished.wallMs - stopping.wallMs).toBe(4000 / player.speed);
+    expect(stopping.shots, 'no record while Decaid is still stopping').toBe(0);
+    expect(state.getShotIds()).toEqual([player.lastShotId]);
   });
 
   it('data timestamps stay realistic at any speed', async () => {

@@ -7,6 +7,10 @@
  * canvas through uPlot's setData at most once per animation frame; the timer
  * and the legend readouts are written straight into their DOM nodes. React
  * re-renders this component twice per shot (started, finished), not per frame.
+ *
+ * The timer counts the pour only. After the pour Decaid stays in its stopping
+ * state for 4-5 s (the cup weight settles, the shot is stored) before it says
+ * finished: the graph plots on through it, the timer stops where the pour did.
  */
 import { useEffect, useRef, useState } from 'react';
 import uPlot from 'uplot';
@@ -26,6 +30,8 @@ const MIN_WEIGHT_G = 50;
 const TARGET_DASH = [6, 5];
 /** Axis sizes in px; the empty-state hint is centred in the plotting area between them. */
 const AXIS = { left: 30, right: 40, bottom: 26, top: 10 } as const;
+/** Decaid's shot states once the pour is over. */
+const POUR_OVER: ReadonlySet<string> = new Set(['stopping', 'finished']);
 
 interface LegendItem {
   key: SeriesKey;
@@ -192,6 +198,16 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
         setPhase(buffer.length > 0 ? 'done' : 'empty');
       }
     });
+    // Decaid's stopping (or finished) frame carries the timestamp of the
+    // machine frame it stopped on. Only a change counts, so a state still
+    // showing from the last shot never stops the next shot's clock.
+    let shotState = telemetry.getState().shotState;
+    const stopWatching = telemetry.subscribe(() => {
+      const next = telemetry.getState().shotState;
+      if (next === shotState) return;
+      shotState = next;
+      if (next && POUR_OVER.has(next.state) && buffer.endPour(next.timestamp)) schedule();
+    });
 
     let last = size;
     const resize = () => {
@@ -207,6 +223,7 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
     return () => {
       stopSamples();
       stopShots();
+      stopWatching();
       observer?.disconnect();
       window.removeEventListener('resize', resize);
       if (frame !== null) cancelFrame(frame);
