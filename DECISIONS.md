@@ -529,5 +529,14 @@ says which reading was taken and MORNING.md lists it among the top questions.
   defeat CafAI's reconnect backoff, so the scripted coach answers from inside
   the page's `fetch` and every Decaid call is untouched. Mock mode keeps its
   own Vite cache so the two dev servers can run side by side. The steps, and
-  what the simulator cannot test, are in docs/SIMULATOR.md; nothing there has
-  been run against a live Decaid yet.
+  what the simulator cannot test, are in docs/SIMULATOR.md. On 2026-10-05
+  Decaid 0.8.7+2847 was run here with the simulator, and CafAI did the whole
+  loop against it in coach-only mode, in normal mode and inside Decaid's
+  window.
+- **D75. The shot timer stops when the pour ends.** Against the real Decaid
+  the panel's "Last shot" read 66.6 s next to a 63 s shot card: Decaid stays
+  in "stopping" for 4-5 s while the weight settles and it stores the shot,
+  and the timer waited for "finished". It now stops at the first `pouringDone`
+  frame or at the frame Decaid stopped on, whichever comes first; the graph
+  keeps plotting the drips. The mock's stopping phase now lasts 4 s, as
+  Decaid's does.

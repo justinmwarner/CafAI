@@ -14,7 +14,7 @@ pushed.
 |---|---|
 | Typecheck (`npm run typecheck`) | pass |
 | Lint (`npm run lint`) | pass |
-| Unit tests (`npm test`) | **1823/1823** in 115 files (overnight: 1254 in 91) |
+| Unit tests (`npm test`) | **1836/1836** in 115 files (overnight: 1254 in 91) |
 | Playwright (`npm run e2e`) | **93/93** at 962x602, 1280x800 and 1920x1200 (overnight: 27) |
 | `npm run verify` (all of the above, build and release zip) | pass |
 | Real Chromium 91 (`npm run build:mock && npm run smoke:chrome91 && npm run smoke:chrome91:loop`) | pass: the app loads with no console or page errors, and the whole coach loop runs, now waiting for the machine to confirm each load |
@@ -89,10 +89,15 @@ commits.
 - **The live API test:** opt-in, skipped without `ANTHROPIC_API_KEY`, and
   never part of `npm test` (D68).
 - **Decaid's own simulator on your computer (asked after the session):**
-  it works today with Decaid's Windows download (Try Demo Mode) and
-  `npm run dev`; `npm run dev:sim` pairs it with the scripted coach so it
-  costs no API tokens. Steps and limits: [docs/SIMULATOR.md](docs/SIMULATOR.md)
-  (from Decaid's source; not yet run against a live Decaid here) (D74).
+  it works. Decaid 0.8.7's Windows build was run here with its simulated
+  machine and scale, and CafAI did the whole loop against it: coach-only
+  (`npm run dev:sim`, no API tokens), normal (`npm run dev`), and inside
+  Decaid's own window. Decaid is left at
+  `%LOCALAPPDATA%\cafai-sim\decaid-0.8.7\Decaid.exe` with the simulator on.
+  Close other CafAI tabs first: an open one joins the simulator too. The run
+  found that the panel's "Last shot" time counted Decaid's 4-5 s save after
+  the pour; fixed (D75). Steps and limits:
+  [docs/SIMULATOR.md](docs/SIMULATOR.md) (D74).
 
 ## Fresh-eyes verification
 
