@@ -560,4 +560,16 @@ says which reading was taken and MORNING.md lists it among the top questions.
   changes nothing and says why, so it can never replace the bags or key used
   with a real Decaid on localhost:5173. Rejected: the dev preview page with
   fake services (its buttons do nothing real) and an import file (manual
-  steps, and its open question would not answer).
+  steps, and its open question would not answer). The demo's data is built
+  at each load by playing a hand-written story through CafAI's own engine on
+  in-memory storage, a scratch mock Decaid and a fast-forwarded clock, so
+  every card, notice and record is the one the app writes and the demo
+  follows the app when it changes.
+- **D77. Undo marks only the shot whose change made the version.** Building
+  the demo showed that Undo marked "the latest applied change on the parent
+  version" as undone: after a change confirmed from a typed request (which no
+  shot records), Undo marked an earlier shot's by-hand grind change as
+  undone, and History and the coach's bag history said so. Undo now marks
+  the shot whose applied profile change matches the undone version's change,
+  and none when no shot made it. A by-hand grind or dose change, or a kept
+  recipe, is never marked undone: they make no version.
