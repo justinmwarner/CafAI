@@ -7,13 +7,29 @@
  * up in dev and tests instead of on a tablet: headers, streaming, tool_choice,
  * strict tools, tool_use / tool_result pairing, assistant prefill, and any
  * assistant turn it produced coming back modified (append-only history).
+ *
+ * The script decides; a voice (voice.ts) words it. The terse voice is the
+ * default; the demo voice (demoVoice.ts) writes fuller prose around the same
+ * tool calls.
  */
 import { EVENT, TEMPLATE_IDS, TOOL, type ProposeAdjustment, type RoastLevel } from '../../src/coach/contract.ts';
 import { resolveGrindMove } from '../../src/coach/grinder.ts';
 import type { GrinderInfo } from '../../src/coach/types.ts';
 import type { StopReason, TextBlock, ToolUseBlock } from '../../src/llm/types.ts';
+import { DEMO_VOICE } from './demoVoice.ts';
 import { encodeAssistantTurn, type SseMessage } from './sse.ts';
 import { TEMPLATES } from '../../src/coach/templates/index.ts';
+import {
+  TERSE_VOICE,
+  type AppliedFacts,
+  type ChangeFacts,
+  type ChangeKind,
+  type PickFacts,
+  type ProposalText,
+  type Taste,
+  type Voice,
+  type VoiceName,
+} from './voice.ts';
 
 type Raw = Record<string, unknown>;
 
@@ -53,8 +69,14 @@ export interface AnthropicErrorBody {
 }
 
 export type ScenarioResponse =
-  | { status: 200; events: SseMessage[]; content: Raw[] }
+  /** `turn`: this reply's number in the memory (1 for the first), the request count. */
+  | { status: 200; events: SseMessage[]; content: Raw[]; turn: number }
   | { status: number; errorBody: AnthropicErrorBody };
+
+export interface RespondOptions {
+  /** Default 'terse'. */
+  voice?: VoiceName;
+}
 
 export interface HeaderSource {
   get(name: string): string | null;
@@ -294,6 +316,7 @@ type Reply = { blocks: Array<TextBlock | ToolUseBlock>; stopReason: StopReason }
 interface Script {
   messages: Message[];
   newToolId(): string;
+  voice: Voice;
 }
 
 /** tool_use id -> tool name, from the assistant turn just before message `index`. */
@@ -416,20 +439,32 @@ function finerSetting(messages: Message[]): string | null {
   return finer >= 0 ? String(Math.round(finer * 100) / 100) : null;
 }
 
-function proposal(
-  change: Pick<ProposeAdjustment, 'variable' | 'lever' | 'value' | 'grind'>,
-  summary: string,
-  rationale: string,
-  expectedEffect: string,
-  tips: string[],
-): ProposeAdjustment {
-  return { ...change, summary, rationale, expectedEffect, tips };
+/** A proposed change as the script decides it; the voice adds the summary, rationale and expected effect. */
+interface Change {
+  kind: ChangeKind;
+  input: Pick<ProposeAdjustment, 'variable' | 'lever' | 'value' | 'grind'>;
+  tips: string[];
 }
 
 const SAME_PREP = ['Keep the same dose, grind and puck prep.'];
+const NO_CHANGE = { variable: 'none', lever: null, value: null, grind: null } as const;
 
-function chooseAdjustment(messages: Message[]): ProposeAdjustment {
-  const answer = latestAnswer(messages);
+function proposalInput(change: Change, text: ProposalText): ProposeAdjustment {
+  return { ...change.input, summary: text.summary, rationale: text.rationale, expectedEffect: text.expectedEffect, tips: change.tips };
+}
+
+/** The answer's taste, first match wins: "Sour / sharp" with "Bitter / harsh" is sour. */
+function tasteOf(answer: string): Taste {
+  if (answer.includes('sour')) return 'sour';
+  if (answer.includes('bitter')) return 'bitter';
+  if (answer.includes('weak')) return 'weak';
+  if (answer.includes('strong')) return 'strong';
+  if (answer.includes('balanced')) return 'balanced';
+  return 'other';
+}
+
+function chooseChange(messages: Message[]): Change {
+  const taste = tasteOf(latestAnswer(messages));
   const shot = latestShot(messages);
   const levers = isRecord(shot?.levers) ? shot.levers : {};
   const templateId = typeof shot?.templateId === 'string' ? shot.templateId : '';
@@ -437,78 +472,83 @@ function chooseAdjustment(messages: Message[]): ProposeAdjustment {
   const yieldG = num(levers.yield);
   const yieldRange = YIELD_RANGE[templateId] ?? { min: 0, max: Infinity };
   const yieldCan = (to: number) => yieldG !== null && to >= yieldRange.min && to <= yieldRange.max;
-  const profile = (lever: string, value: number) => ({ variable: 'profile' as const, lever, value, grind: null });
+  const profile = (kind: ChangeKind, lever: string, value: number): Change => ({
+    kind,
+    input: { variable: 'profile', lever, value, grind: null },
+    tips: SAME_PREP,
+  });
 
-  if (answer.includes('sour')) {
-    if (temp !== null && temp + 1 <= (TEMP_MAX[templateId] ?? Infinity)) {
-      return proposal(
-        profile('temp', temp + 1),
-        'Raise brew temperature by 1 °C',
-        'It tasted sour, which usually means under-extraction. A little more heat pulls out more sweetness.',
-        'Less sharpness and more sweetness.',
-        SAME_PREP,
-      );
-    }
-    if (yieldG !== null && yieldCan(yieldG + 2)) {
-      return proposal(
-        profile('yield', yieldG + 2),
-        'Lengthen the yield by 2 g',
-        'It tasted sour and the temperature is already at the top of this profile, so a longer ratio extracts a little more.',
-        'A rounder, less sharp cup.',
-        SAME_PREP,
-      );
-    }
-  } else if (answer.includes('bitter')) {
-    if (temp !== null) {
-      return proposal(
-        profile('temp', temp - 1),
-        'Lower brew temperature by 1 °C',
-        'It tasted bitter, which usually means over-extraction. A little less heat softens the finish.',
-        'A softer, less harsh finish.',
-        SAME_PREP,
-      );
-    }
-  } else if (answer.includes('weak')) {
-    if (yieldG !== null && yieldCan(yieldG - 2)) {
-      return proposal(
-        profile('yield', yieldG - 2),
-        'Shorten the yield by 2 g',
-        'It tasted weak, so a shorter ratio will concentrate the cup.',
-        'More body and intensity.',
-        SAME_PREP,
-      );
-    }
-  } else if (answer.includes('strong')) {
-    if (yieldG !== null && yieldCan(yieldG + 2)) {
-      return proposal(
-        profile('yield', yieldG + 2),
-        'Lengthen the yield by 2 g',
-        'It tasted too strong, so a longer ratio will open it up.',
-        'A lighter, clearer cup.',
-        SAME_PREP,
-      );
-    }
-  } else if (answer.includes('balanced')) {
-    return proposal(
-      { variable: 'none', lever: null, value: null, grind: null },
-      'Keep everything as it is',
-      'It tasted balanced and sweet. This recipe is dialled in, so lock it in.',
-      'The same good cup again.',
-      ['Note your grind setting so you can repeat it.'],
-    );
+  if (taste === 'sour') {
+    if (temp !== null && temp + 1 <= (TEMP_MAX[templateId] ?? Infinity)) return profile('warmer', 'temp', temp + 1);
+    if (yieldG !== null && yieldCan(yieldG + 2)) return profile('longerForSour', 'yield', yieldG + 2);
+  } else if (taste === 'bitter') {
+    if (temp !== null) return profile('cooler', 'temp', temp - 1);
+  } else if (taste === 'weak') {
+    if (yieldG !== null && yieldCan(yieldG - 2)) return profile('shorter', 'yield', yieldG - 2);
+  } else if (taste === 'strong') {
+    if (yieldG !== null && yieldCan(yieldG + 2)) return profile('longer', 'yield', yieldG + 2);
+  } else if (taste === 'balanced') {
+    return { kind: 'keep', input: NO_CHANGE, tips: ['Note your grind setting so you can repeat it.'] };
   }
   return grindFiner(messages);
 }
 
-function grindFiner(messages: Message[]): ProposeAdjustment {
-  const finer = finerSetting(messages);
-  return proposal(
-    { variable: 'grind', lever: null, value: null, grind: { direction: 'finer', amount: 1, setting: finer } },
-    finer === null ? 'Grind 1 step finer' : `Grind 1 step finer, to ${finer}`,
-    'The taste did not point to one clear fix, so slow the shot slightly with a finer grind.',
-    'A slightly slower shot with more sweetness.',
-    ['Keep the same dose.'],
-  );
+function grindFiner(messages: Message[]): Change {
+  return {
+    kind: 'finer',
+    input: { variable: 'grind', lever: null, value: null, grind: { direction: 'finer', amount: 1, setting: finerSetting(messages) } },
+    tips: ['Keep the same dose.'],
+  };
+}
+
+/** The top of a pressure series among `results` (a get_shot_series answer), and when it came. */
+function pressurePeak(results: NamedResult[]): { bar: number; atS: number | null } | null {
+  for (const { name, payload, isError } of results) {
+    if (name !== TOOL.getShotSeries || isError || !isRecord(payload) || payload.metric !== 'pressure') continue;
+    const values = Array.isArray(payload.values) ? payload.values : [];
+    const times = Array.isArray(payload.tS) ? payload.tS : [];
+    let peak: { bar: number; atS: number | null } | null = null;
+    for (const [i, value] of values.entries()) {
+      const bar = num(value);
+      if (bar !== null && (peak === null || bar > peak.bar)) peak = { bar, atS: num(times[i]) };
+    }
+    if (peak) return peak;
+  }
+  return null;
+}
+
+/** What a voice may say about a change: the taste, the roast, the curve just read and the latest shot's channeling flags. */
+function changeFacts(messages: Message[], change: Change, results: NamedResult[], afterRejection: boolean): ChangeFacts {
+  const peak = pressurePeak(results);
+  const summary = latestShot(messages)?.summary;
+  const flags = isRecord(summary) && Array.isArray(summary.channelingFlags) ? summary.channelingFlags : null;
+  return {
+    kind: change.kind,
+    taste: tasteOf(latestAnswer(messages)),
+    roastLevel: savedRoast(messages),
+    grindSetting: change.input.grind?.setting ?? null,
+    peakPressureBar: peak?.bar ?? null,
+    peakPressureAtS: peak?.atS ?? null,
+    channelingFlags: flags?.filter((flag): flag is string => typeof flag === 'string') ?? null,
+    afterRejection,
+  };
+}
+
+function appliedFacts(payload: Raw): AppliedFacts {
+  const facts = { version: num(payload.version), title: typeof payload.title === 'string' ? payload.title : null };
+  if (payload.variable === 'grind' || payload.variable === 'dose') return { status: 'manual', ...facts };
+  if (payload.variable === 'none') return { status: 'kept', ...facts };
+  // Connected, but not confirmed: the banner's Retry, not a wait for the machine to connect.
+  if (typeof payload.loadError === 'string') return { status: 'notConfirmed', ...facts };
+  if (payload.onMachine === false) return { status: 'offline', ...facts };
+  return { status: 'loaded', ...facts };
+}
+
+function pickStatus(payload: Raw): PickFacts['status'] {
+  if (payload.uploaded === false) return 'notUploaded';
+  if (typeof payload.loadError === 'string') return 'notConfirmed';
+  if (payload.onMachine === false) return 'offline';
+  return 'loaded';
 }
 
 function detectRoast(text: string): RoastLevel | null {
@@ -579,27 +619,23 @@ function templatePicked(messages: Message[]): boolean {
 function intake(script: Script, description: string): Reply {
   const name = (description.split(',')[0] ?? '').trim().slice(0, 40).trim() || 'My coffee';
   const roastLevel = detectRoast(description);
+  const origin = detectOrigin(description);
+  const process = detectProcess(description);
+  const suggestions = suggestionsFor(roastLevel);
   return {
     blocks: [
-      { type: 'text', text: 'Lovely. Here is where I would start.' },
+      { type: 'text', text: script.voice.intake({ name, roastLevel, process, origin, topTemplate: suggestions[0]!.templateId }) },
       {
         type: 'tool_use',
         id: script.newToolId(),
         name: TOOL.saveBagDetails,
-        input: {
-          name,
-          roaster: null,
-          origin: detectOrigin(description),
-          roastLevel,
-          process: detectProcess(description),
-          notes: null,
-        },
+        input: { name, roaster: null, origin, roastLevel, process, notes: null },
       },
       {
         type: 'tool_use',
         id: script.newToolId(),
         name: TOOL.proposeTemplates,
-        input: { suggestions: suggestionsFor(roastLevel) },
+        input: { suggestions },
       },
     ],
     stopReason: 'tool_use',
@@ -608,13 +644,8 @@ function intake(script: Script, description: string): Reply {
 
 const say = (text: string): Reply => ({ blocks: [{ type: 'text', text }], stopReason: 'end_turn' });
 
-function formatNumber(value: unknown): string {
-  const n = num(value);
-  return n === null ? '?' : String(Math.round(n * 10) / 10);
-}
-
 function decide(script: Script): Reply {
-  const { messages } = script;
+  const { messages, voice } = script;
   const lastIndex = messages.length - 1;
   const last = messages[lastIndex];
   const results = namedResults(messages, lastIndex);
@@ -631,53 +662,41 @@ function decide(script: Script): Reply {
     // the grind already, keep the recipe.
     const rejected = toolUses(messages[lastIndex - 1]).find((b) => b.name === TOOL.proposeAdjustment);
     const wasGrind = isRecord(rejected?.input) && rejected.input.variable === 'grind';
-    const next = wasGrind
-      ? proposal(
-          { variable: 'none', lever: null, value: null, grind: null },
-          'Keep everything as it is',
-          'That change is outside what this profile allows, so keep this recipe for one more shot.',
-          'The same cup, to taste again.',
-          SAME_PREP,
-        )
-      : grindFiner(messages);
+    const next: Change = wasGrind ? { kind: 'keepAfterRejectedGrind', input: NO_CHANGE, tips: SAME_PREP } : grindFiner(messages);
+    const facts = changeFacts(messages, next, [], true);
     return {
       blocks: [
-        { type: 'text', text: 'That one is outside what this profile allows. Here is another change.' },
-        { type: 'tool_use', id: script.newToolId(), name: TOOL.proposeAdjustment, input: next },
+        { type: 'text', text: voice.rejected(facts) },
+        { type: 'tool_use', id: script.newToolId(), name: TOOL.proposeAdjustment, input: proposalInput(next, voice.proposalText(facts)) },
       ],
       stopReason: 'tool_use',
     };
   }
   if (decision) {
     const payload = isRecord(decision.payload) ? decision.payload : {};
-    if (payload.applied === true) {
-      if (payload.variable === 'grind' || payload.variable === 'dose') return say('Make that change, then pull another shot.');
-      if (payload.variable === 'none') return say('Locked in. Keep pulling shots like this one.');
-      // Connected, but not confirmed: the banner's Retry, not a wait for the machine to connect.
-      if (typeof payload.loadError === 'string') {
-        return say(`Saved v${formatNumber(payload.version)}, but the machine has not confirmed it. Tap Retry above, then pull another shot.`);
-      }
-      if (payload.onMachine === false) {
-        return say(`Saved v${formatNumber(payload.version)}. Decaid loads it when the machine connects; pull another shot after that.`);
-      }
-      return say(`Done. v${formatNumber(payload.version)} is on the machine. Pull another shot and tell me how it tastes.`);
-    }
-    return say(`OK, we keep v${currentVersion(messages)} as it is. Tell me what you would like to try instead.`);
+    if (payload.applied === true) return say(voice.applied(appliedFacts(payload)));
+    return say(voice.declined({ version: currentVersion(messages) }));
   }
 
   // 2. A query came back: propose one change.
   if (results.some((r) => r.name !== null && QUERY_TOOLS.includes(r.name))) {
-    return {
-      blocks: [{ type: 'tool_use', id: script.newToolId(), name: TOOL.proposeAdjustment, input: chooseAdjustment(messages) }],
-      stopReason: 'tool_use',
+    const change = chooseChange(messages);
+    const facts = changeFacts(messages, change, results, false);
+    const lead = voice.proposalLead(facts);
+    const proposal: ToolUseBlock = {
+      type: 'tool_use',
+      id: script.newToolId(),
+      name: TOOL.proposeAdjustment,
+      input: proposalInput(change, voice.proposalText(facts)),
     };
+    return { blocks: lead === null ? [proposal] : [{ type: 'text', text: lead }, proposal], stopReason: 'tool_use' };
   }
 
   // 3. The taste answer: look at the curve.
   if (resultFor(TOOL.askUser)) {
     return {
       blocks: [
-        { type: 'text', text: 'Thanks. Let me look at the pressure curve.' },
+        { type: 'text', text: voice.tasteAnswer({ taste: tasteOf(latestAnswer(messages)), roastLevel: savedRoast(messages) }) },
         {
           type: 'tool_use',
           id: script.newToolId(),
@@ -692,11 +711,12 @@ function decide(script: Script): Reply {
   // 4. A shot finished: sum it up and ask how it tasted.
   const shotText = texts.find((t) => t.startsWith(EVENT.shotCompleted));
   if (shotText !== undefined) {
-    const summary = eventPayload(shotText)?.summary;
-    const facts = isRecord(summary) ? summary : {};
+    const payload = eventPayload(shotText);
+    const summary = isRecord(payload?.summary) ? payload.summary : {};
+    const shot = { durationS: num(summary.durationS), yieldG: num(summary.yieldG), doseG: num(summary.doseG) ?? num(payload?.doseG) };
     return {
       blocks: [
-        { type: 'text', text: `Got it: ${formatNumber(facts.durationS)} s, ${formatNumber(facts.yieldG)} g out.` },
+        { type: 'text', text: voice.shotCompleted(shot) },
         {
           type: 'tool_use',
           id: script.newToolId(),
@@ -712,24 +732,22 @@ function decide(script: Script): Reply {
   const picked = resultFor(TOOL.proposeTemplates);
   if (picked) {
     const payload = isRecord(picked.payload) ? picked.payload : {};
-    const title = typeof payload.title === 'string' ? payload.title : 'the profile';
-    if (payload.uploaded === false) {
-      return say(`I saved ${title}, but it did not load on the machine. Tap Retry above, then pull a shot.`);
-    }
-    if (typeof payload.loadError === 'string') {
-      return say(`I saved ${title}, but the machine has not confirmed it. Tap Retry above, then pull a shot.`);
-    }
-    if (payload.onMachine === false) {
-      return say(`Saved ${title}. Decaid loads it when the machine connects; pull a shot after that.`);
-    }
-    return say(`Loaded ${title}. Pull a shot when you are ready; I will read the curves.`);
+    return say(
+      voice.picked({
+        title: typeof payload.title === 'string' ? payload.title : null,
+        status: pickStatus(payload),
+        yieldG: num(payload.yieldG),
+        doseG: num(payload.doseG),
+      }),
+    );
   }
 
   // 6. Undo.
   const undoText = texts.find((t) => t.startsWith(EVENT.undo));
   if (undoText !== undefined) {
-    const to = num(eventPayload(undoText)?.to) ?? currentVersion(messages);
-    return say(`Back on v${to}. Pull a shot when you are ready.`);
+    const payload = eventPayload(undoText);
+    const to = num(payload?.to) ?? currentVersion(messages);
+    return say(voice.undo({ to, title: typeof payload?.title === 'string' ? payload.title : null }));
   }
 
   // 7. The bag description, before anything was saved.
@@ -740,14 +758,16 @@ function decide(script: Script): Reply {
   // 7b. Described, but no starting profile picked (the suggestions were set
   // aside): offer them again.
   if (plain !== undefined && !templatePicked(messages)) {
+    const roastLevel = savedRoast(messages);
+    const suggestions = suggestionsFor(roastLevel);
     return {
       blocks: [
-        { type: 'text', text: 'Here are the starting profiles again. Tap one to begin.' },
+        { type: 'text', text: voice.templatesAgain({ roastLevel, topTemplate: suggestions[0]!.templateId }) },
         {
           type: 'tool_use',
           id: script.newToolId(),
           name: TOOL.proposeTemplates,
-          input: { suggestions: suggestionsFor(savedRoast(messages)) },
+          input: { suggestions },
         },
       ],
       stopReason: 'tool_use',
@@ -755,14 +775,19 @@ function decide(script: Script): Reply {
   }
 
   // 8. Anything else.
-  return say('Got it. Pull a shot when you are ready, or tell me more about the coffee.');
+  return say(voice.fallback());
 }
 
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 
-export function respond(requestBody: unknown, headers: HeaderSource, memory: ScenarioMemory): ScenarioResponse {
+export function respond(
+  requestBody: unknown,
+  headers: HeaderSource,
+  memory: ScenarioMemory,
+  options: RespondOptions = {},
+): ScenarioResponse {
   const headerError = checkHeaders(headers);
   if (headerError) return headerError;
   if (!isRecord(requestBody)) return invalid('body: expected a JSON object.');
@@ -777,6 +802,7 @@ export function respond(requestBody: unknown, headers: HeaderSource, memory: Sce
   const reply = decide({
     messages,
     newToolId: () => `toolu_mock_${memory.session}_${turn}_${++toolCount}`,
+    voice: options.voice === 'demo' ? DEMO_VOICE : TERSE_VOICE,
   });
 
   const signature = `mock-sig-${memory.session}-${turn}-${hash(JSON.stringify(reply.blocks))}`;
@@ -790,5 +816,5 @@ export function respond(requestBody: unknown, headers: HeaderSource, memory: Sce
   const content = encoded.content as unknown as Raw[];
   memory.turns.set(signature, content);
   for (const block of toolUses({ role: 'assistant', content })) memory.toolIds.set(block.id as string, signature);
-  return { status: 200, events: encoded.events, content };
+  return { status: 200, events: encoded.events, content, turn };
 }

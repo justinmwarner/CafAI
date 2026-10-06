@@ -5,6 +5,7 @@ export {
   respond,
   type AnthropicErrorBody,
   type HeaderSource,
+  type RespondOptions,
   type ScenarioMemory,
   type ScenarioResponse,
 } from './scenario.ts';
