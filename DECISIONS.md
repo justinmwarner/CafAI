@@ -540,3 +540,24 @@ says which reading was taken and MORNING.md lists it among the top questions.
   frame or at the frame Decaid stopped on, whichever comes first; the graph
   keeps plotting the drips. The mock's stopping phase now lasts 4 s, as
   Decaid's does.
+
+## Demo mode (2026-10-06)
+
+- **D76. A demo with a pre-populated chat (owner, 2026-10-06).** The owner
+  asked to see the chat working on a mock: filled in with everything the
+  coach can show, plus one question to tap that gets a realistic but scripted
+  reply. `npm run demo` starts mock mode on its own address (localhost:5175,
+  `/?demo=1`); the built-in mock Decaid and the scripted coach answer, so
+  there is no Decaid and no API spend. Each load starts the same demo: CafAI's
+  storage at that address is replaced with one dial-in (Kiambu AA over four
+  shots, every card and notice kind, a second bag), and the mock Decaid gets
+  the matching shots, profiles and loaded version. The last shot's "How did
+  it taste?" stays open. Its answers go to the scripted coach, which in the
+  demo thinks for about 1.5 s (the owner's pick of three), streams at about
+  40 words a second with small pauses, and writes fuller sentences than the
+  test script; its decisions do not change. The demo writes only to an
+  address with no CafAI data, or with data it wrote itself; anywhere else it
+  changes nothing and says why, so it can never replace the bags or key used
+  with a real Decaid on localhost:5173. Rejected: the dev preview page with
+  fake services (its buttons do nothing real) and an import file (manual
+  steps, and its open question would not answer).
