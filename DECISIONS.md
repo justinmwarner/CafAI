@@ -554,7 +554,7 @@ says which reading was taken and MORNING.md lists it among the top questions.
   the matching shots, profiles and loaded version. The last shot's "How did
   it taste?" stays open. Its answers go to the scripted coach, which in the
   demo thinks for about 1.5 s (the owner's pick of three), streams at about
-  40 words a second with small pauses, and writes fuller sentences than the
+  30 words a second with its pauses, and writes fuller sentences than the
   test script; its decisions do not change. The demo writes only to an
   address with no CafAI data, or with data it wrote itself; anywhere else it
   changes nothing and says why, so it can never replace the bags or key used
