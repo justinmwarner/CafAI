@@ -55,25 +55,39 @@ function Message({ title, detail }: { title: string; detail?: string }) {
 }
 
 async function startMocks(): Promise<void> {
-  // Mock mode only (npm run dev:mock, dev:sim, build:mock); this branch and
-  // the mocks are compiled out of the production bundle. mock/plan.ts decides
-  // which mocks start.
-  const [{ mockPlanFromUrl }, { anthropicHandlers }, { startCoachOnlyMock }, { startMockWorker }, { startMockPersistence }] =
-    await Promise.all([
-      import('../mock/plan.ts'),
-      import('../mock/anthropic/handlers.ts'),
-      import('../mock/coachOnly.ts'),
-      import('../mock/browser.ts'),
-      import('../mock/persist.ts'),
-    ]);
+  // Mock mode only (npm run dev:mock, dev:sim, demo, build:mock); this branch
+  // and the mocks are compiled out of the production bundle. mock/plan.ts
+  // decides which mocks start.
+  const [
+    { mockPlanFromUrl, demoIgnoredNote },
+    { anthropicHandlers },
+    { startCoachOnlyMock },
+    { startMockWorker },
+    { startMockPersistence },
+    { startDemo },
+  ] = await Promise.all([
+    import('../mock/plan.ts'),
+    import('../mock/anthropic/handlers.ts'),
+    import('../mock/coachOnly.ts'),
+    import('../mock/browser.ts'),
+    import('../mock/persist.ts'),
+    import('../mock/demo/index.ts'),
+  ]);
   const plan = mockPlanFromUrl(window.location.search);
-  const coach = anthropicHandlers({ speed: plan.coachSpeed });
+  // Spread: the demo's timing and voice options, empty outside the demo.
+  const coach = anthropicHandlers({ speed: plan.coachSpeed, ...plan.coachOptions });
   if (!plan.decaid) {
+    const note = demoIgnoredNote(window.location.search);
+    if (note) console.info(note);
     // The scripted coach alone, against a real Decaid (docs/SIMULATOR.md).
     startCoachOnlyMock(coach);
     return;
   }
   const mock = await startMockWorker({ extraHandlers: coach });
+  // ?demo=1 (npm run demo): CafAI's storage and the mock Decaid hold the demo
+  // before createServices() opens them, and every load starts it over, so
+  // nothing is persisted. Where the demo's guard refuses, the normal mock app runs.
+  if (plan.demo && (await startDemo(mock.state)).seeded) return;
   // ?mockPersist=1: the store an earlier page load saved is back before
   // createServices() makes the app's first request.
   startMockPersistence(mock.state);

@@ -12,6 +12,7 @@
     "dev": "vite",
     "dev:mock": "vite --mode mock",
     "dev:sim": "vite --mode mock --open \"/?mockDecaid=0\"",
+    "demo": "vite --mode mock --port 5175 --strictPort --open \"/?demo=1\"",
     "build": "vite build",
     "build:mock": "vite build --mode mock --outDir dist-mock",
     "preview": "vite preview",

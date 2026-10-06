@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mockOptionsFromUrl } from './urlOptions.ts';
+import { DEMO_UPLOAD_MS, mockOptionsFromUrl } from './urlOptions.ts';
 
 describe('mockOptionsFromUrl', () => {
   it('sets nothing without switches, so the defaults hold', () => {
@@ -35,5 +35,24 @@ describe('mockOptionsFromUrl', () => {
 
   it('combines switches', () => {
     expect(mockOptionsFromUrl('?mockSpeed=25&mockGrinders=0&mockUploadMs=3000')).toEqual({ speed: 25, seedGrinders: false, uploadMs: 3000 });
+  });
+
+  it('?demo=1 starts without the example shot and profile, and with a 1.5 s upload so "Loading…" shows', () => {
+    expect(DEMO_UPLOAD_MS).toBe(1500);
+    expect(mockOptionsFromUrl('?demo=1')).toEqual({ seedExamples: false, uploadMs: 1500 });
+    expect(mockOptionsFromUrl('?demo=1&mockSpeed=25')).toEqual({ speed: 25, seedExamples: false, uploadMs: 1500 });
+  });
+
+  it('?mockUploadMs still wins in the demo, and examples stay out whatever ?mockExamples says', () => {
+    expect(mockOptionsFromUrl('?demo=1&mockUploadMs=3000')).toEqual({ seedExamples: false, uploadMs: 3000 });
+    expect(mockOptionsFromUrl('?demo=1&mockUploadMs=0')).toEqual({ seedExamples: false, uploadMs: 0 });
+    expect(mockOptionsFromUrl('?demo=1&mockUploadMs=slow')).toEqual({ seedExamples: false, uploadMs: 1500 });
+    expect(mockOptionsFromUrl('?demo=1&mockExamples=1')).toEqual({ seedExamples: false, uploadMs: 1500 });
+  });
+
+  it('has no demo defaults without exactly demo=1, or with ?mockDecaid=0', () => {
+    for (const search of ['?demo=0', '?demo=true', '?demo=', '?demo=1&mockDecaid=0']) {
+      expect(mockOptionsFromUrl(search), search).toEqual({});
+    }
   });
 });

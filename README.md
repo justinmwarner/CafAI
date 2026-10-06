@@ -108,6 +108,12 @@ follows `docs/briefs/ENGINE_PROTOCOL.md`. `?mockSpeed=20` speeds the shot up.
 a real Decaid (`npm run dev:sim` opens it). The production build never
 contains the mocks or a service worker.
 
+**The demo.** `npm run demo` opens CafAI as it looks in use, on the mocks and
+on its own address (localhost:5175): two bags, every kind of card the coach
+shows, and one open "How did it taste?" to answer, with no Decaid and no API
+key. Each load starts it over. [docs/DEMO.md](docs/DEMO.md) says what is on
+screen and what each answer does.
+
 **Tablet viewports.** `dev/tablet.html` frames the app at real Decent tablet
 sizes (962x602, 1007x602, 1140x712, 1280x800, 1920x1200, iPad) and injects
 safe-area insets.
