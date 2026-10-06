@@ -107,6 +107,13 @@ signature), streams text in small deltas, and streams tool inputs as several
 `input_json_delta` pieces. Every payload field above is accepted; the ones a
 rule does not name (e.g. `yieldG`, `doseG`) leave its reply unchanged.
 
+The texts below are the default, terse voice, which the tests rely on. The
+demo (D76) passes `voice: 'demo'` (mock/anthropic/demoVoice.ts): fuller
+coaching prose, and in rule 2 a short text before `propose_adjustment`, with
+every tool call unchanged. It also paces the stream like the real model
+(`firstEventDelayMs`, `eventDelayMs`, `jitterMs`, `sentencePauseMs` in
+mock/anthropic/handlers.ts).
+
 1. tool_result for `propose_adjustment` with `is_error` (CafAI rejected it)
    -> text "That one is outside what this profile allows. Here is another
    change." + a new `propose_adjustment`: the grind move below, or
