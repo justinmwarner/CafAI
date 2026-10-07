@@ -12,7 +12,14 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { useTelemetry } from '../../app/services.tsx';
 import { TID } from '../testIds.ts';
-import { describeMachineState, formatTemperature, formatWaterLevel, formatWeight, isWaterLow } from './format.ts';
+import {
+  describeMachineState,
+  formatTemperature,
+  formatWaterLevel,
+  formatWeight,
+  isWaterLow,
+  splitUnit,
+} from './format.ts';
 import { LoadedProfile } from './LoadedProfile.tsx';
 
 const DASH = '—';
@@ -115,18 +122,20 @@ interface ReadoutProps {
 }
 
 function Readout({ testId, label, value, detail, warn }: ReadoutProps) {
+  const { value: number, unit } = splitUnit(value);
   return (
     <Box data-testid={testId} sx={{ minWidth: 0 }}>
-      <Typography variant="overline" component="div" color="text.secondary" noWrap sx={{ lineHeight: 1.5 }}>
+      <Typography variant="label" component="div" color="text.secondary" noWrap>
         {label}
       </Typography>
-      <Typography
-        component="div"
-        noWrap
-        color={warn ? 'warning.main' : 'text.primary'}
-        sx={{ fontSize: '1.125rem', fontWeight: 500, lineHeight: 1.25, fontVariantNumeric: 'tabular-nums' }}
-      >
-        {value}
+      <Typography variant="readout" component="div" noWrap color={warn ? 'warning.main' : 'text.primary'}>
+        {number}
+        {unit ? (
+          <Box component="span" sx={{ fontSize: '0.68em', fontWeight: 550, color: 'text.secondary' }}>
+            {' '}
+            {unit}
+          </Box>
+        ) : null}
       </Typography>
       <Typography variant="caption" component="div" color={warn ? 'warning.main' : 'text.secondary'} noWrap>
         {detail ?? ' '}

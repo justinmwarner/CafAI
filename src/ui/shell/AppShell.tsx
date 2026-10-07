@@ -13,11 +13,11 @@ import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
 import CloseRounded from '@mui/icons-material/CloseRounded';
-import CoffeeMakerRounded from '@mui/icons-material/CoffeeMakerRounded';
 import ForumRounded from '@mui/icons-material/ForumRounded';
 import HistoryRounded from '@mui/icons-material/HistoryRounded';
 import LocalCafeRounded from '@mui/icons-material/LocalCafeRounded';
 import LogoutRounded from '@mui/icons-material/LogoutRounded';
+import OpenInNewRounded from '@mui/icons-material/OpenInNewRounded';
 import SettingsRounded from '@mui/icons-material/SettingsRounded';
 import type { HostEnvironment } from '../../api/types.ts';
 import { useServices } from '../../app/services.tsx';
@@ -39,7 +39,7 @@ export interface AppShellProps {
   machinePanel?: ReactNode;
 }
 
-const TOP_BAR_HEIGHT = 64;
+const TOP_BAR_HEIGHT = 56;
 
 interface NavItem {
   name: RouteName;
@@ -59,7 +59,7 @@ function Brand() {
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, color: 'primary.main', pr: 1, flex: 'none' }}>
       <LocalCafeRounded />
-      <Typography component="span" sx={{ fontSize: '1.25rem', fontWeight: 700, letterSpacing: '0.02em' }}>
+      <Typography component="span" sx={{ fontSize: '1.1875rem', fontWeight: 750, letterSpacing: '0.005em' }}>
         CafAI
       </Typography>
     </Box>
@@ -71,12 +71,11 @@ function ExitButton({ host }: { host: HostEnvironment }) {
   return (
     <Button
       data-testid={TID.exitToSkins}
-      variant="outlined"
-      color="inherit"
+      variant="tonal"
       aria-label={host.insideDecaid ? 'Exit to Decaid' : 'Exit to the skin switcher'}
       startIcon={<LogoutRounded />}
       onClick={() => host.exitToSkinSwitcher()}
-      sx={{ flex: 'none', px: 1.5, borderColor: 'divider' }}
+      sx={{ flex: 'none', px: 1.5 }}
     >
       <Box component="span" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.1 }}>
         <span>Exit</span>
@@ -120,7 +119,7 @@ function TopBar({ route, onNavigate, host }: { route: Route; onNavigate: (route:
                 px: 2,
                 flex: 'none',
                 color: active ? 'primary.main' : 'text.secondary',
-                bgcolor: active ? 'rgba(200, 162, 122, 0.14)' : 'transparent',
+                bgcolor: active ? 'cafai.accentSoft' : 'transparent',
               }}
             >
               {item.label}
@@ -134,7 +133,7 @@ function TopBar({ route, onNavigate, host }: { route: Route; onNavigate: (route:
         href={host.settingsUrl}
         data-testid={TID.decaidSettings}
         color="inherit"
-        startIcon={<CoffeeMakerRounded />}
+        startIcon={<OpenInNewRounded />}
         sx={{ flex: 'none', px: 1.5, color: 'text.secondary' }}
       >
         Decaid settings

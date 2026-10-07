@@ -73,11 +73,11 @@ export function LoadedProfile({ onStepNames }: LoadedProfileProps) {
       <Box sx={{ display: 'flex', alignItems: 'baseline', columnGap: 1, minWidth: 0 }}>
         <Typography
           id={labelId}
-          variant="overline"
+          variant="label"
           component="div"
           color="text.secondary"
           noWrap
-          sx={{ flex: 'none', lineHeight: 1.5 }}
+          sx={{ flex: 'none' }}
         >
           Profile
         </Typography>
@@ -89,12 +89,7 @@ export function LoadedProfile({ onStepNames }: LoadedProfileProps) {
         )}
       </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', columnGap: 1, minWidth: 0 }}>
-        <Typography
-          component="div"
-          noWrap
-          title={title ?? undefined}
-          sx={{ minWidth: 0, fontSize: '1.125rem', fontWeight: 500, lineHeight: 1.25 }}
-        >
+        <Typography variant="subtitle1" component="div" noWrap title={title ?? undefined} sx={{ minWidth: 0 }}>
           {shown}
         </Typography>
         <Mark mark={mark} />

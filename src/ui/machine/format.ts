@@ -105,3 +105,12 @@ export function isWaterLow(levels: WaterLevels | null | undefined): boolean {
 export function formatSeconds(seconds: number | null | undefined): string {
   return `${(finite(seconds) && seconds > 0 ? seconds : 0).toFixed(1)} s`;
 }
+
+/**
+ * "97.7 °C" as its number and unit, so a readout can set the unit smaller
+ * and quieter than the number. A dash or a word comes back whole.
+ */
+export function splitUnit(text: string): { value: string; unit: string | null } {
+  const match = /^(-?\d+(?:\.\d+)?)\s+(\S+)$/.exec(text);
+  return match ? { value: match[1]!, unit: match[2]! } : { value: text, unit: null };
+}

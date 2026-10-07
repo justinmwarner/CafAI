@@ -97,8 +97,7 @@ export function MachineControls() {
             <Button
               key={spec.command}
               data-testid={spec.testId}
-              variant={spec.command === 'espresso' ? 'contained' : 'outlined'}
-              color={spec.command === 'espresso' ? 'primary' : 'inherit'}
+              variant={spec.command === 'espresso' ? 'contained' : 'tonal'}
               disabled={!model.startsEnabled}
               loading={pending === spec.command}
               onClick={() => void send(spec.command, spec.failure)}
@@ -109,7 +108,6 @@ export function MachineControls() {
                 px: 0.5,
                 fontSize: '0.9375rem',
                 lineHeight: 1.15,
-                borderColor: spec.command === 'espresso' ? undefined : 'divider',
               }}
             >
               {spec.icon}
@@ -144,7 +142,7 @@ export function MachineControls() {
       <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 1 }}>
         <Button
           data-testid={TID.stopButton}
-          variant={model.stopProminent ? 'contained' : 'outlined'}
+          variant={model.stopProminent ? 'contained' : 'tonal'}
           color="error"
           size="large"
           disabled={!model.stopEnabled}
@@ -156,8 +154,7 @@ export function MachineControls() {
         </Button>
         <Button
           data-testid={TID.sleepWakeButton}
-          variant="outlined"
-          color="inherit"
+          variant="tonal"
           disabled={!sleepWake.enabled}
           loading={pending === sleepWake.command}
           startIcon={sleepWake.label === 'Wake' ? <WbSunnyRounded /> : <BedtimeRounded />}
@@ -167,20 +164,19 @@ export function MachineControls() {
               sleepWake.label === 'Wake' ? "Couldn't wake the machine." : "Couldn't put the machine to sleep.",
             )
           }
-          sx={{ minHeight: ROW_HEIGHT, px: 1, borderColor: 'divider' }}
+          sx={{ minHeight: ROW_HEIGHT, px: 1 }}
         >
           {sleepWake.label}
         </Button>
         <Button
           data-testid={TID.tareButton}
-          variant="outlined"
-          color="inherit"
+          variant="tonal"
           disabled={!model.tareEnabled}
           loading={pending === 'tare'}
           aria-describedby={model.tareReason ? tareHintId : undefined}
           startIcon={<ScaleRounded />}
           onClick={() => void send('tare', "Couldn't tare the scale.")}
-          sx={{ minHeight: ROW_HEIGHT, px: 1, borderColor: 'divider' }}
+          sx={{ minHeight: ROW_HEIGHT, px: 1 }}
         >
           Tare
         </Button>

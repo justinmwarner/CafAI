@@ -6,6 +6,7 @@ import {
   formatWaterLevel,
   formatWeight,
   isWaterLow,
+  splitUnit,
 } from './format.ts';
 
 describe('describeMachineState', () => {
@@ -95,5 +96,19 @@ describe('readouts', () => {
     expect(formatSeconds(0)).toBe('0.0 s');
     expect(formatSeconds(null)).toBe('0.0 s');
     expect(formatSeconds(-1)).toBe('0.0 s');
+  });
+});
+
+describe('splitUnit', () => {
+  it('splits a readout into its number and unit', () => {
+    expect(splitUnit('97.7 °C')).toEqual({ value: '97.7', unit: '°C' });
+    expect(splitUnit('31 mm')).toEqual({ value: '31', unit: 'mm' });
+    expect(splitUnit('0.0 g')).toEqual({ value: '0.0', unit: 'g' });
+    expect(splitUnit('-1.5 g')).toEqual({ value: '-1.5', unit: 'g' });
+  });
+
+  it('leaves a dash or words whole', () => {
+    expect(splitUnit('—')).toEqual({ value: '—', unit: null });
+    expect(splitUnit('No scale')).toEqual({ value: 'No scale', unit: null });
   });
 });
