@@ -72,7 +72,7 @@ npm run dev           # the app against a real Decaid (see below)
 npm run dev:sim       # a real Decaid with the scripted Claude, no API key (docs/SIMULATOR.md)
 npm run typecheck && npm run lint && npm test
 npm run e2e           # Playwright, full loop against the mocks
-npm run release:zip   # release/cafai-<version>.zip (with LICENSE, NOTICE and the font licence)
+npm run release:zip   # release/cafai-<version>.zip (with LICENSE, NOTICE and the font licences)
 ```
 
 **Against the real Anthropic API (opt-in).** `npm test` never calls the API.
@@ -178,6 +178,9 @@ CafAI is licensed under the GNU General Public License v3.0 only
 - **Decent Espresso**: the coach templates are bundled Decaid profiles
   (Blooming Espresso, D-Flow / default, Londonium, Rao Allongé, Gentle and
   Sweet), GPL-3.0; Decaid's API documentation made the client possible.
+- **[Figtree](https://github.com/erikdkennedy/figtree)** by Erik Kennedy,
+  SIL Open Font License 1.1 (LICENSE-FIGTREE.txt), is CafAI's typeface;
+  Roboto's arrows (LICENSE-ROBOTO.txt) fill in the few glyphs it lacks.
 - The community skins **streamline-js**, **MSL**, **decaid-zen**, the **DYE2**
   plugin and **decaid-mcp** (shot-analysis definitions) informed the
   platform rules.

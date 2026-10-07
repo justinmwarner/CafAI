@@ -36,5 +36,7 @@ Libraries
 
 Runtime dependencies are listed in package.json and keep their own licenses
 (MIT unless noted): React, MUI (Material UI and MUI X Chat), Emotion, idb,
-uPlot, Zod, core-js, and the Roboto font via Fontsource (SIL Open Font
-License 1.1; its text ships as LICENSE-ROBOTO.txt).
+uPlot, Zod, core-js, the Figtree font via Fontsource (SIL Open Font License
+1.1; its text ships as LICENSE-FIGTREE.txt), and the arrow glyphs of the Roboto
+font via Fontsource (SIL Open Font License 1.1; its text ships as
+LICENSE-ROBOTO.txt).

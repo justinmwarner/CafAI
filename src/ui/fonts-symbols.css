@@ -1,11 +1,12 @@
 /*
  * Roboto's symbols subset, for the arrows CafAI prints ("18 g → 36 g", diff
- * lines). Fontsource's subset files carry no unicode-range, so these faces
- * declare it here: the browser fetches a file only when such a glyph is on
- * screen, and every other character keeps using the latin subset.
+ * lines), which Figtree does not have. A family of its own that the theme
+ * lists right after Figtree, so only these code points come from it.
+ * Fontsource's subset files carry no unicode-range, so these faces declare
+ * it here: the browser fetches a file only when such a glyph is on screen.
  */
 @font-face {
-  font-family: 'Roboto';
+  font-family: 'CafAI Symbols';
   font-style: normal;
   font-display: swap;
   font-weight: 400;
@@ -14,7 +15,7 @@
 }
 
 @font-face {
-  font-family: 'Roboto';
+  font-family: 'CafAI Symbols';
   font-style: normal;
   font-display: swap;
   font-weight: 500;
@@ -23,7 +24,7 @@
 }
 
 @font-face {
-  font-family: 'Roboto';
+  font-family: 'CafAI Symbols';
   font-style: normal;
   font-display: swap;
   font-weight: 700;

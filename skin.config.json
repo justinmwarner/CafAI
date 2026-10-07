@@ -13,6 +13,7 @@
   "licenseFiles": [
     "LICENSE",
     "NOTICE",
+    "LICENSE-FIGTREE.txt",
     "LICENSE-ROBOTO.txt"
   ],
   "zipBaseName": "cafai",
