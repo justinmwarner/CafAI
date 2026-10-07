@@ -24,17 +24,14 @@ import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import { keyframes } from '@mui/material/styles';
+import { keyframes, useTheme } from '@mui/material/styles';
 import { useCoach, useServices } from '../../app/services.tsx';
 import type { CoachUiMessage } from '../../app/types.ts';
 import type { ShotSummary } from '../../coach/types.ts';
-import { FONT_FAMILY, theme } from '../theme.ts';
+import type { GraphPalette } from '../palette.ts';
 import { TID } from '../testIds.ts';
 import { formatSeconds } from './format.ts';
 import { createShotBuffer, type SeriesKey, type ShotValues } from './shotBuffer.ts';
-
-// Task 5 reads these from the theme in context; until then, the default theme's.
-const graphColors = theme.palette.cafai.graph;
 
 /** The x axis always shows at least this much, so a fresh shot is not stretched across the width. */
 const MIN_WINDOW_S = 30;
@@ -45,18 +42,19 @@ const AXIS = { left: 30, right: 40, bottom: 26, top: 10 } as const;
 /** Decaid's shot states once the pour is over. */
 const POUR_OVER: ReadonlySet<string> = new Set(['stopping', 'finished']);
 
+type LegendKey = 'pressure' | 'flow' | 'weightFlow' | 'weight';
+
 interface LegendItem {
-  key: SeriesKey;
+  key: LegendKey;
   label: string;
   unit: string;
-  color: string;
 }
 
 const LEGEND: readonly LegendItem[] = [
-  { key: 'pressure', label: 'Pressure', unit: 'bar', color: graphColors.pressure },
-  { key: 'flow', label: 'Flow', unit: 'ml/s', color: graphColors.flow },
-  { key: 'weightFlow', label: 'Weight flow', unit: 'g/s', color: graphColors.weightFlow },
-  { key: 'weight', label: 'Weight', unit: 'g', color: graphColors.weight },
+  { key: 'pressure', label: 'Pressure', unit: 'bar' },
+  { key: 'flow', label: 'Flow', unit: 'ml/s' },
+  { key: 'weightFlow', label: 'Weight flow', unit: 'g/s' },
+  { key: 'weight', label: 'Weight', unit: 'g' },
 ];
 
 // Blank until there is a shot; "— bar" beside every key reads as a fault.
@@ -91,8 +89,8 @@ function useCardNumbers(shotId: string | null): CardNumbers | null {
 
 const finiteMax = (value: number | null | undefined) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
 
-function graphOptions(width: number, height: number): uPlot.Options {
-  const font = `12px ${FONT_FAMILY}`;
+function graphOptions(width: number, height: number, colors: GraphPalette, fontFamily: string): uPlot.Options {
+  const font = `12px ${fontFamily}`;
   const line = (stroke: string, scale: string, width: number, dash?: number[]): uPlot.Series => ({
     scale,
     stroke,
@@ -117,20 +115,20 @@ function graphOptions(width: number, height: number): uPlot.Options {
     axes: [
       {
         scale: 'x',
-        stroke: graphColors.axis,
+        stroke: colors.axis,
         font,
         size: AXIS.bottom,
         space: 44,
-        grid: { stroke: graphColors.grid, width: 1 },
+        grid: { stroke: colors.grid, width: 1 },
         ticks: { show: false },
         values: (_plot, splits) => splits.map((v) => `${v}s`),
       },
       {
         scale: 'y',
-        stroke: graphColors.axis,
+        stroke: colors.axis,
         font,
         size: AXIS.left,
-        grid: { stroke: graphColors.grid, width: 1 },
+        grid: { stroke: colors.grid, width: 1 },
         ticks: { show: false },
         // Crema's 3-bar grid, thinned when the panel is short (an alert is showing).
         splits: (plot) => (plot.height - AXIS.top - AXIS.bottom < 72 ? [0, 6, 12] : [0, 3, 6, 9, 12]),
@@ -138,7 +136,7 @@ function graphOptions(width: number, height: number): uPlot.Options {
       {
         scale: 'w',
         side: 1,
-        stroke: graphColors.weight,
+        stroke: colors.weight,
         font,
         size: AXIS.right,
         space: 40,
@@ -150,12 +148,12 @@ function graphOptions(width: number, height: number): uPlot.Options {
     // Same order as SERIES_KEYS: targets underneath, pressure on top.
     series: [
       {},
-      line(graphColors.pressure, 'y', 1.5, TARGET_DASH),
-      line(graphColors.flow, 'y', 1.5, TARGET_DASH),
-      line(graphColors.weight, 'w', 1.5),
-      line(graphColors.weightFlow, 'y', 2),
-      line(graphColors.flow, 'y', 2.5),
-      line(graphColors.pressure, 'y', 2.5),
+      line(colors.pressure, 'y', 1.5, TARGET_DASH),
+      line(colors.flow, 'y', 1.5, TARGET_DASH),
+      line(colors.weight, 'w', 1.5),
+      line(colors.weightFlow, 'y', 2),
+      line(colors.flow, 'y', 2.5),
+      line(colors.pressure, 'y', 2.5),
     ],
   };
 }
@@ -193,13 +191,19 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
   const card = useCardNumbers(finishedShotId);
   const shownCard = useRef<CardNumbers | null>(null);
   const repaint = useRef<(() => void) | null>(null);
+  // uPlot paints a canvas, out of sx's reach, so it takes the theme's graph
+  // colours and font as values. Both stay the same objects for as long as the
+  // theme does, so on their own they never re-create the plot.
+  const muiTheme = useTheme();
+  const colors = muiTheme.palette.cafai.graph;
+  const fontFamily = muiTheme.typography.fontFamily ?? 'sans-serif';
 
   useEffect(() => {
     const host = plotHost.current;
     if (!host) return;
     const buffer = createShotBuffer();
     const size = measure(host);
-    const plot = new uPlot(graphOptions(size.width, size.height), buffer.data, host);
+    const plot = new uPlot(graphOptions(size.width, size.height, colors, fontFamily), buffer.data, host);
     let frame: number | null = null;
     let showingShot = false;
 
@@ -278,7 +282,7 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
       repaint.current = null;
       plot.destroy();
     };
-  }, [telemetry]);
+  }, [telemetry, colors, fontFamily]);
 
   // Once in, the card's numbers stay until the next shot starts, even when the
   // chat moves to another bag and the card leaves the messages.
@@ -320,9 +324,10 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
         <Typography
           ref={timer}
           data-testid={TID.shotTimer}
+          variant="readout"
           component="span"
           aria-label="Shot time"
-          sx={{ fontSize: '1.25rem', fontWeight: 500, lineHeight: 1.3, fontVariantNumeric: 'tabular-nums' }}
+          sx={{ fontSize: '1.25rem' }}
         >
           {formatSeconds(0)}
         </Typography>
@@ -338,7 +343,7 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
           minHeight: minPlotHeight,
           overflow: 'hidden',
           mt: 0.5,
-          '& .uplot': { position: 'absolute', top: 0, left: 0, fontFamily: FONT_FAMILY },
+          '& .uplot': { position: 'absolute', top: 0, left: 0, fontFamily },
         }}
       >
         {phase === 'empty' && (
@@ -370,7 +375,7 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
       >
         {LEGEND.map((item) => (
           <Box component="li" key={item.key} sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
-            <Box component="span" aria-hidden sx={{ width: 12, height: 3, borderRadius: 1, bgcolor: item.color }} />
+            <Box component="span" aria-hidden sx={{ width: 12, height: 3, borderRadius: 1, bgcolor: colors[item.key] }} />
             <Typography variant="caption" color="text.secondary">
               {item.label}
             </Typography>

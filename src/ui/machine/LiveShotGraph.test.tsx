@@ -19,6 +19,7 @@ import { TID } from '../testIds.ts';
 import { createFakeServices, IDLE_TELEMETRY, SAMPLE_WORKFLOW } from '../testing/fakeServices.ts';
 import { renderWithServices } from '../testing/renderWithServices.tsx';
 import { fakePlots, resetFakePlots } from '../testing/uplotMock.ts';
+import { theme } from '../theme.ts';
 import { formatSeconds } from './format.ts';
 import { LiveShotGraph } from './LiveShotGraph.tsx';
 
@@ -529,5 +530,15 @@ describe('LiveShotGraph', () => {
     Object.defineProperty(host, 'clientHeight', { configurable: true, value: 210 });
     act(() => observers[0]!([], {} as ResizeObserver));
     expect(fakePlots[0]!.sizes.at(-1)).toEqual({ width: 420, height: 210 });
+  });
+
+  it('draws in the theme\'s graph colours and font', () => {
+    renderWithServices(<LiveShotGraph />, createFakeServices());
+    const opts = fakePlots[0]!.opts as { series: { stroke?: string }[]; axes: { font?: string; stroke?: string }[] };
+    const graph = theme.palette.cafai.graph;
+    // Same order as SERIES_KEYS: targets, weight, weight flow, flow, pressure.
+    expect(opts.series.slice(1).map((s) => s.stroke)).toEqual([graph.pressure, graph.flow, graph.weight, graph.weightFlow, graph.flow, graph.pressure]);
+    expect(opts.axes[0]!.stroke).toBe(graph.axis);
+    expect(opts.axes[0]!.font).toBe(`12px ${theme.typography.fontFamily}`);
   });
 });

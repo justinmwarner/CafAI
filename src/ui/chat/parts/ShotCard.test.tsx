@@ -172,3 +172,13 @@ describe('Notice', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Loading Kiambu AA v2 on the machine…');
   });
 });
+
+describe('ShotCard sparkline', () => {
+  it('keys the curves with drawn swatches, not box-drawing characters', () => {
+    renderThemed(<ShotCard summary={sampleSummary()} />);
+    expect(screen.getByRole('img', { name: 'Pressure and flow during the shot' })).toBeInTheDocument();
+    expect(screen.getByText('Pressure')).toBeInTheDocument();
+    expect(screen.getByText('Flow')).toBeInTheDocument();
+    expect(screen.queryByText(/━/)).toBeNull();
+  });
+});

@@ -23,13 +23,24 @@ const SPARK_Y_MAX = 12;
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <Box sx={{ minWidth: 0 }}>
-      <Typography variant="caption" component="div" sx={{ color: 'text.secondary', lineHeight: 1.2 }}>
+      <Typography variant="label" component="div" sx={{ color: 'text.secondary' }}>
         {label}
       </Typography>
-      <Typography variant="body1" component="div" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+      <Typography variant="body1" component="div" sx={{ fontWeight: 650, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
         {value}
       </Typography>
     </Box>
+  );
+}
+
+function LegendKey({ color, label }: { color: string; label: string }) {
+  return (
+    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+      <Box component="span" aria-hidden sx={{ width: 12, height: 3, borderRadius: 1, bgcolor: color, flexShrink: 0 }} />
+      <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.3 }}>
+        {label}
+      </Typography>
+    </Stack>
   );
 }
 
@@ -41,8 +52,8 @@ function Sparkline({ summary }: { summary: ShotSummary }) {
   const pressure = sparklinePath(series.tS, series.pressure, box);
   const flow = sparklinePath(series.tS, series.flow, box);
   if (!pressure && !flow) return null;
-  const pressureColor = theme.palette.success.main;
-  const flowColor = theme.palette.info.main;
+  const pressureColor = theme.palette.cafai.graph.pressure;
+  const flowColor = theme.palette.cafai.graph.flow;
   return (
     <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mt: 1 }}>
       <Box
@@ -62,12 +73,8 @@ function Sparkline({ summary }: { summary: ShotSummary }) {
         ) : null}
       </Box>
       <Stack spacing={0.25} sx={{ flexShrink: 0 }}>
-        <Typography variant="caption" sx={{ color: pressureColor, lineHeight: 1.3 }}>
-          ━ Pressure
-        </Typography>
-        <Typography variant="caption" sx={{ color: flowColor, lineHeight: 1.3 }}>
-          ━ Flow
-        </Typography>
+        <LegendKey color={pressureColor} label="Pressure" />
+        <LegendKey color={flowColor} label="Flow" />
       </Stack>
     </Stack>
   );
