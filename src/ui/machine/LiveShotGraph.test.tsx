@@ -2,6 +2,7 @@
 import { Profiler } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, screen, within } from '@testing-library/react';
+import { ThemeProvider } from '@mui/material/styles';
 import { formatLocalTimestamp } from '../../../mock/decaid/clock.ts';
 import { normalizeProfile } from '../../../mock/decaid/profiles.ts';
 import { createShotSimulation } from '../../../mock/decaid/shotPlayer.ts';
@@ -19,7 +20,8 @@ import { TID } from '../testIds.ts';
 import { createFakeServices, IDLE_TELEMETRY, SAMPLE_WORKFLOW } from '../testing/fakeServices.ts';
 import { renderWithServices } from '../testing/renderWithServices.tsx';
 import { fakePlots, resetFakePlots } from '../testing/uplotMock.ts';
-import { theme } from '../theme.ts';
+import { buildPalette, namedTint } from '../palette.ts';
+import { createCafaiTheme, theme } from '../theme.ts';
 import { formatSeconds } from './format.ts';
 import { LiveShotGraph } from './LiveShotGraph.tsx';
 
@@ -129,16 +131,65 @@ afterEach(() => {
 });
 
 describe('LiveShotGraph', () => {
-  it('subscribes to samples on mount and lets go on unmount', () => {
+  it('draws from the app-wide recording, which outlives the graph', () => {
     const { services, unmount } = renderWithServices(<LiveShotGraph />);
     expect(services.telemetry.sampleListenerCount).toBe(1);
     expect(fakePlots).toHaveLength(1);
     expect(screen.getByTestId(TID.liveGraph)).toBeInTheDocument();
     expect(screen.getByTestId(TID.shotTimer)).toHaveTextContent('0.0 s');
 
+    // The plot goes with the graph; the recording does not.
     unmount();
-    expect(services.telemetry.sampleListenerCount).toBe(0);
+    expect(services.telemetry.sampleListenerCount).toBe(1);
     expect(fakePlots[0]!.destroyed).toBe(true);
+
+    // A shot pulled with no graph on screen is there for the next graph from its first frame.
+    act(() => {
+      services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' });
+      for (const t of [0, 1, 2]) services.telemetry.emitSample(sample(t));
+    });
+    renderWithServices(<LiveShotGraph />, services);
+    expect(services.telemetry.sampleListenerCount).toBe(1);
+    expect(fakePlots[1]!.setDataCalls.at(-1)).toEqual([0, 1, 2]);
+    expect(screen.getByTestId(TID.shotTimer)).toHaveTextContent('2.0 s');
+    expect(screen.getByText('Live shot')).toBeInTheDocument();
+  });
+
+  it('rebuilds the plot for a new palette and keeps the shot', () => {
+    const dark = createCafaiTheme(buildPalette('dark', namedTint('crema')));
+    const light = createCafaiTheme(buildPalette('light', namedTint('matcha')));
+    const { services, rerenderWith } = renderWithServices(
+      <ThemeProvider theme={dark}>
+        <LiveShotGraph />
+      </ThemeProvider>,
+    );
+    const timer = screen.getByTestId(TID.shotTimer);
+    act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+    act(() => {
+      for (const t of [0, 1, 2]) services.telemetry.emitSample(sample(t));
+    });
+    runFrames();
+    expect(fakePlots[0]!.setDataCalls.at(-1)).toEqual([0, 1, 2]);
+
+    rerenderWith(
+      <ThemeProvider theme={light}>
+        <LiveShotGraph />
+      </ThemeProvider>,
+    );
+    expect(fakePlots).toHaveLength(2);
+    expect(fakePlots[0]!.destroyed).toBe(true);
+    expect(fakePlots[1]!.setDataCalls.at(-1)).toEqual(fakePlots[0]!.setDataCalls.at(-1));
+    expect((fakePlots[1]!.opts as { axes: { stroke?: string }[] }).axes[0]!.stroke).toBe(light.palette.cafai.graph.axis);
+    expect(timer.textContent).toBe('2.0 s');
+    expect(screen.getByText('Live shot')).toBeInTheDocument();
+
+    // The shot goes on in the new plot only.
+    const oldCalls = fakePlots[0]!.setDataCalls.length;
+    act(() => services.telemetry.emitSample(sample(3)));
+    runFrames();
+    expect(fakePlots[1]!.setDataCalls.at(-1)).toEqual([0, 1, 2, 3]);
+    expect(fakePlots[0]!.setDataCalls).toHaveLength(oldCalls);
+    expect(timer.textContent).toBe('3.0 s');
   });
 
   it('hands samples to uPlot at most once per animation frame', () => {

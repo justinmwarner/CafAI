@@ -3,11 +3,13 @@
  * and ml/s share a scale, as on the DE1's own chart), the cup weight on the
  * right, and the profile's targets dashed.
  *
- * Samples never touch React state. They go into a plain buffer and reach the
- * canvas through uPlot's setData at most once per animation frame; the timer
- * and the legend readouts are written straight into their DOM nodes. React
- * re-renders this component a few times per shot (started, finished, its
- * card), not per frame.
+ * The graph keeps no samples of its own: it draws from the app-wide recording
+ * of the shot (shotTrace.ts), so a graph opened mid-shot, or rebuilt for a new
+ * theme, has the shot from its first frame. Samples never touch React state.
+ * They reach the canvas through uPlot's setData at most once per animation
+ * frame; the timer and the legend readouts are written straight into their
+ * DOM nodes. React re-renders this component a few times per shot (started,
+ * finished, its card), not per frame.
  *
  * The timer counts the pour only. After the pour Decaid stays in its stopping
  * state for 4-5 s (the cup weight settles, the shot is stored) before it says
@@ -19,7 +21,7 @@
  * after the drips (`actualYield`). The weight read live can differ from it a
  * little, and the panel must not say one number while the card says another.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 import Box from '@mui/material/Box';
@@ -31,7 +33,8 @@ import type { ShotSummary } from '../../coach/types.ts';
 import type { GraphPalette } from '../palette.ts';
 import { TID } from '../testIds.ts';
 import { formatSeconds } from './format.ts';
-import { createShotBuffer, type SeriesKey, type ShotValues } from './shotBuffer.ts';
+import type { SeriesKey, ShotValues } from './shotBuffer.ts';
+import { shotTraceFor } from './shotTrace.ts';
 
 /** The x axis always shows at least this much, so a fresh shot is not stretched across the width. */
 const MIN_WINDOW_S = 30;
@@ -39,8 +42,6 @@ const MIN_WEIGHT_G = 50;
 const TARGET_DASH = [6, 5];
 /** Axis sizes in px; the empty-state hint is centred in the plotting area between them. */
 const AXIS = { left: 30, right: 40, bottom: 26, top: 10 } as const;
-/** Decaid's shot states once the pour is over. */
-const POUR_OVER: ReadonlySet<string> = new Set(['stopping', 'finished']);
 
 type LegendKey = 'pressure' | 'flow' | 'weightFlow' | 'weight';
 
@@ -173,8 +174,6 @@ const pulse = keyframes`
   50% { opacity: 0.35; }
 `;
 
-type Phase = 'empty' | 'live' | 'done';
-
 export interface LiveShotGraphProps {
   /** Smallest height of the plot area itself, in px. */
   minPlotHeight?: number;
@@ -182,12 +181,11 @@ export interface LiveShotGraphProps {
 
 export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
   const { telemetry } = useServices();
+  const trace = useMemo(() => shotTraceFor(telemetry), [telemetry]);
+  const { phase, finishedShotId } = useSyncExternalStore(trace.subscribe, trace.getState);
   const plotHost = useRef<HTMLDivElement>(null);
   const timer = useRef<HTMLSpanElement>(null);
   const readouts = useRef<Partial<Record<SeriesKey, HTMLSpanElement | null>>>({});
-  const [phase, setPhase] = useState<Phase>('empty');
-  /** The shot on screen once it has finished; its card's numbers replace the live ones. */
-  const [finishedShotId, setFinishedShotId] = useState<string | null>(null);
   const card = useCardNumbers(finishedShotId);
   const shownCard = useRef<CardNumbers | null>(null);
   const repaint = useRef<(() => void) | null>(null);
@@ -201,11 +199,10 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
   useEffect(() => {
     const host = plotHost.current;
     if (!host) return;
-    const buffer = createShotBuffer();
+    const { buffer } = trace;
     const size = measure(host);
     const plot = new uPlot(graphOptions(size.width, size.height, colors, fontFamily), buffer.data, host);
     let frame: number | null = null;
-    let showingShot = false;
 
     const paint = () => {
       frame = null;
@@ -223,42 +220,20 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
       if (frame === null) frame = nextFrame(paint);
     };
     repaint.current = schedule;
+    // A plot rebuilt mid-shot (a new theme), or opened after a shot, shows its time and readouts at once.
+    if (buffer.length > 0) paint();
 
-    const stopSamples = telemetry.onSample((sample) => {
-      if (!buffer.push(sample)) return;
-      // Mounted mid-shot: the first plotted frame is the start we missed.
-      if (!showingShot) {
-        showingShot = true;
-        setPhase('live');
-      }
-      schedule();
-    });
-    const stopShots = telemetry.onShot((event) => {
-      if (event.type === 'started') {
-        buffer.reset();
+    const stopData = trace.onData((change) => {
+      if (change === 'reset') {
         if (frame !== null) cancelFrame(frame);
+        frame = null;
         // The last shot's card numbers go with it, before this paint.
         shownCard.current = null;
-        setFinishedShotId(null);
         // Paint at once so uPlot never redraws from emptied arrays with stale indexes.
         paint();
-        showingShot = true;
-        setPhase('live');
       } else {
-        // Keep the finished shot on screen until the next one starts.
-        setPhase(buffer.length > 0 ? 'done' : 'empty');
-        setFinishedShotId(buffer.length > 0 ? event.shotId : null);
+        schedule();
       }
-    });
-    // Decaid's stopping (or finished) frame carries the timestamp of the
-    // machine frame it stopped on. Only a change counts, so a state still
-    // showing from the last shot never stops the next shot's clock.
-    let shotState = telemetry.getState().shotState;
-    const stopWatching = telemetry.subscribe(() => {
-      const next = telemetry.getState().shotState;
-      if (next === shotState) return;
-      shotState = next;
-      if (next && POUR_OVER.has(next.state) && buffer.endPour(next.timestamp)) schedule();
     });
 
     let last = size;
@@ -273,16 +248,14 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
     else window.addEventListener('resize', resize);
 
     return () => {
-      stopSamples();
-      stopShots();
-      stopWatching();
+      stopData();
       observer?.disconnect();
       window.removeEventListener('resize', resize);
       if (frame !== null) cancelFrame(frame);
       repaint.current = null;
       plot.destroy();
     };
-  }, [telemetry, colors, fontFamily]);
+  }, [trace, colors, fontFamily]);
 
   // Once in, the card's numbers stay until the next shot starts, even when the
   // chat moves to another bag and the card leaves the messages.
