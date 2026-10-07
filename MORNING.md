@@ -14,12 +14,63 @@ pushed.
 |---|---|
 | Typecheck (`npm run typecheck`) | pass |
 | Lint (`npm run lint`) | pass |
-| Unit tests (`npm test`) | **1836/1836** in 115 files (overnight: 1254 in 91) |
-| Playwright (`npm run e2e`) | **93/93** at 962x602, 1280x800 and 1920x1200 (overnight: 27) |
+| Unit tests (`npm test`) | **2047/2047** in 125 files on 2026-10-06 (this morning: 1836 in 115; overnight: 1254 in 91) |
+| Playwright (`npm run e2e`) | **114/114** at 962x602, 1280x800 and 1920x1200 on 2026-10-06 (this morning: 93; overnight: 27) |
 | `npm run verify` (all of the above, build and release zip) | pass |
 | Real Chromium 91 (`npm run build:mock && npm run smoke:chrome91 && npm run smoke:chrome91:loop`) | pass: the app loads with no console or page errors, and the whole coach loop runs, now waiting for the machine to confirm each load |
 | Live API test (`npm run test:live`) | skipped here (no key on this machine); its dry run against the scripted coach passes |
 | Fresh-eyes verifier | found 1 major, 5 minor and 3 polish defects; all fixed, and its own repro spec passes against the fixes (8/8) |
+
+## Since then: Decaid's simulator and a demo (2026-10-05 and 06)
+
+- **A demo you can open (D76).** `npm run demo` opens
+  <http://localhost:5175/?demo=1>. CafAI is already in use there, on the
+  built-in mocks: no Decaid, no API key, no tokens.
+  - **What's on screen:** Kiambu AA, dialled in over four shots, showing
+    every kind of card and notice the coach can show:
+    - template cards;
+    - "Loading…" and "Loaded" notices;
+    - shot cards with graphs and stars;
+    - answered taste chips;
+    - change cards: applied, made by hand, declined and undone.
+
+    A second bag, Santos, is in the bag picker.
+  - **The open question:** the last shot's "How did it taste?" is waiting.
+    Tap an answer and the coach thinks for about 1.5 s, streams its reply,
+    looks at the pressure curve, then proposes a change. Confirm loads it
+    ("Loading Kiambu AA v5 on the machine…", then "Loaded"). Each answer
+    leads somewhere different, and a typed taste works too.
+  - **Starting over:** a reload starts the demo again from the beginning.
+  - **Your own data:** the demo never writes over CafAI data that is
+    already at that address; it says so instead.
+
+  What's on screen and what each answer does:
+  [docs/DEMO.md](docs/DEMO.md).
+- **How it was built and checked:** each load makes the demo's data by
+  playing a written story through CafAI's real engine, so the demo shows
+  exactly what the app writes. A fresh-eyes verifier drove it at 962x602:
+  its 15 findings are fixed, and its re-check confirmed 14 of them. The rest
+  are fixed too, checked by tests rather than driven again: the typed taste
+  it found half done, plus 2 new findings from the re-check (a card timed
+  its peak on another clock, and the guard note squeezed the app).
+- **App fixes found on the way.** These would show with the real coach too:
+  - Undo marked the wrong shot's change as undone in History (D77).
+  - The panel and the shot card gave different times and yields (60.6 s and
+    44.5 g against 62.4 s and 41.5 g). Now there is one time, the pour, and
+    one yield, the settled cup, everywhere. The card counts its times from
+    the start of the pour, and the panel names the running step ("Pulling a
+    shot: pause" during Blooming's bloom) (D78).
+  - The answer to any coach question was saved as the shot's taste, in
+    Decaid's shot notes too. Now only the taste question's answer is (D79).
+  - Cards set aside after Undo or a new shot said "you answered in the chat
+    instead".
+  - The keep card read like a change made by hand.
+  - The coach's paragraphs ran together.
+  - Raw `**` flashed while a reply streamed.
+- **Seen on both simulators:** Blooming v1 runs out of profile at 42-48 g
+  from 18 g, short of its 50 g stop. If a real DE1 does the same, the yield
+  comes from the length of the pour, not the stop (QUESTIONS #3, hardware
+  plan 3.5).
 
 ## Your answers, one by one
 
@@ -174,6 +225,13 @@ fix agents, then a third, closed what it found.
 
 ```bash
 npm ci
+npm run demo
+# opens http://localhost:5175/?demo=1: CafAI in use, one open question to tap
+```
+
+Or start from an empty CafAI:
+
+```bash
 npm run dev:mock
 # open http://localhost:5173/?mockSpeed=20
 ```
