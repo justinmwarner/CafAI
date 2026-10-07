@@ -139,4 +139,5 @@ export {
 } from './mirror.ts';
 export { exportFileName, ImportError, IMPORT_MESSAGES, parseCafaiExport, serializeExport } from './porter.ts';
 export { isReady, redactSecret, SECRETS_DB_NAME } from './secrets.ts';
-export { defaultSettings } from './settings.ts';
+export { DEFAULT_APPEARANCE, defaultSettings, normalizeAppearance, sameAppearance } from './settings.ts';
+export type { Appearance, AppearanceMode } from './types.ts';

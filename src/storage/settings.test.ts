@@ -3,7 +3,15 @@ import { createDbHandle, openCafaiDb, SETTINGS_KEY } from './db.ts';
 import { buildMirrorEntries, exportFromMirror } from './mirror.ts';
 import { createDataPorter } from './porter.ts';
 import { createRepositories } from './repositories.ts';
-import { applySettingsPatch, defaultSettings, fillBlankSettings, normalizeSettings } from './settings.ts';
+import {
+  applySettingsPatch,
+  DEFAULT_APPEARANCE,
+  defaultSettings,
+  fillBlankSettings,
+  normalizeAppearance,
+  normalizeSettings,
+  sameAppearance,
+} from './settings.ts';
 import type { CafaiExport, Settings } from './types.ts';
 import { API_KEY, MODEL, makeSettings, uniqueDbName } from './testing/fixtures.ts';
 
@@ -12,7 +20,14 @@ const PASTED_KEY = ['sk', 'ant', 'api03', 'nOtArEaLkEy0123456789', 'AbCdEfGhIjKl
 
 describe('defaultSettings', () => {
   it('uses the default model and leaves everything else blank', () => {
-    expect(defaultSettings(MODEL)).toEqual({ model: MODEL, grinderName: null, grinderSetting: null, grinderId: null, activeBagId: null });
+    expect(defaultSettings(MODEL)).toEqual({
+      model: MODEL,
+      grinderName: null,
+      grinderSetting: null,
+      grinderId: null,
+      activeBagId: null,
+      appearance: DEFAULT_APPEARANCE,
+    });
   });
 });
 
@@ -30,7 +45,14 @@ describe('normalizeSettings', () => {
 
   it('falls back field by field when a stored value has the wrong type', () => {
     const raw = { model: 5, grinderName: 3, grinderSetting: '2.5', grinderId: 7, activeBagId: {} };
-    expect(normalizeSettings(raw, MODEL)).toEqual({ model: MODEL, grinderName: null, grinderSetting: '2.5', grinderId: null, activeBagId: null });
+    expect(normalizeSettings(raw, MODEL)).toEqual({
+      model: MODEL,
+      grinderName: null,
+      grinderSetting: '2.5',
+      grinderId: null,
+      activeBagId: null,
+      appearance: DEFAULT_APPEARANCE,
+    });
   });
 
   it('treats a blank model as the default model', () => {
@@ -39,13 +61,13 @@ describe('normalizeSettings', () => {
 
   it('never carries fields outside Settings, such as an API key', () => {
     const normalized = normalizeSettings({ ...makeSettings(), apiKey: API_KEY, theme: 'dark' }, MODEL);
-    expect(Object.keys(normalized).sort()).toEqual(['activeBagId', 'grinderId', 'grinderName', 'grinderSetting', 'model']);
+    expect(Object.keys(normalized).sort()).toEqual(['activeBagId', 'appearance', 'grinderId', 'grinderName', 'grinderSetting', 'model']);
     expect(JSON.stringify(normalized)).not.toContain(API_KEY);
   });
 
   it('reads settings saved before grinder links as not linked', () => {
     const older = { model: MODEL, grinderName: 'Niche Zero', grinderSetting: '14', activeBagId: 'bag_1' };
-    expect(normalizeSettings(older, MODEL)).toEqual({ ...older, grinderId: null });
+    expect(normalizeSettings(older, MODEL)).toEqual({ ...older, grinderId: null, appearance: DEFAULT_APPEARANCE });
   });
 
   it('keeps a linked grinder id, and reads an empty one as no link', () => {
@@ -263,5 +285,63 @@ describe('fillBlankSettings: a restore fills blanks and never overwrites local s
     expect(fillBlankSettings(linkedHere, incoming, MODEL)).toMatchObject({ grinderName: 'Lagom P64', grinderId: 'g-2' });
     const linkWithoutName = makeSettings({ grinderId: 'g-2' });
     expect(fillBlankSettings(linkWithoutName, incoming, MODEL)).toMatchObject({ grinderName: null, grinderId: 'g-2' });
+  });
+});
+
+describe('appearance', () => {
+  it("defaults to dark Crema, today's look", () => {
+    expect(DEFAULT_APPEARANCE).toEqual({ mode: 'dark', tint: 'crema' });
+    expect(defaultSettings(MODEL).appearance).toEqual(DEFAULT_APPEARANCE);
+    expect(normalizeSettings({ model: MODEL }, MODEL).appearance).toEqual(DEFAULT_APPEARANCE);
+  });
+
+  it('keeps a valid mode and tint', () => {
+    expect(normalizeAppearance({ mode: 'light', tint: 'matcha' })).toEqual({ mode: 'light', tint: 'matcha' });
+    expect(normalizeAppearance({ mode: 'auto', tint: { hue: 210 } })).toEqual({ mode: 'auto', tint: { hue: 210 } });
+    // An id this build does not know is kept; the UI decides what it looks like.
+    expect(normalizeAppearance({ mode: 'dark', tint: 'forest' })).toEqual({ mode: 'dark', tint: 'forest' });
+  });
+
+  it('falls back field by field', () => {
+    expect(normalizeAppearance({ mode: 'sepia', tint: 'matcha' })).toEqual({ mode: 'dark', tint: 'matcha' });
+    expect(normalizeAppearance({ mode: 'light', tint: 'Not An Id!' })).toEqual({ mode: 'light', tint: 'crema' });
+    expect(normalizeAppearance({ mode: 'light', tint: { hue: 'red' } })).toEqual({ mode: 'light', tint: 'crema' });
+    expect(normalizeAppearance({ mode: 'light', tint: { hue: Number.NaN } })).toEqual({ mode: 'light', tint: 'crema' });
+    for (const raw of [undefined, null, 'dark', 7, []]) expect(normalizeAppearance(raw)).toEqual(DEFAULT_APPEARANCE);
+  });
+
+  it('wraps and rounds a stored hue', () => {
+    expect(normalizeAppearance({ mode: 'dark', tint: { hue: 370.4 } }).tint).toEqual({ hue: 10 });
+    expect(normalizeAppearance({ mode: 'dark', tint: { hue: -20 } }).tint).toEqual({ hue: 340 });
+  });
+
+  it('is patched like any other setting', () => {
+    const next = applySettingsPatch(defaultSettings(MODEL), { appearance: { mode: 'light', tint: { hue: 120 } } }, MODEL);
+    expect(next.appearance).toEqual({ mode: 'light', tint: { hue: 120 } });
+    expect(applySettingsPatch(next, { grinderSetting: '14' }, MODEL).appearance).toEqual({ mode: 'light', tint: { hue: 120 } });
+  });
+
+  it('takes an imported appearance only while this device still has the default', () => {
+    const incoming = { ...defaultSettings(MODEL), appearance: { mode: 'light' as const, tint: 'ocean' } };
+    expect(fillBlankSettings(defaultSettings(MODEL), incoming, MODEL).appearance).toEqual({ mode: 'light', tint: 'ocean' });
+    const mine = { ...defaultSettings(MODEL), appearance: { mode: 'auto' as const, tint: 'plum' } };
+    expect(fillBlankSettings(mine, incoming, MODEL).appearance).toEqual({ mode: 'auto', tint: 'plum' });
+  });
+
+  it('compares appearances by value', () => {
+    expect(sameAppearance({ mode: 'dark', tint: { hue: 5 } }, { mode: 'dark', tint: { hue: 5 } })).toBe(true);
+    expect(sameAppearance({ mode: 'dark', tint: 'crema' }, { mode: 'dark', tint: { hue: 68 } })).toBe(false);
+    expect(sameAppearance({ mode: 'dark', tint: 'crema' }, { mode: 'light', tint: 'crema' })).toBe(false);
+  });
+
+  it('survives the Decaid mirror round trip (buildMirrorEntries then exportFromMirror)', () => {
+    // Same setup style as "the backup in Decaid holds the settings without the key": a bare
+    // snapshot pushed through buildMirrorEntries, then read back with exportFromMirror.
+    const settings = makeSettings({ appearance: { mode: 'light', tint: { hue: 200 } } });
+    const snapshot = { settings, bags: [], versions: [], iterations: [], conversations: [] };
+    const { entries } = buildMirrorEntries(snapshot, null, MODEL);
+    const data = Object.fromEntries([...entries].map(([key, text]) => [key, JSON.parse(text)]));
+    const restored = exportFromMirror(data, { appVersion: '1.2.3', defaultModel: MODEL, now: () => new Date(0) });
+    expect(restored?.settings.appearance).toEqual({ mode: 'light', tint: { hue: 200 } });
   });
 });

@@ -10,6 +10,7 @@ import {
   parseCafaiExport,
   serializeExport,
 } from './porter.ts';
+import { DEFAULT_APPEARANCE } from './settings.ts';
 import type { CafaiExport, SecretStore } from './types.ts';
 import {
   API_KEY,
@@ -258,7 +259,7 @@ describe('importAll replace', () => {
 
     const older = { model: MODEL, grinderName: 'DF64', grinderSetting: '2.5', activeBagId: null };
     await a.porter.importAll({ ...exportOf(), settings: older }, 'replace');
-    expect(await a.repos.settings.get()).toEqual({ ...older, grinderId: null });
+    expect(await a.repos.settings.get()).toEqual({ ...older, grinderId: null, appearance: DEFAULT_APPEARANCE });
   });
 
   it('returns the number of records imported and asks the mirror to push the new state', async () => {

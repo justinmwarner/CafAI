@@ -111,6 +111,20 @@ export interface ConversationRecord {
   updatedAt: IsoDateTime;
 }
 
+/** Dark, light, or whatever the device is set to. */
+export type AppearanceMode = 'dark' | 'light' | 'auto';
+
+/**
+ * How CafAI looks: a mode and a tint. The tint is a named tint's id (the list
+ * lives with the palette, src/ui/palette.ts) or a hue from the custom slider.
+ * Storage keeps any well-formed id; the UI reads one it does not know as the
+ * default tint, so a tint a newer CafAI added survives a read by an older one.
+ */
+export interface Appearance {
+  mode: AppearanceMode;
+  tint: string | { hue: number };
+}
+
 /** Non-secret settings. Mirrored to Decaid. Never holds the API key. */
 export interface Settings {
   model: string;
@@ -125,6 +139,11 @@ export interface Settings {
   grinderId?: string | null;
   /** Last bag the user worked on, restored on start. */
   activeBagId: string | null;
+  /**
+   * How CafAI looks. Storage always reads and writes it (the default when
+   * absent); it is optional only so that older Settings literals compile.
+   */
+  appearance?: Appearance;
 }
 
 export interface BagRepository {

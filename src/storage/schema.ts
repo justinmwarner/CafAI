@@ -17,7 +17,7 @@ import { ROAST_LEVELS, VARIABLES, type ProposeAdjustment } from '../coach/contra
 import type { ProfileJson, ShotSummary } from '../coach/types.ts';
 import type { LlmMessage } from '../llm/types.ts';
 import type { CoachUiMessage } from '../app/types.ts';
-import type { AppliedChange, Feedback } from './types.ts';
+import type { Appearance, AppliedChange, Feedback } from './types.ts';
 
 /** Checked against `shape`, but the original value is kept, untouched. */
 function exact<T>(shape: z.ZodType) {
@@ -105,6 +105,13 @@ export const SettingsSchema = z.object({
   /** Absent from exports made before grinders could be linked to Decaid: read as not linked. */
   grinderId: nullableText,
   activeBagId: nullableText,
+  /**
+   * Absent from exports made before appearance existed, in which case normalizeAppearance
+   * reads it as the default. Not shape-checked here (any value passes) and re-validated there,
+   * so a tint id this build does not know still survives the round trip instead of being
+   * dropped as an unrecognised shape.
+   */
+  appearance: exact<Appearance>(z.unknown()).optional(),
 });
 
 export const BagSchema = z.object({

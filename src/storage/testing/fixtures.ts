@@ -4,6 +4,7 @@
  * parts. Every builder takes overrides so a test states only what it cares about.
  */
 import type { ProfileJson, ShotSummary } from '../../coach/types.ts';
+import { DEFAULT_APPEARANCE } from '../settings.ts';
 import type { Bag, ConversationRecord, IterationRecord, ProfileVersion, Settings } from '../types.ts';
 import { newId } from '../../util/id.ts';
 
@@ -16,7 +17,15 @@ export function uniqueDbName(prefix = 'cafai-test'): string {
 }
 
 export function makeSettings(overrides: Partial<Settings> = {}): Settings {
-  return { model: MODEL, grinderName: null, grinderSetting: null, grinderId: null, activeBagId: null, ...overrides };
+  return {
+    model: MODEL,
+    grinderName: null,
+    grinderSetting: null,
+    grinderId: null,
+    activeBagId: null,
+    appearance: DEFAULT_APPEARANCE,
+    ...overrides,
+  };
 }
 
 export function makeBag(overrides: Partial<Bag> = {}): Bag {

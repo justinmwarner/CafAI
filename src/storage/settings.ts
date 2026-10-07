@@ -18,10 +18,13 @@
  * rule is cleaned when it is read.
  */
 import { containsKeyLike, redactKeyLike } from './redact.ts';
-import type { Settings } from './types.ts';
+import type { Appearance, AppearanceMode, Settings } from './types.ts';
+
+/** Today's look. */
+export const DEFAULT_APPEARANCE: Appearance = { mode: 'dark', tint: 'crema' };
 
 export function defaultSettings(defaultModel: string): Settings {
-  return { model: defaultModel, grinderName: null, grinderSetting: null, grinderId: null, activeBagId: null };
+  return { model: defaultModel, grinderName: null, grinderSetting: null, grinderId: null, activeBagId: null, appearance: DEFAULT_APPEARANCE };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -48,6 +51,31 @@ function idOrNull(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' && !containsKeyLike(value) ? value : null;
 }
 
+const MODES: readonly AppearanceMode[] = ['dark', 'light', 'auto'];
+/** A tint id is a short lowercase word; nothing else (a pasted key included) is ever kept. */
+const TINT_ID = /^[a-z][a-z0-9-]{0,31}$/;
+
+function normalizeTint(raw: unknown): Appearance['tint'] {
+  if (typeof raw === 'string' && TINT_ID.test(raw)) return raw;
+  if (isRecord(raw) && typeof raw['hue'] === 'number' && Number.isFinite(raw['hue'])) {
+    return { hue: ((Math.round(raw['hue']) % 360) + 360) % 360 };
+  }
+  return DEFAULT_APPEARANCE.tint;
+}
+
+/** A stored appearance, read leniently: anything unusable falls back to the default, field by field. */
+export function normalizeAppearance(raw: unknown): Appearance {
+  if (!isRecord(raw)) return DEFAULT_APPEARANCE;
+  const mode = MODES.find((m) => m === raw['mode']) ?? DEFAULT_APPEARANCE.mode;
+  return { mode, tint: normalizeTint(raw['tint']) };
+}
+
+export function sameAppearance(a: Appearance, b: Appearance): boolean {
+  if (a.mode !== b.mode) return false;
+  if (typeof a.tint === 'string' || typeof b.tint === 'string') return a.tint === b.tint;
+  return a.tint.hue === b.tint.hue;
+}
+
 export function normalizeSettings(raw: unknown, defaultModel: string): Settings {
   if (!isRecord(raw)) return defaultSettings(defaultModel);
   // A key is never a model id: with it taken out, an empty model is the default.
@@ -59,10 +87,11 @@ export function normalizeSettings(raw: unknown, defaultModel: string): Settings 
     // Settings saved before grinders could be linked have no id: not linked.
     grinderId: idOrNull(raw['grinderId']),
     activeBagId: textOrNull(raw['activeBagId']),
+    appearance: normalizeAppearance(raw['appearance']),
   };
 }
 
-const FIELDS: ReadonlyArray<keyof Settings> = ['model', 'grinderName', 'grinderSetting', 'grinderId', 'activeBagId'];
+const FIELDS: ReadonlyArray<keyof Settings> = ['model', 'grinderName', 'grinderSetting', 'grinderId', 'activeBagId', 'appearance'];
 
 /** `undefined` means "not part of this edit", never "clear it"; clearing takes an explicit null. */
 export function applySettingsPatch(current: Settings, patch: Partial<Settings>, defaultModel: string): Settings {
@@ -87,6 +116,7 @@ function isBlank(value: string | null | undefined): boolean {
  * The grinder's name and its Decaid link describe one grinder, so the link
  * comes along only when this device names no grinder at all: a name typed
  * here is never paired with another grinder's link.
+ * The appearance, like the model, is adopted only while it is still the default.
  */
 export function fillBlankSettings(local: Settings, incoming: Settings, defaultModel: string): Settings {
   const pick = (mine: string | null, theirs: string | null) => (isBlank(mine) && !isBlank(theirs) ? theirs : mine);
@@ -98,5 +128,9 @@ export function fillBlankSettings(local: Settings, incoming: Settings, defaultMo
     grinderSetting: pick(local.grinderSetting, incoming.grinderSetting),
     grinderId: noGrinderHere ? (incoming.grinderId ?? null) : (local.grinderId ?? null),
     activeBagId: pick(local.activeBagId, incoming.activeBagId),
+    // Like the model: a look chosen on this device wins; the default takes the imported one.
+    appearance: sameAppearance(local.appearance ?? DEFAULT_APPEARANCE, DEFAULT_APPEARANCE)
+      ? (incoming.appearance ?? DEFAULT_APPEARANCE)
+      : (local.appearance ?? DEFAULT_APPEARANCE),
   };
 }

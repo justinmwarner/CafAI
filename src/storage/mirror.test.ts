@@ -13,6 +13,7 @@ import {
   type MirrorSnapshot,
   type MirrorSource,
 } from './mirror.ts';
+import { DEFAULT_APPEARANCE } from './settings.ts';
 import { createMemoryKv, type MemoryKv } from './testing/memoryKv.ts';
 import {
   API_KEY,
@@ -418,7 +419,7 @@ describe('pull', () => {
 
     const older = { model: MODEL, grinderName: 'DF64', grinderSetting: '2.5', activeBagId: 'bag_kiambu' };
     const oldKv = createMemoryKv({ cafai: { settings: older, bags: [makeBag()] } });
-    expect((await makeMirror(oldKv, memorySource().source).pull())?.settings).toEqual({ ...older, grinderId: null });
+    expect((await makeMirror(oldKv, memorySource().source).pull())?.settings).toEqual({ ...older, grinderId: null, appearance: DEFAULT_APPEARANCE });
   });
 
   it('rejects when Decaid cannot be read, so a failure never looks like an empty backup', async () => {
