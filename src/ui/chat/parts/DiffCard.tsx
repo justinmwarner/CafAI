@@ -80,7 +80,7 @@ function StatusLine({ part, showUndo, disabled, onUndo }: Pick<DiffCardProps, 'p
           </Typography>
           {showUndo ? (
             <Button
-              variant="outlined"
+              variant="tonal"
               startIcon={<UndoIcon />}
               data-testid={TID.diffUndo}
               disabled={disabled}

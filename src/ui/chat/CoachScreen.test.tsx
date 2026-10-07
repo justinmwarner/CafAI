@@ -80,6 +80,19 @@ describe('CoachScreen', () => {
     expect(services.coach.calls).toEqual([{ method: 'selectBag', args: [SANTOS.id] }]);
   });
 
+  it('shows the version quietly beside the bag, with its starting profile', () => {
+    renderCoach(coachStateFor('options'));
+    const version = screen.getByTestId(TID.activeVersion);
+    // The whole title is still in the text for screen readers; the bag's name repeats the picker, so only "v1" shows.
+    expect(version).toHaveTextContent('Kiambu AA v1 · Blooming Espresso');
+    expect(within(version).getByText('v1')).toBeVisible();
+  });
+
+  it('names the bag picker for screen readers without a visible label', () => {
+    renderCoach(coachStateFor('options'));
+    expect(screen.getByRole('combobox', { name: 'Bag' })).toBe(screen.getByTestId(TID.bagPicker));
+  });
+
   const placeholder = () => screen.getByTestId(TID.composerInput).getAttribute('placeholder');
 
   it('invites the taste in the composer only while the open question is about the taste', () => {

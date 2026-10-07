@@ -505,6 +505,11 @@ const chatSx = {
     paddingTop: '2px',
     paddingBottom: '2px',
   },
+  // A comfortable line length on a wide pane: the thread and the composer centre.
+  '& .MuiChatMessageList-content': { maxWidth: 680, width: '100%', mx: 'auto' },
+  '& .MuiChatComposer-root': { maxWidth: 760, width: '100%', mx: 'auto' },
+  // The barista's own words sit on a quiet tonal bubble; the accent is kept for actions.
+  '& .MuiChatMessage-roleUser .MuiChatMessage-bubble': { bgcolor: 'cafai.raised', color: 'text.primary' },
   '& .MuiChatComposer-textArea': { fontSize: '1rem' },
   // followNewest.ts owns the scroll position; the browser's scroll anchoring
   // would move it on its own when content above the view changes size.

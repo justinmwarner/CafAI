@@ -6,7 +6,6 @@ import { useMemo, type ReactNode } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import IconButton from '@mui/material/IconButton';
 import Paper from '@mui/material/Paper';
@@ -18,11 +17,12 @@ import CloseIcon from '@mui/icons-material/Close';
 import KeyIcon from '@mui/icons-material/Key';
 import LocalCafeIcon from '@mui/icons-material/LocalCafe';
 import UndoIcon from '@mui/icons-material/Undo';
-import type { Bag } from '../../storage/types.ts';
+import type { Bag, ProfileVersion } from '../../storage/types.ts';
 import type { CoachPhase, CoachUiMessage } from '../../app/types.ts';
 import { useCoach, useServices, useTelemetry } from '../../app/services.tsx';
 import { isShotRunning } from '../../api/workflow.ts';
 import { TID } from '../testIds.ts';
+import { templateName } from '../history/historyModel.ts';
 import { ChatSurface } from './ChatSurface.tsx';
 import { formatDateTime } from './format.ts';
 import type { OptionsPart } from './parts/types.ts';
@@ -90,8 +90,7 @@ function BagPicker({ bags, activeBag, disabled }: { bags: Bag[]; activeBag: Bag 
   return (
     <TextField
       select
-      size="small"
-      label="Bag"
+      variant="standard"
       value={activeBag?.id ?? ''}
       disabled={disabled}
       onChange={(event) => {
@@ -100,11 +99,24 @@ function BagPicker({ bags, activeBag, disabled }: { bags: Bag[]; activeBag: Bag 
       }}
       slotProps={{
         select: { native: true },
-        htmlInput: { 'data-testid': TID.bagPicker },
-        inputLabel: { shrink: true },
+        input: { disableUnderline: true },
+        htmlInput: { 'data-testid': TID.bagPicker, 'aria-label': 'Bag' },
       }}
-      // The native select itself is the touch target: 12.5 px padding makes it 48 px tall.
-      sx={{ minWidth: 150, maxWidth: 280, flex: '1 1 180px', '& .MuiNativeSelect-select': { py: '12.5px' } }}
+      // The native select itself is the 48 px touch target; it reads as the screen's title.
+      sx={{
+        minWidth: 120,
+        maxWidth: 320,
+        flex: '0 1 auto',
+        '& .MuiNativeSelect-select': {
+          minHeight: 48,
+          boxSizing: 'border-box',
+          py: '11px',
+          fontSize: '1.1875rem',
+          fontWeight: 700,
+          lineHeight: 1.4,
+          letterSpacing: '-0.005em',
+        },
+      }}
     >
       {activeBag ? null : (
         <option value="" disabled>
@@ -260,26 +272,17 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
       {showHeader ? (
         <Stack
           direction="row"
-          spacing={1}
           useFlexGap
           component="header"
           aria-label="Bag"
-          sx={{ alignItems: 'center', flexWrap: 'wrap', px: 1.5, pt: 1.5, pb: 1, borderBottom: 1, borderColor: 'divider' }}
+          sx={{ alignItems: 'center', flexWrap: 'wrap', minHeight: 64, px: 1.5, py: 0.5, columnGap: 1.25, borderBottom: 1, borderColor: 'divider' }}
         >
           <BagPicker bags={listedBags} activeBag={activeBag} disabled={busy || shotRunning} />
-          {activeBag ? (
-            <Chip
-              data-testid={TID.activeVersion}
-              label={activeVersion ? <VersionLabel title={activeVersion.title} version={activeVersion.version} /> : 'No profile yet'}
-              color={activeVersion ? 'primary' : 'default'}
-              variant={activeVersion ? 'filled' : 'outlined'}
-              sx={{ minHeight: 0, height: 36, fontWeight: 600, maxWidth: 260, '& .MuiChip-label': { display: 'flex', minWidth: 0 } }}
-            />
-          ) : null}
+          {activeBag ? <VersionText version={activeVersion} bagName={activeBag.name} /> : null}
           <Box sx={{ flex: '1 0 0', minWidth: 0 }} />
           {canUndo && showChat ? (
             <Button
-              variant="outlined"
+              variant="tonal"
               startIcon={<UndoIcon />}
               data-testid={TID.undoButton}
               disabled={busy}
@@ -291,7 +294,7 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
           ) : null}
           {activeBag ? (
             <Button
-              variant="outlined"
+              variant="tonal"
               startIcon={<AddIcon />}
               data-testid={TID.newBag}
               disabled={busy || shotRunning}
@@ -306,6 +309,57 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
       {error ? <ErrorBanner error={error} /> : null}
       {body}
     </Box>
+  );
+}
+
+const visuallyHidden = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  overflow: 'hidden',
+  clipPath: 'inset(50%)',
+  whiteSpace: 'nowrap',
+} as const;
+
+/**
+ * The version on the machine, quietly: "v4 · Blooming Espresso". When the
+ * title is just the bag's name and the version, the name (already in the
+ * picker) is only read out, not shown twice.
+ */
+function VersionText({ version, bagName }: { version: ProfileVersion | null; bagName: string }) {
+  if (!version) {
+    return (
+      <Typography data-testid={TID.activeVersion} variant="body2" component="span" noWrap sx={{ color: 'text.secondary' }}>
+        No profile yet
+      </Typography>
+    );
+  }
+  const suffix = `v${version.version}`;
+  const repeatsBag = version.title === `${bagName} ${suffix}`;
+  return (
+    <Typography
+      data-testid={TID.activeVersion}
+      variant="body2"
+      component="span"
+      sx={{ display: 'flex', minWidth: 0, maxWidth: 360, color: 'text.secondary', whiteSpace: 'nowrap' }}
+    >
+      <Box component="span" sx={{ color: 'text.primary', fontWeight: 650, display: 'flex', minWidth: 0 }}>
+        {repeatsBag ? (
+          <>
+            <Box component="span" sx={visuallyHidden}>
+              {`${bagName} `}
+            </Box>
+            <span>{suffix}</span>
+          </>
+        ) : (
+          <VersionLabel title={version.title} version={version.version} />
+        )}
+      </Box>
+      <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 1 }}>
+        {' · '}
+        {templateName(version.templateId)}
+      </Box>
+    </Typography>
   );
 }
 
