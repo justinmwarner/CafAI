@@ -1,69 +1,116 @@
 /**
- * CafAI's look: a dark espresso bar, one warm crema accent, type sized to be
- * read from a step back from the machine, and every control at least 48 px
- * tall because it is pressed by a wet thumb, not a mouse.
+ * CafAI's look, built from one palette (palette.ts): Figtree throughout, type
+ * sized to be read from a step back from the machine, quiet tonal surfaces
+ * instead of outlines, and every control at least 48 px tall because it is
+ * pressed by a wet thumb, not a mouse.
  *
- * Plain palette colors only (no `cssVariables`): MUI's CSS-variable mode can
+ * Plain palette colours only (no `cssVariables`): MUI's CSS-variable mode can
  * emit color-mix(), which the Chromium 91 WebView does not understand.
  */
+import type { CSSProperties } from 'react';
 import { createTheme, type Theme } from '@mui/material/styles';
+import { blend } from './color.ts';
+import { buildPalette, DEFAULT_TINT_ID, namedTint, type GraphPalette, type Palette } from './palette.ts';
 
-export const FONT_FAMILY = '"Roboto", "Helvetica", "Arial", sans-serif';
-
-/** Raw tokens, for the few places that draw outside MUI (the uPlot canvas). */
-export const tokens = {
-  background: '#14100D',
-  surface: '#1E1813',
-  surfaceRaised: '#2A211B',
-  line: 'rgba(246, 236, 227, 0.12)',
-  ink: '#F6ECE3',
-  inkMuted: 'rgba(246, 236, 227, 0.7)',
-  crema: '#C8A27A',
-  cremaInk: '#1B130C',
-} as const;
-
-/** Shot graph colors, after Crema: green pressure, blue flow, amber weight flow. */
-export const graphColors = {
-  pressure: '#5FD3A0',
-  flow: '#5AAEF2',
-  weightFlow: '#F0A35E',
-  weight: '#D9C4A8',
-  grid: 'rgba(246, 236, 227, 0.08)',
-  axis: 'rgba(246, 236, 227, 0.62)',
-} as const;
+/** Figtree for everything; the arrows it lacks (→) come from the CafAI Symbols faces (fonts-symbols.css). */
+export const FONT_FAMILY = '"Figtree", "CafAI Symbols", system-ui, "Helvetica", "Arial", sans-serif';
 
 /** Smallest comfortable touch target, in CSS px. */
 export const TOUCH_TARGET = 48;
 
-export function createCafaiTheme(): Theme {
+/** The palette colours MUI has no slot for: `theme.palette.cafai`, and in sx `bgcolor: 'cafai.raised'`. */
+export interface CafaiColors {
+  raised: string;
+  accentSoft: string;
+  live: string;
+  graph: GraphPalette;
+}
+
+declare module '@mui/material/styles' {
+  interface Palette {
+    cafai: CafaiColors;
+  }
+  interface PaletteOptions {
+    cafai?: CafaiColors;
+  }
+  interface TypographyVariants {
+    display: CSSProperties;
+    readoutLarge: CSSProperties;
+    readout: CSSProperties;
+    label: CSSProperties;
+  }
+  interface TypographyVariantsOptions {
+    display?: CSSProperties;
+    readoutLarge?: CSSProperties;
+    readout?: CSSProperties;
+    label?: CSSProperties;
+  }
+}
+
+declare module '@mui/material/Typography' {
+  interface TypographyPropsVariantOverrides {
+    display: true;
+    readoutLarge: true;
+    readout: true;
+    label: true;
+  }
+}
+
+declare module '@mui/material/Button' {
+  interface ButtonPropsVariantOverrides {
+    tonal: true;
+  }
+}
+
+const tabular = { fontVariantNumeric: 'tabular-nums' } as const;
+
+export function createCafaiTheme(palette: Palette = buildPalette('dark', namedTint(DEFAULT_TINT_ID))): Theme {
+  const dark = palette.mode === 'dark';
+  const tonalHover = blend(palette.ink, palette.raised, dark ? 0.08 : 0.06);
+  const tonalDisabled = blend(palette.ink, palette.raised, 0.38);
   return createTheme({
     // Opt-in keyboard focus ring; touch users never see it.
     focusVisible: true,
     palette: {
-      mode: 'dark',
-      primary: { main: tokens.crema, light: '#DDBF9C', dark: '#9E7A55', contrastText: tokens.cremaInk },
-      secondary: { main: '#8FB9A8', contrastText: tokens.cremaInk },
-      error: { main: '#F07D6B' },
-      warning: { main: '#F0C05E' },
-      success: { main: '#5FD3A0' },
-      info: { main: '#6BB5F0' },
-      background: { default: tokens.background, paper: tokens.surface },
-      text: { primary: tokens.ink, secondary: tokens.inkMuted },
-      divider: tokens.line,
+      mode: palette.mode,
+      primary: { main: palette.accent, contrastText: palette.onAccent },
+      // Unused by CafAI; set so nothing falls back to MUI's purple.
+      secondary: { main: palette.inkMuted, contrastText: palette.background },
+      error: { main: palette.error, contrastText: palette.onError },
+      warning: { main: palette.warning },
+      success: { main: palette.success },
+      info: { main: palette.info },
+      background: { default: palette.background, paper: palette.surface },
+      text: { primary: palette.ink, secondary: palette.inkMuted },
+      divider: palette.line,
+      cafai: { raised: palette.raised, accentSoft: palette.accentSoft, live: palette.live, graph: palette.graph },
     },
     shape: { borderRadius: 12 },
     typography: {
       fontFamily: FONT_FAMILY,
-      h4: { fontSize: '1.75rem', fontWeight: 500, lineHeight: 1.2 },
-      h5: { fontSize: '1.375rem', fontWeight: 500, lineHeight: 1.25 },
-      h6: { fontSize: '1.125rem', fontWeight: 500, lineHeight: 1.3 },
-      subtitle1: { fontSize: '1rem', fontWeight: 500, lineHeight: 1.4 },
-      subtitle2: { fontSize: '0.875rem', fontWeight: 500, lineHeight: 1.4 },
-      body1: { fontSize: '1rem', lineHeight: 1.5 },
-      body2: { fontSize: '0.9375rem', lineHeight: 1.45 },
-      button: { fontSize: '1rem', fontWeight: 500, textTransform: 'none', letterSpacing: '0.01em' },
+      fontWeightMedium: 550,
+      fontWeightBold: 700,
+      // The live shot's timer.
+      display: { fontFamily: FONT_FAMILY, fontSize: '2.875rem', fontWeight: 650, lineHeight: 1, letterSpacing: '-0.02em', ...tabular },
+      // The live shot's readouts.
+      readoutLarge: { fontFamily: FONT_FAMILY, fontSize: '1.875rem', fontWeight: 650, lineHeight: 1.1, letterSpacing: '-0.01em', ...tabular },
+      h4: { fontSize: '1.75rem', fontWeight: 650, lineHeight: 1.2, letterSpacing: '-0.015em' },
+      // The machine's state line.
+      h5: { fontSize: '1.4375rem', fontWeight: 650, lineHeight: 1.2, letterSpacing: '-0.01em' },
+      // Screen titles and the bag.
+      h6: { fontSize: '1.1875rem', fontWeight: 700, lineHeight: 1.3, letterSpacing: '-0.005em' },
+      subtitle1: { fontSize: '1.0625rem', fontWeight: 650, lineHeight: 1.35 },
+      subtitle2: { fontSize: '0.9375rem', fontWeight: 600, lineHeight: 1.4 },
+      body1: { fontSize: '1rem', lineHeight: 1.55 },
+      body2: { fontSize: '0.9375rem', lineHeight: 1.5 },
+      // Machine readouts.
+      readout: { fontFamily: FONT_FAMILY, fontSize: '1.1875rem', fontWeight: 650, lineHeight: 1.2, ...tabular },
+      // Readout and field labels, sentence case.
+      label: { fontFamily: FONT_FAMILY, fontSize: '0.8125rem', fontWeight: 550, lineHeight: 1.3 },
+      button: { fontSize: '1rem', fontWeight: 600, lineHeight: 1.25, textTransform: 'none', letterSpacing: '0.005em' },
       caption: { fontSize: '0.8125rem', lineHeight: 1.35 },
-      overline: { fontSize: '0.75rem', fontWeight: 500, letterSpacing: '0.08em', lineHeight: 1.6 },
+      // Kept for any stray use, but in sentence case like the labels.
+      overline: { fontSize: '0.8125rem', fontWeight: 550, lineHeight: 1.3, letterSpacing: 0, textTransform: 'none' },
     },
     components: {
       MuiCssBaseline: {
@@ -89,11 +136,16 @@ export function createCafaiTheme(): Theme {
             WebkitUserSelect: 'none',
             WebkitTouchCallout: 'none',
           },
+          // Even line lengths on headings; engines before Chromium 114 simply ignore it.
+          'h1, h2, h3': { textWrap: 'balance' },
         },
       },
       MuiPaper: {
-        // Dark-mode elevation overlays turn the warm surfaces grey.
-        styleOverrides: { root: { backgroundImage: 'none' } },
+        styleOverrides: {
+          // Dark-mode elevation overlays would grey the tinted surfaces.
+          root: { backgroundImage: 'none' },
+          outlined: { borderRadius: 16 },
+        },
       },
       MuiButton: {
         defaultProps: { disableElevation: true },
@@ -102,6 +154,22 @@ export function createCafaiTheme(): Theme {
           sizeSmall: { minHeight: TOUCH_TARGET },
           sizeLarge: { minHeight: 56, fontSize: '1.0625rem' },
         },
+        variants: [
+          {
+            // Secondary actions: a quiet filled button on the raised colour, no outline.
+            props: { variant: 'tonal' },
+            style: {
+              padding: '6px 16px',
+              backgroundColor: palette.raised,
+              color: palette.ink,
+              '@media (hover: hover)': { '&:hover': { backgroundColor: tonalHover } },
+              '&.Mui-disabled': { backgroundColor: palette.raised, color: tonalDisabled },
+            },
+          },
+          { props: { variant: 'tonal', color: 'error' }, style: { color: palette.error } },
+          { props: { variant: 'tonal', color: 'warning' }, style: { color: palette.warning } },
+          { props: { variant: 'tonal', color: 'success' }, style: { color: palette.success } },
+        ],
       },
       MuiIconButton: {
         styleOverrides: { root: { minWidth: TOUCH_TARGET, minHeight: TOUCH_TARGET } },
@@ -124,4 +192,5 @@ export function createCafaiTheme(): Theme {
   });
 }
 
+/** The default look (dark, Crema), for code without an appearance of its own: the app until stage 2, tests, previews. */
 export const theme = createCafaiTheme();

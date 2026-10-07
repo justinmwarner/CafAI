@@ -3,6 +3,11 @@ import { createRoot } from 'react-dom/client';
 import { App, restoreRoute } from './app/App.tsx';
 import { createServices } from './app/createServices.ts';
 import { detectHost } from './api/host.ts';
+import { buildPalette, DEFAULT_TINT_ID, namedTint } from './ui/palette.ts';
+import { FONT_FAMILY } from './ui/theme.ts';
+
+// Before the app (and its appearance setting) loads, the default look.
+const BOOT = buildPalette('dark', namedTint(DEFAULT_TINT_ID));
 
 const rootElement = document.getElementById('root')!;
 const root = createRoot(rootElement);
@@ -11,9 +16,9 @@ const buttonStyle = {
   minHeight: 48,
   padding: '0 24px',
   borderRadius: 8,
-  border: '1px solid rgba(239, 230, 220, 0.4)',
+  border: `1px solid ${BOOT.line}`,
   background: 'transparent',
-  color: '#efe6dc',
+  color: BOOT.ink,
   fontSize: 16,
   fontFamily: 'inherit',
   display: 'inline-flex',
@@ -32,15 +37,15 @@ function Message({ title, detail }: { title: string; detail?: string }) {
         alignItems: 'center',
         justifyContent: 'center',
         gap: 12,
-        fontFamily: 'Roboto, sans-serif',
-        color: '#efe6dc',
-        background: '#16120f',
+        fontFamily: FONT_FAMILY,
+        color: BOOT.ink,
+        background: BOOT.background,
         padding: 24,
         textAlign: 'center',
       }}
     >
       <div style={{ fontSize: 22, fontWeight: 500 }}>{title}</div>
-      {detail ? <div style={{ fontSize: 16, maxWidth: 520, opacity: 0.8 }}>{detail}</div> : null}
+      {detail ? <div style={{ fontSize: 16, maxWidth: 520, color: BOOT.inkMuted }}>{detail}</div> : null}
       {/* A way back to the skin switcher and Decaid's settings even before (or without) the app. */}
       <div style={{ display: 'flex', gap: 12, marginTop: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
         <button type="button" data-testid="exit-to-skins" onClick={() => host.exitToSkinSwitcher()} style={buttonStyle}>

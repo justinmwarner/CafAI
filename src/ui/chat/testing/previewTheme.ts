@@ -1,20 +1,8 @@
 /**
- * Stand-in for the shell's theme (owned by the baseline UI workstream) so the
- * chat screens can be tested and previewed on their own. Mirrors the shell
- * brief: dark, crema primary, 48 px touch targets. Not shipped.
+ * The theme the chat, history and settings tests and the chat preview
+ * render in: the app's own default (dark, Crema), so a test sees what the
+ * barista sees. Not shipped.
  */
-import { createTheme } from '@mui/material/styles';
+import { createCafaiTheme } from '../../theme.ts';
 
-export const previewTheme = createTheme({
-  palette: {
-    mode: 'dark',
-    primary: { main: '#C8A27A' },
-    background: { default: '#131110', paper: '#1d1a18' },
-  },
-  shape: { borderRadius: 10 },
-  components: {
-    MuiButton: { styleOverrides: { root: { minHeight: 48, textTransform: 'none' } } },
-    MuiIconButton: { styleOverrides: { root: { minWidth: 48, minHeight: 48 } } },
-    MuiChip: { styleOverrides: { root: { minHeight: 48 } } },
-  },
-});
+export const previewTheme = createCafaiTheme();

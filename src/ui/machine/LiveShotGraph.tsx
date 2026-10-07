@@ -28,10 +28,13 @@ import { keyframes } from '@mui/material/styles';
 import { useCoach, useServices } from '../../app/services.tsx';
 import type { CoachUiMessage } from '../../app/types.ts';
 import type { ShotSummary } from '../../coach/types.ts';
-import { FONT_FAMILY, graphColors } from '../theme.ts';
+import { FONT_FAMILY, theme } from '../theme.ts';
 import { TID } from '../testIds.ts';
 import { formatSeconds } from './format.ts';
 import { createShotBuffer, type SeriesKey, type ShotValues } from './shotBuffer.ts';
+
+// Task 5 reads these from the theme in context; until then, the default theme's.
+const graphColors = theme.palette.cafai.graph;
 
 /** The x axis always shows at least this much, so a fresh shot is not stretched across the width. */
 const MIN_WINDOW_S = 30;
