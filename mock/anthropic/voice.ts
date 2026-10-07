@@ -85,8 +85,9 @@ export interface ChangeFacts {
   /** The setting a grind move lands on, when the script could name one. */
   grindSetting: string | null;
   /**
-   * The latest shot's peak pressure and when it came (s from the shot's
-   * start), from its shot event's summary: the numbers its shot card shows.
+   * The latest shot's peak pressure and when it came, in seconds from the
+   * start of the pour (the summary's time minus its pourStartS, never below
+   * 0), from its shot event's summary: the numbers its shot card shows.
    * Without them, the top of a pressure series a get_shot_series result just
    * returned, with no time (a rounded series can tie along a plateau).
    */

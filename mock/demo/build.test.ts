@@ -5,6 +5,7 @@ import { EXTRAS_KEY } from '../../src/app/engine/shotNotes.ts';
 import type { CoachUiMessage, CoachUiPart } from '../../src/app/types.ts';
 import { OTHER_OPTION, TOOL } from '../../src/coach/contract.ts';
 import { getTemplate, profileId, readLeverValues } from '../../src/coach/index.ts';
+import { pourTime } from '../../src/coach/summary/pourClock.ts';
 import { parseTimestampMicros } from '../../src/coach/summary/time.ts';
 import { parseCafaiExport } from '../../src/storage/porter.ts';
 import { DEFAULT_PUCK_RESISTANCE } from '../decaid/shotPlayer.ts';
@@ -425,6 +426,20 @@ describe('the shots, each its own', () => {
     const two = kiambuShots()[1]!;
     expect(two.peakPressureAtS!).toBeLessThan(two.preinfusionEndS! + 2);
     expect(two.channelingFlags).toEqual([]);
+  });
+
+  it("has the coach quote a shot's times as its card shows them: from the start of the pour", () => {
+    const messages = conversationOf(demo, 'Kiambu AA').uiMessages;
+    const coach = parts('text', messages.filter((message) => message.role === 'assistant'))
+      .map((part) => part.text)
+      .join('\n');
+    const [one, two] = kiambuShots();
+    expect(one!.pourStartS).toBeGreaterThan(1);
+    expect(coach).toContain(`the first drops came at ${pourTime(one!.timeToFirstDropS, one!.pourStartS)!.toFixed(1)} s.`);
+    expect(coach).toContain(`came during the fill at ${pourTime(two!.peakPressureAtS, two!.pourStartS)!.toFixed(1)} s.`);
+    // Never the record's clock, which counts the preheat too.
+    expect(coach).not.toContain(`the first drops came at ${one!.timeToFirstDropS!.toFixed(1)} s.`);
+    expect(coach).not.toContain(`came during the fill at ${two!.peakPressureAtS!.toFixed(1)} s.`);
   });
 
   it('a fresh shot of v4 on the mock (its default puck) matches none of them', async () => {

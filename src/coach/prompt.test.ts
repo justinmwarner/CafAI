@@ -239,6 +239,14 @@ describe('buildSystemPrompt: content', () => {
     }
   });
 
+  it('asks for a time told to the user to count from the start of the pour, as the shot card counts it', () => {
+    const reading = prompt.slice(prompt.indexOf('# Reading a shot'), prompt.indexOf('# Coaching heuristics'));
+    const clock = reading.split('\n').find((line) => line.startsWith('- t = 0 is the first sample'))!;
+    expect(clock).toContain(
+      'When you tell the user a time on that clock, count it from the start of the pour as the shot card does: the time minus pourStartS, where the pour starts.',
+    );
+  });
+
   it('puts the rules after the catalog and the data guide, where they still bind', () => {
     const catalog = prompt.indexOf('# Template catalog');
     const reading = prompt.indexOf('# Reading a shot');

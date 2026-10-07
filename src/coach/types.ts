@@ -197,6 +197,15 @@ export interface ShotSummary {
    * times use, whose t = 0 is the start of preheat.
    */
   durationS: number;
+  /**
+   * Where the pour starts on the clock the other times use: the first sample
+   * after preheat, the one durationS counts from (0 when none was recorded).
+   * Whatever shows the user a time counts it from here (summary/pourClock.ts
+   * pourTime: the time minus pourStartS, never below 0), as the shot card
+   * does. Absent from summaries saved before CafAI recorded it, whose times
+   * show as they always did.
+   */
+  pourStartS?: number;
   doseG: number | null;
   yieldG: number | null;
   ratio: number | null;

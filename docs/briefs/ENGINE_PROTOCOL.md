@@ -112,9 +112,12 @@ demo (D76) passes `voice: 'demo'` (mock/anthropic/demoVoice.ts): fuller
 coaching prose, and in rule 2 a short text before `propose_adjustment`, with
 every tool call unchanged. That text quotes the latest shot's peak as its
 shot card shows it: the `[event:shot_completed]` summary's `peakPressureBar`
-and `peakPressureAtS` (one decimal, whole seconds); without them, the top of
-the pressure series just read, with no time (a series rounded to 1 Hz can
-tie along a plateau). It also paces the stream like the real model
+(one decimal) and `peakPressureAtS` counted from the start of the pour, as
+the card counts every time: minus the summary's `pourStartS`, never below 0,
+in whole seconds (a summary without `pourStartS` keeps its time; a peak at
+0 s gets no time). Without them, the top of the pressure series just read,
+with no time (a series rounded to 1 Hz can tie along a plateau). It also
+paces the stream like the real model
 (`firstEventDelayMs`, `eventDelayMs`, `jitterMs`, `sentencePauseMs` in
 mock/anthropic/handlers.ts).
 
@@ -133,8 +136,8 @@ mock/anthropic/handlers.ts).
    instead." End turn.
 2. tool_result for a query tool (`get_shot_series`, `get_shot_summary`,
    `get_phase_stats`, `compare_shots`, `get_bag_history`) -> `propose_adjustment`
-   chosen from the most recent taste answer (an `ask_user` answer, or a
-   taste typed instead, rule 3b; lower-cased, the first match below wins)
+   chosen from the most recent taste answer (an `ask_user` answer, or text
+   typed instead, rule 3b; lower-cased, the first match below wins)
    and the most recent `[event:shot_completed]` payload's `levers` and
    `summary`. A yield move only when that shot reached its yield: it stopped
    on weight (`summary.stopReason` `"targetWeight"`) or its `summary.yieldG`
@@ -168,14 +171,16 @@ mock/anthropic/handlers.ts).
    Fill summary/rationale/expectedEffect/tips with short plausible text.
 3. tool_result for `ask_user` -> text "Thanks. Let me look at the pressure
    curve." + tool_use `get_shot_series` `{shot:"latest", metric:"pressure", fromS:null, toS:null}`.
-3b. A taste typed after a shot instead of tapped: the last user message
-   sets the taste question aside (an `ask_user` whose question mentions
-   taste, answered `{"answered":false,...}` as in user turn 7 above) and
-   holds the user's text, which names a taste with the words rule 2 reads
-   ("sour", "bitter", "weak" or "watery", "strong", "balanced"; any case) ->
-   the text is read as the answer: rule 3's reply, then rule 2 decides from
-   it. Text with none of those words, another question set aside (the puck)
-   or a change set aside gets the rule 8 reply as before.
+3b. Text typed after a shot instead of a tap: the last user message sets
+   the taste question aside (an `ask_user` whose question mentions taste,
+   answered `{"answered":false,...}` as in user turn 7 above) and holds the
+   user's text. The app keeps that text as the shot's taste (D79), so it is
+   the taste answer, read exactly as the same words under Other: rule 3's
+   reply, then rule 2 decides from it (the words rule 2 reads, "sour",
+   "bitter", "weak" or "watery", "strong", "balanced" in any case, pick the
+   move; none means one step finer). Text typed when no taste question was
+   open (another question set aside, such as the puck, a change set aside,
+   or nothing set aside) gets the rule 8 reply as before.
 4. text starting `[event:shot_completed]` -> text "Got it: {durationS} s,
    {yieldG} g out." + tool_use `ask_user` `{question:"How did it taste?",
    options:["Sour / sharp","Bitter / harsh","Balanced, sweet","Weak / watery"],

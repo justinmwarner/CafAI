@@ -190,7 +190,17 @@ describe('answering the open question', () => {
     expect(card.lines).toEqual(['Brew temperature: 93.0 °C -> 94.0 °C (every step +1.0 °C)']);
   });
 
-  it('typed text without a taste word gets the usual reply and no change', async () => {
+  it('typed text without a taste word is the taste too, read as the same words under Other: one step finer', async () => {
+    await engine.sendText('Flat and a bit dull, the fruit is hiding');
+    await idle();
+    expect(engine.getState().error).toBeNull();
+    byHand('14.0')(pendingChange());
+  });
+
+  it('text typed with no taste question open gets the usual reply and no change', async () => {
+    await engine.answerOptions(openQuestion().requestId, ['Balanced, sweet'], null);
+    await idle();
+    // The keep card is open now, not the taste question: the text sets the card aside.
     await engine.sendText('Should it drip during the bloom?');
     await idle();
     expect(engine.getState().error).toBeNull();

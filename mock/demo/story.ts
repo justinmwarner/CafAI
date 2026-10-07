@@ -28,6 +28,7 @@
  */
 import { TOOL, type ProposeAdjustment, type ToolName } from '../../src/coach/contract.ts';
 import { resolveGrindMove } from '../../src/coach/grinder.ts';
+import { pourTime } from '../../src/coach/summary/pourClock.ts';
 import type { ShotCompletedPayload, TemplatePickedPayload, AdjustmentResultPayload } from '../../src/app/engine/protocol.ts';
 import type { LlmMessage } from '../../src/llm/types.ts';
 import { MOCK_GRINDER_IDS } from '../decaid/grinders.ts';
@@ -306,7 +307,7 @@ const firstShot = (messages: readonly LlmMessage[]): CoachTurn => {
   return {
     text:
       `Shot one: ${one(summary.durationS)} s and ${one(summary.yieldG)} g in the cup. ` +
-      `The pour ended with the profile, a little short of the ${num(summary.targetYieldG)} g stop, and the first drops came at ${one(summary.timeToFirstDropS)} s.`,
+      `The pour ended with the profile, a little short of the ${num(summary.targetYieldG)} g stop, and the first drops came at ${one(pourTime(summary.timeToFirstDropS, summary.pourStartS))} s.`,
     tools: tasteQuestion(),
   };
 };
@@ -354,7 +355,7 @@ const unevenPuck = (messages: readonly LlmMessage[]): CoachTurn => {
   const { summary } = shot(messages);
   return {
     text:
-      `This one ran ${one(summary.durationS)} s for ${one(summary.yieldG)} g, but the highest pressure, ${one(summary.peakPressureBar)} bar, came during the fill at ${one(summary.peakPressureAtS)} s. ` +
+      `This one ran ${one(summary.durationS)} s for ${one(summary.yieldG)} g, but the highest pressure, ${one(summary.peakPressureBar)} bar, came during the fill at ${one(pourTime(summary.peakPressureAtS, summary.pourStartS))} s. ` +
       'The pour never built pressure after the bloom, which usually means the water found an easy path through the puck.',
     tools: [
       {

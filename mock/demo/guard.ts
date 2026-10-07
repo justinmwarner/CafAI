@@ -21,8 +21,11 @@ import { DEMO_API_KEY } from './story.ts';
 /** Set after a successful seed; its own prefix keeps it apart from CafAI's `cafai.*` and the mock's `cafai-mock:` keys. */
 export const DEMO_MARKER_KEY = 'cafai-demo:seeded';
 
-export const GUARD_NOTE =
-  'The demo did not load: this address already has CafAI data of its own. Run npm run demo, which opens its own address (localhost:5175).';
+/** Short enough for one line beside its button on the smallest tablet layout (962 px). */
+export const GUARD_NOTE = 'The demo did not load: this address already has CafAI data of its own. Run npm run demo.';
+
+/** The note's one line, so the app keeps nearly all its height. */
+export const GUARD_NOTE_HEIGHT_PX = 34;
 
 /** The keys the scripted coach knows (mock/anthropic/scenario.ts): the demo's placeholder and the two that show its errors. */
 export const MOCK_API_KEYS: readonly string[] = [DEMO_API_KEY, 'sk-ant-invalid', 'sk-ant-overloaded'];
@@ -103,6 +106,11 @@ export type NoteDocument = Pick<Document, 'createElement' | 'body' | 'head'>;
  * until the note is dismissed, the way the app's own engine warning pushes
  * the columns down instead of covering a control. Over the page's bottom it
  * hid half of the chat's composer, and on Settings the grinder field.
+ *
+ * One slim line of a fixed height: with its text wrapped it took 76 px at
+ * 962x602, which shrank the machine panel's graph until its legend lost its
+ * "target" entry. A window too narrow for the text cuts it, with the whole
+ * text on hover, rather than taking more of the app's height.
  */
 export function showGuardNote(document: NoteDocument): HTMLElement {
   const note = document.createElement('div');
@@ -114,41 +122,37 @@ export function showGuardNote(document: NoteDocument): HTMLElement {
     'right:0',
     'z-index:1500',
     'box-sizing:border-box',
+    `height:${GUARD_NOTE_HEIGHT_PX}px`,
     'display:flex',
     'align-items:center',
     'justify-content:center',
-    'gap:8px',
-    'padding:4px 8px 4px 16px',
+    'gap:12px',
+    'padding:0 8px 0 16px',
     'border-bottom:1px solid rgba(239, 230, 220, 0.3)',
     'background:#2b231d',
     'color:#efe6dc',
-    'font:16px/1.4 Roboto, sans-serif',
+    'font:14px/20px Roboto, sans-serif',
   ].join(';');
   const text = document.createElement('span');
   text.textContent = GUARD_NOTE;
-  text.style.cssText = 'flex:0 1 auto;max-width:960px';
+  text.title = GUARD_NOTE;
+  text.style.cssText = 'flex:0 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis';
   const dismiss = document.createElement('button');
   dismiss.type = 'button';
-  dismiss.textContent = '×';
+  dismiss.textContent = 'Dismiss';
   dismiss.setAttribute('aria-label', 'Dismiss');
   dismiss.style.cssText =
-    'flex:none;min-width:48px;min-height:48px;border:0;border-radius:24px;background:transparent;color:inherit;font-size:24px;cursor:pointer';
+    'flex:none;height:26px;padding:0 12px;border:1px solid rgba(239, 230, 220, 0.5);border-radius:13px;background:transparent;color:inherit;font:inherit;font-weight:500;cursor:pointer';
   note.append(text, dismiss);
 
-  // The room the note takes at the top, kept to its height as the text wraps.
+  // The room the note takes at the top: its one line.
   const room = document.createElement('style');
-  const fit = () => {
-    room.textContent = `[data-testid="${TID.appReady}"]{top:${Math.ceil(note.getBoundingClientRect().height)}px !important}`;
-  };
-  const resized = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null;
+  room.textContent = `[data-testid="${TID.appReady}"]{top:${GUARD_NOTE_HEIGHT_PX}px !important}`;
   dismiss.addEventListener('click', () => {
-    resized?.disconnect();
     room.remove();
     note.remove();
   });
   document.head.append(room);
   document.body.append(note);
-  fit();
-  resized?.observe(note);
   return note;
 }

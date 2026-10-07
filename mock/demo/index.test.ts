@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Bag } from '../../src/storage/types.ts';
 import { TID } from '../../src/ui/testIds.ts';
 import { createDbHandle, openCafaiDb, readAll, SETTINGS_KEY, type CafaiDb } from '../../src/storage/db.ts';
@@ -225,35 +225,27 @@ describe('startDemo on an address with CafAI data of its own', () => {
   }
 
   it('puts its note at the top of the page and moves the app below it, so it covers nothing; Dismiss gives the room back', async () => {
-    // jsdom lays nothing out: the note is 72 px tall here.
-    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      const height = this.getAttribute('role') === 'status' ? 72 : 0;
-      return { x: 0, y: 0, top: 0, left: 0, right: 0, bottom: height, width: 0, height, toJSON: () => ({}) } as DOMRect;
-    });
-    try {
-      await addOwnBag();
-      // The app's frame as AppShell draws it: fixed over the whole page, the top bar first.
-      const app = document.createElement('div');
-      app.setAttribute('data-testid', TID.appReady);
-      app.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0';
-      document.body.append(app);
+    await addOwnBag();
+    // The app's frame as AppShell draws it: fixed over the whole page, the top bar first.
+    const app = document.createElement('div');
+    app.setAttribute('data-testid', TID.appReady);
+    app.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0';
+    document.body.append(app);
 
-      expect((await startDemo(state, host, { ...names, now: NOW })).seeded).toBe(false);
-      const note = document.body.querySelector<HTMLElement>('[role="status"]')!;
-      expect(note.textContent).toContain(GUARD_NOTE);
-      expect(note.style.position).toBe('fixed');
-      expect(note.style.top).toBe('0px');
-      expect(note.style.bottom).toBe('');
-      expect([note.style.left, note.style.right]).toEqual(['0px', '0px']);
-      // Not over the composer or a field: the app starts where the note ends.
-      expect(getComputedStyle(app).top).toBe('72px');
+    expect((await startDemo(state, host, { ...names, now: NOW })).seeded).toBe(false);
+    const note = document.body.querySelector<HTMLElement>('[role="status"]')!;
+    expect(note.textContent).toContain(GUARD_NOTE);
+    expect(note.style.position).toBe('fixed');
+    expect(note.style.top).toBe('0px');
+    expect(note.style.bottom).toBe('');
+    expect([note.style.left, note.style.right]).toEqual(['0px', '0px']);
+    // Not over the composer or a field: the app starts where the note's one slim line ends.
+    expect(note.style.height).toBe('34px');
+    expect(getComputedStyle(app).top).toBe('34px');
 
-      note.querySelector<HTMLButtonElement>('button[aria-label="Dismiss"]')!.click();
-      expect(document.body.querySelector('[role="status"]')).toBeNull();
-      expect(getComputedStyle(app).top).toBe('0px');
-    } finally {
-      rect.mockRestore();
-    }
+    note.querySelector<HTMLButtonElement>('button[aria-label="Dismiss"]')!.click();
+    expect(document.body.querySelector('[role="status"]')).toBeNull();
+    expect(getComputedStyle(app).top).toBe('0px');
   });
 
   it('reads a saved settings record as data, even with every field blank', async () => {

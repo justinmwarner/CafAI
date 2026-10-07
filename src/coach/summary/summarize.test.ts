@@ -5,13 +5,52 @@ import { syntheticShotRecord } from '../__fixtures__/syntheticShot.ts';
 import shot01 from '../__fixtures__/decaid-mcp/shot-01.json';
 import shot07 from '../__fixtures__/decaid-mcp/shot-07.json';
 import shot09 from '../__fixtures__/decaid-mcp/shot-09.json';
+import blooming from '../templates/source/Blooming_espresso.json';
 import example from '../../../docs/verified/examples/shot-record.json';
-import { pourSeconds, resampleSeries, shotPhases, summarizeShot, summaryForModel } from './summarize.ts';
+import { normalizeProfile } from '../../../mock/decaid/profiles.ts';
+import { createShotSimulation } from '../../../mock/decaid/shotPlayer.ts';
+import { pourSeconds, pourStartSeconds, resampleSeries, shotPhases, summarizeShot, summaryForModel } from './summarize.ts';
 import { shotRows } from './analysis.ts';
 import { elapsedSeconds, parseTimestampMicros } from './time.ts';
 
 const asRecord = (value: unknown) => value as ShotRecord;
 const oneDecimal = (value: number) => Number(value.toFixed(1));
+
+/** A Blooming Espresso shot as the mock Decaid records it: its preheat, then the profile's steps up to the stop. */
+function mockShotRecord(): ShotRecord {
+  const profile = normalizeProfile(blooming);
+  const simulation = createShotSimulation({
+    profile,
+    targetYield: 50,
+    doseG: 18,
+    scaleConnected: true,
+    startMs: Date.UTC(2026, 9, 6, 9, 0, 0),
+    shotId: 'mock-shot',
+    staleFrame: 5,
+    seed: 1,
+  });
+  const measurements: ShotSnapshot[] = [];
+  for (let frame = simulation.next(); frame; frame = simulation.next()) {
+    if (frame.recorded) measurements.push({ machine: frame.machine, scale: frame.scale, volume: frame.volume });
+  }
+  return {
+    id: 'mock-shot',
+    timestamp: measurements[0]!.machine.timestamp,
+    createdAt: '2026-10-06T09:01:10.000000Z',
+    updatedAt: '2026-10-06T09:01:10.000000Z',
+    workflow: { profile, context: { targetYield: 50, targetDoseWeight: 18 } },
+    annotations: { actualDoseWeight: 18 },
+    stopReason: 'machineEnded',
+    measurements,
+  } as unknown as ShotRecord;
+}
+
+/** Seconds from a record's first sample to its first one after preheat, to 0.1 s. */
+function preheatSeconds(record: ShotRecord): number {
+  const first = record.measurements[0]!.machine.timestamp;
+  const pour = record.measurements.find((m) => m.machine.state.substate !== 'preparingForShot')!.machine.timestamp;
+  return oneDecimal(elapsedSeconds(first, pour)!);
+}
 
 /** A zone-less Decaid timestamp for microseconds read as UTC, as parseTimestampMicros reads them. */
 function stampMicros(micros: number): string {
@@ -197,6 +236,53 @@ describe('summarizeShot: the time is the pour, the yield what is in the cup', ()
   });
 });
 
+describe('summarizeShot: where the pour starts on the record clock (pourStartS)', () => {
+  it('real Decaid shots: the first sample after preheat, the one durationS counts from', () => {
+    // shot-01 preheats 6.5 s, Blooming (shot-07) 2.8 s, the verified example 4.62 s.
+    expect(summarizeShot(asRecord(shot01)).pourStartS).toBe(6.5);
+    expect(summarizeShot(asRecord(shot07)).pourStartS).toBe(2.8);
+    expect(summarizeShot(asRecord(example)).pourStartS).toBe(4.6);
+    for (const record of [shot01, shot07, example]) {
+      expect(summarizeShot(asRecord(record)).pourStartS).toBe(preheatSeconds(asRecord(record)));
+    }
+  });
+
+  it("a mock shot: the mock Decaid's preheat of about 2 s", () => {
+    const record = mockShotRecord();
+    const summary = summarizeShot(record);
+    expect(summary.pourStartS).toBe(preheatSeconds(record));
+    expect(summary.pourStartS).toBeCloseTo(2, 0);
+    // The pour runs from there to the last frame Decaid recorded.
+    const last = record.measurements[record.measurements.length - 1]!.machine.timestamp;
+    expect(summary.durationS).toBe(oneDecimal(elapsedSeconds(record.measurements[0]!.machine.timestamp, last)! - summary.pourStartS!));
+  });
+
+  it('a synthetic shot with 3 s of preheat', () => {
+    const record = syntheticShotRecord();
+    expect(summarizeShot(record).pourStartS).toBe(preheatSeconds(record));
+    expect(summarizeShot(record).pourStartS).toBeGreaterThanOrEqual(3);
+  });
+
+  it('is 0 without machine substates, with preheat alone, or with no samples: nothing to count from', () => {
+    const record = syntheticShotRecord();
+    const bare: ShotRecord = {
+      ...record,
+      measurements: record.measurements.map((m) => ({ ...m, machine: { ...m.machine, state: { state: 'espresso', substate: '' } } })),
+    };
+    expect(summarizeShot(bare).pourStartS).toBe(0);
+    const rows = shotRows(record);
+    expect(pourStartSeconds(rows.filter((row) => row.substate === 'preparingForShot'))).toBe(0);
+    expect(pourStartSeconds([])).toBe(0);
+  });
+
+  it("leaves the summary's other times and its series on the record clock, where the coach's heuristics read them", () => {
+    const summary = summarizeShot(asRecord(example));
+    expect(summary).toMatchObject({ pourStartS: 4.6, timeToFirstDropS: 12.1, preinfusionEndS: 12.1, peakPressureAtS: 19.6 });
+    expect(summary.phases[0]).toEqual({ name: 'preheat', startS: 0, endS: 4.6 });
+    expect(summary.series.tS[0]).toBe(0);
+  });
+});
+
 describe('summarizeShot: synthetic shots', () => {
   it('resamples to one point per second, by timestamp', () => {
     const summary = summarizeShot(syntheticShotRecord());
@@ -256,6 +342,12 @@ describe('summaryForModel', () => {
     const forModel = summaryForModel(summary);
     expect(forModel).not.toHaveProperty('series');
     expect({ ...forModel, series: summary.series }).toEqual(summary);
+  });
+
+  it('tells the model where the pour starts, so it can count a time from there as the shot card does', () => {
+    const summary = summarizeShot(asRecord(shot07));
+    expect(summaryForModel(summary).pourStartS).toBe(2.8);
+    expect(JSON.stringify(summaryForModel(summary))).toContain('"pourStartS":2.8');
   });
 });
 

@@ -12,6 +12,9 @@
  * and stops recording at its stop decision, leaving out the frame it stopped
  * on and its 4-5 s stopping phase, so the pour ends on the last recorded
  * frame; Decaid's own Visualizer upload times a shot over the same frames.
+ * pourStartS is where that pour starts on the clock, so the times a barista
+ * sees can count from it (pourClock.ts) while the rest stays where the
+ * heuristics and the query tools read it.
  *
  * Dose is annotations.actualDoseWeight ?? workflow.context.targetDoseWeight;
  * yield is annotations.actualYield (Decaid's weight once the cup has settled
@@ -106,6 +109,19 @@ export function pourStartIndex(rows: readonly ShotRow[]): number {
 
 const pourIsOver = (row: ShotRow) => row.substate !== null && POUR_OVER_SUBSTATES.has(row.substate);
 
+/** Index of the first sample after preheat, where the pour's time starts; -1 when only preheat was recorded. */
+const firstAfterPreheat = (rows: readonly ShotRow[]) => rows.findIndex((row) => row.substate !== PREHEAT_SUBSTATE);
+
+/**
+ * Where the pour starts on the shot's clock: the time of the first sample
+ * after preheat, which pourSeconds counts from. 0 when nothing but preheat
+ * (or nothing at all) was recorded, which leaves every time as it is.
+ */
+export function pourStartSeconds(rows: readonly ShotRow[]): number {
+  const start = firstAfterPreheat(rows);
+  return start < 0 ? 0 : rows[start]!.t;
+}
+
 /**
  * Seconds of pour: from the first sample after preheat to the last one
  * before the machine reports the pour over. In Decaid's own records that is
@@ -114,7 +130,7 @@ const pourIsOver = (row: ShotRow) => row.substate !== null && POUR_OVER_SUBSTATE
  * (src/ui/machine/shotBuffer.ts). Null when nothing was poured.
  */
 export function pourSeconds(rows: readonly ShotRow[]): number | null {
-  const start = rows.findIndex((row) => row.substate !== PREHEAT_SUBSTATE);
+  const start = firstAfterPreheat(rows);
   if (start < 0) return null;
   let end = start;
   if (!pourIsOver(rows[start]!)) {
@@ -205,6 +221,7 @@ export function summarizeShot(record: ShotRecord): ShotSummary {
     timestamp: record.timestamp,
     profileTitle: record.workflow?.profile?.title ?? null,
     durationS: r1(pourSeconds(rows)) ?? 0,
+    pourStartS: r1(pourStartSeconds(rows)) ?? 0,
     doseG: r1(doseG),
     yieldG: r1(yieldG),
     ratio: doseG !== null && yieldG !== null ? r2(yieldG / doseG) : null,

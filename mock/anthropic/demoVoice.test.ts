@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { ProposeAdjustmentInput, TOOL, TOOL_INPUTS, type ProposeAdjustment, type ToolName } from '../../src/coach/contract.ts';
 import { applyLever } from '../../src/coach/levers.ts';
+import { pourTime } from '../../src/coach/summary/pourClock.ts';
 import { TEMPLATES } from '../../src/coach/templates/index.ts';
 import { validateProposal } from '../../src/coach/validator.ts';
 import { createScenarioMemory, respond, type ScenarioResponse } from './scenario.ts';
@@ -72,13 +73,17 @@ const numbersIn = (value: string) => (value.match(/\d+(?:\.\d+)?/g) ?? []).map(N
 /** The script's own steps: 1 °C, 2 g, one grind step. */
 const STEPS = [1, 2];
 
-/** The shot card shows a peak's time in whole seconds; the coach says it the same way. */
+/** The shot card shows a peak's time from the start of the pour, in whole seconds; the coach says it the same way. */
 function peakSecondsIn(messages: Message[]): number[] {
   return messages
     .flatMap((message) => message.content)
     .flatMap((block) => (typeof block.text === 'string' && block.text.startsWith('[event:shot_completed]\n') ? [block.text] : []))
-    .map((event) => (JSON.parse(event.slice(event.indexOf('\n') + 1)) as { summary?: { peakPressureAtS?: unknown } }).summary?.peakPressureAtS)
-    .flatMap((at) => (typeof at === 'number' ? [Math.round(at)] : []));
+    .map((event) => (JSON.parse(event.slice(event.indexOf('\n') + 1)) as { summary?: { peakPressureAtS?: unknown; pourStartS?: unknown } }).summary)
+    .flatMap((summary) => {
+      const at = typeof summary?.peakPressureAtS === 'number' ? summary.peakPressureAtS : null;
+      const seconds = pourTime(at, typeof summary?.pourStartS === 'number' ? summary.pourStartS : undefined);
+      return seconds === null ? [] : [Math.round(seconds)];
+    });
 }
 
 /**
@@ -301,6 +306,20 @@ describe('the demo voice, branch by branch', () => {
       expect(untimed).toContain('The pressure peaked at 5.7 bar, with no sign of channeling.');
     });
 
+    it('counts the peak from the start of the pour, as the shot card does: never after a shot that ended', () => {
+      // The demo's shot four: a 60.6 s pour after 2 s of preheat, its peak at 61.6 s on the record's clock (the card: "5.4 bar at 60 s").
+      const four = { durationS: 60.6, pourStartS: 2, peakPressureBar: 5.4, peakPressureAtS: 61.6 };
+      const { lead } = proposalFor(toProposal(['Sour / sharp'], null, BLOOMING, 'blooming-espresso', four));
+      expect(lead).toContain('The pressure peaked at 5.4 bar, 60 s in, with no sign of channeling.');
+      expect(lead).not.toContain('62');
+      // Santos: 7.2 bar at 4.2 s on the record's clock, 2.2 s into its pour.
+      const santos = proposalFor(toProposal(['Sour / sharp'], null, BLOOMING, 'blooming-espresso', { pourStartS: 2, peakPressureBar: 7.2, peakPressureAtS: 4.2 }));
+      expect(santos.lead).toContain('The pressure peaked at 7.2 bar, 2 s in');
+      // A peak before the pour began: the card says 0 s, and the coach names no time.
+      const early = proposalFor(toProposal(['Sour / sharp'], null, BLOOMING, 'blooming-espresso', { pourStartS: 4.6, peakPressureBar: 3.1, peakPressureAtS: 1.8 }));
+      expect(early.lead).toContain('The pressure peaked at 3.1 bar, with no sign of channeling.');
+    });
+
     it('after a shot that stopped short of its yield: weak goes one step finer, too strong one step coarser, and says why', () => {
       const weak = proposalFor(toProposal(['Weak / watery'], null, BLOOMING, 'blooming-espresso', STOPPED_SHORT));
       expect(weak.proposal).toMatchObject({ variable: 'grind', grind: { direction: 'finer', amount: 1, setting: '13' }, summary: 'Grind one step finer, to 13' });
@@ -345,6 +364,26 @@ describe('the demo voice, branch by branch', () => {
       expect(look.demo.text).toMatch(/Sour on a light roast usually means \*\*under-extraction\*\*/);
       const { proposal } = proposalFor([...UP_TO_SHOT, shot(), SHOT_REPLY, typed('It tasted a bit sour, sharp at the end'), ANSWER_REPLY, SERIES]);
       expect(proposal).toMatchObject({ variable: 'profile', lever: 'temp', value: 93 });
+    });
+
+    it('a typed taste without a taste word: read like the same words under Other, one step finer', () => {
+      const words = 'Flat and a bit dull, the fruit is hiding';
+      const look = compare([...UP_TO_SHOT, shot(), SHOT_REPLY, typed(words)]);
+      expect(look.demo.tools.map((t) => t.name)).toEqual([TOOL.getShotSeries]);
+      expect(look.demo.text).toBe(compare([...UP_TO_SHOT, shot(), SHOT_REPLY, answer(['Other'], words)]).demo.text);
+      const fromTyped = proposalFor([...UP_TO_SHOT, shot(), SHOT_REPLY, typed(words), ANSWER_REPLY, SERIES]);
+      const fromOther = proposalFor(toProposal(['Other'], words));
+      expect(fromTyped.proposal).toMatchObject({ variable: 'grind', grind: { direction: 'finer', amount: 1, setting: '13' } });
+      expect(fromTyped.proposal).toEqual(fromOther.proposal);
+      expect(fromTyped.lead).toBe(fromOther.lead);
+    });
+
+    it('text typed with no taste question open keeps the usual reply', () => {
+      const noted = "Noted. Pull a shot when you're ready and I'll read its curves with you, or tell me more about the coffee.";
+      const words = 'Flat and a bit dull, the fruit is hiding';
+      expect(compare([...UP_TO_SHOT, user(text(words))]).demo.text).toBe(noted);
+      // The change card set aside, not the taste question.
+      expect(compare([...AFTER_PROPOSAL, user(toolResult('t_adj', typedPast), text(words))]).demo.text).toBe(noted);
     });
 
     it('sour at the top temperature: 2 g longer', () => {

@@ -9,6 +9,7 @@ import LocalCafeIcon from '@mui/icons-material/LocalCafe';
 import StarIcon from '@mui/icons-material/Star';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import { pourTime } from '../../../coach/summary/pourClock.ts';
 import type { ShotSummary } from '../../../coach/types.ts';
 import { TID } from '../../testIds.ts';
 import { describeChannelingFlag, formatBar, formatGrams, formatRatio, formatSeconds, shotRatio } from '../format.ts';
@@ -137,12 +138,16 @@ export interface ShotCardProps {
 
 /** A finished shot at a glance: the numbers the coach reasons about, its curves, and the barista's rating. */
 export function ShotCard({ summary, stars = null, onRate, disabled = false }: ShotCardProps) {
+  // The shot time is the pour, so every other time counts from its start too:
+  // a peak "at 61 s" of a 60 s shot would come after the shot ended.
+  const peakAt = pourTime(summary.peakPressureAtS, summary.pourStartS);
+  const firstDrop = pourTime(summary.timeToFirstDropS, summary.pourStartS);
   const peak =
     summary.peakPressureBar === null
       ? formatBar(null)
-      : summary.peakPressureAtS === null
+      : peakAt === null
         ? formatBar(summary.peakPressureBar)
-        : `${formatBar(summary.peakPressureBar)} at ${Math.round(summary.peakPressureAtS)} s`;
+        : `${formatBar(summary.peakPressureBar)} at ${Math.round(peakAt)} s`;
   return (
     <Paper variant="outlined" data-testid={TID.shotCard} sx={{ p: 1.5, my: 0.5, bgcolor: 'background.paper' }}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
@@ -160,7 +165,7 @@ export function ShotCard({ summary, stars = null, onRate, disabled = false }: Sh
         <Metric label="Dose → yield" value={`${formatGrams(summary.doseG)} → ${formatGrams(summary.yieldG)}`} />
         <Metric label="Ratio" value={formatRatio(shotRatio(summary))} />
         <Metric label="Peak pressure" value={peak} />
-        <Metric label="First drop" value={formatSeconds(summary.timeToFirstDropS)} />
+        <Metric label="First drop" value={formatSeconds(firstDrop)} />
       </Box>
       <Sparkline summary={summary} />
       {summary.channelingFlags.length > 0 ? (

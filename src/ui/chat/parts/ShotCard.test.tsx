@@ -3,6 +3,9 @@ import '../testing/setup.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ShotRecord } from '../../../api/types.ts';
+import shot01 from '../../../coach/__fixtures__/decaid-mcp/shot-01.json';
+import { summarizeShot } from '../../../coach/summary/summarize.ts';
 import { TID } from '../../testIds.ts';
 import { renderThemed } from '../testing/render.tsx';
 import { sampleSummary } from '../testing/fixtures.ts';
@@ -73,6 +76,39 @@ describe('ShotCard', () => {
     expect(within(card).getByText('1:2.0')).toBeInTheDocument();
     expect(within(card).getByText('8.9 bar at 16 s')).toBeInTheDocument();
     expect(within(card).getByText('9.4 s')).toBeInTheDocument();
+  });
+
+  it('counts the peak and the first drop from the start of the pour, as the shot time is', () => {
+    // On the record's clock, which starts with 2 s of preheat, the peak came at 61 s and the first drops at 6.6 s.
+    renderThemed(<ShotCard summary={sampleSummary({ durationS: 60, pourStartS: 2, peakPressureBar: 6, peakPressureAtS: 61, timeToFirstDropS: 6.6 })} />);
+    const card = screen.getByTestId(TID.shotCard);
+    expect(within(card).getByRole('heading')).toHaveTextContent('Shot 60.0 s');
+    expect(within(card).getByText('6.0 bar at 59 s')).toBeInTheDocument();
+    expect(within(card).getByText('4.6 s')).toBeInTheDocument();
+    expect(within(card).queryByText(/at 61 s|6\.6 s/)).toBeNull();
+  });
+
+  it("a real Decaid shot: the summarizer's times, less its 6.5 s of preheat", () => {
+    const summary = summarizeShot(shot01 as unknown as ShotRecord);
+    expect(summary).toMatchObject({ pourStartS: 6.5, timeToFirstDropS: 13.8, peakPressureAtS: 18.3 });
+    renderThemed(<ShotCard summary={summary} />);
+    const card = screen.getByTestId(TID.shotCard);
+    expect(within(card).getByText(`${summary.peakPressureBar!.toFixed(1)} bar at 12 s`)).toBeInTheDocument();
+    expect(within(card).getByText('7.3 s')).toBeInTheDocument();
+  });
+
+  it('never shows a time before the pour began', () => {
+    renderThemed(<ShotCard summary={sampleSummary({ pourStartS: 4.6, peakPressureAtS: 3.2, timeToFirstDropS: 4.1 })} />);
+    expect(screen.getByText('8.9 bar at 0 s')).toBeInTheDocument();
+    expect(screen.getByText('0.0 s')).toBeInTheDocument();
+  });
+
+  it('shows a summary saved before pourStartS as it always did', () => {
+    const saved = sampleSummary();
+    expect(saved).not.toHaveProperty('pourStartS');
+    renderThemed(<ShotCard summary={saved} />);
+    expect(screen.getByText('8.9 bar at 16 s')).toBeInTheDocument();
+    expect(screen.getByText('9.4 s')).toBeInTheDocument();
   });
 
   it('draws pressure and flow as an inline sparkline', () => {

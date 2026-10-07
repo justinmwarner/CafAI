@@ -14,6 +14,7 @@
  */
 import { EVENT, TEMPLATE_IDS, TOOL, type ProposeAdjustment, type RoastLevel } from '../../src/coach/contract.ts';
 import { resolveGrindMove } from '../../src/coach/grinder.ts';
+import { pourTime } from '../../src/coach/summary/pourClock.ts';
 import type { GrinderInfo } from '../../src/coach/types.ts';
 import type { StopReason, TextBlock, ToolUseBlock } from '../../src/llm/types.ts';
 import { DEMO_VOICE } from './demoVoice.ts';
@@ -373,14 +374,16 @@ const typedTexts = (message: Message | undefined) => textsOf(message).filter((t)
 
 /**
  * Rule 3b: the text typed after a shot that set the taste question aside
- * (its ask_user answered with {"answered":false}), lower-cased, when it names
- * a taste the way "Other" text is read; else null.
+ * (its ask_user answered with {"answered":false}), lower-cased. The app keeps
+ * that text as the shot's taste (D79), so it is the taste answer, read as the
+ * same words under "Other" are: a taste word picks the move, none means one
+ * step finer. Null when no taste question was set aside for it.
  */
 function typedTaste(messages: Message[], index: number): string | null {
   const message = messages[index];
   if (message?.role !== 'user') return null;
   const words = typedTexts(message).join(' ').toLowerCase();
-  if (words.trim() === '' || tasteOf(words) === 'other' || latestShot(messages.slice(0, index)) === null) return null;
+  if (words.trim() === '' || latestShot(messages.slice(0, index)) === null) return null;
   const asked = new Map(toolUses(messages[index - 1]).map((b) => [b.id as string, b]));
   const setAside = toolResults(message).some((block) => {
     const payload = parseJson(resultText(block));
@@ -572,14 +575,17 @@ function seriesPeak(results: NamedResult[]): number | null {
 
 /**
  * The latest shot's peak and when it came, from its shot event's summary: the
- * numbers its shot card shows. Without them, the top of the series just read,
- * with no time: a series rounded to 1 Hz can tie along a plateau, so its
- * first top is not the summary's moment.
+ * numbers its shot card shows, the time counted from the start of the pour
+ * (minus the summary's pourStartS, never below 0; a summary without one keeps
+ * its time). Without them, the top of the series just read, with no time: a
+ * series rounded to 1 Hz can tie along a plateau, so its first top is not the
+ * summary's moment.
  */
 function peakOf(messages: Message[], results: NamedResult[]): { bar: number | null; atS: number | null } {
   const summary = latestShot(messages)?.summary;
-  const bar = isRecord(summary) ? num(summary.peakPressureBar) : null;
-  if (bar !== null) return { bar, atS: isRecord(summary) ? num(summary.peakPressureAtS) : null };
+  if (!isRecord(summary)) return { bar: seriesPeak(results), atS: null };
+  const bar = num(summary.peakPressureBar);
+  if (bar !== null) return { bar, atS: pourTime(num(summary.peakPressureAtS), num(summary.pourStartS)) };
   return { bar: seriesPeak(results), atS: null };
 }
 
@@ -760,8 +766,8 @@ function decide(script: Script): Reply {
     return { blocks: lead === null ? [proposal] : [{ type: 'text', text: lead }, proposal], stopReason: 'tool_use' };
   }
 
-  // 3. The taste answer, or (3b) a taste typed after a shot instead of
-  // tapped, which set the taste question aside: look at the curve.
+  // 3. The taste answer, or (3b) text typed after a shot instead of a tap,
+  // which set the taste question aside and so is the taste: look at the curve.
   if (resultFor(TOOL.askUser) || typedTaste(messages, lastIndex) !== null) {
     return {
       blocks: [

@@ -28,6 +28,7 @@ const summary: ShotSummary = {
   timestamp: '2026-10-03T08:00:00.000000',
   profileTitle: 'Kiambu v1',
   durationS: 31.2,
+  pourStartS: 2.4,
   doseG: 18,
   yieldG: 36.4,
   ratio: 2.02,
@@ -164,6 +165,8 @@ describe('engine protocol', () => {
     expect(payload.grinder).toEqual({ name: 'Niche Zero', setting: '13', settingType: null, step: null, values: null, linked: false });
     expect(payload.summary.series).toBeUndefined();
     expect(payload.summary.yieldG).toBe(36.4);
+    // Where the pour starts, so the coach counts a time it tells the user from there, as the shot card does.
+    expect(payload.summary.pourStartS).toBe(2.4);
   });
 
   it("carries the linked grinder's dial in the shot event (rule 3)", () => {

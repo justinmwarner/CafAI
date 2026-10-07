@@ -266,7 +266,7 @@ export const DEMO_VOICE: Voice = {
     const sentences: string[] = [];
     // A curve that never built pressure says nothing worth a sentence.
     if (change.peakPressureBar !== null && change.peakPressureBar > 0) {
-      // Word for word what the shot card shows: "5.7 bar at 61 s".
+      // Word for word what the shot card shows, counted from the start of the pour: "5.4 bar at 60 s".
       const seconds = change.peakPressureAtS === null ? 0 : Math.round(change.peakPressureAtS);
       const at = seconds > 0 ? `, ${seconds} s in` : '';
       const clean = change.channelingFlags?.length === 0 ? ', with no sign of channeling' : '';
