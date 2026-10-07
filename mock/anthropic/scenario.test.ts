@@ -91,7 +91,8 @@ const PICKED = user(
   toolResult('t_tpl', { picked: 'blooming-espresso', version: 1, title: 'Kiambu AA v1', uploaded: true, note: null }),
 );
 const LOADED_REPLY = assistant(text('Loaded Kiambu AA v1.'));
-const shot = (levers: Record<string, number>, templateId = 'blooming-espresso', version = 1) =>
+/** A shot event; `summary` overrides the summary's fields (it gave 36.2 g of its 36 g target by default). */
+const shot = (levers: Record<string, number>, templateId = 'blooming-espresso', version = 1, summary: Record<string, unknown> = {}) =>
   user(
     text(
       '[event:shot_completed]\n' +
@@ -103,7 +104,7 @@ const shot = (levers: Record<string, number>, templateId = 'blooming-espresso', 
           levers,
           doseG: 18,
           targetYieldG: 36,
-          summary: { shotId: 'shot-1', durationS: 28.4, yieldG: 36.2, doseG: 18 },
+          summary: { shotId: 'shot-1', durationS: 28.4, yieldG: 36.2, doseG: 18, ...summary },
         }),
     ),
   );
@@ -116,12 +117,24 @@ const ADJUST_REPLY = assistant(toolUse('t_adj', TOOL.proposeAdjustment, { variab
 
 const UP_TO_SHOT = [INTAKE, INTAKE_REPLY, PICKED, LOADED_REPLY];
 
-function adjustmentFor(selected: string[], levers: Record<string, number> = BLOOMING_LEVERS, templateId = 'blooming-espresso') {
-  const reply = ok(call([...UP_TO_SHOT, shot(levers, templateId), SHOT_REPLY, answer(selected), ANSWER_REPLY, SERIES]));
+function adjustmentFor(
+  selected: string[],
+  levers: Record<string, number> = BLOOMING_LEVERS,
+  templateId = 'blooming-espresso',
+  options: { other?: string; summary?: Record<string, unknown> } = {},
+) {
+  const reply = ok(
+    call([...UP_TO_SHOT, shot(levers, templateId, 1, options.summary), SHOT_REPLY, answer(selected, options.other ?? null), ANSWER_REPLY, SERIES]),
+  );
   expect(reply.tools.map((t) => t.name)).toEqual([TOOL.proposeAdjustment]);
   expectValidInputs(reply.tools);
   return reply.tools[0]?.input as Record<string, unknown>;
 }
+
+/** A Blooming shot that aims at 50 g. */
+const AT_50 = { ...BLOOMING_LEVERS, yield: 50 };
+/** It ran out of steps at 41.5 g: a yield move is never reached (like the demo's shot four). */
+const STOPPED_SHORT = { yieldG: 41.5, stopReason: 'machineEnded' };
 
 describe('request checks', () => {
   it('answers 400 for missing or wrong headers', () => {
@@ -343,6 +356,56 @@ describe('scripted replies', () => {
     expect(pastChange.text).toBe(nudge);
   });
 
+  describe('rule 3b: a taste typed instead of tapped, after a shot', () => {
+    const typedPast = { answered: false, note: 'The user typed a message instead.' };
+    const typed = (words: string) => user(toolResult('t_ask', typedPast), text(words));
+    const AFTER_SHOT = [...UP_TO_SHOT, shot(BLOOMING_LEVERS), SHOT_REPLY];
+    const nudge = 'Got it. Pull a shot when you are ready, or tell me more about the coffee.';
+
+    it('reads a typed sour like the answer: the pressure curve first, then the change', () => {
+      const look = ok(call([...AFTER_SHOT, typed('It tasted a bit sour, sharp at the end')]));
+      expect(look.text).toBe('Thanks. Let me look at the pressure curve.');
+      expect(look.tools.map((t) => [t.name, t.input])).toEqual([
+        [TOOL.getShotSeries, { shot: 'latest', metric: 'pressure', fromS: null, toS: null }],
+      ]);
+      const proposal = ok(call([...AFTER_SHOT, typed('It tasted a bit sour, sharp at the end'), ANSWER_REPLY, SERIES]));
+      expect(proposal.tools.map((t) => t.name)).toEqual([TOOL.proposeAdjustment]);
+      expect(proposal.tools[0]?.input).toMatchObject({ variable: 'profile', lever: 'temp', value: 93 });
+      expectValidInputs(proposal.tools);
+    });
+
+    it('reads the same words as Other', () => {
+      const cases: Array<[string, Record<string, unknown>]> = [
+        ['Bitter and dry', { lever: 'temp', value: 91 }],
+        ['Weak', { lever: 'yield', value: 34 }],
+        ['Thin and watery', { lever: 'yield', value: 34 }],
+        ['Way too STRONG for me', { lever: 'yield', value: 38 }],
+        ['Balanced, I like it', { variable: 'none' }],
+      ];
+      for (const [words, decision] of cases) {
+        expect(ok(call([...AFTER_SHOT, typed(words)])).tools.map((t) => t.name), words).toEqual([TOOL.getShotSeries]);
+        expect(ok(call([...AFTER_SHOT, typed(words), ANSWER_REPLY, SERIES])).tools[0]?.input, words).toMatchObject(decision);
+      }
+      // The same words in Other, which also reads "watery" as weak.
+      expect(adjustmentFor(['Other'], BLOOMING_LEVERS, 'blooming-espresso', { other: 'Thin and watery' })).toMatchObject({ lever: 'yield', value: 34 });
+    });
+
+    it('keeps the reply for text without a taste word, a question that is not the taste one, or no question set aside', () => {
+      expect(ok(call([...AFTER_SHOT, typed('Is the grinder too coarse?')])).text).toBe(nudge);
+      // The puck question set aside: not a taste question.
+      const puckQuestion = assistant(text('Hm.'), toolUse('t_ask', TOOL.askUser, { question: 'What does the puck look like?' }));
+      const pastPuck = ok(call([...UP_TO_SHOT, shot(BLOOMING_LEVERS), puckQuestion, typed('It was sour')]));
+      expect(pastPuck.text).toBe(nudge);
+      expect(pastPuck.tools).toEqual([]);
+      // A change set aside, and text with nothing set aside: today's reply.
+      const base = [...AFTER_SHOT, answer(['Sour / sharp']), ANSWER_REPLY, SERIES, ADJUST_REPLY];
+      expect(ok(call([...base, user(toolResult('t_adj', typedPast), text('Still sour though'))])).text).toBe(nudge);
+      expect(ok(call([...base, user(toolResult('t_adj', { applied: false, reason: 'The user declined.' })), assistant(text('OK.')), user(text('It was sour'))])).text).toBe(
+        nudge,
+      );
+    });
+  });
+
   it('rule 4: a finished shot is summed up and the taste asked for', () => {
     const reply = ok(call([...UP_TO_SHOT, shot(BLOOMING_LEVERS)]));
     expect(reply.text).toBe('Got it: 28.4 s, 36.2 g out.');
@@ -371,9 +434,62 @@ describe('scripted replies', () => {
     expect(adjustmentFor(['Sour / sharp'])).toMatchObject({ variable: 'profile', lever: 'temp', value: 93, grind: null });
   });
 
-  it('rule 2: sour at the template maximum lengthens the yield instead', () => {
+  it('rule 2: sour at the template maximum lengthens the yield instead, when the shot reached its yield', () => {
     const levers = { temp: 94, yield: 50, soak: 3, soakWeight: 4, pourFlow: 1.7, pourPmax: 8.5 };
-    expect(adjustmentFor(['Sour / sharp'], levers, 'd-flow')).toMatchObject({ variable: 'profile', lever: 'yield', value: 52 });
+    const reached = { summary: { yieldG: 50.3, stopReason: 'targetWeight' } };
+    expect(adjustmentFor(['Sour / sharp'], levers, 'd-flow', reached)).toMatchObject({ variable: 'profile', lever: 'yield', value: 52 });
+  });
+
+  it('rule 2: sour at the template maximum after a shot that stopped short of its yield: one grind step finer', () => {
+    const levers = { temp: 94, yield: 50, soak: 3, soakWeight: 4, pourFlow: 1.7, pourPmax: 8.5 };
+    expect(adjustmentFor(['Sour / sharp'], levers, 'd-flow', { summary: STOPPED_SHORT })).toMatchObject({
+      variable: 'grind',
+      grind: { direction: 'finer', amount: 1, setting: '13' },
+    });
+  });
+
+  it('rule 2: weak and strong after a shot that stopped short of its yield move the grind: finer and coarser', () => {
+    // INTAKE's context says the Niche Zero is on 14, a plain number.
+    expect(adjustmentFor(['Weak / watery'], AT_50, 'blooming-espresso', { summary: STOPPED_SHORT })).toMatchObject({
+      variable: 'grind',
+      lever: null,
+      value: null,
+      grind: { direction: 'finer', amount: 1, setting: '13' },
+      summary: 'Grind 1 step finer, to 13',
+    });
+    expect(adjustmentFor(['Other'], AT_50, 'blooming-espresso', { other: 'Too strong', summary: STOPPED_SHORT })).toMatchObject({
+      variable: 'grind',
+      lever: null,
+      value: null,
+      grind: { direction: 'coarser', amount: 1, setting: '15' },
+      summary: 'Grind 1 step coarser, to 15',
+      tips: ['Keep the same dose.'],
+    });
+    // No yield reading is no proof the shot reached its stop.
+    expect(adjustmentFor(['Weak / watery'], AT_50, 'blooming-espresso', { summary: { yieldG: null } })).toMatchObject({ variable: 'grind' });
+  });
+
+  it('rule 2: a shot within 1 g of its yield, or one that stopped on weight, keeps the yield moves', () => {
+    for (const summary of [
+      { yieldG: 49.6, stopReason: 'targetWeight' },
+      { yieldG: 49, stopReason: 'machineEnded' },
+      { yieldG: 50.9, stopReason: 'machineEnded' },
+      { yieldG: 47.2, stopReason: 'targetWeight' },
+    ]) {
+      expect(adjustmentFor(['Weak / watery'], AT_50, 'blooming-espresso', { summary }), JSON.stringify(summary)).toMatchObject({
+        variable: 'profile',
+        lever: 'yield',
+        value: 48,
+      });
+      expect(adjustmentFor(['Other'], AT_50, 'blooming-espresso', { other: 'Too strong', summary }), JSON.stringify(summary)).toMatchObject({
+        lever: 'yield',
+        value: 52,
+      });
+    }
+    // 1.1 g short, and the machine ended it: the stop was never reached.
+    expect(adjustmentFor(['Weak / watery'], AT_50, 'blooming-espresso', { summary: { yieldG: 48.9, stopReason: 'machineEnded' } })).toMatchObject({
+      variable: 'grind',
+    });
   });
 
   it('rule 2: bitter, weak, strong, balanced and anything else', () => {
@@ -509,6 +625,42 @@ describe('scripted replies', () => {
       expect(grindAfter({ ...preset('5'), linked: true }).grind.setting).toBe('4');
     });
 
+    it('takes one step coarser the same way when a too-strong shot stopped short of its yield', () => {
+      const coarserAfter = (grinder: Record<string, unknown>) => {
+        const stoppedShort = user(
+          text(
+            '[event:shot_completed]\n' +
+              JSON.stringify({
+                shotRef: 'latest',
+                shotId: 'shot-2',
+                version: 1,
+                templateId: 'blooming-espresso',
+                levers: BLOOMING_LEVERS,
+                doseG: 18,
+                targetYieldG: 36,
+                grinder,
+                summary: { shotId: 'shot-2', durationS: 27, yieldG: 31.5, doseG: 18, stopReason: 'machineEnded' },
+              }),
+          ),
+        );
+        const reply = ok(call([...UP_TO_SHOT, stoppedShort, SHOT_REPLY, answer(['Other'], 'Too strong'), ANSWER_REPLY, SERIES]));
+        expectValidInputs(reply.tools);
+        return reply.tools[0]?.input as { variable: string; grind: { direction: string; amount: number; setting: string | null }; summary: string };
+      };
+      expect(coarserAfter(numeric('14.5', 0.5))).toMatchObject({
+        variable: 'grind',
+        grind: { direction: 'coarser', amount: 1, setting: '15.0' },
+        summary: 'Grind 1 step coarser, to 15.0',
+      });
+      expect(coarserAfter(numeric('15', 1)).grind.setting).toBe('16');
+      expect(coarserAfter(preset('5')).grind.setting).toBe('6');
+      // Past the end of the list, or linked without steps: directions only.
+      expect(coarserAfter(preset('12')).grind.setting).toBeNull();
+      expect(coarserAfter({ ...numeric('15', null), linked: true }).grind.setting).toBeNull();
+      // Without Decaid's step data a plain number goes up by 1.
+      expect(coarserAfter({ name: 'DF64', setting: '15' }).grind.setting).toBe('16');
+    });
+
     it('reads the intake context the same way before any shot', () => {
       const intake = user(
         text('Kiambu AA, light roast, washed.'),
@@ -568,9 +720,31 @@ describe('scripted replies', () => {
 
   it('rule 2: yield moves stay inside the template range', () => {
     const allonge = { temp: 96, yield: 135, flow: 4.5, maxPressure: 8.6 };
-    expect(adjustmentFor(['Weak / watery'], allonge, 'allonge')).toMatchObject({ lever: 'yield', value: 133 });
+    const reached = { summary: { yieldG: 135.4, stopReason: 'targetWeight' } };
+    expect(adjustmentFor(['Weak / watery'], allonge, 'allonge', reached)).toMatchObject({ lever: 'yield', value: 133 });
     // Sour at the top of the temperature and the yield: the grind instead.
-    expect(adjustmentFor(['Sour / sharp'], allonge, 'allonge')).toMatchObject({ variable: 'grind' });
+    expect(adjustmentFor(['Sour / sharp'], allonge, 'allonge', reached)).toMatchObject({ variable: 'grind' });
+    // Too strong with the yield at the top of the range: one step coarser, never finer (finer would make it stronger).
+    expect(adjustmentFor(['Other'], allonge, 'allonge', { ...reached, other: 'Too strong' })).toMatchObject({
+      variable: 'grind',
+      grind: { direction: 'coarser', amount: 1, setting: '15' },
+      summary: 'Grind 1 step coarser, to 15',
+    });
+  });
+
+  it('rule 2: too strong never grinds finer, whatever stops the yield move', () => {
+    const tooStrong = (levers: Record<string, number>, templateId: string, summary: Record<string, unknown>) =>
+      adjustmentFor(['Other'], levers, templateId, { other: 'Too strong', summary });
+    const allonge = { temp: 96, yield: 135, flow: 4.5, maxPressure: 8.6 };
+    for (const decision of [
+      tooStrong(AT_50, 'blooming-espresso', STOPPED_SHORT),
+      tooStrong(allonge, 'allonge', { yieldG: 135.2, stopReason: 'targetWeight' }),
+      tooStrong(allonge, 'allonge', { yieldG: 120, stopReason: 'machineEnded' }),
+      // No yield lever at all.
+      tooStrong({ temp: 92, bloom: 30, piExit: 4, flow: 2.2 }, 'blooming-espresso', { yieldG: 40 }),
+    ]) {
+      expect(decision).toMatchObject({ variable: 'grind', grind: { direction: 'coarser' } });
+    }
   });
 
   it('rule 1: an applied change is confirmed, a declined one keeps the version', () => {

@@ -7,7 +7,7 @@ import gentle from '../../src/coach/templates/source/Gentle_and_sweet1.json';
 import londonium from '../../src/coach/templates/source/Londonium.json';
 import allonge from '../../src/coach/templates/source/rao_allonge.json';
 import { normalizeProfile } from './profiles.ts';
-import { createShotPlayer, createShotSimulation, type ShotSimulationInput, type SimFrame } from './shotPlayer.ts';
+import { createShotPlayer, createShotSimulation, DEFAULT_PUCK_RESISTANCE, type ShotSimulationInput, type SimFrame } from './shotPlayer.ts';
 import { createMockDecaid } from './state.ts';
 
 const START = new Date(2026, 9, 3, 8, 15, 2, 725).getTime();
@@ -150,6 +150,40 @@ describe('createShotSimulation', () => {
     expect(frames.slice(stopping).some((f) => f.recorded)).toBe(false);
   });
 
+  it("stops at weight as Decaid does: the scale's weight plus its weight flow times weightFlowMultiplier (1.0 s by default)", () => {
+    for (const [multiplier, lookAhead] of [
+      [undefined, 1.0],
+      [2.5, 2.5],
+    ] as const) {
+      const frames = run(input(dflow, { targetYield: 36, ...(multiplier === undefined ? {} : { weightFlowMultiplier: multiplier }) }));
+      const stopAt = frames.findIndex((f) => f.events.some((e) => e.decision?.kind === 'stop'));
+      const decision = frames[stopAt]!.events.find((e) => e.decision?.kind === 'stop')!.decision!;
+      expect(decision.reason).toBe('targetWeight');
+      const projection = (frame: SimFrame) => frame.scale!.weight + frame.scale!.weightFlow * lookAhead;
+      expect((decision.data as { projectedWeight: number }).projectedWeight).toBeCloseTo(projection(frames[stopAt]!), 6);
+      expect(projection(frames[stopAt]!)).toBeGreaterThanOrEqual(36);
+      // The sample before did not reach it yet.
+      expect(projection(frames[stopAt - 1]!)).toBeLessThan(36);
+    }
+  });
+
+  it('a shot stopped at weight settles within about 1 g of its target, as Decaid\'s early stop intends', () => {
+    for (const [name, profile, targetYield] of [
+      ['Blooming Espresso', blooming, 36],
+      ['D-Flow', dflow, 36],
+      ['D-Flow', dflow, 50],
+      ['Londonium', londonium, 36],
+      ['Gentle and Sweet', gentle, 36],
+    ] as const) {
+      const frames = run(input(profile, { targetYield }));
+      expect(events(frames).find((e) => e.decision?.kind === 'stop')!.decision!.reason, name).toBe('targetWeight');
+      const settled = frames.at(-1)!.scale!.weight;
+      expect(Math.abs(settled - targetYield), `${name} at ${targetYield} g settled at ${settled} g`).toBeLessThanOrEqual(1);
+      // The drips after the stop are what Decaid's look-ahead anticipates.
+      expect(settled).toBeGreaterThan(recorded(frames).at(-1)!.scale!.weight + 1);
+    }
+  });
+
   it('values sit on the DE1 fixed-point grids', () => {
     for (const frame of recorded(run(input(dflow)))) {
       expect(Number.isInteger(frame.machine.pressure * 4096)).toBe(true);
@@ -176,6 +210,39 @@ describe('createShotSimulation', () => {
 
   it('is deterministic', () => {
     expect(run(input(londonium))).toEqual(run(input(londonium)));
+  });
+
+  /** When the cup first holds more than 0.3 g, when the profile reaches its pause (step 2), and what the cup holds at the end. */
+  function blooming50(puckResistance?: number) {
+    const frames = recorded(run(input(blooming, { targetYield: 50, ...(puckResistance === undefined ? {} : { puckResistance }) })));
+    const at = (frame: SimFrame | undefined) => (frame ? Math.round((parseDecaidTimestamp(frame.machine.timestamp) - START) / 100) / 10 : null);
+    return {
+      firstDropS: at(frames.find((f) => (f.scale?.weight ?? 0) > 0.3)),
+      pauseS: at(frames.find((f) => f.machine.profileFrame >= 2 && f.machine.state.substate !== 'preparingForShot')),
+      endS: at(frames.at(-1)),
+      weightG: frames.at(-1)!.scale!.weight,
+    };
+  }
+
+  it('the resistance model leaves the default puck alone (the live mock never sets one)', () => {
+    expect(blooming50()).toEqual(blooming50(DEFAULT_PUCK_RESISTANCE));
+    // A live Blooming shot at 50 g; only the cup lag (one lag both ways) moved its weight, from 45.4 g.
+    expect(blooming50()).toEqual({ firstDropS: 7.4, pauseS: 6.6, endS: 62.4, weightG: 44.5 });
+  });
+
+  it("a puck's resistance shows before the pour: a finer one drips later, fills longer and gives less", () => {
+    const coarse = blooming50(2.2);
+    const fine = blooming50(2.6);
+    expect(fine.firstDropS!).toBeGreaterThan(coarse.firstDropS!);
+    expect(fine.pauseS!).toBeGreaterThan(coarse.pauseS!);
+    expect(fine.endS!).toBeGreaterThan(coarse.endS!);
+    expect(fine.weightG).toBeLessThan(coarse.weightG - 2);
+    // About ±10% around the default moves each by at least a frame or a gram.
+    const middle = blooming50();
+    expect(coarse.firstDropS!).toBeLessThan(middle.firstDropS!);
+    expect(fine.firstDropS!).toBeGreaterThan(middle.firstDropS!);
+    expect(coarse.weightG).toBeGreaterThan(middle.weightG + 1);
+    expect(fine.weightG).toBeLessThan(middle.weightG - 1);
   });
 
   it('without a scale it runs scaleless and the machine ends the shot', () => {
@@ -358,7 +425,7 @@ describe('createShotPlayer', () => {
     expect(record.workflow.profile).toEqual(state.getWorkflow().profile);
     expect((record.workflow as { machine?: unknown }).machine).toMatchObject({ provenanceStatus: 'captured', model: 'DE1Pro' });
     const last = record.measurements.at(-1)!;
-    expect(record.annotations).toEqual({ actualDoseWeight: 18, actualYield: Math.round((last.scale!.weight + 0.4) * 10) / 10 });
+    expect(record.annotations).toEqual({ actualDoseWeight: 18, actualYield: state.getScaleSnapshot()!.weight });
     expect(record.measurements[0]!.machine.state.substate).toBe('preparingForShot');
     const start = parseDecaidTimestamp(record.measurements[0]!.machine.timestamp);
     expect(parseDecaidTimestamp(record.timestamp) - start).toBeGreaterThan(0);
@@ -366,6 +433,33 @@ describe('createShotPlayer', () => {
     expect(record.createdAt).toMatch(/Z$/);
     expect(state.getMachineSnapshot().state).toEqual({ state: 'idle', substate: 'idle' });
     expect(state.lastProfileFrame).toBe(last.machine.profileFrame);
+  });
+
+  it("records the cup's settled weight as the yield: what the scale reads once the stopping tail's drips are in", async () => {
+    const { state, player } = setup();
+    const weights: number[] = [];
+    state.on('scale', (frame) => {
+      if ('weight' in frame) weights.push(frame.weight);
+    });
+    player.start();
+    await vi.advanceTimersByTimeAsync(12_000);
+    expect(player.activity).toBeNull();
+
+    const record = state.getShot(player.lastShotId!);
+    const lastRecorded = record.measurements.at(-1)!.scale!.weight;
+    const settled = weights.at(-1)!;
+    // Decaid's actualYield is the cup after the drips, not the weight when the stop was decided.
+    expect(settled).toBeGreaterThan(lastRecorded + 0.4);
+    expect(record.annotations?.actualYield).toBe(settled);
+    // The panel's last reading and the shot card agree.
+    expect(state.getScaleSnapshot()!.weight).toBe(settled);
+  });
+
+  it('records no yield without a scale', async () => {
+    const { state, player } = setup({ scaleConnected: false });
+    player.start();
+    await vi.advanceTimersByTimeAsync(12_000);
+    expect(state.getShot(player.lastShotId!).annotations).toEqual({ actualDoseWeight: 18 });
   });
 
   it('stays in stopping for about 4 s (wall time divided by the speed) and stores the shot only after it', async () => {
@@ -534,6 +628,58 @@ describe('createShotPlayer', () => {
     await vi.advanceTimersByTimeAsync(12_000);
     const ahead = second.state.getShot(second.player.lastShotId!).measurements.at(-1)!.volume!;
     expect(ahead).toBeLessThan(plain - 3);
+  });
+
+  it("the group target follows the machine's profile: its first step idle, the running step's in a shot, and back after", async () => {
+    const { state, player, machine } = setup();
+    // Idle with the workflow's profile on the machine: Guji Hambela v1 starts at 91 °C.
+    expect(state.getMachineProfile().steps[0]!.temperature).toBe(91);
+    expect(state.getMachineSnapshot().targetGroupTemperature).toBe(91);
+
+    // A profile that starts hotter: once the machine holds it, its first step is the target.
+    const profile = state.getWorkflow().profile;
+    const steps = profile.steps.map((step, i) => ({ ...step, temperature: i === 0 ? 94 : 92.5 }));
+    state.updateWorkflow({ profile: { ...profile, title: 'Guji Hambela v2', steps } });
+    expect(state.getMachineSnapshot().targetGroupTemperature, 'not before the machine has it').toBe(91);
+    await vi.advanceTimersByTimeAsync(800);
+    expect(state.getMachineProfile().title).toBe('Guji Hambela v2');
+    expect(state.getMachineSnapshot().targetGroupTemperature).toBe(94);
+    player.startIdleFrames(1000);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(machine.at(-1)!).toMatchObject({ state: { state: 'idle' }, targetGroupTemperature: 94 });
+    expect(machine.at(-1)!.groupTemperature).toBeGreaterThan(92.5);
+
+    // In the shot: the step that runs.
+    machine.length = 0;
+    player.start();
+    await vi.advanceTimersByTimeAsync(12_000);
+    expect(player.activity).toBeNull();
+    const brewing = machine.filter((frame) => frame.state.state === 'espresso' && frame.state.substate !== 'pouringDone');
+    expect(brewing.filter((frame) => frame.profileFrame === 0 && frame.state.substate !== 'preparingForShot').every((f) => f.targetGroupTemperature === 94)).toBe(true);
+    expect(brewing.filter((frame) => frame.profileFrame >= 1).every((f) => f.targetGroupTemperature === 92.5)).toBe(true);
+    expect(brewing.some((frame) => frame.profileFrame >= 1)).toBe(true);
+
+    // Done: back to the idle target as soon as the machine is idle, and in every idle frame after.
+    const after = machine.filter((frame) => frame.state.state === 'idle');
+    expect(after.length).toBeGreaterThan(0);
+    expect(after.every((frame) => frame.targetGroupTemperature === 94)).toBe(true);
+    expect(state.getMachineSnapshot().targetGroupTemperature).toBe(94);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(machine.at(-1)!.targetGroupTemperature).toBe(94);
+    player.dispose();
+  });
+
+  it('settles back to the idle target after a shot without a scale too (no stopping tail)', async () => {
+    const { state, player, machine } = setup({ scaleConnected: false });
+    const profile = state.getWorkflow().profile;
+    // Every step after the first runs hotter, so a target left over from the shot shows.
+    const steps = profile.steps.map((step, i) => ({ ...step, temperature: i === 0 ? 90 : 96 }));
+    state.updateWorkflow({ profile: { ...profile, title: 'Guji Hambela v3', steps } });
+    await vi.advanceTimersByTimeAsync(800);
+    player.start();
+    await vi.advanceTimersByTimeAsync(12_000);
+    expect(machine.at(-1)!).toMatchObject({ state: { state: 'idle' }, targetGroupTemperature: 90 });
+    expect(state.getMachineSnapshot().targetGroupTemperature).toBe(90);
   });
 
   it('emits idle frames on request, and whenIdle resolves after a shot', async () => {

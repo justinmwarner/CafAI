@@ -15,6 +15,7 @@
  */
 import { CAFAI_DB_NAME, createDbHandle, DATA_STORES, openCafaiDb, SETTINGS_KEY } from '../../src/storage/db.ts';
 import { openSecretStore, SECRETS_DB_NAME } from '../../src/storage/secrets.ts';
+import { TID } from '../../src/ui/testIds.ts';
 import { DEMO_API_KEY } from './story.ts';
 
 /** Set after a successful seed; its own prefix keeps it apart from CafAI's `cafai.*` and the mock's `cafai-mock:` keys. */
@@ -93,40 +94,61 @@ export function markSeeded(storage: Pick<globalThis.Storage, 'setItem'>, atMs: n
 }
 
 /** The page a note goes on: plain DOM, outside the React root. */
-export type NoteDocument = Pick<Document, 'createElement' | 'body'>;
+export type NoteDocument = Pick<Document, 'createElement' | 'body' | 'head'>;
 
-/** A dismissible note at the bottom of the page, from mock code (the app itself knows nothing of the demo). */
+/**
+ * A dismissible note across the top of the page, from mock code (the app
+ * itself knows nothing of the demo). It covers nothing: the app's frame
+ * (AppShell, fixed over the whole page) moves down by the note's height
+ * until the note is dismissed, the way the app's own engine warning pushes
+ * the columns down instead of covering a control. Over the page's bottom it
+ * hid half of the chat's composer, and on Settings the grinder field.
+ */
 export function showGuardNote(document: NoteDocument): HTMLElement {
   const note = document.createElement('div');
   note.setAttribute('role', 'status');
   note.style.cssText = [
     'position:fixed',
-    'left:12px',
-    'bottom:12px',
+    'top:0',
+    'left:0',
+    'right:0',
     'z-index:1500',
-    'max-width:min(560px, calc(100% - 24px))',
     'box-sizing:border-box',
     'display:flex',
     'align-items:center',
+    'justify-content:center',
     'gap:8px',
-    'padding:8px 8px 8px 16px',
-    'border-radius:8px',
-    'border:1px solid rgba(239, 230, 220, 0.3)',
+    'padding:4px 8px 4px 16px',
+    'border-bottom:1px solid rgba(239, 230, 220, 0.3)',
     'background:#2b231d',
     'color:#efe6dc',
     'font:16px/1.4 Roboto, sans-serif',
-    'box-shadow:0 4px 16px rgba(0, 0, 0, 0.5)',
   ].join(';');
   const text = document.createElement('span');
   text.textContent = GUARD_NOTE;
+  text.style.cssText = 'flex:0 1 auto;max-width:960px';
   const dismiss = document.createElement('button');
   dismiss.type = 'button';
   dismiss.textContent = '×';
   dismiss.setAttribute('aria-label', 'Dismiss');
   dismiss.style.cssText =
     'flex:none;min-width:48px;min-height:48px;border:0;border-radius:24px;background:transparent;color:inherit;font-size:24px;cursor:pointer';
-  dismiss.addEventListener('click', () => note.remove());
   note.append(text, dismiss);
+
+  // The room the note takes at the top, kept to its height as the text wraps.
+  const room = document.createElement('style');
+  const fit = () => {
+    room.textContent = `[data-testid="${TID.appReady}"]{top:${Math.ceil(note.getBoundingClientRect().height)}px !important}`;
+  };
+  const resized = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null;
+  dismiss.addEventListener('click', () => {
+    resized?.disconnect();
+    room.remove();
+    note.remove();
+  });
+  document.head.append(room);
   document.body.append(note);
+  fit();
+  resized?.observe(note);
   return note;
 }

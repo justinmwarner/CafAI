@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { TID } from '../src/ui/testIds.ts';
-import { openApp, saveApiKey } from './helpers.ts';
+import { openApp, saveApiKey, sendChat } from './helpers.ts';
 
 /**
  * The demo (npm run demo, ?demo=1; docs/DEMO.md, D76): CafAI already in use
@@ -65,6 +65,34 @@ test('opens on Kiambu AA v4 with every kind of card, both bags and the history',
   await kiambu.click();
   for (const version of [1, 2, 3, 4]) await expect(page.getByTestId(TID.historyVersion(version))).toBeVisible();
   await expect(page.locator('[data-testid^="history-iteration-"]')).toHaveCount(4);
+
+  // Santos's "Balanced, sweet" ended with the keep card confirmed: History says it was kept.
+  await page.getByRole('button', { name: 'All bags' }).click();
+  await bags.filter({ hasText: 'Santos' }).click();
+  const santos = page.locator('[data-testid^="history-iteration-"]');
+  await expect(santos).toHaveCount(1);
+  await expect(santos).toContainText('Balanced, sweet');
+  await expect(santos).toContainText('Kept as is');
+});
+
+test('a taste typed instead of tapped is read like the answer', async ({ page }) => {
+  await openDemo(page);
+  await expect(diffCards(page)).toHaveCount(5);
+
+  await sendChat(page, 'It tasted a bit sour, sharp at the end');
+
+  await expect(diffCards(page)).toHaveCount(6, { timeout: 30_000 });
+  const card = diffCards(page).last();
+  await expect(card).toContainText('Kiambu AA v5');
+  await expect(card).toContainText('Brew temperature');
+});
+
+test('"Weak / watery" after a shot that ran out of steps short of its stop moves the grinder, not the stop', async ({ page }) => {
+  await openDemo(page);
+  await openQuestion(page).getByTestId(TID.optionChip('Weak / watery')).click();
+
+  await expect(diffCards(page)).toHaveCount(6, { timeout: 30_000 });
+  await expect(diffCards(page).last()).toContainText('Set the grinder to 14.0 before the next shot');
 });
 
 test('"Sour / sharp" gets a coach reply and a Kiambu AA v5 card, and Confirm loads it', async ({ page }) => {
@@ -129,10 +157,18 @@ test('never replaces data of its own: a bag made in the normal app stays, and a 
   await expect(note).toBeVisible();
   await expect(note).toContainText('npm run demo');
 
+  // Across the top of the page, with the app moved down below it: it covers no control (the composer, a field).
+  const app = page.getByTestId(TID.appReady);
+  const noteBox = (await note.boundingBox())!;
+  expect(noteBox.y).toBeLessThanOrEqual(1);
+  await expect.poll(async () => (await app.boundingBox())!.y).toBeGreaterThanOrEqual(noteBox.y + noteBox.height - 1);
+
   // The normal app runs on this address's own data.
   await expect(page.getByTestId(TID.bagPicker).locator('option')).toHaveText(['New bag']);
   await expect(page.getByTestId(TID.activeVersion)).toContainText('No profile yet');
 
   await note.getByRole('button', { name: 'Dismiss' }).click();
   await expect(note).toHaveCount(0);
+  // Dismissed, the app has the whole page again.
+  await expect.poll(async () => (await app.boundingBox())!.y).toBeLessThanOrEqual(1);
 });

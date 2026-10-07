@@ -13,25 +13,27 @@ import type { RoastLevel, TemplateId } from '../../src/coach/contract.ts';
 
 export type VoiceName = 'terse' | 'demo';
 
-/** What the latest ask_user answer names, read as the script reads it (the first match wins). */
+/** What the latest taste answer names (tapped, or typed instead: rule 3b), read as the script reads it (the first match wins). */
 export type Taste = 'sour' | 'bitter' | 'weak' | 'strong' | 'balanced' | 'other';
 
 /** The change the script proposes. */
 export type ChangeKind =
   /** Sour: temperature +1 °C. */
   | 'warmer'
-  /** Sour, temperature already at the template's top: yield +2 g. */
+  /** Sour, temperature already at the template's top, and the shot reached its yield: yield +2 g. */
   | 'longerForSour'
   /** Bitter: temperature -1 °C. */
   | 'cooler'
-  /** Weak: yield -2 g. */
+  /** Weak, and the shot reached its yield: yield -2 g. */
   | 'shorter'
-  /** Too strong: yield +2 g. */
+  /** Too strong, and the shot reached its yield: yield +2 g. */
   | 'longer'
   /** Balanced: no change. */
   | 'keep'
-  /** Anything else, or no room on the lever: one grind step finer. */
+  /** Anything else, no room on the lever, or a weak or sour shot that stopped short of its yield: one grind step finer. */
   | 'finer'
+  /** Too strong, and the yield cannot run longer (the shot stopped short of it, or it is at the template's top): one grind step coarser. */
+  | 'coarser'
   /** CafAI rejected a grind move: keep the recipe. */
   | 'keepAfterRejectedGrind';
 
@@ -67,15 +69,31 @@ export interface TasteFacts {
   roastLevel: RoastLevel | null;
 }
 
+/** How the latest shot ended against the yield its lever aims at. */
+export interface ShotStop {
+  /** It stopped on weight, or within 1 g of the yield lever: only then can a yield move change the cup. */
+  reached: boolean;
+  /** What it gave (the summary's yield) and the yield lever, when the shot event said. */
+  yieldG: number | null;
+  targetG: number | null;
+}
+
 export interface ChangeFacts {
   kind: ChangeKind;
   taste: Taste;
   roastLevel: RoastLevel | null;
-  /** The setting a finer grind lands on, when the script could name one. */
+  /** The setting a grind move lands on, when the script could name one. */
   grindSetting: string | null;
-  /** The top of the pressure series a get_shot_series result just returned, and when (s from shot start). */
+  /**
+   * The latest shot's peak pressure and when it came (s from the shot's
+   * start), from its shot event's summary: the numbers its shot card shows.
+   * Without them, the top of a pressure series a get_shot_series result just
+   * returned, with no time (a rounded series can tie along a plateau).
+   */
   peakPressureBar: number | null;
   peakPressureAtS: number | null;
+  /** How the latest shot ended against its yield; null without a shot event. */
+  stop: ShotStop | null;
   /** The latest shot's channeling flags (empty: none fired); null when the shot event carried none. */
   channelingFlags: string[] | null;
   /** This change replaces one CafAI rejected. */
@@ -105,7 +123,7 @@ export interface Voice {
   picked(pick: PickFacts): string;
   /** Rule 4: a shot finished; the line before "How did it taste?". */
   shotCompleted(shot: ShotFacts): string;
-  /** Rule 3: the taste answer; the line before get_shot_series. */
+  /** Rule 3: the taste answer, tapped or typed (3b); the line before get_shot_series. */
   tasteAnswer(answer: TasteFacts): string;
   /** Rule 2: the text before propose_adjustment, or null for the tool call alone. */
   proposalLead(change: ChangeFacts): string | null;
@@ -162,6 +180,11 @@ const TERSE_CHANGES: Record<ChangeKind, (change: ChangeFacts) => ProposalText> =
     summary: grindSetting === null ? 'Grind 1 step finer' : `Grind 1 step finer, to ${grindSetting}`,
     rationale: 'The taste did not point to one clear fix, so slow the shot slightly with a finer grind.',
     expectedEffect: 'A slightly slower shot with more sweetness.',
+  }),
+  coarser: ({ grindSetting }) => ({
+    summary: grindSetting === null ? 'Grind 1 step coarser' : `Grind 1 step coarser, to ${grindSetting}`,
+    rationale: 'It tasted too strong and the yield cannot run any longer, so a coarser grind will lighten it.',
+    expectedEffect: 'A lighter, clearer cup.',
   }),
   keepAfterRejectedGrind: () => ({
     summary: 'Keep everything as it is',

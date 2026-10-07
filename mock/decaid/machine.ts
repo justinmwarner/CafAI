@@ -36,6 +36,19 @@ export interface MachineProfileOptions {
   wanted(): WireProfile;
   /** What a write meets with no machine (Decaid's DeviceNotConnectedException). */
   notConnected(): Error;
+  /** The DE1 took a new profile (a copy). */
+  onHeld?(profile: WireProfile): void;
+}
+
+/**
+ * The temperature an idle DE1 holds its group (and water) at: the first step
+ * of the profile it holds, as Decaid's own simulated machine does
+ * (mock_de1.dart: _profileTargetTemperature = profile.steps.first.temperature).
+ * During a shot the target is the running step's.
+ */
+export function idleTemperature(profile: WireProfile): number | null {
+  const first = profile.steps[0]?.temperature;
+  return typeof first === 'number' && Number.isFinite(first) ? first : null;
 }
 
 export interface MachineProfile {
@@ -104,12 +117,17 @@ export function createMachineProfile(options: MachineProfileOptions): MachinePro
     });
   }
 
+  function hold(profile: WireProfile): void {
+    held = profile;
+    options.onHeld?.(clone(held));
+  }
+
   function upload(profile: WireProfile): Promise<void> {
     if (!options.isConnected()) return Promise.reject(options.notConnected());
     if (sameProfile(held, profile)) return Promise.resolve();
     const target = clone(profile);
     if (options.uploadMs <= 0 || disposed) {
-      held = target;
+      hold(target);
       return Promise.resolve();
     }
     return new Promise<void>((resolve, reject) => {
@@ -125,7 +143,7 @@ export function createMachineProfile(options: MachineProfileOptions): MachinePro
       entry.timer = setTimeout(() => {
         entry.timer = null;
         if (active === entry) active = null;
-        held = target;
+        hold(target);
         resolve();
       }, options.uploadMs);
       active = entry;

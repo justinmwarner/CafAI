@@ -5,9 +5,10 @@
  * from the engine itself; only the coach's turns are written here, by hand.
  *
  * Two bags. Santos (Brazil, natural, medium-dark), a day ago: Gentle and
- * Sweet, one 5-star shot answered "Balanced, sweet", kept. Then Kiambu AA
- * (Kenya, washed, light): Blooming Espresso over four shots, with a hotter
- * v2, a by-hand grind move, a shot that ran another profile, a slower pour
+ * Sweet, one 5-star shot answered "Balanced, sweet", and the coach's keep
+ * card confirmed, so History says it was kept. Then Kiambu AA (Kenya,
+ * washed, light): Blooming Espresso over four shots, with a hotter v2, a
+ * by-hand grind move, a shot that ran another profile, a slower pour
  * declined, re-offered, applied and undone, a middle way as v4, and the last
  * shot's "How did it taste?" left open for the viewer to answer.
  *
@@ -17,8 +18,9 @@
  *   on the real Blooming shot in src/coach/__fixtures__); Gentle and Sweet's
  *   fast fill overshoots its 6 bar, which the detector reports.
  * - Kiambu AA's v3 and v4 slow the pour instead of shortening the yield: on
- *   the mock, a blooming shot ends with its profile at about 42-48 g, short of
- *   its 50 g stop, so a shorter stop would change nothing in the cup.
+ *   the mock, a blooming shot ends with its profile short of its 50 g stop
+ *   (about 40-48 g once the drips are in; even the uneven puck of shot two
+ *   ends just short), so a shorter stop would change nothing in the cup.
  *
  * Coach turns that quote a number read it from the request they answer
  * (mock/demo/transcript.ts), the way the real coach can only know what it
@@ -77,15 +79,24 @@ export const STARTING_GRINDER = {
   grinderId: MOCK_GRINDER_IDS.nicheZero,
 } as const;
 
+/**
+ * Every puck its own, as at a real grinder: a sound one within about 10% of
+ * the mock's default resistance (2.4, which a shot pulled in the demo gets),
+ * finer after the grind move, so no two shots run the same time, drip at the
+ * same moment or give the same yield (a finer puck drips later and gives
+ * less; mock/decaid/shotPlayer.ts). Shot two's uneven puck is far below on
+ * purpose.
+ */
 export const SHOTS = {
   santos: { id: '3f6c2b9e-1d4a-4e8b-9c71-5a2d8e0f4b13', puckResistance: 2.4, seed: 7 },
-  kiambu1: { id: '8b2e4d6f-0a1c-4f3e-8d5b-7c9a1e3f5d24', puckResistance: 2.0, seed: 1 },
+  // At 15, a touch coarse.
+  kiambu1: { id: '8b2e4d6f-0a1c-4f3e-8d5b-7c9a1e3f5d24', puckResistance: 2.2, seed: 1 },
   // An uneven puck: the water finds a path, the pour never builds pressure.
   kiambu2: { id: 'c4a6e8f0-2b3d-4a5c-9e7f-1d3b5c7e9a35', puckResistance: 1.4, seed: 2 },
-  stray: { id: 'e1f3a5c7-9b0d-4e2f-a4c6-8e0a2c4e6f46', puckResistance: 2.6, seed: 5 },
-  // One step finer, and a better prepared puck.
+  stray: { id: 'e1f3a5c7-9b0d-4e2f-a4c6-8e0a2c4e6f46', puckResistance: 2.45, seed: 5 },
+  // One step finer, and a better prepared puck: a slower shot.
   kiambu3: { id: '5d7f9b1c-3e5a-4c7d-b9f1-3a5c7e9b1d57', puckResistance: 2.6, seed: 3 },
-  kiambu4: { id: 'a9c1e3f5-7b9d-4f1a-8c3e-5b7d9f1a3c68', puckResistance: 2.6, seed: 4 },
+  kiambu4: { id: 'a9c1e3f5-7b9d-4f1a-8c3e-5b7d9f1a3c68', puckResistance: 2.5, seed: 4 },
 } as const satisfies Record<string, ShotSpec>;
 
 /** Decaid's bundled "D-Flow / default", which another skin loads before the stray shot. */
@@ -199,9 +210,17 @@ const onTheMachine = (messages: readonly LlmMessage[]): CoachTurn => {
 const santosShot = (messages: readonly LlmMessage[]): CoachTurn => {
   const { summary } = shot(messages);
   const dipped = summary.channelingFlags.includes('pressure_dip_after_peak');
+  // The cup is weighed once the drips are in (Decaid's settled yield), so it can end past the stop.
+  const [yieldG, target] = [known(summary.yieldG), known(summary.targetYieldG)];
+  const stop =
+    Math.abs(yieldG - target) < 0.5
+      ? `right at the ${num(target)} g stop`
+      : yieldG > target && summary.stopReason === 'targetWeight'
+        ? `the scale stopped it at ${num(target)} g and the last drips added the rest`
+        : `a little ${yieldG < target ? 'short of' : 'past'} the ${num(target)} g stop`;
   return {
     text:
-      `${one(summary.durationS)} s and ${one(summary.yieldG)} g, right at the ${num(summary.targetYieldG)} g stop. ` +
+      `${one(summary.durationS)} s and ${one(summary.yieldG)} g in the cup: ${stop}. ` +
       (dipped
         ? `The pressure peaked at ${one(summary.peakPressureBar)} bar early on and dipped right after, which can mean a small channel, but your taste decides.`
         : `The pressure peaked at ${one(summary.peakPressureBar)} bar early on and held steady.`),
@@ -209,11 +228,31 @@ const santosShot = (messages: readonly LlmMessage[]): CoachTurn => {
   };
 };
 
-const santosKeep = (messages: readonly LlmMessage[]): CoachTurn => ({
-  text:
-    'Balanced and sweet is exactly what this coffee should give. ' +
-    'The small dip did no harm, so we keep **v1** as it is. ' +
-    `Keep the grinder at ${shot(messages).grinder.setting ?? 'its setting'} and the same dose to repeat it.`,
+/** "Balanced, sweet": a keep card, so a confirm records the recipe as kept (History: "Kept as is"). */
+const santosKeep = (messages: readonly LlmMessage[]): CoachTurn => {
+  const { version, grinder } = shot(messages);
+  return {
+    text: `Balanced and sweet is exactly what this coffee should give. The small dip did no harm, so I would keep **v${num(version)}** as it is.`,
+    tools: [
+      {
+        name: TOOL.proposeAdjustment,
+        input: {
+          variable: 'none',
+          lever: null,
+          value: null,
+          grind: null,
+          summary: `Keep v${num(version)} as it is`,
+          rationale: 'It tasted balanced and sweet, so this recipe is dialled in. The small pressure dip after the peak did no harm in the cup.',
+          expectedEffect: 'The same balanced, sweet cup, shot after shot.',
+          tips: [grinder.setting ? `Keep the grinder at ${grinder.setting} and the same dose.` : 'Keep the same grind and dose.'],
+        },
+      },
+    ],
+  };
+};
+
+const santosKept = (messages: readonly LlmMessage[]): CoachTurn => ({
+  text: `Locked in. Keep the grinder at ${shot(messages).grinder.setting ?? 'its setting'} and the same dose to repeat it, and tell me if the taste drifts as the beans age.`,
 });
 
 const kiambuIntake: CoachTurn = {
@@ -494,6 +533,7 @@ export const STORY: readonly StoryStep[] = [
   { kind: 'shot', minutesAgo: 26.5 * HOUR - 7, shot: SHOTS.santos, coach: [santosShot] },
   { kind: 'rate', minutesAgo: 26.5 * HOUR - 8, stars: 5 },
   { kind: 'answer', minutesAgo: 26.5 * HOUR - 8.5, selected: ['Balanced, sweet'], other: null, coach: [santosKeep] },
+  { kind: 'confirm', minutesAgo: 26.5 * HOUR - 9, coach: [santosKept] },
 
   // Kiambu AA, yesterday
   { kind: 'newBag', minutesAgo: 24 * HOUR },

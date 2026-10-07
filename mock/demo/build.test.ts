@@ -7,7 +7,10 @@ import { OTHER_OPTION, TOOL } from '../../src/coach/contract.ts';
 import { getTemplate, profileId, readLeverValues } from '../../src/coach/index.ts';
 import { parseTimestampMicros } from '../../src/coach/summary/time.ts';
 import { parseCafaiExport } from '../../src/storage/porter.ts';
+import { DEFAULT_PUCK_RESISTANCE } from '../decaid/shotPlayer.ts';
+import { createMockDecaid } from '../decaid/state.ts';
 import { buildDemo, conversationOf, type DemoBuild } from './build.ts';
+import { pullShot } from './shots.ts';
 import { DEMO_API_KEY, SHOTS, STARTING_GRINDER, TASTE_OPTIONS } from './story.ts';
 import { transcriptProblems } from './transcript.ts';
 
@@ -187,6 +190,23 @@ describe('the coverage list (D76)', () => {
     expect(cards.every((card) => card.error === null)).toBe(true);
   });
 
+  it('has Santos kept as it is: the coach proposes keeping the recipe and the barista confirms it', () => {
+    const { apiMessages, uiMessages } = conversationOf(demo, 'Santos');
+    const cards = parts('diff', uiMessages);
+    expect(cards.map((card) => [card.versionLabel, card.status])).toEqual([[null, 'applied']]);
+    const proposals = apiMessages
+      .flatMap((message) => message.content)
+      .filter((block) => block.type === 'tool_use' && block.name === TOOL.proposeAdjustment);
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0]).toMatchObject({ input: { variable: 'none', lever: null, value: null, grind: null } });
+    // The keep came after the "Balanced, sweet" answer, and the coach's last word follows the confirm.
+    const santos = demo.data.iterations.filter((record) => record.bagName === 'Santos');
+    expect(santos.map((record) => [record.feedback?.selected, record.outcome])).toEqual([[['Balanced, sweet'], 'kept']]);
+    const last = uiMessages[uiMessages.length - 1]!;
+    expect(last.role).toBe('assistant');
+    expect(parts('text', [last])[0]?.text).toMatch(/Locked in/);
+  });
+
   it('shows each tap as the user bubble the engine writes', () => {
     const bubbles = conversationOf(demo, 'Kiambu AA')
       .uiMessages.filter((message) => message.role === 'user')
@@ -286,7 +306,8 @@ describe('the versions and iterations', () => {
   it('logs one iteration per credited shot, each pointing at its Decaid record', () => {
     const outcomes = demo.data.iterations.map((record) => [record.bagName, record.profileVersion, record.outcome]);
     expect(outcomes).toEqual([
-      ['Santos', 1, 'pending'],
+      // The keep card was confirmed: History says the recipe was kept, not "No decision yet".
+      ['Santos', 1, 'kept'],
       ['Kiambu AA', 1, 'applied'],
       // v3 was confirmed from a typed request, so no iteration made it and undoing it changes none: the grind move stays applied.
       ['Kiambu AA', 2, 'applied'],
@@ -372,5 +393,54 @@ describe('the mock Decaid after the story', () => {
   it('summarizes each shot card from its record', async () => {
     const { summarizeShot } = await import('../../src/coach/index.ts');
     for (const card of parts('shot')) expect(card.summary).toEqual(summarizeShot(shotRecord(card.shotId)));
+  });
+});
+
+describe('the shots, each its own', () => {
+  const kiambuShots = () => parts('shot', conversationOf(demo, 'Kiambu AA').uiMessages).map((card) => card.summary);
+
+  it('gives no two Kiambu AA shots the same time, first drop or yield', () => {
+    const shots = kiambuShots();
+    expect(shots).toHaveLength(4);
+    for (const metric of ['durationS', 'timeToFirstDropS', 'yieldG'] as const) {
+      const values = shots.map((summary) => summary[metric]);
+      expect(values.every((value) => value !== null), metric).toBe(true);
+      expect(new Set(values).size, `${metric}: ${values.join(', ')}`).toBe(values.length);
+    }
+  });
+
+  it('pulls a slower shot after the finer grind: later first drops and less in the cup in more time', () => {
+    const [one, , three] = kiambuShots();
+    expect(three!.timeToFirstDropS!).toBeGreaterThan(one!.timeToFirstDropS!);
+    expect(three!.yieldG!).toBeLessThan(one!.yieldG!);
+    expect(three!.durationS).toBeGreaterThan(one!.durationS);
+  });
+
+  it('keeps the story true: shots one, three and four end with the profile short of 50 g, and shot two peaks in the fill', () => {
+    for (const shot of [SHOTS.kiambu1, SHOTS.kiambu3, SHOTS.kiambu4]) {
+      const record = shotRecord(shot.id);
+      expect(record.stopReason, shot.id).toBe('machineEnded');
+      expect(record.annotations?.actualYield, shot.id).toBeLessThan(49);
+    }
+    const two = kiambuShots()[1]!;
+    expect(two.peakPressureAtS!).toBeLessThan(two.preinfusionEndS! + 2);
+    expect(two.channelingFlags).toEqual([]);
+  });
+
+  it('a fresh shot of v4 on the mock (its default puck) matches none of them', async () => {
+    const { summarizeShot } = await import('../../src/coach/index.ts');
+    const v4 = demo.decaid.profiles.find((record) => record.profile.title === 'Kiambu AA v4')!;
+    const state = createMockDecaid({ seedExamples: false, uploadMs: 0, now: () => NOW });
+    try {
+      state.updateWorkflow({ profile: v4.profile, context: { targetYield: 50, targetDoseWeight: 18 } });
+      const { record } = await pullShot(state, { id: 'fresh', puckResistance: DEFAULT_PUCK_RESISTANCE, seed: 1 }, NOW);
+      const fresh = summarizeShot(record);
+      for (const shot of kiambuShots()) {
+        expect([fresh.durationS, fresh.timeToFirstDropS, fresh.yieldG]).not.toEqual([shot.durationS, shot.timeToFirstDropS, shot.yieldG]);
+      }
+      expect(fresh.timeToFirstDropS).not.toBe(kiambuShots()[3]!.timeToFirstDropS);
+    } finally {
+      state.dispose();
+    }
   });
 });

@@ -40,7 +40,7 @@ import { createDataClock, formatLocalTimestamp, formatUtcTimestamp, type DataClo
 import { DartError, MockHttpError } from './errors.ts';
 import { createGrinderRecord, seedGrinders, sortGrinders, updateGrinderRecord, type GrinderRecord } from './grinders.ts';
 import { deepMergeJson, isPlainObject, type JsonObject } from './json.ts';
-import { createMachineProfile, DEFAULT_UPLOAD_MS } from './machine.ts';
+import { createMachineProfile, DEFAULT_UPLOAD_MS, idleTemperature } from './machine.ts';
 import { buildProfileRecord, normalizeProfile, profileHash } from './profiles.ts';
 import { normalizeWorkflow, validateWorkflowPatch } from './workflow.ts';
 
@@ -389,13 +389,23 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
   const faults: Array<MockFault & { remaining: number }> = [];
   const requests: MockRequestLog[] = [];
   const uploadMs = options.uploadMs !== undefined && Number.isFinite(options.uploadMs) ? Math.max(0, options.uploadMs) : DEFAULT_UPLOAD_MS;
+  /** An idle machine's targets follow the profile it holds; a shot sets its own, step by step (shotPlayer.ts). */
+  function idleTargets(profile: WireProfile): Partial<MachineSnapshot> {
+    const target = idleTemperature(profile);
+    return target === null ? {} : { targetMixTemperature: target, targetGroupTemperature: target };
+  }
   const machine = createMachineProfile({
     initial: workflow.profile,
     uploadMs,
     isConnected: () => machineConnected,
     wanted: () => workflow.profile,
     notConnected: () => new MockHttpError(500, fixtures.errorMachineNotConnected() as Record<string, unknown>),
+    onHeld(profile) {
+      // The next resting frame carries it; a shot running now keeps its own step's target.
+      if (snapshot.state.state === 'idle' || snapshot.state.state === 'sleeping') snapshot = { ...snapshot, ...idleTargets(profile) };
+    },
   });
+  snapshot = { ...snapshot, ...idleTargets(machine.current()) };
 
   function machineEntry(): DeviceEntry {
     return { name: machineDevice.name, id: machineDevice.id, state: machineConnected ? 'connected' : 'disconnected', type: 'machine', available: machineConnected };

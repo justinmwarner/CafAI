@@ -4,13 +4,14 @@
  * unchanged. Two to four short sentences, plain words, the why in one
  * clause, now and then a **bold** lever or a short list. It quotes only
  * numbers the request carries (the shot event, the tool results, the
- * pressure series) and writes the sentence without one it lacks. The card
- * fields (summary, rationale, expectedEffect) show as plain text, so they
- * carry no markdown. Deterministic: the same facts, the same words.
+ * pressure series), a shot's as its shot card shows them, and writes the
+ * sentence without one it lacks. The card fields (summary, rationale,
+ * expectedEffect) show as plain text, so they carry no markdown.
+ * Deterministic: the same facts, the same words.
  */
 import type { TemplateId } from '../../src/coach/contract.ts';
 import { TEMPLATES } from '../../src/coach/templates/index.ts';
-import type { AppliedFacts, BagFacts, ChangeFacts, ChangeKind, PickFacts, ProposalText, Taste, Voice } from './voice.ts';
+import type { AppliedFacts, BagFacts, ChangeFacts, ChangeKind, PickFacts, ProposalText, Voice } from './voice.ts';
 
 /** One decimal at most, as CafAI shows measurements: 28.44 -> "28.4", 18 -> "18". */
 const n1 = (value: number) => String(Math.round(value * 10) / 10);
@@ -73,20 +74,52 @@ function leadFor(change: ChangeFacts): string[] {
     case 'keep':
       return ["Balanced and sweet means this recipe is dialled in, so I wouldn't change a thing.", "Let's lock it in."];
     case 'finer':
-      return finerLead(change.taste);
+      return finerLead(change);
+    case 'coarser':
+      return [
+        change.stop === null
+          ? "The profile has no room for that change right now, so let's work at the grinder instead."
+          : change.stop.reached
+            ? "The yield can't run any longer in this profile, so the next lever is the grinder."
+            : stopSentence(change, 'longer'),
+        `${bold('One step coarser')} on the grinder lets the water through a little faster, so it pulls out less and the cup gets lighter.`,
+      ];
     case 'keepAfterRejectedGrind':
       return ["Let's keep the recipe as it is for one more shot.", 'Taste it again before we change anything.'];
   }
 }
 
-function finerLead(taste: Taste): string[] {
+/** The shot ran out before its yield lever's stop, with both numbers from the shot event; else null. */
+function shortOfStop(change: ChangeFacts): { yieldG: number; targetG: number } | null {
+  const stop = change.stop;
+  if (!stop || stop.reached || stop.yieldG === null || stop.targetG === null || stop.yieldG >= stop.targetG) return null;
+  return { yieldG: stop.yieldG, targetG: stop.targetG };
+}
+
+/** Why a yield move would change nothing: the shot never got to its stop. */
+function stopSentence(change: ChangeFacts, move: 'sooner' | 'longer'): string {
+  const outcome = move === 'sooner' ? 'stopping it sooner would change nothing' : 'a longer stop would never be reached';
+  const short = shortOfStop(change);
+  return short
+    ? `The shot ended at ${n1(short.yieldG)} g, before its ${n1(short.targetG)} g stop, so ${outcome}.`
+    : `This shot didn't stop at its target yield, so ${outcome}.`;
+}
+
+function finerLead(change: ChangeFacts): string[] {
+  const { taste, stop } = change;
+  // A shot that never got to its stop: a yield move would change nothing, whatever the lever's room.
+  const shortOfYield = stop !== null && !stop.reached;
   if (taste === 'sour') {
+    if (shortOfYield) {
+      return ['The temperature is already at the top of this profile.', stopSentence(change, 'longer'), `${bold('One step finer')} slows the water down so it extracts more.`];
+    }
     return [
       "The temperature and yield are already at this profile's limits, so the next lever is the grinder.",
       `${bold('One step finer')} slows the water down so it extracts more.`,
     ];
   }
   if (taste === 'weak') {
+    if (shortOfYield) return [stopSentence(change, 'sooner'), `${bold('One step finer')} on the grinder pulls more from the coffee and builds body.`];
     return [
       "The yield can't go any shorter in this profile, so the next lever is the grinder.",
       `${bold('One step finer')} slows the shot and builds body.`,
@@ -108,10 +141,17 @@ function finerWhy(change: ChangeFacts): string {
   if (change.afterRejection) {
     return "The last change was outside this profile's limits, so make one small move at the grinder instead: a slightly finer grind slows the shot and extracts a little more.";
   }
+  const shortOfYield = change.stop !== null && !change.stop.reached;
   if (change.taste === 'sour') {
+    if (shortOfYield) {
+      return "It tasted sour, the temperature is at this profile's top, and this shot did not stop at its target yield, so a longer stop would change nothing. A finer grind extracts more instead.";
+    }
     return "It tasted sour and this profile's temperature and yield are at their limits, so a finer grind is the way to slow the water and extract more.";
   }
   if (change.taste === 'weak') {
+    if (shortOfYield) {
+      return 'It tasted weak, and this shot did not stop at its target yield, so stopping it sooner would change nothing. A slightly finer grind extracts more and builds body.';
+    }
     return 'It tasted weak and the yield is already as short as this profile allows, so a finer grind adds contact time and body.';
   }
   return 'The taste did not point to one clear lever, so change one thing at a time: a slightly finer grind slows the shot and usually adds sweetness.';
@@ -152,6 +192,14 @@ const CHANGE_TEXT: Record<ChangeKind, (change: ChangeFacts) => ProposalText> = {
     summary: change.grindSetting === null ? 'Grind one step finer' : `Grind one step finer, to ${change.grindSetting}`,
     rationale: finerWhy(change),
     expectedEffect: 'A slightly slower shot with more sweetness and body.',
+  }),
+  coarser: (change) => ({
+    summary: change.grindSetting === null ? 'Grind one step coarser' : `Grind one step coarser, to ${change.grindSetting}`,
+    rationale:
+      change.stop?.reached === true
+        ? 'It tasted too strong and the yield is already as long as this profile allows, so a slightly coarser grind lets the water through faster and extracts a little less.'
+        : 'It tasted too strong, and this shot did not stop at its target yield, so a longer stop would change nothing. A slightly coarser grind lets the water through faster and extracts a little less.',
+    expectedEffect: 'A lighter, clearer cup that is easier to drink.',
   }),
   keepAfterRejectedGrind: () => ({
     summary: 'Keep this recipe for one more shot',
@@ -218,9 +266,11 @@ export const DEMO_VOICE: Voice = {
     const sentences: string[] = [];
     // A curve that never built pressure says nothing worth a sentence.
     if (change.peakPressureBar !== null && change.peakPressureBar > 0) {
-      const at = change.peakPressureAtS !== null && change.peakPressureAtS > 0 ? `, ${n1(change.peakPressureAtS)} s in` : '';
+      // Word for word what the shot card shows: "5.7 bar at 61 s".
+      const seconds = change.peakPressureAtS === null ? 0 : Math.round(change.peakPressureAtS);
+      const at = seconds > 0 ? `, ${seconds} s in` : '';
       const clean = change.channelingFlags?.length === 0 ? ', with no sign of channeling' : '';
-      sentences.push(`The pressure peaked at ${n1(change.peakPressureBar)} bar${at}${clean}.`);
+      sentences.push(`The pressure peaked at ${change.peakPressureBar.toFixed(1)} bar${at}${clean}.`);
     }
     sentences.push(...leadFor(change));
     if (change.channelingFlags && change.channelingFlags.length > 0) {

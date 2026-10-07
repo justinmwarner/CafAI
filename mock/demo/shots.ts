@@ -11,7 +11,7 @@
  */
 import type { ShotRecord, ShotSnapshot } from '../../src/api/types.ts';
 import { formatLocalTimestamp, formatUtcTimestamp } from '../decaid/clock.ts';
-import { createShotSimulation } from '../decaid/shotPlayer.ts';
+import { createShotSimulation, decaidNumber } from '../decaid/shotPlayer.ts';
 import type { MockDecaid } from '../decaid/state.ts';
 
 export interface ShotSpec {
@@ -19,7 +19,8 @@ export interface ShotSpec {
   id: string;
   /**
    * How hard the wet puck resists, in the mock's puck model (bar per (ml/s)²):
-   * 2.4 is its espresso grind; lower runs faster with less pressure.
+   * 2.4 is its espresso grind; lower runs faster with less pressure, drips
+   * sooner and gives more in the cup; higher, the reverse.
    */
   puckResistance: number;
   /** The simulation's jitter seed. */
@@ -42,13 +43,13 @@ export async function pullShot(state: MockDecaid, spec: ShotSpec, startMs: numbe
   const workflow = state.getWorkflow();
   const settings = state.getSettings();
   const resting = state.getMachineSnapshot();
-  const multiplier = settings.volumeFlowMultiplier;
   const simulation = createShotSimulation({
     profile: state.getMachineProfile(),
     targetYield: workflow.context?.targetYield ?? 0,
     targetVolume: workflow.context?.targetWaterVolume ?? workflow.profile.target_volume,
     volumeCountStart: workflow.profile.target_volume_count_start,
-    volumeFlowMultiplier: typeof multiplier === 'number' && Number.isFinite(multiplier) ? multiplier : undefined,
+    volumeFlowMultiplier: decaidNumber(settings.volumeFlowMultiplier),
+    weightFlowMultiplier: decaidNumber(settings.weightFlowMultiplier),
     puckResistance: spec.puckResistance,
     doseG: workflow.context?.targetDoseWeight ?? 18,
     scaleConnected: state.isScaleConnected(),
@@ -79,7 +80,8 @@ export async function pullShot(state: MockDecaid, spec: ShotSpec, startMs: numbe
     model: info.model,
     firmwareVersion: info.version,
   };
-  const lastWeight = measurements[measurements.length - 1]!.scale?.weight ?? null;
+  // The cup once the stopping tail settled it, as the shot player records it (Decaid's actualYield).
+  const settledYield = simulation.scaleWeightG;
   const record: ShotRecord = {
     id: spec.id,
     timestamp: formatLocalTimestamp(startMs + 6.342),
@@ -88,9 +90,9 @@ export async function pullShot(state: MockDecaid, spec: ShotSpec, startMs: numbe
     measurements,
     workflow: { ...workflow, machine: provenance } as ShotRecord['workflow'],
     annotations:
-      lastWeight === null
+      settledYield === null
         ? { actualDoseWeight: simulation.doseG }
-        : { actualDoseWeight: simulation.doseG, actualYield: Math.round((lastWeight + 0.4) * 10) / 10 },
+        : { actualDoseWeight: simulation.doseG, actualYield: settledYield },
     stopReason: simulation.stopReason ?? 'machineEnded',
   };
   state.addShot(record);

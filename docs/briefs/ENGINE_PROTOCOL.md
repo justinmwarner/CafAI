@@ -110,7 +110,11 @@ rule does not name (e.g. `yieldG`, `doseG`) leave its reply unchanged.
 The texts below are the default, terse voice, which the tests rely on. The
 demo (D76) passes `voice: 'demo'` (mock/anthropic/demoVoice.ts): fuller
 coaching prose, and in rule 2 a short text before `propose_adjustment`, with
-every tool call unchanged. It also paces the stream like the real model
+every tool call unchanged. That text quotes the latest shot's peak as its
+shot card shows it: the `[event:shot_completed]` summary's `peakPressureBar`
+and `peakPressureAtS` (one decimal, whole seconds); without them, the top of
+the pressure series just read, with no time (a series rounded to 1 Hz can
+tie along a plateau). It also paces the stream like the real model
 (`firstEventDelayMs`, `eventDelayMs`, `jitterMs`, `sentencePauseMs` in
 mock/anthropic/handlers.ts).
 
@@ -129,14 +133,25 @@ mock/anthropic/handlers.ts).
    instead." End turn.
 2. tool_result for a query tool (`get_shot_series`, `get_shot_summary`,
    `get_phase_stats`, `compare_shots`, `get_bag_history`) -> `propose_adjustment`
-   chosen from the most recent `ask_user` answer and the most recent
-   `[event:shot_completed]` payload's `levers`:
-   - contains "Sour" -> `{variable:"profile", lever:"temp", value: levers.temp + 1}`
-     (if that exceeds the template max, use `yield` +2 instead);
-   - contains "Bitter" -> temp -1;
-   - contains "Weak" -> yield -2; contains "Strong" -> yield +2 (a yield
-     move only inside the template's yield range, else the grind move);
-   - contains "Balanced" -> `{variable:"none"}`;
+   chosen from the most recent taste answer (an `ask_user` answer, or a
+   taste typed instead, rule 3b; lower-cased, the first match below wins)
+   and the most recent `[event:shot_completed]` payload's `levers` and
+   `summary`. A yield move only when that shot reached its yield: it stopped
+   on weight (`summary.stopReason` `"targetWeight"`) or its `summary.yieldG`
+   is within 1 g of `levers.yield`. A shot that stopped short of it (a
+   Blooming shot that ran out of steps at about 41 g of its 50 g) never
+   meets a stop 2 g sooner or later, so the grind moves instead:
+   - contains "sour" -> `{variable:"profile", lever:"temp", value: levers.temp + 1}`
+     (if that exceeds the template max: `yield` +2 when the shot reached its
+     yield, else the grind move one step finer);
+   - contains "bitter" -> temp -1;
+   - contains "weak" or "watery" -> yield -2 when the shot reached its
+     yield, else the grind move one step finer;
+   - contains "strong" -> yield +2 when the shot reached its yield and the
+     template's yield range has room, else the grind move one step coarser,
+     `{variable:"grind", grind:{direction:"coarser", amount:1, setting}}`;
+     never finer, which would make a strong cup stronger;
+   - contains "balanced" -> `{variable:"none"}`;
    - otherwise -> `{variable:"grind", grind:{direction:"finer", amount:1, setting}}`,
      where setting comes from the latest grinder object (the latest shot
      event's or, before any shot, the intake context's): with a numeric
@@ -147,9 +162,20 @@ mock/anthropic/handlers.ts).
      true: directions only), else the current setting minus 1 when it is a
      plain number. null when none applies (no setting, a setting off the
      dial or not in the list, or a move below 0 or past the first entry).
+     One step coarser is the same the other way: plus the step (`"14.5"`
+     with step 0.5 is `"15.0"`), the entry after, or plus 1; null past the
+     last entry.
    Fill summary/rationale/expectedEffect/tips with short plausible text.
 3. tool_result for `ask_user` -> text "Thanks. Let me look at the pressure
    curve." + tool_use `get_shot_series` `{shot:"latest", metric:"pressure", fromS:null, toS:null}`.
+3b. A taste typed after a shot instead of tapped: the last user message
+   sets the taste question aside (an `ask_user` whose question mentions
+   taste, answered `{"answered":false,...}` as in user turn 7 above) and
+   holds the user's text, which names a taste with the words rule 2 reads
+   ("sour", "bitter", "weak" or "watery", "strong", "balanced"; any case) ->
+   the text is read as the answer: rule 3's reply, then rule 2 decides from
+   it. Text with none of those words, another question set aside (the puck)
+   or a change set aside gets the rule 8 reply as before.
 4. text starting `[event:shot_completed]` -> text "Got it: {durationS} s,
    {yieldG} g out." + tool_use `ask_user` `{question:"How did it taste?",
    options:["Sour / sharp","Bitter / harsh","Balanced, sweet","Weak / watery"],

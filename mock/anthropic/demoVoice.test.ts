@@ -72,11 +72,21 @@ const numbersIn = (value: string) => (value.match(/\d+(?:\.\d+)?/g) ?? []).map(N
 /** The script's own steps: 1 °C, 2 g, one grind step. */
 const STEPS = [1, 2];
 
+/** The shot card shows a peak's time in whole seconds; the coach says it the same way. */
+function peakSecondsIn(messages: Message[]): number[] {
+  return messages
+    .flatMap((message) => message.content)
+    .flatMap((block) => (typeof block.text === 'string' && block.text.startsWith('[event:shot_completed]\n') ? [block.text] : []))
+    .map((event) => (JSON.parse(event.slice(event.indexOf('\n') + 1)) as { summary?: { peakPressureAtS?: unknown } }).summary?.peakPressureAtS)
+    .flatMap((at) => (typeof at === 'number' ? [Math.round(at)] : []));
+}
+
 /**
  * Both voices answer the same request. The demo text is new and non-empty,
  * the decision is the same, and every number the demo writes is one the
- * request carries (to its one-decimal rounding), a step of the script, or the
- * decision itself (a new grind setting in the card's summary).
+ * request carries (to its one-decimal rounding, or a peak's whole second as
+ * the shot card shows it), a step of the script, or the decision itself (a
+ * new grind setting in the card's summary).
  */
 function compare(messages: Message[]) {
   const terse = reply(messages, 'terse');
@@ -88,7 +98,12 @@ function compare(messages: Message[]) {
   for (const tool of demo.tools) expect(TOOL_INPUTS[tool.name].safeParse(tool.input).success, tool.name).toBe(true);
 
   const proposal = demo.tools.find((t) => t.name === TOOL.proposeAdjustment)?.input as ProposeAdjustment | undefined;
-  const known = [...numbersIn(JSON.stringify(messages)), ...numbersIn(JSON.stringify(demo.tools.map(decisionOf))), ...STEPS];
+  const known = [
+    ...numbersIn(JSON.stringify(messages)),
+    ...peakSecondsIn(messages),
+    ...numbersIn(JSON.stringify(demo.tools.map(decisionOf))),
+    ...STEPS,
+  ];
   const written = [demo.text, ...(proposal ? FREE_TEXT.map((field) => proposal[field]) : [])];
   for (const line of written) {
     for (const n of numbersIn(line)) expect(known.some((k) => Math.abs(k - n) <= 0.05 + 1e-9), `${n} in ${JSON.stringify(line)}`).toBe(true);
@@ -174,15 +189,19 @@ const SERIES = user(
 );
 const ADJUST_REPLY = assistant(toolUse('t_adj', TOOL.proposeAdjustment, { variable: 'profile' }));
 
-/** Up to the change proposed after a taste answer. */
-const toProposal = (selected: string[], other: string | null = null, levers: Record<string, number> = BLOOMING, templateId = 'blooming-espresso') => [
-  ...UP_TO_SHOT,
-  shot(levers, templateId),
-  SHOT_REPLY,
-  answer(selected, other),
-  ANSWER_REPLY,
-  SERIES,
-];
+/** Up to the change proposed after a taste answer; `summary` overrides the shot summary's fields. */
+const toProposal = (
+  selected: string[],
+  other: string | null = null,
+  levers: Record<string, number> = BLOOMING,
+  templateId = 'blooming-espresso',
+  summary: Record<string, unknown> = {},
+  series: Message = SERIES,
+) => [...UP_TO_SHOT, shot(levers, templateId, summary), SHOT_REPLY, answer(selected, other), ANSWER_REPLY, series];
+/** It ran out of steps at 41.5 g of its 50 g: a yield move is never reached (like the demo's shot four). */
+const STOPPED_SHORT = { yieldG: 41.5, stopReason: 'machineEnded' };
+const typedPast = { answered: false, note: 'The user typed a message instead.' };
+const typed = (words: string) => user(toolResult('t_ask', typedPast), text(words));
 const AFTER_PROPOSAL = [...toProposal(['Sour / sharp']), ADJUST_REPLY];
 const decided = (payload: unknown) => [...AFTER_PROPOSAL, user(toolResult('t_adj', payload))];
 
@@ -259,8 +278,73 @@ describe('the demo voice, branch by branch', () => {
     it('sour: 1 °C hotter, after reading the curve', () => {
       const { lead, proposal } = proposalFor(toProposal(['Sour / sharp']));
       expect(proposal).toMatchObject({ variable: 'profile', lever: 'temp', value: 93 });
-      expect(lead).toContain('The pressure peaked at 8.6 bar, 34 s in, with no sign of channeling.');
+      // No peak in the shot event: the series' top, without a time (a rounded series can tie along a plateau).
+      expect(lead).toContain('The pressure peaked at 8.6 bar, with no sign of channeling.');
+      expect(lead).not.toMatch(/ s in\b/);
       expect(lead).toContain('**brew temperature**');
+    });
+
+    it("the peak is the shot card's: the summary's peak and its time, in whole seconds as the card shows it", () => {
+      // The rounded 1 Hz series holds 5.7 bar from 58 s on; the summary's peak came at 61.4 s (the card: "5.7 bar at 61 s").
+      const plateau = user(
+        toolResult('t_series', { shotId: 'shot-1', metric: 'pressure', unit: 'bar', tS: [0, 30, 58, 59, 60, 61, 62], values: [0, 3.1, 5.7, 5.7, 5.7, 5.7, 5.6] }),
+      );
+      const peak = { peakPressureBar: 5.7, peakPressureAtS: 61.4 };
+      const { lead } = proposalFor(toProposal(['Sour / sharp'], null, BLOOMING, 'blooming-espresso', peak, plateau));
+      expect(lead).toContain('The pressure peaked at 5.7 bar, 61 s in, with no sign of channeling.');
+      expect(lead).not.toContain('58');
+      // The summary's figure wins over the series' own top, and a whole bar shows its decimal as the card does.
+      const whole = proposalFor(toProposal(['Sour / sharp'], null, BLOOMING, 'blooming-espresso', { peakPressureBar: 6, peakPressureAtS: 12.6 })).lead;
+      expect(whole).toContain('The pressure peaked at 6.0 bar, 13 s in');
+      // A summary peak without its time: no time.
+      const untimed = proposalFor(toProposal(['Sour / sharp'], null, BLOOMING, 'blooming-espresso', { peakPressureBar: 5.7, peakPressureAtS: null })).lead;
+      expect(untimed).toContain('The pressure peaked at 5.7 bar, with no sign of channeling.');
+    });
+
+    it('after a shot that stopped short of its yield: weak goes one step finer, too strong one step coarser, and says why', () => {
+      const weak = proposalFor(toProposal(['Weak / watery'], null, BLOOMING, 'blooming-espresso', STOPPED_SHORT));
+      expect(weak.proposal).toMatchObject({ variable: 'grind', grind: { direction: 'finer', amount: 1, setting: '13' }, summary: 'Grind one step finer, to 13' });
+      expect(weak.lead).toContain('41.5 g');
+      expect(weak.lead).toContain('50 g');
+      expect(weak.lead).toContain('**One step finer**');
+      expect(weak.proposal.rationale).toMatch(/weak/i);
+
+      const strong = proposalFor(toProposal(['Other'], 'Too strong', BLOOMING, 'blooming-espresso', STOPPED_SHORT));
+      expect(strong.proposal).toMatchObject({
+        variable: 'grind',
+        grind: { direction: 'coarser', amount: 1, setting: '15' },
+        summary: 'Grind one step coarser, to 15',
+      });
+      expect(strong.lead).toContain('41.5 g');
+      expect(strong.lead).toContain('**One step coarser**');
+      expect(strong.proposal.rationale).toMatch(/strong/i);
+
+      // Sour with the temperature at the top: one step finer, and the lead says the stop was never reached.
+      const dflow = { temp: 94, yield: 50, soak: 3, soakWeight: 4, pourFlow: 1.7, pourPmax: 8.5 };
+      const sour = proposalFor(toProposal(['Sour / sharp'], null, dflow, 'd-flow', STOPPED_SHORT));
+      expect(sour.proposal).toMatchObject({ variable: 'grind', grind: { direction: 'finer' } });
+      expect(sour.lead).toContain('41.5 g');
+      expect(sour.lead).toContain('**One step finer**');
+    });
+
+    it('too strong with the yield already at its top: one step coarser, and says the stop cannot go later', () => {
+      const allonge = { temp: 96, yield: 135, flow: 4.5, maxPressure: 8.6 };
+      const reached = { yieldG: 135.2, stopReason: 'targetWeight' };
+      const { lead, proposal } = proposalFor(toProposal(['Other'], 'Too strong', allonge, 'allonge', reached));
+      expect(proposal).toMatchObject({ variable: 'grind', grind: { direction: 'coarser', amount: 1 } });
+      expect(lead).toContain('**One step coarser**');
+      expect(lead).toMatch(/can't run any longer/);
+      // It reached its stop: nothing may say otherwise.
+      expect(lead).not.toMatch(/didn't stop|before its/);
+      expect(proposal.rationale).not.toMatch(/did not stop/);
+    });
+
+    it('a typed taste: read like the answer, in the same words', () => {
+      const look = compare([...UP_TO_SHOT, shot(), SHOT_REPLY, typed('It tasted a bit sour, sharp at the end')]);
+      expect(look.demo.tools.map((t) => t.name)).toEqual([TOOL.getShotSeries]);
+      expect(look.demo.text).toMatch(/Sour on a light roast usually means \*\*under-extraction\*\*/);
+      const { proposal } = proposalFor([...UP_TO_SHOT, shot(), SHOT_REPLY, typed('It tasted a bit sour, sharp at the end'), ANSWER_REPLY, SERIES]);
+      expect(proposal).toMatchObject({ variable: 'profile', lever: 'temp', value: 93 });
     });
 
     it('sour at the top temperature: 2 g longer', () => {

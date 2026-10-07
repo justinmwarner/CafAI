@@ -159,18 +159,17 @@ describe('answering the open question', () => {
     ]);
   });
 
+  /** Shot four ran out of steps short of its 50 g stop, so a yield move would never be reached: the grind moves instead. */
+  const byHand = (setting: string) => (card: Extract<CoachUiPart, { kind: 'diff' }>) => {
+    expect(card.versionLabel).toBeNull();
+    expect(card.manualSteps).toEqual([`Set the grinder to ${setting} before the next shot (Decaid lists 0.5 steps for your Niche Zero).`]);
+  };
   const others: Array<[string[], string | null, (card: Extract<CoachUiPart, { kind: 'diff' }>) => void]> = [
     [['Bitter / harsh'], null, (card) => expect(card.lines).toEqual(['Brew temperature: 93.0 °C -> 92.0 °C (every step -1.0 °C)'])],
     [['Balanced, sweet'], null, (card) => expect(card).toMatchObject({ versionLabel: null, summary: 'Keep everything as it is' })],
-    [['Weak / watery'], null, (card) => expect(card.lines).toEqual(['Yield: 50 g -> 48 g (the shot stops at 48 g)'])],
-    [
-      ['Other'],
-      'A bit flat and dull',
-      (card) => {
-        expect(card.versionLabel).toBeNull();
-        expect(card.manualSteps).toEqual(['Set the grinder to 14.0 before the next shot (Decaid lists 0.5 steps for your Niche Zero).']);
-      },
-    ],
+    [['Weak / watery'], null, byHand('14.0')],
+    [['Other'], 'Too strong', byHand('15.0')],
+    [['Other'], 'A bit flat and dull', byHand('14.0')],
   ];
 
   for (const [selected, other, check] of others) {
@@ -181,4 +180,23 @@ describe('answering the open question', () => {
       check(pendingChange());
     });
   }
+
+  it('a taste typed instead of tapped is read like the answer: "sour" ends with v5, 1 °C hotter', async () => {
+    await engine.sendText('It tasted a bit sour, sharp at the end');
+    await idle();
+    expect(engine.getState().error).toBeNull();
+    const card = pendingChange();
+    expect(card.versionLabel).toBe('Kiambu AA v5');
+    expect(card.lines).toEqual(['Brew temperature: 93.0 °C -> 94.0 °C (every step +1.0 °C)']);
+  });
+
+  it('typed text without a taste word gets the usual reply and no change', async () => {
+    await engine.sendText('Should it drip during the bloom?');
+    await idle();
+    expect(engine.getState().error).toBeNull();
+    expect(allParts().some((part) => part.kind === 'diff' && part.status === 'pending')).toBe(false);
+    const coach = engine.getState().messages.filter((message) => message.role === 'assistant');
+    const last = coach[coach.length - 1]!.parts.find((part) => part.kind === 'text') as { text: string } | undefined;
+    expect(last?.text).toBe('Got it. Pull a shot when you are ready, or tell me more about the coffee.');
+  });
 });

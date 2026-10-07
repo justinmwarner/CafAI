@@ -10,9 +10,11 @@
  * turns pumped water into cup weight, and, after a stop with weight in the
  * cup, Decaid's ~4 s stopping phase (pouringDone, then idle) before
  * finished. Decaid's shot sequencer reads the workflow, not the machine:
- * stop-at-weight uses workflow.context.targetYield, and with no scale the
- * volumetric stop uses context.targetWaterVolume or the workflow profile's
- * target_volume, exactly like shot_sequencer.dart. The shotState frames, the
+ * stop-at-weight uses workflow.context.targetYield (stopping once the
+ * scale's weight plus its flow times weightFlowMultiplier reaches it), and
+ * with no scale the volumetric stop uses context.targetWaterVolume or the
+ * workflow profile's target_volume, exactly like shot_sequencer.dart. The
+ * shotState frames, the
  * decision bodies and the persisted ShotRecord (a copy of the workflow at
  * shot end) follow shot_sequencer.dart / de1_state_manager.dart. Wall-clock
  * playback can be compressed with `speed`; data timestamps stay realistic.
@@ -31,6 +33,7 @@ import { parseDecaidTimestamp } from '../../src/api/time.ts';
 import { newId } from '../../src/util/id.ts';
 import { formatLocalTimestamp, formatUtcTimestamp } from './clock.ts';
 import { dartDouble } from './json.ts';
+import { idleTemperature } from './machine.ts';
 import type { MockDecaid } from './state.ts';
 
 /** One frame every 200 ms of data time (5 Hz). */
@@ -53,15 +56,39 @@ const HEADSPACE_ML = 8;
 const FILL_FLOW = 6;
 const MAX_FLOW = 8;
 const MAX_PRESSURE = 12;
-/** Puck resistance in bar per (ml/s)² once wet: a fine espresso grind. */
-const R0 = 2.4;
+/** Puck resistance in bar per (ml/s)² once wet: a fine espresso grind, and every shot's unless one is given. */
+export const DEFAULT_PUCK_RESISTANCE = 2.4;
 /** Decaid's default volumeFlowMultiplier: the volume stop looks this many seconds of flow ahead. */
 const VOLUME_LOOK_AHEAD_S = 0.3;
+/** How wet the default puck is (a share of what it holds) when the first drops pass. */
 const DRIP_START = 0.4;
-const RISE_TAU_S = 1.2;
-const DRIP_TAU_S = 3;
-/** Decaid projects weight ahead by weightFlow x multiplier; a short look-ahead lands near the target. */
-const PROJECTION_S = 0.25;
+/**
+ * A puck's grind shows before the pour, not only in its pressure: a finer,
+ * denser puck (higher resistance) soaks up more water before it lets the
+ * shot through, and wets further before its first drops; a coarser one the
+ * reverse. Without them a flow profile's pump hides the grind: every
+ * Blooming shot ran the same time, dripped at the same moment and gave the
+ * same yield. Both scale as (resistance / default) to these powers, so a
+ * shot at the default resistance (every live shot) runs exactly as before.
+ */
+const SOAK_POWER = 3;
+const DRIP_POWER = 1;
+/**
+ * How long the cup lags what passes the puck, rising and falling alike, so
+ * the cup gets exactly what went through. After a stop the drips come to
+ * about this many seconds of the flow at the stop, which Decaid's look-ahead
+ * below expects: a shot stopped at weight settles within about 1 g of its
+ * target. (A fall slower than the rise added weight that never passed the
+ * puck; with it and a quarter-second look-ahead, shots stopped at weight
+ * settled about 4 g past their target.)
+ */
+const CUP_LAG_S = 1.2;
+/**
+ * Decaid's default weightFlowMultiplier: stop-at-weight and the step weight
+ * exits project the scale's weight this many seconds of weight flow ahead
+ * (shot_sequencer.dart: weight + controlWeightFlow x weightFlowMultiplier).
+ */
+const WEIGHT_LOOK_AHEAD_S = 1.0;
 /** Ends shots that would never reach the target: 45 s of cup flow (a bloom pause does not count). */
 const CAP_FLOWING_S = 45;
 const MAX_STEPS_S = 150;
@@ -83,7 +110,13 @@ export interface ShotSimulationInput {
   volumeCountStart?: number;
   /** Decaid's volumeFlowMultiplier setting (default 0.3). */
   volumeFlowMultiplier?: number;
-  /** How hard the wet puck resists, in bar per (ml/s)²: 2.4 (default) is an espresso grind, about 0.4 a coarse allongé grind. */
+  /** Decaid's weightFlowMultiplier setting (default 1.0): how far ahead stop-at-weight and step weight exits look. */
+  weightFlowMultiplier?: number;
+  /**
+   * How hard the wet puck resists, in bar per (ml/s)²: 2.4 (default) is an
+   * espresso grind, about 0.4 a coarse allongé grind. A finer puck also soaks
+   * up more water and drips later (SOAK_POWER, DRIP_POWER).
+   */
   puckResistance?: number;
   doseG: number;
   scaleConnected: boolean;
@@ -122,10 +155,20 @@ export interface ShotSimulation {
   readonly doseG: number;
   /** The profileFrame the machine shows last (the next shot's stale preheat frame). */
   readonly lastProfileFrame: number;
+  /**
+   * What the scale reads now, null without one. Once the shot is done this
+   * is the settled cup, drips included: Decaid's actualYield.
+   */
+  readonly scaleWeightG: number | null;
 }
 
 function quantize(value: number, steps: number): number {
   return Math.round(value * steps) / steps;
+}
+
+/** A Decaid setting's number when it is one, else undefined (the simulation's default). */
+export function decaidNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 function approach(current: number, target: number, tauS: number): number {
@@ -157,8 +200,10 @@ export function createShotSimulation(input: ShotSimulationInput): ShotSimulation
   const steps = input.profile.steps as ProfileStep[];
   const countStart = input.profile.target_volume_count_start;
   const volumeCountStart = input.volumeCountStart ?? countStart;
-  const saturationMl = Math.max(8, input.doseG * 0.8);
-  const puckResistance = input.puckResistance !== undefined && input.puckResistance > 0 ? input.puckResistance : R0;
+  const puckResistance = input.puckResistance !== undefined && input.puckResistance > 0 ? input.puckResistance : DEFAULT_PUCK_RESISTANCE;
+  const grind = puckResistance / DEFAULT_PUCK_RESISTANCE;
+  const saturationMl = Math.max(8, input.doseG * 0.8 * grind ** SOAK_POWER);
+  const dripStart = Math.min(0.8, DRIP_START * grind ** DRIP_POWER);
   const stopAtWeight = input.scaleConnected && input.targetYield > 0 && !input.bypassSaw;
   // shot_sequencer.dart ~464-486: the volume stop applies only when no scale
   // sample is there (scale == null or lost), SAW is not bypassed and the
@@ -166,6 +211,7 @@ export function createShotSimulation(input: ShotSimulationInput): ShotSimulation
   const targetVolume = (input.targetVolume === undefined ? input.profile.target_volume : input.targetVolume) ?? 0;
   const stopAtVolume = !input.scaleConnected && !input.bypassSaw && targetVolume > 0;
   const volumeLookAheadS = input.volumeFlowMultiplier ?? VOLUME_LOOK_AHEAD_S;
+  const weightLookAheadS = input.weightFlowMultiplier ?? WEIGHT_LOOK_AHEAD_S;
   const random = seededRandom(input.seed ?? 1);
   const temps = input.startTemperatures ?? { mix: 89.9, group: 88.05, steam: 148 };
 
@@ -240,19 +286,22 @@ export function createShotSimulation(input: ShotSimulationInput): ShotSimulation
     };
   }
 
+  const scaleReading = () => Math.round(cupWeight * 10) / 10;
+
   function weight(atMs: number): WeightSnapshot | null {
     if (!input.scaleConnected) return null;
     return {
       timestamp: formatLocalTimestamp(atMs - 21),
-      weight: Math.round(cupWeight * 10) / 10,
+      weight: scaleReading(),
       weightFlow: phase === 'preheat' ? 0 : cupFlow,
       battery: 87,
       timerValue: pourStartMs === null ? null : Math.max(0, Math.round(atMs - pourStartMs)),
     };
   }
 
+  /** Decaid's projected weight: what the scale reads plus its weight flow over the look-ahead. */
   function projected(): number {
-    return cupWeight + cupFlow * PROJECTION_S;
+    return scaleReading() + cupFlow * weightLookAheadS;
   }
 
   function enterStep(index: number): void {
@@ -317,11 +366,11 @@ export function createShotSimulation(input: ShotSimulationInput): ShotSimulation
       headspace += take;
       water -= take;
     }
-    const through = absorbed >= saturationMl ? water : water * smoothstep(DRIP_START, 1, fill);
+    const through = absorbed >= saturationMl ? water : water * smoothstep(dripStart, 1, fill);
     absorbed = Math.min(saturationMl, absorbed + (water - through));
     if (absorbed > 0) wetSeconds += DT;
     const throughRate = through / DT;
-    cupFlow = approach(cupFlow, throughRate, throughRate >= cupFlow ? RISE_TAU_S : DRIP_TAU_S);
+    cupFlow = approach(cupFlow, throughRate, CUP_LAG_S);
     cupWeight += cupFlow * DT;
     if (cupWeight > 0.05 && step && targetOf(step) > 0.05) flowingSeconds += DT;
     return targets;
@@ -333,6 +382,14 @@ export function createShotSimulation(input: ShotSimulationInput): ShotSimulation
     mix = approach(mix, targetMix - 1, 3);
     group = approach(group, stepTemperature - 0.3, 8);
     return { targetMix, targetGroup: stepTemperature };
+  }
+
+  /** Once the machine is idle again it heads back to the profile's first step (machine.ts idleTemperature). */
+  function restingTemperatures(): { targetMix: number; targetGroup: number } {
+    const target = idleTemperature(input.profile) ?? 90;
+    mix = approach(mix, target, 3);
+    group = approach(group, target - 0.3, 8);
+    return { targetMix: target, targetGroup: target };
   }
 
   function stopDecision(reason: string, details: string, data: Record<string, unknown> | null = null): ShotDecision {
@@ -488,7 +545,8 @@ export function createShotSimulation(input: ShotSimulationInput): ShotSimulation
 
   function stoppingFrame(atMs: number): SimFrame {
     physics(null);
-    const temperatures = temperaturesFor(null);
+    // pouringDone still shows the last step; from the next frame on the DE1 is idle.
+    const temperatures = stoppingFrames === 0 ? temperaturesFor(null) : restingTemperatures();
     const profileFrame = Math.min(stepIndex, steps.length - 1);
     const machineState = stoppingFrames === 0 ? 'espresso' : 'idle';
     const substate = stoppingFrames === 0 ? 'pouringDone' : 'idle';
@@ -532,6 +590,9 @@ export function createShotSimulation(input: ShotSimulationInput): ShotSimulation
     },
     get lastProfileFrame() {
       return lastProfileFrame;
+    },
+    get scaleWeightG() {
+      return input.scaleConnected ? scaleReading() : null;
     },
   };
 }
@@ -623,14 +684,20 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
     idleTick += 1;
     // A heater holding temperature wobbles a little; deterministic on purpose.
     const wobble = Math.sin(idleTick / 3) * 0.06;
+    // Between shots the DE1 holds the first step of the profile it holds, not the last shot's step.
+    const idle = idleTemperature(state.getMachineProfile());
+    const targetMix = idle === null ? current.targetMixTemperature : quantize(idle, 256);
+    const targetGroup = idle === null ? current.targetGroupTemperature : quantize(idle, 256);
     state.setMachineSnapshot({
       ...current,
       timestamp: formatLocalTimestamp(state.clock.now()),
       state: { state: resting, substate: 'idle' },
       flow: 0,
       pressure: quantize(0.002 + Math.abs(wobble) / 100, 4096),
-      mixTemperature: quantize(current.targetMixTemperature + wobble, 256),
-      groupTemperature: quantize(current.targetGroupTemperature - 0.9 + wobble, 65536),
+      targetMixTemperature: targetMix,
+      targetGroupTemperature: targetGroup,
+      mixTemperature: quantize(targetMix + wobble, 256),
+      groupTemperature: quantize(targetGroup - 0.9 + wobble, 65536),
     });
   }
 
@@ -660,7 +727,8 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
       // Machine gone at the end of the shot: Decaid records the provenance as unavailable.
     }
     const first = measurements[0]!.machine;
-    const lastWeight = measurements[measurements.length - 1]!.scale?.weight ?? null;
+    // Decaid stores the cup once its stopping tail settled the weight: the drips are in.
+    const settledYield = sim.scaleWeightG;
     const startMs = parseDecaidTimestamp(first.timestamp);
     const endMs = state.clock.now();
     const record: ShotRecord = {
@@ -671,9 +739,7 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
       measurements,
       workflow: { ...workflow, machine: provenance } as ShotRecord['workflow'],
       annotations:
-        lastWeight === null
-          ? { actualDoseWeight: sim.doseG }
-          : { actualDoseWeight: sim.doseG, actualYield: Math.round((lastWeight + 0.4) * 10) / 10 },
+        settledYield === null ? { actualDoseWeight: sim.doseG } : { actualDoseWeight: sim.doseG, actualYield: settledYield },
       stopReason: sim.stopReason ?? 'machineEnded',
     };
     state.addShot(record);
@@ -749,7 +815,6 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
     const workflow = state.getWorkflow();
     const settings = state.getSettings();
     const current = state.getMachineSnapshot();
-    const multiplier = settings.volumeFlowMultiplier;
     shotCount += 1;
     shotId = newId();
     measurements = [];
@@ -761,7 +826,8 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
       targetYield: workflow.context?.targetYield ?? 0,
       targetVolume: workflow.context?.targetWaterVolume ?? workflow.profile.target_volume,
       volumeCountStart: workflow.profile.target_volume_count_start,
-      volumeFlowMultiplier: typeof multiplier === 'number' && Number.isFinite(multiplier) ? multiplier : undefined,
+      volumeFlowMultiplier: decaidNumber(settings.volumeFlowMultiplier),
+      weightFlowMultiplier: decaidNumber(settings.weightFlowMultiplier),
       doseG: workflow.context?.targetDoseWeight ?? 18,
       scaleConnected: state.isScaleConnected(),
       bypassSaw: settings.gatewayMode === 'full',

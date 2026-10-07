@@ -26,6 +26,7 @@ import {
   type ChangeKind,
   type PickFacts,
   type ProposalText,
+  type ShotStop,
   type Taste,
   type Voice,
   type VoiceName,
@@ -364,7 +365,39 @@ function currentVersion(messages: Message[]): number {
   return version;
 }
 
-/** The most recent real ask_user answer ("selected" plus "other"), lower-cased. */
+/** A question about the taste ("How did it taste?"), not about the puck or anything else. */
+const TASTE_QUESTION = /\btast(?:e|ed|es|ing)\b/i;
+
+/** Text the user typed, not an event or context block the engine added. */
+const typedTexts = (message: Message | undefined) => textsOf(message).filter((t) => !t.startsWith('[event:') && !t.startsWith(EVENT.context));
+
+/**
+ * Rule 3b: the text typed after a shot that set the taste question aside
+ * (its ask_user answered with {"answered":false}), lower-cased, when it names
+ * a taste the way "Other" text is read; else null.
+ */
+function typedTaste(messages: Message[], index: number): string | null {
+  const message = messages[index];
+  if (message?.role !== 'user') return null;
+  const words = typedTexts(message).join(' ').toLowerCase();
+  if (words.trim() === '' || tasteOf(words) === 'other' || latestShot(messages.slice(0, index)) === null) return null;
+  const asked = new Map(toolUses(messages[index - 1]).map((b) => [b.id as string, b]));
+  const setAside = toolResults(message).some((block) => {
+    const payload = parseJson(resultText(block));
+    const call = asked.get(block.tool_use_id as string);
+    const question = isRecord(call?.input) ? call.input.question : undefined;
+    return (
+      isRecord(payload) &&
+      payload.answered === false &&
+      call?.name === TOOL.askUser &&
+      typeof question === 'string' &&
+      TASTE_QUESTION.test(question)
+    );
+  });
+  return setAside ? words : null;
+}
+
+/** The most recent taste answer: a real ask_user answer ("selected" plus "other") or a typed taste (rule 3b), lower-cased. */
 function latestAnswer(messages: Message[]): string {
   let answer = '';
   messages.forEach((message, i) => {
@@ -374,6 +407,7 @@ function latestAnswer(messages: Message[]): string {
       const other = typeof payload.other === 'string' ? payload.other : '';
       answer = `${payload.selected.filter((s) => typeof s === 'string').join(' ')} ${other}`.toLowerCase();
     }
+    answer = typedTaste(messages, i) ?? answer;
   });
   return answer;
 }
@@ -414,29 +448,32 @@ function libraryDial(grinder: Raw): GrinderInfo | null {
   return values.length > 0 ? { model, settingType: 'preset', smallStep: null, bigStep: null, values } : null;
 }
 
+type GrindDirection = 'finer' | 'coarser';
+
 /**
- * One step finer than the dial now, or null when it cannot be named. With
- * Decaid's step or list the move is worked out the way CafAI's validator
- * does it (and printed the same: "15" with step 0.5 is "14.5"; with a list,
- * the previous entry). A grinder linked from Decaid's library without them
- * (Decaid no longer lists it, or has no step for it) gets directions only,
- * as Settings tells the user. Otherwise a plain number goes down by 1, as the
- * script did before the grinder library: the common convention is that a
+ * One step finer (or coarser) than the dial now, or null when it cannot be
+ * named. With Decaid's step or list the move is worked out the way CafAI's
+ * validator does it (and printed the same: "15" with step 0.5 is "14.5"
+ * finer and "15.5" coarser; with a list, the entry before or after). A
+ * grinder linked from Decaid's library without them (Decaid no longer lists
+ * it, or has no step for it) gets directions only, as Settings tells the
+ * user. Otherwise a plain number goes down (finer) or up (coarser) by 1, as
+ * the script did before the grinder library: the common convention is that a
  * lower number is finer.
  */
-function finerSetting(messages: Message[]): string | null {
+function movedSetting(messages: Message[], direction: GrindDirection): string | null {
   const grinder = latestGrinder(messages);
   if (!grinder) return null;
   const setting = typeof grinder.setting === 'string' ? grinder.setting.trim() : '';
   const dial = libraryDial(grinder);
   if (dial) {
-    const move = resolveGrindMove(dial, setting, { direction: 'finer', amount: 1, setting: null });
+    const move = resolveGrindMove(dial, setting, { direction, amount: 1, setting: null });
     return move?.ok ? move.move.setting : null;
   }
   if (grinder.linked === true) return null;
   if (!/^\d+(\.\d+)?$/.test(setting)) return null;
-  const finer = Number(setting) - 1;
-  return finer >= 0 ? String(Math.round(finer * 100) / 100) : null;
+  const moved = Number(setting) + (direction === 'finer' ? -1 : 1);
+  return moved >= 0 ? String(Math.round(moved * 100) / 100) : null;
 }
 
 /** A proposed change as the script decides it; the voice adds the summary, rationale and expected effect. */
@@ -453,14 +490,32 @@ function proposalInput(change: Change, text: ProposalText): ProposeAdjustment {
   return { ...change.input, summary: text.summary, rationale: text.rationale, expectedEffect: text.expectedEffect, tips: change.tips };
 }
 
-/** The answer's taste, first match wins: "Sour / sharp" with "Bitter / harsh" is sour. */
+/** The answer's taste, first match wins: "Sour / sharp" with "Bitter / harsh" is sour. Typed tastes (rule 3b) read the same words. */
 function tasteOf(answer: string): Taste {
   if (answer.includes('sour')) return 'sour';
   if (answer.includes('bitter')) return 'bitter';
-  if (answer.includes('weak')) return 'weak';
+  if (answer.includes('weak') || answer.includes('watery')) return 'weak';
   if (answer.includes('strong')) return 'strong';
   if (answer.includes('balanced')) return 'balanced';
   return 'other';
+}
+
+/** Within this much of its yield lever, a shot that did not stop on weight still counts as having reached it. */
+const REACHED_WITHIN_G = 1;
+
+/**
+ * How the shot ended against the yield its lever aims at. A yield move only
+ * changes the cup when the shot gets there: a Blooming shot that runs out of
+ * steps at 41.5 g never meets a stop at 48 g or 52 g.
+ */
+function stopOf(shot: Raw | null): ShotStop | null {
+  if (!shot) return null;
+  const summary = isRecord(shot.summary) ? shot.summary : {};
+  const levers = isRecord(shot.levers) ? shot.levers : {};
+  const yieldG = num(summary.yieldG);
+  const targetG = num(levers.yield);
+  const near = yieldG !== null && targetG !== null && Math.abs(yieldG - targetG) <= REACHED_WITHIN_G + 1e-9;
+  return { reached: summary.stopReason === 'targetWeight' || near, yieldG, targetG };
 }
 
 function chooseChange(messages: Message[]): Change {
@@ -470,8 +525,10 @@ function chooseChange(messages: Message[]): Change {
   const templateId = typeof shot?.templateId === 'string' ? shot.templateId : '';
   const temp = num(levers.temp);
   const yieldG = num(levers.yield);
+  const stop = stopOf(shot);
   const yieldRange = YIELD_RANGE[templateId] ?? { min: 0, max: Infinity };
-  const yieldCan = (to: number) => yieldG !== null && to >= yieldRange.min && to <= yieldRange.max;
+  // A yield move only when the shot reached its yield; else the grind moves instead.
+  const yieldCan = (to: number) => stop?.reached === true && yieldG !== null && to >= yieldRange.min && to <= yieldRange.max;
   const profile = (kind: ChangeKind, lever: string, value: number): Change => ({
     kind,
     input: { variable: 'profile', lever, value, grind: null },
@@ -487,48 +544,59 @@ function chooseChange(messages: Message[]): Change {
     if (yieldG !== null && yieldCan(yieldG - 2)) return profile('shorter', 'yield', yieldG - 2);
   } else if (taste === 'strong') {
     if (yieldG !== null && yieldCan(yieldG + 2)) return profile('longer', 'yield', yieldG + 2);
+    // Never finer: that would make a strong cup stronger.
+    return grindMove(messages, 'coarser');
   } else if (taste === 'balanced') {
     return { kind: 'keep', input: NO_CHANGE, tips: ['Note your grind setting so you can repeat it.'] };
   }
-  return grindFiner(messages);
+  return grindMove(messages, 'finer');
 }
 
-function grindFiner(messages: Message[]): Change {
+function grindMove(messages: Message[], direction: GrindDirection): Change {
   return {
-    kind: 'finer',
-    input: { variable: 'grind', lever: null, value: null, grind: { direction: 'finer', amount: 1, setting: finerSetting(messages) } },
+    kind: direction,
+    input: { variable: 'grind', lever: null, value: null, grind: { direction, amount: 1, setting: movedSetting(messages, direction) } },
     tips: ['Keep the same dose.'],
   };
 }
 
-/** The top of a pressure series among `results` (a get_shot_series answer), and when it came. */
-function pressurePeak(results: NamedResult[]): { bar: number; atS: number | null } | null {
+/** The top of a pressure series among `results` (a get_shot_series answer). */
+function seriesPeak(results: NamedResult[]): number | null {
   for (const { name, payload, isError } of results) {
     if (name !== TOOL.getShotSeries || isError || !isRecord(payload) || payload.metric !== 'pressure') continue;
-    const values = Array.isArray(payload.values) ? payload.values : [];
-    const times = Array.isArray(payload.tS) ? payload.tS : [];
-    let peak: { bar: number; atS: number | null } | null = null;
-    for (const [i, value] of values.entries()) {
-      const bar = num(value);
-      if (bar !== null && (peak === null || bar > peak.bar)) peak = { bar, atS: num(times[i]) };
-    }
-    if (peak) return peak;
+    const values = (Array.isArray(payload.values) ? payload.values : []).map(num).filter((bar): bar is number => bar !== null);
+    if (values.length > 0) return Math.max(...values);
   }
   return null;
 }
 
-/** What a voice may say about a change: the taste, the roast, the curve just read and the latest shot's channeling flags. */
-function changeFacts(messages: Message[], change: Change, results: NamedResult[], afterRejection: boolean): ChangeFacts {
-  const peak = pressurePeak(results);
+/**
+ * The latest shot's peak and when it came, from its shot event's summary: the
+ * numbers its shot card shows. Without them, the top of the series just read,
+ * with no time: a series rounded to 1 Hz can tie along a plateau, so its
+ * first top is not the summary's moment.
+ */
+function peakOf(messages: Message[], results: NamedResult[]): { bar: number | null; atS: number | null } {
   const summary = latestShot(messages)?.summary;
+  const bar = isRecord(summary) ? num(summary.peakPressureBar) : null;
+  if (bar !== null) return { bar, atS: isRecord(summary) ? num(summary.peakPressureAtS) : null };
+  return { bar: seriesPeak(results), atS: null };
+}
+
+/** What a voice may say about a change: the taste, the roast, the peak, how the shot ended and the latest shot's channeling flags. */
+function changeFacts(messages: Message[], change: Change, results: NamedResult[], afterRejection: boolean): ChangeFacts {
+  const peak = peakOf(messages, results);
+  const shot = latestShot(messages);
+  const summary = shot?.summary;
   const flags = isRecord(summary) && Array.isArray(summary.channelingFlags) ? summary.channelingFlags : null;
   return {
     kind: change.kind,
     taste: tasteOf(latestAnswer(messages)),
     roastLevel: savedRoast(messages),
     grindSetting: change.input.grind?.setting ?? null,
-    peakPressureBar: peak?.bar ?? null,
-    peakPressureAtS: peak?.atS ?? null,
+    peakPressureBar: peak.bar,
+    peakPressureAtS: peak.atS,
+    stop: stopOf(shot),
     channelingFlags: flags?.filter((flag): flag is string => typeof flag === 'string') ?? null,
     afterRejection,
   };
@@ -662,7 +730,7 @@ function decide(script: Script): Reply {
     // the grind already, keep the recipe.
     const rejected = toolUses(messages[lastIndex - 1]).find((b) => b.name === TOOL.proposeAdjustment);
     const wasGrind = isRecord(rejected?.input) && rejected.input.variable === 'grind';
-    const next: Change = wasGrind ? { kind: 'keepAfterRejectedGrind', input: NO_CHANGE, tips: SAME_PREP } : grindFiner(messages);
+    const next: Change = wasGrind ? { kind: 'keepAfterRejectedGrind', input: NO_CHANGE, tips: SAME_PREP } : grindMove(messages, 'finer');
     const facts = changeFacts(messages, next, [], true);
     return {
       blocks: [
@@ -692,8 +760,9 @@ function decide(script: Script): Reply {
     return { blocks: lead === null ? [proposal] : [{ type: 'text', text: lead }, proposal], stopReason: 'tool_use' };
   }
 
-  // 3. The taste answer: look at the curve.
-  if (resultFor(TOOL.askUser)) {
+  // 3. The taste answer, or (3b) a taste typed after a shot instead of
+  // tapped, which set the taste question aside: look at the curve.
+  if (resultFor(TOOL.askUser) || typedTaste(messages, lastIndex) !== null) {
     return {
       blocks: [
         { type: 'text', text: voice.tasteAnswer({ taste: tasteOf(latestAnswer(messages)), roastLevel: savedRoast(messages) }) },
