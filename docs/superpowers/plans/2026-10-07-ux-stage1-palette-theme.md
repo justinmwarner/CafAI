@@ -26,7 +26,7 @@
 
 | File | Status | Responsibility |
 |---|---|---|
-| `src/ui/color.ts` | create | OKLCH to sRGB hex with gamut mapping, hex parsing, blending, `withAlpha`, WCAG contrast |
+| `src/ui/color.ts` | create | OKLCH to sRGB hex with gamut mapping, hex parsing, blending, WCAG contrast |
 | `src/ui/color.test.ts` | create | Known conversions, gamut mapping, contrast values |
 | `src/ui/palette.ts` | create | `Tint`, `TINTS`, `customTint`, `namedTint`, `Palette`, `buildPalette(mode, tint)` |
 | `src/ui/palette.test.ts` | create | Shape of the palette and the contrast sweep (every tint and hue, both modes) |
@@ -256,6 +256,8 @@ Run: `cd /e/source/cafai && npx tsc -p tsconfig.json --noEmit > /tmp/tc.log 2>&1
 Expected: `exit=0`, `lint=0`.
 
 - [ ] **Step 6: Report back** (the controller commits: `feat: colour maths for a palette built in OKLCH, written out as hex`).
+
+**As built (after review):** the gamut test pins `oklch(0.7, 0.4, 145) === '#00bf34'` and checks, through a test-local inverse, that mapped colours keep L within 0.005 and hue within 3 degrees and land on the sRGB edge; the blue and green primaries are pinned; contrast tests include red and blue on white (the luminance weights); `oklch` throws on non-finite input and `blend` on an alpha outside 0-1; `withAlpha` was dropped (no caller).
 
 ---
 
