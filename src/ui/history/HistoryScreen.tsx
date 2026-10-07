@@ -180,7 +180,7 @@ function IterationRow({ record }: { record: IterationRecord }) {
   return (
     <Box
       data-testid={TID.historyIteration(record.id)}
-      sx={{ borderLeft: 2, borderColor: 'divider', pl: 1.5, py: 0.5, display: 'grid', gap: 0.25 }}
+      sx={{ py: 0.75, display: 'grid', gap: 0.25 }}
     >
       <Typography variant="body2">
         <Box component="span" sx={{ color: 'text.secondary' }}>
@@ -257,7 +257,7 @@ function VersionCard({ version, iterations }: { version: ProfileVersion; iterati
         </Box>
       ) : null}
       {iterations.length > 0 ? (
-        <Box sx={{ mt: 1.25, display: 'grid', gap: 1 }}>
+        <Box sx={{ mt: 1, display: 'grid', '& > * + *': { borderTop: 1, borderColor: 'divider' } }}>
           {iterations.map((record) => (
             <IterationRow key={record.id} record={record} />
           ))}
@@ -320,7 +320,7 @@ function BagDetail({ data, onBack }: { data: BagHistory; onBack(): void }) {
           <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
             Shots without a profile version
           </Typography>
-          <Box sx={{ display: 'grid', gap: 1 }}>
+          <Box sx={{ display: 'grid', '& > * + *': { borderTop: 1, borderColor: 'divider' } }}>
             {unassigned.map((record) => (
               <IterationRow key={record.id} record={record} />
             ))}
@@ -517,7 +517,7 @@ export function HistoryScreen({ bagId, onSelectBag = hashNavigate }: HistoryScre
           History
         </Typography>
         <Button
-          variant="outlined"
+          variant="tonal"
           startIcon={working === 'export' ? <CircularProgress size={16} /> : <FileDownloadIcon />}
           data-testid={TID.exportData}
           disabled={working !== null}
@@ -527,7 +527,7 @@ export function HistoryScreen({ bagId, onSelectBag = hashNavigate }: HistoryScre
           Export
         </Button>
         <Button
-          variant="outlined"
+          variant="tonal"
           component="label"
           startIcon={working === 'import' ? <CircularProgress size={16} /> : <FileUploadIcon />}
           disabled={working !== null}

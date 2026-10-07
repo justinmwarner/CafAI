@@ -168,7 +168,7 @@ function ApiKeySection() {
         {hasKey ? (
           <Button
             color="error"
-            variant="outlined"
+            variant="tonal"
             data-testid={TID.forgetKey}
             disabled={busy}
             onClick={() => setConfirmForget(true)}
