@@ -344,6 +344,32 @@ describe('MachinePanel graph modes', () => {
     expect(screen.getByTestId(TID.coachNote)).toHaveTextContent('Done. Reading the shot');
   });
 
+  it('columns={2} (a phone on its side): status and buttons in one column, the graph and the note in the other', async () => {
+    const services = createFakeServices();
+    const { rerenderWith } = renderWithServices(<MachinePanel graph="full" columns={2} />, services);
+    await act(async () => {});
+    act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+    const status = screen.getByRole('region', { name: 'Machine status' });
+    const controls = screen.getByRole('region', { name: 'Machine controls' });
+    const graph = screen.getByTestId(TID.liveGraph);
+    const note = screen.getByTestId(TID.coachNote);
+    const left = status.parentElement!;
+    const right = graph.parentElement!;
+    expect(controls.parentElement).toBe(left);
+    expect(note.parentElement).toBe(right);
+    expect(left.nextElementSibling).toBe(right);
+    expect(getComputedStyle(left.parentElement!).flexDirection).toBe('row');
+    // The buttons' column scrolls on its own if it must; the graph's never needs to.
+    expect(getComputedStyle(left).overflowY).toBe('auto');
+
+    // Turning the phone upright keeps the very same buttons (a command in flight stays in flight).
+    const espresso = screen.getByTestId(TID.espressoButton);
+    rerenderWith(<MachinePanel graph="full" columns={1} />);
+    expect(screen.getByTestId(TID.espressoButton)).toBe(espresso);
+    expect(getComputedStyle(left).display).toBe('contents');
+    expect(getComputedStyle(left.parentElement!).flexDirection).toBe('column');
+  });
+
   it('graph="none", or the older showGraph={false}, leaves the graph out and keeps the rest', async () => {
     const { rerenderWith } = renderWithServices(<MachinePanel graph="none" />);
     await act(async () => {});

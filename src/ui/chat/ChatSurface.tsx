@@ -524,7 +524,12 @@ const chatSx = {
   },
   // A comfortable line length on a wide pane: the thread and the composer centre.
   '& .MuiChatMessageList-content': { maxWidth: 680, width: '100%', mx: 'auto' },
-  '& .MuiChatComposer-root': { maxWidth: 760, width: '100%', mx: 'auto' },
+  // The composer at most 760 px, centred, and never closer than x-chat's 8 px
+  // to the pane's edges. Its own compact-variant margin would win over a plain
+  // selector, and a full width beside that margin pushed Send off the pane.
+  '& .MuiChatComposer-root.MuiChatComposer-variantCompact': {
+    mx: 'max(8px, calc((100% - 760px) / 2))',
+  },
   // The barista's own words sit on a quiet tonal bubble; the accent is kept for actions.
   '& .MuiChatMessage-roleUser .MuiChatMessage-bubble': { bgcolor: 'cafai.raised', color: 'text.primary' },
   '& .MuiChatComposer-textArea': { fontSize: '1rem' },
