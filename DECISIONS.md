@@ -597,3 +597,74 @@ says which reading was taken and MORNING.md lists it among the top questions.
   tool description ask the coach to word the taste question so and to keep
   the word out of others. Cards set aside now say why (typed, Undo, a new
   shot), and a keep card says "Nothing to change: keep this recipe."
+
+## UX: modes and theme (2026-10-07)
+
+The owner's brief: a tablet and a phone mode, the shot taking the screen,
+nicer typography, and colours bound to a palette (light or dark plus a
+tint, the owner's own pick a green). Design and mockups:
+docs/superpowers/specs/2026-10-07-ux-modes-and-theme-design.md; plans in
+docs/superpowers/plans/. Built on branch feat/ux-modes-theme by parallel
+subagents, each task committed after its checks.
+
+- **D80. One palette from a tint and a mode.** `src/ui/palette.ts` builds
+  every colour from a tint (hue, accent chroma, neutral chroma) in OKLCH and
+  writes plain hex (`src/ui/color.ts`), because Chromium 91 understands
+  neither oklch() nor color-mix(); out-of-gamut colours keep lightness and
+  hue and lose chroma, so contrast tuning holds. Success, warning, error,
+  info and the shot graph's series never follow the tint (pressure green,
+  flow blue, as on Decent's charts). `palette.test.ts` sweeps every named
+  tint and every hue 0-359 in both modes against WCAG AA for each pair the
+  UI draws; the spec's starting lightness for light-mode success (0.55) and
+  warning (0.60) failed it and became 0.50 and 0.52. Components read colours
+  only through the MUI theme (`theme.palette.cafai` for raised, accentSoft,
+  live and the graph); secondary actions use a theme-level `tonal` Button
+  variant.
+- **D81. Figtree, with Roboto's arrows as a fallback family.** Figtree
+  (variable, latin, upright and italic, about 20 KB each) replaces Roboto's
+  three latin weights. Its latin subset lacks the arrows CafAI prints, so
+  Roboto's symbols faces stay as the `CafAI Symbols` family, listed right
+  after Figtree. LICENSE-FIGTREE.txt joins the zip (amends D49). Labels are
+  sentence case; live numbers use tabular figures with smaller, muted units.
+- **D82. The appearance is a setting, with a boot cache.**
+  `Settings.appearance` (`{ mode: dark | light | auto, tint: <id> | { hue } }`,
+  default dark Crema) is read leniently, mirrored to Decaid and exported like
+  the other settings (the export schema carries it, so a JSON import keeps
+  it); an import adopts it only while this device still has the default,
+  like the model. Storage keeps any well-formed tint id and the UI reads an
+  unknown one as Crema, so a newer CafAI's tint survives an older one. An
+  `AppearanceStore` in Services applies a change at once and saves it; the
+  hue slider previews while dragged and saves on release; of two quick
+  changes the later wins. The last resolved colours are kept in localStorage
+  (`cafai.appearance.boot`) for main.tsx's boot screen and index.html's
+  watchdog page. Auto follows prefers-color-scheme; whether Decaid's WebView
+  reports it is on the hardware plan, and Auto shows light where it never
+  matches.
+- **D83. One shot recording for the app (ShotTrace), a stage early.** The
+  buffer moved out of LiveShotGraph into one trace per telemetry store,
+  started with the shell, so a graph rebuilt for a new palette keeps the
+  shot, and the Shot view, the preview chart and the phone's strip all have
+  the shot from its first frame. The trace outlives any graph; its
+  listeners are called safely, like the telemetry store's.
+- **D84. Layout modes.** A tablet is any viewport at least 800 px wide and
+  500 px tall (every Decent tablet, iPads); anything smaller is a phone, with
+  bottom tabs, or a side rail when the phone lies on its side (under 500 px
+  tall). A new route `#/shot` is the Shot view on a tablet and the Machine
+  tab on a phone, so crossing the breakpoint keeps the screen. The machine
+  column is 340, 400 or 480 px by width.
+- **D85. Shot focus.** A shot start shows the shot route by itself unless a
+  text field has focus or the barista is already there; moving during the
+  shot cancels the automatic return; the coach comes back once the chat gets
+  the shot's card or notice (not the "Looking for that shot" progress
+  notice), or 8 s after the pour finished, and only if the app made the
+  switch. Automatic switches use `location.replace`, so Back goes where the
+  barista went. For 350 ms after an automatic switch the new pane ignores
+  taps; on a tablet only the main pane, so Stop in the machine column always
+  works. The coach stays mounted (hidden) under the Shot view, so its scroll
+  and draft survive.
+- **D86. The coach's note and one loaded-profile reading.** Under the big
+  graph a small note says the coach is watching, why this shot will not
+  count (another profile, a version not confirmed, no bag, no key), or
+  "Done. Reading the shot" until the outcome arrives. The Profile line's
+  workflow reading is shared through a provider, so the note and the Shot
+  view's step ("Pour · step 3 of 3") and yield target add no second poll.
