@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import './testing/setup.ts';
 import { afterEach, describe, expect, it } from 'vitest';
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { CoachState } from '../../app/types.ts';
 import type { LiveSample, ShotStateEvent } from '../../api/types.ts';
@@ -35,6 +35,16 @@ function shotStateEvent(state: ShotStateEvent['state']): ShotStateEvent {
   };
 }
 
+/** jsdom's own window size (a tablet), restored after each test. */
+const JSDOM_VIEWPORT = { width: window.innerWidth, height: window.innerHeight };
+
+/** Makes the window another size for a test, as a phone or a rotation would. */
+function setViewport(width: number, height: number) {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: height });
+  window.dispatchEvent(new Event('resize'));
+}
+
 /** A pouring frame, minimal enough for the shot trace to record it. */
 function sample(tS: number): LiveSample {
   return {
@@ -47,6 +57,9 @@ function sample(tS: number): LiveSample {
 describe('CoachScreen', () => {
   afterEach(() => {
     window.location.hash = '';
+    // Unmounted first, so the resize re-renders nothing outside act().
+    cleanup();
+    setViewport(JSDOM_VIEWPORT.width, JSDOM_VIEWPORT.height);
   });
 
   it('waits for the engine to load', () => {
@@ -151,6 +164,46 @@ describe('CoachScreen', () => {
     act(() => services.coach.setState({ canUndo: true }));
     await userEvent.click(screen.getByTestId(TID.undoButton));
     expect(methods(services)).toEqual(['undo']);
+  });
+
+  it('keeps Undo and New bag as labelled buttons in the header on a tablet', () => {
+    renderCoach({ ...coachStateFor('shot'), canUndo: true });
+    for (const [testId, label] of [
+      [TID.undoButton, 'Undo'],
+      [TID.newBag, 'New bag'],
+    ] as const) {
+      const button = screen.getByTestId(testId);
+      expect(button).toHaveClass('MuiButton-root');
+      expect(button).toHaveTextContent(label);
+    }
+  });
+
+  it('makes Undo and New bag 48 px icon buttons on a phone, named for screen readers, so the bag header keeps to one row', async () => {
+    setViewport(390, 844);
+    const services = renderCoach({ ...coachStateFor('shot'), canUndo: true });
+    const header = screen.getByRole('banner', { name: 'Bag' });
+    for (const [testId, label] of [
+      [TID.undoButton, 'Undo'],
+      [TID.newBag, 'New bag'],
+    ] as const) {
+      const button = screen.getByTestId(testId);
+      expect(button).toBe(within(header).getByRole('button', { name: label }));
+      expect(button).toHaveClass('MuiIconButton-root');
+      expect(button).not.toHaveClass('MuiButton-root');
+      // The icon alone: no visible label beside it.
+      expect(button).toHaveTextContent('');
+      expect(button.querySelector('svg')).not.toBeNull();
+    }
+    expect(header).toHaveStyle({ flexWrap: 'nowrap' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    await userEvent.click(screen.getByRole('button', { name: 'New bag' }));
+    expect(methods(services)).toEqual(['undo', 'newBag']);
+
+    // Rotated or resized back to a tablet: the labelled buttons again.
+    act(() => setViewport(1024, 768));
+    expect(screen.getByTestId(TID.newBag)).toHaveClass('MuiButton-root');
+    expect(screen.getByTestId(TID.newBag)).toHaveTextContent('New bag');
   });
 
   it('shows errors with Retry and dismiss', async () => {

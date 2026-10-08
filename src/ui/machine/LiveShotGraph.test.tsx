@@ -719,9 +719,11 @@ describe('LiveShotGraph: the full graph (the Shot view)', () => {
   it('says what the weight stops at, beside the value paint() writes and never overwritten by it', () => {
     const services = createFakeServices();
     const { rerenderWith } = renderWithServices(withReading(reading({ targetYieldG: 50 }), <LiveShotGraph variant="full" />), services);
-    expect(fullReadoutItem('Weight')).toHaveTextContent('of 50');
+    // Before a shot the weight is blank, so there is no target beside it (the next test).
+    expect(fullReadoutItem('Weight')).not.toHaveTextContent('of');
 
     act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+    expect(fullReadoutItem('Weight')).toHaveTextContent('of 50');
     act(() => {
       for (const t of [0, 1, 2]) services.telemetry.emitSample(sample(t));
     });
@@ -744,6 +746,34 @@ describe('LiveShotGraph: the full graph (the Shot view)', () => {
     rerenderWith(withReading(reading({ targetYieldG: null }), <LiveShotGraph variant="full" />));
     expect(fullReadoutItem('Weight')).not.toHaveTextContent('of');
     expect(fakePlots).toHaveLength(1);
+  });
+
+  it('shows no lone "of 36" before a shot: the target comes with the shot and stays with the last one', () => {
+    const services = createFakeServices();
+    renderWithServices(withReading(reading({ targetYieldG: 36 }), <LiveShotGraph variant="full" />), services);
+    const weight = () => fullReadoutItem('Weight');
+    expect(screen.getByText(/pull a shot/i)).toBeInTheDocument();
+    expect(fullReadout('Weight')).toBe('');
+    expect(weight()).toHaveTextContent(/^Weight$/);
+
+    // Live: the target beside the weight read so far.
+    act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+    expect(weight()).toHaveTextContent('of 36');
+    act(() => services.telemetry.emitSample(sample(2)));
+    runFrames();
+    expect(weight()).toHaveTextContent('Weight3.0 g of 36');
+
+    // The last shot keeps it after the pour.
+    act(() => services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' }));
+    expect(screen.getByText('Last shot')).toBeInTheDocument();
+    expect(weight()).toHaveTextContent('3.0 g of 36');
+
+    // A shot that ended before its first frame leaves the graph empty again, and no lone target.
+    act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-2' }));
+    expect(weight()).toHaveTextContent('of 36');
+    act(() => services.telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: null }));
+    expect(screen.getByText(/pull a shot/i)).toBeInTheDocument();
+    expect(weight()).not.toHaveTextContent('of');
   });
 });
 

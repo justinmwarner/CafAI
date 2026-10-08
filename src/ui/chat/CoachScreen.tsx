@@ -23,6 +23,7 @@ import { useCoach, useServices, useTelemetry } from '../../app/services.tsx';
 import { isShotRunning } from '../../api/workflow.ts';
 import { shotTraceFor } from '../machine/shotTrace.ts';
 import { navigate } from '../router.ts';
+import { useLayout } from '../shell/layout.ts';
 import { TID } from '../testIds.ts';
 import { templateName } from '../history/historyModel.ts';
 import { ChatSurface } from './ChatSurface.tsx';
@@ -134,6 +135,49 @@ function BagPicker({ bags, activeBag, disabled }: { bags: Bag[]; activeBag: Bag 
   );
 }
 
+/**
+ * The tonal button's look on a 48 px icon button. The fill holds on hover and
+ * when disabled: IconButton's own hover clears it on a touch screen, where a
+ * tap leaves :hover behind, and its disabled state drops it.
+ */
+const tonalIconSx = {
+  width: 48,
+  height: 48,
+  flex: 'none',
+  // A string: a bare number here would be a multiple of the theme's radius.
+  borderRadius: '12px',
+  bgcolor: 'cafai.raised',
+  color: 'text.primary',
+  '&:hover': { bgcolor: 'cafai.raised' },
+  '&.Mui-disabled': { bgcolor: 'cafai.raised' },
+} as const;
+
+interface HeaderActionProps {
+  /** A 48 px icon button named by the label, so the phone's header keeps to one row. */
+  iconOnly: boolean;
+  label: string;
+  icon: ReactNode;
+  testId: string;
+  disabled: boolean;
+  onClick: () => void;
+}
+
+/** Undo or New bag in the bag header: a labelled tonal button, or on a phone the icon alone. */
+function HeaderAction({ iconOnly, label, icon, testId, disabled, onClick }: HeaderActionProps) {
+  if (iconOnly) {
+    return (
+      <IconButton aria-label={label} data-testid={testId} disabled={disabled} onClick={onClick} sx={tonalIconSx}>
+        {icon}
+      </IconButton>
+    );
+  }
+  return (
+    <Button variant="tonal" startIcon={icon} data-testid={testId} disabled={disabled} onClick={onClick} sx={{ minHeight: 48 }}>
+      {label}
+    </Button>
+  );
+}
+
 function ErrorBanner({ error }: { error: string }) {
   const { coach } = useServices();
   return (
@@ -231,6 +275,8 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
   // The app-wide shot recording: its finished shot (if any) is the one card that may open the big graph.
   const trace = useMemo(() => shotTraceFor(telemetry), [telemetry]);
   const { finishedShotId } = useSyncExternalStore(trace.subscribe, trace.getState);
+  // On a phone the header's actions are icons, so the bag, its version and both fit one row.
+  const phone = useLayout().mode === 'phone';
 
   const listedBags = useMemo(() => pickerBags(bags, activeBag), [bags, activeBag]);
   const placeholder = useMemo(() => composerPlaceholder(phase, messages), [phase, messages]);
@@ -282,34 +328,40 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
           useFlexGap
           component="header"
           aria-label="Bag"
-          sx={{ alignItems: 'center', flexWrap: 'wrap', minHeight: 64, px: 1.5, py: 0.5, columnGap: 1.25, borderBottom: 1, borderColor: 'divider' }}
+          sx={{
+            alignItems: 'center',
+            // One row on a phone: the picker and the version give way (the version with an ellipsis), the icons never do.
+            flexWrap: phone ? 'nowrap' : 'wrap',
+            minHeight: 64,
+            px: 1.5,
+            py: 0.5,
+            columnGap: 1.25,
+            borderBottom: 1,
+            borderColor: 'divider',
+          }}
         >
           <BagPicker bags={listedBags} activeBag={activeBag} disabled={busy || shotRunning} />
           {activeBag ? <VersionText version={activeVersion} bagName={activeBag.name} /> : null}
           <Box sx={{ flex: '1 0 0', minWidth: 0 }} />
           {canUndo && showChat ? (
-            <Button
-              variant="tonal"
-              startIcon={<UndoIcon />}
-              data-testid={TID.undoButton}
+            <HeaderAction
+              iconOnly={phone}
+              label="Undo"
+              icon={<UndoIcon />}
+              testId={TID.undoButton}
               disabled={busy}
               onClick={() => fire(coach.undo())}
-              sx={{ minHeight: 48 }}
-            >
-              Undo
-            </Button>
+            />
           ) : null}
           {activeBag ? (
-            <Button
-              variant="tonal"
-              startIcon={<AddIcon />}
-              data-testid={TID.newBag}
+            <HeaderAction
+              iconOnly={phone}
+              label="New bag"
+              icon={<AddIcon />}
+              testId={TID.newBag}
               disabled={busy || shotRunning}
               onClick={() => fire(coach.newBag())}
-              sx={{ minHeight: 48 }}
-            >
-              New bag
-            </Button>
+            />
           ) : null}
         </Stack>
       ) : null}

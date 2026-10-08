@@ -447,8 +447,9 @@ export function LiveShotGraph({ minPlotHeight, variant = 'panel', onOpen }: Live
                 sx={{ whiteSpace: 'nowrap', minHeight: '1.1em', [narrow]: { fontSize: '1.5rem' }, [phone]: { fontSize: '1.125rem' } }}
               >
                 <span ref={readoutRef(item.key)}>{legendValue(item, null)}</span>
-                {/* Beside the node paint() writes, never in it, so the target survives every frame. */}
-                {item.key === 'weight' && targetYieldG !== null && (
+                {/* Beside the node paint() writes, never in it, so the target survives every frame.
+                    Not before a shot: the weight is blank then, and "of 36" alone reads as a fault. */}
+                {item.key === 'weight' && targetYieldG !== null && phase !== 'empty' && (
                   <Box
                     component="span"
                     sx={{ fontSize: '0.5em', fontWeight: 550, letterSpacing: 0, color: 'text.secondary', [phone]: { display: 'none' } }}
