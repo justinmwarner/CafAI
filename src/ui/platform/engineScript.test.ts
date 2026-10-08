@@ -12,6 +12,8 @@ import vm from 'node:vm';
 import { Linter } from 'eslint';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { detectHost } from '../../api/host.ts';
+import { BOOT_COLORS_KEY, bootColors } from '../appearance.ts';
+import { buildPalette, namedTint } from '../palette.ts';
 
 const INDEX_HTML = readFileSync(join(import.meta.dirname, '..', '..', '..', 'index.html'), 'utf8');
 
@@ -53,6 +55,8 @@ interface Sandbox {
   brands?: Array<{ brand: string; version: string }>;
   hostname?: string;
   reaHostname?: string | null;
+  /** What storage holds under the app's boot colours key (src/ui/appearance.ts), as stored. */
+  savedColors?: string;
   storageThrows?: boolean;
   insideDecaid?: boolean;
   decentApp?: { exitToDashboard?: unknown };
@@ -90,6 +94,7 @@ function run(options: Sandbox = {}) {
     localStorage: {
       getItem(key: string) {
         if (options.storageThrows) throw new Error('SecurityError');
+        if (key === BOOT_COLORS_KEY) return options.savedColors ?? null;
         return key === 'reaHostname' ? (options.reaHostname ?? null) : null;
       },
     },
@@ -161,7 +166,30 @@ function run(options: Sandbox = {}) {
     messages: () => [...document.querySelectorAll('[data-cafai-start-failed] p')].map((p) => p.textContent),
     exitButton: () => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Exit to Decaid') ?? null,
     settingsLink: () => [...document.querySelectorAll('a')].find((a) => a.textContent === 'Decaid settings') ?? null,
+    /** The colours the fallback and its two controls are drawn in. */
+    look() {
+      const fallback = document.querySelector<HTMLElement>('[data-cafai-start-failed]')!;
+      const controls = [...fallback.querySelectorAll<HTMLElement>('button, a')];
+      return {
+        background: fallback.style.backgroundColor,
+        ink: fallback.style.color,
+        controls: controls.map((control) => ({ ink: control.style.color, line: control.style.borderColor })),
+      };
+    },
   };
+}
+
+/** A colour as an element's style reads it back (jsdom gives hex as rgb()). */
+function cssColor(color: string): string {
+  const probe = document.createElement('p');
+  probe.style.color = color;
+  return probe.style.color;
+}
+
+/** What look() reports for a page drawn in these colours. */
+function lookOf(colors: { background: string; ink: string; line: string }) {
+  const control = { ink: cssColor(colors.ink), line: cssColor(colors.line) };
+  return { background: cssColor(colors.background), ink: cssColor(colors.ink), controls: [control, control] };
 }
 
 beforeEach(() => {
@@ -521,6 +549,48 @@ describe('start-up fallback: the ways back to Decaid (D12-D14)', () => {
         },
       } as unknown as Window);
       expect(page.settingsLink()!.getAttribute('href'), JSON.stringify(options)).toBe(host.settingsUrl);
+    }
+  });
+});
+
+describe('start-up fallback: the look the app showed last', () => {
+  const DEFAULT_LOOK = { background: '#14100D', ink: '#F6ECE3', line: 'rgba(246,236,227,0.4)' };
+
+  function failedStart(options: Sandbox) {
+    const page = run({ userAgent: UA.chrome85, ...options });
+    vi.advanceTimersByTime(WATCHDOG_MS);
+    return page;
+  }
+
+  it('draws in the colours the app saved for the boot screens, in its typeface', () => {
+    const page = failedStart({ savedColors: '{"background":"#f4f8f3","ink":"#1a2218","line":"#d5dad4"}' });
+    expect(page.look()).toEqual(lookOf({ background: '#f4f8f3', ink: '#1a2218', line: '#d5dad4' }));
+    expect(page.fallback()!.style.fontFamily).toMatch(/^Figtree,/);
+  });
+
+  it('reads them as the app writes them', () => {
+    const colors = bootColors(buildPalette('light', namedTint('matcha')));
+    expect(failedStart({ savedColors: JSON.stringify(colors) }).look()).toEqual(lookOf(colors));
+  });
+
+  it('keeps the default dark look when none are saved, they are junk, or storage is blocked', () => {
+    const junk = [
+      'not json',
+      'null',
+      '[]',
+      '"#f4f8f3"',
+      '{"background":"red","ink":"#1a2218","line":"#d5dad4"}',
+      '{"background":"#f4f8f3","ink":"#1a2218"}',
+      // Only #rrggbb colours reach the page's CSS.
+      '{"background":"#f4f8f3","ink":"#1a2218","line":"#d5dad4;display:none"}',
+    ];
+    const cases: Sandbox[] = [
+      {},
+      ...junk.map((savedColors) => ({ savedColors })),
+      { storageThrows: true, savedColors: '{"background":"#f4f8f3","ink":"#1a2218","line":"#d5dad4"}' },
+    ];
+    for (const options of cases) {
+      expect(failedStart(options).look(), JSON.stringify(options)).toEqual(lookOf(DEFAULT_LOOK));
     }
   });
 });

@@ -25,11 +25,6 @@
         // bundle that fails to parse or to load).
         var START_WAIT_MS = 15000;
         var SETTINGS_PATH = ':8080/api/v1/plugins/settings.reaplugin/ui?backName=CafAI';
-        var CONTROL_CSS =
-          'box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;' +
-          'min-width:48px;min-height:48px;margin:6px;padding:0 24px;border:1px solid rgba(246,236,227,0.4);' +
-          'border-radius:12px;background:transparent;color:#F6ECE3;font-family:inherit;font-size:16px;' +
-          'text-decoration:none;cursor:pointer;';
         var win = window;
         var doc = document;
         var engine = { chromium: null, supported: null, reason: 'probe' };
@@ -115,6 +110,31 @@
           return node;
         }
 
+        // The last look the app showed (src/ui/appearance.ts writes it), else the default.
+        function bootColors() {
+          var colors = { background: '#14100D', ink: '#F6ECE3', line: 'rgba(246,236,227,0.4)' };
+          var raw;
+          try {
+            raw = JSON.parse(win.localStorage.getItem('cafai.appearance.boot') || 'null');
+          } catch (unreadable) {
+            raw = null;
+          }
+          // Only #rrggbb colours reach the page's CSS.
+          if (raw && /^#[0-9a-f]{6}$/i.test(raw.background) && /^#[0-9a-f]{6}$/i.test(raw.ink) && /^#[0-9a-f]{6}$/i.test(raw.line)) {
+            colors = raw;
+          }
+          return colors;
+        }
+
+        function controlCss(colors) {
+          return (
+            'box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;' +
+            'min-width:48px;min-height:48px;margin:6px;padding:0 24px;border:1px solid ' + colors.line + ';' +
+            'border-radius:12px;background:transparent;color:' + colors.ink + ';font-family:inherit;font-size:16px;' +
+            'text-decoration:none;cursor:pointer;'
+          );
+        }
+
         // The engine is to blame when it is known to be too old, or when the
         // bundle failed to parse and nothing says the engine is new enough.
         function engineToBlame(parseFailed) {
@@ -125,14 +145,16 @@
         // cause: 'syntax' (the bundle did not parse), 'load' (it did not load)
         // or 'timeout' (nothing rendered in time); kept on the page for support.
         function show(cause) {
-          var blameEngine, title, row, exit, settings;
+          var blameEngine, title, row, exit, settings, colors;
           if (page || !doc.body) return;
           blameEngine = engineToBlame(cause === 'syntax');
+          colors = bootColors();
           page = element(
             'div',
             'position:fixed;top:0;right:0;bottom:0;left:0;z-index:2147483647;overflow:auto;' +
               'display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;' +
-              'background:#14100D;color:#F6ECE3;font-family:Roboto,Helvetica,Arial,sans-serif;text-align:center;'
+              'background:' + colors.background + ';color:' + colors.ink + ';' +
+              'font-family:Figtree,Helvetica,Arial,sans-serif;text-align:center;'
           );
           page.setAttribute('data-cafai-start-failed', cause);
           title = element(
@@ -153,12 +175,12 @@
             )
           );
           row = element('div', 'display:flex;flex-wrap:wrap;justify-content:center;margin-top:16px;');
-          exit = element('button', CONTROL_CSS, 'Exit to Decaid');
+          exit = element('button', controlCss(colors), 'Exit to Decaid');
           exit.setAttribute('type', 'button');
           exit.addEventListener('click', function () {
             exitToDecaid();
           });
-          settings = element('a', CONTROL_CSS, 'Decaid settings');
+          settings = element('a', controlCss(colors), 'Decaid settings');
           settings.setAttribute('href', settingsUrl());
           row.appendChild(exit);
           row.appendChild(settings);

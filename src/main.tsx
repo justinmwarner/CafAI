@@ -3,11 +3,22 @@ import { createRoot } from 'react-dom/client';
 import { App, restoreRoute } from './app/App.tsx';
 import { createServices } from './app/createServices.ts';
 import { detectHost } from './api/host.ts';
+import { bootColors, loadBootColors } from './ui/appearance.ts';
 import { buildPalette, DEFAULT_TINT_ID, namedTint } from './ui/palette.ts';
 import { FONT_FAMILY } from './ui/theme.ts';
 
-// Before the app (and its appearance setting) loads, the default look.
-const BOOT = buildPalette('dark', namedTint(DEFAULT_TINT_ID));
+/** The colours of the last look the app showed (AppTheme keeps them), or null. */
+function readBootColors() {
+  try {
+    return loadBootColors(window.localStorage);
+  } catch {
+    // Where storage is blocked, reading window.localStorage itself throws.
+    return null;
+  }
+}
+
+// Before the app (and its appearance setting) loads: the look it showed last, or the default.
+const BOOT = readBootColors() ?? bootColors(buildPalette('dark', namedTint(DEFAULT_TINT_ID)));
 
 const rootElement = document.getElementById('root')!;
 const root = createRoot(rootElement);
