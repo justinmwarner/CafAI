@@ -29,6 +29,11 @@ export const TID = {
   coachNote: 'coach-note',
   previewGraph: 'preview-graph',
   tapGuard: 'tap-guard',
+  tabShot: 'tab-shot',
+  machineRow: 'machine-row',
+  statsCard: 'stats-card',
+  statsPrompt: 'stats-prompt',
+  machineAlerts: 'machine-alerts',
 
   // Machine panel (baseline skin)
   connectionStatus: 'connection-status',
