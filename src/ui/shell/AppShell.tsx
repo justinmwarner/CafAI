@@ -96,24 +96,57 @@ const exitLabel = (host: HostEnvironment) => (host.insideDecaid ? 'Exit to Decai
 /**
  * True while a field that takes typed text has focus, so a phone's
  * on-screen keyboard is up (the same test as the focus hook's "typing").
+ *
+ * Leaving the field with a press (a tap on Send while typing) brings the
+ * tabs back only after the press's click has landed: they push the content
+ * up, and a release over whatever moved there would lose the tap. So from a
+ * mousedown to its mouseup the layout holds (a tap's focus change comes
+ * between the two), and the tabs follow a task later.
  */
 function useTextEntryFocus(): boolean {
   const [typing, setTyping] = useState(() => typeof document !== 'undefined' && isTextEntry(document.activeElement));
   useEffect(() => {
-    const onFocusIn = (event: FocusEvent) => setTyping(isTextEntry(event.target));
-    // Where focus goes next: from one field to another, the keyboard stays up.
-    const onFocusOut = (event: FocusEvent) => setTyping(isTextEntry(event.relatedTarget));
+    let pressing = false;
+    let release: ReturnType<typeof setTimeout> | null = null;
+    const onFocusIn = (event: FocusEvent) => {
+      if (isTextEntry(event.target)) setTyping(true);
+      // A button a press focused: the tabs wait for the release.
+      else if (!pressing) setTyping(false);
+    };
+    const onFocusOut = (event: FocusEvent) => {
+      // Where focus goes next: from one field to another, the keyboard stays up.
+      if (pressing || isTextEntry(event.relatedTarget)) return;
+      setTyping(false);
+    };
+    const onMouseDown = () => {
+      pressing = true;
+    };
+    const onMouseUp = () => {
+      if (!pressing) return;
+      pressing = false;
+      if (release !== null) clearTimeout(release);
+      // A task later, after the click this release makes, so the tap lands where it was aimed.
+      release = setTimeout(() => {
+        release = null;
+        setTyping(isTextEntry(document.activeElement));
+      }, 0);
+    };
     // A focused field that leaves the page reports no focusout; the next tap anywhere notices.
     const onPointerDown = () => {
       if (!isTextEntry(document.activeElement)) setTyping(false);
     };
     document.addEventListener('focusin', onFocusIn);
     document.addEventListener('focusout', onFocusOut);
+    document.addEventListener('mousedown', onMouseDown, { capture: true, passive: true });
+    document.addEventListener('mouseup', onMouseUp, { capture: true, passive: true });
     document.addEventListener('pointerdown', onPointerDown, { capture: true, passive: true });
     return () => {
       document.removeEventListener('focusin', onFocusIn);
       document.removeEventListener('focusout', onFocusOut);
+      document.removeEventListener('mousedown', onMouseDown, { capture: true });
+      document.removeEventListener('mouseup', onMouseUp, { capture: true });
       document.removeEventListener('pointerdown', onPointerDown, { capture: true });
+      if (release !== null) clearTimeout(release);
     };
   }, []);
   return typing;

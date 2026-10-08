@@ -1,5 +1,6 @@
 // The whole coach loop in a real Chromium 91 (puppeteer 9), against the
-// mock-mode build: settings -> new bag -> templates -> v1 -> scripted shot ->
+// mock-mode build: settings -> new bag -> templates -> v1 -> scripted shot
+// (the Shot view takes the screen, the coach comes back with the card) ->
 // taste chip -> confirmed v2. Fails on any page error or console error.
 //
 // usage: npm run build:mock && node tools/chrome91/loop.mjs
@@ -61,9 +62,31 @@ async function fill(testId, text) {
   await input.click({ clickCount: 3 });
   await input.type(text);
 }
+// A tap lands only where the element itself takes it: for 350 ms after the
+// app switches screens by itself a guard covers the pane (TapGuard) and
+// swallows every tap. So wait until the element's centre, in view, is the
+// element (or inside it) before tapping it.
 async function tap(testId, timeout = 15000) {
-  await page.waitForSelector(`${tid(testId)}:not([disabled])`, { timeout, visible: true });
-  await page.click(tid(testId));
+  const selector = `${tid(testId)}:not([disabled])`;
+  await page.waitForSelector(selector, { timeout, visible: true });
+  await page.waitForFunction(
+    (sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      const x = r.left + r.width / 2;
+      const y = r.top + r.height / 2;
+      if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight) {
+        el.scrollIntoView({ block: 'center', inline: 'nearest' });
+        return false;
+      }
+      const hit = document.elementFromPoint(x, y);
+      return hit !== null && el.contains(hit);
+    },
+    { timeout, polling: 'raf' },
+    selector,
+  );
+  await page.click(selector);
 }
 async function waitText(testId, text, timeout = 30000) {
   await page.waitForFunction(
@@ -94,9 +117,15 @@ try {
   });
   await step('pick a template', async () => tap('template-pick-blooming-espresso', 30000));
   await step('v1 loaded', async () => waitText('active-version', 'v1'));
-  await step('pull the scripted shot', async () => {
+  await step('pull the scripted shot: the Shot view takes the main pane', async () => {
     await tap('espresso-button');
-    await page.waitForSelector(tid('shot-card'), { timeout: 60000 });
+    await page.waitForSelector(tid('shot-view'), { timeout: 30000, visible: true });
+  });
+  // The coach stays mounted under the Shot view, hidden: its card is in the
+  // page before it is on screen, and the coach comes back with it by itself.
+  await step('the coach comes back with the shot card', async () => {
+    await page.waitForSelector(tid('shot-card'), { timeout: 60000, visible: true });
+    await page.waitForFunction(() => window.location.hash === '#/', { timeout: 15000 });
   });
   await step('tap a taste chip', async () => tap('option-sour-sharp', 30000));
   await step('confirm the change', async () => {

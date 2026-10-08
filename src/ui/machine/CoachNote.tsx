@@ -34,8 +34,9 @@ const blink = keyframes`
 
 const visuallyHidden = {
   position: 'absolute',
-  width: 1,
-  height: 1,
+  // Strings: in sx a bare 1 is 100%, a box as wide and tall as the pane that the frame could be scrolled to.
+  width: '1px',
+  height: '1px',
   overflow: 'hidden',
   clipPath: 'inset(50%)',
   whiteSpace: 'nowrap',

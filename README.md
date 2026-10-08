@@ -8,12 +8,17 @@ your feedback and the change that led to it.
 
 CafAI is also a complete everyday skin: machine status, espresso, steam,
 flush, hot water, sleep/wake, scale tare and a live shot graph, with a way
-back to Decaid's dashboard and settings on every screen.
+back to Decaid's dashboard and settings on every screen. When a shot starts,
+the screen turns into a big live graph by itself, and the coach comes back
+once it has read the shot. It has a tablet and a phone layout, and a look of
+your own: dark, light or following the device, in one of seven tints or any
+hue.
 
 - Skin id: `cafai` (never changes; it keys the skin's saved data in Decaid)
 - Runs in Decaid's WebView, down to the Chromium 91 engine of older Decent
   tablets, at 962x602 CSS px and up (an older engine gets a warning, and a
-  page with a way back to Decaid if CafAI cannot start at all)
+  page with a way back to Decaid if CafAI cannot start at all), and in a
+  phone's browser on the same network (the phone layout)
 - Bring your own Anthropic API key; it stays on the tablet
 
 ## How the coach works
@@ -41,6 +46,31 @@ back to Decaid's dashboard and settings on every screen.
 
 The model can only move declared template levers within their bounds; it can
 never change pump type, step order or count, sensors, or exit types.
+
+## Screens and looks
+
+- **Tablet** (800 x 500 CSS px and up, every Decent tablet): a top bar with
+  Coach, Shot, History and Settings, the machine column on the left (status,
+  buttons and a preview of the last shot's graph; tap it for the full one),
+  and the coach on the right. When a shot starts, the right side becomes the
+  Shot view: a big timer, pressure, flow, weight and weight flow, the graph,
+  and a note from the coach saying it is watching. When the shot's card
+  reaches the chat, the coach comes back by itself; the machine column and
+  Stop never move.
+- **Phone** (anything smaller): one screen at a time, with Coach, Machine,
+  History and Settings tabs at the bottom (a rail at the side when the phone
+  lies down). A shot opens the Machine tab with the big graph; on the Coach
+  tab a live strip shows the time, weight and pressure and opens the graph.
+  A phone opens CafAI at `http://<tablet-ip>:3000`; its browser storage is
+  its own, so the API key is entered again there (bags and the look come back
+  from Decaid's key-value store).
+- **Settings > Appearance**: Dark, Light or Auto (follows the device), and a
+  tint: Crema, Matcha, Lagoon, Ocean, Plum, Cherry, Steel, or any hue from the
+  slider. Every colour comes from the tint (in OKLCH, written out as plain
+  hex for Chromium 91) and every pair of colours the screens draw is tested
+  for WCAG AA contrast at every hue; the shot graph keeps Decent's colours
+  (pressure green, flow blue). The look is saved with the other settings.
+  [DESIGN.md](DESIGN.md) describes the visual system.
 
 ## Install on a Decent tablet
 
@@ -71,7 +101,8 @@ npm run dev:mock      # the app against the built-in Decaid + Claude mocks
 npm run dev           # the app against a real Decaid (see below)
 npm run dev:sim       # a real Decaid with the scripted Claude, no API key (docs/SIMULATOR.md)
 npm run typecheck && npm run lint && npm test
-npm run e2e           # Playwright, full loop against the mocks
+npm run e2e           # Playwright against the mocks, on three tablets and a phone
+                      # (962x602, 1280x800, 1920x1200; a 390x844 phone upright and on its side)
 npm run release:zip   # release/cafai-<version>.zip (with LICENSE, NOTICE and the font licences)
 ```
 

@@ -53,6 +53,11 @@ test('shows the search while Decaid saves a shot, then the shot card in its plac
     }),
   );
   await page.getByTestId(TID.espressoButton).click();
+  // The shot takes the main pane by itself (D85) and hands it back only with the
+  // card, after the search. To watch the search, go back to the coach, as a
+  // barista would; that also keeps the coach on screen for the rest of the shot.
+  await expect(page.getByTestId(TID.shotView)).toBeVisible();
+  await page.getByTestId(TID.navCoach).click();
 
   const search = page.getByRole('status').filter({ hasText: SEARCH });
   await expect(search).toBeVisible({ timeout: 60_000 });

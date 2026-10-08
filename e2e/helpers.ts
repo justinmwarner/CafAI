@@ -19,10 +19,52 @@ export async function fillField(page: Page, testId: string, value: string): Prom
   await input.fill(value);
 }
 
+/** A screen the navigation reaches: the top bar's buttons on a tablet, the tabs on a phone. */
+export type Screen = 'coach' | 'shot' | 'history' | 'settings';
+
+/** The phone layout's viewports: src/ui/shell/layout.ts's rule, a tablet being at least 800 x 500. */
+export function isPhoneViewport(size: { width: number; height: number }): boolean {
+  return !(size.width >= 800 && size.height >= 500);
+}
+
+/** Whether the page has the phone layout (bottom tabs, or the rail on its side). */
+export function isPhone(page: Page): boolean {
+  const size = page.viewportSize();
+  if (size === null) throw new Error('The page has no viewport size.');
+  return isPhoneViewport(size);
+}
+
+const TOP_BAR: Record<Screen, string> = { coach: TID.navCoach, shot: TID.navShot, history: TID.navHistory, settings: TID.navSettings };
+// The phone's Machine tab is the shot route.
+const TABS: Record<Screen, string> = { coach: TID.tabCoach, shot: TID.tabMachine, history: TID.tabHistory, settings: TID.tabSettings };
+
+/**
+ * Go to a screen as the barista would: the top bar on a tablet, the tabs on a
+ * phone. The tabs give way to the on-screen keyboard while a text field has
+ * focus, so on a phone the field is left first, as a tap outside it would.
+ */
+export async function goTo(page: Page, screen: Screen): Promise<void> {
+  if (isPhone(page)) {
+    await page.evaluate(() => {
+      const field = document.activeElement;
+      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) field.blur();
+    });
+    await page.getByTestId(TABS[screen]).click();
+  } else {
+    await page.getByTestId(TOP_BAR[screen]).click();
+  }
+}
+
 export async function saveApiKey(page: Page, key = 'sk-ant-e2e-test'): Promise<void> {
-  await page.getByTestId(TID.navSettings).click();
+  await goTo(page, 'settings');
   await fillField(page, TID.apiKeyInput, key);
   await page.getByTestId(TID.apiKeySave).click();
+}
+
+/** Pull the scripted shot on the machine itself, as the group-head button does: no tap in CafAI. */
+export async function pullShotOnMachine(page: Page): Promise<void> {
+  const started = await page.evaluate(() => (window as CafaiMockWindow).__CAFAI_MOCK__?.player.start() ?? false);
+  expect(started, 'the mock machine starts a shot').toBe(true);
 }
 
 export async function sendChat(page: Page, text: string): Promise<void> {

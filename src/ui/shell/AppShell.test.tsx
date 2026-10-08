@@ -313,6 +313,47 @@ describe('AppShell on a phone', () => {
     expect(screen.getByTestId(TID.tabCoach)).toBeInTheDocument();
   });
 
+  it('a press that leaves the field brings the tabs back only after its release and its click', async () => {
+    renderShell();
+    const user = userEvent.setup();
+    const remember = screen.getByLabelText('Remember');
+    // The tabs return under the content, so a click that saw them would land where they pushed it.
+    let tabsAtClick: boolean | null = null;
+    remember.addEventListener('click', () => {
+      tabsAtClick = screen.queryByTestId(TID.tabCoach) !== null;
+    });
+    act(() => screen.getByLabelText('Draft').focus());
+    expect(screen.queryByTestId(TID.tabCoach)).not.toBeInTheDocument();
+
+    // Pressed and held: the focus has left the field, the layout has not moved.
+    await user.pointer({ keys: '[MouseLeft>]', target: remember });
+    expect(remember).toHaveFocus();
+    expect(screen.queryByTestId(TID.tabCoach)).not.toBeInTheDocument();
+
+    // Released: the click lands on the layout it was aimed at, then the tabs come back.
+    await user.pointer({ keys: '[/MouseLeft]', target: remember });
+    expect(remember).toBeChecked();
+    expect(tabsAtClick).toBe(false);
+    expect(await screen.findByTestId(TID.tabCoach)).toBeInTheDocument();
+  });
+
+  it('a press from one field to another keeps the tabs away', async () => {
+    renderShell();
+    const user = userEvent.setup();
+    const draft = screen.getByLabelText('Draft');
+    const remember = screen.getByLabelText('Remember');
+    act(() => remember.focus());
+    expect(screen.getByTestId(TID.tabCoach)).toBeInTheDocument();
+    await user.click(draft);
+    expect(draft).toHaveFocus();
+    expect(screen.queryByTestId(TID.tabCoach)).not.toBeInTheDocument();
+    // Still typing a task later, once the press is over.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.queryByTestId(TID.tabCoach)).not.toBeInTheDocument();
+  });
+
   it('on its side (844 x 390) the tabs are a rail before the content', () => {
     setViewport(844, 390);
     renderShell();
