@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
-import { navigate, useRoute } from './router.ts';
+import { navigate, replaceRoute, useRoute } from './router.ts';
 
 describe('hash navigation', () => {
   afterEach(() => {
@@ -31,5 +31,16 @@ describe('hash navigation', () => {
     const first = result.current;
     rerender();
     expect(result.current).toBe(first);
+  });
+
+  it('replaceRoute() changes the hash without a new history entry', () => {
+    const before = window.history.length;
+    replaceRoute({ name: 'shot' });
+    expect(window.location.hash).toBe('#/shot');
+    expect(window.history.length).toBe(before);
+
+    replaceRoute({ name: 'shot' });
+    expect(window.location.hash).toBe('#/shot');
+    expect(window.history.length).toBe(before);
   });
 });

@@ -17,8 +17,18 @@ export const TID = {
   navCoach: 'nav-coach',
   navHistory: 'nav-history',
   navSettings: 'nav-settings',
+  navShot: 'nav-shot',
   exitToSkins: 'exit-to-skins',
   decaidSettings: 'open-decaid-settings',
+  tabCoach: 'tab-coach',
+  tabMachine: 'tab-machine',
+  tabHistory: 'tab-history',
+  tabSettings: 'tab-settings',
+  liveStrip: 'live-strip',
+  shotView: 'shot-view',
+  coachNote: 'coach-note',
+  previewGraph: 'preview-graph',
+  tapGuard: 'tap-guard',
 
   // Machine panel (baseline skin)
   connectionStatus: 'connection-status',
@@ -58,6 +68,7 @@ export const TID = {
   /** The Why / Expect block under a change card's decision. */
   diffReason: 'diff-reason',
   shotCard: 'shot-card',
+  openShotGraph: 'open-shot-graph',
   errorBanner: 'error-banner',
   retryButton: 'retry-button',
 

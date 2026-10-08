@@ -8,7 +8,7 @@
  */
 import { useMemo, useSyncExternalStore } from 'react';
 
-export type Route = { name: 'coach' } | { name: 'history'; bagId?: string } | { name: 'settings' };
+export type Route = { name: 'coach' } | { name: 'history'; bagId?: string } | { name: 'settings' } | { name: 'shot' };
 
 export type RouteName = Route['name'];
 
@@ -29,6 +29,7 @@ export function parseRoute(hash: string): Route {
   if (segments.length === 1) {
     if (screen === 'history') return { name: 'history' };
     if (screen === 'settings') return { name: 'settings' };
+    if (screen === 'shot') return { name: 'shot' };
     return COACH;
   }
   if (screen === 'history' && segments.length === 2 && segments[1]) {
@@ -50,6 +51,8 @@ export function routeHref(route: Route): string {
       return route.bagId ? `#/history/${encodeURIComponent(route.bagId)}` : '#/history';
     case 'settings':
       return '#/settings';
+    case 'shot':
+      return '#/shot';
   }
 }
 
@@ -62,6 +65,17 @@ export function sameRoute(a: Route, b: Route): boolean {
 export function navigate(route: Route, win: Window = window): void {
   const href = routeHref(route);
   if (win.location.hash !== href) win.location.hash = href;
+}
+
+/**
+ * Go to a route without a new history entry: the app's own switches (a shot
+ * starting, its outcome arriving), so Back in a browser goes where the
+ * barista went, not where the app went.
+ */
+export function replaceRoute(route: Route, win: Window = window): void {
+  const href = routeHref(route);
+  if (win.location.hash === href) return;
+  win.location.replace(`${win.location.pathname}${win.location.search}${href}`);
 }
 
 function subscribe(onChange: () => void): () => void {

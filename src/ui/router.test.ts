@@ -27,6 +27,13 @@ describe('parseRoute', () => {
     expect(parseRoute('#/settings/')).toEqual({ name: 'settings' });
   });
 
+  it('reads the shot route', () => {
+    expect(parseRoute('#/shot')).toEqual({ name: 'shot' });
+    expect(parseRoute('#/SHOT/')).toEqual({ name: 'shot' });
+    expect(routeHref({ name: 'shot' })).toBe('#/shot');
+    expect(sameRoute({ name: 'shot' }, { name: 'shot' })).toBe(true);
+  });
+
   it("tolerates Decaid's ?_=<ms> cache buster", () => {
     expect(parseRoute('#/?_=1759480000000')).toEqual({ name: 'coach' });
     expect(parseRoute('#/settings?_=1759480000000')).toEqual({ name: 'settings' });
