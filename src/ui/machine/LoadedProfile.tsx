@@ -8,6 +8,9 @@
  * title is in its `title` attribute) and the mark beside it keeps its place:
  * "This bag" once the machine holds the version, "loading…" while it takes
  * it, "not confirmed" (in the warning colour) after a load that failed.
+ *
+ * Inside the shell the line shows the app's shared reading
+ * (LoadedProfileContext.tsx); on its own it reads Decaid's workflow itself.
  */
 import { useEffect, useId } from 'react';
 import Box from '@mui/material/Box';
@@ -15,8 +18,9 @@ import Typography from '@mui/material/Typography';
 import CheckCircleRounded from '@mui/icons-material/CheckCircleRounded';
 import ErrorOutlineRounded from '@mui/icons-material/ErrorOutlineRounded';
 import { useTelemetry } from '../../app/services.tsx';
+import { useSharedLoadedProfile } from './LoadedProfileContext.tsx';
 import type { ProfileMark } from './loadedProfileModel.ts';
-import { useLoadedProfile } from './useLoadedProfile.ts';
+import { useLoadedProfile, type LoadedProfileState } from './useLoadedProfile.ts';
 
 const DASH = '—';
 
@@ -58,8 +62,18 @@ export interface LoadedProfileProps {
   onStepNames?: (names: readonly string[] | null) => void;
 }
 
-export function LoadedProfile({ onStepNames }: LoadedProfileProps) {
-  const { title, mark, stepNames } = useLoadedProfile();
+export function LoadedProfile(props: LoadedProfileProps) {
+  const shared = useSharedLoadedProfile();
+  return shared ? <LoadedProfileView state={shared} {...props} /> : <OwnLoadedProfile {...props} />;
+}
+
+// Its own component, so the hook is never called conditionally.
+function OwnLoadedProfile(props: LoadedProfileProps) {
+  return <LoadedProfileView state={useLoadedProfile()} {...props} />;
+}
+
+function LoadedProfileView({ state, onStepNames }: LoadedProfileProps & { state: LoadedProfileState }) {
+  const { title, mark, stepNames } = state;
   const connected = useTelemetry((s) => s.machineConnected);
   const labelId = useId();
   const shown = title === null ? DASH : title.trim() || 'Untitled profile';

@@ -8,7 +8,8 @@ import { createFakeServices, SAMPLE_WORKFLOW, type FakeServices } from '../testi
 import { renderWithServices } from '../testing/renderWithServices.tsx';
 import { theme } from '../theme.ts';
 import { LoadedProfile } from './LoadedProfile.tsx';
-import { LOADED_PROFILE_POLL_MS } from './useLoadedProfile.ts';
+import { LoadedProfileProvider, useSharedLoadedProfile } from './LoadedProfileContext.tsx';
+import { LOADED_PROFILE_POLL_MS, type LoadedProfileState } from './useLoadedProfile.ts';
 
 const BAG = makeBag({ id: 'bag_1', name: 'Kiambu AA', activeVersionId: 'ver_2' });
 const V2 = makeVersion({ id: 'ver_2', bagId: 'bag_1', version: 2, title: 'Kiambu AA v2' });
@@ -404,5 +405,69 @@ describe('LoadedProfile: when it reads again', () => {
     services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: null });
     await vi.advanceTimersByTimeAsync(LOADED_PROFILE_POLL_MS * 2);
     expect(reads(services)).toBe(2);
+  });
+});
+
+describe('LoadedProfile: the shared reading', () => {
+  it('inside a LoadedProfileProvider, shows the shared reading: one read of the workflow for every line', async () => {
+    const services = createFakeServices({ coach: ON_V2 });
+    const decaid = serveWorkflow(services, workflow('Kiambu AA v2', { versionId: 'ver_2', bagId: 'bag_1' }));
+    renderWithServices(
+      <LoadedProfileProvider>
+        <LoadedProfile />
+        <LoadedProfile />
+      </LoadedProfileProvider>,
+      services,
+    );
+    await act(async () => {});
+    const lines = screen.getAllByRole('group', { name: 'Profile' });
+    expect(lines).toHaveLength(2);
+    for (const each of lines) {
+      expect(each).toHaveTextContent('Kiambu AA v2');
+      expect(each).toHaveTextContent('This bag');
+    }
+    expect(reads(services)).toBe(1);
+
+    // The next read reaches both lines, still one request.
+    decaid.set(workflow('Londonium'));
+    await act(async () => services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' }));
+    expect(reads(services)).toBe(2);
+    for (const each of screen.getAllByRole('group', { name: 'Profile' })) {
+      expect(each).toHaveTextContent('Londonium');
+      expect(each).not.toHaveTextContent('This bag');
+    }
+  });
+
+  it('a read that changes nothing re-renders no reader', async () => {
+    const services = createFakeServices({ coach: ON_V2 });
+    const decaid = serveWorkflow(services, workflow('Kiambu AA v2', { versionId: 'ver_2', bagId: 'bag_1' }));
+    // A Profiler above the readers does not count renders the provider pushes
+    // down through the context, so the reader counts its own.
+    const seen: Array<LoadedProfileState | null> = [];
+    function Reader() {
+      seen.push(useSharedLoadedProfile());
+      return null;
+    }
+    renderWithServices(
+      <LoadedProfileProvider>
+        <LoadedProfile />
+        <Reader />
+      </LoadedProfileProvider>,
+      services,
+    );
+    await act(async () => {});
+    const settled = seen.length;
+    expect(seen.at(-1)).toMatchObject({ title: 'Kiambu AA v2', mark: 'thisBag', targetYieldG: 36 });
+
+    await act(async () => services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' }));
+    expect(reads(services)).toBe(2);
+    expect(seen).toHaveLength(settled);
+
+    // A read that changes something reaches the readers.
+    const tagged = workflow('Kiambu AA v2', { versionId: 'ver_2', bagId: 'bag_1' });
+    decaid.set({ ...tagged, context: { ...tagged.context, targetYield: 40 } });
+    await act(async () => services.telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: 'targetWeight' }));
+    expect(seen.length).toBeGreaterThan(settled);
+    expect(seen.at(-1)).toMatchObject({ title: 'Kiambu AA v2', targetYieldG: 40 });
   });
 });

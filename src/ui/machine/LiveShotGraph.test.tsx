@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { Profiler } from 'react';
+import { Profiler, type ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ThemeProvider } from '@mui/material/styles';
 import { formatLocalTimestamp } from '../../../mock/decaid/clock.ts';
 import { normalizeProfile } from '../../../mock/decaid/profiles.ts';
@@ -24,6 +25,8 @@ import { buildPalette, namedTint } from '../palette.ts';
 import { createCafaiTheme, theme } from '../theme.ts';
 import { formatSeconds } from './format.ts';
 import { LiveShotGraph } from './LiveShotGraph.tsx';
+import { LoadedProfileContextForTests, LoadedProfileProvider } from './LoadedProfileContext.tsx';
+import type { LoadedProfileState } from './useLoadedProfile.ts';
 
 vi.mock('uplot', () => import('../testing/uplotMock.ts'));
 
@@ -31,6 +34,25 @@ vi.mock('uplot', () => import('../testing/uplotMock.ts'));
 function legendReadout(label: string): string {
   const item = within(screen.getByRole('list', { name: /legend/i })).getByText(label).closest('li')!;
   return item.lastElementChild?.textContent ?? '';
+}
+
+/** One of the full graph's four readouts, by its label: label, value, and the target after the weight. */
+function fullReadoutItem(label: string): HTMLElement {
+  return within(screen.getByRole('list', { name: 'Shot readouts' })).getByText(label).closest('li')!;
+}
+
+/** The value paint() writes into a full readout, e.g. fullReadout('Weight') -> "36.4 g". */
+function fullReadout(label: string): string {
+  return fullReadoutItem(label).lastElementChild?.firstElementChild?.textContent ?? '';
+}
+
+/** The app's shared loaded-profile reading, as the shell's provider hands it out. */
+function reading(patch: Partial<LoadedProfileState> = {}): LoadedProfileState {
+  return { title: 'Kiambu AA v2', mark: 'thisBag', stepNames: null, targetYieldG: null, ...patch };
+}
+
+function withReading(value: LoadedProfileState, node: ReactElement): ReactElement {
+  return <LoadedProfileContextForTests.Provider value={value}>{node}</LoadedProfileContextForTests.Provider>;
 }
 
 /** The chat's shot card for a shot, as the coach engine posts it. */
@@ -591,5 +613,188 @@ describe('LiveShotGraph', () => {
     expect(opts.series.slice(1).map((s) => s.stroke)).toEqual([graph.pressure, graph.flow, graph.weight, graph.weightFlow, graph.flow, graph.pressure]);
     expect(opts.axes[0]!.stroke).toBe(graph.axis);
     expect(opts.axes[0]!.font).toBe(`12px ${theme.typography.fontFamily}`);
+  });
+});
+
+describe('LiveShotGraph: the full graph (the Shot view)', () => {
+  it('has four labelled readouts in place of the legend, and writes the latest values into them', () => {
+    const { services } = renderWithServices(<LiveShotGraph variant="full" />);
+    const list = screen.getByRole('list', { name: 'Shot readouts' });
+    expect(within(list).getAllByRole('listitem').map((item) => item.firstElementChild?.textContent)).toEqual([
+      'Pressure',
+      'Flow',
+      'Weight',
+      'Weight flow',
+    ]);
+    expect(screen.queryByRole('list', { name: /legend/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/pull a shot/i)).toBeInTheDocument();
+    expect(screen.getByTestId(TID.shotTimer)).toHaveTextContent('0.0 s');
+    expect(screen.getByTestId(TID.shotTimer)).toHaveAttribute('aria-label', 'Shot time');
+
+    act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+    act(() => {
+      for (const t of [0, 1, 2]) services.telemetry.emitSample(sample(t));
+    });
+    runFrames();
+    expect(fakePlots).toHaveLength(1);
+    expect(fakePlots[0]!.setDataCalls.at(-1)).toEqual([0, 1, 2]);
+    expect(screen.getByText('Live shot')).toBeInTheDocument();
+    expect(screen.queryByText(/pull a shot/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId(TID.shotTimer)).toHaveTextContent('2.0 s');
+    expect(fullReadout('Pressure')).toBe('9.0 bar');
+    expect(fullReadout('Flow')).toBe('2.0 ml/s');
+    expect(fullReadout('Weight')).toBe('3.0 g');
+    expect(fullReadout('Weight flow')).toBe('1.5 g/s');
+  });
+
+  it('names the running step from the shared reading, only while the shot runs', () => {
+    const services = createFakeServices({ telemetry: { machine: { ...IDLE_TELEMETRY.machine!, profileFrame: 2 } } });
+    const at = (profileFrame: number) =>
+      act(() => services.telemetry.setState({ machine: { ...IDLE_TELEMETRY.machine!, profileFrame } }));
+    const { rerenderWith } = renderWithServices(
+      withReading(reading({ stepNames: ['Fill', 'Bloom', 'Pour'] }), <LiveShotGraph variant="full" />),
+      services,
+    );
+    // Between shots the frame is still the last shot's.
+    expect(screen.queryByText(/step/)).not.toBeInTheDocument();
+
+    act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+    expect(screen.getByText('Pour · step 3 of 3')).toBeInTheDocument();
+    at(0);
+    expect(screen.getByText('Fill · step 1 of 3')).toBeInTheDocument();
+    // A step the profile does not have: no name and no count.
+    at(7);
+    expect(screen.queryByText(/step/)).not.toBeInTheDocument();
+    at(1);
+    expect(screen.getByText('Bloom · step 2 of 3')).toBeInTheDocument();
+
+    // A one-step profile is named by its step alone; an unnamed step is not named.
+    rerenderWith(withReading(reading({ stepNames: ['Flat 9 bar'] }), <LiveShotGraph variant="full" />));
+    at(0);
+    expect(screen.getByText('Flat 9 bar')).toBeInTheDocument();
+    rerenderWith(withReading(reading({ stepNames: ['Fill', ''] }), <LiveShotGraph variant="full" />));
+    at(1);
+    expect(screen.queryByText(/step/)).not.toBeInTheDocument();
+
+    rerenderWith(withReading(reading({ stepNames: ['Fill', 'Bloom', 'Pour'] }), <LiveShotGraph variant="full" />));
+    expect(screen.getByText('Bloom · step 2 of 3')).toBeInTheDocument();
+    act(() => {
+      services.telemetry.emitSample(sample(0));
+      services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' });
+    });
+    expect(screen.getByText('Last shot')).toBeInTheDocument();
+    expect(screen.queryByText(/step/)).not.toBeInTheDocument();
+  });
+
+  it("takes the step names and the target from the shell's one workflow read", async () => {
+    const services = createFakeServices({ telemetry: { machine: { ...IDLE_TELEMETRY.machine!, profileFrame: 1 } } });
+    const profile = normalizeProfile(blooming);
+    services.decaid.getWorkflow = async () => {
+      services.decaid.calls.push({ method: 'getWorkflow', args: [] });
+      return { ...SAMPLE_WORKFLOW, profile: { ...profile, steps: profile.steps.slice(0, 3) }, context: { ...SAMPLE_WORKFLOW.context, targetYield: 40 } };
+    };
+    renderWithServices(
+      <LoadedProfileProvider>
+        <LiveShotGraph variant="full" />
+      </LoadedProfileProvider>,
+      services,
+    );
+    await act(async () => {});
+    act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+    expect(screen.getByText('preinfusion · step 2 of 3')).toBeInTheDocument();
+    expect(fullReadoutItem('Weight')).toHaveTextContent('of 40');
+    expect(services.decaid.calls.filter((call) => call.method === 'getWorkflow')).toHaveLength(1);
+  });
+
+  it('names no step outside the shell (no shared reading), and none in the panel', () => {
+    const services = createFakeServices({ telemetry: { machine: { ...IDLE_TELEMETRY.machine!, profileFrame: 2 } } });
+    const { rerenderWith } = renderWithServices(<LiveShotGraph variant="full" />, services);
+    act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+    expect(screen.getByText('Live shot')).toBeInTheDocument();
+    expect(screen.queryByText(/step/)).not.toBeInTheDocument();
+    rerenderWith(withReading(reading({ stepNames: ['Fill', 'Bloom', 'Pour'] }), <LiveShotGraph />));
+    expect(screen.queryByText(/step/)).not.toBeInTheDocument();
+  });
+
+  it('says what the weight stops at, beside the value paint() writes and never overwritten by it', () => {
+    const services = createFakeServices();
+    const { rerenderWith } = renderWithServices(withReading(reading({ targetYieldG: 50 }), <LiveShotGraph variant="full" />), services);
+    expect(fullReadoutItem('Weight')).toHaveTextContent('of 50');
+
+    act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+    act(() => {
+      for (const t of [0, 1, 2]) services.telemetry.emitSample(sample(t));
+    });
+    runFrames();
+    expect(fullReadout('Weight')).toBe('3.0 g');
+    expect(fullReadoutItem('Weight')).toHaveTextContent('3.0 g of 50');
+    // Only the weight has a target.
+    expect(fullReadoutItem('Weight flow')).not.toHaveTextContent('of');
+
+    // The card's yield replaces the weight read live; the target stays beside it.
+    act(() => services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' }));
+    act(() => services.coach.setState({ messages: [shotCard('shot-1', summaryWith('shot-1', 27.8, 49.6))] }));
+    runFrames();
+    expect(fullReadoutItem('Weight')).toHaveTextContent('49.6 g of 50');
+
+    // Whole grams; nothing once the stop is off.
+    rerenderWith(withReading(reading({ targetYieldG: 36.4 }), <LiveShotGraph variant="full" />));
+    expect(fullReadoutItem('Weight')).toHaveTextContent('49.6 g of 36');
+    expect(fullReadoutItem('Weight')).not.toHaveTextContent('36.4');
+    rerenderWith(withReading(reading({ targetYieldG: null }), <LiveShotGraph variant="full" />));
+    expect(fullReadoutItem('Weight')).not.toHaveTextContent('of');
+    expect(fakePlots).toHaveLength(1);
+  });
+});
+
+describe('LiveShotGraph: the preview card (onOpen)', () => {
+  it('makes the whole panel a button named "Open the shot graph" that calls onOpen', async () => {
+    const onOpen = vi.fn();
+    renderWithServices(<LiveShotGraph onOpen={onOpen} />);
+    const button = screen.getByRole('button', { name: 'Open the shot graph' });
+    expect(button).toBe(screen.getByTestId(TID.previewGraph));
+    // The panel inside it, legend and all, with the plot drawn there.
+    expect(within(button).getByTestId(TID.liveGraph)).toBeInTheDocument();
+    expect(within(button).getByTestId(TID.shotTimer)).toHaveTextContent('0.0 s');
+    expect(within(button).getByRole('list', { name: /legend/i })).toBeInTheDocument();
+    expect(button.contains(fakePlots[0]!.target!)).toBe(true);
+
+    const user = userEvent.setup();
+    await user.click(button);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    // A keyboard opens it too.
+    await user.keyboard('{Enter}');
+    expect(button).toHaveFocus();
+    expect(onOpen).toHaveBeenCalledTimes(2);
+  });
+
+  it('is no button without onOpen, nor in the full graph', () => {
+    const { rerenderWith } = renderWithServices(<LiveShotGraph />);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.queryByTestId(TID.previewGraph)).not.toBeInTheDocument();
+    rerenderWith(<LiveShotGraph variant="full" onOpen={() => {}} />);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.queryByTestId(TID.previewGraph)).not.toBeInTheDocument();
+  });
+
+  it('keeps the shot when the panel moves into the card: a new plot there, painted at once', () => {
+    const { services, rerenderWith } = renderWithServices(<LiveShotGraph />);
+    act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+    act(() => {
+      for (const t of [0, 1, 2]) services.telemetry.emitSample(sample(t));
+    });
+    runFrames();
+
+    rerenderWith(<LiveShotGraph onOpen={() => {}} />);
+    expect(fakePlots).toHaveLength(2);
+    expect(fakePlots[0]!.destroyed).toBe(true);
+    expect(screen.getByTestId(TID.previewGraph).contains(fakePlots[1]!.target!)).toBe(true);
+    expect(fakePlots[1]!.setDataCalls.at(-1)).toEqual([0, 1, 2]);
+    expect(screen.getByTestId(TID.shotTimer)).toHaveTextContent('2.0 s');
+    expect(legendReadout('Weight')).toBe('3.0 g');
+
+    // A new function each render is the same card: no new plot.
+    rerenderWith(<LiveShotGraph onOpen={() => {}} />);
+    expect(fakePlots).toHaveLength(2);
   });
 });

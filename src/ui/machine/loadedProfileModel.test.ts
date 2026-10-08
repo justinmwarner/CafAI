@@ -10,6 +10,9 @@ import {
   profileStepNames,
   readLoadedProfile,
   sameStepNames,
+  stepNameAt,
+  stepProgress,
+  workflowTargetYield,
   type LoadedProfileReading,
 } from './loadedProfileModel.ts';
 
@@ -75,6 +78,52 @@ describe('profileStepNames', () => {
     expect(sameStepNames(['Fill'], ['Soak'])).toBe(false);
     expect(sameStepNames(null, null)).toBe(true);
     expect(sameStepNames(null, ['Fill'])).toBe(false);
+  });
+});
+
+describe('the running step', () => {
+  const names = ['Fill', 'Bloom', 'Pour'];
+
+  it("names step profileFrame (0-based) of the workflow's profile", () => {
+    expect(stepNameAt(names, 0)).toBe('Fill');
+    expect(stepNameAt(names, 2)).toBe('Pour');
+    expect(stepNameAt(['Fill', ''], 1)).toBe('');
+    for (const frame of [3, -1, 1.5, Number.NaN, null, undefined, '1']) {
+      expect(stepNameAt(names, frame), String(frame)).toBeNull();
+    }
+    expect(stepNameAt(null, 0)).toBeNull();
+  });
+
+  it('counts the steps for the Shot view, and names a one-step profile by its step alone', () => {
+    expect(stepProgress(names, 2)).toBe('Pour · step 3 of 3');
+    expect(stepProgress(names, 0)).toBe('Fill · step 1 of 3');
+    expect(stepProgress(['Flat 9 bar'], 0)).toBe('Flat 9 bar');
+  });
+
+  it('says nothing when the step or its name is unknown', () => {
+    expect(stepProgress(null, 0)).toBeNull();
+    expect(stepProgress(names, 3)).toBeNull();
+    expect(stepProgress(names, undefined)).toBeNull();
+    expect(stepProgress(['Fill', '', 'Pour'], 1)).toBeNull();
+  });
+});
+
+describe('workflowTargetYield', () => {
+  const withTarget = (targetYield: unknown): Workflow =>
+    ({ ...SAMPLE_WORKFLOW, context: { ...SAMPLE_WORKFLOW.context, targetYield } }) as Workflow;
+
+  it("keeps the stop-at-weight target Decaid's workflow carries", () => {
+    expect(workflowTargetYield(withTarget(36))).toBe(36);
+    expect(workflowTargetYield(withTarget(40.5))).toBe(40.5);
+  });
+
+  it('has none when the stop is off, missing, or not a usable number', () => {
+    for (const target of [0, -5, Number.NaN, Number.POSITIVE_INFINITY, '36', null, undefined]) {
+      expect(workflowTargetYield(withTarget(target)), String(target)).toBeNull();
+    }
+    const noContext: Workflow = { ...SAMPLE_WORKFLOW };
+    delete noContext.context;
+    expect(workflowTargetYield(noContext)).toBeNull();
   });
 });
 

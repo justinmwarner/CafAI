@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCoach, useServices, useTelemetry } from '../../app/services.tsx';
 import {
   createRefresher,
@@ -7,6 +7,7 @@ import {
   profileStepNames,
   readLoadedProfile,
   sameStepNames,
+  workflowTargetYield,
   type LoadedProfileReading,
   type ProfileMark,
   type Refresher,
@@ -22,6 +23,8 @@ export interface LoadedProfileState {
   mark: ProfileMark;
   /** The same profile's step names, in order; null until a read finds steps. Kept while the content is the same. */
   stepNames: readonly string[] | null;
+  /** The workflow's stop-at-weight target in grams; null while the stop is off or nothing has been read. */
+  targetYieldG: number | null;
 }
 
 /**
@@ -36,7 +39,11 @@ export interface LoadedProfileState {
  * banner. A coach that keeps no beat gets a 30 s clock of the line's own. One
  * request at a time; a failed read keeps what was there and says nothing.
  * The same read gives the profile's step names, so the state line can name
- * the running step without a read of its own.
+ * the running step without a read of its own, and the stop-at-weight target
+ * the Shot view shows beside the weight.
+ *
+ * The state is the same object until one of its values changes, so a shared
+ * reading (LoadedProfileContext.tsx) re-renders its readers only then.
  */
 export function useLoadedProfile(): LoadedProfileState {
   const { decaid, telemetry } = useServices();
@@ -49,6 +56,8 @@ export function useLoadedProfile(): LoadedProfileState {
   const ownClock = beat === undefined;
   const [reading, setReading] = useState<LoadedProfileReading | null>(null);
   const [stepNames, setStepNames] = useState<readonly string[] | null>(null);
+  // A number, so a read that finds the same target re-renders nothing.
+  const [targetYieldG, setTargetYieldG] = useState<number | null>(null);
   const refresher = useRef<Refresher | null>(null);
   const isBagVersion = reading !== null && isActiveBagVersion(reading, { bagId, versionId, title: versionTitle });
 
@@ -61,6 +70,7 @@ export function useLoadedProfile(): LoadedProfileState {
           setReading(readLoadedProfile(workflow));
           const names = profileStepNames(workflow);
           setStepNames((current) => (sameStepNames(current, names) ? current : names));
+          setTargetYieldG(workflowTargetYield(workflow));
         }),
       // Every read here is wanted at once; nothing asks for a debounced one.
       0,
@@ -123,9 +133,7 @@ export function useLoadedProfile(): LoadedProfileState {
     wasConnected.current = connected;
   }, [connected]);
 
-  return {
-    title: reading?.title ?? null,
-    mark: profileMark(isBagVersion, load, connected),
-    stepNames,
-  };
+  const title = reading?.title ?? null;
+  const mark = profileMark(isBagVersion, load, connected);
+  return useMemo(() => ({ title, mark, stepNames, targetYieldG }), [title, mark, stepNames, targetYieldG]);
 }

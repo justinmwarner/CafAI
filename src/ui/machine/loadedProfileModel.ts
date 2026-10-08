@@ -63,6 +63,32 @@ export function sameStepNames(a: readonly string[] | null, b: readonly string[] 
   return a.length === b.length && a.every((name, index) => name === b[index]);
 }
 
+/** The name of step `frame` (the machine's 0-based profileFrame), when the profile has one; '' for a step without a usable name. */
+export function stepNameAt(stepNames: readonly string[] | null, frame: unknown): string | null {
+  return typeof frame === 'number' && Number.isInteger(frame) && frame >= 0 ? (stepNames?.[frame] ?? null) : null;
+}
+
+/**
+ * The running step as the Shot view names it: "Pour · step 3 of 3", or just
+ * "Pour" when the profile has one step. Null when the step, or its name, is
+ * not known: a wrong count is worse than none.
+ */
+export function stepProgress(stepNames: readonly string[] | null, frame: unknown): string | null {
+  const name = stepNameAt(stepNames, frame);
+  if (!name || stepNames === null) return null;
+  return stepNames.length === 1 ? name : `${name} · step ${(frame as number) + 1} of ${stepNames.length}`;
+}
+
+/**
+ * The workflow's stop-at-weight target in grams (context.targetYield), for
+ * the Shot view's "of 36". Null when the stop is off (Decaid's 0), missing,
+ * or not a usable number.
+ */
+export function workflowTargetYield(workflow: Workflow): number | null {
+  const target: unknown = workflow.context?.targetYield;
+  return typeof target === 'number' && Number.isFinite(target) && target > 0 ? target : null;
+}
+
 export function isActiveBagVersion(reading: LoadedProfileReading, active: ActiveBagVersion): boolean {
   if (reading.versionId === null || reading.versionId !== active.versionId || reading.title !== active.title) return false;
   return reading.bagId === null || reading.bagId === active.bagId;

@@ -21,6 +21,7 @@ import {
   splitUnit,
 } from './format.ts';
 import { LoadedProfile } from './LoadedProfile.tsx';
+import { stepNameAt } from './loadedProfileModel.ts';
 
 const DASH = '—';
 
@@ -89,11 +90,6 @@ function ConnectionRow() {
       )}
     </Box>
   );
-}
-
-/** The name of step `frame` (the machine's 0-based profileFrame), when the profile has one. */
-function stepNameAt(stepNames: readonly string[] | null, frame: unknown): string | null {
-  return typeof frame === 'number' && Number.isInteger(frame) && frame >= 0 ? (stepNames?.[frame] ?? null) : null;
 }
 
 /** "Pulling a shot: pause" during Blooming's bloom: the step says why the pump is off. */

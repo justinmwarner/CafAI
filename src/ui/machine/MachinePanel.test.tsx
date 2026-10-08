@@ -305,6 +305,58 @@ describe('MachinePanel controls', () => {
   });
 });
 
+describe('MachinePanel graph modes', () => {
+  it('shows the panel graph by default, and as the button to the Shot view when it can open it', async () => {
+    const onOpenGraph = vi.fn();
+    const { rerenderWith } = await renderPanel();
+    expect(screen.getByTestId(TID.liveGraph)).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: /legend/i })).toBeInTheDocument();
+    expect(screen.queryByTestId(TID.previewGraph)).not.toBeInTheDocument();
+
+    rerenderWith(<MachinePanel graph="preview" onOpenGraph={onOpenGraph} />);
+    const preview = screen.getByRole('button', { name: 'Open the shot graph' });
+    expect(preview).toBe(screen.getByTestId(TID.previewGraph));
+    await userEvent.click(preview);
+    expect(onOpenGraph).toHaveBeenCalledTimes(1);
+  });
+
+  it('graph="full" is the phone Machine tab: status, buttons, then the big graph and the coach note', async () => {
+    const services = createFakeServices();
+    renderWithServices(<MachinePanel graph="full" />, services);
+    await act(async () => {});
+    expect(screen.getByRole('list', { name: 'Shot readouts' })).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: /legend/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId(TID.previewGraph)).not.toBeInTheDocument();
+    expect(screen.queryByTestId(TID.coachNote)).not.toBeInTheDocument();
+
+    act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+    const graph = screen.getByTestId(TID.liveGraph);
+    const note = screen.getByTestId(TID.coachNote);
+    // Below the controls, the note last.
+    expect(screen.getByTestId(TID.espressoButton).compareDocumentPosition(graph) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(graph.nextElementSibling).toBe(note);
+    expect(note.nextElementSibling).toBeNull();
+  });
+
+  it('graph="full" passes the note its "Reading the shot" state', async () => {
+    renderWithServices(<MachinePanel graph="full" awaitingOutcome />);
+    await act(async () => {});
+    expect(screen.getByTestId(TID.coachNote)).toHaveTextContent('Done. Reading the shot');
+  });
+
+  it('graph="none", or the older showGraph={false}, leaves the graph out and keeps the rest', async () => {
+    const { rerenderWith } = renderWithServices(<MachinePanel graph="none" />);
+    await act(async () => {});
+    expect(screen.queryByTestId(TID.liveGraph)).not.toBeInTheDocument();
+    expect(screen.getByTestId(TID.machineState)).toBeInTheDocument();
+    expect(screen.getByTestId(TID.espressoButton)).toBeInTheDocument();
+
+    rerenderWith(<MachinePanel showGraph={false} onOpenGraph={() => {}} />);
+    expect(screen.queryByTestId(TID.liveGraph)).not.toBeInTheDocument();
+    expect(screen.queryByTestId(TID.previewGraph)).not.toBeInTheDocument();
+  });
+});
+
 describe('MachinePanel rendering cost', () => {
   it('does not re-render for graph samples or telemetry it does not show', async () => {
     const services = createFakeServices();

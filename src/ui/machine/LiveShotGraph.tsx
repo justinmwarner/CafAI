@@ -20,19 +20,29 @@
  * numbers: the pour time and Decaid's yield, the cup weight Decaid settles on
  * after the drips (`actualYield`). The weight read live can differ from it a
  * little, and the panel must not say one number while the card says another.
+ *
+ * Two looks around the same plot, refs and paint loop. 'panel' is the machine
+ * column's graph: caption, timer and a small legend; with `onOpen` the whole
+ * card is the tablet's button to the Shot view. 'full' is the Shot view (and
+ * the phone's Machine tab): the running step, the timer in display size and
+ * four big readouts in place of the legend.
  */
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import Typography from '@mui/material/Typography';
+import ChevronRightRounded from '@mui/icons-material/ChevronRightRounded';
 import { keyframes, useTheme } from '@mui/material/styles';
-import { useCoach, useServices } from '../../app/services.tsx';
+import { useCoach, useServices, useTelemetry } from '../../app/services.tsx';
 import type { CoachUiMessage } from '../../app/types.ts';
 import type { ShotSummary } from '../../coach/types.ts';
 import type { GraphPalette } from '../palette.ts';
 import { TID } from '../testIds.ts';
 import { formatSeconds } from './format.ts';
+import { useSharedLoadedProfile } from './LoadedProfileContext.tsx';
+import { stepProgress } from './loadedProfileModel.ts';
 import type { SeriesKey, ShotValues } from './shotBuffer.ts';
 import { shotTraceFor } from './shotTrace.ts';
 
@@ -51,12 +61,14 @@ interface LegendItem {
   unit: string;
 }
 
-const LEGEND: readonly LegendItem[] = [
-  { key: 'pressure', label: 'Pressure', unit: 'bar' },
-  { key: 'flow', label: 'Flow', unit: 'ml/s' },
-  { key: 'weightFlow', label: 'Weight flow', unit: 'g/s' },
-  { key: 'weight', label: 'Weight', unit: 'g' },
-];
+const PRESSURE: LegendItem = { key: 'pressure', label: 'Pressure', unit: 'bar' };
+const FLOW: LegendItem = { key: 'flow', label: 'Flow', unit: 'ml/s' };
+const WEIGHT_FLOW: LegendItem = { key: 'weightFlow', label: 'Weight flow', unit: 'g/s' };
+const WEIGHT: LegendItem = { key: 'weight', label: 'Weight', unit: 'g' };
+
+const LEGEND: readonly LegendItem[] = [PRESSURE, FLOW, WEIGHT_FLOW, WEIGHT];
+/** The Shot view's four readouts, in its own order; paint() fills them by key, as it does the legend. */
+const READOUTS: readonly LegendItem[] = [PRESSURE, FLOW, WEIGHT, WEIGHT_FLOW];
 
 // Blank until there is a shot; "— bar" beside every key reads as a fault.
 const reading = (value: number | null | undefined, unit: string) =>
@@ -174,12 +186,56 @@ const pulse = keyframes`
   50% { opacity: 0.35; }
 `;
 
-export interface LiveShotGraphProps {
-  /** Smallest height of the plot area itself, in px. */
-  minPlotHeight?: number;
+const REDUCED_MOTION = '@media (prefers-reduced-motion: reduce)';
+
+/** The live shot's dot: it pulses, and holds still under reduced motion. */
+function LiveDot({ size }: { size: number }) {
+  return (
+    <Box
+      component="span"
+      aria-hidden
+      sx={{
+        width: size,
+        height: size,
+        flex: 'none',
+        borderRadius: '50%',
+        bgcolor: 'cafai.live',
+        animation: `${pulse} 1.6s ease-in-out infinite`,
+        [REDUCED_MOTION]: { animation: 'none' },
+      }}
+    />
+  );
 }
 
-export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
+/**
+ * "Pour · step 3 of 3" beside the Shot view's caption. Its own component, so
+ * the machine frames it watches re-render this line alone, and only when the
+ * step changes.
+ */
+function StepProgress({ stepNames }: { stepNames: readonly string[] }) {
+  const text = useTelemetry((s) => stepProgress(stepNames, s.machine?.profileFrame));
+  if (text === null) return null;
+  return (
+    <Typography variant="body2" component="span" color="text.secondary" noWrap sx={{ minWidth: 0, fontWeight: 550 }}>
+      {text}
+    </Typography>
+  );
+}
+
+export interface LiveShotGraphProps {
+  /** Smallest height of the plot area itself, in px (90 in the panel, 160 in full). */
+  minPlotHeight?: number;
+  /** 'panel' (the machine column's graph, as today) or 'full' (the Shot view: big timer and readouts). */
+  variant?: 'panel' | 'full';
+  /** Makes the whole panel a button that opens the Shot view (the tablet's preview chart). Panel only. */
+  onOpen?: () => void;
+}
+
+export function LiveShotGraph({ minPlotHeight, variant = 'panel', onOpen }: LiveShotGraphProps) {
+  const full = variant === 'full';
+  // The full graph is the view the preview opens, never a button to itself.
+  const button = !full && onOpen !== undefined;
+  const plotMinHeight = minPlotHeight ?? (full ? 160 : 90);
   const { telemetry } = useServices();
   const trace = useMemo(() => shotTraceFor(telemetry), [telemetry]);
   const { phase, finishedShotId } = useSyncExternalStore(trace.subscribe, trace.getState);
@@ -189,6 +245,11 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
   const card = useCardNumbers(finishedShotId);
   const shownCard = useRef<CardNumbers | null>(null);
   const repaint = useRef<(() => void) | null>(null);
+  // The Shot view's step and target come from the app's one workflow read;
+  // outside the shell (a component test) there is none and they stay blank.
+  const shared = useSharedLoadedProfile();
+  const stepNames = full ? (shared?.stepNames ?? null) : null;
+  const targetYieldG = full ? (shared?.targetYieldG ?? null) : null;
   // uPlot paints a canvas, out of sx's reach, so it takes the theme's graph
   // colours and font as values. Both stay the same objects for as long as the
   // theme does, so on their own they never re-create the plot.
@@ -255,7 +316,9 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
       repaint.current = null;
       plot.destroy();
     };
-  }, [trace, colors, fontFamily]);
+    // Another look, or the preview card coming or going, puts the plot in
+    // another host node: a new plot there, painted from the trace at once.
+  }, [trace, colors, fontFamily, full, button]);
 
   // Once in, the card's numbers stay until the next shot starts, even when the
   // chat moves to another bag and the card leaves the messages.
@@ -266,7 +329,144 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
   }, [card]);
 
   const caption = phase === 'live' ? 'Live shot' : phase === 'done' ? 'Last shot' : 'Shot graph';
-  return (
+  const readoutRef = (key: SeriesKey) => (node: HTMLSpanElement | null) => {
+    readouts.current[key] = node;
+  };
+
+  const plot = (
+    <Box
+      ref={plotHost}
+      role="img"
+      aria-label="Pressure, flow and weight over the shot"
+      sx={{
+        position: 'relative',
+        flex: '1 1 auto',
+        minHeight: plotMinHeight,
+        overflow: 'hidden',
+        mt: full ? 0 : 0.5,
+        '& .uplot': { position: 'absolute', top: 0, left: 0, fontFamily },
+      }}
+    >
+      {phase === 'empty' && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: AXIS.top,
+            right: AXIS.right,
+            bottom: AXIS.bottom,
+            left: AXIS.left,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+            zIndex: 1,
+          }}
+        >
+          {/* Masks the grid lines behind it, so it takes the colour of what the plot sits on. */}
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ bgcolor: button ? 'background.paper' : 'background.default', px: 1, borderRadius: 1 }}
+          >
+            Pull a shot to see it here.
+          </Typography>
+        </Box>
+      )}
+    </Box>
+  );
+
+  if (full) {
+    // Viewport widths stand in for the container's (the Chromium 91 WebView
+    // has no container queries): the Shot view of a tablet held upright and
+    // a phone on its side get smaller readouts, an upright phone's Machine tab
+    // the phone sizes of the mockup, so four readouts with their units always
+    // fit side by side.
+    const narrow = muiTheme.breakpoints.down('md');
+    const phone = muiTheme.breakpoints.down('sm');
+    return (
+      <Box
+        component="section"
+        aria-label="Shot graph"
+        data-testid={TID.liveGraph}
+        sx={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', gap: 1.25 }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
+          {phase === 'live' && <LiveDot size={9} />}
+          <Typography variant="subtitle1" component="h2" noWrap sx={{ flex: 'none', fontWeight: 700 }}>
+            {caption}
+          </Typography>
+          {phase === 'live' && stepNames !== null && <StepProgress stepNames={stepNames} />}
+          <Typography
+            ref={timer}
+            data-testid={TID.shotTimer}
+            variant="display"
+            component="span"
+            aria-label="Shot time"
+            sx={{ flex: 'none', ml: 'auto', [phone]: { fontSize: '2.125rem' } }}
+          >
+            {formatSeconds(0)}
+          </Typography>
+        </Box>
+
+        <Box
+          component="ul"
+          aria-label="Shot readouts"
+          sx={{
+            listStyle: 'none',
+            m: 0,
+            p: 0,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+            gap: 1.25,
+            [phone]: { columnGap: 0.5 },
+          }}
+        >
+          {READOUTS.map((item) => (
+            <Box component="li" key={item.key} sx={{ minWidth: 0 }}>
+              <Typography variant="label" component="div" color="text.secondary" noWrap sx={{ [phone]: { fontSize: '0.71875rem' } }}>
+                <Box
+                  component="span"
+                  aria-hidden
+                  sx={{
+                    display: 'inline-block',
+                    width: 12,
+                    height: 3,
+                    borderRadius: 1,
+                    bgcolor: colors[item.key],
+                    verticalAlign: 'middle',
+                    mr: 0.75,
+                    [phone]: { width: 10, mr: 0.5 },
+                  }}
+                />
+                {item.label}
+              </Typography>
+              {/* No overflow clip: at this line height it would cut the descender of the g. */}
+              <Typography
+                variant="readoutLarge"
+                component="div"
+                sx={{ whiteSpace: 'nowrap', minHeight: '1.1em', [narrow]: { fontSize: '1.5rem' }, [phone]: { fontSize: '1.125rem' } }}
+              >
+                <span ref={readoutRef(item.key)}>{legendValue(item, null)}</span>
+                {/* Beside the node paint() writes, never in it, so the target survives every frame. */}
+                {item.key === 'weight' && targetYieldG !== null && (
+                  <Box
+                    component="span"
+                    sx={{ fontSize: '0.5em', fontWeight: 550, letterSpacing: 0, color: 'text.secondary', [phone]: { display: 'none' } }}
+                  >
+                    {` of ${Math.round(targetYieldG)}`}
+                  </Box>
+                )}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+
+        {plot}
+      </Box>
+    );
+  }
+
+  const panel = (
     <Box
       component="section"
       aria-label="Shot graph"
@@ -275,21 +475,14 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
         display: 'flex',
         flexDirection: 'column',
         flex: '1 1 auto',
-        minHeight: minPlotHeight + 64,
-        borderTop: 1,
-        borderColor: 'divider',
-        pt: 0.75,
+        minHeight: plotMinHeight + 64,
+        // The preview card draws its own edge.
+        ...(button ? null : { borderTop: 1, borderColor: 'divider', pt: 0.75 }),
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
-          {phase === 'live' && (
-            <Box
-              component="span"
-              aria-hidden
-              sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'error.main', animation: `${pulse} 1.6s ease-in-out infinite` }}
-            />
-          )}
+          {phase === 'live' && <LiveDot size={8} />}
           <Typography variant="subtitle1" component="h2" noWrap>
             {caption}
           </Typography>
@@ -300,46 +493,14 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
           variant="readout"
           component="span"
           aria-label="Shot time"
-          sx={{ fontSize: '1.25rem' }}
+          sx={{ fontSize: '1.25rem', ...(button ? { ml: 'auto' } : null) }}
         >
           {formatSeconds(0)}
         </Typography>
+        {button && <ChevronRightRounded aria-hidden sx={{ flex: 'none', color: 'primary.main', fontSize: '1.25rem' }} />}
       </Box>
 
-      <Box
-        ref={plotHost}
-        role="img"
-        aria-label="Pressure, flow and weight over the shot"
-        sx={{
-          position: 'relative',
-          flex: '1 1 auto',
-          minHeight: minPlotHeight,
-          overflow: 'hidden',
-          mt: 0.5,
-          '& .uplot': { position: 'absolute', top: 0, left: 0, fontFamily },
-        }}
-      >
-        {phase === 'empty' && (
-          <Box
-            sx={{
-              position: 'absolute',
-              top: AXIS.top,
-              right: AXIS.right,
-              bottom: AXIS.bottom,
-              left: AXIS.left,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              pointerEvents: 'none',
-              zIndex: 1,
-            }}
-          >
-            <Typography variant="body2" color="text.secondary" sx={{ bgcolor: 'background.default', px: 1, borderRadius: 1 }}>
-              Pull a shot to see it here.
-            </Typography>
-          </Box>
-        )}
-      </Box>
+      {plot}
 
       <Box
         component="ul"
@@ -354,9 +515,7 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
             </Typography>
             <Typography
               variant="caption"
-              ref={(node: HTMLSpanElement | null) => {
-                readouts.current[item.key] = node;
-              }}
+              ref={readoutRef(item.key)}
               sx={{ fontVariantNumeric: 'tabular-nums', color: 'text.primary' }}
             >
               {legendValue(item, null)}
@@ -371,5 +530,32 @@ export function LiveShotGraph({ minPlotHeight = 90 }: LiveShotGraphProps) {
         </Box>
       </Box>
     </Box>
+  );
+
+  if (!button) return panel;
+  return (
+    <ButtonBase
+      component="div"
+      onClick={onOpen}
+      aria-label="Open the shot graph"
+      data-testid={TID.previewGraph}
+      sx={{
+        flex: '1 1 auto',
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        justifyContent: 'flex-start',
+        textAlign: 'left',
+        // A string: a bare number here would be a multiple of the theme's radius.
+        borderRadius: '14px',
+        bgcolor: 'background.paper',
+        border: 1,
+        borderColor: 'divider',
+        p: '10px 12px 8px',
+      }}
+    >
+      {panel}
+    </ButtonBase>
   );
 }
