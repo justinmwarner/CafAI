@@ -61,6 +61,18 @@ describe('SecretStore', () => {
     await expect(failing.getApiKey()).rejects.toMatchObject({ name: 'StorageError' });
     await expect(failing.forgetApiKey()).rejects.toMatchObject({ name: 'StorageError' });
   });
+
+  it('says what failed on this device, a phone as much as a tablet', async () => {
+    const failing = createSecretStore(() => Promise.reject(new Error('blocked')));
+    await expect(failing.getApiKey()).rejects.toThrow('Could not read the saved API key on this device. Reload the page and try again.');
+    await expect(failing.setApiKey(API_KEY)).rejects.toThrow('Could not save the API key on this device. Try again.');
+    await expect(failing.forgetApiKey()).rejects.toThrow('Could not remove the API key from this device. Try again.');
+    const full = createSecretStore(() => Promise.reject(new DOMException('The quota has been exceeded.', 'QuotaExceededError')));
+    await expect(full.setApiKey(API_KEY)).rejects.toMatchObject({
+      kind: 'quota',
+      message: 'This device is out of storage space, so the API key was not saved.',
+    });
+  });
 });
 
 describe('isReady', () => {

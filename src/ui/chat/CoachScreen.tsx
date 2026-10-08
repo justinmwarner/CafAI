@@ -222,7 +222,7 @@ function ApiKeyCard({ settingsHref }: { settingsHref: string }) {
         Add your Anthropic API key to start coaching
       </Typography>
       <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
-        The key stays on this tablet. You pay Anthropic directly for what the coach uses.
+        The key stays on this device. You pay Anthropic directly for what the coach uses.
       </Typography>
       <Button variant="contained" href={settingsHref} sx={{ mt: 2.5, minHeight: 48, px: 3 }}>
         Open Settings
@@ -415,7 +415,8 @@ function VersionText({ version, bagName }: { version: ProfileVersion | null; bag
           <VersionLabel title={version.title} version={version.version} />
         )}
       </Box>
-      <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 1 }}>
+      {/* Kept white space: as a flex item the span would drop the space before the dot. */}
+      <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 1, whiteSpace: 'pre' }}>
         {' · '}
         {templateName(version.templateId)}
       </Box>

@@ -125,9 +125,15 @@ export function createCafaiTheme(palette: Palette = buildPalette('dark', namedTi
             '--safe-left': 'env(safe-area-inset-left, 0px)',
           },
           'html, body, #root': { height: '100%' },
-          html: { touchAction: 'manipulation' },
+          // The page itself in the look: index.html paints it in the boot
+          // colours until the app renders, and those must not outlive a
+          // change of look.
+          html: { touchAction: 'manipulation', backgroundColor: palette.background },
           // The shell owns scrolling; the page itself never scrolls or bounces.
           body: { overflow: 'hidden', overscrollBehavior: 'none' },
+          // Browsers give form controls a typeface of their own: text in a
+          // bare button (x-chat's scroll-to-newest count) came out in Arial.
+          'button, input, select, textarea': { fontFamily: 'inherit' },
           '*': { WebkitTapHighlightColor: 'transparent' },
           // A long press on a button must not select its label or open a callout.
           'button, a, [role="button"], .MuiButtonBase-root': {
@@ -194,6 +200,23 @@ export function createCafaiTheme(palette: Palette = buildPalette('dark', namedTi
           // Anything tappable is a full touch target; status chips stay compact.
           clickable: { minHeight: TOUCH_TARGET, height: 'auto', borderRadius: TOUCH_TARGET / 2 },
           deletable: { minHeight: TOUCH_TARGET, height: 'auto', borderRadius: TOUCH_TARGET / 2 },
+        },
+        // A chip outlined in a status colour or the accent draws the outline
+        // in that colour, opaque (MUI's is 70%), so the contrast sweep checks it.
+        variants: (
+          [
+            ['primary', palette.accent],
+            ['success', palette.success],
+            ['warning', palette.warning],
+            ['error', palette.error],
+            ['info', palette.info],
+          ] as const
+        ).map(([color, borderColor]) => ({ props: { variant: 'outlined' as const, color }, style: { borderColor } })),
+      },
+      MuiInputBase: {
+        styleOverrides: {
+          // MUI fades the text colour for a placeholder, a pair the sweep cannot check.
+          input: { '&::placeholder': { color: palette.inkMuted, opacity: 1 } },
         },
       },
       MuiTab: { styleOverrides: { root: { minHeight: TOUCH_TARGET, textTransform: 'none' } } },

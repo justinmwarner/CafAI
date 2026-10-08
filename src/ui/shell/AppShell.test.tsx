@@ -212,15 +212,63 @@ describe('AppShell on a tablet: the shot', () => {
     }
   });
 
-  it('keeps the tablet layout while a text field has focus (an on-screen keyboard shortens the window)', () => {
+  it('keeps the tablet layout while a text field has focus (an on-screen keyboard shortens the window), and while the keyboard closes', () => {
+    setViewport(962, 602);
     renderShell();
     act(() => screen.getByLabelText('Draft').focus());
-    act(() => setViewport(1024, 380));
+    act(() => setViewport(962, 300));
     expect(screen.getByTestId(TID.navCoach)).toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'Machine' })).toBeInTheDocument();
+
+    // Done typing: the keyboard is still closing, the window still short. No phone layout in between.
     act(() => screen.getByLabelText('Draft').blur());
-    // Done typing: the window really is that short now, so the layout follows it.
+    expect(screen.getByTestId(TID.navCoach)).toBeInTheDocument();
+    expect(screen.queryByTestId(TID.tabCoach)).not.toBeInTheDocument();
+    act(() => setViewport(962, 602));
+    expect(screen.getByTestId(TID.navCoach)).toBeInTheDocument();
+
+    // The keyboard has closed and nobody types: a short window now is a short window.
+    act(() => setViewport(962, 300));
     expect(screen.getByTestId(TID.tabCoach)).toBeInTheDocument();
+  });
+
+  it('after typing, a window that stays short gets its own layout once a keyboard would have closed', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+    try {
+      setViewport(962, 602);
+      renderShell();
+      act(() => screen.getByLabelText('Draft').focus());
+      act(() => setViewport(962, 300));
+      act(() => screen.getByLabelText('Draft').blur());
+      act(() => vi.advanceTimersByTime(499));
+      expect(screen.getByTestId(TID.navCoach)).toBeInTheDocument();
+      act(() => vi.advanceTimersByTime(1));
+      expect(screen.queryByTestId(TID.navCoach)).not.toBeInTheDocument();
+      expect(screen.getByTestId(TID.tabCoach)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('while a text field has focus a new width applies at once, and the draft keeps its text and its focus', () => {
+    renderShell();
+    const draft = screen.getByLabelText('Draft');
+    act(() => draft.focus());
+    fireEvent.change(draft, { target: { value: 'Still typing' } });
+
+    // A narrowed window: the phone layout, its tabs away while the barista types.
+    act(() => setViewport(390, 844));
+    expect(screen.queryByTestId(TID.navCoach)).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'Machine' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId(TID.tabCoach)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Draft')).toBe(draft);
+    expect(draft).toHaveFocus();
+    expect(draft).toHaveValue('Still typing');
+
+    act(() => setViewport(1024, 768));
+    expect(screen.getByTestId(TID.navCoach)).toBeInTheDocument();
+    expect(draft).toHaveFocus();
+    expect(draft).toHaveValue('Still typing');
   });
 });
 
@@ -337,6 +385,32 @@ describe('AppShell on a phone', () => {
     expect(await screen.findByTestId(TID.tabCoach)).toBeInTheDocument();
   });
 
+  it('the keyboard closing brings back the bar, never a rail for the moment the window is short', () => {
+    renderShell();
+    act(() => screen.getByLabelText('Draft').focus());
+    act(() => setViewport(390, 450));
+    act(() => screen.getByLabelText('Draft').blur());
+    // The bar, after the content: the window is short only until the keyboard is down.
+    const tabs = screen.getByRole('navigation', { name: 'Main' });
+    expect(screen.getByRole('main').compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(getComputedStyle(tabs).display).toBe('grid');
+    act(() => setViewport(390, 844));
+    expect(getComputedStyle(screen.getByRole('navigation', { name: 'Main' })).display).toBe('grid');
+  });
+
+  it('a rotation while typing turns the layout with the phone, never taking it for a tablet', () => {
+    renderShell();
+    act(() => screen.getByLabelText('Draft').focus());
+    act(() => setViewport(844, 390));
+    expect(screen.queryByTestId(TID.navCoach)).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'Machine' })).not.toBeInTheDocument();
+    act(() => screen.getByLabelText('Draft').blur());
+    // On its side: the rail, before the content, at once.
+    const rail = screen.getByRole('navigation', { name: 'Main' });
+    expect(rail.compareDocumentPosition(screen.getByRole('main')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(getComputedStyle(rail).flexDirection).toBe('column');
+  });
+
   it('a press from one field to another keeps the tabs away', async () => {
     renderShell();
     const user = userEvent.setup();
@@ -378,6 +452,18 @@ describe('AppShell on a phone', () => {
     expect(getComputedStyle(left.parentElement!).flexDirection).toBe('row');
   });
 
+  it("the tab bar's and the rail's dividers are the top bar's line, not the text colour", () => {
+    renderShell();
+    const line = getComputedStyle(screen.getByRole('banner')).borderBottomColor;
+    expect(line).not.toBe(getComputedStyle(screen.getByTestId(TID.appReady)).color);
+    expect(getComputedStyle(screen.getByRole('navigation', { name: 'Main' })).borderTopColor).toBe(line);
+    cleanup();
+
+    setViewport(844, 390);
+    renderShell();
+    expect(getComputedStyle(screen.getByRole('navigation', { name: 'Main' })).borderRightColor).toBe(line);
+  });
+
   it('a rotation keeps the routed screen mounted', () => {
     const { container } = renderShell();
     const routed = screen.getByText('routed screen');
@@ -396,8 +482,8 @@ describe('AppShell on a phone', () => {
     act(() => screen.getByLabelText('Draft').blur());
 
     const machineTab = screen.getByTestId(TID.tabMachine);
-    expect(machineTab).toHaveAccessibleName('Machine, shot running');
-    expect(machineTab).toHaveTextContent('4 s');
+    expect(machineTab).toHaveAccessibleName('Machine, shot running, 4 seconds');
+    expect(machineTab).toHaveTextContent(/^4\.2 s$/);
 
     const strip = screen.getByTestId(TID.liveStrip);
     expect(strip).toHaveAccessibleName('Open the live shot');
@@ -406,6 +492,31 @@ describe('AppShell on a phone', () => {
     expect(screen.getByRole('main')).toContainElement(strip);
     await userEvent.click(strip);
     expect(onNavigate).toHaveBeenCalledWith({ name: 'shot' });
+  });
+
+  it('the Machine tab counts in tenths as the strip does, and names the whole seconds only as they pass', () => {
+    const { services } = renderShell({ name: 'history' });
+    pull(services);
+    const machineTab = screen.getByTestId(TID.tabMachine);
+    expect(machineTab).toHaveTextContent(/^4\.2 s$/);
+    expect(machineTab).toHaveAccessibleName('Machine, shot running, 4 seconds');
+
+    // A screen reader is not handed a new name every tenth of a second.
+    const renamed = new MutationObserver(() => {});
+    renamed.observe(machineTab, { attributes: true, attributeFilter: ['aria-label'] });
+    act(() => services.telemetry.emitSample(sample(4.5)));
+    act(() => services.telemetry.emitSample(sample(4.9)));
+    expect(machineTab).toHaveTextContent(/^4\.9 s$/);
+    expect(renamed.takeRecords()).toHaveLength(0);
+    act(() => services.telemetry.emitSample(sample(10.04)));
+    expect(machineTab).toHaveTextContent(/^10\.0 s$/);
+    expect(machineTab).toHaveAccessibleName('Machine, shot running, 10 seconds');
+    expect(renamed.takeRecords()).toHaveLength(1);
+    renamed.disconnect();
+
+    act(() => services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: null }));
+    expect(machineTab).toHaveTextContent(/^Machine$/);
+    expect(machineTab).toHaveAccessibleName('Machine');
   });
 
   it('the live strip is only on the Coach tab', () => {
@@ -445,7 +556,7 @@ describe('AppShell browser engine warning (D58)', () => {
     renderShell();
     const warning = screen.getByRole('alert');
     expect(warning).toHaveTextContent(
-      "This tablet's browser engine (Chromium 85) is older than CafAI is built for (Chromium 91 or newer), so some parts may not work.",
+      "This device's browser engine (Chromium 85) is older than CafAI is built for (Chromium 91 or newer), so some parts may not work.",
     );
     // In the flow, not over anything: after the top bar, before the machine
     // column and the routed screen, and inside neither.
@@ -464,7 +575,7 @@ describe('AppShell browser engine warning (D58)', () => {
     window.__CAFAI_ENGINE__ = { chromium: null, supported: false, reason: 'probe' };
     renderShell();
     expect(screen.getByRole('alert')).toHaveTextContent(
-      "This tablet's browser engine is older than CafAI is built for (Chromium 91 or newer), so some parts may not work.",
+      "This device's browser engine is older than CafAI is built for (Chromium 91 or newer), so some parts may not work.",
     );
   });
 

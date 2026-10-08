@@ -168,7 +168,7 @@ async function exchange(
     throw new GatewayError(
       0,
       path,
-      'Could not reach Decaid. Check that it is running and that this tablet is on the same network.',
+      'Could not reach Decaid. Check that it is running and that this device is on the same network.',
       'network',
     );
   } finally {

@@ -11,10 +11,10 @@ export type StorageErrorKind = 'unavailable' | 'quota' | 'superseded' | 'read' |
 
 export const STORAGE_MESSAGES: Readonly<Record<StorageErrorKind, string>> = {
   unavailable: 'This browser blocked storage, so CafAI cannot save anything. Allow site data for this page, then reload.',
-  quota: 'This tablet is out of storage space, so the change was not saved. Free up some space and try again.',
+  quota: 'This device is out of storage space, so the change was not saved. Free up some space and try again.',
   superseded: 'A newer version of CafAI is open in another window. Reload this page to keep working.',
-  read: 'Could not read the saved data on this tablet. Reload the page and try again.',
-  write: 'Could not save to this tablet. Try again.',
+  read: 'Could not read the saved data on this device. Reload the page and try again.',
+  write: 'Could not save to this device. Try again.',
 };
 
 export class StorageError extends Error {

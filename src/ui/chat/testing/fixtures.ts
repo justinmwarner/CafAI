@@ -358,7 +358,7 @@ export function conversation(stage: ConversationStage): CoachUiMessage[] {
         expectedEffect: 'Less sharp, rounder acidity, a touch more sweetness.',
         versionLabel: 'Kiambu AA v2',
         status,
-        error: stage === 'failed' ? 'Decaid did not answer. Check that the tablet is on the same network.' : null,
+        error: stage === 'failed' ? 'Decaid did not answer. Check that this device is on the same network.' : null,
       },
     ]),
   );

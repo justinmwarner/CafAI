@@ -27,6 +27,8 @@ export interface OptionChipsProps {
 }
 
 const chipSx = { height: 48, minHeight: 48, borderRadius: 24, px: 0.75, fontSize: '1rem' } as const;
+/** An answer not given once the question is closed: the muted ink, never MUI's faded disabled chip, so it still reads at AA. */
+const setAsideSx = { ...chipSx, color: 'text.secondary', borderColor: 'divider', '& .MuiChip-icon': { color: 'inherit' } } as const;
 
 /**
  * A question with tappable answers. Single-select answers on tap;
@@ -110,6 +112,7 @@ export function OptionChips({
         {ordered.map((option) => {
           const chosen = isChosen(option);
           const isOther = option === OTHER_OPTION;
+          const setAside = closed && !chosen;
           return (
             <Chip
               key={option}
@@ -119,12 +122,13 @@ export function OptionChips({
               aria-checked={chosen}
               aria-disabled={locked || undefined}
               clickable={!locked}
-              disabled={locked && !chosen}
+              // Only while the coach works on an open question: it comes back.
+              disabled={locked && !closed && !chosen}
               onClick={locked ? undefined : () => tap(option)}
               color={chosen ? 'primary' : 'default'}
               variant={chosen ? 'filled' : 'outlined'}
               icon={chosen ? <CheckIcon /> : isOther ? <EditIcon /> : undefined}
-              sx={chipSx}
+              sx={setAside ? setAsideSx : chipSx}
             />
           );
         })}

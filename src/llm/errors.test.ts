@@ -110,7 +110,8 @@ describe('fixed sentences', () => {
   it('points at the internet connection when Anthropic cannot be reached', () => {
     const error = networkError();
     expect(error.kind).toBe('network');
-    expect(error.message).toBe("Could not reach Anthropic. Check the tablet's internet connection.");
+    // A phone calls Anthropic itself too: "this device", not the tablet.
+    expect(error.message).toBe("Could not reach Anthropic. Check this device's internet connection.");
     expect(error.retryable).toBe(true);
   });
 });

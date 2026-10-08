@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { layoutMode, machineColumnWidth, phoneNav } from './layout.ts';
+import { layoutFor, layoutMode, machineColumnWidth, phoneNav } from './layout.ts';
 
 describe('layoutMode', () => {
   it('is a tablet at 800 x 500 and up, a phone below', () => {
@@ -18,6 +18,14 @@ describe('phoneNav', () => {
     expect(phoneNav(844, 390)).toBe('rail');
     expect(phoneNav(700, 499)).toBe('rail');
     expect(phoneNav(700, 500)).toBe('bar');
+  });
+});
+
+describe('layoutFor', () => {
+  it('is the mode and the phone navigation for a window of that size', () => {
+    expect(layoutFor(962, 602)).toEqual({ mode: 'tablet', nav: 'bar', width: 962, height: 602 });
+    expect(layoutFor(390, 844)).toEqual({ mode: 'phone', nav: 'bar', width: 390, height: 844 });
+    expect(layoutFor(844, 390)).toEqual({ mode: 'phone', nav: 'rail', width: 844, height: 390 });
   });
 });
 

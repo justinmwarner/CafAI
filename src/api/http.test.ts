@@ -204,7 +204,8 @@ describe('requestJson', () => {
     const error = await requestJson(transport, '/api/v1/workflow').catch((e: unknown) => e);
     expect(error).toBeInstanceOf(GatewayError);
     expect(error).toMatchObject({ status: 0, code: 'network' });
-    expect((error as Error).message).toMatch(/Could not reach Decaid/);
+    // "This device": a phone on the network reaches Decaid the same way.
+    expect((error as Error).message).toBe('Could not reach Decaid. Check that it is running and that this device is on the same network.');
   });
 
   it('retries a GET once on 503 after Retry-After', async () => {

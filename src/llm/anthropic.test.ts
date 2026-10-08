@@ -326,7 +326,7 @@ describe('createAnthropicProvider: errors', () => {
     const counter = countRequests(() => HttpResponse.error());
     const error = await failure(collect(provider().stream(request())));
     expect(error).toMatchObject({ kind: 'network', retryable: true });
-    expect(error.message).toBe("Could not reach Anthropic. Check the tablet's internet connection.");
+    expect(error.message).toBe("Could not reach Anthropic. Check this device's internet connection.");
     expect(counter.calls).toBe(3);
   });
 

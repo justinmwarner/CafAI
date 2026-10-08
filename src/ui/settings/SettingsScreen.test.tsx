@@ -100,7 +100,8 @@ describe('SettingsScreen API key', () => {
     const error = vi.spyOn(console, 'error');
     const services = renderSettings({ coach: { hasApiKey: false } });
     expect(screen.getByText('No key saved yet. The coach needs one to work.')).toBeInTheDocument();
-    expect(screen.getByText('The key stays on this tablet. It is never sent to Decaid or included in exports.')).toBeInTheDocument();
+    // A phone keeps its own key too: the copy says "this device", never "this tablet".
+    expect(screen.getByText('The key stays on this device. It is never sent to Decaid or included in exports.')).toBeInTheDocument();
     const input = screen.getByTestId(TID.apiKeyInput);
     expect(input).toHaveAttribute('type', 'password');
     expect(screen.getByTestId(TID.apiKeySave)).toBeDisabled();
@@ -109,7 +110,8 @@ describe('SettingsScreen API key', () => {
     await userEvent.click(screen.getByTestId(TID.apiKeySave));
 
     await waitFor(() => expect(services.storage.apiKey).toBe(SECRET));
-    expect(await screen.findByText('A key is saved on this tablet.')).toBeInTheDocument();
+    expect(await screen.findByText('A key is saved on this device.')).toBeInTheDocument();
+    expect(screen.getByText('Key saved on this device.')).toBeInTheDocument();
     expect(methods(services)).toContain('refresh');
     expect(screen.getByTestId(TID.apiKeyInput)).toHaveValue('');
     expect(document.body.innerHTML).not.toContain(SECRET);
@@ -129,16 +131,19 @@ describe('SettingsScreen API key', () => {
 
   it('forgets the key only after a confirmation', async () => {
     const services = renderSettings({ coach: { hasApiKey: true }, key: SECRET });
-    expect(screen.getByText('A key is saved on this tablet.')).toBeInTheDocument();
+    expect(screen.getByText('A key is saved on this device.')).toBeInTheDocument();
 
     await userEvent.click(screen.getByTestId(TID.forgetKey));
-    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Keep it' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('The coach stops working on this device until you add a key again.')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Keep it' }));
     expect(services.storage.apiKey).toBe(SECRET);
 
     await userEvent.click(screen.getByTestId(TID.forgetKey));
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Forget key' }));
     await waitFor(() => expect(services.storage.apiKey).toBeNull());
     expect(await screen.findByText('No key saved yet. The coach needs one to work.')).toBeInTheDocument();
+    expect(screen.getByText('The key is gone from this device.')).toBeInTheDocument();
     expect(methods(services)).toEqual(['refresh']);
     expect(screen.queryByTestId(TID.forgetKey)).toBeNull();
   });

@@ -45,7 +45,7 @@ test.describe('on an engine older than Chromium 91', () => {
     const warning = page.getByRole('alert').filter({ hasText: WARNING });
     await expect(warning).toBeVisible();
     await expect(warning).toContainText(
-      "This tablet's browser engine (Chromium 85) is older than CafAI is built for (Chromium 91 or newer), so some parts may not work.",
+      "This device's browser engine (Chromium 85) is older than CafAI is built for (Chromium 91 or newer), so some parts may not work.",
     );
 
     // In the flow between the top bar and the columns: it pushes them down
@@ -84,7 +84,7 @@ test.describe('on an engine older than Chromium 91', () => {
     await blockTheBundle(page);
     await page.goto('./?mockSpeed=25#/');
     await expect(failedLoad(page)).toBeVisible({ timeout: GENEROUS_MS });
-    await expect(page.getByText("CafAI could not start on this tablet's browser engine (Chromium 85).")).toBeVisible();
+    await expect(page.getByText("CafAI could not start on this device's browser engine (Chromium 85).")).toBeVisible();
     await expect(page.getByText('It needs Chromium 91 or newer.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Exit to Decaid' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Decaid settings' })).toHaveAttribute('href', SETTINGS_URL);

@@ -24,3 +24,15 @@ export function renderThemed(ui: ReactElement) {
   const wrapper = ({ children }: { children: ReactNode }) => <ThemeProvider theme={previewTheme}>{children}</ThemeProvider>;
   return render(ui, { wrapper });
 }
+
+/**
+ * The elements in `root` (itself included) faded with opacity. What is set
+ * aside is drawn in the muted ink instead, a colour the contrast sweep
+ * (palette.test.ts) checks; a faded colour it cannot.
+ */
+export function fadedElements(root: HTMLElement): HTMLElement[] {
+  return [root, ...root.querySelectorAll<HTMLElement>('*')].filter((element) => {
+    const opacity = getComputedStyle(element).opacity;
+    return opacity !== '' && Number(opacity) < 1;
+  });
+}

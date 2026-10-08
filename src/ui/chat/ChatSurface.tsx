@@ -532,7 +532,9 @@ const chatSx = {
   },
   // The barista's own words sit on a quiet tonal bubble; the accent is kept for actions.
   '& .MuiChatMessage-roleUser .MuiChatMessage-bubble': { bgcolor: 'cafai.raised', color: 'text.primary' },
-  '& .MuiChatComposer-textArea': { fontSize: '1rem' },
+  // The placeholder in the muted ink at full strength: x-chat draws MUI's
+  // faded text.disabled, a colour the contrast sweep cannot check.
+  '& .MuiChatComposer-textArea': { fontSize: '1rem', '&::placeholder': { color: 'text.secondary', opacity: 1 } },
   // followNewest.ts owns the scroll position; the browser's scroll anchoring
   // would move it on its own when content above the view changes size.
   '& .MuiChatMessageList-scroller': { overflowAnchor: 'none' },

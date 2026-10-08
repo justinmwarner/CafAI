@@ -19,7 +19,7 @@
  * layout puts the routed screen at the same place in the tree, so a rotation
  * keeps it mounted too.
  */
-import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -46,9 +46,9 @@ import { watchSafeArea } from '../platform/safeArea.ts';
 import { useHeartbeatOnInteraction } from '../platform/useHeartbeatOnInteraction.ts';
 import type { Route, RouteName } from '../router.ts';
 import { TID } from '../testIds.ts';
-import { machineColumnWidth, useLayout, type Layout } from './layout.ts';
+import { layoutFor, machineColumnWidth, useLayout, type Layout } from './layout.ts';
 import { LiveStrip } from './LiveStrip.tsx';
-import { LiveDot, ShotTime, useShotLive } from './ShotTime.tsx';
+import { LiveDot, ShotTime, useShotLive, useShotTimeName } from './ShotTime.tsx';
 import { TapGuard } from './TapGuard.tsx';
 import { isTextEntry, useShotFocus } from './useShotFocus.ts';
 
@@ -152,16 +152,46 @@ function useTextEntryFocus(): boolean {
   return typing;
 }
 
+/** How long the held height outlasts the typing: about as long as a keyboard takes to close. */
+const KEYBOARD_CLOSE_MS = 500;
+
+/** The window whose height the layout keeps while the barista types. */
+interface Hold {
+  width: number;
+  height: number;
+}
+
+const sameLayout = (a: Layout, b: Layout) => a.mode === b.mode && a.nav === b.nav;
+
 /**
- * The layout for the screen, held while the barista types: an on-screen
- * keyboard shortens the window, and a tablet that took that for a phone would
- * drop its machine column (and Stop) from under the barista mid-sentence.
+ * The layout for the screen, its height held while the barista types: an
+ * on-screen keyboard shortens the window, and a tablet that took that for a
+ * phone would drop its machine column (and Stop) from under the barista
+ * mid-sentence. Only the height: the width is always the window's own. A new
+ * width (a rotation, a narrowed window) or a taller window is never the
+ * keyboard, so it brings the window as it is then.
+ *
+ * Once typing ends the keyboard is still closing: the held height stays until
+ * the window is back on its side of the line, or KEYBOARD_CLOSE_MS at most,
+ * so a closing keyboard never flashes the other layout.
  */
 function useShellLayout(typing: boolean): Layout {
   const live = useLayout();
-  const [held, setHeld] = useState(live);
-  if (!typing && held !== live) setHeld(live);
-  return typing ? held : live;
+  const [hold, setHold] = useState<Hold | null>(null);
+  let next = hold;
+  if (next !== null && (next.width !== live.width || next.height < live.height)) next = null;
+  if (typing && next === null) next = { width: live.width, height: live.height };
+  // Done typing: the hold ends as soon as it makes no difference.
+  if (!typing && next !== null && sameLayout(layoutFor(live.width, next.height), live)) next = null;
+  if (next !== hold) setHold(next);
+
+  useEffect(() => {
+    if (typing || hold === null) return;
+    const timer = setTimeout(() => setHold(null), KEYBOARD_CLOSE_MS);
+    return () => clearTimeout(timer);
+  }, [typing, hold]);
+
+  return next === null ? live : layoutFor(live.width, next.height);
 }
 
 function Brand() {
@@ -309,14 +339,19 @@ function PhoneTopBar({ host, insetLeft }: { host: HostEnvironment; insetLeft: bo
   );
 }
 
+/** The Machine tab's name while a shot runs: the time shows in place of its label. */
+const machineTabName = (seconds: number) => `Machine, shot running, ${seconds} ${seconds === 1 ? 'second' : 'seconds'}`;
+
 /** A tab: the icon in its pill above the label; while a shot runs the Machine tab shows the dot and the time instead. */
 function Tab({ item, active, rail, onNavigate }: { item: NavItem; active: boolean; rail: boolean; onNavigate: (route: Route) => void }) {
   const live = useShotLive() && item.name === 'shot';
+  const node = useRef<HTMLButtonElement>(null);
+  useShotTimeName(node, live, machineTabName);
   return (
     <ButtonBase
+      ref={node}
       data-testid={item.testId}
       aria-current={active ? 'page' : undefined}
-      aria-label={live ? 'Machine, shot running' : undefined}
       onClick={() => onNavigate(item.route)}
       sx={{
         flexDirection: 'column',
@@ -349,7 +384,7 @@ function Tab({ item, active, rail, onNavigate }: { item: NavItem; active: boolea
       {live ? (
         <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, color: 'text.primary' }}>
           <LiveDot size={7} />
-          <ShotTime short />
+          <ShotTime />
         </Box>
       ) : (
         <span>{item.label}</span>
@@ -367,7 +402,6 @@ function Tabs({ route, onNavigate, rail }: { route: Route; onNavigate: (route: R
       sx={{
         flex: 'none',
         bgcolor: 'background.paper',
-        borderColor: 'divider',
         ...(rail
           ? {
               // The rail reaches the screen's left and bottom edges; its tabs stay clear of the notch and the home indicator.
@@ -392,6 +426,8 @@ function Tabs({ route, onNavigate, rail }: { route: Route; onNavigate: (route: R
               gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
               borderTop: 1,
             }),
+        // After the border: `borderTop: 1` and `borderRight: 1` are shorthands that set its colour back to the text's.
+        borderColor: 'divider',
       }}
     >
       {TABS.map((item) => (
@@ -470,7 +506,6 @@ function Shell({ route, onNavigate, children, machinePanel }: AppShellProps) {
   const { awaitingOutcome, guardUntil } = useShotFocus(route);
   const typing = useTextEntryFocus();
   const layout = useShellLayout(typing);
-  const { width } = useLayout();
 
   const phone = layout.mode === 'phone';
   // The tabs give way to the on-screen keyboard, so the chat keeps its room.
@@ -525,7 +560,7 @@ function Shell({ route, onNavigate, children, machinePanel }: AppShellProps) {
             aria-label="Machine"
             sx={{
               flex: 'none',
-              width: machineColumnWidth(width),
+              width: machineColumnWidth(layout.width),
               minHeight: 0,
               borderRight: 1,
               borderColor: 'divider',

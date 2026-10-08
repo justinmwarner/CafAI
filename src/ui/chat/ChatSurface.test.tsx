@@ -7,6 +7,7 @@ import type { CoachUiMessage } from '../../app/types.ts';
 import { TID } from '../testIds.ts';
 import { ChatSurface, latestAppliedDiffId, toChatMessages, type ChatSurfaceProps } from './ChatSurface.tsx';
 import { conversation, sampleSummary } from './testing/fixtures.ts';
+import { previewTheme } from './testing/previewTheme.ts';
 import { renderThemed } from './testing/render.tsx';
 
 function textMessage(id: string, role: CoachUiMessage['role'], text: string, streaming = false): CoachUiMessage {
@@ -83,6 +84,14 @@ describe('ChatSurface', () => {
     await userEvent.type(screen.getByTestId(TID.composerInput), 'Why the bloom?');
     await userEvent.click(screen.getByTestId(TID.composerSend));
     await waitFor(() => expect(handlers.onSend).toHaveBeenLastCalledWith('Why the bloom?'));
+  });
+
+  it("draws the composer's placeholder in the muted ink at full strength, not x-chat's faded grey", () => {
+    renderSurface();
+    // jsdom computes no ::placeholder style, so read the rule the page was given.
+    const css = [...document.head.querySelectorAll('style')].map((style) => style.textContent).join('');
+    const muted = previewTheme.palette.text.secondary;
+    expect(css).toContain(` .MuiChatComposer-textArea::placeholder{color:${muted};opacity:1;}`);
   });
 
   it('keeps typing allowed but blocks sending while busy', async () => {

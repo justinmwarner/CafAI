@@ -49,7 +49,7 @@ export function readEngineCheck(value: unknown): EngineCheck | null {
 export function engineWarning(check: EngineCheck | null): string | null {
   if (check?.supported !== false) return null;
   const named = check.chromium !== null ? ` (Chromium ${check.chromium})` : '';
-  return `This tablet's browser engine${named} is older than CafAI is built for (Chromium ${CHROMIUM_FLOOR} or newer), so some parts may not work.`;
+  return `This device's browser engine${named} is older than CafAI is built for (Chromium ${CHROMIUM_FLOOR} or newer), so some parts may not work.`;
 }
 
 function engineKey(check: EngineCheck): string {

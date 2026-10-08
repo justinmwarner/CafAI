@@ -31,13 +31,18 @@ export interface Layout {
   height: number;
 }
 
+/** The layout for a window of this size. */
+export function layoutFor(width: number, height: number): Layout {
+  return { mode: layoutMode(width, height), nav: phoneNav(width, height), width, height };
+}
+
 let cached: Layout | null = null;
 
 function read(): Layout {
   const width = window.innerWidth;
   const height = window.innerHeight;
   if (cached && cached.width === width && cached.height === height) return cached;
-  cached = { mode: layoutMode(width, height), nav: phoneNav(width, height), width, height };
+  cached = layoutFor(width, height);
   return cached;
 }
 

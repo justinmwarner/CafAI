@@ -76,7 +76,7 @@ function ApiKeySection() {
       setDraft('');
       setVisible(false);
       setSavedHere(true);
-      setMessage({ tone: 'success', text: 'Key saved on this tablet.' });
+      setMessage({ tone: 'success', text: 'Key saved on this device.' });
       await coach.refresh();
     } catch (error) {
       setMessage({ tone: 'error', text: `Could not save the key: ${errorText(error)}` });
@@ -92,7 +92,7 @@ function ApiKeySection() {
     try {
       await storage.secrets.forgetApiKey();
       setSavedHere(false);
-      setMessage({ tone: 'success', text: 'The key is gone from this tablet.' });
+      setMessage({ tone: 'success', text: 'The key is gone from this device.' });
       await coach.refresh();
     } catch (error) {
       setMessage({ tone: 'error', text: `Could not forget the key: ${errorText(error)}` });
@@ -106,11 +106,11 @@ function ApiKeySection() {
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
         {hasKey ? <CheckCircleIcon color="success" fontSize="small" /> : null}
         <Typography variant="body1" sx={{ fontWeight: 600 }} role="status">
-          {hasKey ? 'A key is saved on this tablet.' : 'No key saved yet. The coach needs one to work.'}
+          {hasKey ? 'A key is saved on this device.' : 'No key saved yet. The coach needs one to work.'}
         </Typography>
       </Stack>
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }}>
-        The key stays on this tablet. It is never sent to Decaid or included in exports.
+        The key stays on this device. It is never sent to Decaid or included in exports.
       </Typography>
       <Box component="form" onSubmit={(event) => void save(event)} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <TextField
@@ -176,7 +176,7 @@ function ApiKeySection() {
       <Dialog open={confirmForget} onClose={() => setConfirmForget(false)}>
         <DialogTitle>Forget the API key?</DialogTitle>
         <DialogContent>
-          <DialogContentText>The coach stops working on this tablet until you add a key again.</DialogContentText>
+          <DialogContentText>The coach stops working on this device until you add a key again.</DialogContentText>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setConfirmForget(false)} sx={{ minHeight: 48 }}>

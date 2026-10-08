@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 /**
- * The inline engine check in index.html, run the way an old tablet would meet
- * it: extracted from the real file and executed in a sandbox (Node's vm) whose
- * window is under the test's control. jsdom supplies the document; the
+ * The inline scripts in index.html, run the way an old tablet would meet
+ * them: extracted from the real file and executed in a sandbox (Node's vm)
+ * whose window is under the test's control. jsdom supplies the document; the
  * sandbox supplies the user agent, the Function constructor (to play an engine
- * that cannot parse the probe), storage, location and the timers.
+ * that cannot parse the probe), storage, location and the timers. The boot
+ * look (the script in <head>) runs against jsdom's own document, whose style
+ * sheets cascade, so its tests read the page's colours as a browser would.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -13,7 +15,7 @@ import { Linter } from 'eslint';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { detectHost } from '../../api/host.ts';
 import { BOOT_COLORS_KEY, bootColors } from '../appearance.ts';
-import { buildPalette, namedTint } from '../palette.ts';
+import { buildPalette, DEFAULT_TINT_ID, namedTint } from '../palette.ts';
 
 const INDEX_HTML = readFileSync(join(import.meta.dirname, '..', '..', '..', 'index.html'), 'utf8');
 
@@ -34,16 +36,19 @@ function parse(html: string): Document {
   return new DOMParser().parseFromString(html, 'text/html');
 }
 
-/** The classic inline script(s) in index.html (module scripts excluded). */
+/** The classic inline scripts in index.html (module scripts excluded): the boot look in <head>, the engine check in <body>. */
 function inlineScripts(): HTMLScriptElement[] {
   return [...parse(INDEX_HTML).querySelectorAll('script')].filter((s) => !s.src && s.type !== 'module');
 }
 
-function engineScript(): string {
-  const [script] = inlineScripts();
-  if (!script) throw new Error('index.html has no inline engine check');
+function inlineScriptIn(parent: 'HEAD' | 'BODY', what: string): string {
+  const script = inlineScripts().find((s) => s.parentElement?.tagName === parent);
+  if (!script) throw new Error(`index.html has no inline ${what}`);
   return script.textContent ?? '';
 }
+
+const bootScript = () => inlineScriptIn('HEAD', 'boot look');
+const engineScript = () => inlineScriptIn('BODY', 'engine check');
 
 /** A Function constructor for an engine that cannot parse the probe (older than Chromium 91). */
 function FunctionWithoutBrandChecks(): never {
@@ -200,21 +205,114 @@ afterEach(() => {
 });
 
 describe('index.html', () => {
-  it('has one classic inline script, before the untouched module script', () => {
-    expect(inlineScripts()).toHaveLength(1);
+  it('has two classic inline scripts: the boot look in <head>, the engine check after #root and before the untouched module script', () => {
+    expect(inlineScripts()).toHaveLength(2);
     expect(INDEX_HTML).toContain('<script type="module" src="./src/main.tsx"></script>');
-    expect(INDEX_HTML.indexOf('<script>')).toBeGreaterThan(INDEX_HTML.indexOf('<div id="root"></div>'));
-    expect(INDEX_HTML.indexOf('<script>')).toBeLessThan(INDEX_HTML.indexOf('<script type="module"'));
+    const boot = INDEX_HTML.indexOf('<script>');
+    const engine = INDEX_HTML.indexOf('<script>', boot + 1);
+    expect(boot).toBeLessThan(INDEX_HTML.indexOf('</head>'));
+    expect(engine).toBeGreaterThan(INDEX_HTML.indexOf('<div id="root"></div>'));
+    expect(engine).toBeLessThan(INDEX_HTML.indexOf('<script type="module"'));
   });
 
-  it('the inline script is plain ES5, so an engine too old for the bundle still runs it', () => {
+  it('the inline scripts are plain ES5, so an engine too old for the bundle still runs them', () => {
     const linter = new Linter();
-    const problems = linter.verify(engineScript(), { languageOptions: { ecmaVersion: 5, sourceType: 'script' } });
-    expect(problems.map((p) => `${p.line}:${p.column} ${p.message}`)).toEqual([]);
+    for (const script of [bootScript(), engineScript()]) {
+      const problems = linter.verify(script, { languageOptions: { ecmaVersion: 5, sourceType: 'script' } });
+      expect(problems.map((p) => `${p.line}:${p.column} ${p.message}`)).toEqual([]);
+    }
   });
 
   it('adds nothing to window but __CAFAI_ENGINE__', () => {
     expect(run().added).toEqual(['__CAFAI_ENGINE__']);
+  });
+});
+
+describe('boot look: the first frame, before the bundle', () => {
+  /** The default look (dark Crema) as main.tsx and AppTheme build it. */
+  const DEFAULT_COLORS = bootColors(buildPalette('dark', namedTint(DEFAULT_TINT_ID)));
+
+  afterEach(() => {
+    document.head.innerHTML = '';
+  });
+
+  /**
+   * index.html's <head> in jsdom's own document (its scripts inert, as
+   * innerHTML leaves them), then the boot script run against it, with storage
+   * holding `savedColors` under the app's key. Returns the page's colours.
+   */
+  function boot(options: Pick<Sandbox, 'savedColors' | 'storageThrows'> = {}) {
+    document.head.innerHTML = parse(INDEX_HTML).head.innerHTML;
+    const global: Record<string, unknown> = {
+      document,
+      localStorage: {
+        getItem(key: string) {
+          if (options.storageThrows) throw new Error('SecurityError');
+          return key === BOOT_COLORS_KEY ? (options.savedColors ?? null) : null;
+        },
+      },
+    };
+    global.window = global;
+    const before = new Set(Object.keys(global));
+    vm.runInContext(bootScript(), vm.createContext(global));
+    const html = getComputedStyle(document.documentElement);
+    return {
+      look: { background: html.backgroundColor, ink: html.color, colorScheme: html.getPropertyValue('color-scheme') },
+      added: Object.keys(global).filter((key) => !before.has(key)),
+    };
+  }
+
+  const lookOf = (colors: { background: string; ink: string }, colorScheme: 'dark' | 'light') => ({
+    background: cssColor(colors.background),
+    ink: cssColor(colors.ink),
+    colorScheme,
+  });
+
+  it('paints the default look (dark Crema) when nothing is saved', () => {
+    expect(boot().look).toEqual(lookOf(DEFAULT_COLORS, 'dark'));
+  });
+
+  it('paints the look the app saved last, as the app writes it, in its own colour scheme', () => {
+    const lightMatcha = bootColors(buildPalette('light', namedTint('matcha')));
+    expect(boot({ savedColors: JSON.stringify(lightMatcha) }).look).toEqual(lookOf(lightMatcha, 'light'));
+    const darkOcean = bootColors(buildPalette('dark', namedTint('ocean')));
+    expect(boot({ savedColors: JSON.stringify(darkOcean) }).look).toEqual(lookOf(darkOcean, 'dark'));
+    const lightSteel = bootColors(buildPalette('light', namedTint('steel')));
+    expect(boot({ savedColors: JSON.stringify(lightSteel) }).look).toEqual(lookOf(lightSteel, 'light'));
+  });
+
+  it('keeps the default when the saved colours are junk, incomplete or blocked, as main.tsx does', () => {
+    const lightMatcha = bootColors(buildPalette('light', namedTint('matcha')));
+    const junk = [
+      'not json',
+      'null',
+      '[]',
+      '7',
+      '"#f4f8f3"',
+      JSON.stringify({ ...lightMatcha, background: 'red' }),
+      JSON.stringify({ ...lightMatcha, ink: ['#1a2218'] }),
+      JSON.stringify({ background: lightMatcha.background, ink: lightMatcha.ink }),
+      // Only #rrggbb colours reach the page's CSS.
+      JSON.stringify({ ...lightMatcha, background: '#f4f8f3; } body { display: none' }),
+    ];
+    const cases: Pick<Sandbox, 'savedColors' | 'storageThrows'>[] = [
+      ...junk.map((savedColors) => ({ savedColors })),
+      { storageThrows: true, savedColors: JSON.stringify(lightMatcha) },
+    ];
+    for (const options of cases) {
+      expect(boot(options).look, JSON.stringify(options)).toEqual(lookOf(DEFAULT_COLORS, 'dark'));
+    }
+  });
+
+  it('adds nothing to window', () => {
+    expect(boot({ savedColors: JSON.stringify(DEFAULT_COLORS) }).added).toEqual([]);
+  });
+
+  it('runs before anything renders: in <head>, after the style that holds the default', () => {
+    const doc = parse(INDEX_HTML);
+    const script = [...doc.head.querySelectorAll('script')].find((s) => !s.src && s.type !== 'module')!;
+    const style = doc.head.querySelector('style')!;
+    expect(style.compareDocumentPosition(script) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 
@@ -348,7 +446,7 @@ describe('start-up watchdog', () => {
 
     expect(page.fallback()).not.toBeNull();
     expect(page.cause()).toBe('timeout');
-    expect(page.messages()).toEqual(["CafAI could not start on this tablet's browser engine (Chromium 85).", 'It needs Chromium 91 or newer.']);
+    expect(page.messages()).toEqual(["CafAI could not start on this device's browser engine (Chromium 85).", 'It needs Chromium 91 or newer.']);
     // Plain DOM checks: jest-dom needs a document with a window, and a parsed one has none.
     expect(page.fallback()!.querySelector('[role="alert"]')?.textContent).toContain('CafAI could not start');
     expect(page.exitButton()?.getAttribute('type')).toBe('button');
@@ -366,7 +464,7 @@ describe('start-up watchdog', () => {
   it('says nothing about a version it does not know', () => {
     const page = run({ userAgent: UA.decaid, functionCtor: FunctionWithoutBrandChecks });
     vi.advanceTimersByTime(WATCHDOG_MS);
-    expect(page.messages()).toEqual(["CafAI could not start on this tablet's browser engine.", 'It needs Chromium 91 or newer.']);
+    expect(page.messages()).toEqual(["CafAI could not start on this device's browser engine.", 'It needs Chromium 91 or newer.']);
   });
 
   it('does not blame a supported engine for a start that never came', () => {
@@ -381,7 +479,7 @@ describe('start-up watchdog', () => {
     const page = run({ userAgent: UA.decaid, noEval: true });
     page.fireError(new SyntaxError("Unexpected token '?'"));
     expect(page.cause()).toBe('syntax');
-    expect(page.messages()).toEqual(["CafAI could not start on this tablet's browser engine.", 'It needs Chromium 91 or newer.']);
+    expect(page.messages()).toEqual(["CafAI could not start on this device's browser engine.", 'It needs Chromium 91 or newer.']);
   });
 
   it('recognizes a SyntaxError by its message when the event carries no error object', () => {
@@ -449,7 +547,7 @@ describe('start-up watchdog: an app bundle that fails to load', () => {
     const page = run({ userAgent: UA.chrome85 });
     page.fireLoadError(page.appScript());
     expect(page.cause()).toBe('load');
-    expect(page.messages()).toEqual(["CafAI could not start on this tablet's browser engine (Chromium 85).", 'It needs Chromium 91 or newer.']);
+    expect(page.messages()).toEqual(["CafAI could not start on this device's browser engine (Chromium 85).", 'It needs Chromium 91 or newer.']);
   });
 
   it('any script counts, and a module preload too', () => {

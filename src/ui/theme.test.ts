@@ -59,4 +59,33 @@ describe('theme', () => {
     expect(baseline['*']).toMatchObject({ WebkitTapHighlightColor: 'transparent' });
     expect(baseline['button, a, [role="button"], .MuiButtonBase-root']).toMatchObject({ userSelect: 'none' });
   });
+
+  it('paints the page itself in the look, taking over from the boot colours in index.html', () => {
+    const p = buildPalette('light', namedTint('matcha'));
+    const baseline = createCafaiTheme(p).components!.MuiCssBaseline!.styleOverrides as Record<string, Record<string, string>>;
+    expect(baseline.html).toMatchObject({ backgroundColor: p.background });
+  });
+
+  it("sets form controls in the page's typeface: a browser gives a bare button its own", () => {
+    const baseline = theme.components!.MuiCssBaseline!.styleOverrides as Record<string, Record<string, string>>;
+    expect(baseline['button, input, select, textarea']).toEqual({ fontFamily: 'inherit' });
+  });
+
+  it('draws placeholders in the muted ink at full strength, not faded', () => {
+    const p = buildPalette('light', namedTint('steel'));
+    const input = createCafaiTheme(p).components!.MuiInputBase!.styleOverrides!.input as Record<string, unknown>;
+    expect(input['&::placeholder']).toEqual({ color: p.inkMuted, opacity: 1 });
+  });
+
+  it('outlines a chip in a status colour or the accent in that colour, opaque, as the contrast sweep checks it', () => {
+    const p = buildPalette('light', namedTint('matcha'));
+    const variants = createCafaiTheme(p).components!.MuiChip!.variants!;
+    const outline = (color: string) =>
+      variants.find((v) => typeof v.props === 'object' && v.props.variant === 'outlined' && v.props.color === color)?.style;
+    expect(outline('primary')).toEqual({ borderColor: p.accent });
+    expect(outline('success')).toEqual({ borderColor: p.success });
+    expect(outline('warning')).toEqual({ borderColor: p.warning });
+    expect(outline('error')).toEqual({ borderColor: p.error });
+    expect(outline('info')).toEqual({ borderColor: p.info });
+  });
 });

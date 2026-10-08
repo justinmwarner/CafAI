@@ -152,6 +152,15 @@ describe('toStorageError', () => {
     const original = new StorageError('superseded', STORAGE_MESSAGES.superseded);
     expect(toStorageError(original, 'read')).toBe(original);
   });
+
+  it('names the device, never a tablet: a phone keeps its own copy of CafAI too', () => {
+    expect(STORAGE_MESSAGES.quota).toBe(
+      'This device is out of storage space, so the change was not saved. Free up some space and try again.',
+    );
+    expect(STORAGE_MESSAGES.read).toBe('Could not read the saved data on this device. Reload the page and try again.');
+    expect(STORAGE_MESSAGES.write).toBe('Could not save to this device. Try again.');
+    for (const message of Object.values(STORAGE_MESSAGES)) expect(message).not.toMatch(/tablet/i);
+  });
 });
 
 describe('requestPersistentStorage', () => {

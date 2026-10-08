@@ -113,7 +113,7 @@ export function noApiKeyError(): LlmError {
 }
 
 export function networkError(): LlmError {
-  return new LlmError('network', "Could not reach Anthropic. Check the tablet's internet connection.", 0, true);
+  return new LlmError('network', "Could not reach Anthropic. Check this device's internet connection.", 0, true);
 }
 
 export function abortedError(): LlmError {

@@ -82,6 +82,9 @@ describe('buildPalette', () => {
 /** The pairs the UI draws (spec section 3, "Contrast, enforced by tests"). */
 const PAIRS: readonly (readonly [string, number, (p: Palette) => readonly (readonly [string, string])[]])[] = [
   ['ink on background, surface, raised', 7, (p) => [[p.ink, p.background], [p.ink, p.surface], [p.ink, p.raised]]],
+  // Also what is set aside (the starting profiles not picked, an undone
+  // version, a closed question's other answers) and every placeholder: the
+  // muted ink at full strength, never faded with opacity.
   ['inkMuted on background, surface, raised', 4.5, (p) => [[p.inkMuted, p.background], [p.inkMuted, p.surface], [p.inkMuted, p.raised]]],
   ['accent on background and surface', 4.5, (p) => [[p.accent, p.background], [p.accent, p.surface]]],
   ['accent on accentSoft', 4.5, (p) => [[p.accent, p.accentSoft]]],
@@ -97,6 +100,13 @@ const PAIRS: readonly (readonly [string, number, (p: Palette) => readonly (reado
     'status colours on raised',
     4.5,
     (p) => [p.success, p.warning, p.error].map((c) => [c, p.raised] as const),
+  ],
+  // A chip outlined in a status colour or the accent (confidence, a version's
+  // status) carries its meaning in the outline too; the theme draws it opaque.
+  [
+    'chip outlines: status colours and the accent on background and surface',
+    3,
+    (p) => [p.success, p.warning, p.error, p.info, p.accent].flatMap((c) => [[c, p.background], [c, p.surface]] as const),
   ],
   [
     'graph series on background and surface',

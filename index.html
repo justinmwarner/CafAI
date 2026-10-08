@@ -5,6 +5,61 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark light" />
     <title>CafAI</title>
+    <style>
+      /*
+       * The page before the bundle has run (seconds on a slow tablet): the
+       * default look (dark Crema), which the script below swaps for the look
+       * the app showed last, so a dark CafAI never opens on white. The
+       * theme's CssBaseline takes over once the app renders.
+       */
+      html,
+      body,
+      #root {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+      }
+      html {
+        background-color: #140e09;
+        color: #f4ede6;
+        color-scheme: dark;
+      }
+    </style>
+    <script>
+      // The boot look: the colours src/ui/appearance.ts keeps for the boot
+      // screens, from the first frame. Read as main.tsx reads them (all six
+      // must be #rrggbb), else the default above stays. ES5 like the engine
+      // check below, so any engine runs it; the tests in
+      // src/ui/platform/engineScript.test.ts hold it to that.
+      (function () {
+        var FIELDS = ['background', 'surface', 'ink', 'inkMuted', 'line', 'accent'];
+        var HEX = /^#[0-9a-f]{6}$/i;
+        var colors, style, i;
+
+        function brightness(hex) {
+          var n = parseInt(hex.slice(1), 16);
+          return ((n >> 16) & 255) + ((n >> 8) & 255) + (n & 255);
+        }
+
+        try {
+          colors = JSON.parse(window.localStorage.getItem('cafai.appearance.boot') || 'null');
+        } catch (unreadable) {
+          // Storage blocked, or junk: the default look.
+          return;
+        }
+        if (!colors || typeof colors !== 'object') return;
+        // Only #rrggbb colours reach the page's CSS.
+        for (i = 0; i < FIELDS.length; i += 1) {
+          if (typeof colors[FIELDS[i]] !== 'string' || !HEX.test(colors[FIELDS[i]])) return;
+        }
+        style = document.createElement('style');
+        style.textContent =
+          'html { background-color: ' + colors.background + '; color: ' + colors.ink + '; color-scheme: ' +
+          (brightness(colors.background) < brightness(colors.ink) ? 'dark' : 'light') + '; }';
+        document.head.appendChild(style);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
@@ -161,7 +216,7 @@
             'p',
             'margin:0 0 8px;max-width:560px;font-size:22px;font-weight:500;line-height:1.3;',
             blameEngine
-              ? "CafAI could not start on this tablet's browser engine" +
+              ? "CafAI could not start on this device's browser engine" +
                   (engine.chromium !== null ? ' (Chromium ' + engine.chromium + ').' : '.')
               : 'CafAI could not start.'
           );

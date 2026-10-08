@@ -40,6 +40,10 @@ export function TemplateCards({ items, pickedTemplateId, disabled = false, expir
       ) : null}
       {items.map((item) => {
         const picked = item.templateId === pickedTemplateId;
+        // Another was picked, or the suggestions were set aside: the card
+        // stays, in the muted ink with a plain chip, never faded, so every
+        // word still reads at AA.
+        const setAside = locked && !picked;
         return (
           <Paper
             key={item.templateId}
@@ -50,9 +54,9 @@ export function TemplateCards({ items, pickedTemplateId, disabled = false, expir
             sx={{
               p: 1.5,
               bgcolor: 'background.paper',
+              color: setAside ? 'text.secondary' : 'text.primary',
               borderColor: picked ? 'primary.main' : 'divider',
               borderWidth: picked ? 2 : 1,
-              opacity: locked && !picked ? 0.55 : 1,
             }}
           >
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
@@ -64,9 +68,9 @@ export function TemplateCards({ items, pickedTemplateId, disabled = false, expir
                   <Chip
                     size="small"
                     variant="outlined"
-                    color={CONFIDENCE_COLOR[item.confidence]}
+                    color={setAside ? 'default' : CONFIDENCE_COLOR[item.confidence]}
                     label={confidenceLabel(item.confidence)}
-                    sx={{ minHeight: 0 }}
+                    sx={setAside ? { minHeight: 0, color: 'text.secondary', borderColor: 'divider' } : { minHeight: 0 }}
                   />
                 </Stack>
                 <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>

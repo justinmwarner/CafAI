@@ -46,13 +46,13 @@ describe('readEngineCheck', () => {
 describe('engineWarning', () => {
   it('names the version when the engine gave one', () => {
     expect(engineWarning(OLD)).toBe(
-      "This tablet's browser engine (Chromium 85) is older than CafAI is built for (Chromium 91 or newer), so some parts may not work.",
+      "This device's browser engine (Chromium 85) is older than CafAI is built for (Chromium 91 or newer), so some parts may not work.",
     );
   });
 
   it('does not depend on a number (Decaid hides the version)', () => {
     expect(engineWarning(OLD_UNNAMED)).toBe(
-      "This tablet's browser engine is older than CafAI is built for (Chromium 91 or newer), so some parts may not work.",
+      "This device's browser engine is older than CafAI is built for (Chromium 91 or newer), so some parts may not work.",
     );
   });
 

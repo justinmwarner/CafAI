@@ -1,12 +1,14 @@
 /**
- * The live shot in the navigation: the pulsing dot and the running pour time
- * ("Shot 42.0 s" in the tablet's top bar, "42 s" in the phone's Machine tab).
+ * The live shot in the navigation: the pulsing dot and the running pour time,
+ * in tenths as the live strip has it ("Shot 42.0 s" in the tablet's top bar,
+ * "42.0 s" in the phone's Machine tab).
  *
  * The time is written straight into its node whenever the app's shot
  * recording changes (shotTrace.ts), so a frame re-renders nothing; React
- * hears only of the shot starting and ending.
+ * hears only of the shot starting and ending. The Machine tab's name, with
+ * the whole seconds, is written the same way.
  */
-import { useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useLayoutEffect, useMemo, useRef, useSyncExternalStore, type RefObject } from 'react';
 import Box from '@mui/material/Box';
 import { keyframes } from '@mui/material/styles';
 import { useServices } from '../../app/services.tsx';
@@ -47,19 +49,14 @@ export function useShotLive(): boolean {
   return useSyncExternalStore(trace.subscribe, () => trace.getState().phase === 'live');
 }
 
-function pourTime(seconds: number | null, short: boolean): string {
-  if (!short) return formatSeconds(seconds);
+/** The whole seconds of the time on screen: 4.96 s shows as "5.0 s", so 5. */
+function wholeSeconds(seconds: number | null): number {
   const shown = seconds !== null && Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
-  return `${Math.round(shown)} s`;
+  return Math.floor(Math.round(shown * 10) / 10);
 }
 
-export interface ShotTimeProps {
-  /** Whole seconds ("42 s"), for the phone's tab; otherwise tenths ("42.0 s"). */
-  short?: boolean;
-}
-
-/** The running pour time, or nothing while no shot is live. */
-export function ShotTime({ short = false }: ShotTimeProps) {
+/** The running pour time ("42.0 s"), or nothing while no shot is live. */
+export function ShotTime() {
   const { telemetry } = useServices();
   const trace = useMemo(() => shotTraceFor(telemetry), [telemetry]);
   const live = useSyncExternalStore(trace.subscribe, () => trace.getState().phase === 'live');
@@ -70,12 +67,12 @@ export function ShotTime({ short = false }: ShotTimeProps) {
     const element = node.current;
     if (!live || !element) return;
     const write = () => {
-      const text = pourTime(trace.buffer.elapsedS(), short);
+      const text = formatSeconds(trace.buffer.elapsedS());
       if (element.textContent !== text) element.textContent = text;
     };
     write();
     return trace.onData(write);
-  }, [trace, live, short]);
+  }, [trace, live]);
 
   if (!live) return null;
   return (
@@ -83,7 +80,33 @@ export function ShotTime({ short = false }: ShotTimeProps) {
       component="span"
       ref={node}
       // Room for "00.0 s" from the start, so the label does not grow as the seconds tick past ten.
-      sx={{ display: 'inline-block', minWidth: short ? undefined : '3.3em', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
+      sx={{ display: 'inline-block', minWidth: '3.3em', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
     />
   );
+}
+
+/**
+ * While `live`, names `node` with the running pour time in whole seconds, in
+ * `name`'s words (the Machine tab's "Machine, shot running, 42 seconds").
+ * Written straight into the node like the time, and only as a second passes,
+ * so a screen reader is not handed a new name ten times a second.
+ */
+export function useShotTimeName(node: RefObject<HTMLElement | null>, live: boolean, name: (seconds: number) => string): void {
+  const { telemetry } = useServices();
+  const trace = useMemo(() => shotTraceFor(telemetry), [telemetry]);
+
+  useLayoutEffect(() => {
+    const element = node.current;
+    if (!live || !element) return;
+    const write = () => {
+      const text = name(wholeSeconds(trace.buffer.elapsedS()));
+      if (element.getAttribute('aria-label') !== text) element.setAttribute('aria-label', text);
+    };
+    write();
+    const stop = trace.onData(write);
+    return () => {
+      stop();
+      element.removeAttribute('aria-label');
+    };
+  }, [trace, node, live, name]);
 }

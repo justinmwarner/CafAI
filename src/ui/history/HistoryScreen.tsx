@@ -225,8 +225,10 @@ function VersionCard({ version, iterations }: { version: ProfileVersion; iterati
       sx={{
         p: 1.5,
         bgcolor: 'background.paper',
+        // An undone version reads as set aside: the muted ink throughout (its
+        // chip keeps the warning colour), never faded, so it still reads at AA.
+        color: version.status === 'undone' ? 'text.secondary' : 'text.primary',
         borderColor: version.status === 'active' ? 'success.main' : 'divider',
-        opacity: version.status === 'undone' ? 0.75 : 1,
       }}
     >
       <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -489,7 +491,7 @@ export function HistoryScreen({ bagId, onSelectBag = hashNavigate }: HistoryScre
         setMessage(
           imported > 0
             ? { tone: 'success', text: `Imported ${imported} ${imported === 1 ? 'record' : 'records'}.` }
-            : { tone: 'info', text: 'Nothing new to import: this tablet already has everything in that file.' },
+            : { tone: 'info', text: 'Nothing new to import: this device already has everything in that file.' },
         );
         setReloads((n) => n + 1);
         coach.refresh().catch(() => undefined);

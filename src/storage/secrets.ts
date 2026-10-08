@@ -53,12 +53,12 @@ function secretError(error: unknown, action: 'read' | 'save' | 'remove'): Storag
   if (error instanceof StorageError && error.kind === 'superseded') return error;
   const name = typeof error === 'object' && error !== null && 'name' in error ? String(error.name) : null;
   if (name === 'QuotaExceededError') {
-    return new StorageError('quota', 'This tablet is out of storage space, so the API key was not saved.', name);
+    return new StorageError('quota', 'This device is out of storage space, so the API key was not saved.', name);
   }
   const sentence = {
-    read: 'Could not read the saved API key on this tablet. Reload the page and try again.',
-    save: 'Could not save the API key on this tablet. Try again.',
-    remove: 'Could not remove the API key from this tablet. Try again.',
+    read: 'Could not read the saved API key on this device. Reload the page and try again.',
+    save: 'Could not save the API key on this device. Try again.',
+    remove: 'Could not remove the API key from this device. Try again.',
   }[action];
   return new StorageError(action === 'read' ? 'read' : 'write', sentence, name);
 }

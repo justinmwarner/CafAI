@@ -68,7 +68,7 @@ test('a key pasted into the grinder fields and the model never reaches Decaid or
   const seen = recordRequests(page);
   await openApp(page);
   await saveApiKey(page, KEY);
-  await expect(page.getByText('Key saved on this tablet.')).toBeVisible();
+  await expect(page.getByText('Key saved on this device.')).toBeVisible();
 
   // The same key, pasted after a grinder name and over the setting (which keeps 20 characters)...
   await fillField(page, TID.grinderName, `Niche Zero ${KEY}`);

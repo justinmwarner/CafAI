@@ -6,7 +6,8 @@ import userEvent from '@testing-library/user-event';
 import { createFakeServices, type FakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
 import { KIAMBU, KIAMBU_ITERATIONS, KIAMBU_VERSIONS, SANTOS } from '../chat/testing/fixtures.ts';
-import { renderWithServices } from '../chat/testing/render.tsx';
+import { previewTheme } from '../chat/testing/previewTheme.ts';
+import { fadedElements, renderWithServices } from '../chat/testing/render.tsx';
 import { HistoryScreen } from './HistoryScreen.tsx';
 
 function seeded(options: { insideDecaid?: boolean } = {}): FakeServices {
@@ -77,6 +78,19 @@ describe('HistoryScreen bag detail', () => {
     expect(v4).toHaveTextContent('Undone');
     // Newest first.
     expect(v4.compareDocumentPosition(v1) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('shows an undone version in the muted ink, its Undone chip still in warning, never faded', async () => {
+    const { palette } = previewTheme;
+    renderHistory(KIAMBU.id);
+    const undone = await screen.findByTestId(TID.historyVersion(4));
+    expect(fadedElements(undone)).toEqual([]);
+    expect(undone).toHaveStyle({ color: palette.text.secondary });
+    const chip = within(undone).getByText('Undone').closest<HTMLElement>('.MuiChip-root')!;
+    expect(chip).toHaveStyle({ color: palette.warning.main, borderColor: palette.warning.main });
+    // The versions in use keep the ink.
+    expect(screen.getByTestId(TID.historyVersion(3))).toHaveStyle({ color: palette.text.primary });
+    expect(screen.getByTestId(TID.historyVersion(1))).toHaveStyle({ color: palette.text.primary });
   });
 
   it('shows each iteration under its version: shot, feedback, proposal, outcome', async () => {
@@ -159,6 +173,14 @@ describe('HistoryScreen export and import', () => {
     expect(await screen.findByText('Imported 7 records.')).toBeInTheDocument();
     expect(importAll).toHaveBeenCalledWith(data, 'merge');
     expect(services.coach.calls.map((c) => c.method)).toContain('refresh');
+  });
+
+  it('says when an import brings nothing new, on whatever device it runs', async () => {
+    const services = seeded();
+    vi.spyOn(services.storage.porter, 'importAll').mockResolvedValue({ imported: 0 });
+    renderHistory(null, services);
+    await userEvent.upload(screen.getByTestId(TID.importData), new File(['{}'], 'x.json', { type: 'application/json' }));
+    expect(await screen.findByText('Nothing new to import: this device already has everything in that file.')).toBeInTheDocument();
   });
 
   it('rejects a file that is not JSON without calling the porter', async () => {

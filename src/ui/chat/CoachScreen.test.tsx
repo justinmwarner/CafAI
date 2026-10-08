@@ -71,6 +71,8 @@ describe('CoachScreen', () => {
   it('asks for an API key before anything else', () => {
     renderCoach({ ...coachStateFor('diff'), hasApiKey: false });
     expect(screen.getByText('Add your Anthropic API key to start coaching')).toBeInTheDocument();
+    // A phone's browser keeps its own key: the copy names no tablet.
+    expect(screen.getByText('The key stays on this device. You pay Anthropic directly for what the coach uses.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open Settings' })).toHaveAttribute('href', '#/settings');
     expect(screen.queryByTestId(TID.chat)).toBeNull();
     expect(screen.queryByTestId(TID.newBag)).toBeNull();
@@ -112,6 +114,13 @@ describe('CoachScreen', () => {
     // The whole title is still in the text for screen readers; the bag's name repeats the picker, so only "v1" shows.
     expect(version).toHaveTextContent('Kiambu AA v1 · Blooming Espresso');
     expect(within(version).getByText('v1')).toBeVisible();
+  });
+
+  it('keeps the space before the dot, so the version reads "v1 · Blooming Espresso" like the other separators', () => {
+    renderCoach(coachStateFor('options'));
+    const rest = [...screen.getByTestId(TID.activeVersion).children].find((child) => child.textContent === ' · Blooming Espresso');
+    // A flex item drops its leading space unless white space is kept (jsdom lays nothing out to show it).
+    expect(rest).toHaveStyle({ whiteSpace: 'pre' });
   });
 
   it('names the bag picker for screen readers without a visible label', () => {

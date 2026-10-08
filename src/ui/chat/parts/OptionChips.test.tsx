@@ -4,8 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TID } from '../../testIds.ts';
-import { renderThemed } from '../testing/render.tsx';
+import { fadedElements, renderThemed } from '../testing/render.tsx';
+import { previewTheme } from '../testing/previewTheme.ts';
 import { OptionChips } from './OptionChips.tsx';
+
+const { palette } = previewTheme;
 
 const OPTIONS = ['Sour / sharp', 'Bitter / harsh', 'Balanced, sweet', 'Other'];
 
@@ -95,6 +98,20 @@ describe('OptionChips', () => {
     expect(onAnswer).not.toHaveBeenCalled();
   });
 
+  it('sets the other answers aside in the muted ink once answered, never faded', async () => {
+    const onAnswer = setup({ answer: { selected: ['Bitter / harsh'], otherText: null } });
+    for (const option of ['Sour / sharp', 'Balanced, sweet', 'Other']) {
+      const chip = screen.getByTestId(TID.optionChip(option));
+      expect(fadedElements(chip)).toEqual([]);
+      expect(chip).toHaveStyle({ color: palette.text.secondary, borderColor: palette.divider });
+      expect(chip).toHaveAttribute('aria-disabled', 'true');
+      await userEvent.click(chip);
+    }
+    expect(onAnswer).not.toHaveBeenCalled();
+    // The answer stays filled in the accent.
+    expect(screen.getByTestId(TID.optionChip('Bitter / harsh'))).toHaveStyle({ backgroundColor: palette.primary.main });
+  });
+
   it('closes a half-typed Other when the question is set aside', async () => {
     const onAnswer = vi.fn();
     const props = { question: 'How did it taste?', options: OPTIONS, multiSelect: false, answer: null, onAnswer };
@@ -120,7 +137,10 @@ describe('OptionChips', () => {
     setup({ expired: true, ...(reason ? { setAsideReason: reason } : {}) });
     expect(screen.getByText(text)).toBeInTheDocument();
     expect(screen.queryAllByText(/^Set aside/)).toHaveLength(1);
-    expect(screen.getByTestId(TID.optionChip('Sour / sharp'))).toHaveAttribute('aria-disabled', 'true');
+    const chip = screen.getByTestId(TID.optionChip('Sour / sharp'));
+    expect(chip).toHaveAttribute('aria-disabled', 'true');
+    expect(fadedElements(chip)).toEqual([]);
+    expect(chip).toHaveStyle({ color: palette.text.secondary });
   });
 
   it('ignores taps while the coach is busy', async () => {
