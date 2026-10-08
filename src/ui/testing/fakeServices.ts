@@ -14,6 +14,7 @@ import type {
   TelemetryStore,
   Workflow,
 } from '../../api/types.ts';
+import { createAppearanceStore, type AppearanceStore } from '../../app/appearance.ts';
 import type { CoachController, CoachState, Services } from '../../app/types.ts';
 import type { ModelInfo } from '../../llm/types.ts';
 import type {
@@ -361,6 +362,8 @@ export interface FakeServices extends Services {
   coach: FakeCoach;
   heartbeat: Heartbeat & { count: number };
   host: HostEnvironment & { exits: number };
+  /** The real store, over the fake settings repository above. */
+  appearance: AppearanceStore;
 }
 
 export function createFakeServices(options: {
@@ -384,14 +387,16 @@ export function createFakeServices(options: {
       host.exits += 1;
     },
   };
+  const storage = createFakeStorage(options.storage);
   return {
     decaid: createFakeDecaid(),
     telemetry: createFakeTelemetry(options.telemetry),
     heartbeat,
     host,
-    storage: createFakeStorage(options.storage),
+    storage,
     coach: createFakeCoach(options.coach),
     models: FAKE_MODELS,
     appVersion: '0.1.0-test',
+    appearance: createAppearanceStore(storage.settings, options.storage?.settings?.appearance),
   };
 }

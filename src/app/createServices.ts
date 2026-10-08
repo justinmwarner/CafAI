@@ -12,6 +12,7 @@ import { DEFAULT_MODEL, MODELS } from '../llm/index.ts';
 import { createIdbStorage, restoreFromMirrorIfEmpty } from '../storage/index.ts';
 import { newId } from '../util/id.ts';
 import { createApiPort, createCoachPort, createLlmPort } from './adapters.ts';
+import { createAppearanceStore } from './appearance.ts';
 import { createCoachEngine, type CoachEngine } from './engine/engine.ts';
 import type { Services } from './types.ts';
 
@@ -32,6 +33,8 @@ export async function createServices(win: Window): Promise<AppServices> {
   // Browser storage can be lost (a temporary origin, a reinstall): bring the
   // non-secret records back from Decaid's key-value backup before anything reads them.
   await restoreFromMirrorIfEmpty(storage);
+
+  const appearance = createAppearanceStore(storage.settings, (await storage.settings.get()).appearance);
 
   const coach = createCoachEngine({
     storage,
@@ -68,6 +71,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     coach,
     models: MODELS,
     appVersion: APP_VERSION,
+    appearance,
     dispose() {
       win.document.removeEventListener('visibilitychange', onVisibility);
       coach.dispose();

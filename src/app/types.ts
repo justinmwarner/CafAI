@@ -11,6 +11,7 @@ import type { Confidence } from '../coach/contract.ts';
 import type { ShotSummary } from '../coach/types.ts';
 import type { ModelInfo } from '../llm/types.ts';
 import type { Bag, ProfileVersion, Storage } from '../storage/types.ts';
+import type { AppearanceStore } from './appearance.ts';
 
 /** Everything the UI needs, provided once through ServicesProvider (src/app/services.tsx). */
 export interface Services {
@@ -22,6 +23,8 @@ export interface Services {
   coach: CoachController;
   models: readonly ModelInfo[];
   appVersion: string;
+  /** How CafAI looks: the appearance setting as live state. */
+  appearance: AppearanceStore;
 }
 
 export type UiRole = 'user' | 'assistant' | 'system';

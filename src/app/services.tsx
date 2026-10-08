@@ -1,6 +1,7 @@
 import { createContext, useContext, useSyncExternalStore, type ReactNode } from 'react';
 import type { CoachState, Services } from './types.ts';
 import type { TelemetryState } from '../api/types.ts';
+import type { Appearance } from '../storage/types.ts';
 
 const ServicesContext = createContext<Services | null>(null);
 
@@ -28,4 +29,10 @@ export function useTelemetry<T>(selector: (state: TelemetryState) => T): T {
 export function useCoach<T>(selector: (state: CoachState) => T): T {
   const { coach } = useServices();
   return useSyncExternalStore(coach.subscribe, () => selector(coach.getState()));
+}
+
+/** The appearance to render (Settings > Appearance). */
+export function useAppearance(): Appearance {
+  const { appearance } = useServices();
+  return useSyncExternalStore(appearance.subscribe, appearance.get);
 }
