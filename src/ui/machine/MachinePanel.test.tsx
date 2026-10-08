@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { Profiler } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { normalizeProfile } from '../../../mock/decaid/profiles.ts';
-import { GatewayError, type MachineSnapshot, type TelemetryState } from '../../api/types.ts';
+import { GatewayError, type LiveSample, type MachineSnapshot, type TelemetryState } from '../../api/types.ts';
 import blooming from '../../coach/templates/source/Blooming_espresso.json';
 import { TID } from '../testIds.ts';
 import { createFakeServices, IDLE_TELEMETRY, SAMPLE_WORKFLOW, type FakeServices } from '../testing/fakeServices.ts';
@@ -16,6 +16,13 @@ vi.mock('uplot', () => import('../testing/uplotMock.ts'));
 const machine = (patch: Partial<MachineSnapshot> & { state?: MachineSnapshot['state'] }): MachineSnapshot => ({
   ...IDLE_TELEMETRY.machine!,
   ...patch,
+});
+
+/** A pour frame `tS` seconds in, as telemetry hands one to the shot recording. */
+const sample = (tS: number): LiveSample => ({
+  tS,
+  machine: machine({ state: { state: 'espresso', substate: 'pouring' }, pressure: 9, flow: 2 }),
+  scale: { ...IDLE_TELEMETRY.scale!, weight: tS * 1.5 },
 });
 
 const DISCONNECTED: Partial<TelemetryState> = { machineConnected: false, scaleConnected: false, scale: null };
@@ -353,9 +360,9 @@ describe('MachinePanel graph modes', () => {
     const controls = screen.getByRole('region', { name: 'Machine controls' });
     const graph = screen.getByTestId(TID.liveGraph);
     const note = screen.getByTestId(TID.coachNote);
-    const left = status.parentElement!;
+    const left = controls.parentElement!;
     const right = graph.parentElement!;
-    expect(controls.parentElement).toBe(left);
+    expect(left.contains(status)).toBe(true);
     expect(note.parentElement).toBe(right);
     expect(left.nextElementSibling).toBe(right);
     expect(getComputedStyle(left.parentElement!).flexDirection).toBe('row');
@@ -368,6 +375,92 @@ describe('MachinePanel graph modes', () => {
     expect(screen.getByTestId(TID.espressoButton)).toBe(espresso);
     expect(getComputedStyle(left).display).toBe('contents');
     expect(getComputedStyle(left.parentElement!).flexDirection).toBe('column');
+  });
+
+  describe('an upright phone too short for everything at once', () => {
+    let clientHeight = 490;
+    beforeEach(() => {
+      clientHeight = 490;
+      vi.spyOn(Element.prototype, 'clientHeight', 'get').mockImplementation(() => clientHeight);
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    /** The Machine tab mid-shot, as the shell shows it on a phone. */
+    async function renderTab(awaitingOutcome = false) {
+      const services = createFakeServices();
+      const view = renderWithServices(<MachinePanel graph="full" awaitingOutcome={awaitingOutcome} />, services);
+      await act(async () => {});
+      const status = screen.getByRole('region', { name: 'Machine status' });
+      const controls = screen.getByRole('region', { name: 'Machine controls' });
+      return { ...view, services, status, controls, panel: controls.parentElement!.parentElement! };
+    }
+
+    const follows = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+    it('gives the shot the room of the status and the start buttons, while Stop stays the same button in the same place', async () => {
+      const { services, status, controls, rerenderWith } = await renderTab();
+      const stop = screen.getByTestId(TID.stopButton);
+      // No shot: the usual tab, the graph under the buttons.
+      expect(follows(controls, screen.getByTestId(TID.liveGraph))).toBe(true);
+      expect(status).toBeVisible();
+
+      act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+      const graph = screen.getByTestId(TID.liveGraph);
+      // Drawn over the status and the start row, which keep their places, hidden and out of reach.
+      expect(follows(graph, controls)).toBe(true);
+      expect(graph.parentElement!.parentElement!.contains(status)).toBe(true);
+      expect(status).not.toBeVisible();
+      expect(screen.getByTestId(TID.espressoButton)).not.toBeVisible();
+      // Stop is the very same button, and the coach's note comes under it.
+      expect(screen.getByTestId(TID.stopButton)).toBe(stop);
+      expect(stop).toBeVisible();
+      expect(follows(stop, screen.getByTestId(TID.coachNote))).toBe(true);
+      expect(screen.getAllByTestId(TID.liveGraph)).toHaveLength(1);
+
+      // The pour is over and the chat waits for the outcome: the shot keeps the room.
+      act(() => {
+        services.telemetry.emitSample(sample(0));
+        services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' });
+      });
+      rerenderWith(<MachinePanel graph="full" awaitingOutcome />);
+      expect(follows(screen.getByTestId(TID.liveGraph), controls)).toBe(true);
+      expect(screen.getByTestId(TID.coachNote)).toHaveTextContent('Done. Reading the shot');
+
+      // The outcome is in: the usual tab again, the same buttons.
+      rerenderWith(<MachinePanel graph="full" awaitingOutcome={false} />);
+      expect(follows(controls, screen.getByTestId(TID.liveGraph))).toBe(true);
+      expect(status).toBeVisible();
+      expect(screen.getByTestId(TID.espressoButton)).toBeVisible();
+      expect(screen.getByTestId(TID.stopButton)).toBe(stop);
+    });
+
+    it('keeps the usual tab where there is room for it all, and on a tab the barista has scrolled', async () => {
+      clientHeight = 700;
+      const tall = await renderTab();
+      act(() => tall.services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+      expect(follows(tall.controls, screen.getByTestId(TID.liveGraph))).toBe(true);
+      expect(tall.status).toBeVisible();
+      tall.unmount();
+
+      clientHeight = 490;
+      const scrolled = await renderTab();
+      Object.defineProperty(scrolled.panel, 'scrollTop', { configurable: true, value: 40 });
+      fireEvent.scroll(scrolled.panel);
+      act(() => scrolled.services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+      expect(follows(scrolled.controls, screen.getByTestId(TID.liveGraph))).toBe(true);
+      expect(scrolled.status).toBeVisible();
+    });
+
+    it('never covers the status on a tablet, nor beside a phone on its side', async () => {
+      const services = createFakeServices();
+      const { rerenderWith } = renderWithServices(<MachinePanel graph="preview" onOpenGraph={() => {}} />, services);
+      await act(async () => {});
+      act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+      expect(screen.getByRole('region', { name: 'Machine status' })).toBeVisible();
+      rerenderWith(<MachinePanel graph="full" columns={2} />);
+      expect(screen.getByRole('region', { name: 'Machine status' })).toBeVisible();
+      expect(screen.getByTestId(TID.espressoButton)).toBeVisible();
+    });
   });
 
   it('graph="none", or the older showGraph={false}, leaves the graph out and keeps the rest', async () => {

@@ -68,15 +68,33 @@ export function stepNameAt(stepNames: readonly string[] | null, frame: unknown):
   return typeof frame === 'number' && Number.isInteger(frame) && frame >= 0 ? (stepNames?.[frame] ?? null) : null;
 }
 
+/** A word with a capital and nothing else in capitals: "Up" in "Pressure Up", not "PI" or "LRv3". */
+const CAPITALIZED_WORD = /^\p{Lu}\p{Ll}+$/u;
+
+/**
+ * A step name in sentence case, as the app writes its own labels: "pause" is
+ * "Pause", "Pressure Up" is "Pressure up". Profiles spell their steps either
+ * way. A word in capitals or in mixed case ("PI", "LRv3") is kept as its
+ * author wrote it.
+ */
+export function sentenceCase(name: string): string {
+  const text = name
+    .split(' ')
+    .map((word, index) => (index > 0 && CAPITALIZED_WORD.test(word) ? word.toLowerCase() : word))
+    .join(' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 /**
  * The running step as the Shot view names it: "Pour · step 3 of 3", or just
- * "Pour" when the profile has one step. Null when the step, or its name, is
- * not known: a wrong count is worse than none.
+ * "Pour" when the profile has one step, in sentence case. Null when the step,
+ * or its name, is not known: a wrong count is worse than none.
  */
 export function stepProgress(stepNames: readonly string[] | null, frame: unknown): string | null {
   const name = stepNameAt(stepNames, frame);
   if (!name || stepNames === null) return null;
-  return stepNames.length === 1 ? name : `${name} · step ${(frame as number) + 1} of ${stepNames.length}`;
+  const shown = sentenceCase(name);
+  return stepNames.length === 1 ? shown : `${shown} · step ${(frame as number) + 1} of ${stepNames.length}`;
 }
 
 /**

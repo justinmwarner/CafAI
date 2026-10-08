@@ -92,7 +92,14 @@ function ConnectionRow() {
   );
 }
 
-/** "Pulling a shot: pause" during Blooming's bloom: the step says why the pump is off. */
+/**
+ * "Pulling a shot: pause" during Blooming's bloom: the step says why the pump
+ * is off. Always one line: a step name too long for the column ("Pulling a
+ * shot: reset temperature" in 340 px) is cut short rather than wrapped, so
+ * the readouts, the buttons and Stop under it never jump as the steps change.
+ * The whole line is its title and what a screen reader hears, and the Shot
+ * view names the step in full.
+ */
 function StateLine({ stepNames }: { stepNames: readonly string[] | null }) {
   const text = useTelemetry((s) =>
     describeMachineState(
@@ -103,7 +110,7 @@ function StateLine({ stepNames }: { stepNames: readonly string[] | null }) {
     ),
   );
   return (
-    <Typography data-testid={TID.machineState} variant="h5" component="p" aria-live="polite" sx={{ mt: 0.25 }}>
+    <Typography data-testid={TID.machineState} variant="h5" component="p" aria-live="polite" noWrap title={text} sx={{ mt: 0.25 }}>
       {text}
     </Typography>
   );

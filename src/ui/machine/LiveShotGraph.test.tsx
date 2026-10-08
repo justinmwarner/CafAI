@@ -23,7 +23,7 @@ import { renderWithServices } from '../testing/renderWithServices.tsx';
 import { fakePlots, resetFakePlots } from '../testing/uplotMock.ts';
 import { buildPalette, namedTint } from '../palette.ts';
 import { createCafaiTheme, theme } from '../theme.ts';
-import { formatSeconds } from './format.ts';
+import { DASH, formatSeconds } from './format.ts';
 import { LiveShotGraph } from './LiveShotGraph.tsx';
 import { LoadedProfileContextForTests, LoadedProfileProvider } from './LoadedProfileContext.tsx';
 import type { LoadedProfileState } from './useLoadedProfile.ts';
@@ -158,7 +158,7 @@ describe('LiveShotGraph', () => {
     expect(services.telemetry.sampleListenerCount).toBe(1);
     expect(fakePlots).toHaveLength(1);
     expect(screen.getByTestId(TID.liveGraph)).toBeInTheDocument();
-    expect(screen.getByTestId(TID.shotTimer)).toHaveTextContent('0.0 s');
+    expect(screen.getByTestId(TID.shotTimer)).toHaveTextContent(DASH);
 
     // The plot goes with the graph; the recording does not.
     unmount();
@@ -268,6 +268,30 @@ describe('LiveShotGraph', () => {
     expect(plot.setDataCalls.at(-1)).toEqual([]);
     expect(screen.getByTestId(TID.shotTimer)).toHaveTextContent('0.0 s');
     expect(screen.getByText('Live shot')).toBeInTheDocument();
+  });
+
+  it('shows a dash for the time while there is no shot to show, in the panel and in the full graph', () => {
+    for (const variant of ['panel', 'full'] as const) {
+      const { services, unmount } = renderWithServices(<LiveShotGraph variant={variant} />);
+      const timer = screen.getByTestId(TID.shotTimer);
+      expect(timer.textContent, variant).toBe(DASH);
+
+      // A shot that started is timed from zero, before its first frame too.
+      act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+      expect(timer.textContent, variant).toBe('0.0 s');
+      act(() => {
+        services.telemetry.emitSample(sample(0));
+        services.telemetry.emitSample(sample(1.5));
+      });
+      runFrames();
+      expect(timer.textContent, variant).toBe('1.5 s');
+
+      // One that ended before its first frame leaves nothing to show again.
+      act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-2' }));
+      act(() => services.telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: null }));
+      expect(timer.textContent, variant).toBe(DASH);
+      unmount();
+    }
   });
 
   it('stops the timer on the frame before the one Decaid stopped on, and plots on until the shot is finished', () => {
@@ -628,7 +652,7 @@ describe('LiveShotGraph: the full graph (the Shot view)', () => {
     ]);
     expect(screen.queryByRole('list', { name: /legend/i })).not.toBeInTheDocument();
     expect(screen.getByText(/pull a shot/i)).toBeInTheDocument();
-    expect(screen.getByTestId(TID.shotTimer)).toHaveTextContent('0.0 s');
+    expect(screen.getByTestId(TID.shotTimer)).toHaveTextContent(DASH);
     expect(screen.getByTestId(TID.shotTimer)).toHaveAttribute('aria-label', 'Shot time');
 
     act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
@@ -701,9 +725,50 @@ describe('LiveShotGraph: the full graph (the Shot view)', () => {
     );
     await act(async () => {});
     act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
-    expect(screen.getByText('preinfusion · step 2 of 3')).toBeInTheDocument();
+    // Blooming spells its steps in lowercase; the Shot view names them in sentence case.
+    expect(screen.getByText('Preinfusion · step 2 of 3')).toBeInTheDocument();
     expect(fullReadoutItem('Weight')).toHaveTextContent('of 40');
     expect(services.decaid.calls.filter((call) => call.method === 'getWorkflow')).toHaveLength(1);
+  });
+
+  it('keeps the step line through the shot, named or not, so the readouts under it never move', () => {
+    const services = createFakeServices({ telemetry: { machine: { ...IDLE_TELEMETRY.machine!, profileFrame: 0 } } });
+    const at = (profileFrame: number) =>
+      act(() => services.telemetry.setState({ machine: { ...IDLE_TELEMETRY.machine!, profileFrame } }));
+    renderWithServices(withReading(reading({ stepNames: ['fill', '', 'Slow Pour'] }), <LiveShotGraph variant="full" />), services);
+    // The header: the caption and the timer, and while there is a shot the step's line between them.
+    const header = screen.getByTestId(TID.shotTimer).parentElement!;
+    expect(header.children).toHaveLength(2);
+
+    act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+    expect(header.children).toHaveLength(3);
+    const step = header.children[1]!;
+    expect(step).toHaveTextContent('Fill · step 1 of 3');
+    // Cut short only where even a line of its own is too narrow: the whole name is its title.
+    expect(step).toHaveAttribute('title', 'Fill · step 1 of 3');
+    // A step without a name keeps the same, empty line.
+    at(1);
+    expect(header.children[1]).toBe(step);
+    expect(step).toBeEmptyDOMElement();
+    at(2);
+    expect(step).toHaveTextContent('Slow pour · step 3 of 3');
+
+    // After the pour the line stays, empty, until the next shot.
+    act(() => {
+      services.telemetry.emitSample(sample(0));
+      services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' });
+    });
+    expect(screen.getByText('Last shot')).toBeInTheDocument();
+    expect(header.children[1]).toBe(step);
+    expect(step).toBeEmptyDOMElement();
+  });
+
+  it('takes the phone sizes at any width when compact (a phone on its side)', () => {
+    const { rerenderWith } = renderWithServices(<LiveShotGraph variant="full" />);
+    // No media query matches here, so the full sizes are the base ones.
+    expect(getComputedStyle(screen.getByTestId(TID.shotTimer)).fontSize).toBe('46px');
+    rerenderWith(<LiveShotGraph variant="full" compact />);
+    expect(getComputedStyle(screen.getByTestId(TID.shotTimer)).fontSize).toBe('34px');
   });
 
   it('names no step outside the shell (no shared reading), and none in the panel', () => {
@@ -785,7 +850,7 @@ describe('LiveShotGraph: the preview card (onOpen)', () => {
     expect(button).toBe(screen.getByTestId(TID.previewGraph));
     // The panel inside it, legend and all, with the plot drawn there.
     expect(within(button).getByTestId(TID.liveGraph)).toBeInTheDocument();
-    expect(within(button).getByTestId(TID.shotTimer)).toHaveTextContent('0.0 s');
+    expect(within(button).getByTestId(TID.shotTimer)).toHaveTextContent(DASH);
     expect(within(button).getByRole('list', { name: /legend/i })).toBeInTheDocument();
     expect(button.contains(fakePlots[0]!.target!)).toBe(true);
 

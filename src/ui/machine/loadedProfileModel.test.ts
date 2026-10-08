@@ -10,6 +10,7 @@ import {
   profileStepNames,
   readLoadedProfile,
   sameStepNames,
+  sentenceCase,
   stepNameAt,
   stepProgress,
   workflowTargetYield,
@@ -100,11 +101,38 @@ describe('the running step', () => {
     expect(stepProgress(['Flat 9 bar'], 0)).toBe('Flat 9 bar');
   });
 
+  it('names the step in sentence case, whatever case the profile spells it in', () => {
+    // Blooming Espresso's own names, all lowercase.
+    const blooming = ['preinfusion start', 'preinfusion', 'pause', 'ramp', 'flat flow', 'reset temperature'];
+    expect(stepProgress(blooming, 0)).toBe('Preinfusion start · step 1 of 6');
+    expect(stepProgress(blooming, 2)).toBe('Pause · step 3 of 6');
+    // Londonium's, in title case.
+    expect(stepProgress(['Fill start', 'Pressure Up', 'Flow Limit'], 1)).toBe('Pressure up · step 2 of 3');
+    expect(stepProgress(['hold at 4.5 ml/s'], 0)).toBe('Hold at 4.5 ml/s');
+  });
+
   it('says nothing when the step or its name is unknown', () => {
     expect(stepProgress(null, 0)).toBeNull();
     expect(stepProgress(names, 3)).toBeNull();
     expect(stepProgress(names, undefined)).toBeNull();
     expect(stepProgress(['Fill', '', 'Pour'], 1)).toBeNull();
+  });
+});
+
+describe('sentenceCase', () => {
+  it('capitalizes the first word and lowers the capital of the others', () => {
+    expect(sentenceCase('pause')).toBe('Pause');
+    expect(sentenceCase('Pressure Decline')).toBe('Pressure decline');
+    expect(sentenceCase('forced rise without limit')).toBe('Forced rise without limit');
+    expect(sentenceCase('Allongé Bloom')).toBe('Allongé bloom');
+  });
+
+  it("keeps a word the author set in capitals or mixed case, and anything that is not a word's capital", () => {
+    expect(sentenceCase('PI hold')).toBe('PI hold');
+    expect(sentenceCase('slow LRv3 Ramp')).toBe('Slow LRv3 ramp');
+    expect(sentenceCase('2nd Fill')).toBe('2nd fill');
+    expect(sentenceCase('hold at 4.5 ml/s')).toBe('Hold at 4.5 ml/s');
+    expect(sentenceCase('')).toBe('');
   });
 });
 

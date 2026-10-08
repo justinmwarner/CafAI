@@ -26,6 +26,8 @@
  * card is the tablet's button to the Shot view. 'full' is the Shot view (and
  * the phone's Machine tab): the running step, the timer in display size and
  * four big readouts in place of the legend.
+ *
+ * Before the first shot there is no time to show: both timers show a dash.
  */
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import uPlot from 'uplot';
@@ -40,7 +42,7 @@ import type { CoachUiMessage } from '../../app/types.ts';
 import type { ShotSummary } from '../../coach/types.ts';
 import type { GraphPalette } from '../palette.ts';
 import { TID } from '../testIds.ts';
-import { formatSeconds } from './format.ts';
+import { DASH, formatSeconds } from './format.ts';
 import { useSharedLoadedProfile } from './LoadedProfileContext.tsx';
 import { stepProgress } from './loadedProfileModel.ts';
 import type { SeriesKey, ShotValues } from './shotBuffer.ts';
@@ -208,15 +210,23 @@ function LiveDot({ size }: { size: number }) {
 }
 
 /**
- * "Pour · step 3 of 3" beside the Shot view's caption. Its own component, so
- * the machine frames it watches re-render this line alone, and only when the
- * step changes.
+ * "Pour · step 3 of 3" beside the Shot view's caption (under it on a phone).
+ * Its own component, so the machine frames it watches re-render this line
+ * alone, and only when the step changes. Without names (none read yet, a step
+ * the profile does not name, the pour over) the line stays, empty, so nothing
+ * under it moves as the steps change.
  */
-function StepProgress({ stepNames }: { stepNames: readonly string[] }) {
-  const text = useTelemetry((s) => stepProgress(stepNames, s.machine?.profileFrame));
-  if (text === null) return null;
+function StepProgress({ stepNames }: { stepNames: readonly string[] | null }) {
+  const text = useTelemetry((s) => (stepNames === null ? null : stepProgress(stepNames, s.machine?.profileFrame)));
   return (
-    <Typography variant="body2" component="span" color="text.secondary" noWrap sx={{ minWidth: 0, fontWeight: 550 }}>
+    <Typography
+      variant="body2"
+      component="span"
+      color="text.secondary"
+      noWrap
+      title={text ?? undefined}
+      sx={{ gridArea: 'step', minWidth: 0, minHeight: '1.35em', lineHeight: 1.35, fontWeight: 550 }}
+    >
       {text}
     </Typography>
   );
@@ -229,9 +239,15 @@ export interface LiveShotGraphProps {
   variant?: 'panel' | 'full';
   /** Makes the whole panel a button that opens the Shot view (the tablet's preview chart). Panel only. */
   onOpen?: () => void;
+  /**
+   * Full only: the graph has an upright phone's width at any window width (a
+   * phone on its side gives it a column that narrow), so it takes the
+   * phone's sizes and puts the step on a line of its own, as below 600 px.
+   */
+  compact?: boolean;
 }
 
-export function LiveShotGraph({ minPlotHeight, variant = 'panel', onOpen }: LiveShotGraphProps) {
+export function LiveShotGraph({ minPlotHeight, variant = 'panel', onOpen, compact = false }: LiveShotGraphProps) {
   const full = variant === 'full';
   // The full graph is the view the preview opens, never a button to itself.
   const button = !full && onOpen !== undefined;
@@ -380,9 +396,10 @@ export function LiveShotGraph({ minPlotHeight, variant = 'panel', onOpen }: Live
     // has no container queries): the Shot view of a tablet held upright and
     // a phone on its side get smaller readouts, an upright phone's Machine tab
     // the phone sizes of the mockup, so four readouts with their units always
-    // fit side by side.
+    // fit side by side. A compact graph has the phone sizes at any width.
     const narrow = muiTheme.breakpoints.down('md');
     const phone = muiTheme.breakpoints.down('sm');
+    const phoneSized = (styles: object) => (compact ? styles : { [phone]: styles });
     return (
       <Box
         component="section"
@@ -390,21 +407,33 @@ export function LiveShotGraph({ minPlotHeight, variant = 'panel', onOpen }: Live
         data-testid={TID.liveGraph}
         sx={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', gap: 1.25 }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
-          {phase === 'live' && <LiveDot size={9} />}
-          <Typography variant="subtitle1" component="h2" noWrap sx={{ flex: 'none', fontWeight: 700 }}>
-            {caption}
-          </Typography>
-          {phase === 'live' && stepNames !== null && <StepProgress stepNames={stepNames} />}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+            gridTemplateAreas: '"caption step timer"',
+            alignItems: 'center',
+            columnGap: 1.25,
+            // A phone's width leaves the step no room beside the caption: it takes the line under it, whole.
+            ...phoneSized({ gridTemplateColumns: 'minmax(0, 1fr) auto', gridTemplateAreas: '"caption timer" "step step"', rowGap: '2px' }),
+          }}
+        >
+          <Box sx={{ gridArea: 'caption', display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
+            {phase === 'live' && <LiveDot size={9} />}
+            <Typography variant="subtitle1" component="h2" noWrap sx={{ fontWeight: 700 }}>
+              {caption}
+            </Typography>
+          </Box>
+          {phase !== 'empty' && <StepProgress stepNames={phase === 'live' ? stepNames : null} />}
           <Typography
             ref={timer}
             data-testid={TID.shotTimer}
             variant="display"
             component="span"
             aria-label="Shot time"
-            sx={{ flex: 'none', ml: 'auto', [phone]: { fontSize: '2.125rem' } }}
+            sx={{ gridArea: 'timer', justifySelf: 'end', ...phoneSized({ fontSize: '2.125rem' }) }}
           >
-            {formatSeconds(0)}
+            {phase === 'empty' ? DASH : formatSeconds(0)}
           </Typography>
         </Box>
 
@@ -418,12 +447,12 @@ export function LiveShotGraph({ minPlotHeight, variant = 'panel', onOpen }: Live
             display: 'grid',
             gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
             gap: 1.25,
-            [phone]: { columnGap: 0.5 },
+            ...phoneSized({ columnGap: 0.5 }),
           }}
         >
           {READOUTS.map((item) => (
             <Box component="li" key={item.key} sx={{ minWidth: 0 }}>
-              <Typography variant="label" component="div" color="text.secondary" noWrap sx={{ [phone]: { fontSize: '0.71875rem' } }}>
+              <Typography variant="label" component="div" color="text.secondary" noWrap sx={phoneSized({ fontSize: '0.71875rem' })}>
                 <Box
                   component="span"
                   aria-hidden
@@ -435,7 +464,7 @@ export function LiveShotGraph({ minPlotHeight, variant = 'panel', onOpen }: Live
                     bgcolor: colors[item.key],
                     verticalAlign: 'middle',
                     mr: 0.75,
-                    [phone]: { width: 10, mr: 0.5 },
+                    ...phoneSized({ width: 10, mr: 0.5 }),
                   }}
                 />
                 {item.label}
@@ -444,7 +473,11 @@ export function LiveShotGraph({ minPlotHeight, variant = 'panel', onOpen }: Live
               <Typography
                 variant="readoutLarge"
                 component="div"
-                sx={{ whiteSpace: 'nowrap', minHeight: '1.1em', [narrow]: { fontSize: '1.5rem' }, [phone]: { fontSize: '1.125rem' } }}
+                sx={{
+                  whiteSpace: 'nowrap',
+                  minHeight: '1.1em',
+                  ...(compact ? { fontSize: '1.125rem' } : { [narrow]: { fontSize: '1.5rem' }, [phone]: { fontSize: '1.125rem' } }),
+                }}
               >
                 <span ref={readoutRef(item.key)}>{legendValue(item, null)}</span>
                 {/* Beside the node paint() writes, never in it, so the target survives every frame.
@@ -452,7 +485,7 @@ export function LiveShotGraph({ minPlotHeight, variant = 'panel', onOpen }: Live
                 {item.key === 'weight' && targetYieldG !== null && phase !== 'empty' && (
                   <Box
                     component="span"
-                    sx={{ fontSize: '0.5em', fontWeight: 550, letterSpacing: 0, color: 'text.secondary', [phone]: { display: 'none' } }}
+                    sx={{ fontSize: '0.5em', fontWeight: 550, letterSpacing: 0, color: 'text.secondary', ...phoneSized({ display: 'none' }) }}
                   >
                     {` of ${Math.round(targetYieldG)}`}
                   </Box>
@@ -496,7 +529,7 @@ export function LiveShotGraph({ minPlotHeight, variant = 'panel', onOpen }: Live
           aria-label="Shot time"
           sx={{ fontSize: '1.25rem', ...(button ? { ml: 'auto' } : null) }}
         >
-          {formatSeconds(0)}
+          {phase === 'empty' ? DASH : formatSeconds(0)}
         </Typography>
         {button && <ChevronRightRounded aria-hidden sx={{ flex: 'none', color: 'primary.main', fontSize: '1.25rem' }} />}
       </Box>

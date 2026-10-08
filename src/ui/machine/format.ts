@@ -7,7 +7,8 @@
  */
 import type { WaterLevels } from '../../api/types.ts';
 
-const DASH = '—';
+/** What a readout shows for a value the machine has not given: never a 0, never a unit alone. */
+export const DASH = '—';
 
 const STATE_WORDS: Record<string, string> = {
   idle: 'Ready',

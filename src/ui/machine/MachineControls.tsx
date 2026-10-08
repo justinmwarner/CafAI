@@ -47,10 +47,19 @@ function errorText(cause: unknown, failure: string): string {
   return `${failure} ${detail}`;
 }
 
-const START_HEIGHT = 60;
+/** The start row's height (the start buttons, or the note that replaces them on a GHC machine). */
+export const START_HEIGHT = 60;
 const ROW_HEIGHT = 52;
 
-export function MachineControls() {
+export interface MachineControlsProps {
+  /**
+   * Something is drawn over the start row (a short phone's shot graph): the
+   * row is hidden in its place, untouchable, and Stop stays where it was.
+   */
+  startsCovered?: boolean;
+}
+
+export function MachineControls({ startsCovered = false }: MachineControlsProps) {
   const { decaid } = useServices();
   const connected = useTelemetry((s) => s.machineConnected);
   const state = useTelemetry((s) => s.machine?.state?.state ?? null);
@@ -89,10 +98,11 @@ export function MachineControls() {
   );
 
   const sleepWake = model.sleepWake;
+  const hiddenStarts = startsCovered ? ({ visibility: 'hidden' } as const) : null;
   return (
     <Box component="section" aria-label="Machine controls" sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
       {model.startsVisible ? (
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 1 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 1, ...hiddenStarts }}>
           {START_BUTTONS.map((spec) => (
             <Button
               key={spec.command}
@@ -104,9 +114,14 @@ export function MachineControls() {
               sx={{
                 minHeight: START_HEIGHT,
                 flexDirection: 'column',
+                // From the top, so the four icons share a line even where a column too narrow wraps a label.
+                justifyContent: 'flex-start',
+                pt: '9px',
                 gap: 0.25,
-                px: 0.5,
-                fontSize: '0.9375rem',
+                // "Hot water" on one line in the 340 px machine column and beside a phone's rail.
+                px: '2px',
+                fontSize: '0.875rem',
+                letterSpacing: 0,
                 lineHeight: 1.15,
               }}
             >
@@ -119,6 +134,7 @@ export function MachineControls() {
         <Box
           role="note"
           sx={{
+            ...hiddenStarts,
             minHeight: START_HEIGHT,
             display: 'flex',
             alignItems: 'center',
