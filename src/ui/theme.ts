@@ -138,6 +138,17 @@ export function createCafaiTheme(palette: Palette = buildPalette('dark', namedTi
           },
           // Even line lengths on headings; engines before Chromium 114 simply ignore it.
           'h1, h2, h3': { textWrap: 'balance' },
+          // Asked for less motion: every animation, MUI's spinners and progress
+          // bars included, settles at once. Each one has words beside it that
+          // say what is happening, so nothing is lost by holding still.
+          '@media (prefers-reduced-motion: reduce)': {
+            '*, *::before, *::after': {
+              animationDuration: '0.01ms !important',
+              animationIterationCount: '1 !important',
+              transitionDuration: '0.01ms !important',
+              scrollBehavior: 'auto !important',
+            },
+          },
         },
       },
       MuiPaper: {

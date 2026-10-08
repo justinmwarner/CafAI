@@ -92,6 +92,12 @@ const PAIRS: readonly (readonly [string, number, (p: Palette) => readonly (reado
     (p) => [p.success, p.warning, p.error, p.info].flatMap((c) => [[c, p.background], [c, p.surface]] as const),
   ],
   ['onError on error', 4.5, (p) => [[p.onError, p.error]]],
+  // Tonal buttons in a status colour (Forget key, Stop at rest) draw it on the raised fill.
+  [
+    'status colours on raised',
+    4.5,
+    (p) => [p.success, p.warning, p.error].map((c) => [c, p.raised] as const),
+  ],
   [
     'graph series on background and surface',
     3,

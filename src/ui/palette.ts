@@ -115,7 +115,7 @@ const FIXED: Record<ThemeMode, Record<'success' | 'warning' | 'error' | 'info' |
   light: {
     success: [0.5, 0.13, 155],
     warning: [0.52, 0.12, 75],
-    error: [0.55, 0.18, 25],
+    error: [0.53, 0.18, 25],
     info: [0.52, 0.15, 250],
     live: [0.58, 0.2, 25],
     pressure: [0.55, 0.14, 160],
