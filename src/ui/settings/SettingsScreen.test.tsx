@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { CoachState } from '../../app/types.ts';
-import { applySettingsPatch, normalizeSettings } from '../../storage/settings.ts';
+import { applySettingsPatch, DEFAULT_APPEARANCE, normalizeSettings } from '../../storage/settings.ts';
 import type { Settings } from '../../storage/types.ts';
 import { createFakeServices, type FakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
@@ -177,6 +177,7 @@ describe('SettingsScreen coach settings', () => {
       grinderSetting: '2.5',
       grinderId: null,
       activeBagId: 'bag-1',
+      appearance: DEFAULT_APPEARANCE,
     });
     expect(methods(services)).toEqual(['refresh']);
     // The fields show what was saved; nothing was taken out, so nothing more is said.
@@ -219,7 +220,7 @@ describe('SettingsScreen keeps a pasted API key out of the settings (D37)', () =
     expect(screen.getByText('Settings saved.')).toBeInTheDocument();
     expect(screen.getByTestId(TID.grinderName)).toHaveValue('Niche Zero');
     expect(screen.getByTestId(TID.grinderSetting)).toHaveValue('');
-    expect(await services.storage.settings.get()).toEqual({ ...typed, grinderSetting: null, grinderId: null });
+    expect(await services.storage.settings.get()).toEqual({ ...typed, grinderSetting: null, grinderId: null, appearance: DEFAULT_APPEARANCE });
     expect(methods(services)).toEqual(['refresh']);
     noKeyInAnyField();
     expect(document.body.innerHTML).not.toContain(PASTED_KEY.slice(0, 20));
@@ -311,6 +312,7 @@ describe('SettingsScreen grinder from Decaid', () => {
       grinderSetting: '13.5',
       grinderId: 'g-niche',
       activeBagId: 'bag-1',
+      appearance: DEFAULT_APPEARANCE,
     });
     expect(methods(services)).toEqual(['refresh']);
     expect(services.decaid.calls.map((call) => call.method)).not.toContain('updateWorkflow');
