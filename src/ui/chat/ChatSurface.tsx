@@ -52,6 +52,8 @@ export interface ChatSurfaceProps {
   inputDisabled?: boolean;
   placeholder: string;
   canUndo: boolean;
+  /** The one shot whose card may open the big graph (the live/last shot the app-wide trace holds); null or absent when none can. */
+  graphShotId?: string | null;
   onSend(text: string): void;
   onPickTemplate(requestId: string, templateId: string): void;
   onAnswerOptions(requestId: string, selected: string[], otherText: string | null): void;
@@ -60,6 +62,8 @@ export interface ChatSurfaceProps {
   onUndo(): void;
   /** A star tapped on a shot card (1-5). */
   onRateShot(shotId: string, stars: number): void;
+  /** Opens the shot route (#/shot) from graphShotId's card. Without it no card shows Graph. */
+  onOpenGraph?(): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -157,12 +161,17 @@ interface PartActions {
   decline(requestId: string): void;
   undo(): void;
   rateShot(shotId: string, stars: number): void;
+  openGraph(): void;
 }
 
 interface PartsContextValue {
   busy: boolean;
   canUndo: boolean;
   latestAppliedDiff: string | null;
+  /** The shot whose card may show Graph; compared against each shot part's id. */
+  graphShotId: string | null;
+  /** Whether a graph handler was given at all (ShotView still gates on graphShotId matching). */
+  hasOpenGraph: boolean;
   actions: PartActions;
 }
 
@@ -230,15 +239,18 @@ function DiffView({ data }: { data: unknown }) {
 }
 
 function ShotView({ data }: { data: unknown }) {
-  const { busy, actions } = usePartsContext();
+  const { busy, graphShotId, hasOpenGraph, actions } = usePartsContext();
   const part = cardOf(data, 'shot');
   if (!part) return null;
+  // The trace holds one shot: only the card of that shot may open its graph.
+  const showGraph = hasOpenGraph && part.shotId === graphShotId;
   return (
     <ShotCard
       summary={part.summary}
       stars={part.stars ?? null}
       disabled={busy}
       onRate={(stars) => actions.rateShot(part.shotId, stars)}
+      onOpenGraph={showGraph ? actions.openGraph : undefined}
     />
   );
 }
@@ -365,8 +377,11 @@ function closedStream(): ReadableStream<never> {
 }
 
 export function ChatSurface(props: ChatSurfaceProps) {
-  const { messages, busy, inputDisabled = false, placeholder, canUndo } = props;
+  const { messages, busy, inputDisabled = false, placeholder, canUndo, graphShotId = null, onOpenGraph } = props;
   const sendBlocked = busy || inputDisabled;
+  // A boolean, not the raw (often inline, identity-changing) callback: keeps
+  // partsContext stable so part renderers do not re-render on every parent render.
+  const hasOpenGraph = onOpenGraph !== undefined;
 
   // Latest-ref: the adapter and part actions stay stable while the parent
   // passes fresh callbacks on every render (every streamed token).
@@ -411,13 +426,15 @@ export function ChatSurface(props: ChatSurfaceProps) {
       undo: act(() => propsRef.current.onUndo()),
       // A rating is often given on an older card: the view stays where the barista is reading.
       rateShot: (shotId: string, stars: number) => propsRef.current.onRateShot(shotId, stars),
+      // Navigation, not a chat append: no need to follow the thread for it either.
+      openGraph: () => propsRef.current.onOpenGraph?.(),
     };
   }, []);
 
   const latestAppliedDiff = useMemo(() => latestAppliedDiffId(messages), [messages]);
   const partsContext = useMemo<PartsContextValue>(
-    () => ({ busy, canUndo, latestAppliedDiff, actions }),
-    [busy, canUndo, latestAppliedDiff, actions],
+    () => ({ busy, canUndo, latestAppliedDiff, graphShotId, hasOpenGraph, actions }),
+    [busy, canUndo, latestAppliedDiff, graphShotId, hasOpenGraph, actions],
   );
 
   const chatMessages = useMemo(() => toChatMessages(messages, busy), [messages, busy]);

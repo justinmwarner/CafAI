@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import './testing/setup.ts';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { CoachState } from '../../app/types.ts';
-import type { ShotStateEvent } from '../../api/types.ts';
-import { createFakeServices, type FakeServices } from '../testing/fakeServices.ts';
+import type { LiveSample, ShotStateEvent } from '../../api/types.ts';
+import { createFakeServices, IDLE_TELEMETRY, type FakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
 import { CoachScreen } from './CoachScreen.tsx';
 import { KIAMBU, SANTOS, coachStateFor } from './testing/fixtures.ts';
@@ -35,7 +35,20 @@ function shotStateEvent(state: ShotStateEvent['state']): ShotStateEvent {
   };
 }
 
+/** A pouring frame, minimal enough for the shot trace to record it. */
+function sample(tS: number): LiveSample {
+  return {
+    tS,
+    machine: { ...IDLE_TELEMETRY.machine!, state: { state: 'espresso', substate: 'pouring' }, pressure: 9, flow: 2 },
+    scale: { timestamp: '', weight: tS * 1.5, weightFlow: 1.5, battery: null, timerValue: null },
+  };
+}
+
 describe('CoachScreen', () => {
+  afterEach(() => {
+    window.location.hash = '';
+  });
+
   it('waits for the engine to load', () => {
     renderCoach({ ready: false });
     expect(screen.getByText('Loading your bags…')).toBeInTheDocument();
@@ -171,6 +184,20 @@ describe('CoachScreen', () => {
     const services = renderCoach(coachStateFor('options'));
     await userEvent.click(screen.getByRole('radio', { name: 'Rate 5 out of 5' }));
     expect(services.coach.calls).toEqual([{ method: 'rateShot', args: ['shot-1', 5] }]);
+  });
+
+  it('shows Graph on the finished shot card, and opens the shot route from it', async () => {
+    const services = createFakeServices({ coach: coachStateFor('shot') });
+    renderWithServices(<CoachScreen />, services);
+    act(() => {
+      services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' });
+      services.telemetry.emitSample(sample(0));
+      services.telemetry.emitSample(sample(1));
+      services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: null });
+    });
+    const card = screen.getByTestId(TID.shotCard);
+    await userEvent.click(within(card).getByTestId(TID.openShotGraph));
+    expect(window.location.hash).toBe('#/shot');
   });
 
   it('keeps the bag on screen while a shot is pulled', () => {

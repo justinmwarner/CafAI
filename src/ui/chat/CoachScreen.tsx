@@ -2,7 +2,7 @@
  * The coach route (#/): bag header, error banner, and the chat. Renders
  * CoachState and calls the controller; it keeps no coaching state itself.
  */
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -21,6 +21,8 @@ import type { Bag, ProfileVersion } from '../../storage/types.ts';
 import type { CoachPhase, CoachUiMessage } from '../../app/types.ts';
 import { useCoach, useServices, useTelemetry } from '../../app/services.tsx';
 import { isShotRunning } from '../../api/workflow.ts';
+import { shotTraceFor } from '../machine/shotTrace.ts';
+import { navigate } from '../router.ts';
 import { TID } from '../testIds.ts';
 import { templateName } from '../history/historyModel.ts';
 import { ChatSurface } from './ChatSurface.tsx';
@@ -213,7 +215,7 @@ function NewBagCta({ hasBags, disabled }: { hasBags: boolean; disabled: boolean 
 }
 
 export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
-  const { coach } = useServices();
+  const { coach, telemetry } = useServices();
   const ready = useCoach((s) => s.ready);
   const hasApiKey = useCoach((s) => s.hasApiKey);
   const bags = useCoach((s) => s.bags);
@@ -226,6 +228,9 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
   const canUndo = useCoach((s) => s.canUndo);
   // A shot belongs to the bag on screen: no switching while it is pulled.
   const shotRunning = useTelemetry(isShotRunning);
+  // The app-wide shot recording: its finished shot (if any) is the one card that may open the big graph.
+  const trace = useMemo(() => shotTraceFor(telemetry), [telemetry]);
+  const { finishedShotId } = useSyncExternalStore(trace.subscribe, trace.getState);
 
   const listedBags = useMemo(() => pickerBags(bags, activeBag), [bags, activeBag]);
   const placeholder = useMemo(() => composerPlaceholder(phase, messages), [phase, messages]);
@@ -253,6 +258,7 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
           busy={busy}
           placeholder={placeholder}
           canUndo={canUndo}
+          graphShotId={finishedShotId}
           onSend={(text) => fire(coach.sendText(text))}
           onPickTemplate={(requestId, templateId) => fire(coach.pickTemplate(requestId, templateId))}
           onAnswerOptions={(requestId, selected, otherText) => fire(coach.answerOptions(requestId, selected, otherText))}
@@ -260,6 +266,7 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
           onDecline={(requestId) => fire(coach.declineChange(requestId))}
           onUndo={() => fire(coach.undo())}
           onRateShot={(shotId, stars) => fire(coach.rateShot(shotId, stars))}
+          onOpenGraph={() => navigate({ name: 'shot' })}
         />
       </Box>
     );

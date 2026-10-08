@@ -6,11 +6,15 @@ import userEvent from '@testing-library/user-event';
 import type { CoachUiMessage } from '../../app/types.ts';
 import { TID } from '../testIds.ts';
 import { ChatSurface, latestAppliedDiffId, toChatMessages, type ChatSurfaceProps } from './ChatSurface.tsx';
-import { conversation } from './testing/fixtures.ts';
+import { conversation, sampleSummary } from './testing/fixtures.ts';
 import { renderThemed } from './testing/render.tsx';
 
 function textMessage(id: string, role: CoachUiMessage['role'], text: string, streaming = false): CoachUiMessage {
   return { id, role, parts: [{ kind: 'text', text, ...(streaming ? { streaming } : {}) }], createdAt: '2026-10-03T08:00:00.000Z' };
+}
+
+function shotMessage(id: string, shotId: string): CoachUiMessage {
+  return { id, role: 'assistant', parts: [{ kind: 'shot', shotId, summary: sampleSummary({ shotId }) }], createdAt: '2026-10-03T08:00:00.000Z' };
 }
 
 function progressMessage(id: string, text: string, value: number | null, label: string | null): CoachUiMessage {
@@ -176,6 +180,27 @@ describe('ChatSurface', () => {
     }));
     renderSurface({ messages: rated });
     expect(screen.getByRole('radio', { name: 'Rate 4 out of 5' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('shows Graph only on the card matching graphShotId, and opens it from there', async () => {
+    const onOpenGraph = vi.fn();
+    renderSurface({
+      messages: [shotMessage('m1', 'shot-1'), shotMessage('m2', 'shot-2')],
+      graphShotId: 'shot-2',
+      onOpenGraph,
+    });
+    const cards = screen.getAllByTestId(TID.shotCard);
+    expect(cards).toHaveLength(2);
+    expect(within(cards[0]!).queryByTestId(TID.openShotGraph)).toBeNull();
+    await userEvent.click(within(cards[1]!).getByTestId(TID.openShotGraph));
+    expect(onOpenGraph).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows no Graph button when no shot matches graphShotId, or no onOpenGraph was given', () => {
+    const { rerender } = renderSurface({ messages: [shotMessage('m1', 'shot-1')], graphShotId: 'shot-2', onOpenGraph: vi.fn() });
+    expect(screen.queryByTestId(TID.openShotGraph)).toBeNull();
+    rerender({ graphShotId: 'shot-1', onOpenGraph: undefined });
+    expect(screen.queryByTestId(TID.openShotGraph)).toBeNull();
   });
 
   it('shows progress notices with their bar, and no thinking row beside them', () => {

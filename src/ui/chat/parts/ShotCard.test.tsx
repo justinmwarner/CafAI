@@ -173,6 +173,22 @@ describe('Notice', () => {
   });
 });
 
+describe('ShotCard graph link', () => {
+  it('shows a Graph button that opens the full graph', async () => {
+    const onOpenGraph = vi.fn();
+    renderThemed(<ShotCard summary={sampleSummary()} onOpenGraph={onOpenGraph} />);
+    const button = screen.getByTestId(TID.openShotGraph);
+    expect(button).toHaveTextContent('Graph');
+    await userEvent.click(button);
+    expect(onOpenGraph).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows no Graph button without onOpenGraph', () => {
+    renderThemed(<ShotCard summary={sampleSummary()} />);
+    expect(screen.queryByTestId(TID.openShotGraph)).toBeNull();
+  });
+});
+
 describe('ShotCard sparkline', () => {
   it('keys the curves with drawn swatches, not box-drawing characters', () => {
     renderThemed(<ShotCard summary={sampleSummary()} />);

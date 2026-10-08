@@ -1,10 +1,12 @@
 import { useId, useRef, type KeyboardEvent } from 'react';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import { useTheme } from '@mui/material/styles';
+import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import LocalCafeIcon from '@mui/icons-material/LocalCafe';
 import StarIcon from '@mui/icons-material/Star';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
@@ -44,7 +46,7 @@ function LegendKey({ color, label }: { color: string; label: string }) {
   );
 }
 
-function Sparkline({ summary }: { summary: ShotSummary }) {
+function Sparkline({ summary, onOpenGraph }: { summary: ShotSummary; onOpenGraph?: () => void }) {
   const theme = useTheme();
   const { series } = summary;
   const lastT = series.tS.length > 0 ? (series.tS[series.tS.length - 1] ?? 0) : 0;
@@ -76,6 +78,18 @@ function Sparkline({ summary }: { summary: ShotSummary }) {
         <LegendKey color={pressureColor} label="Pressure" />
         <LegendKey color={flowColor} label="Flow" />
       </Stack>
+      {onOpenGraph ? (
+        <Button
+          variant="text"
+          color="primary"
+          endIcon={<ChevronRightRoundedIcon />}
+          data-testid={TID.openShotGraph}
+          onClick={onOpenGraph}
+          sx={{ minHeight: 48, flexShrink: 0 }}
+        >
+          Graph
+        </Button>
+      ) : null}
     </Stack>
   );
 }
@@ -141,10 +155,12 @@ export interface ShotCardProps {
   onRate?: (stars: number) => void;
   /** True while the coach is working; blocks a rating tap. */
   disabled?: boolean;
+  /** Opens the shot's full graph (#/shot). Without it the card shows no Graph link. */
+  onOpenGraph?: () => void;
 }
 
 /** A finished shot at a glance: the numbers the coach reasons about, its curves, and the barista's rating. */
-export function ShotCard({ summary, stars = null, onRate, disabled = false }: ShotCardProps) {
+export function ShotCard({ summary, stars = null, onRate, disabled = false, onOpenGraph }: ShotCardProps) {
   // The shot time is the pour, so every other time counts from its start too:
   // a peak "at 61 s" of a 60 s shot would come after the shot ended.
   const peakAt = pourTime(summary.peakPressureAtS, summary.pourStartS);
@@ -174,7 +190,7 @@ export function ShotCard({ summary, stars = null, onRate, disabled = false }: Sh
         <Metric label="Peak pressure" value={peak} />
         <Metric label="First drop" value={formatSeconds(firstDrop)} />
       </Box>
-      <Sparkline summary={summary} />
+      <Sparkline summary={summary} onOpenGraph={onOpenGraph} />
       {summary.channelingFlags.length > 0 ? (
         <Stack direction="row" spacing={1} sx={{ mt: 1, alignItems: 'flex-start', color: 'warning.main' }}>
           <WarningAmberIcon fontSize="small" sx={{ mt: 0.25 }} />
