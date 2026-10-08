@@ -103,6 +103,19 @@ describe('createAppearanceStore', () => {
     expect(store.get()).toEqual({ mode: 'dark', tint: { hue: 120 } });
   });
 
+  it('keeps a preview made while an earlier save is still landing', async () => {
+    const repo = fakeSettingsRepo(makeSettings(), { hold: true });
+    const store = createAppearanceStore(repo);
+
+    const saving = store.set({ mode: 'dark', tint: 'ocean' });
+    // The barista starts dragging the hue slider before that save lands.
+    store.preview({ mode: 'dark', tint: { hue: 300 } });
+    repo.releases[0]!();
+    await saving;
+
+    expect(store.get()).toEqual({ mode: 'dark', tint: { hue: 300 } });
+  });
+
   it('reload() re-reads the saved appearance', async () => {
     const saved: Appearance = { mode: 'light', tint: 'matcha' };
     const repo = fakeSettingsRepo(makeSettings({ appearance: saved }));

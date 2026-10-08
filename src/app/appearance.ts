@@ -32,7 +32,11 @@ export function createAppearanceStore(settings: SettingsRepository, initial: App
       listeners.add(listener);
       return () => void listeners.delete(listener);
     },
-    preview: show,
+    preview(next) {
+      // A preview is a newer change too: a save landing mid-drag must not snap the look back.
+      latest += 1;
+      show(next);
+    },
     async set(next) {
       const ticket = ++latest;
       show(next);

@@ -80,6 +80,9 @@ export const TID = {
   importData: 'import-data',
 
   // Settings
+  appearanceMode: (mode: string) => `appearance-mode-${mode}`,
+  tintSwatch: (id: string) => `tint-${id}`,
+  tintHue: 'tint-hue',
   apiKeyInput: 'api-key-input',
   apiKeySave: 'api-key-save',
   forgetKey: 'forget-key',

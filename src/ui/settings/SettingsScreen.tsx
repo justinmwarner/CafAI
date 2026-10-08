@@ -1,13 +1,13 @@
 /**
- * The settings route (#/settings): the Anthropic API key, the model, and the
- * grinder. The key goes straight to the secret store and is never shown
- * again; the UI only ever knows whether one is saved. The grinder can be
- * linked to Decaid's grinder library, whose step size the coach then uses
- * (GrinderFields.tsx). A key pasted into another field never becomes a
- * setting: storage takes it out (src/storage/settings.ts) and the screen says
- * so.
+ * The settings route (#/settings): how CafAI looks (AppearanceSection.tsx),
+ * the Anthropic API key, the model, and the grinder. The key goes straight
+ * to the secret store and is never shown again; the UI only ever knows
+ * whether one is saved. The grinder can be linked to Decaid's grinder
+ * library, whose step size the coach then uses (GrinderFields.tsx). A key
+ * pasted into another field never becomes a setting: storage takes it out
+ * (src/storage/settings.ts) and the screen says so.
  */
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -18,7 +18,6 @@ import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
 import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
-import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
@@ -31,9 +30,11 @@ import { useCoach, useServices } from '../../app/services.tsx';
 import { containsKeyLike } from '../../storage/redact.ts';
 import type { Settings } from '../../storage/types.ts';
 import { TID } from '../testIds.ts';
+import { AppearanceSection } from './AppearanceSection.tsx';
 import { GrinderFields } from './GrinderFields.tsx';
 import { grinderPatch, libraryAfterError, NOT_LISTED, type GrinderForm, type GrinderLibrary } from './grinderPicker.ts';
 import { revealInColumn } from './reveal.ts';
+import { Section } from './Section.tsx';
 
 type Message = { tone: 'success' | 'error'; text: string };
 
@@ -46,17 +47,6 @@ function errorText(error: unknown): string {
 
 function price(model: ModelInfo): string {
   return `$${model.inputPerMTok} in / $${model.outputPerMTok} out per million tokens`;
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <Paper variant="outlined" component="section" aria-label={title} sx={{ p: 2, bgcolor: 'background.paper' }}>
-      <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 700, mb: 1 }}>
-        {title}
-      </Typography>
-      {children}
-    </Paper>
-  );
 }
 
 const fieldSx = { '& .MuiInputBase-root': { minHeight: 48 } } as const;
@@ -436,6 +426,7 @@ export function SettingsScreen() {
         <Typography variant="h6" component="h1">
           Settings
         </Typography>
+        <AppearanceSection />
         <ApiKeySection />
         <CoachSettingsSection column={column} />
         <AboutSection />
