@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CafAI: chat first, the machine on demand</title>
+<style>
+  @font-face { font-family: 'Figtree'; font-weight: 300 900; font-style: normal; src: url('../../../node_modules/@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2') format('woff2'); }
+
+  /* Dark Crema, from src/ui/palette.ts. */
+  .t-crema-dark { --bg:#140e09; --surface:#1c160f; --raised:#282018; --ink:#f4ede6; --muted:#b8afa6; --line:#2f2924; --grid:#26201b; --accent:#d5a776; --accent-soft:#3a2d1f; --on-accent:#1e1408; --success:#6ad895; --warning:#eec05b; --error:#f47b74; --on-error:#1e1311; --live:#f75d59; --pressure:#5ed99e; --flow:#65b2f1; --wflow:#f7a062; --weight:#dabfa2; }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; background: #101010; color: #d8d8d8; font-family: 'Figtree', system-ui, sans-serif; }
+  .board { display: flex; flex-direction: column; gap: 36px; width: 1440px; }
+  .intro h1 { font-size: 26px; font-weight: 700; margin: 0 0 8px; color: #fff; }
+  .intro p { font-size: 15.5px; line-height: 1.55; margin: 0 0 4px; color: #bdbdbd; max-width: 1240px; }
+  .rowf { display: flex; gap: 32px; align-items: flex-start; }
+  .fw { display: flex; flex-direction: column; gap: 10px; }
+  .cap { font-size: 14.5px; line-height: 1.45; color: #bdbdbd; max-width: 962px; }
+  .cap b { color: #fff; font-weight: 650; }
+  .fw.p .cap { max-width: 390px; }
+
+  .frame { position: relative; overflow: hidden; background: var(--bg); color: var(--ink); box-shadow: 0 0 0 1px #2c2c2c, 0 18px 40px rgba(0,0,0,.45); font-size: 16px; display: flex; flex-direction: column; }
+  .tab { width: 962px; height: 602px; border-radius: 12px; }
+  .ph { width: 390px; height: 844px; border-radius: 30px; }
+
+  .ic { width: 22px; height: 22px; fill: currentColor; flex: none; }
+  .ic.s { width: 18px; height: 18px; }
+  .grow { flex: 1 1 auto; }
+  .num { font-variant-numeric: tabular-nums; }
+  .u { font-size: .6em; font-weight: 500; color: var(--muted); margin-left: .12em; }
+
+  /* Top bar: brand, places, the machine row, Decaid. */
+  .tb { height: 56px; flex: none; display: flex; align-items: center; gap: 2px; padding: 0 10px 0 14px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .brand { display: flex; align-items: center; gap: 7px; color: var(--accent); font-weight: 750; font-size: 19px; margin-right: 8px; }
+  .nav-i { height: 44px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; border-radius: 11px; color: var(--muted); font-weight: 600; font-size: 15.5px; white-space: nowrap; }
+  .nav-i .ic { width: 20px; height: 20px; }
+  .nav-i.on { background: var(--accent-soft); color: var(--accent); }
+  .nav-i .live-t { font-weight: 650; color: var(--ink); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--live); display: inline-block; flex: none; box-shadow: 0 0 0 3px rgba(247, 93, 89, .22); }
+  .sep { width: 1px; height: 30px; background: var(--line); margin: 0 6px; }
+  .mrow { display: flex; gap: 2px; }
+  .mb { width: 54px; height: 48px; border-radius: 11px; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; color: var(--ink); font-size: 11.5px; font-weight: 600; }
+  .mb .ic { width: 21px; height: 21px; }
+  .mb.off { opacity: .38; }
+  .mb.stop { background: var(--error); color: var(--on-error); font-weight: 700; }
+  .ib { width: 44px; height: 44px; border-radius: 11px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
+  .exit { height: 44px; padding: 0 12px 0 10px; display: inline-flex; align-items: center; gap: 6px; border-radius: 11px; background: var(--raised); color: var(--ink); font-weight: 650; font-size: 15px; }
+
+  /* Coach. */
+  .bagbar { height: 60px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 14px 0 18px; border-bottom: 1px solid var(--line); }
+  .bag { font-size: 19px; font-weight: 700; }
+  .ver { font-size: 14px; color: var(--muted); font-weight: 550; }
+  .tbtn { height: 44px; padding: 0 14px; border-radius: 11px; background: var(--raised); display: inline-flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 600; }
+  .chat { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 22px 8px; }
+  .lane { max-width: 680px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  .who { font-size: 12.5px; font-weight: 650; color: var(--muted); margin-bottom: 3px; }
+  .msg { font-size: 16px; line-height: 1.55; }
+  .faded { opacity: .55; }
+
+  /* The live stats card. */
+  .stats { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px 16px 14px; }
+  .st-h { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .st-h b { font-size: 15px; font-weight: 700; }
+  .st-h .conn { display: inline-flex; gap: 12px; font-size: 13px; color: var(--muted); font-weight: 500; margin-left: auto; }
+  .st-h .conn span { display: inline-flex; align-items: center; gap: 5px; }
+  .st-h .conn i { width: 8px; height: 8px; border-radius: 50%; background: var(--success); display: inline-block; }
+  .state { font-size: 21px; font-weight: 650; line-height: 1.2; margin-bottom: 8px; }
+  .ro4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .ro2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 6px; }
+  .lab { font-size: 12.5px; font-weight: 550; color: var(--muted); }
+  .val { font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .sub { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .st-f { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .pv { font-size: 15px; font-weight: 650; }
+  .ok { display: inline-flex; align-items: center; gap: 4px; color: var(--success); font-size: 13px; font-weight: 600; }
+  .sbtn { height: 40px; padding: 0 13px; border-radius: 10px; background: var(--raised); display: inline-flex; align-items: center; gap: 6px; font-size: 14.5px; font-weight: 600; }
+
+  /* Prompts and the composer. */
+  .prompts { flex: none; display: flex; gap: 8px; padding: 2px 14px 0; max-width: 760px; width: 100%; margin: 0 auto; }
+  .chip { height: 40px; padding: 0 14px 0 11px; border-radius: 20px; border: 1px solid var(--line); background: var(--surface); display: inline-flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600; }
+  .chip .ic { width: 18px; height: 18px; color: var(--accent); }
+  .composer { flex: none; padding: 8px 14px 12px; }
+  .comp { height: 52px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); display: flex; align-items: center; padding: 0 6px 0 16px; color: var(--muted); font-size: 15.5px; max-width: 760px; margin: 0 auto; }
+  .send { width: 42px; height: 42px; border-radius: 12px; background: var(--accent); color: var(--on-accent); display: inline-flex; align-items: center; justify-content: center; margin-left: auto; }
+
+  /* Shot view. */
+  .shot { flex: 1 1 auto; display: flex; flex-direction: column; padding: 14px 24px; gap: 10px; min-height: 0; max-width: 960px; width: 100%; margin: 0 auto; }
+  .shot-h { display: flex; align-items: baseline; gap: 10px; }
+  .shot-h .ttl { font-size: 17px; font-weight: 700; }
+  .shot-h .step { font-size: 14.5px; color: var(--muted); font-weight: 550; }
+  .big { display: grid; grid-template-columns: 1.3fr repeat(4, minmax(0, 1fr)); gap: 8px; align-items: end; }
+  .timer { font-size: 54px; font-weight: 650; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .bv { font-size: 27px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.05; white-space: nowrap; }
+  .key { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); font-weight: 550; margin-top: 3px; }
+  .key i { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
+  .plot { flex: 1 1 auto; min-height: 0; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+  .cn { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 14px; background: var(--raised); font-size: 15px; }
+  .cn b { font-weight: 650; }
+  .typing { display: inline-flex; gap: 3px; }
+  .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); display: inline-block; }
+
+  /* Phone. */
+  .ptb { height: 52px; flex: none; display: flex; align-items: center; gap: 2px; padding: 0 6px 0 14px; background: var(--surface); border-bottom: 1px solid var(--line); margin-top: 44px; }
+  .ptb .brand { font-size: 17px; margin-right: 0; }
+  .ptb .mb { width: 46px; height: 44px; }
+  .tabs { height: 64px; flex: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); background: var(--surface); border-top: 1px solid var(--line); padding-bottom: 6px; }
+  .tabi { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+  .tabi .pill { width: 54px; height: 28px; border-radius: 14px; display: flex; align-items: center; justify-content: center; }
+  .tabi.on { color: var(--accent); }
+  .tabi.on .pill { background: var(--accent-soft); }
+  .ph .chat { padding: 0 12px 6px; }
+  .ph .bagbar { height: 56px; padding: 0 8px 0 14px; }
+  .ph .bag { font-size: 17px; }
+  .ph .stats { padding: 11px 13px 12px; }
+  .ph .prompts { padding: 2px 12px 0; }
+  .ph .composer { padding: 8px 12px 10px; }
+</style>
+</head>
+<body class="t-crema-dark">
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-brand" viewBox="0 0 24 24"><path d="M20 3H6c-1.1 0-2 .9-2 2v8c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2m0 5h-2V5h2zM3 21h16c.55 0 1-.45 1-1s-.45-1-1-1H3c-.55 0-1 .45-1 1s.45 1 1 1"/></symbol>
+    <symbol id="i-coach" viewBox="0 0 24 24"><path d="M20 6h-1v8c0 .55-.45 1-1 1H6v1c0 1.1.9 2 2 2h10l4 4V8c0-1.1-.9-2-2-2m-3 5V4c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v13l4-4h9c1.1 0 2-.9 2-2"/></symbol>
+    <symbol id="i-shot" viewBox="0 0 24 24"><path d="m4.2 17.78 5.3-5.3 3.25 3.25c.41.41 1.07.39 1.45-.04l7.17-8.07c.35-.39.33-.99-.04-1.37-.4-.4-1.07-.39-1.45.04l-6.39 7.18-3.29-3.29a.996.996 0 0 0-1.41 0l-6.09 6.1c-.39.39-.39 1.02 0 1.41l.09.09c.39.39 1.03.39 1.41 0"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18m-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8z"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6"/></symbol>
+    <symbol id="i-espresso" viewBox="0 0 24 24"><path d="M18.5 3H6c-1.1 0-2 .9-2 2v5.71c0 3.83 2.95 7.18 6.78 7.29 3.96.12 7.22-3.06 7.22-7v-1h.5c1.93 0 3.5-1.57 3.5-3.5S20.43 3 18.5 3M16 5v3H6V5zm2.5 3H18V5h.5c.83 0 1.5.67 1.5 1.5S19.33 8 18.5 8M4 19h16v2H4z"/></symbol>
+    <symbol id="i-steam" viewBox="0 0 24 24"><path d="M14.5 17c0 1.65-1.35 3-3 3s-3-1.35-3-3h2c0 .55.45 1 1 1s1-.45 1-1-.45-1-1-1H2v-2h9.5c1.65 0 3 1.35 3 3M19 6.5C19 4.57 17.43 3 15.5 3S12 4.57 12 6.5h2c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S16.33 8 15.5 8H2v2h13.5c1.93 0 3.5-1.57 3.5-3.5m-.5 4.5H2v2h16.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5v2c1.93 0 3.5-1.57 3.5-3.5S20.43 11 18.5 11"/></symbol>
+    <symbol id="i-flush" viewBox="0 0 24 24"><path d="M12 3c-.55 0-1 .45-1 1v1.07C7.06 5.56 4 8.92 4 13h16c0-4.08-3.06-7.44-7-7.93V4c0-.55-.45-1-1-1M8 15a1 1 0 1 0 0 2 1 1 0 0 0 0-2m4 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2m4 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2m-6 3a1 1 0 1 0 0 2 1 1 0 0 0 0-2m4 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2"/></symbol>
+    <symbol id="i-water" viewBox="0 0 24 24"><path d="M12 2.69 6.34 8.35a8 8 0 1 0 11.32 0z"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+    <symbol id="i-open" viewBox="0 0 24 24"><path d="M18 19H6c-.55 0-1-.45-1-1V6c0-.55.45-1 1-1h5c.55 0 1-.45 1-1s-.45-1-1-1H5c-1.11 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-6c0-.55-.45-1-1-1s-1 .45-1 1v5c0 .55-.45 1-1 1M14 4c0 .55.45 1 1 1h2.59l-9.13 9.13a.996.996 0 1 0 1.41 1.41L19 6.41V9c0 .55.45 1 1 1s1-.45 1-1V4c0-.55-.45-1-1-1h-5c-.55 0-1 .45-1 1"/></symbol>
+    <symbol id="i-exit" viewBox="0 0 24 24"><path d="M5 5h6c.55 0 1-.45 1-1s-.45-1-1-1H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h6c.55 0 1-.45 1-1s-.45-1-1-1H5z"/><path d="m20.65 11.65-2.79-2.79c-.32-.32-.86-.1-.86.35V11h-7c-.55 0-1 .45-1 1s.45 1 1 1h7v1.79c0 .45.54.67.85.35l2.79-2.79c.2-.19.2-.51.01-.7"/></symbol>
+    <symbol id="i-stats" viewBox="0 0 24 24"><path d="M20.38 8.57l-1.23 1.85a8 8 0 0 1-.22 7.58H5.07A8 8 0 0 1 15.58 6.85l1.85-1.23A10 10 0 0 0 3.35 19a2 2 0 0 0 1.72 1h13.85a2 2 0 0 0 1.74-1 10 10 0 0 0-.27-10.44zm-9.79 6.84a2 2 0 0 0 2.83 0l5.66-8.49-8.49 5.66a2 2 0 0 0 0 2.83"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M3.4 20.4l17.45-7.48a1 1 0 0 0 0-1.84L3.4 3.6a.993.993 0 0 0-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></symbol>
+    <symbol id="i-power" viewBox="0 0 24 24"><path d="M13 3h-2v10h2zm4.83 2.17-1.42 1.42A6.92 6.92 0 0 1 19 12c0 3.87-3.13 7-7 7A6.995 6.995 0 0 1 7.58 6.58L6.17 5.17A8.932 8.932 0 0 0 3 12a9 9 0 0 0 18 0c0-2.74-1.23-5.18-3.17-6.83"/></symbol>
+    <symbol id="i-add" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></symbol>
+  </defs>
+</svg>
+
+<div class="board">
+  <div class="intro">
+    <h1>Chat first, the machine on demand</h1>
+    <p>No machine column and no graph on load: the routed screen takes the whole width. The top bar keeps Coach, Shot, History and Settings and gains a row of the four buttons used most (Espresso, Steam, Flush, Hot water). The one that is running turns into Stop, in its place, on every screen.</p>
+    <p>The chat opens with a live stats card at its end. It goes away as soon as the chat moves on (your next message, or anything new from the coach), and the "Stats" prompt above the composer always brings it back. The graph opens from Shot, and still takes the screen by itself when a shot starts.</p>
+  </div>
+
+  <div class="rowf">
+    <div class="fw">
+      <div class="cap"><b>1. Tablet, on load.</b> The chat is the whole screen. The machine row sits in the top bar (on a group-head machine it holds only Stop, while something runs). The stats card is the newest thing in the chat and updates live: state, temperatures, water, scale with Tare, the loaded profile, and Sleep.</div>
+      <div class="frame tab">
+        <header class="tb">
+          <div class="brand"><svg class="ic"><use href="#i-brand"/></svg>CafAI</div>
+          <span class="nav-i on"><svg class="ic"><use href="#i-coach"/></svg>Coach</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-shot"/></svg>Shot</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-history"/></svg>History</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-settings"/></svg>Settings</span>
+          <span class="grow"></span>
+          <div class="mrow">
+            <span class="mb"><svg class="ic"><use href="#i-espresso"/></svg>Espresso</span>
+            <span class="mb"><svg class="ic"><use href="#i-steam"/></svg>Steam</span>
+            <span class="mb"><svg class="ic"><use href="#i-flush"/></svg>Flush</span>
+            <span class="mb"><svg class="ic"><use href="#i-water"/></svg>Hot water</span>
+          </div>
+          <span class="sep"></span>
+          <span class="ib" title="Decaid settings"><svg class="ic"><use href="#i-open"/></svg></span>
+          <span class="exit"><svg class="ic s"><use href="#i-exit"/></svg>Exit</span>
+        </header>
+        <div class="bagbar">
+          <span class="bag">Kiambu AA</span><span class="ver">v4 · Blooming Espresso</span>
+          <span class="grow"></span>
+          <span class="tbtn"><svg class="ic s"><use href="#i-add"/></svg>New bag</span>
+        </div>
+        <div class="chat">
+          <div class="lane">
+            <div class="faded">
+              <div class="who">Coach</div>
+              <div class="msg">v4 is on the machine: 1 °C hotter, the same grind. Pull a shot when you are ready and tell me how it tastes.</div>
+            </div>
+            <div class="stats">
+              <div class="st-h"><b>Machine</b><span class="conn"><span><i></i>DE1</span><span><i></i>Scale</span></span></div>
+              <div class="state">Ready</div>
+              <div class="ro4">
+                <div><div class="lab">Group</div><div class="val">93.0<span class="u">°C</span></div><div class="sub">target 93.0</div></div>
+                <div><div class="lab">Steam</div><div class="val">140<span class="u">°C</span></div></div>
+                <div><div class="lab">Water</div><div class="val">72<span class="u">%</span></div></div>
+                <div><div class="lab">Scale</div><div class="val">0.0<span class="u">g</span></div></div>
+              </div>
+              <div class="st-f">
+                <span class="pv">Kiambu AA v4</span><span class="ok"><svg class="ic s"><use href="#i-check"/></svg>Loaded</span>
+                <span class="grow"></span>
+                <span class="sbtn">Tare</span>
+                <span class="sbtn"><svg class="ic s"><use href="#i-power"/></svg>Sleep</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="prompts"><span class="chip"><svg class="ic"><use href="#i-stats"/></svg>Stats</span></div>
+        <div class="composer"><div class="comp">Tell the coach how it tasted…<span class="send"><svg class="ic"><use href="#i-send"/></svg></span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rowf">
+    <div class="fw">
+      <div class="cap"><b>2. Tablet, a shot running.</b> The Shot view took the screen by itself, full width. Espresso has turned into Stop in the top bar, in the same place; the other buttons wait. Shot shows the running time. The top bar is never covered by the tap guard, so Stop works the moment it appears.</div>
+      <div class="frame tab">
+        <header class="tb">
+          <div class="brand"><svg class="ic"><use href="#i-brand"/></svg>CafAI</div>
+          <span class="nav-i"><svg class="ic"><use href="#i-coach"/></svg>Coach</span>
+          <span class="nav-i on"><span class="dot"></span>Shot <span class="live-t num">12.4 s</span></span>
+          <span class="nav-i"><svg class="ic"><use href="#i-history"/></svg>History</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-settings"/></svg>Settings</span>
+          <span class="grow"></span>
+          <div class="mrow">
+            <span class="mb stop"><svg class="ic"><use href="#i-stop"/></svg>Stop</span>
+            <span class="mb off"><svg class="ic"><use href="#i-steam"/></svg>Steam</span>
+            <span class="mb off"><svg class="ic"><use href="#i-flush"/></svg>Flush</span>
+            <span class="mb off"><svg class="ic"><use href="#i-water"/></svg>Hot water</span>
+          </div>
+          <span class="sep"></span>
+          <span class="ib" title="Decaid settings"><svg class="ic"><use href="#i-open"/></svg></span>
+          <span class="exit"><svg class="ic s"><use href="#i-exit"/></svg>Exit</span>
+        </header>
+        <div class="shot">
+          <div class="shot-h"><span class="ttl">Kiambu AA v4</span><span class="step">Rise and hold · step 3 of 5</span></div>
+          <div class="big">
+            <div class="timer">12.4<span class="u">s</span></div>
+            <div><div class="bv">8.9<span class="u">bar</span></div><div class="key"><i style="background:var(--pressure)"></i>Pressure</div></div>
+            <div><div class="bv">2.1<span class="u">ml/s</span></div><div class="key"><i style="background:var(--flow)"></i>Flow</div></div>
+            <div><div class="bv">18.2<span class="u">g of 40</span></div><div class="key"><i style="background:var(--weight)"></i>Weight</div></div>
+            <div><div class="bv">1.9<span class="u">g/s</span></div><div class="key"><i style="background:var(--wflow)"></i>Weight flow</div></div>
+          </div>
+          <svg class="plot" viewBox="0 0 900 240" preserveAspectRatio="none">
+            <g stroke="var(--grid)" stroke-width="1"><line x1="0" y1="60" x2="900" y2="60"/><line x1="0" y1="120" x2="900" y2="120"/><line x1="0" y1="180" x2="900" y2="180"/></g>
+            <polyline fill="none" stroke="var(--pressure)" stroke-width="3" points="0,232 60,226 120,170 170,78 230,70 300,66 360,64"/>
+            <polyline fill="none" stroke="var(--flow)" stroke-width="3" points="0,232 40,140 90,120 140,170 200,176 260,172 360,170"/>
+            <polyline fill="none" stroke="var(--wflow)" stroke-width="2.5" points="0,236 150,236 200,214 260,184 360,180"/>
+            <polyline fill="none" stroke="var(--weight)" stroke-width="2.5" stroke-dasharray="6 5" points="0,236 160,236 220,222 290,200 360,184"/>
+          </svg>
+          <div class="cn"><span class="typing"><i></i><i></i><i></i></span><span><b>I'm watching this shot.</b> I'll read the curves once it's done.</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rowf">
+    <div class="fw p">
+      <div class="cap"><b>3. Phone, on load.</b> The same: the machine row in the top bar (icons only), the stats card at the end of the chat, Stats above the composer. The Machine tab is now Shot.</div>
+      <div class="frame ph">
+        <header class="ptb">
+          <div class="brand"><svg class="ic"><use href="#i-brand"/></svg>CafAI</div>
+          <span class="grow"></span>
+          <div class="mrow">
+            <span class="mb" title="Espresso"><svg class="ic"><use href="#i-espresso"/></svg></span>
+            <span class="mb" title="Steam"><svg class="ic"><use href="#i-steam"/></svg></span>
+            <span class="mb" title="Flush"><svg class="ic"><use href="#i-flush"/></svg></span>
+            <span class="mb" title="Hot water"><svg class="ic"><use href="#i-water"/></svg></span>
+          </div>
+          <span class="ib" title="Exit to Decaid"><svg class="ic"><use href="#i-exit"/></svg></span>
+        </header>
+        <div class="bagbar"><span class="bag">Kiambu AA</span><span class="ver">v4</span><span class="grow"></span><span class="ib" style="background:var(--raised);color:var(--ink)"><svg class="ic"><use href="#i-add"/></svg></span></div>
+        <div class="chat">
+          <div class="lane">
+            <div class="faded">
+              <div class="who">Coach</div>
+              <div class="msg">v4 is on the machine: 1 °C hotter, the same grind. Pull a shot when you are ready.</div>
+            </div>
+            <div class="stats">
+              <div class="st-h"><b>Machine</b><span class="conn"><span><i></i>DE1</span><span><i></i>Scale</span></span></div>
+              <div class="state">Ready</div>
+              <div class="ro2">
+                <div><div class="lab">Group</div><div class="val">93.0<span class="u">°C</span></div></div>
+                <div><div class="lab">Steam</div><div class="val">140<span class="u">°C</span></div></div>
+                <div><div class="lab">Water</div><div class="val">72<span class="u">%</span></div></div>
+                <div><div class="lab">Scale</div><div class="val">0.0<span class="u">g</span></div></div>
+              </div>
+              <div class="st-f"><span class="pv">v4</span><span class="ok"><svg class="ic s"><use href="#i-check"/></svg>Loaded</span><span class="grow"></span><span class="sbtn">Tare</span><span class="sbtn"><svg class="ic s"><use href="#i-power"/></svg></span></div>
+            </div>
+          </div>
+        </div>
+        <div class="prompts"><span class="chip"><svg class="ic"><use href="#i-stats"/></svg>Stats</span></div>
+        <div class="composer"><div class="comp">Message the coach…<span class="send"><svg class="ic"><use href="#i-send"/></svg></span></div></div>
+        <nav class="tabs">
+          <div class="tabi on"><span class="pill"><svg class="ic"><use href="#i-coach"/></svg></span>Coach</div>
+          <div class="tabi"><span class="pill"><svg class="ic"><use href="#i-shot"/></svg></span>Shot</div>
+          <div class="tabi"><span class="pill"><svg class="ic"><use href="#i-history"/></svg></span>History</div>
+          <div class="tabi"><span class="pill"><svg class="ic"><use href="#i-settings"/></svg></span>Settings</div>
+        </nav>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
