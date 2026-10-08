@@ -206,6 +206,31 @@ Load another profile from Decaid's own screens or another skin, then return
 to CafAI. Expected: within 30 s the Profile line shows that title, not marked
 as this bag's, and the banner offers Retry to load the bag's version.
 
+## 11. The shot takes the screen, and the look (D82, D84-D86)
+
+1. **Shot focus.** On the coach, tap Espresso (or start the shot from the
+   group head on a GHC machine). Expected: within a second the right side
+   becomes the big graph with "I'm watching this shot..." under it; the
+   machine column and Stop stay exactly where they were. After the pour,
+   "Done. Reading the shot" shows, and the coach comes back by itself when
+   the shot's card arrives (or about 8 s after the pour). Tap Stop during a
+   shot right after the switch: it must work at once.
+2. **Typing keeps the coach.** Start typing to the coach, then start a shot
+   from the group head. Expected: the coach stays on screen; the preview
+   chart in the machine column shows the shot; tapping it opens the graph.
+3. **Appearance.** Settings > Appearance: choose Light, then Matcha. Every
+   screen changes at once and stays changed after Exit and back. Note
+   whether the tablet's own dark mode reaches CafAI: set the tablet to dark
+   mode, choose Auto, and note whether CafAI turns dark (it shows light if
+   Decaid's WebView never reports the preference).
+4. **Native controls.** In Light, open the bag picker: its list should be
+   light too.
+5. **A phone on the network (optional).** Open `http://<tablet-ip>:3000` on
+   a phone. Expected: the phone layout (tabs at the bottom), the bags there
+   after a moment, and the API key asked for again (each browser keeps its
+   own). Pull a shot from the tablet: the phone's Coach tab shows the live
+   strip.
+
 ## Results
 
 | Section | Step | Expected | Observed | Pass? |
@@ -224,6 +249,11 @@ as this bag's, and the banner offers Retry to load the bag's version.
 | 8 | 2 | Grind direction right for your grinder | | |
 | 9 | 1 | Progress, warning, Retry | | |
 | 10 | - | Profile line follows another skin | | |
+| 11 | 1 | Shot view by itself, Stop never moves, coach returns | | |
+| 11 | 2 | Typing keeps the coach | | |
+| 11 | 3 | Appearance applies; Auto follows the tablet's dark mode? | | |
+| 11 | 4 | Bag picker list matches Light | | |
+| 11 | 5 | Phone layout over the network (optional) | | |
 
 Send back this table, the saved shot and profile JSON files, and the
 `[CafAI]` lines from `/api/v1/webview/logs`.
