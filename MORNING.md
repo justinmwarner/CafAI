@@ -1,5 +1,9 @@
 # Good morning: CafAI after your answers (2026-10-04)
 
+**Newest (2026-10-08):** your UX brief is built: a tablet and a phone
+layout, the shot taking the screen, Figtree, and a look of your own. It is
+the first section after the status table.
+
 Your nine answers in QUESTIONS.md are all done. Each is an owner decision
 (D55-D63), and each that changed behaviour went through its own brief,
 tests and review. The overnight gaps that need no hardware are closed, there
@@ -14,12 +18,113 @@ pushed.
 |---|---|
 | Typecheck (`npm run typecheck`) | pass |
 | Lint (`npm run lint`) | pass |
-| Unit tests (`npm test`) | **2047/2047** in 125 files on 2026-10-06 (this morning: 1836 in 115; overnight: 1254 in 91) |
-| Playwright (`npm run e2e`) | **114/114** at 962x602, 1280x800 and 1920x1200 on 2026-10-06 (this morning: 93; overnight: 27) |
+| Unit tests (`npm test`) | **2275/2275** in 141 files on 2026-10-08 (2026-10-06: 2047 in 125; 2026-10-04: 1836 in 115; overnight: 1254 in 91) |
+| Playwright (`npm run e2e`) | **140/140** on 2026-10-08: 42 each at 962x602, 1280x800 and 1920x1200, and 7 each on a 390x844 phone upright and on its side (2026-10-06: 114 on the three tablets) |
 | `npm run verify` (all of the above, build and release zip) | pass |
-| Real Chromium 91 (`npm run build:mock && npm run smoke:chrome91 && npm run smoke:chrome91:loop`) | pass: the app loads with no console or page errors, and the whole coach loop runs, now waiting for the machine to confirm each load |
+| Real Chromium 91 (`npm run build:mock && npm run smoke:chrome91 && npm run smoke:chrome91:loop`) | pass: the app loads with no console or page errors, and the whole coach loop runs, waiting for the machine to confirm each load; the shot takes the screen 0.9 s after Espresso and the coach comes back with the card 3.9 s later |
 | Live API test (`npm run test:live`) | skipped here (no key on this machine); its dry run against the scripted coach passes |
-| Fresh-eyes verifier | found 1 major, 5 minor and 3 polish defects; all fixed, and its own repro spec passes against the fixes (8/8) |
+| Fresh-eyes verifier | 2026-10-08, the UX rework: 2 major, 5 minor and 8 polish; 13 fixed, 1 kept by design, 1 open (below). Earlier rounds: all fixed |
+
+## New: tablet and phone, the shot on screen, a look of your own (2026-10-07 and 08)
+
+Everything is on the branch `feat/ux-modes-theme`, 32 commits on top of
+`main` (not merged, nothing pushed). This checkout is on that branch, so
+`npm run demo` shows it.
+
+- **Tablet and phone layouts (D84).** At 800x500 CSS px and up (every Decent
+  tablet): Coach, Shot, History and Settings in the top bar, the machine
+  column on the left with a preview of the last shot's graph (tap it for the
+  full one), and the coach on the right. Anything smaller gets the phone
+  layout: one screen at a time, with Coach, Machine, History and Settings
+  tabs at the bottom (a rail at the side when the phone lies down). A phone
+  opens CafAI at `http://<tablet-ip>:3000`; it asks for the API key again
+  (each browser keeps its own), and the bags and the look come from Decaid.
+- **The shot takes the screen (D85, D86).** When a shot starts, the right
+  side becomes the Shot view: a big timer, pressure, flow, weight and weight
+  flow, the running step, the graph, and the coach's note: "I'm watching
+  this shot. I'll read the curves once it's done." After the pour it says
+  "Done. Reading the shot", then the coach comes back by itself with the
+  shot card. The machine column and Stop never move. On a phone the Machine
+  tab opens by itself. Back to the chart at any time: the preview, the Shot
+  item (it shows the running time), the phone's live strip on the Coach tab,
+  or the newest shot card's Graph button. Go to the coach yourself during a
+  shot and it stays there; if you are typing when a shot starts, the coach
+  stays and your draft is safe.
+- **Typography (D81).** Figtree everywhere, a tighter type scale, numbers
+  that keep their width while they count, and calmer tonal buttons.
+- **A look of your own (D80, D82).** Settings > Appearance: Dark, Light or
+  Auto (follows the device), and a tint: Crema (the brown, still the
+  default), Matcha (your green), Lagoon, Ocean, Plum, Cherry, Steel, or any
+  hue from the slider. Every colour comes from one palette, and every pair
+  the screens draw from it is tested for WCAG AA contrast at every hue in
+  both modes. The shot graph keeps Decent's colours (pressure green, flow
+  blue). The look is saved with your settings (Decaid's copy and the export
+  too), and the start screens use it from the first frame.
+- **Docs:** [DESIGN.md](DESIGN.md) (the visual system),
+  [PRODUCT.md](PRODUCT.md), the spec and mockups in
+  `docs/superpowers/specs/`, D80-D89, and section 11 of the hardware plan.
+
+**Fresh-eyes check.** A verifier that had not seen the code drove the built
+app at 962x602, 1280x800, 390x844 and 844x390, and on smaller phones. Of its
+15 findings, 13 are fixed (D87-D89), each measured in a browser before and
+after. The fixes were not driven again by the verifier; they pass the whole
+suite above. The ones you would have noticed:
+
+- At 962x602, Stop and the machine column dropped 27 px twice a shot (a
+  long step name wrapping). They now hold still at every size, and the
+  column fits without scrolling.
+- On phones shorter than about 800 px the big graph was half hidden. Under
+  660 px the shot now covers the status and start buttons until its
+  outcome, so the whole plot and the note show, and Stop does not move.
+- The layout froze at any size while you typed, and a closing tablet
+  keyboard flashed the phone layout for 100 ms. Now only the height is
+  held.
+- In light mode, dimmed text (an undone version, the profiles you did not
+  pick) and the composer's placeholder fell to 2.3-3.7:1 contrast. Now they
+  are 6.4:1 and up.
+- Smaller fixes: a white flash before the app started, "this tablet" on a
+  phone, a dash instead of "0.0 s" before any shot, and "Hot water" fits on
+  one line.
+
+One finding is kept by design and one is left open:
+
+- **Kept:** on a phone, the screen that opens itself ignores taps for 350
+  ms, Stop included. Stop was not on screen when the finger started
+  moving, so a tap there was aimed at the coach; a tap at 280 ms works. On
+  a tablet Stop always works at once. Say if you want Stop exempt on the
+  phone too (D88).
+- **Open:** stop a shot while it is still preheating and CafAI looks for it
+  in Decaid 6 times, with a 404 in the console each time. This is older
+  than the rework; section 9 of the hardware plan checks whether Decaid
+  saves such a shot.
+
+**Calls I made that you may want to change:**
+
+1. The phone's tap guard covers Stop (above).
+2. The phone's Machine tab counts in tenths ("42.0 s") like everything
+   else; the spec said whole seconds (D88).
+3. On a short phone the shot covers the status and start buttons until its
+   outcome (D87).
+4. A step name too long for the machine column ends in an ellipsis; the
+   Shot view shows it whole (D87).
+5. The key notes and errors say "this device" instead of "this tablet", so
+   a phone reads right (D89).
+
+**Try it:** `npm run demo`, then Settings > Appearance > Matcha, then back
+to Coach and tap Espresso in the machine column: the shot takes the screen,
+then the coach comes back with the card. Narrow the browser below 800 px for
+the phone layout.
+
+**How it ran:** three stages (palette and theme, appearance, layouts and
+shot focus), each task by a subagent and committed after its checks; then
+an end-to-end agent added the phone projects (and found two phone bugs);
+then the verifier; then three fix agents in parallel on separate files and
+a docs agent. The usage limit stopped agents twice; each was resumed where
+it stopped.
+
+**Merging:** `main` has not moved since the branch started, so
+`git checkout main && git merge --ff-only feat/ux-modes-theme` keeps the
+history straight. I left that to you.
 
 ## Since then: Decaid's simulator and a demo (2026-10-05 and 06)
 
@@ -187,6 +292,10 @@ recorded, not chased.
   the UI, steam and hot-water editors, device-connect screens, a
   screensaver, and the local coach (roadmap).
 - Writes waiting for Decaid live in memory only (D64).
+- Layout corners left from the UX check: at 962x602 the machine column
+  still scrolls while "Not connected" shows with Decaid's alert, and at
+  667x375 (a small phone on its side) the left column scrolls, with 44 of
+  Stop's 60 px on screen.
 
 ## Top 5 questions for you
 

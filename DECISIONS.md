@@ -668,3 +668,83 @@ subagents, each task committed after its checks.
   "Done. Reading the shot" until the outcome arrives. The Profile line's
   workflow reading is shared through a provider, so the note and the Shot
   view's step ("Pour · step 3 of 3") and yield target add no second poll.
+
+## The fresh-eyes check of the UX rework (2026-10-08)
+
+A verifier who had not seen the code drove the rework on tablets and phones
+(docs/briefs/verify-ux.md), and three fix agents took what it found: the
+machine panel, the shell, and the look and the copy. Left open: at 962x602
+the machine column still scrolls while "Not connected" shows with Decaid's
+alert; at 667x375 (a small phone on its side) the left column scrolls and
+Stop shows 44 of its 60 px; and after a shot stopped while still
+preheating, CafAI looks for the shot in Decaid up to 6 times and the
+browser logs a 404 for each. That last one is older than the rework; the
+hardware plan's section 9 now checks whether Decaid saves such a shot.
+
+- **D87. The machine column and the shot views hold still.** The machine
+  column's state line ("Pulling a shot: preinfusion start") is always one
+  line: too long for the column, it ends in an ellipsis, its whole text is
+  its title and what a screen reader hears, and the Shot view names the
+  step in full. At 962x602 it wrapped, and moved the readouts, the buttons
+  and Stop 27 px for up to a second, twice a shot. The Shot view's step is
+  in sentence case ("Pause · step 3 of 6"), keeping words in capitals or
+  mixed case ("PI", "LRv3"). On a phone, beside the rail too, the step has
+  a full-width line of its own, which keeps its place, empty when there is
+  no name, for the whole shot. On an upright phone whose Machine tab is
+  under 660 px tall (too short for the status, the buttons, the big graph
+  and a three-line note at once) and scrolled to its top, from the shot's
+  start until the chat has its outcome, the big graph is drawn over the
+  status and the start row. Those stay in their places, hidden and
+  untappable, and the coach's note goes under Stop; nothing above Stop
+  changes height, so Stop never moves. A tab the barista has scrolled keeps
+  the usual arrangement, which the shorter one would scroll back. The
+  phone's big graph keeps at least 120 px of plot (was 160; the tablet's
+  Shot view keeps 160). The start buttons' labels are 14 px with 2 px
+  sides, aligned from the top, so "Hot water" fits on one line at 962x602
+  and beside a phone's rail, and the icons line up. The preview card's plot
+  may shrink to 64 px (was 90), so the 962x602 column fits without
+  scrolling in every state but "Not connected" with Decaid's alert. Before
+  any shot, the preview's and the Shot view's timers show the dash (`DASH`
+  in format.ts), not "0.0 s".
+- **D88. The keyboard holds the height only; the navigation counts in
+  tenths.** While a field has focus the layout uses the live width and the
+  tallest height since typing began; a new width (a rotation, a narrowed
+  window) or a taller window starts the hold again from the window as it
+  is. After blur the held height stays until the layout would be the same
+  without it, or 500 ms pass. Taking the height again on a new width keeps
+  a 390x844 phone turned while typing from reading as 844x844, a tablet.
+  The phone's Machine tab shows the running time in tenths ("42.0 s"), like
+  the tablet's Shot item and the live strip, in a box that does not grow
+  past 10 s; its accessible name, "Machine, shot running, 42 seconds", is
+  updated once a second and removed when the shot ends. The spec said
+  "42 s"; one clock format everywhere won. The phone tab bar's and rail's
+  divider is the line colour: the `borderTop` and `borderRight` shorthands
+  had set it back to the text colour. Kept by design: on a phone the screen
+  that opens by itself ignores taps for 350 ms, Stop included (D85, the
+  spec's "Any automatic switch" row). Stop was not on screen when the
+  finger started moving, so a tap there in that window was aimed at the
+  coach. On a tablet Stop is never guarded. The check's brief said Stop
+  must work at once on both; it now says on a tablet.
+- **D89. Set aside by colour, never by opacity; the look from the first
+  frame.** What is set aside is drawn in the muted ink: the undone version
+  card in History (its "Undone" chip stays in warning), the starting
+  profiles not picked (muted name and reason; the chip goes muted with a
+  line-colour outline) and a closed question's other answers (the same
+  look, still disabled for screen readers). Only an open question waiting
+  on the coach keeps MUI's faded disabled chip, because its answers come
+  back. Opacity escaped the contrast sweep, and in light mode those cards
+  and chips fell to 2.3 to 3.7:1; in the muted ink they measure 6.4:1 and
+  up in light Crema, and the sweep holds that ink to 4.5:1 at every hue.
+  Chips outlined in a status colour or the accent draw the outline opaque
+  (MUI's is 70%), and the sweep gained "chip outlines: status colours and
+  the accent on background and surface, 3:1". Every input placeholder, the
+  composer's too, is the muted ink at full opacity. Buttons, inputs,
+  selects and textareas take the page's typeface (x-chat's unread count was
+  in Arial). The first paint is in the look: index.html's head paints the
+  default look (dark Crema, #140e09) and an ES5 script swaps in the cached
+  boot colours (`cafai.appearance.boot`, D82) before the bundle runs, so a
+  dark CafAI never opens on white; the theme then sets the page's own
+  background. User-facing copy says "this device" where it said "this
+  tablet" (the API key's notes, the storage and network errors, the engine
+  warning, the start-failure page): the same text runs in a phone's
+  browser.

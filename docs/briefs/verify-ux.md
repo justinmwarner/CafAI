@@ -57,7 +57,10 @@ What was built (read for the expected behaviour, not the code):
    note ("I'm watching this shot..."); the machine column and Stop do not
    move. After the pour: "Done. Reading the shot"; then the coach comes back
    by itself with the new shot card. Repeat on a phone: the Machine tab
-   opens by itself. Tap Stop mid-shot right after the switch: it must work.
+   opens by itself. On a tablet, tap Stop mid-shot right after the switch:
+   it must work at once. (On a phone the screen that opened by itself
+   ignores taps for 350 ms, Stop included, by design: see the spec's "Any
+   automatic switch" row.)
 3. **Back to the chart.** During a shot, go back to the coach yourself: on a
    tablet, the preview chart in the machine column and the "Shot" nav item
    (with the running time) open the graph; on a phone, the live strip at the

@@ -1,6 +1,6 @@
 # CafAI UX: tablet and phone modes, shot focus, palette theme, Figtree
 
-Date: 2026-10-07. Status: approved design, awaiting spec review.
+Date: 2026-10-07. Status: approved and built on `feat/ux-modes-theme`; what changed after the fresh-eyes check is in section 11 (D87-D89).
 Strategic context: [PRODUCT.md](../../../PRODUCT.md).
 
 ## Why
@@ -490,3 +490,28 @@ Each stage leaves the app working and can be committed on its own.
 - **Performance on old tablets**: a theme change re-renders the whole tree
   once (rare, on a tap); building a palette is a few hundred arithmetic
   operations.
+
+## 11. After the fresh-eyes check
+
+The check (docs/briefs/verify-ux.md) changed a few things this spec says;
+the reasons are in DECISIONS.md D87 to D89.
+
+- **The phone's Machine tab** counts in tenths ("42.0 s", not "42 s"), like
+  the Shot nav item and the live strip; its accessible name keeps the whole
+  seconds ("Machine, shot running, 42 seconds").
+- **While a text field has focus** the layout keeps the tallest height
+  since typing began, never the width, so a keyboard cannot turn a tablet
+  into a phone (section 1's mode is otherwise a pure function of the
+  viewport).
+- **The state line and the Shot view's step** never wrap; the step is in
+  sentence case and has a line of its own on a phone. Before any shot the
+  timers show a dash.
+- **An upright phone under 660 px tall** draws the big graph over the
+  status and the start buttons during a shot, so Stop stays where it was.
+- **Nothing set aside fades.** It takes the muted ink, and the contrast
+  table (section 3) gains chip outlines (status colours and the accent on
+  background and surface, 3:1).
+- **The boot cache** also paints `index.html`'s first frame, so a dark
+  CafAI never opens on white.
+- **The "Any automatic switch" row stands**: on a phone, Stop too ignores
+  taps for 350 ms after the Machine tab opens by itself.

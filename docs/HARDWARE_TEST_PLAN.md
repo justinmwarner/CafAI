@@ -199,6 +199,11 @@ credits. Nothing to judge on the spot: send the files.
    meanwhile. Expected: a notice that Decaid can't be reached; once Decaid is
    back, `/api/v1/workflow` -> `context.grinderSetting` has the new setting
    within about 30 s.
+3. Tap Espresso, then Stop within half a second (still preheating). Note
+   whether Decaid saves a shot for it (the newest entry in
+   `/api/v1/shots`). CafAI looks for one up to 6 times ("Try 6 of 6"), and
+   the browser console logs a 404 for each try. If Decaid never saves a
+   shot that never poured, CafAI should stop looking for those.
 
 ## 10. The machine panel's profile line (D66)
 

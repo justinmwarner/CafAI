@@ -19,7 +19,7 @@ hue.
   tablets, at 962x602 CSS px and up (an older engine gets a warning, and a
   page with a way back to Decaid if CafAI cannot start at all), and in a
   phone's browser on the same network (the phone layout)
-- Bring your own Anthropic API key; it stays on the tablet
+- Bring your own Anthropic API key; it stays on the device you enter it on
 
 ## How the coach works
 
@@ -67,8 +67,8 @@ never change pump type, step order or count, sensors, or exit types.
 - **Settings > Appearance**: Dark, Light or Auto (follows the device), and a
   tint: Crema, Matcha, Lagoon, Ocean, Plum, Cherry, Steel, or any hue from the
   slider. Every colour comes from the tint (in OKLCH, written out as plain
-  hex for Chromium 91) and every pair of colours the screens draw is tested
-  for WCAG AA contrast at every hue; the shot graph keeps Decent's colours
+  hex for Chromium 91) and every pair of palette colours the screens use is
+  tested for WCAG AA contrast at every hue; the shot graph keeps Decent's colours
   (pressure green, flow blue). The look is saved with the other settings.
   [DESIGN.md](DESIGN.md) describes the visual system.
 
