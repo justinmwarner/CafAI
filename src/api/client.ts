@@ -11,23 +11,28 @@
 import { DEFAULT_TIMEOUT_MS, requestJson, requestValue, type Transport } from './http.ts';
 import { toWebSocketOrigin } from './host.ts';
 import { createKvClient } from './kv.ts';
-import type {
-  BuildInfo,
-  CommandableState,
-  DecaidClient,
-  DecaidSettings,
-  DeviceEntry,
-  HeartbeatResponse,
-  MachineInfo,
-  MachineSnapshot,
-  PaginatedShots,
-  ProfileCreateRequest,
-  ProfileRecord,
-  ShotRecord,
-  ShotRecordSummary,
-  ShotUpdateRequest,
-  Workflow,
-  WorkflowPatch,
+import { newId } from '../util/id.ts';
+import {
+  GatewayError,
+  type Bean,
+  type BeanBatch,
+  type BuildInfo,
+  type CommandableState,
+  type DecaidClient,
+  type DecaidSettings,
+  type DeviceEntry,
+  type HeartbeatResponse,
+  type MachineInfo,
+  type MachineSnapshot,
+  type PaginatedShots,
+  type PluginInfo,
+  type ProfileCreateRequest,
+  type ProfileRecord,
+  type ShotRecord,
+  type ShotRecordSummary,
+  type ShotUpdateRequest,
+  type Workflow,
+  type WorkflowPatch,
 } from './types.ts';
 
 /** A workflow PUT waits for Decaid to write steam/water settings to the DE1. */
@@ -45,14 +50,8 @@ export interface DecaidClientOptions {
   timeoutMs?: number;
 }
 
-/** The DecaidClient contract plus device connection, which the contract does not cover yet. */
-export interface GatewayClient extends DecaidClient {
-  /** Discovery only: never `connect=true`, which reconnects everything it sees. */
-  scanDevices(options?: { quick?: boolean }): Promise<DeviceEntry[]>;
-  connectDevice(deviceId: string, connectionRole?: 'primary' | 'auxiliary'): Promise<unknown>;
-  /** Find and connect ONE device of a kind, leaving the others alone; returns the device list after. */
-  connectKind(kind: 'machine' | 'scale'): Promise<DeviceEntry[]>;
-}
+/** The DecaidClient contract; kept as its own name since other modules import it that way. */
+export type GatewayClient = DecaidClient;
 
 function query(params: Record<string, string | number | boolean | undefined>): string {
   const parts = Object.entries(params)
@@ -75,6 +74,16 @@ export function createDecaidClient(options: DecaidClientOptions): GatewayClient 
 
     getInfo: () => requestValue<BuildInfo>(transport, '/api/v1/info'),
     getSettings: () => requestValue<DecaidSettings>(transport, '/api/v1/settings'),
+    async updateSettings(patch) {
+      // Decaid answers 200 null (settings_handler.dart at aab5f93): read them back.
+      await requestJson(transport, '/api/v1/settings', { method: 'POST', body: patch });
+      return client.getSettings();
+    },
+    async listPlugins() {
+      return (await requestJson<PluginInfo[]>(transport, '/api/v1/plugins')) ?? [];
+    },
+    getPluginEndpoint: <T>(pluginId: string, endpoint: string) =>
+      requestJson<T>(transport, `/api/v1/plugins/${id(pluginId)}/${id(endpoint)}`),
 
     getMachineInfo: () => requestValue<MachineInfo>(transport, '/api/v1/machine/info'),
     /**
@@ -144,6 +153,31 @@ export function createDecaidClient(options: DecaidClientOptions): GatewayClient 
     getShot: (shotId: string) => requestValue<ShotRecord>(transport, `/api/v1/shots/${id(shotId)}`),
     updateShot: (shotId: string, patch: ShotUpdateRequest) =>
       requestValue<ShotRecord>(transport, `/api/v1/shots/${id(shotId)}`, { method: 'PUT', body: patch }),
+    async probeEnjoymentScale() {
+      // A made-up id: current builds validate enjoyment (0-10) before looking
+      // the shot up, 0.8.6 field builds look it up first (decaid-mcp's probe).
+      try {
+        await requestJson(transport, `/api/v1/shots/${id(newId('cafai-probe'))}`, {
+          method: 'PUT',
+          body: { annotations: { enjoyment: 11 } },
+        });
+        return null;
+      } catch (error) {
+        if (!(error instanceof GatewayError)) return null;
+        if (error.status === 404) return 100;
+        const said = [error.body?.error, error.body?.message, error.body?.details, error.message].join(' ');
+        return error.status === 400 && /enjoyment/i.test(said) ? 10 : null;
+      }
+    },
+    async listBeans() {
+      return (await requestJson<Bean[]>(transport, '/api/v1/beans')) ?? [];
+    },
+    async listBatches(beanId) {
+      return (await requestJson<BeanBatch[]>(transport, `/api/v1/beans/${id(beanId)}/batches`)) ?? [];
+    },
+    createBean: (request) => requestValue<Bean>(transport, '/api/v1/beans', { method: 'POST', body: request }),
+    createBatch: (beanId, request) =>
+      requestValue<BeanBatch>(transport, `/api/v1/beans/${id(beanId)}/batches`, { method: 'POST', body: request }),
 
     kv: createKvClient(origin, options.fetch, timeoutMs),
 

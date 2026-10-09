@@ -14,6 +14,7 @@ import type { ProfileJson, ShotSummary } from '../coach/types.ts';
 import type { ProposeAdjustment, RoastLevel } from '../coach/contract.ts';
 import type { LlmMessage } from '../llm/types.ts';
 import type { CoachUiMessage } from '../app/types.ts';
+import type { KeyBackup } from './keyBackup.ts';
 
 export type IsoDateTime = string;
 
@@ -27,6 +28,11 @@ export interface Bag {
   roastLevel: RoastLevel | null;
   process: string | null;
   notes: string | null;
+  /** Decaid's bean and batch this bag is linked to (D102); absent on bags made before 2026-10-09. */
+  decaidBeanId?: string | null;
+  decaidBatchId?: string | null;
+  /** Roast date, YYYY-MM-DD. */
+  roastDate?: string | null;
   /** The template picked for v1, once picked. */
   templateId: string | null;
   /** The ProfileVersion currently on the machine for this bag. */
@@ -209,6 +215,10 @@ export interface KvMirror {
   pushNow(): Promise<void>;
   /** Read the mirrored copy, e.g. to restore after browser storage was lost. */
   pull(): Promise<CafaiExport | null>;
+  /** When the last push finished (ISO), or null. */
+  readonly lastPushAt: string | null;
+  /** The last push or gate failure as a sentence, or null after a success. */
+  readonly lastError: string | null;
 }
 
 export interface Storage {
@@ -220,4 +230,5 @@ export interface Storage {
   secrets: SecretStore;
   porter: DataPorter;
   mirror: KvMirror;
+  keyBackup: KeyBackup;
 }

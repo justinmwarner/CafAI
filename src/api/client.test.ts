@@ -83,6 +83,98 @@ describe('transport (ported)', () => {
   });
 });
 
+// ---- settings, plugins and the enjoyment probe (0.3) ------------------------------------
+
+describe('updateSettings and listPlugins', () => {
+  it('POSTs the patch (Decaid answers null) and reads the settings back', async () => {
+    const calls: Array<{ url: string; method: string; body?: string }> = [];
+    const client = createDecaidClient({
+      origin: 'http://localhost:8080',
+      fetch: stubFetch((url, init) => {
+        const method = init?.method ?? 'GET';
+        calls.push({ url, method, ...(typeof init?.body === 'string' ? { body: init.body } : {}) });
+        if (method === 'POST') return new Response(null, { status: 200 });
+        return new Response(JSON.stringify({ gatewayMode: 'tracking' }), { status: 200 });
+      }),
+    });
+    const settings = await client.updateSettings({ gatewayMode: 'tracking' });
+    expect(calls).toEqual([
+      { url: 'http://localhost:8080/api/v1/settings', method: 'POST', body: '{"gatewayMode":"tracking"}' },
+      { url: 'http://localhost:8080/api/v1/settings', method: 'GET' },
+    ]);
+    expect(settings).toEqual({ gatewayMode: 'tracking' });
+  });
+
+  it('turns a null plugins body into an empty list', async () => {
+    const client = createDecaidClient({
+      origin: 'http://localhost:8080',
+      fetch: stubFetch(() => new Response('null', { status: 200 })),
+    });
+    expect(await client.listPlugins()).toEqual([]);
+  });
+});
+
+describe('probeEnjoymentScale (D101)', () => {
+  it('a 400 that mentions enjoyment means the 0-10 scale', async () => {
+    const client = createDecaidClient({
+      origin: 'http://localhost:8080',
+      fetch: stubFetch(
+        () =>
+          new Response(JSON.stringify({ error: 'Invalid request', message: 'enjoyment must be between 0 and 10' }), {
+            status: 400,
+          }),
+      ),
+    });
+    expect(await client.probeEnjoymentScale()).toBe(10);
+  });
+
+  it('a 404 (the probe id does not exist) means the 0-100 scale', async () => {
+    const client = createDecaidClient({ origin: 'http://localhost:8080', fetch: stubFetch(() => new Response(null, { status: 404 })) });
+    expect(await client.probeEnjoymentScale()).toBe(100);
+  });
+
+  it('a 200 (the write went through) cannot tell the scale', async () => {
+    const client = createDecaidClient({ origin: 'http://localhost:8080', fetch: stubFetch(() => new Response(null, { status: 200 })) });
+    expect(await client.probeEnjoymentScale()).toBeNull();
+  });
+
+  it('a network failure cannot tell the scale either', async () => {
+    const client = createDecaidClient({
+      origin: 'http://localhost:8080',
+      fetch: stubFetch(() => Promise.reject(new TypeError('Failed to fetch'))),
+    });
+    expect(await client.probeEnjoymentScale()).toBeNull();
+  });
+
+  it('probes a made-up shot id under /api/v1/shots/cafai-probe', async () => {
+    let seen = '';
+    const client = createDecaidClient({
+      origin: 'http://localhost:8080',
+      fetch: stubFetch((url) => {
+        seen = url;
+        return new Response(null, { status: 404 });
+      }),
+    });
+    await client.probeEnjoymentScale();
+    expect(seen).toMatch(/^http:\/\/localhost:8080\/api\/v1\/shots\/cafai-probe/);
+  });
+});
+
+describe('the bean library', () => {
+  it('percent-encodes the bean id when listing its batches', async () => {
+    let seen = '';
+    const client = createDecaidClient({
+      origin: 'http://localhost:8080',
+      fetch: stubFetch((url) => {
+        seen = url;
+        return new Response('[]', { status: 200 });
+      }),
+    });
+    await client.listBatches('bean:1');
+    expect(seen).toBe('http://localhost:8080/api/v1/beans/bean%3A1/batches');
+  });
+});
+
 // ---- connecting one device without disturbing the others (ported) ------------------------
 
 async function connectCalls(kind: 'machine' | 'scale', scanResult: (url: string) => unknown[]): Promise<Array<{ url: string; body?: string }>> {

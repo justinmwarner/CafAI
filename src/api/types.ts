@@ -217,6 +217,8 @@ export interface WorkflowContext {
   grinderModel?: string | null;
   /** A string on the wire. */
   grinderSetting?: string | null;
+  /** The linked grinder's burrs; Decaid fills it when a shot is stored (on main after v0.8.8). */
+  grinderBurrs?: string | null;
   beanBatchId?: string | null;
   coffeeName?: string | null;
   coffeeRoaster?: string | null;
@@ -378,12 +380,77 @@ export interface BuildInfo {
 
 /** The parts of GET /api/v1/settings CafAI reads. */
 export interface DecaidSettings {
-  /** In "full" mode Decaid neither tares nor stops at weight. */
-  gatewayMode?: string;
+  /** "full": Decaid leaves stop-at-weight (and tare) to the skin. "tracking", "disabled": Decaid stops the shot. */
+  gatewayMode?: 'disabled' | 'full' | 'tracking' | (string & {});
   blockOnNoScale?: boolean;
   blockTareDuringShot?: boolean;
   [key: string]: unknown;
 }
+
+/** One installed plugin (GET /api/v1/plugins): only what CafAI reads. */
+export interface PluginInfo {
+  id: string;
+  name?: string;
+  version?: string;
+  /** Running now. */
+  loaded?: boolean;
+  [key: string]: unknown;
+}
+
+/** A coffee in Decaid's bean library (GET /api/v1/beans). */
+export interface Bean {
+  id: string;
+  roaster?: string;
+  name?: string;
+  country?: string;
+  region?: string;
+  processing?: string;
+  notes?: string;
+  archived?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  extras?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/** One roast of a bean (GET /api/v1/beans/{id}/batches). Dates are ISO strings. */
+export interface BeanBatch {
+  id: string;
+  beanId: string;
+  roastDate?: string | null;
+  roastLevel?: string | null;
+  freezeDate?: string | null;
+  unfreezeDate?: string | null;
+  /** In the freezer now. */
+  frozen?: boolean;
+  archived?: boolean;
+  createdAt?: string;
+  extras?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface BeanCreateRequest {
+  roaster: string;
+  name: string;
+  country?: string;
+  processing?: string;
+  notes?: string;
+}
+
+export interface BatchCreateRequest {
+  roastDate?: string;
+  roastLevel?: string;
+}
+
+/** ws/v1/plugins/time-to-ready.reaplugin/timeToReady frames. */
+export interface TimeToReadyFrame {
+  status: 'heating' | 'reached' | 'not_heating' | 'insufficient_data' | (string & {});
+  /** ms until ready, when the plugin has an estimate. */
+  remainingTimeMs: number | null;
+}
+
+/** Decaid's enjoyment scale: 0-10 on current builds, 0-100 on 0.8.6 field builds (D101). */
+export type EnjoymentScale = 10 | 100;
 
 /** Any error body Decaid sends, parsed leniently. */
 export interface DecaidErrorBody {
@@ -437,6 +504,11 @@ export interface DecaidClient {
 
   getInfo(): Promise<BuildInfo>;
   getSettings(): Promise<DecaidSettings>;
+  /** POST /api/v1/settings (answers null): only the keys given change. Answers the settings read after. */
+  updateSettings(patch: Pick<DecaidSettings, 'gatewayMode'>): Promise<DecaidSettings>;
+  listPlugins(): Promise<PluginInfo[]>;
+  /** GET a loaded plugin's HTTP endpoint, e.g. ("dye2.reaplugin", "recent-favs"). */
+  getPluginEndpoint<T = unknown>(pluginId: string, endpoint: string): Promise<T | null>;
 
   getMachineInfo(): Promise<MachineInfo>;
   getMachineState(): Promise<MachineSnapshot>;
@@ -448,6 +520,11 @@ export interface DecaidClient {
   getDevices(): Promise<DeviceEntry[]>;
   /** Primary scale. Never before espresso: Decaid tares twice by itself. */
   tareScale(): Promise<void>;
+  /** Discovery only: never `connect=true`, which reconnects everything it sees. */
+  scanDevices(options?: { quick?: boolean }): Promise<DeviceEntry[]>;
+  connectDevice(deviceId: string, connectionRole?: 'primary' | 'auxiliary'): Promise<unknown>;
+  /** Find and connect ONE device of a kind, leaving the others alone; returns the device list after. */
+  connectKind(kind: 'machine' | 'scale'): Promise<DeviceEntry[]>;
 
   getWorkflow(): Promise<Workflow>;
   /** Returns the merged workflow; treat the response as the truth. */
@@ -464,6 +541,13 @@ export interface DecaidClient {
   getLatestShot(): Promise<ShotRecordSummary | null>;
   getShot(id: string): Promise<ShotRecord>;
   updateShot(id: string, patch: ShotUpdateRequest): Promise<ShotRecord>;
+  /** D101: 10 or 100, or null when Decaid could not be asked. */
+  probeEnjoymentScale(): Promise<EnjoymentScale | null>;
+
+  listBeans(): Promise<Bean[]>;
+  listBatches(beanId: string): Promise<BeanBatch[]>;
+  createBean(request: BeanCreateRequest): Promise<Bean>;
+  createBatch(beanId: string, request: BatchCreateRequest): Promise<BeanBatch>;
 
   readonly kv: KvClient;
 }

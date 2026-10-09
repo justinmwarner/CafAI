@@ -10,6 +10,7 @@
 import type { KvClient } from '../api/types.ts';
 import { CAFAI_DB_NAME, createDbHandle, openCafaiDb, readAll, requestPersistentStorage } from './db.ts';
 import { toStorageError } from './errors.ts';
+import { createKeyBackup } from './keyBackup.ts';
 import { DecaidKvMirror } from './mirror.ts';
 import { createDataPorter, ImportError } from './porter.ts';
 import { createRepositories } from './repositories.ts';
@@ -79,6 +80,7 @@ export async function createIdbStorage(options: CreateIdbStorageOptions): Promis
   });
   const repositories = createRepositories({ db, defaultModel, onWrite: () => mirror.schedulePush() });
   const porter = createDataPorter({ db, secrets, mirror, appVersion, defaultModel, now });
+  const keyBackup = createKeyBackup(kv, secrets);
 
   // A store that started this session empty (first run, or browser storage
   // lost) must not overwrite a backup it has not seen: if the start-up
@@ -102,6 +104,7 @@ export async function createIdbStorage(options: CreateIdbStorageOptions): Promis
     secrets,
     porter,
     mirror,
+    keyBackup,
     close() {
       mirror.dispose();
       handle.close();

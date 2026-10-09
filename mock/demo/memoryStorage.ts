@@ -118,6 +118,14 @@ export function createMemoryStorage(options: MemoryStorageOptions): MemoryStorag
       schedulePush() {},
       pushNow: async () => {},
       pull: async () => null,
+      lastPushAt: null,
+      lastError: null,
+    },
+    keyBackup: {
+      isOn: async () => false,
+      setOn: async () => {},
+      keyChanged: async () => {},
+      restoreIfMissing: async () => false,
     },
     snapshot,
   };

@@ -4,11 +4,17 @@
  * imports here, so previews can use it in the browser.
  */
 import type {
+  Bean,
+  BeanBatch,
   CommandableState,
   DecaidClient,
+  DecaidSettings,
+  DeviceEntry,
+  EnjoymentScale,
   Heartbeat,
   HostEnvironment,
   LiveSample,
+  PluginInfo,
   ShotLifecycleEvent,
   TelemetryState,
   TelemetryStore,
@@ -16,6 +22,7 @@ import type {
 } from '../../api/types.ts';
 import { createAppearanceStore, type AppearanceStore } from '../../app/appearance.ts';
 import type { CoachController, CoachState, Services } from '../../app/types.ts';
+import type { PluginDirectory } from '../../api/plugins.ts';
 import type { ModelInfo } from '../../llm/types.ts';
 import type {
   Bag,
@@ -153,6 +160,12 @@ export function createFakeDecaid(): FakeDecaid {
     return value;
   };
   const kvData = new Map<string, unknown>();
+  const settingsState: DecaidSettings = { gatewayMode: 'tracking' };
+  const plugins: PluginInfo[] = [];
+  const beans: Bean[] = [];
+  const batchesByBean = new Map<string, BeanBatch[]>();
+  let beanSeq = 0;
+  let batchSeq = 0;
   return {
     calls,
     failNext: (method, error) => void failures.set(method, error),
@@ -169,7 +182,10 @@ export function createFakeDecaid(): FakeDecaid {
         appStore: false,
         fullVersion: '0.9.0+1',
       }),
-    getSettings: () => call('getSettings', [], { gatewayMode: 'disabled' }),
+    getSettings: () => call('getSettings', [], settingsState),
+    updateSettings: (patch) => call('updateSettings', [patch], Object.assign(settingsState, patch)),
+    listPlugins: () => call('listPlugins', [], plugins),
+    getPluginEndpoint: <T>(pluginId: string, endpoint: string) => call<T | null>('getPluginEndpoint', [pluginId, endpoint], null),
     getMachineInfo: () =>
       call('getMachineInfo', [], { version: '1358', model: 'DE1Pro', serialNumber: '1', GHC: false }),
     getMachineState: () => call('getMachineState', [], IDLE_TELEMETRY.machine!),
@@ -178,6 +194,9 @@ export function createFakeDecaid(): FakeDecaid {
     heartbeat: () => call('heartbeat', [], { timeout: 1800 }),
     getDevices: () => call('getDevices', [], []),
     tareScale: () => call('tareScale', [], undefined),
+    scanDevices: (options) => call('scanDevices', [options], [] as DeviceEntry[]),
+    connectDevice: (deviceId, connectionRole) => call('connectDevice', [deviceId, connectionRole], undefined),
+    connectKind: (kind) => call('connectKind', [kind], [] as DeviceEntry[]),
     getWorkflow: () => call('getWorkflow', [], SAMPLE_WORKFLOW),
     updateWorkflow: (patch) => call('updateWorkflow', [patch], SAMPLE_WORKFLOW),
     listProfiles: (options) => call('listProfiles', [options], []),
@@ -200,6 +219,21 @@ export function createFakeDecaid(): FakeDecaid {
     getLatestShot: () => call('getLatestShot', [], null),
     getShot: (id) => call('getShot', [id], Promise.reject(new Error('not found')) as never),
     updateShot: (id, patch) => call('updateShot', [id, patch], Promise.reject(new Error('unsupported')) as never),
+    probeEnjoymentScale: () => call<EnjoymentScale | null>('probeEnjoymentScale', [], 10),
+    listBeans: () => call('listBeans', [], beans),
+    listBatches: (beanId) => call('listBatches', [beanId], batchesByBean.get(beanId) ?? []),
+    createBean: (request) => {
+      beanSeq += 1;
+      const bean: Bean = { id: `bean_${beanSeq}`, roaster: request.roaster, name: request.name, country: request.country, processing: request.processing, notes: request.notes };
+      beans.push(bean);
+      return call('createBean', [request], bean);
+    },
+    createBatch: (beanId, request) => {
+      batchSeq += 1;
+      const batch: BeanBatch = { id: `batch_${batchSeq}`, beanId, roastDate: request.roastDate ?? null, roastLevel: request.roastLevel ?? null };
+      batchesByBean.set(beanId, [...(batchesByBean.get(beanId) ?? []), batch]);
+      return call('createBatch', [beanId, request], batch);
+    },
     kv: {
       list: async (ns) => [...kvData.keys()].filter((k) => k.startsWith(`${ns}/`)).map((k) => k.slice(ns.length + 1)),
       getAll: async (ns) => ({
@@ -229,6 +263,7 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
     grinderSetting: null,
     activeBagId: null,
   };
+  let keyBackupOn = false;
   const storage: FakeStorage = {
     apiKey: null,
     bags: {
@@ -280,6 +315,14 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
       schedulePush() {},
       pushNow: async () => {},
       pull: async () => null,
+      lastPushAt: null,
+      lastError: null,
+    },
+    keyBackup: {
+      isOn: async () => keyBackupOn,
+      setOn: async (on) => void (keyBackupOn = on),
+      keyChanged: async () => {},
+      restoreIfMissing: async () => false,
     },
   };
   return storage;
@@ -336,6 +379,25 @@ export function createFakeCoach(initial: Partial<CoachState> = {}): FakeCoach {
   };
 }
 
+export interface FakePluginDirectory extends PluginDirectory {
+  /** Replace the loaded set directly, notifying subscribers (refresh() is a no-op on this fake). */
+  setLoaded(ids: Iterable<string>): void;
+}
+
+export function createFakePluginDirectory(initial: Iterable<string> = []): FakePluginDirectory {
+  let loaded = new Set(initial);
+  const changes = emitter<void>();
+  return {
+    isLoaded: (id) => loaded.has(id),
+    refresh: async () => {},
+    subscribe: (listener) => changes.on(listener),
+    setLoaded(ids) {
+      loaded = new Set(ids);
+      changes.emit();
+    },
+  };
+}
+
 export const FAKE_MODELS: readonly ModelInfo[] = [
   {
     id: 'claude-opus-5-5',
@@ -364,6 +426,7 @@ export interface FakeServices extends Services {
   host: HostEnvironment & { exits: number };
   /** The real store, over the fake settings repository above. */
   appearance: AppearanceStore;
+  plugins: FakePluginDirectory;
 }
 
 export function createFakeServices(options: {
@@ -398,5 +461,6 @@ export function createFakeServices(options: {
     models: FAKE_MODELS,
     appVersion: '0.1.0-test',
     appearance: createAppearanceStore(storage.settings, options.storage?.settings?.appearance),
+    plugins: createFakePluginDirectory(),
   };
 }

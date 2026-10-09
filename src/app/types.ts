@@ -7,6 +7,7 @@
  * controller and the engine against fake UIs.
  */
 import type { DecaidClient, Heartbeat, HostEnvironment, TelemetryStore } from '../api/types.ts';
+import type { PluginDirectory } from '../api/plugins.ts';
 import type { Confidence } from '../coach/contract.ts';
 import type { ShotSummary } from '../coach/types.ts';
 import type { ModelInfo } from '../llm/types.ts';
@@ -23,6 +24,8 @@ export interface Services {
   coach: CoachController;
   models: readonly ModelInfo[];
   appVersion: string;
+  /** Which of Decaid's optional plugins are loaded (D103). */
+  plugins: PluginDirectory;
   /** How CafAI looks: the appearance setting as live state. */
   appearance: AppearanceStore;
 }

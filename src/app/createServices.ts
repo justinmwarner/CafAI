@@ -8,6 +8,7 @@ import {
   defaultGatewayOrigin,
   detectHost,
 } from '../api/index.ts';
+import { createPluginDirectory } from '../api/plugins.ts';
 import { DEFAULT_MODEL, MODELS } from '../llm/index.ts';
 import { createIdbStorage, restoreFromMirrorIfEmpty } from '../storage/index.ts';
 import { newId } from '../util/id.ts';
@@ -28,6 +29,8 @@ export async function createServices(win: Window): Promise<AppServices> {
   const host = detectHost(win);
   const telemetry = createTelemetryStore({ client: decaid, wsOrigin: decaid.wsOrigin });
   const heartbeat = createHeartbeat(decaid);
+  const plugins = createPluginDirectory(decaid);
+  void plugins.refresh();
 
   const storage = await createIdbStorage({ kv: decaid.kv, appVersion: APP_VERSION, defaultModel: DEFAULT_MODEL });
   // Browser storage can be lost (a temporary origin, a reinstall): bring the
@@ -57,8 +60,10 @@ export async function createServices(win: Window): Promise<AppServices> {
   await coach.start();
 
   // Backgrounding can unload the page after ten minutes: back up on the way out.
+  // Coming back into view can mean a plugin was loaded or unloaded meanwhile.
   const onVisibility = () => {
     if (win.document.visibilityState === 'hidden') void storage.mirror.pushNow();
+    else void plugins.refresh();
   };
   win.document.addEventListener('visibilitychange', onVisibility);
 
@@ -72,6 +77,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     models: MODELS,
     appVersion: APP_VERSION,
     appearance,
+    plugins,
     dispose() {
       win.document.removeEventListener('visibilitychange', onVisibility);
       coach.dispose();

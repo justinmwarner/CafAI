@@ -26,6 +26,12 @@ function exact<T>(shape: z.ZodType) {
 
 const text = z.string();
 const nullableText = z.string().nullable().default(null);
+/**
+ * Unlike nullableText, a missing value stays missing. `nullableText.optional()`
+ * does not do this: the built-in default still fires on a missing key, so
+ * `.optional()` on top of it has no effect (checked against zod 4 directly).
+ */
+const optionalNullableText = z.string().nullable().optional();
 const id = z.string().min(1);
 const timestamp = z.string().min(1);
 
@@ -122,6 +128,10 @@ export const BagSchema = z.object({
   roastLevel: z.enum(ROAST_LEVELS).nullable().default(null),
   process: nullableText,
   notes: nullableText,
+  /** Decaid's bean library link (D102); absent on bags made before 2026-10-09, and left absent (not forced to null) so an old export still round-trips exactly. */
+  decaidBeanId: optionalNullableText,
+  decaidBatchId: optionalNullableText,
+  roastDate: optionalNullableText,
   templateId: nullableText,
   activeVersionId: nullableText,
   conversationId: text,
