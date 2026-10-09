@@ -104,6 +104,8 @@ describe('CoachScreen', () => {
     expect(screen.getByRole('link', { name: 'Open Settings' })).toHaveAttribute('href', '#/settings');
     expect(screen.queryByTestId(TID.chat)).toBeNull();
     expect(screen.queryByTestId(TID.newBag)).toBeNull();
+    // CafAI is an everyday skin before the coach can start: the machine stays on screen.
+    expect(screen.getByTestId(TID.statsCard)).toBeInTheDocument();
   });
 
   it('offers one large New bag button when there are no bags', async () => {
@@ -111,6 +113,7 @@ describe('CoachScreen', () => {
     expect(screen.getByText('Dial in your first bag')).toBeInTheDocument();
     expect(screen.queryByTestId(TID.bagPicker)).toBeNull();
     expect(screen.getAllByTestId(TID.newBag)).toHaveLength(1);
+    expect(screen.getByTestId(TID.statsCard)).toBeInTheDocument();
     await userEvent.click(screen.getByTestId(TID.newBag));
     expect(methods(services)).toEqual(['newBag']);
   });
@@ -323,9 +326,11 @@ describe('CoachScreen', () => {
       expect(all[all.length - 1]).toHaveTextContent('Thinking…');
     });
 
-    it('waits for the chat: not posted while there is no key, posted when the chat first shows', () => {
+    it('waits for the chat: under the key card while there is no key, posted when the chat first shows', () => {
       const services = renderCoach({ ...coachStateFor('options'), hasApiKey: false });
-      expect(screen.queryByTestId(TID.statsCard)).toBeNull();
+      // Before the coach can start, the setup screen carries the machine's card itself.
+      expect(screen.queryByTestId(TID.chat)).toBeNull();
+      expect(screen.getByTestId(TID.statsCard)).toBeInTheDocument();
       act(() => services.coach.setState({ hasApiKey: true }));
       expectCardLast();
     });

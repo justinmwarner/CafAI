@@ -23,6 +23,7 @@ import type { CoachPhase, CoachUiMessage } from '../../app/types.ts';
 import { useCoach, useServices, useTelemetry } from '../../app/services.tsx';
 import { isShotRunning } from '../../api/workflow.ts';
 import { shotTraceFor } from '../machine/shotTrace.ts';
+import { StatsCard } from '../machine/StatsCard.tsx';
 import { navigate } from '../router.ts';
 import { useLayout } from '../shell/layout.ts';
 import { TID } from '../testIds.ts';
@@ -208,15 +209,22 @@ function ErrorBanner({ error }: { error: string }) {
   );
 }
 
+/**
+ * Before the coach can start (no key, no bag): what to do next, and the
+ * machine's live card under it, since CafAI is an everyday skin too and the
+ * chat that would post the card is not there yet.
+ */
 function EmptyState({ children }: { children: ReactNode }) {
   return (
     <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', p: 2 }}>
-      <Paper
-        variant="outlined"
-        sx={{ m: 'auto', p: 3, maxWidth: 460, width: '100%', textAlign: 'center', bgcolor: 'background.paper' }}
-      >
-        {children}
-      </Paper>
+      <Box sx={{ m: 'auto', width: '100%', maxWidth: 680, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+        <Paper variant="outlined" sx={{ p: 3, maxWidth: 460, width: '100%', textAlign: 'center', bgcolor: 'background.paper' }}>
+          {children}
+        </Paper>
+        <Box sx={{ width: '100%' }}>
+          <StatsCard />
+        </Box>
+      </Box>
     </Box>
   );
 }
