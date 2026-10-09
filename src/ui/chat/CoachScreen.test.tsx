@@ -3,7 +3,7 @@ import './testing/setup.ts';
 import { afterEach, describe, expect, it } from 'vitest';
 import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { CoachState } from '../../app/types.ts';
+import type { CoachState, CoachUiMessage } from '../../app/types.ts';
 import type { LiveSample, ShotStateEvent } from '../../api/types.ts';
 import { createFakeServices, IDLE_TELEMETRY, type FakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
@@ -53,6 +53,34 @@ function sample(tS: number): LiveSample {
     scale: { timestamp: '', weight: tS * 1.5, weightFlow: 1.5, battery: null, timerValue: null },
   };
 }
+
+function said(id: string, role: CoachUiMessage['role'], text: string): CoachUiMessage {
+  return { id, role, parts: [{ kind: 'text', text }], createdAt: '2026-10-03T09:00:00.000Z' };
+}
+
+/** A transient progress notice, which the engine removes once the work is done. */
+function progress(id: string): CoachUiMessage {
+  return {
+    id,
+    role: 'system',
+    parts: [{ kind: 'notice', tone: 'info', text: 'Looking for that shot in Decaid…', progress: { value: null, label: null } }],
+    createdAt: '2026-10-03T09:00:00.000Z',
+  };
+}
+
+/** The thread's rows (x-chat's articles), oldest first. */
+function rows(): HTMLElement[] {
+  return within(screen.getByTestId(TID.chat)).getAllByRole('article');
+}
+
+/** The stats card is in the chat once, as its newest row. */
+function expectCardLast() {
+  const all = rows();
+  expect(screen.getAllByTestId(TID.statsCard)).toHaveLength(1);
+  expect(within(all[all.length - 1]!).getByTestId(TID.statsCard)).toBeInTheDocument();
+}
+
+const SANTOS_CHAT: CoachUiMessage[] = [said('s-1', 'assistant', 'Santos v1 is on the machine. Pull a shot when you are ready.')];
 
 describe('CoachScreen', () => {
   afterEach(() => {
@@ -278,5 +306,132 @@ describe('CoachScreen', () => {
     expect(screen.getByTestId(TID.newBag)).toBeDisabled();
     expect(screen.getByTestId(TID.bagPicker)).toBeDisabled();
     for (const undo of [...screen.getAllByTestId(TID.undoButton), ...screen.queryAllByTestId(TID.diffUndo)]) expect(undo).toBeDisabled();
+  });
+
+  describe('the stats card', () => {
+    it('is posted after the newest message when the chat first shows', () => {
+      renderCoach(coachStateFor('options'));
+      expectCardLast();
+      const all = rows();
+      expect(within(all[all.length - 2]!).getByTestId(TID.optionChip('Sour / sharp'))).toBeInTheDocument();
+    });
+
+    it('comes before nothing but the thinking row while the coach works', () => {
+      renderCoach({ ...coachStateFor('intake'), busy: true });
+      const all = rows();
+      expect(within(all[all.length - 2]!).getByTestId(TID.statsCard)).toBeInTheDocument();
+      expect(all[all.length - 1]).toHaveTextContent('Thinking…');
+    });
+
+    it('waits for the chat: not posted while there is no key, posted when the chat first shows', () => {
+      const services = renderCoach({ ...coachStateFor('options'), hasApiKey: false });
+      expect(screen.queryByTestId(TID.statsCard)).toBeNull();
+      act(() => services.coach.setState({ hasApiKey: true }));
+      expectCardLast();
+    });
+
+    it('goes once a message is sent, and Stats brings it back at the end, with no coach call', async () => {
+      const state = coachStateFor('intake');
+      const services = renderCoach(state);
+      expectCardLast();
+      await userEvent.type(screen.getByTestId(TID.composerInput), 'Kiambu AA, washed{Enter}');
+      await waitFor(() => expect(methods(services)).toEqual(['sendText']));
+      // The engine puts the barista's words in the chat.
+      act(() => services.coach.setState({ messages: [...state.messages!, said('u-1', 'user', 'Kiambu AA, washed')] }));
+      expect(screen.queryByTestId(TID.statsCard)).toBeNull();
+
+      await userEvent.click(screen.getByTestId(TID.statsPrompt));
+      expectCardLast();
+      expect(within(rows()[rows().length - 2]!).getByText('Kiambu AA, washed')).toBeInTheDocument();
+      expect(methods(services)).toEqual(['sendText']);
+    });
+
+    it('goes for good when anything new lands, even if that goes again', () => {
+      const state = coachStateFor('applied');
+      const services = renderCoach(state);
+      expectCardLast();
+      act(() => services.coach.setState({ messages: [...state.messages!, progress('p-1')] }));
+      expect(screen.queryByTestId(TID.statsCard)).toBeNull();
+      // The engine removes the progress notice once the work is done: the card stays gone.
+      act(() => services.coach.setState({ messages: state.messages! }));
+      expect(screen.queryByTestId(TID.statsCard)).toBeNull();
+    });
+
+    it('stays where it is while the newest message only changes inside', () => {
+      const state = coachStateFor('options');
+      const services = renderCoach(state);
+      // A star rating updates the shot card in place: nothing new landed.
+      const rated = state.messages!.map((m) => ({ ...m, parts: m.parts.map((p) => (p.kind === 'shot' ? { ...p, stars: 4 } : p)) }));
+      act(() => services.coach.setState({ messages: rated }));
+      expectCardLast();
+    });
+
+    it('goes when another bag opens, and does not come back with the first bag', async () => {
+      const services = renderCoach(coachStateFor('options'));
+      expectCardLast();
+      act(() => services.coach.setState({ activeBag: SANTOS, messages: SANTOS_CHAT }));
+      expect(screen.queryByTestId(TID.statsCard)).toBeNull();
+      act(() => services.coach.setState(coachStateFor('options')));
+      expect(screen.queryByTestId(TID.statsCard)).toBeNull();
+      // Stats posts it in the chat on screen.
+      await userEvent.click(screen.getByTestId(TID.statsPrompt));
+      expectCardLast();
+    });
+
+    it('is still there after a visit to another screen if nothing new landed', () => {
+      const services = createFakeServices({ coach: coachStateFor('options') });
+      renderWithServices(<CoachScreen />, services).unmount();
+      renderWithServices(<CoachScreen />, services);
+      expectCardLast();
+    });
+
+    it('is gone after a visit to another screen if something landed meanwhile', () => {
+      const state = coachStateFor('options');
+      const services = createFakeServices({ coach: state });
+      renderWithServices(<CoachScreen />, services).unmount();
+      act(() => services.coach.setState({ messages: [...state.messages!, said('a-9', 'assistant', 'Ready when you are.')] }));
+      renderWithServices(<CoachScreen />, services);
+      expect(screen.queryByTestId(TID.statsCard)).toBeNull();
+      expect(screen.getByTestId(TID.statsPrompt)).toBeInTheDocument();
+    });
+
+    it('is posted once a session, and again after a reload', () => {
+      const services = renderCoach(coachStateFor('options'));
+      act(() => services.coach.setState({ activeBag: SANTOS, messages: SANTOS_CHAT }));
+      cleanup();
+      // The chat shows again in the same session: no second post.
+      renderWithServices(<CoachScreen />, services);
+      expect(screen.queryByTestId(TID.statsCard)).toBeNull();
+      cleanup();
+      // A reload builds the services anew.
+      renderWithServices(<CoachScreen />, createFakeServices({ coach: { ...coachStateFor('options'), activeBag: SANTOS, messages: SANTOS_CHAT } }));
+      expectCardLast();
+    });
+
+    it('shows in an empty chat until the first message', () => {
+      const services = renderCoach({ ...coachStateFor('intake'), messages: [] });
+      expectCardLast();
+      act(() => services.coach.setState({ messages: [said('a-1', 'assistant', 'Tell me about the coffee.')] }));
+      expect(screen.queryByTestId(TID.statsCard)).toBeNull();
+    });
+
+    it('never reaches the coach, the stored conversation or the export', async () => {
+      const state = coachStateFor('options');
+      const services = renderCoach(state);
+      act(() => services.coach.setState({ messages: [...state.messages!, said('u-1', 'user', 'Sour / sharp')] }));
+      await userEvent.click(screen.getByTestId(TID.statsPrompt));
+      expectCardLast();
+      expect(services.coach.calls).toEqual([]);
+      expect(services.coach.getState().messages.map((m) => m.id)).not.toContain('cafai-stats');
+      expect(JSON.stringify(services.coach.getState().messages)).not.toContain('cafai-stats');
+      expect(JSON.stringify(await services.storage.porter.exportAll())).not.toContain('cafai-stats');
+    });
+
+    it('has its Stats prompt above the composer on a tablet and on a phone', () => {
+      renderCoach(coachStateFor('options'));
+      expect(screen.getByTestId(TID.statsPrompt)).toHaveTextContent('Stats');
+      act(() => setViewport(390, 844));
+      expect(screen.getByTestId(TID.statsPrompt)).toHaveTextContent('Stats');
+    });
   });
 });

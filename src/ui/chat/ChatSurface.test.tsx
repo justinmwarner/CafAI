@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 import './testing/setup.ts';
 import { describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { CoachUiMessage } from '../../app/types.ts';
 import { TID } from '../testIds.ts';
 import { ChatSurface, latestAppliedDiffId, toChatMessages, type ChatSurfaceProps } from './ChatSurface.tsx';
 import { conversation, sampleSummary } from './testing/fixtures.ts';
 import { previewTheme } from './testing/previewTheme.ts';
-import { renderThemed } from './testing/render.tsx';
+import { renderWithServices } from './testing/render.tsx';
 
 function textMessage(id: string, role: CoachUiMessage['role'], text: string, streaming = false): CoachUiMessage {
   return { id, role, parts: [{ kind: 'text', text, ...(streaming ? { streaming } : {}) }], createdAt: '2026-10-03T08:00:00.000Z' };
@@ -27,6 +27,21 @@ function progressMessage(id: string, text: string, value: number | null, label: 
   };
 }
 
+function noticeMessage(id: string, text: string): CoachUiMessage {
+  return { id, role: 'system', parts: [{ kind: 'notice', tone: 'success', text }], createdAt: '2026-10-03T08:00:00.000Z' };
+}
+
+/** The thread's rows (x-chat's articles), oldest first. */
+function rows(): HTMLElement[] {
+  return within(screen.getByTestId(TID.chat)).getAllByRole('article');
+}
+
+function lastRow(): HTMLElement {
+  const all = rows();
+  return all[all.length - 1]!;
+}
+
+// With services: the stats card reads the machine.
 function renderSurface(props: Partial<ChatSurfaceProps> = {}) {
   const handlers = {
     onSend: vi.fn(),
@@ -45,7 +60,7 @@ function renderSurface(props: Partial<ChatSurfaceProps> = {}) {
     ...handlers,
     ...props,
   };
-  const result = renderThemed(<ChatSurface {...all} />);
+  const result = renderWithServices(<ChatSurface {...all} />);
   const rerender = (next: Partial<ChatSurfaceProps>) => result.rerender(<ChatSurface {...all} {...next} />);
   return { ...result, handlers, rerender };
 }
@@ -279,6 +294,110 @@ describe('ChatSurface', () => {
   });
 });
 
+describe('ChatSurface: the stats card and the Stats prompt', () => {
+  it('shows the stats card once, after the newest message', () => {
+    renderSurface({ messages: conversation('options'), statsCard: true });
+    expect(screen.getAllByTestId(TID.statsCard)).toHaveLength(1);
+    expect(within(lastRow()).getByTestId(TID.statsCard)).toBeInTheDocument();
+    const all = rows();
+    expect(within(all[all.length - 2]!).getByTestId(TID.optionChip('Sour / sharp'))).toBeInTheDocument();
+  });
+
+  it('shows no stats card unless it is asked for', () => {
+    renderSurface({ messages: conversation('options') });
+    expect(screen.queryByTestId(TID.statsCard)).toBeNull();
+  });
+
+  it('keeps the thinking row last while busy', () => {
+    renderSurface({ messages: [textMessage('a', 'user', 'Kenya, washed')], busy: true, statsCard: true });
+    const all = rows();
+    expect(all).toHaveLength(3);
+    expect(within(all[1]!).getByTestId(TID.statsCard)).toBeInTheDocument();
+    expect(all[2]).toHaveTextContent('Thinking…');
+  });
+
+  it('never puts an author label of its own over the card', () => {
+    // "Coach" over the machine's numbers would read as advice: the card joins whatever it follows.
+    const { rerender } = renderSurface({ messages: [textMessage('a', 'user', 'Kenya, washed')], statsCard: true });
+    expect(screen.getByText('You')).toBeInTheDocument();
+    expect(screen.queryByText('Coach')).toBeNull();
+    rerender({ messages: [noticeMessage('n', 'Loaded Kiambu AA v4 on the machine.')], statsCard: true });
+    expect(screen.getByText('CafAI')).toBeInTheDocument();
+    expect(screen.queryByText('Coach')).toBeNull();
+    // A thinking row after it is the coach's, and says so.
+    rerender({ messages: [textMessage('a', 'user', 'Kenya, washed')], statsCard: true, busy: true });
+    expect(screen.getAllByText('Coach')).toHaveLength(1);
+  });
+
+  it('leaves Graph and Undo on the newest real cards', () => {
+    renderSurface({
+      messages: conversation('applied'),
+      statsCard: true,
+      canUndo: true,
+      graphShotId: 'shot-1',
+      onOpenGraph: vi.fn(),
+    });
+    expect(screen.getByTestId(TID.diffUndo)).toBeInTheDocument();
+    expect(within(screen.getByTestId(TID.shotCard)).getByTestId(TID.openShotGraph)).toBeInTheDocument();
+  });
+
+  it('puts the Stats prompt between the thread and the composer, in an empty chat and mid-conversation', () => {
+    const { rerender } = renderSurface({ messages: [], onStats: vi.fn() });
+    const thread = screen.getByRole('log', { name: 'Conversation with the coach' });
+    const check = () => {
+      const prompt = screen.getByTestId(TID.statsPrompt);
+      expect(prompt).toHaveTextContent('Stats');
+      expect(prompt).toHaveAttribute('role', 'button');
+      expect(thread.contains(prompt)).toBe(false);
+      expect(thread.compareDocumentPosition(prompt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(prompt.compareDocumentPosition(screen.getByTestId(TID.composerInput)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    };
+    check();
+    rerender({ messages: conversation('options'), onStats: vi.fn() });
+    check();
+    expect(screen.getAllByTestId(TID.statsPrompt)).toHaveLength(1);
+  });
+
+  it('shows no Stats prompt without a handler for it', () => {
+    renderSurface({ messages: conversation('options') });
+    expect(screen.queryByTestId(TID.statsPrompt)).toBeNull();
+  });
+
+  it('asks for the card from the prompt: no message, and the draft stays', async () => {
+    const onStats = vi.fn();
+    const { handlers } = renderSurface({ messages: conversation('options'), onStats });
+    await userEvent.type(screen.getByTestId(TID.composerInput), 'Half a thought');
+    await userEvent.click(screen.getByTestId(TID.statsPrompt));
+    expect(onStats).toHaveBeenCalledTimes(1);
+    expect(handlers.onSend).not.toHaveBeenCalled();
+    expect(screen.getByTestId(TID.composerInput)).toHaveValue('Half a thought');
+  });
+
+  it('asks for the card even while the coach works', async () => {
+    const onStats = vi.fn();
+    renderSurface({ messages: [textMessage('a', 'user', 'Kenya, washed')], busy: true, onStats });
+    await userEvent.click(screen.getByTestId(TID.statsPrompt));
+    expect(onStats).toHaveBeenCalledTimes(1);
+  });
+
+  it('brings the card into view from Stats, even after the reader scrolled up', async () => {
+    const messages = conversation('options');
+    const { rerender } = renderSurface({ messages, onStats: vi.fn() });
+    const scroller = screen.getByTestId(TID.chat).querySelector<HTMLElement>('.MuiChatMessageList-scroller')!;
+    // jsdom lays nothing out: a 300 px view over 1000 px of thread.
+    Object.defineProperty(scroller, 'scrollHeight', { configurable: true, get: () => 1000 });
+    Object.defineProperty(scroller, 'clientHeight', { configurable: true, get: () => 300 });
+    Object.defineProperty(scroller, 'scrollTop', { configurable: true, writable: true, value: 700 });
+    fireEvent.scroll(scroller);
+    scroller.scrollTop = 100;
+    fireEvent.scroll(scroller);
+
+    await userEvent.click(screen.getByTestId(TID.statsPrompt));
+    rerender({ messages, onStats: vi.fn(), statsCard: true });
+    expect(scroller.scrollTop).toBe(700);
+  });
+});
+
 describe('toChatMessages', () => {
   it('maps text to text parts and everything else to data parts', () => {
     const [first, second] = toChatMessages(
@@ -306,6 +425,23 @@ describe('toChatMessages', () => {
   it('leaves the thinking row out while a progress notice says what CafAI is doing', () => {
     const searching = [textMessage('a', 'user', 'Hi'), progressMessage('p', 'Looking for that shot in Decaid…', 1 / 6, 'Try 2 of 6')];
     expect(toChatMessages(searching, true).map((m) => m.id)).toEqual(['a', 'p']);
+  });
+
+  it('puts the stats card after the messages and before the thinking row', () => {
+    const idle = [textMessage('a', 'user', 'Hi')];
+    expect(toChatMessages(idle, false, true).map((m) => m.id)).toEqual(['a', 'cafai-stats']);
+    expect(toChatMessages(idle, true, true).map((m) => m.id)).toEqual(['a', 'cafai-stats', 'cafai-thinking']);
+    expect(toChatMessages([], false, true)).toEqual([
+      { id: 'cafai-stats', role: 'system', status: 'sent', parts: [{ type: 'data-cafai-stats', data: null }] },
+    ]);
+  });
+
+  it('reads what the coach is doing from the real messages, not the card', () => {
+    // Streaming text or a progress notice before the card still holds the thinking row back.
+    const streaming = [textMessage('a', 'user', 'Hi'), textMessage('b', 'assistant', 'Hel', true)];
+    expect(toChatMessages(streaming, true, true).map((m) => m.id)).toEqual(['a', 'b', 'cafai-stats']);
+    const searching = [textMessage('a', 'user', 'Hi'), progressMessage('p', 'Looking for that shot in Decaid…', null, null)];
+    expect(toChatMessages(searching, true, true).map((m) => m.id)).toEqual(['a', 'p', 'cafai-stats']);
   });
 });
 

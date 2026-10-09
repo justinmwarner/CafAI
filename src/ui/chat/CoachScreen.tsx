@@ -1,8 +1,9 @@
 /**
  * The coach route (#/): bag header, error banner, and the chat. Renders
  * CoachState and calls the controller; it keeps no coaching state itself.
+ * The stats card's place (statsCard.ts) is screen state, never the coach's.
  */
-import { useMemo, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -29,6 +30,7 @@ import { templateName } from '../history/historyModel.ts';
 import { ChatSurface } from './ChatSurface.tsx';
 import { formatDateTime } from './format.ts';
 import type { OptionsPart } from './parts/types.ts';
+import { statsCardFor, statsCardShown } from './statsCard.ts';
 
 export interface CoachScreenProps {
   /** Where the "add your API key" card links. */
@@ -63,6 +65,11 @@ function asksForTaste(messages: readonly CoachUiMessage[]): boolean {
 function composerPlaceholder(phase: CoachPhase, messages: readonly CoachUiMessage[]): string {
   if (phase === 'awaiting_feedback' && !asksForTaste(messages)) return OTHER_QUESTION_PLACEHOLDER;
   return PLACEHOLDERS[phase];
+}
+
+/** The id of the chat's newest message, or null for an empty chat: what the stats card follows. */
+function newestId(messages: readonly CoachUiMessage[]): string | null {
+  return messages[messages.length - 1]?.id ?? null;
 }
 
 /** Controller calls report failures through CoachState.error; this only stops unhandled rejections. */
@@ -282,6 +289,28 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
   const placeholder = useMemo(() => composerPlaceholder(phase, messages), [phase, messages]);
   const showChat = ready && hasApiKey && activeBag !== null;
 
+  // The stats card (D91), kept per services instance so a visit to History
+  // and back finds it where it was. Posted the first time the chat shows this
+  // session; once anything lands after it, or another bag opens, it is gone
+  // until Stats, even if what landed goes again (a progress notice does).
+  const stats = useMemo(() => statsCardFor(coach), [coach]);
+  const statsAt = useSyncExternalStore(stats.subscribe, stats.getSnapshot);
+  const bagId = activeBag?.id ?? null;
+  const newest = newestId(messages);
+  // The chat's first showing has the card from its first frame, so x-chat
+  // never counts it as a message that arrived below the view.
+  const statsShown = showChat && (!statsAt.opened || statsCardShown(statsAt, bagId, newest));
+  useEffect(() => {
+    if (!showChat) return;
+    stats.open(bagId, newest);
+    if (!statsCardShown(stats.getSnapshot(), bagId, newest)) stats.hide();
+  }, [stats, showChat, bagId, newest]);
+  const showStats = () => {
+    // The engine's latest, in case it moved on since this render.
+    const latest = coach.getState();
+    stats.show(latest.activeBag?.id ?? null, newestId(latest.messages));
+  };
+
   let body: ReactNode;
   if (!ready) {
     body = (
@@ -313,6 +342,8 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
           onUndo={() => fire(coach.undo())}
           onRateShot={(shotId, stars) => fire(coach.rateShot(shotId, stars))}
           onOpenGraph={() => navigate({ name: 'shot' })}
+          statsCard={statsShown}
+          onStats={showStats}
         />
       </Box>
     );

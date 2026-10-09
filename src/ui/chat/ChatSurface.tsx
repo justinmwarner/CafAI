@@ -8,6 +8,9 @@
  * the adapter's sendMessage only forwards the text to `onSend` and returns an
  * already-closed stream. Everything except text renders as `data-cafai-*`
  * parts through our own part components.
+ *
+ * The live stats card (D91) is one more row at the end, on screen only: it
+ * is never one of `messages`, so it is never stored or sent to the coach.
  */
 import {
   createContext,
@@ -22,9 +25,11 @@ import {
   type FormEvent,
 } from 'react';
 import Box from '@mui/material/Box';
+import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import SpeedRounded from '@mui/icons-material/SpeedRounded';
 import { ChatBox, type ChatBoxFeatures, type ChatBoxSlotProps, type ChatBoxSlots } from '@mui/x-chat';
 import type {
   ChatAdapter,
@@ -35,6 +40,7 @@ import type {
   ChatPartRendererProps,
 } from '@mui/x-chat/headless';
 import type { CoachUiMessage, CoachUiPart } from '../../app/types.ts';
+import { StatsCard } from '../machine/StatsCard.tsx';
 import { TID } from '../testIds.ts';
 import { RichText } from './RichText.tsx';
 import { DiffCard } from './parts/DiffCard.tsx';
@@ -64,6 +70,10 @@ export interface ChatSurfaceProps {
   onRateShot(shotId: string, stars: number): void;
   /** Opens the shot route (#/shot) from graphShotId's card. Without it no card shows Graph. */
   onOpenGraph?(): void;
+  /** Show the live stats card after the newest message (statsCard.ts decides when). */
+  statsCard?: boolean;
+  /** The Stats prompt above the composer was tapped: post the card. Without it there is no prompt. */
+  onStats?(): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -74,6 +84,8 @@ type CardKind = Exclude<CoachUiPart['kind'], 'text'>;
 const DATA_PREFIX = 'data-cafai-';
 const THINKING_TYPE = `${DATA_PREFIX}thinking` as const;
 const THINKING_ID = 'cafai-thinking';
+const STATS_TYPE = `${DATA_PREFIX}stats` as const;
+const STATS_ID = 'cafai-stats';
 
 function toChatPart(part: CoachUiPart): ChatMessagePart {
   if (part.kind === 'text') return { type: 'text', text: part.text, state: part.streaming ? 'streaming' : 'done' };
@@ -111,6 +123,14 @@ const THINKING_MESSAGE: ChatMessage = {
   parts: [{ type: THINKING_TYPE, data: null }],
 };
 
+/** The live stats card: a row of the thread, never a CoachUiMessage, and CafAI's own, not the coach's. */
+const STATS_MESSAGE: ChatMessage = {
+  id: STATS_ID,
+  role: 'system',
+  status: 'sent',
+  parts: [{ type: STATS_TYPE, data: null }],
+};
+
 function showsProgress(message: CoachUiMessage): boolean {
   return message.parts.some((part) => part.kind === 'notice' && part.progress !== undefined);
 }
@@ -120,13 +140,15 @@ function applyingChange(messages: readonly CoachUiMessage[]): boolean {
 }
 
 /**
- * x-chat messages for the thread, plus a "thinking" row while busy with
- * nothing streaming yet. A progress notice already says what CafAI is doing
- * (loading a profile, looking for a shot), and a change card that is being
- * applied shows its own bar, so neither gets a thinking row.
+ * x-chat messages for the thread, then the stats card when it shows, then a
+ * "thinking" row while busy with nothing streaming yet. A progress notice
+ * already says what CafAI is doing (loading a profile, looking for a shot),
+ * and a change card that is being applied shows its own bar, so neither gets
+ * a thinking row. Both are read from the real messages, never the card.
  */
-export function toChatMessages(messages: readonly CoachUiMessage[], busy: boolean): ChatMessage[] {
+export function toChatMessages(messages: readonly CoachUiMessage[], busy: boolean, statsCard = false): ChatMessage[] {
   const result = messages.map(toChatMessage);
+  if (statsCard) result.push(STATS_MESSAGE);
   const last = messages[messages.length - 1];
   const streamingNow = last !== undefined && last.role !== 'user' && isStreaming(last);
   const working = (last !== undefined && showsProgress(last)) || applyingChange(messages);
@@ -162,6 +184,8 @@ interface PartActions {
   undo(): void;
   rateShot(shotId: string, stars: number): void;
   openGraph(): void;
+  /** The Stats prompt (it lives in x-chat's slot above the composer, so it reaches ChatSurface through here too). */
+  askStats(): void;
 }
 
 interface PartsContextValue {
@@ -293,7 +317,73 @@ const PART_RENDERERS: ChatPartRendererMap = {
   [`${DATA_PREFIX}shot`]: ({ part }: DataRendererProps) => <ShotView data={part.data} />,
   [`${DATA_PREFIX}notice`]: ({ part }: DataRendererProps) => <NoticeView data={part.data} />,
   [THINKING_TYPE]: () => <ThinkingView />,
+  [STATS_TYPE]: () => <StatsCard />,
 };
+
+/** x-chat's own grouping key: the author, else the role. */
+function authorKey(message: ChatMessage): string {
+  return message.author?.id ?? message.role;
+}
+
+// ---------------------------------------------------------------------------
+// The prompt row
+// ---------------------------------------------------------------------------
+
+/**
+ * The Stats chip as drawn: 40 px, the surface colour inside a line, the
+ * accent icon; a band above and below makes it the full 48 px touch target.
+ */
+const statsChipSx = {
+  position: 'relative',
+  height: 40,
+  minHeight: 40,
+  borderRadius: '20px',
+  bgcolor: 'background.paper',
+  borderColor: 'divider',
+  fontWeight: 600,
+  // A tap leaves :hover behind on a touch screen: the chip keeps its colour.
+  '&.MuiChip-clickable:hover': { bgcolor: 'background.paper' },
+  '& .MuiChip-icon': { color: 'primary.main', fontSize: 18, ml: '10px' },
+  '& .MuiChip-label': { pr: '13px' },
+  // From inside the 1 px border: 5 px out each way makes 48.
+  '&::after': { content: '""', position: 'absolute', top: -5, right: 0, bottom: -5, left: 0 },
+} as const;
+
+/** The composer's lane: at most 760 px, centred, never closer than 8 px to the pane's sides. */
+const promptRowSx = {
+  display: 'flex',
+  flexShrink: 0,
+  gap: 1,
+  mx: 'max(8px, calc((100% - 760px) / 2))',
+  pt: '2px',
+  pb: 1,
+} as const;
+
+/**
+ * The prompts above the composer: Stats alone (D91), on every chat. A tap
+ * posts the stats card at the end of the thread; nothing is sent, and the
+ * composer's draft stays as it is.
+ */
+function PromptRow() {
+  const { actions } = usePartsContext();
+  return (
+    <Box sx={promptRowSx}>
+      <Chip
+        variant="outlined"
+        icon={<SpeedRounded />}
+        label="Stats"
+        data-testid={TID.statsPrompt}
+        onClick={actions.askStats}
+        sx={statsChipSx}
+      />
+    </Box>
+  );
+}
+
+/** An empty thread shows nothing of x-chat's own: a chat opens with the coach's first words, or the stats card. */
+function EmptyThread() {
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // ChatBox configuration
@@ -303,7 +393,8 @@ const FEATURES: ChatBoxFeatures = {
   attachments: false,
   conversationHeader: false,
   helperText: false,
-  suggestions: false,
+  // x-chat's slot between the thread and the composer, for the prompt row (SLOTS).
+  suggestions: true,
   scrollToBottom: true,
   // ChatSurface follows new content itself (followNewest.ts): x-chat's
   // buffer-based follow lets go when a tall card lands on a 602 px screen.
@@ -357,7 +448,14 @@ const SLOTS: ChatBoxSlots = {
   messageAvatar: null,
   messageInlineMeta: null,
   messageActions: null,
+  // Our own row in the suggestions slot: x-chat's chips would only fill the composer.
+  suggestions: PromptRow,
+  // x-chat moves its suggestions to the middle of an empty thread unless it has an empty state to show there.
+  emptyState: EmptyThread,
 };
+
+/** x-chat draws the suggestions slot only while it has suggestions; PromptRow never hands them to the composer. */
+const PROMPTS = ['Stats'];
 
 const LOCALE_TEXT: Partial<ChatLocaleText> = {
   messageAuthorUserLabel: 'You',
@@ -377,11 +475,22 @@ function closedStream(): ReadableStream<never> {
 }
 
 export function ChatSurface(props: ChatSurfaceProps) {
-  const { messages, busy, inputDisabled = false, placeholder, canUndo, graphShotId = null, onOpenGraph } = props;
+  const {
+    messages,
+    busy,
+    inputDisabled = false,
+    placeholder,
+    canUndo,
+    graphShotId = null,
+    onOpenGraph,
+    statsCard = false,
+    onStats,
+  } = props;
   const sendBlocked = busy || inputDisabled;
   // A boolean, not the raw (often inline, identity-changing) callback: keeps
   // partsContext stable so part renderers do not re-render on every parent render.
   const hasOpenGraph = onOpenGraph !== undefined;
+  const hasStats = onStats !== undefined;
 
   // Latest-ref: the adapter and part actions stay stable while the parent
   // passes fresh callbacks on every render (every streamed token).
@@ -393,6 +502,8 @@ export function ChatSurface(props: ChatSurfaceProps) {
   });
 
   const followNextRef = useRef(false);
+  // Counts the taps on Stats, so each one brings the card into view (below).
+  const [statsAsked, setStatsAsked] = useState(0);
 
   const adapter = useMemo<ChatAdapter>(
     () => ({
@@ -428,6 +539,11 @@ export function ChatSurface(props: ChatSurfaceProps) {
       rateShot: (shotId: string, stars: number) => propsRef.current.onRateShot(shotId, stars),
       // Navigation, not a chat append: no need to follow the thread for it either.
       openGraph: () => propsRef.current.onOpenGraph?.(),
+      // No message and no coach call: the card is screen-only (statsCard.ts).
+      askStats: () => {
+        setStatsAsked((count) => count + 1);
+        propsRef.current.onStats?.();
+      },
     };
   }, []);
 
@@ -437,7 +553,18 @@ export function ChatSurface(props: ChatSurfaceProps) {
     [busy, canUndo, latestAppliedDiff, graphShotId, hasOpenGraph, actions],
   );
 
-  const chatMessages = useMemo(() => toChatMessages(messages, busy), [messages, busy]);
+  const chatMessages = useMemo(() => toChatMessages(messages, busy, statsCard), [messages, busy, statsCard]);
+
+  // The card joins the run of messages above it, so it never carries an
+  // author label of its own ("Coach" over the machine's numbers would read as
+  // advice). Only an empty chat leaves it nothing to join.
+  const lastRole = messages[messages.length - 1]?.role ?? null;
+  const messageGroup = useMemo<ChatBoxSlotProps['messageGroup']>(
+    () => ({
+      groupKey: (message: ChatMessage) => (message.id === STATS_ID && lastRole !== null ? lastRole : authorKey(message)),
+    }),
+    [lastRole],
+  );
 
   // Keep the newest message in view (followNewest.ts): on mount and on a bag
   // switch (the thread is replaced), after the barista acted (sent, tapped a
@@ -456,6 +583,15 @@ export function ChatSurface(props: ChatSurfaceProps) {
     }
     followerRef.current?.update();
   }, [chatMessages, followerRef]);
+  // Stats: the card is (or has just become) the newest row. Shown afresh, as
+  // a new thread is, so a card taller than the view shows from its start
+  // again, however far the reader had scrolled. After the effect above, which
+  // runs in the same commit when the card has just been added.
+  useLayoutEffect(() => {
+    if (statsAsked === 0) return;
+    followerRef.current?.reset();
+    followerRef.current?.update();
+  }, [statsAsked, followerRef]);
 
   const onComposerKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
     // Enter sends unless sending is blocked; then it does nothing, and the draft stays.
@@ -478,8 +614,9 @@ export function ChatSurface(props: ChatSurfaceProps) {
         disabled: sendBlocked,
         'data-testid': TID.composerSend,
       } as ChatBoxSlotProps['composerSendButton'],
+      messageGroup,
     }),
-    [placeholder, sendBlocked, onComposerKeyDown, onComposerSubmit],
+    [placeholder, sendBlocked, onComposerKeyDown, onComposerSubmit, messageGroup],
   );
 
   return (
@@ -492,6 +629,7 @@ export function ChatSurface(props: ChatSurfaceProps) {
           features={FEATURES}
           slots={SLOTS}
           slotProps={slotProps}
+          suggestions={hasStats ? PROMPTS : undefined}
           localeText={LOCALE_TEXT}
           sx={{ height: '100%', bgcolor: 'transparent' }}
         />
