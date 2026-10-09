@@ -1,7 +1,7 @@
 /**
  * The loaded-profile reading (useLoadedProfile.ts), shared: the shell reads
- * Decaid's workflow once on the engine's beat, and the machine column's
- * Profile line, the Shot view's step and the coach note all show that one
+ * Decaid's workflow once on the engine's beat, and the stats card's Profile
+ * line, the Shot view's step and the coach note all show that one
  * reading. Outside a provider (a component test) a component reads its own.
  */
 import { createContext, useContext, type ReactNode } from 'react';

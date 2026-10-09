@@ -1,13 +1,12 @@
 /**
- * What the machine is doing, at a glance.
+ * What the machine is doing, at a glance: the pieces of the stats card
+ * (StatsCard.tsx).
  *
  * Every readout is its own small component that selects one formatted string
  * from telemetry, so a WebSocket tick re-renders at most the number that
  * changed and nothing around it (Crema rebuilt the whole screen per tick, and
  * taps landed in the gaps).
  */
-import { useEffect, useState } from 'react';
-import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { useTelemetry } from '../../app/services.tsx';
@@ -20,24 +19,19 @@ import {
   isWaterLow,
   splitUnit,
 } from './format.ts';
-import { LoadedProfile } from './LoadedProfile.tsx';
 import { stepNameAt } from './loadedProfileModel.ts';
 
 const DASH = '—';
 
-/** True once `flag` has held for `delayMs`; a reconnect attempt that flips it briefly shows nothing. */
-function useSettledFlag(flag: boolean, delayMs: number): boolean {
-  const [settled, setSettled] = useState(false);
-  useEffect(() => {
-    if (!flag) {
-      setSettled(false);
-      return;
-    }
-    const timer = setTimeout(() => setSettled(true), delayMs);
-    return () => clearTimeout(timer);
-  }, [flag, delayMs]);
-  return flag && settled;
-}
+const visuallyHidden = {
+  position: 'absolute',
+  // Strings: in sx a bare 1 is 100%, a box as wide and tall as the pane that the frame could be scrolled to.
+  width: '1px',
+  height: '1px',
+  overflow: 'hidden',
+  clipPath: 'inset(50%)',
+  whiteSpace: 'nowrap',
+} as const;
 
 function Dot({ on }: { on: boolean }) {
   return (
@@ -45,8 +39,8 @@ function Dot({ on }: { on: boolean }) {
       component="span"
       aria-hidden
       sx={{
-        width: 10,
-        height: 10,
+        width: 8,
+        height: 8,
         borderRadius: '50%',
         flex: 'none',
         bgcolor: on ? 'success.main' : 'transparent',
@@ -57,50 +51,52 @@ function Dot({ on }: { on: boolean }) {
   );
 }
 
-function ConnectionRow() {
+/** One link: its dot, and a word that says it too ("Scale", or "No scale"). */
+function DeviceLink({ on, name, missing }: { on: boolean; name: string; missing: string }) {
+  return (
+    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+      <Dot on={on} />
+      <Typography variant="label" component="span" color="text.secondary" noWrap>
+        {on ? name : missing}
+        {on && (
+          <Box component="span" sx={visuallyHidden}>
+            {' connected'}
+          </Box>
+        )}
+      </Typography>
+    </Box>
+  );
+}
+
+/**
+ * The machine's and the scale's links, short enough for a card's header on a
+ * phone: "DE1" and "Scale" beside filled dots while connected, "No machine"
+ * and "No scale" beside hollow rings while not. Decaid itself out of reach
+ * is the alert's to say (MachineAlerts.tsx).
+ */
+export function ConnectionRow() {
   const machine = useTelemetry((s) => s.machineConnected);
   const scale = useTelemetry((s) => s.scaleConnected);
-  // Sockets stay 'connecting'/'closed' between backoff retries, so only a lasting outage is shown.
-  const unreachable = useSettledFlag(
-    useTelemetry((s) => !s.machineConnected && s.sockets.devices !== 'open'),
-    2500,
-  );
-  const item = { display: 'inline-flex', alignItems: 'center', gap: 0.75, minWidth: 0 } as const;
   return (
     <Box
       data-testid={TID.connectionStatus}
-      sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 2, rowGap: 0.5 }}
+      sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', columnGap: 1.5, rowGap: 0.25 }}
     >
-      <Box sx={item}>
-        <Dot on={machine} />
-        <Typography variant="body2" noWrap>
-          {machine ? 'Machine connected' : 'No machine'}
-        </Typography>
-      </Box>
-      <Box sx={item}>
-        <Dot on={scale} />
-        <Typography variant="body2" noWrap>
-          {scale ? 'Scale connected' : 'No scale'}
-        </Typography>
-      </Box>
-      {unreachable && (
-        <Typography variant="body2" color="warning.main" noWrap>
-          Can't reach Decaid
-        </Typography>
-      )}
+      <DeviceLink on={machine} name="DE1" missing="No machine" />
+      <DeviceLink on={scale} name="Scale" missing="No scale" />
     </Box>
   );
 }
 
 /**
  * "Pulling a shot: pause" during Blooming's bloom: the step says why the pump
- * is off. Always one line: a step name too long for the column ("Pulling a
- * shot: reset temperature" in 340 px) is cut short rather than wrapped, so
- * the readouts, the buttons and Stop under it never jump as the steps change.
- * The whole line is its title and what a screen reader hears, and the Shot
- * view names the step in full.
+ * is off. Always one line: a step name too long for the card ("Pulling a
+ * shot: reset temperature" on a phone) is cut short rather than wrapped, so
+ * the readouts and the buttons under it never jump as the steps change. The
+ * whole line is its title and what a screen reader hears, and the Shot view
+ * names the step in full.
  */
-function StateLine({ stepNames }: { stepNames: readonly string[] | null }) {
+export function StateLine({ stepNames }: { stepNames: readonly string[] | null }) {
   const text = useTelemetry((s) =>
     describeMachineState(
       s.machine?.state?.state ?? null,
@@ -141,7 +137,7 @@ function Readout({ testId, label, value, detail, warn }: ReadoutProps) {
         ) : null}
       </Typography>
       <Typography variant="caption" component="div" color={warn ? 'warning.main' : 'text.secondary'} noWrap>
-        {detail ?? ' '}
+        {detail ?? ' '}
       </Typography>
     </Box>
   );
@@ -176,46 +172,18 @@ function ScaleWeight() {
   return <Readout testId={TID.scaleWeight} label="Scale" value={value} detail={connected ? null : 'No scale'} />;
 }
 
-/** Decaid's latest device error (e.g. profileUploadFailed), until dismissed. */
-function ConnectionErrorNotice() {
-  const error = useTelemetry((s) => s.connectionError);
-  const [dismissed, setDismissed] = useState<string | null>(null);
-  if (!error || error.timestamp === dismissed) return null;
+/**
+ * Group, Steam, Water and Scale: four in a row, or two by two where a row of
+ * four has no room. Every readout keeps its caption line, empty or not, so
+ * the rows line up and nothing moves when "Refill" or "No scale" appears.
+ */
+export function MachineReadouts({ columns }: { columns: 2 | 4 }) {
   return (
-    <Alert
-      severity={error.severity === 'warning' ? 'warning' : 'error'}
-      variant="outlined"
-      onClose={() => setDismissed(error.timestamp)}
-      sx={{
-        mt: 1,
-        py: 0,
-        px: 1.25,
-        alignItems: 'center',
-        '& .MuiAlert-icon': { py: 0.75, mr: 1 },
-        '& .MuiAlert-message': { py: 0.75, fontSize: '0.875rem', lineHeight: 1.35 },
-      }}
-    >
-      {error.message?.trim() || 'Decaid reported a problem with a device.'}
-      {error.suggestion ? ` ${error.suggestion}` : ''}
-    </Alert>
-  );
-}
-
-export function MachineStatus() {
-  // The Profile line reads Decaid's workflow; the state line names the running step from the same read.
-  const [stepNames, setStepNames] = useState<readonly string[] | null>(null);
-  return (
-    <Box component="section" aria-label="Machine status">
-      <ConnectionRow />
-      <StateLine stepNames={stepNames} />
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', columnGap: 1, mt: 0.75 }}>
-        <GroupTemperature />
-        <SteamTemperature />
-        <WaterLevel />
-        <ScaleWeight />
-      </Box>
-      <LoadedProfile onStepNames={setStepNames} />
-      <ConnectionErrorNotice />
+    <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, columnGap: 1, rowGap: 1, mt: 0.75 }}>
+      <GroupTemperature />
+      <SteamTemperature />
+      <WaterLevel />
+      <ScaleWeight />
     </Box>
   );
 }

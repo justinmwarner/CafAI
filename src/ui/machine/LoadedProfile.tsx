@@ -1,10 +1,10 @@
 /**
- * The Profile line of the machine panel: which profile Decaid's workflow
+ * The Profile line of the stats card: which profile Decaid's workflow
  * carries, and whether it is the active bag's version on the machine (D66,
  * D55).
  *
  * Two fixed lines that never wrap, so a long title or the offline note cannot
- * move the readouts around it: the title is cut with an ellipsis (the whole
+ * move Tare and Sleep beside it: the title is cut with an ellipsis (the whole
  * title is in its `title` attribute) and the mark beside it keeps its place:
  * "This bag" once the machine holds the version, "loading…" while it takes
  * it, "not confirmed" (in the warning colour) after a load that failed.
@@ -83,7 +83,7 @@ function LoadedProfileView({ state, onStepNames }: LoadedProfileProps & { state:
   }, [onStepNames, stepNames]);
 
   return (
-    <Box role="group" aria-labelledby={labelId} sx={{ mt: 0.75, minWidth: 0 }}>
+    <Box role="group" aria-labelledby={labelId} sx={{ minWidth: 0 }}>
       <Box sx={{ display: 'flex', alignItems: 'baseline', columnGap: 1, minWidth: 0 }}>
         <Typography
           id={labelId}
