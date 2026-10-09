@@ -652,6 +652,9 @@ subagents, each task committed after its checks.
   tall). A new route `#/shot` is the Shot view on a tablet and the Machine
   tab on a phone, so crossing the breakpoint keeps the screen. The machine
   column is 340, 400 or 480 px by width.
+  *Superseded in part by D90 and D92: there is no machine column, so no
+  widths, and `#/shot` is the Shot view in both layouts (the phone's tab is
+  Shot).*
 - **D85. Shot focus.** A shot start shows the shot route by itself unless a
   text field has focus or the barista is already there; moving during the
   shot cancels the automatic return; the coach comes back once the chat gets
@@ -662,12 +665,17 @@ subagents, each task committed after its checks.
   taps; on a tablet only the main pane, so Stop in the machine column always
   works. The coach stays mounted (hidden) under the Shot view, so its scroll
   and draft survive.
+  *Amended by D92: on a phone too the guard covers the main pane only, so
+  Stop, now in the top bar, always works.*
 - **D86. The coach's note and one loaded-profile reading.** Under the big
   graph a small note says the coach is watching, why this shot will not
   count (another profile, a version not confirmed, no bag, no key), or
   "Done. Reading the shot" until the outcome arrives. The Profile line's
   workflow reading is shared through a provider, so the note and the Shot
   view's step ("Pour · step 3 of 3") and yield target add no second poll.
+  *Superseded in part by D91: the Profile line is the stats card's now. The
+  shell still makes the one reading, so the note, the step and the target
+  need no card on screen.*
 
 ## The fresh-eyes check of the UX rework (2026-10-08)
 
@@ -706,6 +714,11 @@ hardware plan's section 9 now checks whether Decaid saves such a shot.
   scrolling in every state but "Not connected" with Decaid's alert. Before
   any shot, the preview's and the Shot view's timers show the dash (`DASH`
   in format.ts), not "0.0 s".
+  *Superseded in part by D90 and D92: the column, its start buttons and the
+  preview card are gone, and with them the short phone's cover. The state
+  line keeps its one line in the stats card; the step's line of its own is
+  the narrow Shot view's (under 600 px wide; a phone on its side keeps the
+  step beside the caption), and every Shot view keeps 120 px of plot.*
 - **D88. The keyboard holds the height only; the navigation counts in
   tenths.** While a field has focus the layout uses the live width and the
   tallest height since typing began; a new width (a rotation, a narrowed
@@ -725,6 +738,9 @@ hardware plan's section 9 now checks whether Decaid saves such a shot.
   finger started moving, so a tap there in that window was aimed at the
   coach. On a tablet Stop is never guarded. The check's brief said Stop
   must work at once on both; it now says on a tablet.
+  *Superseded in part by D92: the tab is Shot, named "Shot, running, 42
+  seconds" mid-shot, and Stop is in the top bar, which the guard never
+  covers, so on a phone too Stop works at once.*
 - **D89. Set aside by colour, never by opacity; the look from the first
   frame.** What is set aside is drawn in the muted ink: the undone version
   card in History (its "Undone" chip stays in warning), the starting
@@ -748,3 +764,115 @@ hardware plan's section 9 now checks whether Decaid saves such a shot.
   tablet" (the API key's notes, the storage and network errors, the engine
   warning, the start-failure page): the same text runs in a phone's
   browser.
+
+## Chat first, the machine on demand (2026-10-08)
+
+The owner's ask: on load, no graph and no machine stats; a live stats
+message in the chat when it opens, gone as the chat moves on; Stats always
+among the pre-filled prompts to show it again; the graph opened from the
+header; and a row of the most used buttons, with Stop in place of whatever
+runs. Answers given: the card goes once the chat moves on, the phone follows
+(its Machine tab becomes Shot), Stats is the only pre-filled prompt, and Stop
+lives only in the row. Design and mockup:
+docs/superpowers/specs/2026-10-08-chat-first-machine-design.md; plan in
+docs/superpowers/plans/2026-10-08-chat-first-machine.md. Built on branch
+feat/ux-modes-theme by three agents in parallel (the machine's pieces, the
+card in the chat, the shell), each committed after its checks. Two corners
+the fresh-eyes check left open go with the machine column: its scrolling at
+962x602 with "Not connected" and Decaid's alert, and the left column of a
+small phone on its side.
+
+- **D90. No machine column; the machine row, Stop in the running start's
+  place.** The routed screen takes the whole width under the top bar; the
+  column, its preview chart and `MachinePanel` are gone, and with them the
+  column's own starts and Stop. The machine row (`MachineRow.tsx`) is in the
+  top bar on every screen: Espresso, Steam, Flush and Hot water, each its
+  icon over a short label in a 54x48 box on a tablet, the icon alone in
+  44x44 on a phone (named for screen readers). While the machine runs
+  anything, the start that runs turns into Stop in its own box, filled in
+  the error colour, and the other starts are held. Stop takes Espresso's
+  place for espresso and skipStep, Steam's for steam and steamRinse,
+  Flush's for flush and airPurge, Hot water's for hotWater, and the first
+  place for anything else (cleaning, descaling). It is the same button,
+  changed, so the finger that started the run finds Stop under it. A
+  group-head machine's row is empty until something runs, then holds Stop
+  alone; a sleeping machine's holds Wake alone. After a run ends or the
+  machine wakes, the starts stay held for 1 s, so a second tap meant for
+  Stop or Wake starts nothing in the same spot; Stop itself is never held.
+  One command is in flight for the whole app (`useMachineCommands.ts`),
+  shared by the row and the stats card: while one is in flight a tap on a
+  start, Tare or Sleep sends nothing (the command counts as sent before the
+  request goes, so a fast double tap sends once), and Stop is never
+  blocked. Nothing is retried on its own. The machine's problems show in
+  one slim alert under the top bar (`MachineAlerts.tsx`, about 40 px, in
+  the flow, so it pushes the screen down), only while they last, the most
+  important first: a failed command from the row or the card (closable,
+  cleared by the next command); Decaid's device error (closable); Decaid
+  out of reach (after 2.5 s); not connected (after 1 s, once Decaid has
+  answered); the machine's own error; water to refill (held 3 s before it
+  shows and before it clears, as the level wobbles while water moves).
+  Supersedes D84's column widths and D87's rules for the column's start
+  buttons and preview card.
+- **D91. The stats card, and Stats to bring it back.** The machine's
+  readings are a card in the chat (`StatsCard.tsx`): "Machine" with "DE1"
+  and "Scale" beside their dots ("No machine" and "No scale" when not
+  connected), the state line, Group (with its target), Steam, Water
+  (Refill when low) and Scale, the loaded profile ("Profile", its title and
+  the "This bag" mark), and Tare and Sleep or Wake. It updates live and
+  keeps the column's rules: one component per number, the state line on one
+  line. Laid out for its own width (`useOwnLayout.ts`: Chromium 91 has no
+  container queries), it puts the four readouts in a row from 520 px and
+  two by two under that, where Sleep shows its icon alone. It is a row of
+  the thread on screen only (`statsCard.ts`), never one of the coach's
+  messages: never stored (so never in the export or Decaid's copy) and
+  never sent to the coach. It reads as CafAI's (role system), joined to the
+  run of messages above it, so no "Coach" label sits over the machine's
+  numbers. The first time the chat shows in a session the card follows its
+  newest message (in an empty chat too). It goes as soon as anything new
+  lands (a message from either side, a notice, a shot card), even if that
+  goes again as a progress notice does, and when another bag opens; it
+  stays while the newest message only changes inside (a rating, a reply
+  still streaming). Its place is kept per services instance, like the shot
+  recording, so a visit to History and back keeps it, and a reload starts
+  with it shown. The only pre-filled prompt is **Stats**: one chip, 40 px
+  tall with an invisible band that makes it a 48 px touch target, above the
+  composer in x-chat's suggestions slot, aligned with the composer, on every
+  chat, an empty one too. A tap posts the card after the newest message, or
+  leaves it where it already is, and brings it into view; it sends nothing,
+  calls no coach and keeps the draft. The chat needs an API key and a bag,
+  so the prompt waits for both; until then the coach screen's setup card
+  (the key, or New bag) has the stats card under it, because CafAI is an
+  everyday skin too and the machine's readings, Tare and Sleep must not
+  wait for the coach.
+- **D92. The graph from Shot, the phone's Shot tab, and a top bar the guard
+  never covers.** The big graph is the Shot view (`#/shot`), opened from
+  Shot: the tablet's top bar, or the phone's tab, renamed from Machine and
+  now the same Shot view. Between shots it shows the last shot; before any
+  shot its timer shows the dash. A starting shot still takes the screen by
+  itself and hands back to the coach (D85), with the coach's note under the
+  graph (D86), and the live strip on the phone's Coach tab still opens it.
+  The tablet's top bar: the brand, Coach, Shot, History, Settings, a gap,
+  the machine row, a hairline, Decaid settings (an icon button) and Exit.
+  It fits at 962 px mid-shot inside Decaid, with 18 px to spare, as the
+  places take 8 px sides and 2 px gaps below 1200 px; between 800 and
+  960 px they show their icons alone, still named for screen readers. The
+  phone's top bar: the brand (its word gives way first, the cup stays), a
+  gap, the row as icons, then Decaid settings and Exit as icon buttons. One
+  top bar element serves both layouts, so the row stays mounted across a
+  layout change and a command in flight keeps its spinner. The machine
+  alert sits first under the bar, then the old-engine warning. The tap
+  guard after an automatic switch (350 ms, D85) covers the main pane only,
+  on a tablet and on a phone, never the top bar (nor the phone's tabs), so
+  Stop takes a tap the moment it appears. That supersedes D88's guard over
+  the phone's Stop, kept then because Stop sat in the pane that switched.
+  Mid-shot the Shot tab shows "42.0 s" and is named "Shot, running, 42
+  seconds" (D88's wording, moved). The Shot view lays itself out for its own
+  box: on a tablet across the pane, at most 960 px wide and centred; under
+  600 px wide (an upright phone) the step takes a line of its own and the
+  readouts go two by two; under 440 px tall (a phone on its side) four
+  readouts stay in a row, in the smaller timer and readout sizes. The plot
+  keeps at least 120 px in all three, and where even that does not fit the
+  view scrolls rather than cut off the note. The phone's readouts are 24 px
+  (were 18), and its weight shows the target ("of 36") too. With the column
+  go D87's cover on a short upright phone and the split panel of a phone on
+  its side.

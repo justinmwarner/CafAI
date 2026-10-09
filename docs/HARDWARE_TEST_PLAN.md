@@ -67,7 +67,7 @@ ticks: they decide the next changes.
 5. If CafAI shows "could not start": record the text, tap **Exit to Decaid**
    (it must return to the dashboard) and send the webview log. Stop here.
 6. **Exit** (top right) returns to Decaid's dashboard; **Decaid settings**
-   opens Decaid's settings page. The page itself never scrolls; each column
+   opens Decaid's settings page. The page itself never scrolls; each region
    scrolls inside itself.
 
 ## 2. Settings: key, grinder, dose (QUESTIONS #3 and #8, D57, D62)
@@ -91,8 +91,9 @@ ticks: they decide the next changes.
    in the log watcher, the time from the first "encoding step" line to
    "mmr write: tankTemp". The research estimate is about 1 s; nothing in
    Decaid's source measures it.
-3. The machine panel's **Profile** line shows "<Bean> v1", marked as this
-   bag's.
+3. The stats card's **Profile** line shows "<Bean> v1", marked as this
+   bag's. (The card leaves the chat once the chat moves on: tap **Stats**
+   above the composer to bring it back.)
 4. v1's yield (D57): the chat says where v1 stops, e.g. "Kiambu AA v1 stops
    at 50 g: 2.8 x the 18.0 g dose in Decaid." (with no dose in Decaid, or one
    outside 12-25 g, it says v1 assumes 18 g and asks you to set the real
@@ -199,42 +200,75 @@ credits. Nothing to judge on the spot: send the files.
    meanwhile. Expected: a notice that Decaid can't be reached; once Decaid is
    back, `/api/v1/workflow` -> `context.grinderSetting` has the new setting
    within about 30 s.
-3. Tap Espresso, then Stop within half a second (still preheating). Note
-   whether Decaid saves a shot for it (the newest entry in
-   `/api/v1/shots`). CafAI looks for one up to 6 times ("Try 6 of 6"), and
-   the browser console logs a 404 for each try. If Decaid never saves a
-   shot that never poured, CafAI should stop looking for those.
+3. Tap Espresso, then Stop (it takes Espresso's place in the top bar)
+   within half a second (still preheating). Note whether Decaid saves a
+   shot for it (the newest entry in `/api/v1/shots`). CafAI looks for one
+   up to 6 times ("Try 6 of 6"), and the browser console logs a 404 for
+   each try. If Decaid never saves a shot that never poured, CafAI should
+   stop looking for those.
 
-## 10. The machine panel's profile line (D66)
+## 10. The stats card's profile line (D66)
 
 Load another profile from Decaid's own screens or another skin, then return
-to CafAI. Expected: within 30 s the Profile line shows that title, not marked
-as this bag's, and the banner offers Retry to load the bag's version.
+to CafAI. Expected: within 30 s the stats card's Profile line (tap **Stats**
+if the card is not at the end of the chat) shows that title, not marked as
+this bag's, and the banner offers Retry to load the bag's version.
 
-## 11. The shot takes the screen, and the look (D82, D84-D86)
+## 11. The shot takes the screen, the machine row, the stats card, and the look (D82, D84-D86, D90-D92)
 
-1. **Shot focus.** On the coach, tap Espresso (or start the shot from the
-   group head on a GHC machine). Expected: within a second the right side
-   becomes the big graph with "I'm watching this shot..." under it; the
-   machine column and Stop stay exactly where they were. After the pour,
-   "Done. Reading the shot" shows, and the coach comes back by itself when
-   the shot's card arrives (or about 8 s after the pour). Tap Stop during a
-   shot right after the switch: it must work at once.
-2. **Typing keeps the coach.** Start typing to the coach, then start a shot
-   from the group head. Expected: the coach stays on screen; the preview
-   chart in the machine column shows the shot; tapping it opens the graph.
-3. **Appearance.** Settings > Appearance: choose Light, then Matcha. Every
+1. **Shot focus.** On the coach, tap **Espresso** in the top bar (or start
+   the shot from the group head on a GHC machine). Expected: Espresso turns
+   into a red **Stop** in the same place and the other buttons grey out (on
+   a GHC machine the row, empty before, shows Stop alone); within a
+   second the screen under the top bar becomes the big graph with "I'm
+   watching this shot..." under it, and the top bar stays exactly where it
+   was. After the pour, "Done. Reading the shot" shows, and the coach comes
+   back by itself when the shot's card arrives (or about 8 s after the
+   pour).
+2. **Stop from the top bar.** Pull a shot from the coach and tap **Stop**
+   the moment the screen has switched to the graph by itself: the pump must
+   stop on that first tap (the tap guard covers only the screen under the
+   bar, never Stop). Pull another and tap Stop mid-pour, about 10 s in: the
+   same, at once. Once the machine is idle again, the four buttons come
+   back after about a second.
+3. **Typing keeps the coach.** Start typing to the coach, then start a shot
+   from the group head. Expected: the coach stays on screen; the top bar's
+   Shot item shows the live dot and the running time, and the row shows
+   Stop; tapping Shot opens the graph.
+4. **The stats card, live.** Reload CafAI (Exit, then select CafAI in
+   Decaid again). Expected: the chat ends with the **Machine** card: "DE1"
+   and "Scale" beside green dots, the state ("Ready"), and Group (with its
+   target), Steam, Water and Scale. Wake the machine from sleep, or run a
+   flush, and watch the card for a minute without touching anything: Group
+   and Steam move as the machine heats. Put a cup on the scale: Scale
+   follows it, and **Tare** zeroes it. **Sleep** puts the machine to sleep
+   and the top bar's row shows Wake alone; wake it from there. Then send the
+   coach a message: the card goes. Tap **Stats** above the composer: the
+   card comes back at the end of the chat, still live, and the coach does
+   not answer.
+5. **The machine switched off.** With CafAI open on the coach, switch the
+   machine off (or disconnect it in Decaid). Expected: a slim alert under
+   the top bar says "Not connected. Wake the DE1 and pair it in Decaid."
+   (record how long after switching off it appeared: CafAI waits 1 s once
+   Decaid reports the machine gone). If Decaid reports the disconnect as an
+   error of its own, its words show there first, with a close button:
+   record them, close them, and the "Not connected" line follows. The
+   row's buttons grey out, and the card (tap Stats) says "No machine" and
+   "Not connected", with dashes for the readings. Switch the machine on:
+   the alert goes once it reconnects, and the buttons come back.
+6. **Appearance.** Settings > Appearance: choose Light, then Matcha. Every
    screen changes at once and stays changed after Exit and back. Note
    whether the tablet's own dark mode reaches CafAI: set the tablet to dark
    mode, choose Auto, and note whether CafAI turns dark (it shows light if
    Decaid's WebView never reports the preference).
-4. **Native controls.** In Light, open the bag picker: its list should be
+7. **Native controls.** In Light, open the bag picker: its list should be
    light too.
-5. **A phone on the network (optional).** Open `http://<tablet-ip>:3000` on
-   a phone. Expected: the phone layout (tabs at the bottom), the bags there
-   after a moment, and the API key asked for again (each browser keeps its
-   own). Pull a shot from the tablet: the phone's Coach tab shows the live
-   strip.
+8. **A phone on the network (optional).** Open `http://<tablet-ip>:3000` on
+   a phone. Expected: the phone layout (tabs at the bottom, the machine row
+   as icons in the top bar), the bags there after a moment, and the API key
+   asked for again (each browser keeps its own). Pull a shot from the
+   tablet: the phone's Coach tab shows the live strip, and its Shot tab the
+   running time.
 
 ## Results
 
@@ -254,11 +288,14 @@ as this bag's, and the banner offers Retry to load the bag's version.
 | 8 | 2 | Grind direction right for your grinder | | |
 | 9 | 1 | Progress, warning, Retry | | |
 | 10 | - | Profile line follows another skin | | |
-| 11 | 1 | Shot view by itself, Stop never moves, coach returns | | |
-| 11 | 2 | Typing keeps the coach | | |
-| 11 | 3 | Appearance applies; Auto follows the tablet's dark mode? | | |
-| 11 | 4 | Bag picker list matches Light | | |
-| 11 | 5 | Phone layout over the network (optional) | | |
+| 11 | 1 | Shot view by itself, Espresso turns into Stop in place, coach returns | | |
+| 11 | 2 | Stop in the top bar works on the first tap, right after the switch and mid-pour | | |
+| 11 | 3 | Typing keeps the coach | | |
+| 11 | 4 | Stats card live (temperatures move), gone after a message, back on Stats | | |
+| 11 | 5 | Machine off: the alert's words; buttons greyed; back on reconnect | | |
+| 11 | 6 | Appearance applies; Auto follows the tablet's dark mode? | | |
+| 11 | 7 | Bag picker list matches Light | | |
+| 11 | 8 | Phone layout over the network (optional) | | |
 
 Send back this table, the saved shot and profile JSON files, and the
 `[CafAI]` lines from `/api/v1/webview/logs`.

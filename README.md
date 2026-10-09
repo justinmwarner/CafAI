@@ -6,13 +6,16 @@ starting profiles, pull a shot, tap how it tasted, and confirm one change at a
 time. Every version of your profile for that bag is kept, with the shot data,
 your feedback and the change that led to it.
 
-CafAI is also a complete everyday skin: machine status, espresso, steam,
-flush, hot water, sleep/wake, scale tare and a live shot graph, with a way
-back to Decaid's dashboard and settings on every screen. When a shot starts,
-the screen turns into a big live graph by itself, and the coach comes back
-once it has read the shot. It has a tablet and a phone layout, and a look of
-your own: dark, light or following the device, in one of seven tints or any
-hue.
+CafAI is also a complete everyday skin: espresso, steam, flush and hot water
+from a row in the top bar (the one running turns into Stop), a live card in
+the chat with the machine's state, temperatures, water, scale (with tare),
+the loaded profile and sleep/wake, and a live shot graph, with a way back to
+Decaid's dashboard and settings on every screen. It opens on the chat, with
+no graph and no machine panel: the card is the chat's newest entry until the
+chat moves on, and the Stats prompt brings it back. When a shot starts, the
+screen turns into a big live graph by itself, and the coach comes back once
+it has read the shot. It has a tablet and a phone layout, and a look of your
+own: dark, light or following the device, in one of seven tints or any hue.
 
 - Skin id: `cafai` (never changes; it keys the skin's saved data in Decaid)
 - Runs in Decaid's WebView, down to the Chromium 91 engine of older Decent
@@ -50,20 +53,26 @@ never change pump type, step order or count, sensors, or exit types.
 ## Screens and looks
 
 - **Tablet** (800 x 500 CSS px and up, every Decent tablet): a top bar with
-  Coach, Shot, History and Settings, the machine column on the left (status,
-  buttons and a preview of the last shot's graph; tap it for the full one),
-  and the coach on the right. When a shot starts, the right side becomes the
-  Shot view: a big timer, pressure, flow, weight and weight flow, the graph,
-  and a note from the coach saying it is watching. When the shot's card
-  reaches the chat, the coach comes back by itself; the machine column and
-  Stop never move.
-- **Phone** (anything smaller): one screen at a time, with Coach, Machine,
+  Coach, Shot, History and Settings, the machine row (Espresso, Steam, Flush
+  and Hot water; the one running turns into Stop in its place), Decaid
+  settings and Exit, and the coach across the whole width under it. The chat
+  opens with the live stats card (state, temperatures, water, scale with
+  Tare, the loaded profile, Sleep); it goes once the chat moves on, and
+  **Stats** above the composer brings it back. Shot opens the graph. When a
+  shot starts, the screen becomes the Shot view by itself: a big timer,
+  pressure, flow, weight and weight flow, the graph, and a note from the
+  coach saying it is watching. When the shot's card reaches the chat, the
+  coach comes back by itself; the top bar and Stop never move. Problems
+  (not connected, Decaid out of reach, water to refill, a failed command)
+  show in one slim alert under the top bar while they last.
+- **Phone** (anything smaller): one screen at a time, with Coach, Shot,
   History and Settings tabs at the bottom (a rail at the side when the phone
-  lies down). A shot opens the Machine tab with the big graph; on the Coach
-  tab a live strip shows the time, weight and pressure and opens the graph.
-  A phone opens CafAI at `http://<tablet-ip>:3000`; its browser storage is
-  its own, so the API key is entered again there (bags and the look come back
-  from Decaid's key-value store).
+  lies down) and the machine row as icons in the top bar. The chat has the
+  same stats card and Stats prompt. A shot opens the Shot tab with the big
+  graph; on the Coach tab a live strip shows the time, weight and pressure
+  and opens it. A phone opens CafAI at `http://<tablet-ip>:3000`; its
+  browser storage is its own, so the API key is entered again there (bags
+  and the look come back from Decaid's key-value store).
 - **Settings > Appearance**: Dark, Light or Auto (follows the device), and a
   tint: Crema, Matcha, Lagoon, Ocean, Plum, Cherry, Steel, or any hue from the
   slider. Every colour comes from the tint (in OKLCH, written out as plain
@@ -169,7 +178,7 @@ Screenshots land in `tools/chrome91/out/`.
 | `src/llm` | `LlmProvider` interface, streaming Anthropic client (fetch + SSE), tool-loop runner |
 | `src/storage` | IndexedDB repositories, local-only key store, export/import, mirror to Decaid's KV store |
 | `src/app` | The coach engine, services, app composition |
-| `src/ui` | Shell, machine panel, live graph, chat surface, history and settings |
+| `src/ui` | Shell, machine row, stats card and alert, live graph, chat surface, history and settings |
 | `mock` | MSW mocks of Decaid and Claude, plus fixtures |
 | `e2e` | Playwright specs |
 | `docs` | Research, verified platform facts, Crema port plan, workstream briefs |

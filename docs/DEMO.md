@@ -74,11 +74,11 @@ so CafAI's channeling check has no pressure to judge on Kiambu AA's shots.
 Picking Santos loads its v1 on the mock machine, as switching bags does.
 History shows both bags with their versions and shots.
 
-The machine panel is the mock's. Espresso pulls a scripted shot of v4 that
-takes about a minute, as a real one does: Blooming Espresso fills the puck,
-soaks it for about 30 s with the pump off (the panel shows 0 bar then), and
-then pours. It adds a shot card and a new taste question (and closes the
-open one). The panel's group target follows the profile the mock machine
+The machine is the mock's. Espresso in the top bar pulls a scripted shot of
+v4 that takes about a minute, as a real one does: Blooming Espresso fills
+the puck, soaks it for about 30 s with the pump off (the Shot view shows
+0 bar then), and then pours. It adds a shot card and a new taste question
+(and closes the open one). The stats card's group target follows the profile the mock machine
 holds: idle, its first step (98.5 °C for v4, whose fill runs hotter than its
 93 °C pour), and during a shot the step that runs (91 °C in v4's bloom), back
 to the idle target once the shot is done.

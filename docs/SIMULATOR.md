@@ -146,10 +146,11 @@ localStorage.removeItem('reaHostname')
 Each address (`localhost:5173`, `localhost:5174`) keeps its own storage, so do
 it on each one you use.
 
-**Check which Decaid CafAI reached.** The machine panel says "Machine
-connected" and "Scale connected", and CafAI's Settings > About shows the
+**Check which Decaid CafAI reached.** The stats card in the chat shows the
+DE1 and the scale as connected, and CafAI's Settings > About shows the
 simulator's Decaid version (`Decaid 0.8.7+2847`), not `0.8.6+2801` (the
-built-in mock's). Without a Decaid the panel says "Can't reach Decaid".
+built-in mock's). Without a Decaid the alert under the top bar says "Can't
+reach Decaid".
 
 *Tried: `npm run dev:sim` starts mock mode and asks to open `/?mockDecaid=0`.
 A mock-mode page at `/?mockDecaid=0` started with no `window.__CAFAI_MOCK__`,

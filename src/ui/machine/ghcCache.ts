@@ -1,8 +1,8 @@
 /**
  * Whether the machine has a group-head controller, remembered across loads.
  *
- * The panel's layout depends on it (a GHC machine has no on-screen start
- * buttons), and waiting for GET /machine/info on every boot would draw the
+ * The top bar's machine row depends on it (a GHC machine has no on-screen
+ * start buttons), and waiting for GET /machine/info on every boot would draw the
  * wrong layout first and then correct it, which reads as a flicker (Crema's
  * lesson). It is a fact about the hardware, so a disconnect never clears it.
  */

@@ -8,8 +8,8 @@ colors:
   crema-accent: "#d5a776"      # accent: the primary action and the current selection
   on-accent: "#1e1408"         # text and icons on the accent
   accent-wash: "#3a2d1f"       # accentSoft: accent at 16% over surface
-  bar-background: "#140e09"    # background: the page, the machine column, the main pane
-  bar-surface: "#1c160f"       # surface: top bar, tab bar, cards, composer, preview chart
+  bar-background: "#140e09"    # background: the page, the main pane
+  bar-surface: "#1c160f"       # surface: top bar, tab bar, cards (the stats card too), composer, the Stats chip
   bar-raised: "#282018"        # raised: tonal buttons, user bubbles, the coach note
   bar-raised-hover: "#383028"  # ink at 8% over raised: tonal hover, pointer devices only
   ink: "#f4ede6"               # text
@@ -22,7 +22,7 @@ colors:
   success: "#6ad895"
   warning: "#eec05b"
   error: "#f47b74"
-  on-error: "#1e1311"          # text on a filled error button (Stop while the machine runs)
+  on-error: "#1e1311"          # text on a filled error button (Stop in the machine row)
   info: "#65b2f1"
   live: "#f75d59"              # the pulsing live-shot dot
   graph-pressure: "#5ed99e"
@@ -44,7 +44,7 @@ typography:
     lineHeight: 1.1
     letterSpacing: -0.01em
     fontFeature: tabular-nums
-  headline:         # MUI h5: the machine's state line
+  headline:         # MUI h5: the stats card's state line
     fontFamily: Figtree
     fontSize: 1.4375rem
     fontWeight: 650
@@ -74,7 +74,7 @@ typography:
     fontWeight: 400
     lineHeight: 1.5
     letterSpacing: 0em
-  readout:          # the machine column's readouts
+  readout:          # the stats card's readouts
     fontFamily: Figtree
     fontSize: 1.1875rem
     fontWeight: 650
@@ -94,7 +94,7 @@ typography:
     fontWeight: 550
     lineHeight: 1.3
     letterSpacing: 0em
-  caption:          # small print: legend, "target 98.5", the Exit button's second line
+  caption:          # small print: "target 98.5", the profile's mark, the Exit button's second line
     fontFamily: Figtree
     fontSize: 0.8125rem
     fontWeight: 400
@@ -112,62 +112,63 @@ typography:
     fontWeight: 600
     lineHeight: 1.25
     letterSpacing: 0.005em
-  button-start:     # Espresso, Steam, Flush, Hot water: icon over label
+  button-start:     # the machine row on a tablet (Espresso, Steam, Flush, Hot water, Wake): icon over label
     fontFamily: Figtree
-    fontSize: 0.875rem
+    fontSize: 0.71875rem
     fontWeight: 600
     lineHeight: 1.15
     letterSpacing: 0em
-  button-stop:
+  button-stop:      # Stop in the machine row: the starts' size, at 700
     fontFamily: Figtree
-    fontSize: 1.0625rem
+    fontSize: 0.71875rem
     fontWeight: 700
-    lineHeight: 1.25
-    letterSpacing: 0.005em
+    lineHeight: 1.15
+    letterSpacing: 0em
   tab-label:        # the phone's tabs
     fontFamily: Figtree
     fontSize: 0.78125rem
     fontWeight: 650
     lineHeight: 1.2
     letterSpacing: 0em
-  wordmark:         # "CafAI" in the top bar, in the accent
+  wordmark:         # "CafAI" in the top bar, in the accent; one 24 px line, the cup's height
     fontFamily: Figtree
     fontSize: 1.1875rem
     fontWeight: 750
-    lineHeight: 1.55
+    lineHeight: 24px
     letterSpacing: 0.005em
 rounded:
-  none: 0px                         # the old-engine warning strip, full bleed
+  none: 0px                         # the machine alert and the old-engine warning, full bleed
   segment: 10px                     # a segment of the Mode control
-  button: 12px                      # theme.shape.borderRadius: buttons, fields, composer, Send, user bubbles, alerts
-  panel: 14px                       # the preview chart card, the Mode control's track, a phone tab
-  card: 16px                        # outlined cards, settings sections, the live strip
+  button: 12px                      # theme.shape.borderRadius: buttons, the machine row, fields, composer, Send, user bubbles, alerts
+  panel: 14px                       # the Mode control's track, a phone tab
+  card: 16px                        # outlined cards (the stats card too), settings sections, the live strip
   note-bubble: 16px 16px 16px 6px   # the coach note; the corner nearest the avatar stays tight
+  prompt: 20px                      # the Stats chip, half its 40 px height
   chip: 24px                        # option chips, half their 48 px height
   full: 9999px                      # dots, swatches, the coach avatar, the hue rail and thumb, the phone tab pill
 spacing:
   base: 8px            # MUI theme.spacing(1): an sx spacing number n is n x 8 px
-  3xs: 2px             # 0.25
-  2xs: 4px             # 0.5: nav items apart, the composer's padding
+  3xs: 2px             # 0.25: the machine row's buttons apart, the places apart below 1200 px
+  2xs: 4px             # 0.5: the tablet bar's gaps below 1200 px, the places apart from 1200 px, the composer's padding
   xs: 6px              # 0.75
-  sm: 8px              # 1: between buttons, chips and readout columns
-  sm-md: 10px          # 1.25: between the blocks of the machine column and of the Shot view
-  md: 12px             # 1.5: card padding, the side padding of the bars and the machine column
+  sm: 8px              # 1: between buttons, chips and readout columns; the places' sides below 1200 px
+  sm-md: 10px          # 1.25: between the blocks of the Shot view
+  md: 12px             # 1.5: card padding (the stats card's too), the tablet bar's sides, a narrow or short Shot view's sides
   md-lg: 14px          # 1.75: the Shot view's top and bottom, the note bubble's sides
   lg: 16px             # 2: screen padding, settings sections, gaps between sections
-  xl: 20px             # 2.5: the Shot view's sides
+  xl: 20px             # 2.5: the wide Shot view's sides
   2xl: 24px            # 3: the sides of Confirm, Send and Save; empty-state padding
   3xl: 32px            # 4: the sides of the large New bag button
-  touch-target: 48px   # the floor for anything tappable
+  touch-target: 48px   # the floor for anything tappable (the phone's machine row, 44 px, falls short of it)
 components:
-  button-primary:          # contained: the one main action (Espresso, Confirm, Use this, Send, Save)
+  button-primary:          # contained: the one main action (Confirm, Use this, Send, Save)
     backgroundColor: "{colors.crema-accent}"
     textColor: "{colors.on-accent}"
     typography: "{typography.button}"
     rounded: "{rounded.button}"
     padding: 6px 24px
     height: 48px
-  button-tonal:            # every secondary action (Undo, New bag, Export, Exit, Steam, Sleep, Tare)
+  button-tonal:            # every secondary action (Undo, New bag, Export, Exit, Sleep, Tare)
     backgroundColor: "{colors.bar-raised}"
     textColor: "{colors.ink}"
     typography: "{typography.button}"
@@ -186,66 +187,53 @@ components:
     rounded: "{rounded.button}"
     padding: 6px 16px
     height: 48px
-  button-text-muted:       # the way out to Decaid's settings
+  icon-button-bar:         # Decaid settings in both bars, Exit on a phone: the icon alone, named for screen readers
     textColor: "{colors.ink-muted}"
-    typography: "{typography.button}"
     rounded: "{rounded.button}"
-    padding: 6px 12px
+    size: 48px
+  machine-row-button:      # Espresso, Steam, Flush, Hot water (and Wake) on a tablet: a text button, icon over label
+    textColor: "{colors.ink}"
+    typography: "{typography.button-start}"
+    rounded: "{rounded.button}"
+    padding: 0px
+    width: 54px
     height: 48px
-  button-espresso:         # the start row's primary; icon and label aligned from the top
-    backgroundColor: "{colors.crema-accent}"
-    textColor: "{colors.on-accent}"
-    typography: "{typography.button-start}"
-    rounded: "{rounded.button}"
-    padding: 9px 2px 6px
-    height: 60px
-  button-start:            # Steam, Flush, Hot water
-    backgroundColor: "{colors.bar-raised}"
+  machine-row-icon:        # the same in a phone's bar: the icon alone, named for screen readers
     textColor: "{colors.ink}"
-    typography: "{typography.button-start}"
     rounded: "{rounded.button}"
-    padding: 9px 2px 6px
-    height: 60px
-  button-machine-row:      # Sleep or Wake, Tare
-    backgroundColor: "{colors.bar-raised}"
-    textColor: "{colors.ink}"
-    typography: "{typography.button}"
-    rounded: "{rounded.button}"
-    padding: 6px 8px
-    height: 52px
-  button-stop-idle:        # nothing running: a disabled tonal button in its fixed cell
-    backgroundColor: "{colors.bar-raised}"
-    textColor: "{colors.ink-disabled}"
-    typography: "{typography.button-stop}"
-    rounded: "{rounded.button}"
-    height: 52px
-  button-stop-live:        # the machine runs anything: a shot, steam, flush, hot water
+    size: 44px
+  button-stop:             # the running start's own box in the machine row (44x44, the icon alone, on a phone)
     backgroundColor: "{colors.error}"
     textColor: "{colors.on-error}"
     typography: "{typography.button-stop}"
     rounded: "{rounded.button}"
-    height: 60px
-  top-bar:                 # tablet
+    width: 54px
+    height: 48px
+  top-bar:                 # tablet; gaps 4 px below 1200 px, 8 px from 1200 px
     backgroundColor: "{colors.bar-surface}"
     padding: 0 12px
     height: 56px
-  nav-item:
+  nav-item:                # a place; 16 px sides from 1200 px; below 960 px the icon alone, 48 px wide with 12 px sides
     textColor: "{colors.ink-muted}"
     typography: "{typography.button}"
     rounded: "{rounded.button}"
-    padding: 6px 16px
+    padding: 6px 8px
     height: 48px
   nav-item-active:
     backgroundColor: "{colors.accent-wash}"
     textColor: "{colors.crema-accent}"
     typography: "{typography.button}"
     rounded: "{rounded.button}"
-    padding: 6px 16px
+    padding: 6px 8px
     height: 48px
-  top-bar-phone:
+  top-bar-phone:           # 16 px left plus the left inset beside the rail
     backgroundColor: "{colors.bar-surface}"
-    padding: 0 10px 0 16px
+    padding: 0 4px 0 16px
     height: 52px
+  machine-alert:           # one slim MUI Alert under the top bar, a line below; 14 px text
+    rounded: "{rounded.none}"
+    padding: 0 12px
+    height: 40px
   tab-bar:                 # phone upright, plus the bottom safe-area inset
     backgroundColor: "{colors.bar-surface}"
     padding: 6px
@@ -269,13 +257,10 @@ components:
     rounded: "{rounded.full}"
     width: 58px
     height: 30px
-  machine-column:          # 340 px below 1200 px wide, 400 px below 1600 px, 480 px from 1600 px
-    backgroundColor: "{colors.bar-background}"
-    padding: 10px 12px
-    width: 340px
-  shot-view:               # the tablet's main pane during a shot
+  shot-view:               # the Shot route on a tablet, and the phone's Shot tab: at most 960 px wide, centred; 12 px sides when narrow or short
     backgroundColor: "{colors.bar-background}"
     padding: 14px 20px
+    width: 960px
   bag-header:
     backgroundColor: "{colors.bar-background}"
     padding: 4px 12px
@@ -296,11 +281,16 @@ components:
     rounded: "{rounded.card}"
     padding: 24px
     width: 460px
-  preview-chart:           # the machine column's graph, one button to the Shot view
+  stats-card:              # the machine at a glance: a live row at the end of the chat, outlined in line
     backgroundColor: "{colors.bar-surface}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.panel}"
-    padding: 10px 12px 8px
+    rounded: "{rounded.card}"
+    padding: 12px
+  stats-prompt:            # the Stats chip above the composer: outlined in line, an accent gauge icon, a band to 48 px
+    backgroundColor: "{colors.bar-surface}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.prompt}"
+    height: 40px
   readout:
     textColor: "{colors.ink}"
     typography: "{typography.readout}"
@@ -320,7 +310,7 @@ components:
   connection-dot:          # filled when connected; a hollow 2 px ring when not
     backgroundColor: "{colors.success}"
     rounded: "{rounded.full}"
-    size: 10px
+    size: 8px
   coach-note-bubble:
     backgroundColor: "{colors.bar-raised}"
     textColor: "{colors.ink}"
@@ -406,11 +396,11 @@ components:
 
 ## 1. Overview: The Barista's Instrument
 
-> **As built** on branch `feat/ux-modes-theme`, 8 October 2026: all three UX stages (palette, theme and Figtree; Appearance; layouts and shot focus) and the fixes from their fresh-eyes check. The sources of truth are `src/ui/palette.ts`, `src/ui/color.ts`, `src/ui/theme.ts` and the components under `src/ui/`; the why is in the spec (`docs/superpowers/specs/2026-10-07-ux-modes-and-theme-design.md`) and DECISIONS.md D80 to D89. Where the spec and the code differ, this file follows the code and says so.
+> **As built** on branch `feat/ux-modes-theme`, 8 October 2026: all three UX stages (palette, theme and Figtree; Appearance; layouts and shot focus), the fixes from their fresh-eyes check, and "chat first, the machine on demand" (no machine column; the machine row in the top bar; the stats card in the chat; the phone's Shot tab). The sources of truth are `src/ui/palette.ts`, `src/ui/color.ts`, `src/ui/theme.ts` and the components under `src/ui/`; the why is in the specs (`docs/superpowers/specs/2026-10-07-ux-modes-and-theme-design.md` and `docs/superpowers/specs/2026-10-08-chat-first-machine-design.md`) and DECISIONS.md D80 to D92. Where a spec and the code differ, this file follows the code and says so.
 
 **Creative North Star: The Barista's Instrument.** CafAI is a chat-first AI espresso dial-in coach that runs as a web skin inside Decaid, the Decent Espresso app: on the tablet mounted on a DE1 (962x602 CSS px and up, in a WebView as old as Chromium 91) and in phone browsers. The barista reads it from a step back, often with wet hands and a cup in the other, in morning daylight or evening lamplight. It should feel like a good espresso scale or a well-made grinder: calm, precise, warm, and quiet until it matters.
 
-An instrument earns trust by being legible and by holding still. CafAI draws with tone instead of outlines and shadows (three layers of one tinted neutral), keeps its one accent for the thing to press, prints big tabular numbers, and plots a shot the way Decent's own charts do (pressure green, flow blue). When a shot starts, the shot comes first: the main pane becomes the graph, Stop stays under the thumb it was under, nothing moves, and the coach says only that it is watching. Every change to the machine is written in plain words and waits for the barista's tap, and there is always a way out to Decaid.
+An instrument earns trust by being legible and by holding still. CafAI draws with tone instead of outlines and shadows (three layers of one tinted neutral), keeps its one accent for the thing to press, prints big tabular numbers, and plots a shot the way Decent's own charts do (pressure green, flow blue). Between shots the chat comes first: no graph and no dashboard on load, only a live card of the machine at the end of the chat, there until the chat moves on, and back with one tap on Stats. When a shot starts, the shot comes first: the screen under the top bar becomes the graph, the start that runs turns into Stop in its place, under the thumb that tapped it, nothing moves, and the coach says only that it is watching. Every change to the machine is written in plain words and waits for the barista's tap, and there is always a way out to Decaid.
 
 It rejects the SaaS dashboard (metric tiles, sidebars full of charts, enterprise chrome), glassy gradients, glassmorphism and glow used as decoration, and the cartoon coffee shop (mascots, latte-art clip art, novelty fonts). It also rejects anything that needs a squint or a fingertip: small type, thin tap targets, hover-only controls.
 
@@ -418,10 +408,10 @@ It rejects the SaaS dashboard (metric tiles, sidebars full of charts, enterprise
 
 The layout is a pure function of the viewport (`src/ui/shell/layout.ts`), read again on every resize and rotation.
 
-- **Tablet**, at least 800 px wide and 500 px tall (every Decent tablet: 962x602, 1007x602, 1140x712; iPads either way up, except an iPad mini upright). A 56 px top bar carries the navigation (Coach · Shot · History · Settings) and the ways out. Under it, a **machine column** on the left (status, controls, a preview chart) and a **main pane** on the right with the routed screen. When a shot starts, the main pane becomes the big graph (the Shot view) by itself, and the machine column stays exactly where it was.
-- **Phone**, anything smaller. One screen at a time under a 52 px top bar, with tabs **Coach · Machine · History · Settings** along the bottom, or as a side rail when the phone lies on its side (under 500 px tall). The Machine tab is the machine column at full width, with the big graph under the buttons (on a short phone, during a shot, over the status and the start buttons, so Stop stays where it was).
+- **Tablet**, at least 800 px wide and 500 px tall (every Decent tablet: 962x602, 1007x602, 1140x712; iPads either way up, except an iPad mini upright). A 56 px top bar carries the navigation (Coach · Shot · History · Settings), the **machine row** (Espresso, Steam, Flush, Hot water; the one that runs turns into Stop) and the ways out. Under it the **main pane** holds the routed screen at the window's full width: there is no machine column. When a shot starts, the main pane becomes the big graph (the Shot view) by itself, and the top bar, Stop included, stays exactly where it was.
+- **Phone**, anything smaller. One screen at a time under a 52 px top bar that carries the machine row as icons and the ways out, with tabs **Coach · Shot · History · Settings** along the bottom, or as a side rail when the phone lies on its side (under 500 px tall). The Shot tab is the tablet's Shot view, laid out for the phone's width or height.
 
-In both, the page never scrolls (each region scrolls inside itself), there are no edge gestures (an Android edge swipe leaves the skin), safe-area insets reach the layout only through the `--safe-top`, `--safe-right`, `--safe-bottom` and `--safe-left` CSS variables, and Exit and Decaid settings are on every screen. The route `#/shot` is the Shot view on a tablet and the Machine tab on a phone, so crossing the breakpoint keeps the screen.
+In both, the machine's readings are a live **stats card** at the end of the chat (Stats above the composer brings it back; before there is a chat, with no key or no bag yet, it sits under the coach screen's setup card), and its problems show in one slim alert under the top bar. The page never scrolls (each region scrolls inside itself), there are no edge gestures (an Android edge swipe leaves the skin), safe-area insets reach the layout only through the `--safe-top`, `--safe-right`, `--safe-bottom` and `--safe-left` CSS variables, and Exit and Decaid settings are on every screen. The route `#/shot` is the Shot view in both layouts, so crossing the breakpoint keeps the screen.
 
 ### Key Characteristics
 
@@ -430,7 +420,8 @@ In both, the page never scrolls (each region scrolls inside itself), there are n
 - Contrast is enforced by a unit test across every named tint and every hue 0-359, in both modes.
 - Tonal layering (background, surface, raised) with 1 px tinted lines; no shadows at rest.
 - Figtree everywhere, sentence case, tabular figures for anything that changes live.
-- 48 px minimum touch targets, 60 px start buttons; controls disable instead of disappearing.
+- Chat first: no graph and no machine panel on load. The machine's numbers are a live card in the chat, the four starts are a row in the top bar, and the graph is one tap away under Shot.
+- 48 px minimum touch targets (the phone's 44 px machine row falls short); controls disable in place instead of disappearing, except where the machine row trades its starts for Stop or Wake.
 - The accent marks the primary action and the current selection.
 - The shot graph is Decent's: bar and ml/s on one 0-12 axis, pressure on top, the tint never on the plot.
 - Motion is short (150 to 250 ms), eased out, never bouncy, and still under reduced motion.
@@ -445,8 +436,8 @@ The default look is **dark Crema**: the frontmatter tokens are its values. The t
 
 | Token | palette.ts | Read it as (MUI sx) | Dark Crema | Light Crema | Used for |
 |---|---|---|---|---|---|
-| bar-background | background | `background.default` | #140e09 | #faf6f2 | the page, the machine column, the main pane |
-| bar-surface | surface | `background.paper` | #1c160f | #fffdfb | top bar, tab bar, cards, composer, preview chart, the chosen Mode segment |
+| bar-background | background | `background.default` | #140e09 | #faf6f2 | the page, the main pane |
+| bar-surface | surface | `background.paper` | #1c160f | #fffdfb | top bar, tab bar, cards (the stats card too), composer, the Stats chip, the chosen Mode segment |
 | bar-raised | raised | `cafai.raised` | #282018 | #f2ece5 | tonal buttons, user bubbles, the coach note, the Mode track |
 | bar-raised-hover | (theme.ts) | tonal variant only | #383028 | #e6e0d8 | a tonal button under a pointer (ink at 8% over raised dark, 6% light) |
 | ink | ink | `text.primary` | #f4ede6 | #261d14 | text, values |
@@ -469,7 +460,7 @@ The same in every tint (`palette.test.ts` asserts it). OKLCH lightness, chroma a
 |---|---|---|---|---|---|---|
 | success | `success.main` | 0.80, 0.14, 155 | #6ad895 | 0.50, 0.13, 155 | #007742 | connection dots, "This bag", a saved change, the active version |
 | warning | `warning.main` | 0.83, 0.13, 85 | #eec05b | 0.52, 0.12, 75 | #8d5e00 | low water, "not confirmed", possible channeling, the rating stars |
-| error | `error.main` | 0.72, 0.15, 25 | #f47b74 | 0.53, 0.18, 25 | #be2e31 | Stop while running, failures, Forget key |
+| error | `error.main` | 0.72, 0.15, 25 | #f47b74 | 0.53, 0.18, 25 | #be2e31 | Stop in the machine row, failures, Forget key |
 | on-error | `error.contrastText` | 0.20, 0.02, 25 | #1e1311 | 0.99, 0.005, 25 | #fffbfa | text on a filled error button |
 | info | `info.main` | 0.74, 0.12, 245 | #65b2f1 | 0.52, 0.15, 250 | #006bb9 | MUI info alerts (an info notice in the chat is drawn in ink-muted) |
 | live | `cafai.live` | 0.68, 0.19, 25 | #f75d59 | 0.58, 0.20, 25 | #d73337 | the pulsing live-shot dot |
@@ -522,7 +513,7 @@ Every neutral and the accent come from the tint; nothing is picked by eye. A com
 
 ### The Accent Is For Action Rule
 
-The accent marks the primary action of a screen or region (a contained button: Espresso, Confirm, Use this, Send, Save) and the current selection (the current nav item and tab, a chosen chip, the chosen starting profile's border, the pending change's border, the hue thumb, the focus ring). Text buttons that act take it too (Not now, Graph). Beyond that it appears only as a few small marks of CafAI itself: the wordmark, the coach's avatar, the cup on a shot card, the hand on a by-hand step, the chevron of the preview chart, the medium-confidence chip on a starting profile, and the one large icon of an empty state. It is never a heading colour, never a background for decoration, never on the plot, and there is no second accent.
+The accent marks the primary action of a screen or region (a contained button: Confirm, Use this, Send, Save) and the current selection (the current nav item and tab, a chosen chip, the chosen starting profile's border, the pending change's border, the hue thumb, the focus ring). Text buttons that act take it too (Not now, Graph). Beyond that it appears only as a few small marks of CafAI itself: the wordmark, the coach's avatar, the cup on a shot card, the hand on a by-hand step, the gauge on the Stats chip, the medium-confidence chip on a starting profile, and the one large icon of an empty state. The machine row has no accent: its starts are ink, and the one coloured button there is Stop, in the error colour. It is never a heading colour, never a background for decoration, never on the plot, and there is no second accent.
 
 ### The Graph Keeps Its Colours Rule
 
@@ -552,7 +543,7 @@ Chromium 91 has no `oklch()`, no `color-mix()`, no relative colour syntax and no
 
 ### The Words Beside The Colour Rule
 
-Colour is never the only signal. Connection dots sit beside "Machine connected" or "No machine", the profile mark says "This bag" or "not confirmed", every graph series has a label and a value, and states are written in words ("Ready", "Pulling a shot: pour", "Can't reach Decaid").
+Colour is never the only signal. Connection dots sit beside "DE1" or "No machine" (a screen reader hears "DE1 connected"), the profile mark says "This bag" or "not confirmed", Stop says "Stop" (by name on a phone), every graph series has a label and a value, and states are written in words ("Ready", "Pulling a shot: pour", "Can't reach Decaid. Trying again…").
 
 ## 3. Typography: Read From a Step Back
 
@@ -572,21 +563,21 @@ Fixed rem sizes (product register), about 1.125 to 1.2 between steps. "Tabular" 
 
 | Token | MUI variant | Size | Weight | Line height | Tracking | Figures | Use |
 |---|---|---|---|---|---|---|---|
-| display | `display` | 2.875rem (46 px) | 650 | 1 | -0.02em | tabular | the Shot view's pour timer (2.125rem, 34 px, below 600 px wide) |
-| readout-large | `readoutLarge` | 1.875rem (30 px) | 650 | 1.1 | -0.01em | tabular | the Shot view's readouts (1.5rem below 900 px wide, 1.125rem below 600 px) |
+| display | `display` | 2.875rem (46 px) | 650 | 1 | -0.02em | tabular | the Shot view's pour timer (2.125rem, 34 px, on a phone: a Shot view under 600 px wide or 440 px tall) |
+| readout-large | `readoutLarge` | 1.875rem (30 px) | 650 | 1.1 | -0.01em | tabular | the Shot view's readouts (1.5rem, 24 px, on a phone, and on a tablet window under 900 px wide) |
 | (unused) | `h4` | 1.75rem | 650 | 1.2 | -0.015em | | defined, not used |
-| headline | `h5` | 1.4375rem (23 px) | 650 | 1.2 | -0.01em | | the machine's state line ("Ready", "Pulling a shot: pour") |
+| headline | `h5` | 1.4375rem (23 px) | 650 | 1.2 | -0.01em | | the stats card's state line ("Ready", "Pulling a shot: pour") |
 | title | `h6` | 1.1875rem (19 px) | 700 | 1.3 | -0.005em | | screen titles, empty-state titles; the bag picker is set to match |
-| subtitle | `subtitle1` | 1.0625rem (17 px) | 650 | 1.35 | 0 | | card titles (set to 700), names and questions (set to 600), graph captions, the profile name |
+| subtitle | `subtitle1` | 1.0625rem (17 px) | 650 | 1.35 | 0 | | card titles (set to 700; the stats card's "Machine" too), names and questions (set to 600), graph captions, the profile name |
 | (live strip) | `subtitle2` | 0.9375rem (15 px) | 600 | 1.4 | 0 | | the live strip's "Live shot" (set to 700) |
 | body | `body1` | 1rem (16 px) | 400 | 1.55 | 0 | | chat text (1.5 in the chat), change lines, body copy |
 | body-small | `body2` | 0.9375rem (15 px) | 400 | 1.5 | 0 | | secondary text, notices, helper text, the coach's note |
-| readout | `readout` | 1.1875rem (19 px) | 650 | 1.2 | 0 | tabular | the machine column's readouts |
+| readout | `readout` | 1.1875rem (19 px) | 650 | 1.2 | 0 | tabular | the stats card's readouts |
 | metric | `body1` at 650 | 1rem | 650 | 1.55 | 0 | tabular | the numbers on a shot card |
-| label | `label` | 0.8125rem (13 px) | 550 | 1.3 | 0 | | readout and field labels, swatch names, the profile line's label |
-| caption | `caption` | 0.8125rem (13 px) | 400 | 1.35 | 0 | | legend, "target 98.5", the Exit button's "to Decaid" |
-| button | `button` | 1rem (16 px) | 600 | 1.25 | 0.005em | | every button (start buttons 0.875rem at line height 1.15, no tracking; Stop 1.0625rem at 700) |
-| wordmark | (sx) | 1.1875rem (19 px) | 750 | 1.55 | 0.005em | | "CafAI" in the top bar, in the accent |
+| label | `label` | 0.8125rem (13 px) | 550 | 1.3 | 0 | | readout and field labels, swatch names, the profile line's label, the stats card's "DE1" and "Scale" |
+| caption | `caption` | 0.8125rem (13 px) | 400 | 1.35 | 0 | | "target 98.5", the profile's mark, the Exit button's "to Decaid" |
+| button | `button` | 1rem (16 px) | 600 | 1.25 | 0.005em | | every button (the machine row's labels 0.71875rem, 11.5 px, at line height 1.15 with no tracking, Stop's at 700) |
+| wordmark | (sx) | 1.1875rem (19 px) | 750 | 24 px | 0.005em | | "CafAI" in the top bar, in the accent |
 
 `overline` is kept for any stray use but set like `label`, in sentence case. Headings `h1` to `h3` get `text-wrap: balance` (Chromium 91 ignores it, harmlessly).
 
@@ -594,20 +585,21 @@ Fixed rem sizes (product register), about 1.125 to 1.2 between steps. "Tabular" 
 
 - **Sentence case everywhere**: "Group", not "GROUP"; "Hot water", "New bag", "Decaid settings". Buttons, tabs and toggles have `textTransform: none`; there is no uppercase overline or eyebrow.
 - **The middle dot joins facts**: "v4 · Blooming Espresso", "Pour · step 3 of 3", "60.6 s · 18.0 g → 40.4 g · 1:2.2 · peak 5.4 bar", the nav's "Coach · Shot · History · Settings".
+- **Short names where room is short**: the stats card's links say "DE1" and "Scale" (a screen reader hears "connected" after them), and the machine row's labels are one or two words ("Hot water").
 - **The arrow shows a change**: "18.0 g → 40.4 g" (the glyph, from CafAI Symbols); the change card draws an arrow icon instead.
 - **Work in progress ends in an ellipsis**: "Thinking…", "Loading v5 onto the machine…", "loading…".
-- **No em dashes in copy**, and plain words for states: "Ready", "Not connected", "Can't reach Decaid", "Not applied. Nothing changed on the machine."
+- **No em dashes in copy**, and plain words for states: "Ready", "Not connected", "Can't reach Decaid. Trying again…", "Not applied. Nothing changed on the machine."
 
 ### Numbers
 
 - Anything that changes live is set in tabular figures: the timer, the readouts, the legend values, the shot card's metrics, the live strip, the pour time in the navigation.
-- One decimal for live readings ("5.0 bar", "42.0 s", "97.7 °C"), whole numbers where a decimal is noise ("148 °C" steam, "31 mm" water). The running pour time is in tenths wherever it shows, the phone's Machine tab included.
-- A space always separates the number and its unit. In the machine column the unit is set smaller and quieter: 0.68em, weight 550, ink-muted. In the Shot view's readouts, the graph legend and the timer, the number and the unit are one string at one size, because the paint loop rewrites it every frame; the mockups and the spec's "units at about 0.6em" show them smaller there, and the code does not (yet). The Shot view's weight target, "of 50", is 0.5em, weight 550, ink-muted.
+- One decimal for live readings ("5.0 bar", "42.0 s", "97.7 °C"), whole numbers where a decimal is noise ("148 °C" steam, "31 mm" water). The running pour time is in tenths wherever it shows, the phone's Shot tab included.
+- A space always separates the number and its unit. In the stats card the unit is set smaller and quieter: 0.68em, weight 550, ink-muted. In the Shot view's readouts and the timer, the number and the unit are one string at one size, because the paint loop rewrites it every frame; the mockups and the spec's "units at about 0.6em" show them smaller there, and the code does not (yet). The Shot view's weight target, "of 50", is 0.5em, weight 550, ink-muted, on a phone too.
 - A reading the machine has not given shows a dash, never a 0 and never a unit alone; legend values stay blank until there is a shot, and before any shot the timers show the dash (`DASH` in `format.ts`), not "0.0 s".
 
 ### Line length and small print
 
-The chat lane is capped at 680 px (about 70 characters at 16 px) and the composer at 760 px, both centred in a wide pane. Other measures: the Settings column 760 px, the coach's note 520 px, a notice with a progress bar 480 px, an empty-state card 460 px. The floor for text is 13 px (`label`, `caption`); only the plot's axis numbers (12 px), the phone's tab labels (12.5 px) and the phone Shot view's readout labels (11.5 px) go below it.
+The chat lane is capped at 680 px (about 70 characters at 16 px) and the composer at 760 px, both centred in a wide pane; the Stats prompt shares the composer's lane. Other measures: the Shot view 960 px, the Settings column 760 px, the coach's note 520 px, a notice with a progress bar 480 px, an empty-state card 460 px. The floor for text is 13 px (`label`, `caption`); only the plot's axis numbers (12 px), the phone's tab labels (12.5 px) and the tablet machine row's labels (11.5 px) go below it.
 
 ## 4. Elevation: Tone, Not Shadow
 
@@ -615,104 +607,111 @@ CafAI is flat and tonal. Depth comes from three layers of the tinted neutral and
 
 | Layer | Dark L | Light L | Holds |
 |---|---|---|---|
-| background | 0.17 | 0.975 | the page, the machine column, the main pane, the Shot view, the bag header |
-| surface | 0.205 | 0.995 | the bars, cards, settings sections, the composer, the preview chart |
+| background | 0.17 | 0.975 | the page, the main pane, the Shot view, the bag header |
+| surface | 0.205 | 0.995 | the bars, cards (the stats card too), settings sections, the composer, the Stats chip |
 | raised | 0.25 | 0.945 | tonal buttons, user bubbles, the coach's note, the Mode track |
 
 In dark mode each layer is a step lighter than the one under it. In light mode the surface is the lightest (cards read as paper on the page) and raised is a step darker than the page, so a tonal fill reads as pressed in, not lifted.
 
-- **Lines**: a 1 px `line` border on every card and along the edges of regions (under the top bar, right of the machine column and of the phone's rail, under the bag header and the History header, above the phone's tab bar). Emphasis is a full border, never a stripe: 2 px in the accent for the pending change and the chosen starting profile, 1 px in success for the active version in History.
+- **Lines**: a 1 px `line` border on every card and along the edges of regions (under the top bar and under the machine alert, right of the phone's rail, under the bag header and the History header, above the phone's tab bar). In the tablet's top bar a 1x30 px hairline in `line` parts the machine row from Decaid settings and Exit. Emphasis is a full border, never a stripe: 2 px in the accent for the pending change and the chosen starting profile, 1 px in success for the active version in History.
 - **No shadows at rest.** Buttons have `disableElevation`; outlined Paper is the card; `MuiPaper` sets `backgroundImage: none`, so MUI's dark-mode elevation overlays never grey the tinted surfaces. The few shadows that exist are small and functional: the chosen Mode segment (`0 1px 2px` black at 35% in dark, 14% in light), the hue slider's thumb (`0 1px 4px` black at 50%, so it reads over any hue, plus a 10 px accent halo at 24% while dragged), x-chat's scroll-to-newest button (surface, 1 px line, MUI shadow 2) when the barista has scrolled up, and MUI's own shadow on the app's two dialogs.
 - **The one ring**: the chosen tint swatch gets a 3 px gap in the surface colour and then a 2.5 px ring in ink (not the accent, so it reads around every swatch colour). Nothing else wears a ring at rest.
 - **Focus rings for the keyboard only**: the theme's `focusVisible` draws a 2 px solid accent outline 2 px outside the control, on `:focus-visible` only, so touch users never see it. The composer is the one exception: x-chat gives it an accent border and a 1 px accent ring on `:focus-within`, which shows on touch too and marks the typing state. Tap highlights are transparent, and a long press on a button neither selects its label nor opens a callout.
-- **Layering in the main pane**: on the shot route the Shot view sits over the coach, which stays mounted (hidden) underneath. On a short upright phone during a shot, the Machine tab's big graph sits over the hidden status and start row, down to 4 px above Stop and never over it. The 350 ms tap guard after an automatic switch is a transparent sheet, never a visible scrim.
+- **Layering in the main pane**: on the shot route (a tablet's Shot, a phone's Shot tab) the Shot view sits over the coach, which stays mounted (hidden) underneath. The 350 ms tap guard after an automatic switch is a transparent sheet over the main pane only, never a visible scrim; the main pane is its own stacking context, so neither the guard nor the Shot view ever reaches the top bar (or a phone's tabs).
 
 ## 5. Components: Controls That Keep Their Place
 
-Everything here is MUI 9 with CafAI's theme, plus x-chat for the thread and uPlot for the graph. Icons are Material Icons, the Rounded set in the shell and the machine column.
+Everything here is MUI 9 with CafAI's theme, plus x-chat for the thread and uPlot for the graph. Icons are Material Icons, the Rounded set in the shell, the machine row and the stats card.
 
 ### Buttons
 
 | Kind | MUI | Fill and text | Height | Used for |
 |---|---|---|---|---|
-| Primary | `variant="contained"` | accent, on-accent | 48 px | the one main action of a region or card: Espresso (60 px), Confirm, Use this, Send, Save key, Save settings, Open Settings; the empty state's New bag (`size="large"`, 56 px) |
-| Tonal | `variant="tonal"` | raised, ink; hover ink at 8% over raised | 48 px | every secondary action: Steam, Flush, Hot water, Sleep or Wake, Tare, Undo, New bag in the bag header, Export, Import, Exit |
+| Primary | `variant="contained"` | accent, on-accent | 48 px | the one main action of a region or card: Confirm, Use this, Send, Save key, Save settings, Open Settings; the empty state's New bag (`size="large"`, 56 px) |
+| Tonal | `variant="tonal"` | raised, ink; hover ink at 8% over raised | 48 px | every secondary action: the stats card's Tare and Sleep or Wake, Undo, New bag in the bag header, Export, Import, Exit on a tablet |
 | Tonal, coloured | `variant="tonal" color="error"` (also `warning`, `success`) | raised, the status colour | 48 px | Forget key |
-| Text | `variant="text"` | none, accent | 48 px | the quiet choice beside a primary (Not now, Keep it), the shot card's Graph link, the dialogs' Download file and Copy; Decaid settings is a text button in ink-muted |
-| Destructive | `variant="contained" color="error"` | error, on-error | 48 to 60 px | Stop while the machine runs, the dialog's Forget key |
+| Text | `variant="text"` | none, accent | 48 px | the quiet choice beside a primary (Not now, Keep it), the shot card's Graph link, the dialogs' Download file and Copy |
+| Machine row | `variant="text" color="inherit"` | none, ink | 54x48 px (44x44 on a phone) | Espresso, Steam, Flush, Hot water, and Wake while the machine sleeps |
+| Bar icon | `IconButton` | none, ink-muted | 48 px | Decaid settings in both bars, Exit on a phone |
+| Destructive | `variant="contained" color="error"` | error, on-error | 48 px (Stop: 54x48, 44x44 on a phone) | Stop in the machine row, the dialog's Forget key |
 
-- **Touch targets**: the theme makes Button, IconButton, ToggleButton, Tab, ListItemButton, MenuItem and every clickable or deletable Chip at least 48 px (`TOUCH_TARGET`); text fields and native selects are 48 px too. The start buttons are 60 px and the Stop, Sleep and Tare row 52 px. Only status chips, which are not tappable, stay compact.
+- **Touch targets**: the theme makes Button, IconButton, ToggleButton, Tab, ListItemButton, MenuItem and every clickable or deletable Chip at least 48 px (`TOUCH_TARGET`); text fields and native selects are 48 px too. The Stats chip draws 40 px and takes taps on a 48 px band. The machine row is 54x48 on a tablet, and 44x44 on a phone, where it falls short of the floor. Only status chips, which are not tappable, stay compact.
 - **Shape**: radius 12, 16 px sides (24 px on the screen's main action), `disableElevation`, sentence case, a Rounded icon before the label where it helps recognition.
 - **Hover** exists only under `@media (hover: hover)`; nothing depends on it.
-- **Disabled, never removed**: a control that cannot act right now is disabled in place. A disabled tonal button keeps its raised fill and dims its label to `ink-disabled`; a disabled contained button takes MUI's default disabled fill and text.
-- **Pending**: a tapped machine button shows MUI's loading spinner in its own place; a command is sent once per tap and never retried on its own, and a failure is shown under the buttons in plain words.
-- **Stop, as built**: whenever nothing is running, Stop is a disabled tonal button (raised fill, dimmed label, a square stop icon) in the wide first cell of the second row. Whenever the machine runs anything (a shot, steam, flush, hot water, cleaning, descaling), it is enabled and becomes the filled error button, 60 px tall, weight 700, with on-error text. The row grows from 52 to 60 px downward, so nothing above it moves. The spec describes an idle Stop with error-coloured text; in the code Stop is never enabled without being filled, so that look does not appear.
+- **Disabled, never removed**: a control that cannot act right now is disabled in place. A disabled tonal button keeps its raised fill and dims its label to `ink-disabled`; a disabled contained or text button takes MUI's default disabled colours. The machine row is the exception, by design: Stop takes the running start's place, a sleeping machine shows Wake alone, and a group-head machine's row is empty between runs.
+- **Pending**: a tapped start, Wake, Tare or Sleep shows MUI's loading spinner in its own place (Stop has none). One command is in flight for the whole app, shared by the machine row and the stats card: while it is, a tap on a start, Tare or Sleep sends nothing, and Stop always goes. A command is sent once per tap and never retried on its own; a failure shows in the machine alert under the top bar, in plain words, until it is closed or the next command goes.
+- **Stop, as built**: there is no Stop while nothing runs. Whenever the machine runs anything (a shot, steam, flush, hot water, cleaning, descaling), the start that runs turns into Stop in its own box: filled in the error colour, on-error text at 700, the square stop icon over "Stop" (the icon alone on a phone, named "Stop"). Box and place never change, so the finger that started the run finds Stop under it.
 
 ### The shell
 
-`src/ui/shell/AppShell.tsx` draws both shells, with `LiveStrip.tsx`, `ShotTime.tsx` and `TapGuard.tsx`.
+`src/ui/shell/AppShell.tsx` draws both shells, with `LiveStrip.tsx`, `ShotTime.tsx` and `TapGuard.tsx`. One top bar element serves both layouts, and the routed screen and the machine row keep their places in the tree in every layout, so a rotation or a crossed breakpoint remounts neither: a command in flight keeps its spinner.
 
 **Tablet**
 
-- **Top bar**: 56 px, surface, a 1 px line below, 12 px sides, 8 px gaps. Left to right: the wordmark (a cup icon and "CafAI" in the accent, 19 px, weight 750); the navigation **Coach · Shot · History · Settings**, 4 px apart, each a 48 px text button with a Rounded icon and 16 px sides, the current one in the accent on the accent wash (`aria-current="page"`), the others ink-muted; a spacer; **Decaid settings**, an ink-muted text button with an "opens elsewhere" icon; and **Exit**, tonal, with a logout icon and two lines: "Exit" over a muted caption "to Decaid" ("Skins" outside Decaid). While a shot runs, the Shot item swaps its chart icon for the 9 px live dot and adds the pour time in ink, "Shot 42.0 s", in tabular figures inside a box 3.3em wide so the label never grows.
-- **Old-engine warning**: a full-width warning strip right under the top bar (square corners, 14 px text, a line below, a dismiss button) that pushes the columns down instead of covering a control.
-- **Machine column**: 340 px wide below 1200 px, 400 px below 1600 px, 480 px from 1600 px (`machineColumnWidth` in `layout.ts`, D84; the shell committed before stage 3 used 360, 420 and 520 px on MUI breakpoints). It sits on the page background with a 1 px line on its right, 12 px sides, 10 px above, below and between blocks, and scrolls inside itself: status, then the controls, then the preview chart filling what is left.
-- **Main pane**: the routed screen, scrolling inside itself. On the shot route the Shot view (20 px sides, 14 px top and bottom, 10 px gaps) covers the coach, which stays mounted so its scroll and draft survive; the preview chart hides meanwhile, and the controls above it keep their places. For 350 ms after an automatic switch the main pane ignores taps; the machine column, Stop included, never does.
+- **Top bar**: 56 px, surface, a 1 px line below, 12 px sides, 4 px gaps (8 px from 1200 px wide). Left to right: the wordmark (a cup icon and "CafAI" in the accent, 19 px, weight 750); the places **Coach · Shot · History · Settings**, 2 px apart (4 px from 1200 px), each a 48 px text button with a Rounded icon and 8 px sides (16 px from 1200 px), the current one in the accent on the accent wash (`aria-current="page"`), the others ink-muted; a spacer; the **machine row** (below); a 1x30 px hairline in `line`; **Decaid settings**, a 48 px ink-muted icon button with the "opens elsewhere" icon, named for screen readers; and **Exit**, tonal, with a logout icon and two lines: "Exit" over a muted caption "to Decaid" ("Skins" outside Decaid). While a shot runs, the Shot item swaps its chart icon for the 9 px live dot and adds the pour time in ink, "Shot 42.0 s", in tabular figures inside a box 3.3em wide so the label never grows. Measured at 962 px inside Decaid mid-shot, the whole bar fits with 18 px to spare. Between 800 and 960 px wide (an iPad upright, a narrowed window) the places show their icons alone, 48 px wide with 12 px sides, their names kept for screen readers; the Shot item then shows the dot and the time.
+- **Machine alert, then the old-engine warning**: right under the top bar, across the whole width, in the flow, so they push the screen down instead of covering a control (both below).
+- **Main pane**: the routed screen at the window's full width, scrolling inside itself; there is no machine column. On the shot route the Shot view covers the coach, which stays mounted so its scroll and draft survive. For 350 ms after an automatic switch the main pane ignores taps; the top bar, Stop included, never does.
 
 **Phone**
 
-- **Top bar**: 52 px, surface, a line below, 16 px left and 10 px right, 6 px gaps: the wordmark, a spacer, **Decaid** (an ink-muted text button with the same "opens elsewhere" icon) and **Exit** (tonal, one line). Both on every screen.
-- **Tabs**: **Coach · Machine · History · Settings** (speech, coffee maker, history and gear icons), on surface. Upright, a bottom bar 64 px tall plus the bottom safe-area inset, a line on top, the four tabs in equal columns inside 6 px of padding. On its side (under 500 px tall), a side rail 80 px wide plus the left inset, a line on its right, the same four stacked 4 px apart and centred, the content to its right. Each tab is a button at least 48 px square (60 px tall in the rail), radius 14: its icon in a 58x30 pill above a 12.5 px label at 650. The current tab's label is in the accent and its pill fills with the accent wash; the others are ink-muted on no fill. The tabs hide while a text field has focus, so the keyboard does not leave the chat a few lines tall, and come back on blur; when a tap (on Send, say) ends the typing, they wait for the press's release, so the tap lands where it was aimed. They are navigation only.
-- **Machine tab**: the machine column at full width, with the full graph and the coach's note under the buttons. On a phone on its side the panel splits in two: status and buttons in a left column (45%, scrolling if it must), the graph and the note at full height on the right (`MachinePanel columns={2}`).
-- **Machine tab during a shot**: the tab shows a 7 px live dot and the running time in tenths ("42.0 s", in ink, tabular) in place of its label, counting like the tablet's Shot item and the live strip, in a box 3.3em wide so it does not grow as the seconds pass 10. Its accessible name is "Machine, shot running, 42 seconds", rewritten once a second (not with every frame) and removed when the shot ends. On an upright phone whose tab is under 660 px tall (too short for the status, the buttons, 120 px of plot and a three-line note at once) and scrolled to its top, from the shot's start until the chat has its outcome, the big graph is drawn over the status and the start row. Those stay in their places, hidden and untappable, and the coach's note goes under Stop; nothing above Stop changes height, so Stop never moves. A tab the barista has scrolled keeps the usual arrangement, which the shorter one would scroll back. After the automatic switch the tab ignores taps for 350 ms, Stop included: Stop was not on screen when the finger started moving, so a tap there in that window was aimed at the coach.
-- **Live strip**: at the top of the Coach tab while a shot is live or its outcome is still on its way to the chat. One 64 px button to the Machine tab on the accent wash, radius 16, 10 px from the top and 12 px from the sides, padded 14 px left and 10 px right, with 10 px gaps: the 9 px live dot and "Live shot" ("Last shot" once the pour is over) in 15 px at 700; under it the time (ink, 650) and " · 11.5 g · 5.0 bar" (13.5 px, 550, ink-muted, tabular); a 104x38 chart of pressure and flow (2 px lines, round caps, pressure on top); an ink-muted chevron. It goes once the outcome is in the chat.
+- **Top bar**: 52 px, surface, a line below, 16 px left (plus the left inset beside the rail, over which the bar reaches) and 4 px right: the wordmark, a spacer, the machine row as 44 px icons, then **Decaid settings** and **Exit** as 48 px ink-muted icon buttons, named for screen readers ("Exit to Decaid"). All on every screen. When the room runs out (a narrow phone beside four starts) the word "CafAI" wraps onto a second line its 24 px box clips, so the cup stays and nothing else moves; the word is back as soon as it fits (a group-head machine's empty row leaves it room).
+- **Under the top bar**: the machine alert, then the old-engine warning, as on a tablet.
+- **Tabs**: **Coach · Shot · History · Settings** (speech, chart, history and gear icons), on surface. Upright, a bottom bar 64 px tall plus the bottom safe-area inset, a line on top, the four tabs in equal columns inside 6 px of padding. On its side (under 500 px tall), a side rail 80 px wide plus the left inset, a line on its right, the same four stacked 4 px apart and centred, the content to its right. Each tab is a button at least 48 px square (60 px tall in the rail), radius 14: its icon in a 58x30 pill above a 12.5 px label at 650. The current tab's label is in the accent and its pill fills with the accent wash; the others are ink-muted on no fill. The tabs hide while a text field has focus, so the keyboard does not leave the chat a few lines tall, and come back on blur; when a tap (on Send, say) ends the typing, they wait for the press's release, so the tap lands where it was aimed. They are navigation only.
+- **Shot tab**: the tablet's Shot view, over the coach kept mounted and hidden, laid out for the phone (narrow upright, short on its side: see the Shot view below).
+- **Shot tab during a shot**: the tab shows a 7 px live dot and the running time in tenths ("42.0 s", in ink, tabular) in place of its label, counting like the tablet's Shot item and the live strip, in a box 3.3em wide so it does not grow as the seconds pass 10. Its accessible name is "Shot, running, 42 seconds", rewritten once a second (not with every frame) and removed when the shot ends. After the automatic switch the content ignores taps for 350 ms; the top bar, with Stop, and the tabs never do.
+- **Live strip**: at the top of the Coach tab while a shot is live or its outcome is still on its way to the chat. One 64 px button to the Shot tab on the accent wash, radius 16, 10 px from the top and 12 px from the sides, padded 14 px left and 10 px right, with 10 px gaps: the 9 px live dot and "Live shot" ("Last shot" once the pour is over) in 15 px at 700; under it the time (ink, 650) and " · 11.5 g · 5.0 bar" (13.5 px, 550, ink-muted, tabular); a 104x38 chart of pressure and flow (2 px lines, round caps, pressure on top); an ink-muted chevron. It goes once the outcome is in the chat.
 
-**While the barista types** the layout holds its height, never its width. With a text field focused it uses the window's own width and the tallest height since typing began, so a keyboard that shortens the window never turns a tablet into a phone mid-sentence (taking Stop away), nor an upright phone into one on its side. A new width (a rotation, a narrowed window) takes the window as it is: a phone turned while typing is a phone on its side, never an 844x844 tablet. After blur the held height stays until the layout would be the same without it, or 500 ms at most, so a closing keyboard never flashes the other layout.
+**While the barista types** the layout holds its height, never its width. With a text field focused it uses the window's own width and the tallest height since typing began, so a keyboard that shortens the window never turns a tablet into a phone mid-sentence (trading the tablet's top bar for the phone's and bringing the tabs up), nor an upright phone into one on its side. A new width (a rotation, a narrowed window) takes the window as it is: a phone turned while typing is a phone on its side, never an 844x844 tablet. After blur the held height stays until the layout would be the same without it, or 500 ms at most, so a closing keyboard never flashes the other layout.
 
-**Decaid's exit hint**: for 10 s after the skin opens, Decaid floats an exit-hint snackbar over the bottom of the screen. Nothing that must be tapped lives there: the machine column puts the graph lowest, the phone's bottom tabs are navigation only, and Stop is never at the bottom.
+**Decaid's exit hint**: for 10 s after the skin opens, Decaid floats an exit-hint snackbar over the bottom of the screen. Nothing that must be tapped at once lives there: the machine row and Stop are in the top bar, and the phone's bottom tabs are navigation only. The composer and the Stats prompt sit at the bottom of the chat, as the composer always has; both can wait.
 
-### Machine status
+### The machine row
 
-`src/ui/machine/MachineStatus.tsx`. Each readout is its own small component, so a telemetry tick re-renders only the number that changed.
+`src/ui/machine/MachineRow.tsx`, with `useMachineCommands.ts` (sending) and `commands.ts` (which controls are live). In the top bar on every screen, as a group named "Machine". Water moves when these run, so their rules are strict: a tap sends once, a failure is shown and never retried, and a button never moves.
 
-- **Connection row**: "Machine connected" or "No machine", "Scale connected" or "No scale", in body-small, 16 px apart, each after a 10 px dot: filled success when connected, a hollow 2 px ring in MUI's disabled text colour when not. "Can't reach Decaid" joins in warning once an outage has lasted 2.5 s.
-- **State line**: headline (h5), polite live region: "Ready", "Heating", "Sleeping", "Pulling a shot: pour" (the running step's name from the profile, when it has one). Always one line: too long for the column ("Pulling a shot: preinfusion start" in 340 px), it ends in an ellipsis rather than wrapping, the whole text is its title and what a screen reader hears, and the Shot view names the step in full. A wrapped line moved the readouts, the buttons and Stop 27 px at 962x602, for up to a second, twice a shot.
-- **Readouts**: Group, Steam, Water, Scale in a four-column grid with 8 px between columns. Each is a label (13 px, 550, ink-muted), the value in `readout` with its unit at 0.68em, weight 550, ink-muted, and a caption line under it ("target 98.5", "No scale", or "Refill" in warning, when the value turns warning too). A missing value is a dash.
-- **Profile line**: the label "Profile", then the profile's title on one line (subtitle, cut with an ellipsis, the full title in its tooltip) and a mark that keeps its place: "This bag" (success, with a check), "loading…" (ink-muted), "not confirmed" (warning, with an outlined alert icon). Offline, a muted caption says "Decaid loads it when the machine connects".
-- **Device error**: an outlined MUI Alert in error or warning, 14 px text, dismissible.
+- **Starts**: **Espresso**, **Steam**, **Flush** and **Hot water**, 2 px apart. On a tablet each is a 54x48 text button in ink with no fill: its icon (21 px) over an 11.5 px label at 600 (line height 1.15, no tracking, never wrapped, so "Hot water" stays on one line). On a phone each is its icon alone (22 px) in 44x44, named for screen readers. They are enabled while the machine is connected and idle or heating and no command is in flight; otherwise they are disabled in place, in MUI's disabled text colour, and a visually hidden line tells a screen reader why ("The machine is asleep. Tap Wake first.", "Not connected. Wake the DE1 and pair it in Decaid."). The machine alert says it on screen.
+- **Stop**: while the machine runs anything, the start that runs becomes Stop in its own box (see Buttons): Espresso's place for a shot (espresso, skipStep), Steam's for steam and steamRinse, Flush's for flush and airPurge, Hot water's for hot water, and the first place for anything else (cleaning, descaling). The other starts are held. Stop puts the machine to idle and is never held behind another command.
+- **After a run, and after a wake**: the starts stay held for 1 s (`STARTS_HOLD_MS`), so a second tap meant for Stop or Wake lands on a disabled start instead of starting something. Stop itself is never delayed.
+- **Asleep**: the row is **Wake** alone (a sun icon over "Wake", a text button in ink), with its spinner while the wake is in flight.
+- **Group-head controller**: a machine that starts its own runs has an empty row until something runs, then Stop alone; between runs a screen reader hears "Start on the machine". The answer is remembered across loads, so four starts never flash before the machine has said.
+- **Failures** have no room here: a failed start or Stop ("Couldn't start the shot." plus Decaid's own sentence) shows in the machine alert.
 
-### Machine controls
+### The stats card
 
-`src/ui/machine/MachineControls.tsx`. Water moves when these run, so their rules are strict: a tap sends once, a failure is shown and never retried, and every control keeps its place whatever the machine is doing.
+`src/ui/machine/StatsCard.tsx`, with its pieces in `MachineStatus.tsx` and `LoadedProfile.tsx`; the chat decides when it shows (see Chat). Everything in it updates live, and each readout is its own small component, so a telemetry tick re-renders only the number that changed.
 
-- **Start row**: four equal columns, 8 px apart: **Espresso** (contained, accent), **Steam**, **Flush**, **Hot water** (tonal). Each is 60 px tall with its icon above a 14 px label (line height 1.15, no tracking) and 2 px sides, so "Hot water" fits on one line in the 340 px column and beside a phone's rail. Icon and label are aligned from the top (9 px above the icon), so the four icons share a line even where a label wraps.
-- **Second row**: a `2fr 1fr 1fr` grid, 8 px apart: **Stop**, **Sleep** (Wake while asleep, with a sun icon), **Tare**, 52 px (Stop 60 px while running, above).
-- **Group-head controller**: on a machine that starts shots itself, the start row is replaced by a 60 px dashed-outline note (1 px dashed line, radius 12, ink-muted subtitle and a touch icon): "Start on the machine". Stop and the rest stay.
-- **Reasons**: when starts are off, a 14 px ink-muted status line under the buttons says why ("The machine is asleep. Tap Wake first."). A failure is an outlined error Alert there ("Couldn't start the shot." plus Decaid's own sentence).
+- **Card**: outlined Paper, surface, a 1 px line, radius 16, 12 px padding, 4 px above and below in the chat, a section named by its title. It lays itself out for its own width (`useOwnLayout.ts`, measured before the first paint, as Chromium 91 has no container queries): from 520 px the readouts sit four in a row; under 520 px (a phone) two by two, and Sleep shows its icon alone.
+- **Header**: "Machine" (subtitle at 700) and, at the right, the links: "DE1" and "Scale" in `label`, ink-muted, 12 px apart, each after an 8 px dot, filled success when connected (a screen reader hears "DE1 connected"); "No machine" and "No scale" after a hollow 2 px ring in MUI's disabled text colour when not. Decaid out of reach is the alert's to say.
+- **State line**: headline (h5), polite live region: "Ready", "Heating", "Sleeping", "Not connected", "Pulling a shot: pour" (the running step's name from the profile, when it has one). Always one line: too long for the card ("Pulling a shot: reset temperature" on a phone), it ends in an ellipsis rather than wrapping, the whole text is its title and what a screen reader hears, and the Shot view names the step in full.
+- **Readouts**: Group, Steam, Water and Scale in a grid with 8 px gaps. Each is a label (13 px, 550, ink-muted), the value in `readout` with its unit at 0.68em, weight 550, ink-muted, and a caption line under it ("target 98.5", "No scale", or "Refill" in warning, when the value turns warning too). Every readout keeps its caption line, empty or not, so the rows line up and nothing moves when one appears. A missing value is a dash.
+- **Foot**: under a 1 px line, the Profile line on the left and **Tare** and **Sleep** at the right (tonal, 48 px, 8 px apart). The Profile line: the label "Profile", then the profile's title on one line (subtitle, cut with an ellipsis, the full title in its tooltip) and a mark that keeps its place: "This bag" (success, with a check), "loading…" (ink-muted), "not confirmed" (warning, with an outlined alert icon). Offline, a muted caption beside the label says "Decaid loads it when the machine connects". Tare needs a scale (a screen reader hears "Connect a scale to tare." otherwise). Sleep (a moon icon) is Wake (a sun) while the machine sleeps, and is held while something runs or no machine is connected. On a narrow card Tare has 12 px sides and Sleep is a 48 px square with its icon alone, named. A failed Tare or Sleep shows in the machine alert, not on the card: the card comes and goes with the chat, and a failure must not go with it.
+
+### The machine alert
+
+`src/ui/machine/MachineAlerts.tsx`. One slim strip right under the top bar, across the whole width, only while a problem lasts, one problem at a time, the most important first. Nothing shows while the machine is fine, or before Decaid has said anything about its devices.
+
+- **Look**: a standard MUI Alert (its tinted fill, in warning or error), at least 40 px tall, square corners, a 1 px line below, 12 px sides, 14 px text at line height 1.35. A closable alert sets its 48 px close button into the strip, so it stays as slim as the rest. It is in the flow, so it pushes the screen down rather than covering a control.
+- **Order**: a failed command from the machine row or the stats card ("Couldn't start the shot." plus Decaid's own sentence; error, closable, cleared by the next command); Decaid's latest device error, in its own words with its suggestion (closable); "Can't reach Decaid. Trying again…" (warning, once that has lasted 2.5 s); "Not connected. Wake the DE1 and pair it in Decaid." (warning, once the machine has been away for 1 s); "The machine reports an error. Check it first." (error); "Refill the water tank to continue." (warning, once the water has been low for 3 s, and gone 3 s after it recovers, so a level wobbling at the line never flickers).
+- **Old-engine warning** (D58): under the machine alert, a full-width strip in warning drawn the same way, with a 48 px dismiss button; dismissed once per engine version.
 
 ### The live shot graph
 
 `src/ui/machine/LiveShotGraph.tsx`, drawn by uPlot from the app-wide shot recording (`shotTrace.ts`). Samples never touch React state: the canvas is repainted at most once per animation frame, and the timer and readouts are written straight into their nodes.
 
-**The plot, in every variant**
+**The plot**
 
 - Pressure (bar), flow (ml/s) and weight flow (g/s) share one 0-12 left axis, as on the DE1's own chart, with grid lines every 3 (0, 6, 12 when the plot is under 72 px tall). Cup weight has its own right axis from 0 to at least 50 g, its labels in the weight colour. Time runs from 0 to at least 30 s, so a fresh shot is not stretched across the width. Axis labels are 12 px Figtree in `graph-axis` ("10s", "25g"); grid lines are 1 px `graph-grid`; no ticks.
 - Series, bottom to top: the pressure and flow targets (dashed 6/5, 1.5 px, in their series colours), weight (1.5 px), weight flow (2 px), flow (2.5 px), pressure (2.5 px, on top).
 - Touch first: no cursor, no hover readout, no drag to zoom, no legend inside the canvas.
 - Before any shot the plot shows "Pull a shot to see it here." (body-small, ink-muted) centred in the plotting area, on a patch of the colour beneath so no grid line strikes through it, and the timer shows the dash.
-- Captions: "Shot graph" before any shot, "Live shot" with the live dot while pouring, "Last shot" after. Once the chat has the shot's card, the timer and the weight switch to the card's numbers (the pour time and Decaid's settled yield), so the panel never says one number while the card says another.
+- Captions: "Shot graph" before any shot, "Live shot" with the live dot while pouring, "Last shot" after. Once the chat has the shot's card, the timer and the weight switch to the card's numbers (the pour time and Decaid's settled yield), so the Shot view never says one number while the card says another.
 
-**Panel variant: the preview chart** (tablet machine column)
+**The Shot view** (`ShotView.tsx`: a tablet's Shot, the phone's Shot tab)
 
-- One button, "Open the shot graph", to the Shot view: surface, a 1 px line, radius 14, padded 10 px top, 12 px sides, 8 px bottom, filling the column's remaining height. The plot may shrink to 64 px, so the 962x602 column fits without scrolling in every state but "Not connected" with Decaid's alert.
-- Header: the caption (subtitle) after an 8 px live dot while live; the timer (`readout` at 1.25rem, tabular) at the right; an accent chevron.
-- Legend under the plot, items 12 px apart: a 12x3 px rounded swatch of the series colour, its name in an ink-muted caption and its live value in a tabular ink caption, for Pressure, Flow, Weight flow and Weight, then "target" after a 16 px dashed 2 px ink-muted line.
-
-**Full variant: the Shot view and the Machine tab**
-
-- Header: a 9 px live dot, "Live shot" (subtitle at 700), the running step ("Pour · step 3 of 3", body-small at 550, ink-muted, on one line with its full text as its title), and the pour timer in `display` at the right. The step is in sentence case, as CafAI writes its own labels ("pause" shows as "Pause", "Pressure Up" as "Pressure up"); a word in capitals or mixed case ("PI", "LRv3") stays as its author wrote it. On a phone (below 600 px wide, and beside the rail of a phone on its side) the step has a full-width line of its own under the caption and the timer. Once a shot has started, that line keeps its place, empty when there is no name to show (none read yet, a step the profile does not name, the pour over), so nothing under it moves as the steps change.
-- Four readouts in a four-column grid with 10 px gaps (4 px between columns on phones): **Pressure**, **Flow**, **Weight**, **Weight flow**. Each is a label with its 12x3 series swatch (10x3 on phones) over a `readout-large` value such as "5.0 bar"; Weight adds " of 50" at half size, ink-muted, when a stop-at-weight target is known and there is a shot (hidden on phones). These replace the legend. The sizes step down by viewport width (Chromium 91 has no container queries): below 900 px wide the readouts drop to 24 px; below 600 px they drop to 18 px, the timer to 34 px and the labels to 11.5 px. Beside the rail of a phone on its side the graph's column is about as narrow as an upright phone's screen, so there it takes the phone sizes at any width.
-- The plot fills the rest: at least 160 px tall in the Shot view, 120 px under an upright phone's buttons, 110 px beside them on a phone on its side. The coach's note sits under it (under Stop when a short phone's graph covers the status and the start row: see the Machine tab).
+- **Layout**: it lays itself out for its own box (`useOwnLayout.ts`), as the main pane loses height to the alert and to a phone's tabs or rail. **Wide** (a tablet): across the main pane, at most 960 px wide and centred, 20 px sides, 14 px top and bottom, 10 px gaps. **Narrow** (under 600 px wide: an upright phone): 12 px sides, the step on a line of its own, the readouts two by two. **Short** (under 440 px tall: a phone on its side; short wins over narrow): 12 px sides, 8 px top, bottom and gaps, four readouts in a row. Should even the plot's minimum not fit (an alert on the smallest phone on its side), the view scrolls rather than cut off the note.
+- **Header**: a 9 px live dot, "Live shot" (subtitle at 700), the running step ("Pour · step 3 of 3", body-small at 550, ink-muted, on one line with its full text as its title), and the pour timer in `display` at the right (34 px when narrow or short). The step is in sentence case, as CafAI writes its own labels ("pause" shows as "Pause", "Pressure Up" as "Pressure up"); a word in capitals or mixed case ("PI", "LRv3") stays as its author wrote it. When narrow, the step has a full-width line of its own under the caption and the timer; once a shot has started that line keeps its place, empty when there is no name to show (none read yet, a step the profile does not name, the pour over), so nothing under it moves as the steps change. Wide or short, the step sits between the caption and the timer, cut with an ellipsis when it is too long.
+- **Readouts**: **Pressure**, **Flow**, **Weight**, **Weight flow**, each a label (13 px) with its 12x3 series swatch over a `readout-large` value such as "5.0 bar"; Weight adds " of 50" at half size, ink-muted, when a stop-at-weight target is known and there is a shot, on a phone too. These replace the legend. Four in a row with 10 px between columns (wide, short), or two by two with 16 px between columns (narrow); 8 px between rows. The values are 30 px on a tablet, 24 px on a tablet window under 900 px wide, and 24 px on a phone (narrow or short; they were 18 px).
+- **Plot**: it fills the rest, at least 120 px tall in every layout. The coach's note sits under it.
 
 ### The coach's note
 
@@ -724,14 +723,16 @@ Everything here is MUI 9 with CafAI's theme, plus x-chat for the thread and uPlo
 
 ### Chat
 
-`src/ui/chat/ChatSurface.tsx` (the only module that imports x-chat) and `CoachScreen.tsx`.
+`src/ui/chat/ChatSurface.tsx` (the only module that imports x-chat), `CoachScreen.tsx`, and `statsCard.ts` for the stats card's place. The chat shows once there is an API key and a bag; before that the pane holds an empty-state card, and there is no stats card and no Stats prompt.
 
 - **Bag header**: at least 64 px, 12 px sides, 10 px gaps, a line below. The bag picker reads as the screen's title (a native select, 19 px at 700, 48 px tall, no underline); the version is quiet text beside it ("v4 · Blooming Espresso": the version in ink at 650, the rest ink-muted body-small); then a spacer and **Undo** and **New bag** (tonal, 48 px). On a phone they are 48 px icon buttons with the tonal fill, named "Undo" and "New bag" for screen readers, and the header keeps to one row: the picker and the version give way (the version with an ellipsis), the icons never do.
-- **Lane**: the thread is capped at 680 px and the composer at 760 px, centred in a wide pane.
-- **Messages**: the coach's (and the app's) messages sit on the page with no bubble, across the full lane, so their cards read as cards, under x-chat's small author label "Coach" (caption size, 550, ink-muted). The barista's own words sit in a right-aligned bubble: raised fill, ink, radius 12, 8 px by 12 px. The accent is kept for actions, never for bubbles.
+- **Lane**: the thread is capped at 680 px and the composer at 760 px, centred in a wide pane; the Stats prompt shares the composer's lane.
+- **Messages**: the coach's (and the app's) messages sit on the page with no bubble, across the full lane, so their cards read as cards, under x-chat's small author label, "Coach" ("CafAI" for the app's own lines; caption size, 550, ink-muted). The barista's own words sit in a right-aligned bubble: raised fill, ink, radius 12, 8 px by 12 px. The accent is kept for actions, never for bubbles.
 - **Text**: 16 px at line height 1.5; paragraphs and lists 12 px apart, lists indented 20 px, list items 2 px apart, code in monospace at 0.9em. The coach's text supports bold, italic, code and lists, never links or images; what the barista typed is shown verbatim.
 - **Thinking**: while the coach works with nothing streaming yet, a row with a 16 px spinner and "Thinking…" in ink-muted body-small, adding the seconds after 3 s ("Thinking… 12 s"), so a slow reply never looks frozen.
+- **Stats card** (D91): the machine's live card (see The stats card) as one more row at the end of the thread, on screen only, before the thinking row when there is one. The first time the chat shows in a session it follows the newest message (an empty chat too). It goes as soon as anything new lands (a message from either side, a notice, a shot card) or another bag opens, and stays gone even if what landed goes again (a progress notice does); it stays while the newest message only changes inside (a rating, a reply still streaming). It is never one of the conversation's messages, so it is never stored, exported or sent to the coach. It is CafAI's (role system) and joins the run of messages above it, so no author label of its own sits over it ("Coach" over the machine's numbers would read as advice). A visit to History and back finds it where it was; a reload starts with it shown.
 - **Composer**: x-chat's compact composer on surface, a 1 px line, radius 12, 4 px padding, 8 px from the pane's sides and bottom, up to four rows of 16 px text. Its placeholder says what the coach is waiting for ("Tap an answer, or say how it tasted", "Pull a shot, or ask the coach"), in ink-muted at full opacity, as every input's placeholder is (x-chat and MUI would fade the text colour, a pair the sweep cannot check). **Send** is a 48 px square, radius 12, accent with an on-accent arrow, faded to 38% while sending is blocked (typing never is).
+- **Stats prompt**: the only pre-filled prompt, one chip right above the composer in x-chat's suggestions slot, on every chat, tablet and phone, an empty one too (an empty thread shows nothing of x-chat's own, so the prompt stays above the composer). It shares the composer's lane (at most 760 px, centred, never closer than 8 px to the pane's sides), with 2 px above it and 8 px between it and the composer. The chip is 40 px tall, radius 20: surface inside a 1 px line, an 18 px gauge icon in the accent and "Stats" at 15 px, weight 600; an invisible band 5 px above and below makes its touch area 48 px, and a touch leaves no hover colour behind. A tap posts the card after the newest message, or leaves it where it already is, and brings it into view (from its top when it is taller than the view, however far the reader had scrolled); nothing is sent, the coach is not called, and the draft stays, even while the coach works.
 - **Following**: the thread keeps the newest message in view as content arrives, unless the barista scrolls up; then x-chat's scroll-to-newest button appears at the bottom of the thread.
 
 ### Cards
@@ -753,7 +754,7 @@ All cards are outlined Paper: surface, a 1 px line, radius 16, 12 px padding (16
 ### Notices, alerts and dialogs
 
 - **Notice** (a line from the app itself in the chat, `parts/Notice.tsx`): a small icon and body-small text. Info is ink-muted, icon and text; success, warning and error put the icon in their colour and keep the text in ink. With progress, a rounded bar sits under the line, indented 28 px to align with the text, with an optional caption at the right ("Try 2 of 3"), at most 480 px wide.
-- **Alerts**: MUI Alerts with plain-word messages that name the next step. Outlined in the machine column (device errors, command failures); standard, with MUI's tinted fill, for the coach's error banner (with Retry and a 48 px dismiss) and the old-engine warning; standard in Settings for saved and failed messages.
+- **Alerts**: MUI Alerts with plain-word messages that name the next step, all standard, with MUI's tinted fill: the machine alert under the top bar (a failed command, a device error, the connection, the machine's error, water; see The machine alert) and the old-engine warning under it, the coach's error banner (with Retry and a 48 px dismiss), and the saved and failed messages in Settings.
 - **Dialogs**: only for confirming a destructive step (Forget the API key) and for an export's result. A short title, one sentence, then the actions at the right: the quiet choice as a text button, the decisive one contained ("Forget key" in error, "Done" in the accent).
 
 ### Appearance controls
@@ -768,22 +769,22 @@ All cards are outlined Paper: surface, a 1 px line, radius 16, 12 px padding (16
 ### Motion
 
 - **State changes take 150 to 250 ms and ease out.** The coach's note and the live strip enter over 200 ms ease-out (a fade with a 6 px rise for the note, a 4 px drop for the strip). The Mode segments and the tint swatches change in 200 ms (MUI's `shorter`, its standard curve); the composer's focus border in 250 ms.
-- **The live dot** pulses while a shot runs: opacity 1 to 0.35 and back over 1.6 s, ease-in-out, looping; it holds still at full opacity under reduced motion. It is 7 px in the phone's Machine tab, 8 px in the preview chart's header and 9 px elsewhere.
+- **The live dot** pulses while a shot runs: opacity 1 to 0.35 and back over 1.6 s, ease-in-out, looping; it holds still at full opacity under reduced motion. It is 7 px in the phone's Shot tab and 9 px elsewhere.
 - **"Reading the shot"**: three 5 px dots, opacity 0.3 to 1 over 1.2 s, each 0.2 s after the last; still under reduced motion.
 - **Press feedback**: MUI's ripple on buttons, which animates only when the device has no reduced-motion preference; the tint swatches scale to 0.94 instead.
-- **No bounce, spring, parallax or route transitions.** Screens swap in one frame. An automatic swap (a shot starting, the coach coming back) uses `location.replace`, so Back goes where the barista went, and is followed by the 350 ms tap guard on the pane that changed.
+- **No bounce, spring, parallax or route transitions.** Screens swap in one frame. An automatic swap (a shot starting, the coach coming back) uses `location.replace`, so Back goes where the barista went, and is followed by the 350 ms tap guard on the main pane, never the top bar.
 - **Every animation has a still alternative** under `prefers-reduced-motion: reduce`: CafAI's own animations switch off (`animation: none`), and a global CssBaseline rule settles everything else at once, MUI's spinners and indeterminate progress bars included. Their meaning is always in the words beside them ("Thinking… 12 s", "Loading v5 onto the machine…").
 
 ## 6. Do's and Don'ts
 
 ### Do
 
-- **Do keep every control where it is while a shot starts.** Disable instead of removing; let only the main pane change; keep Stop in its cell, enabled whenever the machine runs.
+- **Do keep every control where it is while a shot starts.** Disable instead of removing; let only the main pane change; put Stop in the place of the start that runs, enabled whenever the machine runs, and never under the tap guard.
 - **Do let the shot own the screen while it runs**: the big graph, the timer and Stop; the coach's note under the plot, never over the curves.
 - **Do keep text that changes during a shot to one line** (the state line, the Shot view's step), and keep a line that comes and goes in its place, empty: a wrap or a new line moves everything under it, Stop included.
 - **Do read every colour from the theme** and add a new role to `buildPalette` (and its pairs to `palette.test.ts`) when nothing fits.
-- **Do give each region or card one contained button** for its main action (Espresso in the machine column, Send in the chat, Confirm on a change card) and make every other action tonal (or a text button for the quiet choice beside a primary).
-- **Do make anything tappable at least 48 px**, start buttons 60 px, and space them 8 px apart.
+- **Do give each region or card one contained button** for its main action (Send in the chat, Confirm on a change card, Use this on a starting profile) and make every other action tonal (or a text button for the quiet choice beside a primary). The machine row is the exception: four equal text buttons, and Stop, filled in the error colour, while something runs.
+- **Do make anything tappable at least 48 px** and space them 8 px apart. The machine row is the exception: 54x48 boxes 2 px apart in the tablet's top bar, 44x44 in the phone's.
 - **Do set live numbers in tabular figures** with a space before the unit, one decimal for live readings, and a dash for a value the machine has not given.
 - **Do write states in words beside their colour**, in sentence case, in plain language, with the next step in an error.
 - **Do show a change in plain words and wait for a tap** before anything reaches the machine; put the decision before the reasoning.
@@ -801,7 +802,7 @@ All cards are outlined Paper: surface, a 1 px line, radius 16, 12 px padding (16
 - **Don't use uppercase eyebrows**, overlines in capitals, or letter-spaced labels.
 - **Don't use shadows or elevation for cards**, and don't let MUI's dark-mode elevation overlays grey a surface.
 - **Don't use glassy gradients, glassmorphism or glow**; the only gradients are the hue rail and the Custom swatch, and they show hues.
-- **Don't build metric tiles or a dashboard of charts**; one graph, drawn like Decent's, with the numbers beside it.
+- **Don't build metric tiles or a dashboard of charts**; one graph, drawn like Decent's, with the numbers beside it, and the machine's numbers in one card in the chat that goes when the chat moves on.
 - **Don't use mascots, latte-art clip art, novelty fonts** or emoji in the interface.
 - **Don't let the page scroll or add edge gestures**; a region scrolls inside itself.
 - **Don't send a machine command without a tap, or retry one on its own.**

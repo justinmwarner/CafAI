@@ -1,8 +1,12 @@
 # Good morning: CafAI after your answers (2026-10-04)
 
-**Newest (2026-10-08):** your UX brief is built: a tablet and a phone
-layout, the shot taking the screen, Figtree, and a look of your own. It is
-the first section after the status table.
+**Newest (2026-10-09):** the machine on demand, as you asked. Nothing but
+the chat on load; a live stats card in the chat that goes as you chat, with
+Stats to bring it back; Espresso, Steam, Flush and Hot water in the top bar,
+where the running one turns into Stop; the graph from Shot. It is merged
+into `main` with the UX rework under it (2026-10-07 and 08: tablet and phone
+layouts, the shot taking the screen, Figtree, a look of your own). Both
+sections come right after the status table.
 
 Your nine answers in QUESTIONS.md are all done. Each is an owner decision
 (D55-D63), and each that changed behaviour went through its own brief,
@@ -18,18 +22,73 @@ pushed.
 |---|---|
 | Typecheck (`npm run typecheck`) | pass |
 | Lint (`npm run lint`) | pass |
-| Unit tests (`npm test`) | **2275/2275** in 141 files on 2026-10-08 (2026-10-06: 2047 in 125; 2026-10-04: 1836 in 115; overnight: 1254 in 91) |
-| Playwright (`npm run e2e`) | **140/140** on 2026-10-08: 42 each at 962x602, 1280x800 and 1920x1200, and 7 each on a 390x844 phone upright and on its side (2026-10-06: 114 on the three tablets) |
+| Unit tests (`npm test`) | **2330/2330** in 144 files on 2026-10-09 (2026-10-08: 2275 in 141; 2026-10-06: 2047 in 125; 2026-10-04: 1836 in 115; overnight: 1254 in 91) |
+| Playwright (`npm run e2e`) | **188 passed, 2 skipped** on 2026-10-09: 52 each at 962x602, 1280x800 and 1920x1200, and 16 each on a 390x844 phone upright and on its side (each phone skips a tablet-only check) (2026-10-08: 140; 2026-10-06: 114 on the three tablets) |
 | `npm run verify` (all of the above, build and release zip) | pass |
-| Real Chromium 91 (`npm run build:mock && npm run smoke:chrome91 && npm run smoke:chrome91:loop`) | pass: the app loads with no console or page errors, and the whole coach loop runs, waiting for the machine to confirm each load; the shot takes the screen 0.9 s after Espresso and the coach comes back with the card 3.9 s later |
+| Real Chromium 91 (`npm run build:mock && npm run smoke:chrome91 && npm run smoke:chrome91:loop`) | pass: the app loads with no console or page errors, and the whole coach loop runs, waiting for the machine to confirm each load; the chat opens with the stats card, Stats brings it back, Espresso in the top bar turns into Stop and the Shot view takes the screen 0.2 s later, and the coach comes back with the card 3.5 s after that |
 | Live API test (`npm run test:live`) | skipped here (no key on this machine); its dry run against the scripted coach passes |
-| Fresh-eyes verifier | 2026-10-08, the UX rework: 2 major, 5 minor and 8 polish; 13 fixed, 1 kept by design, 1 open (below). Earlier rounds: all fixed |
+| Fresh-eyes verifier | 2026-10-08, the UX rework: 2 major, 5 minor and 8 polish; 13 fixed, 1 kept by design, 1 open (below). Chat first: not run yet (its brief is `docs/briefs/verify-chat-first.md`). Earlier rounds: all fixed |
+
+## New: chat first, the machine on demand (2026-10-08 and 09)
+
+Your follow-up is built and merged into `main`, with the UX rework below it.
+Nothing is pushed (this repository has no remote).
+
+- **On load, the chat (D90).** No machine column and no graph: the screen is
+  the coach, across the whole width.
+- **The machine row (D90).** Espresso, Steam, Flush and Hot water sit in the
+  top bar on every screen (icons only on a phone). The one that runs turns
+  into Stop in its own box, so your finger finds it where it tapped; the
+  others wait. A group-head machine's row is empty until something runs,
+  then shows Stop alone; a sleeping machine shows Wake. For 1 s after a run
+  ends the starts stay held, so a second tap on Stop starts nothing.
+- **The stats card (D91).** The chat opens with a live card at its end:
+  state, DE1 and scale, Group, Steam, Water, Scale, the loaded profile, Tare
+  and Sleep. It goes as soon as anything new lands in the chat (your
+  message, the coach's, a shot card) or you switch bags, and **Stats**, the
+  one pre-filled prompt above the composer, brings it back. It is
+  screen-only: never saved, exported or sent to the coach. Before there is a
+  chat (no key or no bag yet) it sits under the setup card, so the machine's
+  readings never wait for the coach.
+- **The graph from Shot (D92).** Shot (in the tablet's top bar, and the
+  phone's tab that replaces Machine) opens the graph. A starting shot still
+  takes the screen by itself and hands back to the coach. The tap guard
+  never covers the top bar, so Stop works the moment it appears, on a phone
+  too (the phone's old guard over Stop is gone).
+- **Problems** (not connected, Decaid out of reach, water to refill, a
+  failed command) show in one slim alert under the top bar while they last.
+
+**Look at first:** `npm run demo`. The card is the newest thing in the chat;
+tap a taste answer and it goes; tap Stats and it comes back; tap Espresso in
+the top bar and it turns into Stop as the graph takes the screen.
+
+**Calls you may want to change:**
+
+1. The phone's row buttons are 44 px, under the 48 px touch floor used
+   elsewhere: four 48 px buttons with Exit and Decaid settings do not fit a
+   360 px phone's bar.
+2. The tablet row's labels are 11.5 px, under the 13 px text floor, so the
+   bar fits 962 px with the Shot timer running.
+3. Stop lives only in the top bar, as you chose: there is no big Stop in the
+   graph view.
+4. Below 960 px wide (an iPad upright) the tablet's places show their icons
+   alone.
+
+**Not done yet:** the fresh-eyes check of this change. Its brief is ready
+(`docs/briefs/verify-chat-first.md`); say if you want it run.
+
+**How it ran:** a spec and a mockup you approved; three agents in parallel
+(the machine's pieces, the card in the chat, the shell), then one for the
+e2e suite and the Chromium 91 loop beside a docs agent. The e2e agent was
+stopped before its last runs (the permission system halted its Chromium 91
+loop, then the usage limit), so I ran the full suite and both Chromium 91
+checks myself when you asked to merge.
 
 ## New: tablet and phone, the shot on screen, a look of your own (2026-10-07 and 08)
 
-Everything is on the branch `feat/ux-modes-theme`, 32 commits on top of
-`main` (not merged, nothing pushed). This checkout is on that branch, so
-`npm run demo` shows it.
+Merged into `main` on 2026-10-09 together with the change above, which
+replaced this rework's machine column, its preview chart and the phone's
+Machine tab; the rest stands as described here.
 
 - **Tablet and phone layouts (D84).** At 800x500 CSS px and up (every Decent
   tablet): Coach, Shot, History and Settings in the top bar, the machine
@@ -111,9 +170,9 @@ One finding is kept by design and one is left open:
    a phone reads right (D89).
 
 **Try it:** `npm run demo`, then Settings > Appearance > Matcha, then back
-to Coach and tap Espresso in the machine column: the shot takes the screen,
-then the coach comes back with the card. Narrow the browser below 800 px for
-the phone layout.
+to Coach and tap Espresso in the top bar: the shot takes the screen, then
+the coach comes back with the card. Narrow the browser below 800 px for the
+phone layout.
 
 **How it ran:** three stages (palette and theme, appearance, layouts and
 shot focus), each task by a subagent and committed after its checks; then
@@ -121,10 +180,6 @@ an end-to-end agent added the phone projects (and found two phone bugs);
 then the verifier; then three fix agents in parallel on separate files and
 a docs agent. The usage limit stopped agents twice; each was resumed where
 it stopped.
-
-**Merging:** `main` has not moved since the branch started, so
-`git checkout main && git merge --ff-only feat/ux-modes-theme` keeps the
-history straight. I left that to you.
 
 ## Since then: Decaid's simulator and a demo (2026-10-05 and 06)
 
@@ -292,10 +347,8 @@ recorded, not chased.
   the UI, steam and hot-water editors, device-connect screens, a
   screensaver, and the local coach (roadmap).
 - Writes waiting for Decaid live in memory only (D64).
-- Layout corners left from the UX check: at 962x602 the machine column
-  still scrolls while "Not connected" shows with Decaid's alert, and at
-  667x375 (a small phone on its side) the left column scrolls, with 44 of
-  Stop's 60 px on screen.
+- The fresh-eyes check of chat first (its brief is ready). The two layout
+  corners the UX check left open went with the machine column.
 
 ## Top 5 questions for you
 
