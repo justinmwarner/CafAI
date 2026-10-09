@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import type { ShotRecord } from '../src/api/types.ts';
 import type { CafaiMockWindow } from '../mock/browser.ts';
 import { TID } from '../src/ui/testIds.ts';
-import { fillField, openApp, saveApiKey, sendChat } from './helpers.ts';
+import { fillField, openApp, pullShot, saveApiKey, sendChat } from './helpers.ts';
 
 /**
  * CafAI's writes to Decaid: the taste answer and the star rating land in the
@@ -23,14 +23,14 @@ async function workflowGrinderSetting(page: Page): Promise<string | null> {
   return page.evaluate(() => (window as CafaiMockWindow).__CAFAI_MOCK__?.state.getWorkflow().context?.grinderSetting ?? null);
 }
 
-/** New bag, v1 on the machine, one shot pulled from the machine panel. */
+/** New bag, v1 on the machine, one shot pulled from Espresso in the top bar. */
 async function pullFirstShot(page: Page): Promise<void> {
   await page.getByTestId(TID.navCoach).click();
   await page.getByTestId(TID.newBag).click();
   await sendChat(page, 'Kiambu AA, light roast, washed');
   await page.getByTestId(TID.templatePick('blooming-espresso')).click();
   await expect(page.getByText('Loaded Kiambu AA v1 on the machine.')).toBeVisible();
-  await page.getByTestId(TID.espressoButton).click();
+  await pullShot(page);
   await expect(page.getByTestId(TID.shotCard)).toBeVisible({ timeout: 60_000 });
 }
 

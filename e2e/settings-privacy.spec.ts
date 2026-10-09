@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import type { CafaiMockWindow } from '../mock/browser.ts';
 import { CAFAI_DB_NAME } from '../src/storage/db.ts';
 import { TID } from '../src/ui/testIds.ts';
-import { everythingDecaidSaw, fillField, openApp, recordRequests, saveApiKey, sendChat, settledMirror } from './helpers.ts';
+import { everythingDecaidSaw, fillField, openApp, pullShot, recordRequests, saveApiKey, sendChat, settledMirror } from './helpers.ts';
 
 /**
  * An API key pasted into Settings' grinder fields or model never becomes a
@@ -102,7 +102,7 @@ test('a key pasted into the grinder fields and the model never reaches Decaid or
   await sendChat(page, 'Kiambu AA, light roast, washed');
   await page.getByTestId(TID.templatePick('blooming-espresso')).click();
   await expect(page.getByText('Loaded Kiambu AA v1 on the machine.')).toBeVisible();
-  await page.getByTestId(TID.espressoButton).click();
+  await pullShot(page);
   await expect(page.getByTestId(TID.shotCard)).toBeVisible({ timeout: 60_000 });
   await page.getByTestId(TID.optionChip('Sour / sharp')).click();
   await expect(page.getByTestId(TID.diffCard)).toBeVisible();

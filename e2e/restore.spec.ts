@@ -4,7 +4,7 @@ import { MOCK_STORE_KEY, MOCK_STORE_PREFIX, type MockStoreSnapshot } from '../mo
 import { CAFAI_DB_NAME } from '../src/storage/db.ts';
 import { SECRETS_DB_NAME } from '../src/storage/secrets.ts';
 import { TID } from '../src/ui/testIds.ts';
-import { everythingDecaidSaw, loseBrowserStorage, openAppWithSwitches, saveApiKey, sendChat, settledMirror } from './helpers.ts';
+import { everythingDecaidSaw, loseBrowserStorage, openAppWithSwitches, pullShot, saveApiKey, sendChat, settledMirror } from './helpers.ts';
 
 /**
  * Restoring from the Decaid backup, end to end (D36, D60, D67): CafAI mirrors
@@ -51,7 +51,7 @@ test('a reload after lost browser storage restores bags, history and the chat fr
   await sendChat(page, INTAKE);
   await page.getByTestId(TID.templatePick('blooming-espresso')).click();
   await expect(page.getByTestId(TID.activeVersion)).toContainText('Kiambu AA v1');
-  await page.getByTestId(TID.espressoButton).click();
+  await pullShot(page);
   await expect(page.getByTestId(TID.shotCard)).toBeVisible({ timeout: 60_000 });
   await page.getByTestId(TID.optionChip('Sour / sharp')).click();
   await expect(page.getByTestId(TID.diffCard)).toBeVisible();
@@ -122,7 +122,7 @@ test('a reload after lost browser storage restores bags, history and the chat fr
 
   // 5. The restored transcript is still a valid conversation: another shot
   // brings its card and fresh taste options (the old ones stay, answered).
-  await page.getByTestId(TID.espressoButton).click();
+  await pullShot(page);
   await expect(shotCards).toHaveCount(2, { timeout: 60_000 });
   await expect.poll(() => chips.count(), { message: 'fresh taste options after the new shot', timeout: 30_000 }).toBeGreaterThan(chipsBefore);
   const newest = chips.last();

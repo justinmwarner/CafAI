@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { TID } from '../src/ui/testIds.ts';
-import { everythingDecaidSaw, mirroredText, openApp, recordRequests, saveApiKey, sendChat } from './helpers.ts';
+import { everythingDecaidSaw, mirroredText, openApp, pullShot, recordRequests, saveApiKey, sendChat } from './helpers.ts';
 
 /**
  * The whole dial-in loop against the mock: new bag -> template suggestions ->
@@ -30,8 +30,8 @@ test('new bag to confirmed v2 and history', async ({ page }) => {
   // The native bag picker opens only from the select itself: a full touch target.
   expect((await page.getByTestId(TID.bagPicker).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(47.5);
 
-  // Pull the scripted fake shot from the machine panel.
-  await page.getByTestId(TID.espressoButton).click();
+  // Pull the scripted fake shot from Espresso in the top bar's machine row.
+  await pullShot(page);
   await expect(page.getByTestId(TID.shotCard)).toBeVisible({ timeout: 60_000 });
 
   // Tappable taste options, "Other" always last.
@@ -78,7 +78,7 @@ test('undo returns the machine to the previous version', async ({ page }) => {
   await sendChat(page, 'Rwanda Huye, medium roast, natural');
   await page.getByTestId(TID.templatePick('d-flow')).click();
   await expect(page.getByTestId(TID.activeVersion)).toContainText('v1');
-  await page.getByTestId(TID.espressoButton).click();
+  await pullShot(page);
   await expect(page.getByTestId(TID.shotCard)).toBeVisible({ timeout: 60_000 });
   await page.getByTestId(TID.optionChip('Bitter / harsh')).click();
   await page.getByTestId(TID.diffConfirm).click();

@@ -1,13 +1,13 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { TID } from '../src/ui/testIds.ts';
-import { goTo, openApp, saveApiKey, sendChat, type Screen } from './helpers.ts';
+import { goTo, machineRow, openApp, pullShot, saveApiKey, sendChat, type Screen } from './helpers.ts';
 
 /**
  * The phone layout (D84), upright and on its side: one screen at a time
  * under a slim top bar, four tabs at the bottom (a rail on the left when the
- * phone lies on its side), Exit and Decaid settings on every screen, and
- * nothing wider than the screen. The Machine tab is the machine column at
- * full width: status, the buttons and the big graph.
+ * phone lies on its side), Exit, Decaid settings and the machine row (its
+ * icons alone, D90) on every screen, and nothing wider than the screen. The
+ * Shot tab is the Shot view's big graph (D92).
  */
 
 /** How wide the page and its scrolling boxes are against the window, and any box that scrolls sideways. */
@@ -67,7 +67,7 @@ const SCREENS: readonly TabScreen[] = [
     hash: '#/',
     shows: (page) => page.getByRole('heading', { name: 'Add your Anthropic API key to start coaching' }),
   },
-  { screen: 'shot', tab: TID.tabMachine, hash: '#/shot', shows: (page) => page.getByTestId(TID.espressoButton) },
+  { screen: 'shot', tab: TID.tabShot, hash: '#/shot', shows: (page) => page.getByTestId(TID.shotView) },
   { screen: 'history', tab: TID.tabHistory, hash: '#/history', shows: (page) => page.getByRole('heading', { name: 'History', level: 1 }) },
   { screen: 'settings', tab: TID.tabSettings, hash: '#/settings', shows: (page) => page.getByRole('heading', { name: 'Settings', level: 1 }) },
 ];
@@ -81,9 +81,9 @@ function bottomInset(page: Page): Promise<number> {
 
 test('every tab shows its screen, with Exit and Decaid settings, and nothing runs off the side', async ({ page }) => {
   await openApp(page);
-  // The phone's navigation, not the tablet's.
+  // The phone's navigation, not the tablet's, and the machine row in the top bar as icons.
   await expect(page.getByTestId(TID.navCoach)).toHaveCount(0);
-  await expect(page.getByRole('complementary', { name: 'Machine' })).toHaveCount(0);
+  await expect(machineRow(page)).toHaveAttribute('data-icons', 'true');
   // The page fills the phone's screen, so the home indicator's room is inferred: 34 px upright, 21 px on its side.
   const { width, height } = page.viewportSize()!;
   const inset = await bottomInset(page);
@@ -100,9 +100,10 @@ test('every tab shows its screen, with Exit and Decaid settings, and nothing run
         await expect(page.getByTestId(other.tab), where).not.toHaveAttribute('aria-current', 'page');
       }
       await expect(shows(page), where).toBeVisible();
-      // The ways out, whole and on screen.
+      // The ways out and the machine row, whole and on screen.
       await expect(page.getByTestId(TID.exitToSkins), where).toBeInViewport({ ratio: 1 });
       await expect(page.getByTestId(TID.decaidSettings), where).toBeInViewport({ ratio: 1 });
+      await expect(machineRow(page), where).toBeInViewport({ ratio: 1 });
       // Every tab stays whole on screen too, clear of the home indicator.
       for (const other of SCREENS) {
         const tabButton = page.getByTestId(other.tab);
@@ -115,20 +116,33 @@ test('every tab shows its screen, with Exit and Decaid settings, and nothing run
   }
 });
 
-test('the Machine tab has Espresso, Stop and the big graph', async ({ page }) => {
+test('the Shot tab has the big graph, and the top bar the machine row as named icons', async ({ page }) => {
   await openApp(page);
   await goTo(page, 'shot');
-  await expect(page.getByTestId(TID.machineState)).toBeVisible();
-  for (const id of [TID.espressoButton, TID.stopButton, TID.liveGraph]) {
-    await expect(page.getByTestId(id)).toBeInViewport({ ratio: 1 });
-  }
-  // The full graph, with its four readouts, not the tablet's small panel.
+  await expect(page.getByTestId(TID.shotView)).toBeVisible();
+  await expect(page.getByTestId(TID.liveGraph)).toBeInViewport({ ratio: 1 });
+  // The full graph, with its four readouts.
   await expect(page.getByRole('list', { name: 'Shot readouts' })).toBeVisible();
-  await expect(page.getByTestId(TID.previewGraph)).toHaveCount(0);
-  for (const id of [TID.steamButton, TID.flushButton, TID.hotWaterButton, TID.tareButton, TID.sleepWakeButton]) {
-    await expect(page.getByTestId(id)).toBeVisible();
+  // The four starts as icons, each named for screen readers and a full touch target; no Stop while nothing runs.
+  for (const [name, id] of [
+    ['Espresso', TID.espressoButton],
+    ['Steam', TID.steamButton],
+    ['Flush', TID.flushButton],
+    ['Hot water', TID.hotWaterButton],
+  ] as const) {
+    const button = machineRow(page).getByRole('button', { name, exact: true });
+    await expect(button).toHaveAttribute('data-testid', id);
+    await expect(button).toHaveText('');
+    await expect(button).toBeInViewport({ ratio: 1 });
+    const box = (await button.boundingBox())!;
+    expect(Math.min(box.width, box.height), `${name} is a full touch target`).toBeGreaterThanOrEqual(43.5);
   }
-  await expectNoSidewaysOverflow(page, 'the Machine tab');
+  await expect(machineRow(page).getByTestId(TID.stopButton)).toHaveCount(0);
+  // The ways out are icons too, named.
+  await expect(page.getByTestId(TID.exitToSkins)).toHaveAccessibleName(/^Exit to /);
+  await expect(page.getByTestId(TID.decaidSettings)).toHaveAccessibleName('Decaid settings');
+  for (const id of [TID.exitToSkins, TID.decaidSettings]) await expect(page.getByTestId(id)).toHaveText('');
+  await expectNoSidewaysOverflow(page, 'the Shot tab');
 });
 
 test('the bag header keeps the picker, the version, Undo and New bag on one row', async ({ page }) => {
@@ -140,10 +154,9 @@ test('the bag header keeps the picker, the version, Undo and New bag on one row'
   await page.getByTestId(TID.templatePick('blooming-espresso')).click();
   await expect(page.getByTestId(TID.activeVersion)).toContainText('Kiambu AA v1');
 
-  // A shot from the Machine tab, a taste and a confirmed change: v2, so Undo shows.
-  await goTo(page, 'shot');
-  await page.getByTestId(TID.espressoButton).click();
-  await goTo(page, 'coach');
+  // A shot from Espresso in the top bar, a taste and a confirmed change: v2, so Undo shows.
+  // The shot takes the screen by itself, and the coach comes back with its card.
+  await pullShot(page);
   await expect(page.getByTestId(TID.shotCard)).toBeVisible({ timeout: 60_000 });
   await page.getByTestId(TID.optionChip('Sour / sharp')).click();
   await page.getByTestId(TID.diffConfirm).click();

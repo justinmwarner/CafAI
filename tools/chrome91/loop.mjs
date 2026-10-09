@@ -1,7 +1,10 @@
 // The whole coach loop in a real Chromium 91 (puppeteer 9), against the
-// mock-mode build: settings -> new bag -> templates -> v1 -> scripted shot
-// (the Shot view takes the screen, the coach comes back with the card) ->
-// taste chip -> confirmed v2. Fails on any page error or console error.
+// mock-mode build: settings -> new bag (the chat opens with the live stats
+// card, which the first message takes away) -> templates -> v1 -> Stats
+// brings the card back -> scripted shot from Espresso in the top bar's
+// machine row (it turns into Stop, the Shot view takes the screen, the coach
+// comes back with the card) -> taste chip -> confirmed v2. Fails on any page
+// error or console error.
 //
 // usage: npm run build:mock && node tools/chrome91/loop.mjs
 import http from 'node:http';
@@ -63,11 +66,14 @@ async function fill(testId, text) {
   await input.type(text);
 }
 // A tap lands only where the element itself takes it: for 350 ms after the
-// app switches screens by itself a guard covers the pane (TapGuard) and
-// swallows every tap. So wait until the element's centre, in view, is the
-// element (or inside it) before tapping it.
+// app switches screens by itself a guard covers the main pane (TapGuard; the
+// top bar is never covered) and swallows every tap. So wait until the
+// element's centre, in view, is the element (or inside it) before tapping it.
 async function tap(testId, timeout = 15000) {
-  const selector = `${tid(testId)}:not([disabled])`;
+  await tapAt(tid(testId), timeout);
+}
+async function tapAt(target, timeout = 15000) {
+  const selector = `${target}:not([disabled])`;
   await page.waitForSelector(selector, { timeout, visible: true });
   await page.waitForFunction(
     (sel) => {
@@ -107,18 +113,28 @@ try {
     await fill('api-key-input', 'sk-ant-chrome91');
     await tap('api-key-save');
   });
-  await step('new bag', async () => {
+  await step('new bag: the chat opens with the live stats card', async () => {
     await tap('nav-coach');
     await tap('new-bag');
+    await page.waitForSelector(`${tid('chat')} ${tid('stats-card')}`, { timeout: 15000, visible: true });
+    await waitText('machine-state', 'Ready');
   });
-  await step('describe the bag', async () => {
+  await step('describe the bag: the card goes', async () => {
     await fill('composer-input', 'Kiambu AA, light roast, washed, blackcurrant');
     await tap('composer-send');
+    await page.waitForSelector(tid('stats-card'), { timeout: 15000, hidden: true });
   });
   await step('pick a template', async () => tap('template-pick-blooming-espresso', 30000));
   await step('v1 loaded', async () => waitText('active-version', 'v1'));
-  await step('pull the scripted shot: the Shot view takes the main pane', async () => {
-    await tap('espresso-button');
+  await step('Stats brings the card back', async () => {
+    // Once the coach is done: anything that lands after the card takes it away again.
+    await page.waitForSelector(`${tid('chat')}:not([data-busy])`, { timeout: 30000 });
+    await tap('stats-prompt');
+    await page.waitForSelector(`${tid('chat')} ${tid('stats-card')}`, { timeout: 15000, visible: true });
+  });
+  await step('pull the scripted shot from the top bar: Espresso turns into Stop, the Shot view takes the main pane', async () => {
+    await tapAt(`${tid('machine-row')} ${tid('espresso-button')}`);
+    await page.waitForSelector(`${tid('machine-row')} ${tid('stop-button')}`, { timeout: 15000 });
     await page.waitForSelector(tid('shot-view'), { timeout: 30000, visible: true });
   });
   // The coach stays mounted under the Shot view, hidden: its card is in the

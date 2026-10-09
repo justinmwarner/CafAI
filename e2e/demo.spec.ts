@@ -28,13 +28,18 @@ function diffCards(page: Page, status?: string): Locator {
   return page.locator(`[data-testid="${TID.diffCard}"]${status ? `[data-status="${status}"]` : ''}`);
 }
 
-/** Every message in the chat, the barista's, the coach's and CafAI's. */
+/**
+ * Every message in the chat, the barista's, the coach's and CafAI's; not the
+ * live stats card, a row of the chat too while it shows (D91), but no message.
+ */
 function messages(page: Page): Locator {
-  return page.getByTestId(TID.chat).getByRole('article');
+  return page.getByTestId(TID.chat).getByRole('article').filter({ hasNot: page.getByTestId(TID.statsCard) });
 }
 
 test('opens on Kiambu AA v4 with every kind of card, both bags and the history', async ({ page }) => {
   await openDemo(page);
+  // The chat opens with the live stats card, its newest row (D91).
+  await expect(page.getByTestId(TID.chat).getByRole('article').last().getByTestId(TID.statsCard)).toBeVisible();
 
   // The bag picker lists both bags, the active one first.
   await expect(page.getByTestId(TID.bagPicker).locator('option')).toHaveText(['Kiambu AA', 'Santos']);

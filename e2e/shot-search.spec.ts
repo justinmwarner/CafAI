@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { CafaiMockWindow } from '../mock/browser.ts';
 import { TID } from '../src/ui/testIds.ts';
-import { openApp, saveApiKey, sendChat } from './helpers.ts';
+import { openApp, pullShot, saveApiKey, sendChat } from './helpers.ts';
 
 /**
  * D65: while CafAI asks Decaid for a just-finished shot (six tries over about
@@ -52,7 +52,7 @@ test('shows the search while Decaid saves a shot, then the shot card in its plac
       times: 3,
     }),
   );
-  await page.getByTestId(TID.espressoButton).click();
+  await pullShot(page);
   // The shot takes the main pane by itself (D85) and hands it back only with the
   // card, after the search. To watch the search, go back to the coach, as a
   // barista would; that also keeps the coach on screen for the rest of the shot.
@@ -69,7 +69,7 @@ test('shows the search while Decaid saves a shot, then the shot card in its plac
 test('shows the search again on Retry after the machine dropped mid-shot', async ({ page }) => {
   await loadFirstVersion(page);
   const dropped = dropMachineWhilePouring(page);
-  await page.getByTestId(TID.espressoButton).click();
+  await pullShot(page);
   await dropped;
 
   const search = page.getByText(SEARCH);

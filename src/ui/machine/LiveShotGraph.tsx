@@ -7,8 +7,8 @@
  * of the shot (shotTrace.ts), so a graph opened mid-shot, or rebuilt for a new
  * theme, has the shot from its first frame. Samples never touch React state.
  * They reach the canvas through uPlot's setData at most once per animation
- * frame; the timer and the legend readouts are written straight into their
- * DOM nodes. React re-renders this component a few times per shot (started,
+ * frame; the timer and the readouts are written straight into their DOM
+ * nodes. React re-renders this component a few times per shot (started,
  * finished, its card), not per frame.
  *
  * The timer counts the pour only. After the pour Decaid stays in its stopping
@@ -19,23 +19,19 @@
  * Once the chat has the shot's card, the timer and the weight show the card's
  * numbers: the pour time and Decaid's yield, the cup weight Decaid settles on
  * after the drips (`actualYield`). The weight read live can differ from it a
- * little, and the panel must not say one number while the card says another.
+ * little, and the graph must not say one number while the card says another.
  *
- * Two looks around the same plot, refs and paint loop. 'panel' is the small
- * graph: caption, timer and a small legend; with `onOpen` the whole card is a
- * button to the Shot view. 'full' is the Shot view, on a tablet and on a
- * phone's Shot tab: the running step, the timer in display size and four big
- * readouts in place of the legend.
+ * It is the Shot view's graph, on a tablet and on a phone's Shot tab: the
+ * running step, the timer in display size and four big readouts over the
+ * plot.
  *
- * Before the first shot there is no time to show: both timers show a dash.
+ * Before the first shot there is no time to show: the timer shows a dash.
  */
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 import Box from '@mui/material/Box';
-import ButtonBase from '@mui/material/ButtonBase';
 import Typography from '@mui/material/Typography';
-import ChevronRightRounded from '@mui/icons-material/ChevronRightRounded';
 import { keyframes, useTheme } from '@mui/material/styles';
 import { useCoach, useServices, useTelemetry } from '../../app/services.tsx';
 import type { CoachUiMessage } from '../../app/types.ts';
@@ -55,28 +51,27 @@ const TARGET_DASH = [6, 5];
 /** Axis sizes in px; the empty-state hint is centred in the plotting area between them. */
 const AXIS = { left: 30, right: 40, bottom: 26, top: 10 } as const;
 
-type LegendKey = 'pressure' | 'flow' | 'weightFlow' | 'weight';
+type ReadoutKey = 'pressure' | 'flow' | 'weightFlow' | 'weight';
 
-interface LegendItem {
-  key: LegendKey;
+interface ReadoutItem {
+  key: ReadoutKey;
   label: string;
   unit: string;
 }
 
-const PRESSURE: LegendItem = { key: 'pressure', label: 'Pressure', unit: 'bar' };
-const FLOW: LegendItem = { key: 'flow', label: 'Flow', unit: 'ml/s' };
-const WEIGHT_FLOW: LegendItem = { key: 'weightFlow', label: 'Weight flow', unit: 'g/s' };
-const WEIGHT: LegendItem = { key: 'weight', label: 'Weight', unit: 'g' };
+const PRESSURE: ReadoutItem = { key: 'pressure', label: 'Pressure', unit: 'bar' };
+const FLOW: ReadoutItem = { key: 'flow', label: 'Flow', unit: 'ml/s' };
+const WEIGHT_FLOW: ReadoutItem = { key: 'weightFlow', label: 'Weight flow', unit: 'g/s' };
+const WEIGHT: ReadoutItem = { key: 'weight', label: 'Weight', unit: 'g' };
 
-const LEGEND: readonly LegendItem[] = [PRESSURE, FLOW, WEIGHT_FLOW, WEIGHT];
-/** The Shot view's four readouts, in its own order; paint() fills them by key, as it does the legend. */
-const READOUTS: readonly LegendItem[] = [PRESSURE, FLOW, WEIGHT, WEIGHT_FLOW];
+/** The Shot view's four readouts, in its own order; paint() fills them by key. */
+const READOUTS: readonly ReadoutItem[] = [PRESSURE, FLOW, WEIGHT, WEIGHT_FLOW];
 
 // Blank until there is a shot; "— bar" beside every key reads as a fault.
 const reading = (value: number | null | undefined, unit: string) =>
   value === null || value === undefined ? '' : `${value.toFixed(1)} ${unit}`;
 
-const legendValue = (item: LegendItem, values: ShotValues | null) => reading(values?.[item.key], item.unit);
+const readoutValue = (item: ReadoutItem, values: ShotValues | null) => reading(values?.[item.key], item.unit);
 
 /** The numbers on a shot's card in the chat. */
 interface CardNumbers {
@@ -145,7 +140,7 @@ function graphOptions(width: number, height: number, colors: GraphPalette, fontF
         size: AXIS.left,
         grid: { stroke: colors.grid, width: 1 },
         ticks: { show: false },
-        // Crema's 3-bar grid, thinned when the panel is short (an alert is showing).
+        // Crema's 3-bar grid, thinned when the plot is short (a phone on its side, an alert showing).
         splits: (plot) => (plot.height - AXIS.top - AXIS.bottom < 72 ? [0, 6, 12] : [0, 3, 6, 9, 12]),
       },
       {
@@ -233,31 +228,25 @@ function StepProgress({ stepNames }: { stepNames: readonly string[] | null }) {
 }
 
 export interface LiveShotGraphProps {
-  /** Smallest height of the plot area itself, in px (90 in the panel, 160 in full). */
+  /** Smallest height of the plot area itself, in px (160 unless given). */
   minPlotHeight?: number;
-  /** 'panel' (the small graph with a legend) or 'full' (the Shot view: big timer and readouts). */
-  variant?: 'panel' | 'full';
-  /** Makes the whole panel a button that opens the Shot view. Panel only. */
-  onOpen?: () => void;
+  /** The Shot view's look: big timer and readouts. The only one since the machine column's small panel went (D90). */
+  variant?: 'full';
   /**
-   * Full only: the view is short (a phone on its side), so the timer and the
-   * readouts take the phone's smaller sizes and the plot keeps its room over
-   * the coach's note.
+   * The view is short (a phone on its side), so the timer and the readouts
+   * take the phone's smaller sizes and the plot keeps its room over the
+   * coach's note.
    */
   compact?: boolean;
   /**
-   * Full only: the view is narrow (an upright phone, under 600 px wide): the
-   * step takes a line of its own under the caption, and the readouts go two
-   * by two, so each keeps a size read from a step back.
+   * The view is narrow (an upright phone, under 600 px wide): the step takes
+   * a line of its own under the caption, and the readouts go two by two, so
+   * each keeps a size read from a step back.
    */
   narrow?: boolean;
 }
 
-export function LiveShotGraph({ minPlotHeight, variant = 'panel', onOpen, compact = false, narrow = false }: LiveShotGraphProps) {
-  const full = variant === 'full';
-  // The full graph is the view the preview opens, never a button to itself.
-  const button = !full && onOpen !== undefined;
-  const plotMinHeight = minPlotHeight ?? (full ? 160 : 90);
+export function LiveShotGraph({ minPlotHeight = 160, compact = false, narrow = false }: LiveShotGraphProps) {
   const { telemetry } = useServices();
   const trace = useMemo(() => shotTraceFor(telemetry), [telemetry]);
   const { phase, finishedShotId } = useSyncExternalStore(trace.subscribe, trace.getState);
@@ -270,8 +259,8 @@ export function LiveShotGraph({ minPlotHeight, variant = 'panel', onOpen, compac
   // The Shot view's step and target come from the app's one workflow read;
   // outside the shell (a component test) there is none and they stay blank.
   const shared = useSharedLoadedProfile();
-  const stepNames = full ? (shared?.stepNames ?? null) : null;
-  const targetYieldG = full ? (shared?.targetYieldG ?? null) : null;
+  const stepNames = shared?.stepNames ?? null;
+  const targetYieldG = shared?.targetYieldG ?? null;
   // uPlot paints a canvas, out of sx's reach, so it takes the theme's graph
   // colours and font as values. Both stay the same objects for as long as the
   // theme does, so on their own they never re-create the plot.
@@ -293,10 +282,10 @@ export function LiveShotGraph({ minPlotHeight, variant = 'panel', onOpen, compac
       const numbers = shownCard.current;
       if (timer.current) timer.current.textContent = formatSeconds(numbers ? numbers.durationS : buffer.elapsedS());
       const latest = buffer.latest();
-      for (const item of LEGEND) {
+      for (const item of READOUTS) {
         const node = readouts.current[item.key];
         if (!node) continue;
-        node.textContent = numbers && item.key === 'weight' ? reading(numbers.yieldG, item.unit) : legendValue(item, latest);
+        node.textContent = numbers && item.key === 'weight' ? reading(numbers.yieldG, item.unit) : readoutValue(item, latest);
       }
     };
     const schedule = () => {
@@ -338,9 +327,8 @@ export function LiveShotGraph({ minPlotHeight, variant = 'panel', onOpen, compac
       repaint.current = null;
       plot.destroy();
     };
-    // Another look, or the preview card coming or going, puts the plot in
-    // another host node: a new plot there, painted from the trace at once.
-  }, [trace, colors, fontFamily, full, button]);
+    // A new palette or font makes a new plot, painted from the trace at once.
+  }, [trace, colors, fontFamily]);
 
   // Once in, the card's numbers stay until the next shot starts, even when the
   // chat moves to another bag and the card leaves the messages.
@@ -363,9 +351,8 @@ export function LiveShotGraph({ minPlotHeight, variant = 'panel', onOpen, compac
       sx={{
         position: 'relative',
         flex: '1 1 auto',
-        minHeight: plotMinHeight,
+        minHeight: minPlotHeight,
         overflow: 'hidden',
-        mt: full ? 0 : 0.5,
         '& .uplot': { position: 'absolute', top: 0, left: 0, fontFamily },
       }}
     >
@@ -385,11 +372,7 @@ export function LiveShotGraph({ minPlotHeight, variant = 'panel', onOpen, compac
           }}
         >
           {/* Masks the grid lines behind it, so it takes the colour of what the plot sits on. */}
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ bgcolor: button ? 'background.paper' : 'background.default', px: 1, borderRadius: 1 }}
-          >
+          <Typography variant="body2" color="text.secondary" sx={{ bgcolor: 'background.default', px: 1, borderRadius: 1 }}>
             Pull a shot to see it here.
           </Typography>
         </Box>
@@ -397,202 +380,107 @@ export function LiveShotGraph({ minPlotHeight, variant = 'panel', onOpen, compac
     </Box>
   );
 
-  if (full) {
-    // The Shot view says how much room it has (`narrow`, `compact`: it
-    // measures its own box, as the Chromium 91 WebView has no container
-    // queries). Beyond that the window's width steps the readouts down on a
-    // tablet held upright, where the view is as wide as the window.
-    const upright = muiTheme.breakpoints.down('md');
-    const phoneSizes = narrow || compact;
-    return (
-      <Box
-        component="section"
-        aria-label="Shot graph"
-        data-testid={TID.liveGraph}
-        sx={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', gap: compact ? 1 : 1.25 }}
-      >
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: 'auto minmax(0, 1fr) auto',
-            gridTemplateAreas: '"caption step timer"',
-            alignItems: 'center',
-            columnGap: 1.25,
-            // An upright phone leaves the step no room beside the caption: it takes the line under it, whole.
-            ...(narrow ? { gridTemplateColumns: 'minmax(0, 1fr) auto', gridTemplateAreas: '"caption timer" "step step"', rowGap: '2px' } : null),
-          }}
-        >
-          <Box sx={{ gridArea: 'caption', display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
-            {phase === 'live' && <LiveDot size={9} />}
-            <Typography variant="subtitle1" component="h2" noWrap sx={{ fontWeight: 700 }}>
-              {caption}
-            </Typography>
-          </Box>
-          {phase !== 'empty' && <StepProgress stepNames={phase === 'live' ? stepNames : null} />}
-          <Typography
-            ref={timer}
-            data-testid={TID.shotTimer}
-            variant="display"
-            component="span"
-            aria-label="Shot time"
-            sx={{ gridArea: 'timer', justifySelf: 'end', ...(phoneSizes ? { fontSize: '2.125rem' } : null) }}
-          >
-            {phase === 'empty' ? DASH : formatSeconds(0)}
-          </Typography>
-        </Box>
-
-        <Box
-          component="ul"
-          aria-label="Shot readouts"
-          sx={{
-            listStyle: 'none',
-            m: 0,
-            p: 0,
-            display: 'grid',
-            gridTemplateColumns: narrow ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))',
-            columnGap: narrow ? 2 : 1.25,
-            rowGap: 1,
-          }}
-        >
-          {READOUTS.map((item) => (
-            <Box component="li" key={item.key} sx={{ minWidth: 0 }}>
-              <Typography variant="label" component="div" color="text.secondary" noWrap>
-                <Box
-                  component="span"
-                  aria-hidden
-                  sx={{
-                    display: 'inline-block',
-                    width: 12,
-                    height: 3,
-                    borderRadius: 1,
-                    bgcolor: colors[item.key],
-                    verticalAlign: 'middle',
-                    mr: 0.75,
-                  }}
-                />
-                {item.label}
-              </Typography>
-              {/* No overflow clip: at this line height it would cut the descender of the g. */}
-              <Typography
-                variant="readoutLarge"
-                component="div"
-                sx={{
-                  whiteSpace: 'nowrap',
-                  minHeight: '1.1em',
-                  ...(phoneSizes ? { fontSize: '1.5rem' } : { [upright]: { fontSize: '1.5rem' } }),
-                }}
-              >
-                <span ref={readoutRef(item.key)}>{legendValue(item, null)}</span>
-                {/* Beside the node paint() writes, never in it, so the target survives every frame.
-                    Not before a shot: the weight is blank then, and "of 36" alone reads as a fault. */}
-                {item.key === 'weight' && targetYieldG !== null && phase !== 'empty' && (
-                  <Box
-                    component="span"
-                    sx={{ fontSize: '0.5em', fontWeight: 550, letterSpacing: 0, color: 'text.secondary' }}
-                  >
-                    {` of ${Math.round(targetYieldG)}`}
-                  </Box>
-                )}
-              </Typography>
-            </Box>
-          ))}
-        </Box>
-
-        {plot}
-      </Box>
-    );
-  }
-
-  const panel = (
+  // The Shot view says how much room it has (`narrow`, `compact`: it
+  // measures its own box, as the Chromium 91 WebView has no container
+  // queries). Beyond that the window's width steps the readouts down on a
+  // tablet held upright, where the view is as wide as the window.
+  const upright = muiTheme.breakpoints.down('md');
+  const phoneSizes = narrow || compact;
+  return (
     <Box
       component="section"
       aria-label="Shot graph"
       data-testid={TID.liveGraph}
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        flex: '1 1 auto',
-        minHeight: plotMinHeight + 64,
-        // The preview card draws its own edge.
-        ...(button ? null : { borderTop: 1, borderColor: 'divider', pt: 0.75 }),
-      }}
+      sx={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', gap: compact ? 1 : 1.25 }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
-          {phase === 'live' && <LiveDot size={8} />}
-          <Typography variant="subtitle1" component="h2" noWrap>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+          gridTemplateAreas: '"caption step timer"',
+          alignItems: 'center',
+          columnGap: 1.25,
+          // An upright phone leaves the step no room beside the caption: it takes the line under it, whole.
+          ...(narrow ? { gridTemplateColumns: 'minmax(0, 1fr) auto', gridTemplateAreas: '"caption timer" "step step"', rowGap: '2px' } : null),
+        }}
+      >
+        <Box sx={{ gridArea: 'caption', display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
+          {phase === 'live' && <LiveDot size={9} />}
+          <Typography variant="subtitle1" component="h2" noWrap sx={{ fontWeight: 700 }}>
             {caption}
           </Typography>
         </Box>
+        {phase !== 'empty' && <StepProgress stepNames={phase === 'live' ? stepNames : null} />}
         <Typography
           ref={timer}
           data-testid={TID.shotTimer}
-          variant="readout"
+          variant="display"
           component="span"
           aria-label="Shot time"
-          sx={{ fontSize: '1.25rem', ...(button ? { ml: 'auto' } : null) }}
+          sx={{ gridArea: 'timer', justifySelf: 'end', ...(phoneSizes ? { fontSize: '2.125rem' } : null) }}
         >
           {phase === 'empty' ? DASH : formatSeconds(0)}
         </Typography>
-        {button && <ChevronRightRounded aria-hidden sx={{ flex: 'none', color: 'primary.main', fontSize: '1.25rem' }} />}
       </Box>
-
-      {plot}
 
       <Box
         component="ul"
-        aria-label="Graph legend"
-        sx={{ listStyle: 'none', m: 0, mt: 0.5, p: 0, display: 'flex', flexWrap: 'wrap', columnGap: 1.5, rowGap: 0.25 }}
+        aria-label="Shot readouts"
+        sx={{
+          listStyle: 'none',
+          m: 0,
+          p: 0,
+          display: 'grid',
+          gridTemplateColumns: narrow ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))',
+          columnGap: narrow ? 2 : 1.25,
+          rowGap: 1,
+        }}
       >
-        {LEGEND.map((item) => (
-          <Box component="li" key={item.key} sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
-            <Box component="span" aria-hidden sx={{ width: 12, height: 3, borderRadius: 1, bgcolor: colors[item.key] }} />
-            <Typography variant="caption" color="text.secondary">
+        {READOUTS.map((item) => (
+          <Box component="li" key={item.key} sx={{ minWidth: 0 }}>
+            <Typography variant="label" component="div" color="text.secondary" noWrap>
+              <Box
+                component="span"
+                aria-hidden
+                sx={{
+                  display: 'inline-block',
+                  width: 12,
+                  height: 3,
+                  borderRadius: 1,
+                  bgcolor: colors[item.key],
+                  verticalAlign: 'middle',
+                  mr: 0.75,
+                }}
+              />
               {item.label}
             </Typography>
+            {/* No overflow clip: at this line height it would cut the descender of the g. */}
             <Typography
-              variant="caption"
-              ref={readoutRef(item.key)}
-              sx={{ fontVariantNumeric: 'tabular-nums', color: 'text.primary' }}
+              variant="readoutLarge"
+              component="div"
+              sx={{
+                whiteSpace: 'nowrap',
+                minHeight: '1.1em',
+                ...(phoneSizes ? { fontSize: '1.5rem' } : { [upright]: { fontSize: '1.5rem' } }),
+              }}
             >
-              {legendValue(item, null)}
+              <span ref={readoutRef(item.key)}>{readoutValue(item, null)}</span>
+              {/* Beside the node paint() writes, never in it, so the target survives every frame.
+                  Not before a shot: the weight is blank then, and "of 36" alone reads as a fault. */}
+              {item.key === 'weight' && targetYieldG !== null && phase !== 'empty' && (
+                <Box
+                  component="span"
+                  sx={{ fontSize: '0.5em', fontWeight: 550, letterSpacing: 0, color: 'text.secondary' }}
+                >
+                  {` of ${Math.round(targetYieldG)}`}
+                </Box>
+              )}
             </Typography>
           </Box>
         ))}
-        <Box component="li" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
-          <Box component="span" aria-hidden sx={{ width: 16, borderTop: '2px dashed', borderColor: 'text.secondary' }} />
-          <Typography variant="caption" color="text.secondary">
-            target
-          </Typography>
-        </Box>
       </Box>
-    </Box>
-  );
 
-  if (!button) return panel;
-  return (
-    <ButtonBase
-      component="div"
-      onClick={onOpen}
-      aria-label="Open the shot graph"
-      data-testid={TID.previewGraph}
-      sx={{
-        flex: '1 1 auto',
-        width: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'stretch',
-        justifyContent: 'flex-start',
-        textAlign: 'left',
-        // A string: a bare number here would be a multiple of the theme's radius.
-        borderRadius: '14px',
-        bgcolor: 'background.paper',
-        border: 1,
-        borderColor: 'divider',
-        p: '10px 12px 8px',
-      }}
-    >
-      {panel}
-    </ButtonBase>
+      {plot}
+    </Box>
   );
 }

@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import type { CafaiMockWindow } from '../mock/browser.ts';
 import { TID } from '../src/ui/testIds.ts';
 
@@ -11,12 +11,21 @@ export async function openApp(page: Page, route = '#/', mockSpeed = 25): Promise
   await expect(page.getByTestId(TID.appReady)).toBeVisible();
 }
 
-/** Fill an MUI text field whether the test id sits on the input or its wrapper. */
-export async function fillField(page: Page, testId: string, value: string): Promise<void> {
+/** An MUI text field's own input or textarea, whether the test id sits on it or on its wrapper. */
+async function fieldOf(page: Page, testId: string): Promise<Locator> {
   const target = page.getByTestId(testId);
   const tag = await target.evaluate((el) => el.tagName.toLowerCase());
-  const input = tag === 'input' || tag === 'textarea' ? target : target.locator('input, textarea').first();
-  await input.fill(value);
+  return tag === 'input' || tag === 'textarea' ? target : target.locator('input, textarea').first();
+}
+
+/** Fill an MUI text field whether the test id sits on the input or its wrapper. */
+export async function fillField(page: Page, testId: string, value: string): Promise<void> {
+  await (await fieldOf(page, testId)).fill(value);
+}
+
+/** The composer's text field, whether the test id sits on it or on its wrapper. */
+export function composerField(page: Page): Promise<Locator> {
+  return fieldOf(page, TID.composerInput);
 }
 
 /** A screen the navigation reaches: the top bar's buttons on a tablet, the tabs on a phone. */
@@ -35,8 +44,8 @@ export function isPhone(page: Page): boolean {
 }
 
 const TOP_BAR: Record<Screen, string> = { coach: TID.navCoach, shot: TID.navShot, history: TID.navHistory, settings: TID.navSettings };
-// The phone's Machine tab is the shot route.
-const TABS: Record<Screen, string> = { coach: TID.tabCoach, shot: TID.tabMachine, history: TID.tabHistory, settings: TID.tabSettings };
+// The phone's tabs are the same four places, its Shot tab the shot route too.
+const TABS: Record<Screen, string> = { coach: TID.tabCoach, shot: TID.tabShot, history: TID.tabHistory, settings: TID.tabSettings };
 
 /**
  * Go to a screen as the barista would: the top bar on a tablet, the tabs on a
@@ -61,10 +70,54 @@ export async function saveApiKey(page: Page, key = 'sk-ant-e2e-test'): Promise<v
   await page.getByTestId(TID.apiKeySave).click();
 }
 
+/** The shell's own top bar (a screen may have a header of its own, as the coach's bag header). */
+export function topBar(page: Page): Locator {
+  return page.locator(`[data-testid="${TID.appReady}"] > header`);
+}
+
+/**
+ * The machine row in the top bar, on every screen of both layouts (D90):
+ * Espresso, Steam, Flush and Hot water; the one that runs turns into Stop.
+ */
+export function machineRow(page: Page): Locator {
+  return topBar(page).getByTestId(TID.machineRow);
+}
+
+/** Pull a shot as the barista does: Espresso in the top bar's machine row. */
+export async function pullShot(page: Page): Promise<void> {
+  await machineRow(page).getByTestId(TID.espressoButton).click();
+}
+
 /** Pull the scripted shot on the machine itself, as the group-head button does: no tap in CafAI. */
 export async function pullShotOnMachine(page: Page): Promise<void> {
   const started = await page.evaluate(() => (window as CafaiMockWindow).__CAFAI_MOCK__?.player.start() ?? false);
   expect(started, 'the mock machine starts a shot').toBe(true);
+}
+
+/**
+ * The live stats card (D91): the machine's links, state and readings, its
+ * profile, Tare and Sleep. At the end of the chat once there is one; under
+ * the key card or the New bag card before that.
+ */
+export function statsCard(page: Page): Locator {
+  return page.getByTestId(TID.statsCard);
+}
+
+/** The stats card's Profile line: the profile in Decaid's workflow, and whether it is the bag's own (D66). */
+export function profileLine(page: Page): Locator {
+  return statsCard(page).getByRole('group', { name: 'Profile', exact: true });
+}
+
+/**
+ * Bring the stats card back at the end of the chat with the Stats prompt.
+ * Anything that lands in the chat after it takes it away again, so this first
+ * waits for the coach to be done.
+ */
+export async function showStats(page: Page): Promise<Locator> {
+  await expect(page.getByTestId(TID.chat), 'the coach is done').not.toHaveAttribute('data-busy');
+  await page.getByTestId(TID.statsPrompt).click();
+  await expect(statsCard(page)).toBeVisible();
+  return statsCard(page);
 }
 
 export async function sendChat(page: Page, text: string): Promise<void> {

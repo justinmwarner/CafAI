@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { TID } from '../src/ui/testIds.ts';
-import { openApp } from './helpers.ts';
+import { openApp, topBar } from './helpers.ts';
 
 /**
  * The old-engine warning and the start-up fallback (D58). Playwright's
@@ -48,15 +48,12 @@ test.describe('on an engine older than Chromium 91', () => {
       "This device's browser engine (Chromium 85) is older than CafAI is built for (Chromium 91 or newer), so some parts may not work.",
     );
 
-    // In the flow between the top bar and the columns: it pushes them down
-    // and covers nothing, and the app still fits the screen.
-    // The shell's own top bar (the coach screen has a header of its own).
-    const bar = (await page.locator(`[data-testid="${TID.appReady}"] > header`).boundingBox())!;
+    // In the flow between the top bar and the main pane: it pushes the pane
+    // down and covers nothing, and the app still fits the screen.
+    const bar = (await topBar(page).boundingBox())!;
     const box = (await warning.boundingBox())!;
-    const machine = (await page.getByRole('complementary', { name: 'Machine' }).boundingBox())!;
     const main = (await page.getByRole('main').boundingBox())!;
     expect(box.y).toBeGreaterThanOrEqual(bar.y + bar.height - 1);
-    expect(machine.y).toBeGreaterThanOrEqual(box.y + box.height - 1);
     expect(main.y).toBeGreaterThanOrEqual(box.y + box.height - 1);
     expect(
       await page.evaluate(
@@ -64,7 +61,8 @@ test.describe('on an engine older than Chromium 91', () => {
           document.documentElement.scrollHeight <= window.innerHeight && document.documentElement.scrollWidth <= window.innerWidth,
       ),
     ).toBe(true);
-    for (const id of [TID.exitToSkins, TID.decaidSettings, TID.navCoach, TID.espressoButton, TID.stopButton]) {
+    // The machine row's ends too: Stop takes a start's place only while something runs.
+    for (const id of [TID.exitToSkins, TID.decaidSettings, TID.navCoach, TID.espressoButton, TID.hotWaterButton]) {
       await expect(page.getByTestId(id)).toBeInViewport();
     }
 

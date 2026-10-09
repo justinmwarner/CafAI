@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { TID } from '../src/ui/testIds.ts';
-import { openApp, saveApiKey, sendChat } from './helpers.ts';
+import { openApp, pullShot, saveApiKey, sendChat } from './helpers.ts';
 
 /**
  * "Visible" in Playwright only means rendered; this checks the element sits
@@ -38,8 +38,8 @@ test('every prompt the barista must act on is in view when it arrives', async ({
   await best.click();
   await expect(page.getByTestId(TID.activeVersion)).toContainText('v1');
 
-  // A shot pulled from the machine panel (no tap in the chat) still brings the question into view.
-  await page.getByTestId(TID.espressoButton).click();
+  // A shot pulled from Espresso in the top bar (no tap in the chat) still brings the question into view.
+  await pullShot(page);
   const sour = page.getByTestId(TID.optionChip('Sour / sharp'));
   await expect(sour).toBeVisible({ timeout: 60_000 });
   await expectInView(page, sour, 'the taste options after the shot');
@@ -50,5 +50,7 @@ test('every prompt the barista must act on is in view when it arrives', async ({
   await expectInView(page, confirm, 'Confirm on the proposed change');
   await confirm.click();
   await expect(page.getByTestId(TID.activeVersion)).toContainText('v2');
-  await expectInView(page, page.locator('.MuiChatMessage-root').last(), "the coach's reply after Confirm");
+  // The newest message: the stats card (D91) is a row of the chat too while it shows, but no message.
+  const reply = page.locator('.MuiChatMessage-root').filter({ hasNot: page.getByTestId(TID.statsCard) }).last();
+  await expectInView(page, reply, "the coach's reply after Confirm");
 });

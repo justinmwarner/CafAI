@@ -1,7 +1,17 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { CafaiMockWindow } from '../mock/browser.ts';
 import { TID } from '../src/ui/testIds.ts';
-import { openApp, openAppWithSwitches, recordRequests, saveApiKey, sendChat, type SeenRequest } from './helpers.ts';
+import {
+  openApp,
+  openAppWithSwitches,
+  profileLine,
+  pullShot,
+  recordRequests,
+  saveApiKey,
+  sendChat,
+  showStats,
+  type SeenRequest,
+} from './helpers.ts';
 
 /**
  * The fresh-eyes verifier's defects 2, 3, 7 and 8 (main 5098ef5), in the
@@ -11,9 +21,11 @@ import { openApp, openAppWithSwitches, recordRequests, saveApiKey, sendChat, typ
  * (D55); the Profile line marks the bag's version only once the machine holds
  * it; and a shot that ran another bag's same-named version names the title
  * once (D41).
+ *
+ * The Profile line is the stats card's (D91): anything new in the chat takes
+ * the card away, so each check of the line brings it back with Stats first.
  */
 
-const profileLine = (page: Page) => page.getByRole('group', { name: 'Profile', exact: true });
 const banner = (page: Page) => page.getByTestId(TID.errorBanner);
 const chat = (page: Page) => page.getByTestId(TID.chat);
 
@@ -77,7 +89,9 @@ test('a profile loaded behind CafAI reaches the banner with the Profile line, on
   await saveApiKey(page);
   await startBag(page, 'Kiambu AA, light roast, washed', 'blooming-espresso');
   await pickNewest(page, 'blooming-espresso');
-  await expect(page.getByText('Loaded Kiambu AA v1 on the machine.')).toBeVisible();
+  const loaded = page.getByText('Loaded Kiambu AA v1 on the machine.');
+  await expect(loaded).toBeVisible();
+  await showStats(page);
   await expect(profileLine(page)).toContainText('This bag');
 
   // CafAI looks every 30 s; the line reads on the same beat, so both change together.
@@ -99,9 +113,11 @@ test('a profile loaded behind CafAI reaches the banner with the Profile line, on
   await expect(banner(page)).toContainText('The machine is running "Gentle and sweet", not Kiambu AA v1.');
   await expect(profileLine(page)).toContainText('Gentle and sweet');
 
-  // Retry loads the bag's version again.
+  // Retry loads the bag's version again, and says so in the chat.
   await banner(page).getByTestId(TID.retryButton).click();
   await expect(banner(page)).toHaveCount(0);
+  await expect(loaded).toHaveCount(2);
+  await showStats(page);
   await expect(profileLine(page)).toContainText('Kiambu AA v1');
   await expect(profileLine(page)).toContainText('This bag');
 });
@@ -118,6 +134,7 @@ test('a version the connected machine has not confirmed asks for Retry, never fo
   await expect(chat(page)).not.toContainText('Decaid loads it when the machine connects');
   await expect(banner(page)).toContainText('The machine has not confirmed Kiambu AA v1.');
   // The Profile line agrees with the banner.
+  await showStats(page);
   await expect(profileLine(page)).toContainText('Kiambu AA v1');
   await expect(profileLine(page)).toContainText('not confirmed');
   await expect(profileLine(page)).not.toContainText('This bag');
@@ -128,10 +145,11 @@ test('a version the connected machine has not confirmed asks for Retry, never fo
 
   await banner(page).getByTestId(TID.retryButton).click();
   await expect(page.getByText('Loaded Kiambu AA v1 on the machine.')).toBeVisible();
+  await showStats(page);
   await expect(profileLine(page)).toContainText('This bag');
 
   // A confirmed change the machine does not confirm: the same.
-  await page.getByTestId(TID.espressoButton).click();
+  await pullShot(page);
   const sour = page.getByTestId(TID.optionChip('Sour / sharp'));
   await expect(sour).toHaveCount(1, { timeout: 60_000 });
   await sour.click();
@@ -141,6 +159,7 @@ test('a version the connected machine has not confirmed asks for Retry, never fo
   await failNextBarrier(page);
   await diff.getByTestId(TID.diffConfirm).click();
   await expect(chat(page)).toContainText('Saved v2, but the machine has not confirmed it. Tap Retry above, then pull another shot.');
+  await showStats(page);
   await expect(profileLine(page)).toContainText('Kiambu AA v2');
   await expect(profileLine(page)).toContainText('not confirmed');
   await expect(chat(page)).not.toContainText('Decaid loads it when the machine connects');
@@ -153,11 +172,14 @@ test('the Profile line says loading… until the machine holds the version, neve
   await pickNewest(page, 'blooming-espresso');
 
   await expect(page.getByRole('status').filter({ hasText: 'Loading Kiambu AA v1 on the machine…' })).toBeVisible();
+  // Stats while the machine takes it (three seconds): the card follows the loading note, the coach still busy.
+  await page.getByTestId(TID.statsPrompt).click();
   await expect(profileLine(page)).toContainText('Kiambu AA v1');
   await expect(profileLine(page)).toContainText('loading…');
   await expect(profileLine(page)).not.toContainText('This bag');
 
   await expect(page.getByText('Loaded Kiambu AA v1 on the machine.')).toBeVisible();
+  await showStats(page);
   await expect(profileLine(page)).toContainText('This bag');
   await expect(profileLine(page)).not.toContainText('loading…');
 });
@@ -177,7 +199,7 @@ test('a shot that ran another bag’s same-named version names the title once (d
       context: { extras: { cafai: { versionId: 'ver_other', bagId: 'bag_other' } } },
     });
   });
-  await page.getByTestId(TID.espressoButton).click();
+  await pullShot(page);
   await expect(chat(page)).toContainText(
     'That shot ran a different "Kiambu AA v1" (another bag or version), so it is not part of this dial-in.',
     { timeout: 60_000 },

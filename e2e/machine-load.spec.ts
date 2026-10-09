@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { CafaiMockWindow } from '../mock/browser.ts';
 import { TID } from '../src/ui/testIds.ts';
-import { recordRequests, saveApiKey, sendChat } from './helpers.ts';
+import { pullShot, recordRequests, saveApiKey, sendChat } from './helpers.ts';
 
 /**
  * D55: a version is "on the machine" only once Decaid's barrier
@@ -55,7 +55,7 @@ test('keeps the loop going on an older Decaid without the machine-profile route'
   await pickFirstTemplate(page);
   await expect(page.getByText('Loaded Kiambu AA v1 on the machine.')).toBeVisible();
 
-  await page.getByTestId(TID.espressoButton).click();
+  await pullShot(page);
   await expect(page.getByTestId(TID.shotCard)).toBeVisible({ timeout: 60_000 });
   await page.getByTestId(TID.optionChip('Sour / sharp')).click();
   const diff = page.getByTestId(TID.diffCard).last();

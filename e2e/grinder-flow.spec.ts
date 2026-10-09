@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import type { CafaiMockWindow } from '../mock/browser.ts';
 import { MOCK_GRINDER_IDS } from '../mock/decaid/grinders.ts';
 import { TID } from '../src/ui/testIds.ts';
-import { fillField, openApp, saveApiKey, sendChat } from './helpers.ts';
+import { fillField, openApp, pullShot, saveApiKey, sendChat } from './helpers.ts';
 
 /**
  * A grind move on the grinder linked from Decaid's grinder library (D62).
@@ -47,7 +47,7 @@ test("a grind move uses the linked grinder's steps and reaches Settings and Deca
   await sendChat(page, 'Kiambu AA, light roast, washed');
   await page.getByTestId(TID.templatePick('blooming-espresso')).click();
   await expect(page.getByText('Loaded Kiambu AA v1 on the machine.')).toBeVisible();
-  await page.getByTestId(TID.espressoButton).click();
+  await pullShot(page);
   await expect(page.getByTestId(TID.shotCard)).toBeVisible({ timeout: 60_000 });
 
   // A taste the scripted coach does not recognise: one step finer, on the grinder's own grid.
