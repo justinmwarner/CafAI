@@ -316,7 +316,7 @@ CafAI does not send it; the owner decides.
 | 5.13 | Workflow PUT | Deadline 35 s. On a timeout or a 503, CafAI reads the workflow back: if it holds what was sent (the read-back check passes and the tag matches), the load counts; otherwise it fails as today. |
 | 5.14 | Rating scale (D101) | Before the first `enjoyment` write in a session: `PUT /api/v1/shots/<a random id that does not exist> {"annotations":{"enjoyment":11}}`. A 400 that mentions enjoyment means 0-10 (stars x 2); a 404 means 0-100 (stars x 20); anything else leaves the stars in the outbox until the probe can run. Reads of `enjoyment` use the same scale. |
 | 5.15 | Backup health | Settings > About shows "Backed up to Decaid N min ago" or "Backup paused: <reason>" from the mirror's `lastPushAt` and `lastError`. |
-| 5.16 | Overscroll | `overscroll-behavior: none` on `html` and `body` (streamline 7aa2ddb). |
+| 5.16 | Overscroll | Already in place: `body` has `overscroll-behavior: none` (`src/ui/theme.ts:133`), which streamline added in 7aa2ddb. |
 | 5.17 | Soft keyboard | Not changed blind: docs/HARDWARE_TEST_PLAN.md gains a check that the composer stays visible with the keyboard open on a Decent tablet (streamline lifts its canvas by the keyboard overlap, b10fabe). |
 
 ## 6. Decaid features
