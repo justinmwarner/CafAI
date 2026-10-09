@@ -2,7 +2,7 @@
  * The phone's way back to the shot from the Coach tab: while a shot runs, or
  * its outcome is still on its way to the chat, a strip at the top of the tab
  * with the time, the weight and the pressure, a small chart of pressure and
- * flow, and a chevron. The whole strip is one button to the Machine tab, and
+ * flow, and a chevron. The whole strip is one button to the Shot tab, and
  * it goes once the outcome is in the chat.
  *
  * Like the graphs, it keeps no samples and re-renders for none: the numbers
@@ -65,7 +65,7 @@ function chartLine(buffer: ShotBuffer, column: number): string {
 export interface LiveStripProps {
   /** From the shell's focus hook: the pour is over and the chat has not had the shot's outcome yet. */
   awaitingOutcome: boolean;
-  /** Opens the Machine tab: a normal navigation, the barista's choice. */
+  /** Opens the Shot tab: a normal navigation, the barista's choice. */
   onOpen: () => void;
 }
 

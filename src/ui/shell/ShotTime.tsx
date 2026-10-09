@@ -1,12 +1,12 @@
 /**
  * The live shot in the navigation: the pulsing dot and the running pour time,
  * in tenths as the live strip has it ("Shot 42.0 s" in the tablet's top bar,
- * "42.0 s" in the phone's Machine tab).
+ * "42.0 s" in the phone's Shot tab).
  *
  * The time is written straight into its node whenever the app's shot
  * recording changes (shotTrace.ts), so a frame re-renders nothing; React
- * hears only of the shot starting and ending. The Machine tab's name, with
- * the whole seconds, is written the same way.
+ * hears only of the shot starting and ending. The Shot tab's name, with the
+ * whole seconds, is written the same way.
  */
 import { useLayoutEffect, useMemo, useRef, useSyncExternalStore, type RefObject } from 'react';
 import Box from '@mui/material/Box';
@@ -87,7 +87,7 @@ export function ShotTime() {
 
 /**
  * While `live`, names `node` with the running pour time in whole seconds, in
- * `name`'s words (the Machine tab's "Machine, shot running, 42 seconds").
+ * `name`'s words (the Shot tab's "Shot, running, 42 seconds").
  * Written straight into the node like the time, and only as a second passes,
  * so a screen reader is not handed a new name ten times a second.
  */

@@ -47,9 +47,9 @@ function Routed() {
   } else if (route.name === 'settings') {
     screen = <SettingsScreen />;
   } else {
-    // The coach and the shot routes alike: the shell lays the Shot view (on a
-    // phone, the Machine tab) over the coach, and the same element in the same
-    // place keeps the coach mounted across the switch, scroll and draft intact.
+    // The coach and the shot routes alike: the shell lays the Shot view over
+    // the coach, and the same element in the same place keeps the coach
+    // mounted across the switch, scroll and draft intact.
     screen = <CoachScreen />;
   }
   return (

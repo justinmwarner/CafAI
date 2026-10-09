@@ -11,11 +11,26 @@ import { AppShell } from './AppShell.tsx';
 
 vi.mock('uplot', () => import('../testing/uplotMock.ts'));
 
-function renderShell(route: Route = { name: 'coach' }, options: { insideDecaid?: boolean; panel?: boolean } = {}) {
+// MachineAlerts in a marked box, so a test finds its place in the frame
+// whatever it shows (what it shows is MachineAlerts.test.tsx's business).
+const { ALERTS_SLOT } = vi.hoisted(() => ({ ALERTS_SLOT: 'machine-alerts-slot' }));
+vi.mock('../machine/MachineAlerts.tsx', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../machine/MachineAlerts.tsx')>();
+  return {
+    ...actual,
+    MachineAlerts: () => (
+      <div data-testid={ALERTS_SLOT}>
+        <actual.MachineAlerts />
+      </div>
+    ),
+  };
+});
+
+function renderShell(route: Route = { name: 'coach' }, options: { insideDecaid?: boolean } = {}) {
   const onNavigate = vi.fn();
   const services = createFakeServices({ insideDecaid: options.insideDecaid });
   const view = renderWithServices(
-    <AppShell route={route} onNavigate={onNavigate} machinePanel={options.panel ? undefined : <div>panel</div>}>
+    <AppShell route={route} onNavigate={onNavigate}>
       <p>routed screen</p>
       <textarea aria-label="Draft" />
       <input aria-label="Remember" type="checkbox" />
@@ -30,6 +45,12 @@ function setViewport(width: number, height: number) {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
   Object.defineProperty(window, 'innerHeight', { configurable: true, value: height });
   window.dispatchEvent(new Event('resize'));
+}
+
+/** True when `later` comes after `earlier` in the page and neither holds the other. */
+function follows(earlier: Element, later: Element): boolean {
+  if (earlier.contains(later) || later.contains(earlier)) return false;
+  return (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
 }
 
 /** A pour frame of the shot, `tS` seconds in. */
@@ -50,6 +71,22 @@ function pull(services: FakeServices) {
   });
 }
 
+/**
+ * The guard over the pane the app switched to, and nothing else: it is the
+ * main pane's own child, the pane is its containing block, and the top bar,
+ * where the machine row and Stop are, is outside the pane.
+ */
+function expectGuardOverMainOnly() {
+  const guard = screen.getByTestId(TID.tapGuard);
+  const main = screen.getByRole('main');
+  const bar = screen.getByRole('banner');
+  expect(guard.parentElement).toBe(main);
+  expect(getComputedStyle(main).position).toBe('relative');
+  expect(bar).not.toContainElement(guard);
+  expect(main).not.toContainElement(bar);
+  expect(bar).toContainElement(screen.getByTestId(TID.machineRow));
+}
+
 beforeEach(() => {
   // The shell's focus hook switches routes itself; each test starts on the coach.
   window.history.replaceState(null, '', '#/');
@@ -66,7 +103,40 @@ describe('AppShell', () => {
     renderShell();
     expect(screen.getByTestId(TID.appReady)).toBeInTheDocument();
     expect(screen.getByText('routed screen')).toBeInTheDocument();
-    expect(screen.getByRole('complementary', { name: 'Machine' })).toHaveTextContent('panel');
+  });
+
+  it('has no machine column on a tablet: the main pane is the whole width under the top bar', () => {
+    setViewport(962, 602);
+    renderShell();
+    expect(screen.queryByRole('complementary', { name: 'Machine' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+    // Alone in its row, so it takes the window's width.
+    const main = screen.getByRole('main');
+    expect([...main.parentElement!.children]).toEqual([main]);
+    expect(follows(screen.getByRole('banner'), main)).toBe(true);
+  });
+
+  it("puts the machine row in the tablet's top bar, between the places and Decaid's buttons", () => {
+    setViewport(962, 602);
+    renderShell();
+    const bar = screen.getByRole('banner');
+    const places = within(bar).getByRole('navigation', { name: 'Main' });
+    const row = within(bar).getByTestId(TID.machineRow);
+    const decaid = within(bar).getByTestId(TID.decaidSettings);
+    const exit = within(bar).getByTestId(TID.exitToSkins);
+    expect(within(places).getAllByRole('button').map((button) => button.textContent)).toEqual(['Coach', 'Shot', 'History', 'Settings']);
+    expect(follows(places, row)).toBe(true);
+    expect(follows(row, decaid)).toBe(true);
+    expect(follows(decaid, exit)).toBe(true);
+    // Each button's icon over its label, not the phone's icons alone.
+    expect(row).not.toHaveAttribute('data-icons');
+  });
+
+  it('shows Decaid settings as an icon, named for screen readers', () => {
+    renderShell();
+    const decaid = screen.getByTestId(TID.decaidSettings);
+    expect(decaid).toHaveAccessibleName('Decaid settings');
+    expect(decaid).toHaveTextContent(/^$/);
   });
 
   it('navigates with the top bar and marks the current screen', async () => {
@@ -85,10 +155,10 @@ describe('AppShell', () => {
   });
 
   it('Exit calls host.exitToSkinSwitcher(), on every screen', async () => {
-    for (const route of [{ name: 'coach' }, { name: 'history' }, { name: 'settings' }] as Route[]) {
+    for (const route of [{ name: 'coach' }, { name: 'shot' }, { name: 'history' }, { name: 'settings' }] as Route[]) {
       const { services, unmount } = renderShell(route);
       await userEvent.click(screen.getByTestId(TID.exitToSkins));
-      expect(services.host.exits).toBe(1);
+      expect(services.host.exits, route.name).toBe(1);
       unmount();
     }
   });
@@ -124,11 +194,37 @@ describe('AppShell', () => {
     expect(document.documentElement.style.getPropertyValue('--safe-bottom')).toBe('0px');
   });
 
-  it('shows the machine panel by default', async () => {
-    renderShell({ name: 'coach' }, { panel: true });
-    await act(async () => {});
-    expect(screen.getByTestId(TID.machineState)).toHaveTextContent('Ready');
-    expect(screen.getByTestId(TID.liveGraph)).toBeInTheDocument();
+  it('keeps the machine row mounted when the layout changes, so a command in flight stays in flight', () => {
+    renderShell();
+    const row = screen.getByTestId(TID.machineRow);
+    act(() => setViewport(390, 844));
+    expect(screen.getByTestId(TID.machineRow)).toBe(row);
+    expect(row).toHaveAttribute('data-icons', 'true');
+    act(() => setViewport(844, 390));
+    expect(screen.getByTestId(TID.machineRow)).toBe(row);
+    act(() => setViewport(1024, 768));
+    expect(screen.getByTestId(TID.machineRow)).toBe(row);
+    expect(row).not.toHaveAttribute('data-icons');
+  });
+});
+
+describe('AppShell: the machine alert', () => {
+  it('sits directly under the top bar and above the main pane, on a tablet and a phone', () => {
+    for (const [width, height] of [
+      [962, 602],
+      [1280, 800],
+      [390, 844],
+      [844, 390],
+    ] as const) {
+      setViewport(width, height);
+      const { unmount } = renderShell();
+      const where = `${width}x${height}`;
+      const slot = screen.getByTestId(ALERTS_SLOT);
+      expect(screen.getByRole('banner').nextElementSibling, where).toBe(slot);
+      expect(follows(slot, screen.getByRole('main')), where).toBe(true);
+      expect(screen.getByRole('main'), where).not.toContainElement(slot);
+      unmount();
+    }
   });
 });
 
@@ -159,15 +255,17 @@ describe('AppShell on a tablet: the shot', () => {
     expect(screen.getByTestId(TID.navShot)).toHaveTextContent(/^Shot$/);
   });
 
-  it('on the shot route the main pane shows the Shot view, the routed screen kept mounted under it, hidden', () => {
+  it('on the shot route the main pane shows the Shot view at full width, the routed screen kept mounted under it, hidden', () => {
     renderShell({ name: 'shot' });
     const main = screen.getByRole('main');
     expect(within(main).getByTestId(TID.shotView)).toBeInTheDocument();
+    expect([...main.parentElement!.children]).toEqual([main]);
     const routed = screen.getByText('routed screen');
     expect(main).toContainElement(routed);
     expect(routed).not.toBeVisible();
     expect(screen.getByTestId(TID.navShot)).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('complementary', { name: 'Machine' })).toHaveTextContent('panel');
+    // The machine row stays in the top bar.
+    expect(within(screen.getByRole('banner')).getByTestId(TID.machineRow)).toBeInTheDocument();
   });
 
   it('the coach route shows the routed screen and no Shot view', () => {
@@ -176,35 +274,17 @@ describe('AppShell on a tablet: the shot', () => {
     expect(screen.queryByTestId(TID.shotView)).not.toBeInTheDocument();
   });
 
-  it("the machine column's preview opens the shot route, and gives way to the Shot view there", async () => {
-    const { onNavigate, rerenderWith } = renderShell({ name: 'coach' }, { panel: true });
-    await act(async () => {});
-    const machine = screen.getByRole('complementary', { name: 'Machine' });
-    await userEvent.click(within(machine).getByTestId(TID.previewGraph));
-    expect(onNavigate).toHaveBeenCalledWith({ name: 'shot' });
-
-    rerenderWith(
-      <AppShell route={{ name: 'shot' }} onNavigate={onNavigate}>
-        <p>routed screen</p>
-      </AppShell>,
-    );
-    expect(within(machine).queryByTestId(TID.previewGraph)).not.toBeInTheDocument();
-    expect(within(machine).queryByTestId(TID.liveGraph)).not.toBeInTheDocument();
-    // The controls stay where they were.
-    expect(within(machine).getByTestId(TID.espressoButton)).toBeInTheDocument();
-    expect(within(machine).getByTestId(TID.stopButton)).toBeInTheDocument();
-    expect(within(screen.getByRole('main')).getByTestId(TID.liveGraph)).toBeInTheDocument();
-  });
-
-  it('a shot switches the main pane by itself and guards it, never the machine column', () => {
+  it('a shot switches the main pane by itself and guards it, never the top bar', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     try {
-      const { services } = renderShell();
+      setViewport(962, 602);
+      const { services, onNavigate } = renderShell();
       pull(services);
       expect(window.location.hash).toBe('#/shot');
-      const guard = screen.getByTestId(TID.tapGuard);
-      expect(screen.getByRole('main')).toContainElement(guard);
-      expect(screen.getByRole('complementary', { name: 'Machine' })).not.toContainElement(guard);
+      expectGuardOverMainOnly();
+      // The top bar takes a tap at once.
+      fireEvent.click(screen.getByTestId(TID.navCoach));
+      expect(onNavigate).toHaveBeenCalledWith({ name: 'coach' });
       act(() => vi.advanceTimersByTime(350));
       expect(screen.queryByTestId(TID.tapGuard)).not.toBeInTheDocument();
     } finally {
@@ -218,7 +298,7 @@ describe('AppShell on a tablet: the shot', () => {
     act(() => screen.getByLabelText('Draft').focus());
     act(() => setViewport(962, 300));
     expect(screen.getByTestId(TID.navCoach)).toBeInTheDocument();
-    expect(screen.getByRole('complementary', { name: 'Machine' })).toBeInTheDocument();
+    expect(screen.getByTestId(TID.machineRow)).not.toHaveAttribute('data-icons');
 
     // Done typing: the keyboard is still closing, the window still short. No phone layout in between.
     act(() => screen.getByLabelText('Draft').blur());
@@ -259,7 +339,7 @@ describe('AppShell on a tablet: the shot', () => {
     // A narrowed window: the phone layout, its tabs away while the barista types.
     act(() => setViewport(390, 844));
     expect(screen.queryByTestId(TID.navCoach)).not.toBeInTheDocument();
-    expect(screen.queryByRole('complementary', { name: 'Machine' })).not.toBeInTheDocument();
+    expect(screen.getByTestId(TID.machineRow)).toHaveAttribute('data-icons', 'true');
     expect(screen.queryByTestId(TID.tabCoach)).not.toBeInTheDocument();
     expect(screen.getByLabelText('Draft')).toBe(draft);
     expect(draft).toHaveFocus();
@@ -275,46 +355,66 @@ describe('AppShell on a tablet: the shot', () => {
 describe('AppShell on a phone', () => {
   beforeEach(() => setViewport(390, 844));
 
-  it('has the four tabs and a top bar with just the brand, Decaid settings and Exit', () => {
+  it('has the four tabs, Shot among them, and a top bar with the brand, the machine row as icons, Decaid settings and Exit', () => {
     const { services } = renderShell();
     const tabs = screen.getByRole('navigation', { name: 'Main' });
-    expect(within(tabs).getAllByRole('button').map((tab) => tab.textContent)).toEqual(['Coach', 'Machine', 'History', 'Settings']);
+    expect(within(tabs).getAllByRole('button').map((tab) => tab.textContent)).toEqual(['Coach', 'Shot', 'History', 'Settings']);
+    expect(within(tabs).getAllByRole('button').map((tab) => tab.dataset.testid)).toEqual([
+      TID.tabCoach,
+      TID.tabShot,
+      TID.tabHistory,
+      TID.tabSettings,
+    ]);
     expect(screen.getByTestId(TID.tabCoach)).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByTestId(TID.tabMachine)).not.toHaveAttribute('aria-current');
+    expect(screen.getByTestId(TID.tabShot)).not.toHaveAttribute('aria-current');
+    expect(screen.getByTestId(TID.tabShot)).toHaveAccessibleName('Shot');
+    expect(screen.queryByText('Machine')).not.toBeInTheDocument();
 
-    const exit = screen.getByTestId(TID.exitToSkins);
-    expect(exit).toHaveTextContent(/^Exit$/);
+    const bar = screen.getByRole('banner');
+    const row = within(bar).getByTestId(TID.machineRow);
+    expect(row).toHaveAttribute('data-icons', 'true');
+    const exit = within(bar).getByTestId(TID.exitToSkins);
+    const decaid = within(bar).getByTestId(TID.decaidSettings);
+    expect(follows(row, decaid)).toBe(true);
+    expect(follows(decaid, exit)).toBe(true);
+    // Icons, named for screen readers.
+    expect(exit).toHaveTextContent(/^$/);
     expect(exit).toHaveAccessibleName('Exit to the skin switcher');
-    const decaid = screen.getByTestId(TID.decaidSettings);
+    expect(decaid).toHaveTextContent(/^$/);
     expect(decaid.tagName).toBe('A');
     expect(decaid).toHaveAttribute('href', services.host.settingsUrl);
     expect(decaid).toHaveAccessibleName('Decaid settings');
-    expect(screen.getByRole('banner')).toContainElement(exit);
-    expect(screen.getByRole('banner')).toContainElement(decaid);
 
-    // No top-bar navigation and no machine column: the Machine tab is the machine.
+    // No top-bar navigation and no machine column: the tabs navigate, the row runs the machine.
     for (const id of [TID.navCoach, TID.navShot, TID.navHistory, TID.navSettings]) {
       expect(screen.queryByTestId(id)).not.toBeInTheDocument();
     }
-    expect(screen.queryByRole('complementary', { name: 'Machine' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
     // The bar comes after the content.
-    expect(screen.getByRole('main').compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(follows(screen.getByRole('main'), tabs)).toBe(true);
   });
 
-  it('Exit and Decaid settings are on every tab', async () => {
+  it('names Exit for where it goes', () => {
+    renderShell({ name: 'coach' }, { insideDecaid: true });
+    expect(screen.getByTestId(TID.exitToSkins)).toHaveAccessibleName('Exit to Decaid');
+  });
+
+  it('Exit, Decaid settings and the machine row are on every tab', async () => {
     for (const route of [{ name: 'coach' }, { name: 'shot' }, { name: 'history' }, { name: 'settings' }] as Route[]) {
       const { services, unmount } = renderShell(route);
-      expect(screen.getByTestId(TID.decaidSettings)).toBeInTheDocument();
+      const bar = screen.getByRole('banner');
+      expect(within(bar).getByTestId(TID.decaidSettings), route.name).toBeInTheDocument();
+      expect(within(bar).getByTestId(TID.machineRow), route.name).toBeInTheDocument();
       await userEvent.click(screen.getByTestId(TID.exitToSkins));
       expect(services.host.exits, route.name).toBe(1);
       unmount();
     }
   });
 
-  it('the tabs navigate, and the Machine tab is the shot route', async () => {
+  it('the tabs navigate, and the Shot tab is the shot route', async () => {
     const { onNavigate } = renderShell({ name: 'history', bagId: 'bag_1' });
     expect(screen.getByTestId(TID.tabHistory)).toHaveAttribute('aria-current', 'page');
-    for (const id of [TID.tabMachine, TID.tabSettings, TID.tabCoach, TID.tabHistory]) {
+    for (const id of [TID.tabShot, TID.tabSettings, TID.tabCoach, TID.tabHistory]) {
       await userEvent.click(screen.getByTestId(id));
     }
     expect(onNavigate.mock.calls.map(([route]) => route)).toEqual([
@@ -325,14 +425,22 @@ describe('AppShell on a phone', () => {
     ]);
   });
 
-  it('the Machine tab is the machine panel with the big graph, over the coach kept mounted and hidden', async () => {
-    renderShell({ name: 'shot' }, { panel: true });
-    await act(async () => {});
-    expect(screen.getByTestId(TID.tabMachine)).toHaveAttribute('aria-current', 'page');
+  it('the Shot tab is the Shot view, the one a tablet shows, over the coach kept mounted and hidden', () => {
+    renderShell({ name: 'shot' });
+    expect(screen.getByTestId(TID.tabShot)).toHaveAttribute('aria-current', 'page');
     const main = screen.getByRole('main');
-    expect(within(main).getByTestId(TID.espressoButton)).toBeInTheDocument();
-    expect(within(main).getByRole('list', { name: 'Shot readouts' })).toBeInTheDocument();
-    expect(screen.queryByTestId(TID.previewGraph)).not.toBeInTheDocument();
+    const view = within(main).getByTestId(TID.shotView);
+    expect(view).toContainElement(screen.getByTestId(TID.liveGraph));
+    expect(screen.getByText('routed screen')).not.toBeVisible();
+    // The machine's buttons are in the top bar, not on the tab.
+    expect(main).not.toContainElement(screen.getByTestId(TID.machineRow));
+  });
+
+  it('on its side the Shot tab is the same Shot view', () => {
+    setViewport(844, 390);
+    renderShell({ name: 'shot' });
+    expect(screen.getByTestId(TID.tabShot)).toHaveAttribute('aria-current', 'page');
+    expect(within(screen.getByRole('main')).getByTestId(TID.shotView)).toBeInTheDocument();
     expect(screen.getByText('routed screen')).not.toBeVisible();
   });
 
@@ -340,6 +448,7 @@ describe('AppShell on a phone', () => {
     for (const route of [{ name: 'coach' }, { name: 'history' }, { name: 'settings' }] as Route[]) {
       const { unmount } = renderShell(route);
       expect(screen.getByText('routed screen')).toBeVisible();
+      expect(screen.queryByTestId(TID.shotView)).not.toBeInTheDocument();
       unmount();
     }
   });
@@ -349,9 +458,10 @@ describe('AppShell on a phone', () => {
     act(() => screen.getByLabelText('Draft').focus());
     expect(screen.queryByTestId(TID.tabCoach)).not.toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument();
-    // The ways out stay.
+    // The ways out and the machine row stay.
     expect(screen.getByTestId(TID.exitToSkins)).toBeInTheDocument();
     expect(screen.getByTestId(TID.decaidSettings)).toBeInTheDocument();
+    expect(screen.getByTestId(TID.machineRow)).toBeInTheDocument();
 
     act(() => screen.getByLabelText('Draft').blur());
     expect(screen.getByTestId(TID.tabCoach)).toBeInTheDocument();
@@ -403,7 +513,7 @@ describe('AppShell on a phone', () => {
     act(() => screen.getByLabelText('Draft').focus());
     act(() => setViewport(844, 390));
     expect(screen.queryByTestId(TID.navCoach)).not.toBeInTheDocument();
-    expect(screen.queryByRole('complementary', { name: 'Machine' })).not.toBeInTheDocument();
+    expect(screen.getByTestId(TID.machineRow)).toHaveAttribute('data-icons', 'true');
     act(() => screen.getByLabelText('Draft').blur());
     // On its side: the rail, before the content, at once.
     const rail = screen.getByRole('navigation', { name: 'Main' });
@@ -428,28 +538,23 @@ describe('AppShell on a phone', () => {
     expect(screen.queryByTestId(TID.tabCoach)).not.toBeInTheDocument();
   });
 
-  it('on its side (844 x 390) the tabs are a rail before the content', () => {
+  it('on its side (844 x 390) the tabs are a rail before the content, with the same four, and the top bar keeps the row', () => {
     setViewport(844, 390);
     renderShell();
     const rail = screen.getByRole('navigation', { name: 'Main' });
-    expect(within(rail).getAllByRole('button')).toHaveLength(4);
+    expect(within(rail).getAllByRole('button').map((tab) => tab.textContent)).toEqual(['Coach', 'Shot', 'History', 'Settings']);
+    expect(within(rail).getAllByRole('button').map((tab) => tab.dataset.testid)).toEqual([
+      TID.tabCoach,
+      TID.tabShot,
+      TID.tabHistory,
+      TID.tabSettings,
+    ]);
     expect(rail.compareDocumentPosition(screen.getByRole('main')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(getComputedStyle(rail).flexDirection).toBe('column');
-    expect(screen.getByTestId(TID.exitToSkins)).toBeInTheDocument();
-    expect(screen.getByTestId(TID.decaidSettings)).toBeInTheDocument();
-  });
-
-  it('on its side the Machine tab puts the graph beside the buttons', async () => {
-    setViewport(844, 390);
-    renderShell({ name: 'shot' }, { panel: true });
-    await act(async () => {});
-    const controls = screen.getByRole('region', { name: 'Machine controls' });
-    const graph = screen.getByTestId(TID.liveGraph);
-    // Two columns: the buttons' column and the graph's are siblings in one row.
-    const left = controls.parentElement!;
-    const right = graph.parentElement!;
-    expect(left.parentElement).toBe(right.parentElement);
-    expect(getComputedStyle(left.parentElement!).flexDirection).toBe('row');
+    const bar = screen.getByRole('banner');
+    expect(within(bar).getByTestId(TID.machineRow)).toHaveAttribute('data-icons', 'true');
+    expect(within(bar).getByTestId(TID.exitToSkins)).toBeInTheDocument();
+    expect(within(bar).getByTestId(TID.decaidSettings)).toBeInTheDocument();
   });
 
   it("the tab bar's and the rail's dividers are the top bar's line, not the text colour", () => {
@@ -473,7 +578,7 @@ describe('AppShell on a phone', () => {
     expect(container).toContainElement(routed);
   });
 
-  it('while a shot runs the Machine tab shows the time, and the Coach tab a live strip that opens the Machine tab', async () => {
+  it('while a shot runs the Shot tab shows the time, and the Coach tab a live strip that opens the Shot tab', async () => {
     const { services, onNavigate } = renderShell();
     act(() => screen.getByLabelText('Draft').focus());
     pull(services);
@@ -481,9 +586,9 @@ describe('AppShell on a phone', () => {
     expect(window.location.hash).toBe('#/');
     act(() => screen.getByLabelText('Draft').blur());
 
-    const machineTab = screen.getByTestId(TID.tabMachine);
-    expect(machineTab).toHaveAccessibleName('Machine, shot running, 4 seconds');
-    expect(machineTab).toHaveTextContent(/^4\.2 s$/);
+    const shotTab = screen.getByTestId(TID.tabShot);
+    expect(shotTab).toHaveAccessibleName('Shot, running, 4 seconds');
+    expect(shotTab).toHaveTextContent(/^4\.2 s$/);
 
     const strip = screen.getByTestId(TID.liveStrip);
     expect(strip).toHaveAccessibleName('Open the live shot');
@@ -494,29 +599,29 @@ describe('AppShell on a phone', () => {
     expect(onNavigate).toHaveBeenCalledWith({ name: 'shot' });
   });
 
-  it('the Machine tab counts in tenths as the strip does, and names the whole seconds only as they pass', () => {
+  it('the Shot tab counts in tenths as the strip does, and names the whole seconds only as they pass', () => {
     const { services } = renderShell({ name: 'history' });
     pull(services);
-    const machineTab = screen.getByTestId(TID.tabMachine);
-    expect(machineTab).toHaveTextContent(/^4\.2 s$/);
-    expect(machineTab).toHaveAccessibleName('Machine, shot running, 4 seconds');
+    const shotTab = screen.getByTestId(TID.tabShot);
+    expect(shotTab).toHaveTextContent(/^4\.2 s$/);
+    expect(shotTab).toHaveAccessibleName('Shot, running, 4 seconds');
 
     // A screen reader is not handed a new name every tenth of a second.
     const renamed = new MutationObserver(() => {});
-    renamed.observe(machineTab, { attributes: true, attributeFilter: ['aria-label'] });
+    renamed.observe(shotTab, { attributes: true, attributeFilter: ['aria-label'] });
     act(() => services.telemetry.emitSample(sample(4.5)));
     act(() => services.telemetry.emitSample(sample(4.9)));
-    expect(machineTab).toHaveTextContent(/^4\.9 s$/);
+    expect(shotTab).toHaveTextContent(/^4\.9 s$/);
     expect(renamed.takeRecords()).toHaveLength(0);
     act(() => services.telemetry.emitSample(sample(10.04)));
-    expect(machineTab).toHaveTextContent(/^10\.0 s$/);
-    expect(machineTab).toHaveAccessibleName('Machine, shot running, 10 seconds');
+    expect(shotTab).toHaveTextContent(/^10\.0 s$/);
+    expect(shotTab).toHaveAccessibleName('Shot, running, 10 seconds');
     expect(renamed.takeRecords()).toHaveLength(1);
     renamed.disconnect();
 
     act(() => services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: null }));
-    expect(machineTab).toHaveTextContent(/^Machine$/);
-    expect(machineTab).toHaveAccessibleName('Machine');
+    expect(shotTab).toHaveTextContent(/^Shot$/);
+    expect(shotTab).toHaveAccessibleName('Shot');
   });
 
   it('the live strip is only on the Coach tab', () => {
@@ -525,15 +630,32 @@ describe('AppShell on a phone', () => {
     expect(screen.queryByTestId(TID.liveStrip)).not.toBeInTheDocument();
   });
 
-  it('a shot takes the phone to the Machine tab by itself and guards the content, not the tabs', () => {
+  it('a shot takes the phone to the Shot tab by itself and guards the content, never the top bar or the tabs', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     try {
       const { services } = renderShell();
       pull(services);
       expect(window.location.hash).toBe('#/shot');
-      const guard = screen.getByTestId(TID.tapGuard);
-      expect(screen.getByRole('main')).toContainElement(guard);
-      expect(screen.getByRole('navigation', { name: 'Main' })).not.toContainElement(guard);
+      expectGuardOverMainOnly();
+      expect(screen.getByRole('navigation', { name: 'Main' })).not.toContainElement(screen.getByTestId(TID.tapGuard));
+      // The top bar takes a tap at once.
+      fireEvent.click(screen.getByTestId(TID.exitToSkins));
+      expect(services.host.exits).toBe(1);
+      act(() => vi.advanceTimersByTime(350));
+      expect(screen.queryByTestId(TID.tapGuard)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('on its side a shot guards the content beside the rail, never the top bar', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+    try {
+      setViewport(844, 390);
+      const { services } = renderShell();
+      pull(services);
+      expect(window.location.hash).toBe('#/shot');
+      expectGuardOverMainOnly();
       act(() => vi.advanceTimersByTime(350));
       expect(screen.queryByTestId(TID.tapGuard)).not.toBeInTheDocument();
     } finally {
@@ -551,22 +673,22 @@ describe('AppShell browser engine warning (D58)', () => {
     localStorage.clear();
   });
 
-  it('warns on an engine older than Chromium 91, between the top bar and the columns', () => {
+  it("warns on an engine older than Chromium 91, under the top bar and the machine's alert, above the main pane", () => {
     window.__CAFAI_ENGINE__ = OLD_ENGINE;
     renderShell();
     const warning = screen.getByRole('alert');
     expect(warning).toHaveTextContent(
       "This device's browser engine (Chromium 85) is older than CafAI is built for (Chromium 91 or newer), so some parts may not work.",
     );
-    // In the flow, not over anything: after the top bar, before the machine
-    // column and the routed screen, and inside neither.
+    // In the flow, not over anything: after the top bar and the machine's
+    // alert, before the routed screen, and inside none of them.
     const header = screen.getByRole('banner');
-    const machine = screen.getByRole('complementary', { name: 'Machine' });
+    const alerts = screen.getByTestId(ALERTS_SLOT);
     const main = screen.getByRole('main');
-    expect(header.compareDocumentPosition(warning) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(warning.compareDocumentPosition(machine) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(warning.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    for (const region of [header, machine, main]) expect(region).not.toContainElement(warning);
+    expect(follows(header, warning)).toBe(true);
+    expect(follows(alerts, warning)).toBe(true);
+    expect(follows(warning, main)).toBe(true);
+    for (const region of [header, alerts, main]) expect(region).not.toContainElement(warning);
     expect(getComputedStyle(warning).position).not.toBe('absolute');
     expect(getComputedStyle(warning).position).not.toBe('fixed');
   });

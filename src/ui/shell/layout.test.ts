@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { layoutFor, layoutMode, machineColumnWidth, phoneNav } from './layout.ts';
+import { layoutFor, layoutMode, phoneNav } from './layout.ts';
 
 describe('layoutMode', () => {
   it('is a tablet at 800 x 500 and up, a phone below', () => {
@@ -26,15 +26,5 @@ describe('layoutFor', () => {
     expect(layoutFor(962, 602)).toEqual({ mode: 'tablet', nav: 'bar', width: 962, height: 602 });
     expect(layoutFor(390, 844)).toEqual({ mode: 'phone', nav: 'bar', width: 390, height: 844 });
     expect(layoutFor(844, 390)).toEqual({ mode: 'phone', nav: 'rail', width: 844, height: 390 });
-  });
-});
-
-describe('machineColumnWidth', () => {
-  it('grows with the screen', () => {
-    expect(machineColumnWidth(962)).toBe(340);
-    expect(machineColumnWidth(1199)).toBe(340);
-    expect(machineColumnWidth(1280)).toBe(400);
-    expect(machineColumnWidth(1599)).toBe(400);
-    expect(machineColumnWidth(1920)).toBe(480);
   });
 });

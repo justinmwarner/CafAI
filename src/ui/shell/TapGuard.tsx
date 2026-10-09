@@ -5,9 +5,10 @@
  * for the screen that was there cannot land on the one that just appeared
  * (a taste chip, a star, Steam).
  *
- * It covers that pane and nothing else: on a tablet the machine column, Stop
- * included, never stops taking taps. The window still hears the tap first
- * (capture), so it still counts as someone at the machine (the heartbeat).
+ * It covers that pane and nothing else: the top bar, where the machine row
+ * and its Stop are, never stops taking taps, on a tablet or a phone. The
+ * window still hears the tap first (capture), so it still counts as someone
+ * at the machine (the heartbeat).
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Box from '@mui/material/Box';

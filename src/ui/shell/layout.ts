@@ -17,13 +17,6 @@ export function phoneNav(_width: number, height: number): PhoneNav {
   return height < 500 ? 'rail' : 'bar';
 }
 
-/** The tablet's machine column: wider on bigger screens, so the readouts and buttons breathe. */
-export function machineColumnWidth(width: number): number {
-  if (width < 1200) return 340;
-  if (width < 1600) return 400;
-  return 480;
-}
-
 export interface Layout {
   mode: LayoutMode;
   nav: PhoneNav;

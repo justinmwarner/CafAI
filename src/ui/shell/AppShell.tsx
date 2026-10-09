@@ -2,22 +2,26 @@
  * The frame every screen sits in, in the layout the screen size calls for
  * (layout.ts):
  *
- * - Tablet: a top bar with the navigation and the ways out to Decaid, the
- *   machine column on the left and the routed screen on the right. On the
- *   Shot route the main pane shows the big graph (ShotView) over the coach.
- * - Phone: a slim top bar with the ways out, one screen at a time, and four
- *   tabs at the bottom (a rail on the left when the phone is on its side).
- *   The Machine tab is the Shot route: the machine column at full width.
+ * - Tablet: a top bar with the navigation, the machine row and the ways out
+ *   to Decaid, and the routed screen under it at the window's full width.
+ *   On the Shot route the main pane shows the big graph (ShotView) over the
+ *   coach.
+ * - Phone: a slim top bar with the machine row (icons only) and the ways
+ *   out, one screen at a time, and four tabs at the bottom (a rail on the
+ *   left when the phone is on its side). The Shot tab is the Shot route: the
+ *   same Shot view.
  *
- * In both, the page itself never scrolls (each region scrolls inside itself),
- * there are no edge gestures (Android edge swipes leave the skin), and Exit
- * and Decaid settings are on every screen: Crema hid its exit on focus
- * screens and people got stuck.
+ * In both, the machine row (the four starts; the running one turns into
+ * Stop) is in the top bar on every screen, and the machine's problems show
+ * in one slim alert right under it. The page itself never scrolls (each
+ * region scrolls inside itself), there are no edge gestures (Android edge
+ * swipes leave the skin), and Exit and Decaid settings are on every screen:
+ * Crema hid its exit on focus screens and people got stuck.
  *
- * The coach stays mounted, hidden, under the Shot view and the Machine tab,
- * so its scroll position and the composer's draft survive a shot; and every
- * layout puts the routed screen at the same place in the tree, so a rotation
- * keeps it mounted too.
+ * The coach stays mounted, hidden, under the Shot view, so its scroll
+ * position and the composer's draft survive a shot; and every layout puts
+ * the routed screen and the machine row at the same places in the tree, so a
+ * rotation keeps them mounted too.
  */
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import Alert from '@mui/material/Alert';
@@ -27,7 +31,6 @@ import ButtonBase from '@mui/material/ButtonBase';
 import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
 import CloseRounded from '@mui/icons-material/CloseRounded';
-import CoffeeMakerRounded from '@mui/icons-material/CoffeeMakerRounded';
 import ForumRounded from '@mui/icons-material/ForumRounded';
 import HistoryRounded from '@mui/icons-material/HistoryRounded';
 import LocalCafeRounded from '@mui/icons-material/LocalCafeRounded';
@@ -38,7 +41,8 @@ import ShowChartRounded from '@mui/icons-material/ShowChartRounded';
 import type { HostEnvironment } from '../../api/types.ts';
 import { useServices } from '../../app/services.tsx';
 import { LoadedProfileProvider } from '../machine/LoadedProfileContext.tsx';
-import { MachinePanel } from '../machine/MachinePanel.tsx';
+import { MachineAlerts } from '../machine/MachineAlerts.tsx';
+import { MachineRow } from '../machine/MachineRow.tsx';
 import { shotTraceFor } from '../machine/shotTrace.ts';
 import { ShotView } from '../machine/ShotView.tsx';
 import { dismissEngineWarning, engineWarning, isEngineWarningDismissed, readEngineCheck } from '../platform/engineCheck.ts';
@@ -46,7 +50,7 @@ import { watchSafeArea } from '../platform/safeArea.ts';
 import { useHeartbeatOnInteraction } from '../platform/useHeartbeatOnInteraction.ts';
 import type { Route, RouteName } from '../router.ts';
 import { TID } from '../testIds.ts';
-import { layoutFor, machineColumnWidth, useLayout, type Layout } from './layout.ts';
+import { layoutFor, useLayout, type Layout } from './layout.ts';
 import { LiveStrip } from './LiveStrip.tsx';
 import { LiveDot, ShotTime, useShotLive, useShotTimeName } from './ShotTime.tsx';
 import { TapGuard } from './TapGuard.tsx';
@@ -57,16 +61,33 @@ export interface AppShellProps {
   route: Route;
   /** Called by the navigation buttons (normally router.navigate). */
   onNavigate: (route: Route) => void;
-  /** The routed screen: right of the machine column on a tablet, the whole content on a phone. */
+  /** The routed screen: the main pane under the top bar (on a phone, above the tabs or beside the rail). */
   children: ReactNode;
-  /** Replaces the default <MachinePanel /> (tests, previews); null hides it. */
-  machinePanel?: ReactNode;
 }
 
 const TOP_BAR_HEIGHT = 56;
 const PHONE_TOP_BAR_HEIGHT = 52;
 const TAB_BAR_HEIGHT = 64;
 const RAIL_WIDTH = 80;
+/** The brand's cup, and its word's line: one height, so a word that wrapped away is clipped whole. */
+const BRAND_LINE = 24;
+/**
+ * A tablet narrower than Decent's smallest (962 px): an iPad upright, a
+ * narrowed window. There the places show their icons alone, their labels
+ * kept for screen readers, so the machine row and the ways out keep their
+ * room. From 960 px the labels fit, the Shot item counting, inside Decaid.
+ */
+const NARROW_TABLET = '@media (max-width: 959.98px)';
+
+const visuallyHidden = {
+  position: 'absolute',
+  // Strings: in sx a bare 1 is 100%, a box as wide and tall as the pane that the frame could be scrolled to.
+  width: '1px',
+  height: '1px',
+  overflow: 'hidden',
+  clipPath: 'inset(50%)',
+  whiteSpace: 'nowrap',
+} as const;
 
 interface NavItem {
   name: RouteName;
@@ -83,10 +104,10 @@ const NAV: readonly NavItem[] = [
   { name: 'settings', route: { name: 'settings' }, label: 'Settings', icon: <SettingsRounded />, testId: TID.navSettings },
 ];
 
-// On a phone the Shot route is the Machine tab: it holds steam, flush and hot water too, not just the shot.
+// The phone's tabs are the same four places; the machine's buttons are in the top bar.
 const TABS: readonly NavItem[] = [
   { name: 'coach', route: { name: 'coach' }, label: 'Coach', icon: <ForumRounded />, testId: TID.tabCoach },
-  { name: 'shot', route: { name: 'shot' }, label: 'Machine', icon: <CoffeeMakerRounded />, testId: TID.tabMachine },
+  { name: 'shot', route: { name: 'shot' }, label: 'Shot', icon: <ShowChartRounded />, testId: TID.tabShot },
   { name: 'history', route: { name: 'history' }, label: 'History', icon: <HistoryRounded />, testId: TID.tabHistory },
   { name: 'settings', route: { name: 'settings' }, label: 'Settings', icon: <SettingsRounded />, testId: TID.tabSettings },
 ];
@@ -166,10 +187,10 @@ const sameLayout = (a: Layout, b: Layout) => a.mode === b.mode && a.nav === b.na
 /**
  * The layout for the screen, its height held while the barista types: an
  * on-screen keyboard shortens the window, and a tablet that took that for a
- * phone would drop its machine column (and Stop) from under the barista
- * mid-sentence. Only the height: the width is always the window's own. A new
- * width (a rotation, a narrowed window) or a taller window is never the
- * keyboard, so it brings the window as it is then.
+ * phone would trade its top bar for the phone's (and bring the tabs up from
+ * the bottom) under the barista mid-sentence. Only the height: the width is
+ * always the window's own. A new width (a rotation, a narrowed window) or a
+ * taller window is never the keyboard, so it brings the window as it is then.
  *
  * Once typing ends the keyboard is still closing: the held height stays until
  * the window is back on its side of the line, or KEYBOARD_CLOSE_MS at most,
@@ -194,17 +215,39 @@ function useShellLayout(typing: boolean): Layout {
   return next === null ? live : layoutFor(live.width, next.height);
 }
 
-function Brand() {
+/**
+ * The cup and the word. In the phone's bar the word gives way when the room
+ * runs out (a narrow phone, the machine row's four buttons beside it): it
+ * wraps onto a second line the box clips, so the cup stays, nothing else
+ * moves, and the word is back as soon as it fits (the row of a group-head
+ * machine, empty between shots, leaves it room).
+ */
+function Brand({ phone }: { phone: boolean }) {
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, color: 'primary.main', pr: 1, flex: 'none' }}>
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0.75,
+        color: 'primary.main',
+        pr: 1,
+        flex: 'none',
+        // The first button's own padding makes up the room before the row.
+        ...(phone ? { pr: 0.5, flex: '0 1 auto', minWidth: BRAND_LINE + 4, height: BRAND_LINE, flexWrap: 'wrap', overflow: 'hidden' } : null),
+      }}
+    >
       <LocalCafeRounded />
-      <Typography component="span" sx={{ fontSize: '1.1875rem', fontWeight: 750, letterSpacing: '0.005em' }}>
+      <Typography
+        component="span"
+        sx={{ fontSize: '1.1875rem', fontWeight: 750, letterSpacing: '0.005em', lineHeight: `${BRAND_LINE}px`, whiteSpace: 'nowrap' }}
+      >
         CafAI
       </Typography>
     </Box>
   );
 }
 
+/** Exit on a tablet: the word over where it goes. */
 function ExitButton({ host }: { host: HostEnvironment }) {
   const where = host.insideDecaid ? 'to Decaid' : 'Skins';
   return (
@@ -226,7 +269,33 @@ function ExitButton({ host }: { host: HostEnvironment }) {
   );
 }
 
-/** "Shot", or while a shot runs the live dot and "Shot 42.0 s". */
+/** The ways out as icons, named for screen readers: ink-muted, as quiet as the bar's other places. */
+const barIconSx = {
+  flex: 'none',
+  // A string: a bare number here would be a multiple of the theme's radius.
+  borderRadius: '12px',
+  color: 'text.secondary',
+} as const;
+
+/** Exit on a phone: the icon alone. */
+function PhoneExitButton({ host }: { host: HostEnvironment }) {
+  return (
+    <IconButton data-testid={TID.exitToSkins} aria-label={exitLabel(host)} onClick={() => host.exitToSkinSwitcher()} sx={barIconSx}>
+      <LogoutRounded />
+    </IconButton>
+  );
+}
+
+/** Decaid's settings, a full-page navigation (D13): the "opens elsewhere" icon, in both bars. */
+function DecaidSettingsButton({ host }: { host: HostEnvironment }) {
+  return (
+    <IconButton component="a" href={host.settingsUrl} data-testid={TID.decaidSettings} aria-label="Decaid settings" sx={barIconSx}>
+      <OpenInNewRounded />
+    </IconButton>
+  );
+}
+
+/** "Shot", or while a shot runs the live dot and "Shot 42.0 s"; on a narrow tablet the icon (or the dot and the time) alone. */
 function NavButton({ item, active, onNavigate }: { item: NavItem; active: boolean; onNavigate: (route: Route) => void }) {
   const live = useShotLive() && item.name === 'shot';
   return (
@@ -237,17 +306,22 @@ function NavButton({ item, active, onNavigate }: { item: NavItem; active: boolea
       startIcon={live ? <LiveDot size={9} /> : item.icon}
       onClick={() => onNavigate(item.route)}
       sx={{
-        px: 2,
+        // Tight enough for the 962 px tablet inside Decaid with the Shot item counting; more room from 1200 px.
+        px: { xs: 1, lg: 2 },
         flex: 'none',
+        whiteSpace: 'nowrap',
         color: active ? 'primary.main' : 'text.secondary',
         bgcolor: active ? 'cafai.accentSoft' : 'transparent',
         // The dot sits where the icon was, centred in the icon's room.
         '& .MuiButton-startIcon': { minWidth: 20, justifyContent: 'center' },
+        [NARROW_TABLET]: { minWidth: 48, px: 1.5, '& .MuiButton-startIcon': { mx: 0 } },
       }}
     >
-      {item.label}
+      <Box component="span" sx={{ [NARROW_TABLET]: visuallyHidden }}>
+        {item.label}
+      </Box>
       {live && (
-        <Box component="span" sx={{ ml: 0.75, color: 'text.primary' }}>
+        <Box component="span" sx={{ ml: 0.75, color: 'text.primary', [NARROW_TABLET]: { ml: 0.5 } }}>
           <ShotTime />
         </Box>
       )}
@@ -255,98 +329,73 @@ function NavButton({ item, active, onNavigate }: { item: NavItem; active: boolea
   );
 }
 
-function TopBar({ route, onNavigate, host }: { route: Route; onNavigate: (route: Route) => void; host: HostEnvironment }) {
+interface TopBarProps {
+  phone: boolean;
+  route: Route;
+  onNavigate: (route: Route) => void;
+  host: HostEnvironment;
+  /** Beside the rail: the bar reaches over the rail's inset to the screen's edge. */
+  insetLeft: boolean;
+}
+
+/**
+ * The top bar, one element in both layouts, so a change of layout keeps the
+ * machine row, and a command in flight, mounted. Tablet: the brand, the four
+ * places, then at the right the machine row, a hairline, Decaid settings and
+ * Exit. Phone: the brand, then the row, Decaid settings and Exit as icons;
+ * the tabs navigate.
+ *
+ * Nothing guards it: the tap guard covers the main pane only, so Stop takes
+ * a tap the moment it appears.
+ */
+function TopBar({ phone, route, onNavigate, host, insetLeft }: TopBarProps) {
   return (
     <Box
       component="header"
       sx={{
         flex: 'none',
-        height: TOP_BAR_HEIGHT,
+        height: phone ? PHONE_TOP_BAR_HEIGHT : TOP_BAR_HEIGHT,
         display: 'flex',
         alignItems: 'center',
-        gap: 1,
-        px: 1.5,
+        ...(phone
+          ? {
+              // Over the rail's inset too, so the bar reaches the edge while the brand clears the notch.
+              pl: insetLeft ? 'calc(16px + var(--safe-left, 0px))' : '16px',
+              // The last icon's own padding makes up the rest of the edge.
+              pr: '4px',
+            }
+          : { gap: { xs: 0.5, lg: 1 }, px: 1.5 }),
         bgcolor: 'background.paper',
         borderBottom: 1,
         borderColor: 'divider',
       }}
     >
-      <Brand />
-      <Box component="nav" aria-label="Main" sx={{ display: 'flex', gap: 0.5, minWidth: 0 }}>
-        {NAV.map((item) => (
-          <NavButton key={item.name} item={item} active={route.name === item.name} onNavigate={onNavigate} />
-        ))}
-      </Box>
+      <Brand phone={phone} />
+      {phone ? null : (
+        <Box component="nav" aria-label="Main" sx={{ display: 'flex', gap: { xs: 0.25, lg: 0.5 }, flex: 'none' }}>
+          {NAV.map((item) => (
+            <NavButton key={item.name} item={item} active={route.name === item.name} onNavigate={onNavigate} />
+          ))}
+        </Box>
+      )}
       <Box sx={{ flex: '1 1 auto' }} />
-      <Button
-        component="a"
-        href={host.settingsUrl}
-        data-testid={TID.decaidSettings}
-        color="inherit"
-        startIcon={<OpenInNewRounded />}
-        sx={{ flex: 'none', px: 1.5, color: 'text.secondary' }}
-      >
-        Decaid settings
-      </Button>
-      <ExitButton host={host} />
+      {/* Fourth in the bar in both layouts: the same row, its icons alone on a phone. */}
+      <MachineRow icons={phone} />
+      {phone ? null : <Box sx={{ flex: 'none', width: '1px', height: 30, mx: 0.5, bgcolor: 'divider' }} />}
+      <DecaidSettingsButton host={host} />
+      {phone ? <PhoneExitButton host={host} /> : <ExitButton host={host} />}
     </Box>
   );
 }
 
-/** The phone's bar: just the brand and the two ways out; the tabs navigate. */
-function PhoneTopBar({ host, insetLeft }: { host: HostEnvironment; insetLeft: boolean }) {
-  return (
-    <Box
-      component="header"
-      sx={{
-        flex: 'none',
-        height: PHONE_TOP_BAR_HEIGHT,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 0.75,
-        // Over the rail's inset too, so the bar reaches the edge while the brand clears the notch.
-        pl: insetLeft ? 'calc(16px + var(--safe-left, 0px))' : '16px',
-        pr: '10px',
-        bgcolor: 'background.paper',
-        borderBottom: 1,
-        borderColor: 'divider',
-      }}
-    >
-      <Brand />
-      <Box sx={{ flex: '1 1 auto' }} />
-      <Button
-        component="a"
-        href={host.settingsUrl}
-        data-testid={TID.decaidSettings}
-        aria-label="Decaid settings"
-        color="inherit"
-        startIcon={<OpenInNewRounded />}
-        sx={{ flex: 'none', px: 1.25, color: 'text.secondary' }}
-      >
-        Decaid
-      </Button>
-      <Button
-        data-testid={TID.exitToSkins}
-        variant="tonal"
-        aria-label={exitLabel(host)}
-        startIcon={<LogoutRounded />}
-        onClick={() => host.exitToSkinSwitcher()}
-        sx={{ flex: 'none', px: 1.5 }}
-      >
-        Exit
-      </Button>
-    </Box>
-  );
-}
+/** The Shot tab's name while a shot runs: the time shows in place of its label. */
+const shotTabName = (seconds: number) => `Shot, running, ${seconds} ${seconds === 1 ? 'second' : 'seconds'}`;
 
-/** The Machine tab's name while a shot runs: the time shows in place of its label. */
-const machineTabName = (seconds: number) => `Machine, shot running, ${seconds} ${seconds === 1 ? 'second' : 'seconds'}`;
-
-/** A tab: the icon in its pill above the label; while a shot runs the Machine tab shows the dot and the time instead. */
+/** A tab: the icon in its pill above the label; while a shot runs the Shot tab shows the dot and the time instead. */
 function Tab({ item, active, rail, onNavigate }: { item: NavItem; active: boolean; rail: boolean; onNavigate: (route: Route) => void }) {
   const live = useShotLive() && item.name === 'shot';
   const node = useRef<HTMLButtonElement>(null);
-  useShotTimeName(node, live, machineTabName);
+  useShotTimeName(node, live, shotTabName);
   return (
     <ButtonBase
       ref={node}
@@ -439,7 +488,7 @@ function Tabs({ route, onNavigate, rail }: { route: Route; onNavigate: (route: R
 
 /**
  * An engine older than Chromium 91 (D58): CafAI started, but parts of it may
- * not work. In the flow under the top bar, so it pushes the columns down
+ * not work. In the flow under the top bar, so it pushes the screen down
  * instead of covering a control; dismissed once per engine version.
  */
 function EngineWarning() {
@@ -481,7 +530,7 @@ function EngineWarning() {
   );
 }
 
-/** Over the hidden coach: the Shot view (tablet) or the Machine tab (phone). */
+/** Over the hidden coach: the Shot view. */
 const overlaySx = {
   position: 'absolute',
   top: 0,
@@ -494,7 +543,7 @@ const overlaySx = {
   bgcolor: 'background.default',
 } as const;
 
-function Shell({ route, onNavigate, children, machinePanel }: AppShellProps) {
+function Shell({ route, onNavigate, children }: AppShellProps) {
   const { heartbeat, host, telemetry } = useServices();
   useHeartbeatOnInteraction(heartbeat);
   // Before paint, so the first frame already respects the insets.
@@ -512,21 +561,9 @@ function Shell({ route, onNavigate, children, machinePanel }: AppShellProps) {
   const tabs = phone && !typing;
   const rail = tabs && layout.nav === 'rail';
   const bar = tabs && layout.nav === 'bar';
-  const onShot = route.name === 'shot';
   const openShot = () => onNavigate({ name: 'shot' });
-
-  let overlay: ReactNode = null;
-  if (onShot) {
-    overlay = phone ? (
-      machinePanel === undefined ? (
-        <MachinePanel graph="full" awaitingOutcome={awaitingOutcome} columns={layout.nav === 'rail' ? 2 : 1} />
-      ) : (
-        machinePanel
-      )
-    ) : (
-      <ShotView awaitingOutcome={awaitingOutcome} />
-    );
-  }
+  // The Shot route in both layouts: the big graph at the main pane's full width.
+  const overlay = route.name === 'shot' ? <ShotView awaitingOutcome={awaitingOutcome} /> : null;
 
   return (
     <Box
@@ -549,31 +586,13 @@ function Shell({ route, onNavigate, children, machinePanel }: AppShellProps) {
         pl: rail ? 0 : 'var(--safe-left, 0px)',
       }}
     >
-      {phone ? <PhoneTopBar host={host} insetLeft={rail} /> : <TopBar route={route} onNavigate={onNavigate} host={host} />}
+      <TopBar phone={phone} route={route} onNavigate={onNavigate} host={host} insetLeft={rail} />
+      {/* Right under the bar, over the whole width: what keeps the machine from working, while it lasts. */}
+      <MachineAlerts />
       <EngineWarning />
-      {/* Every layout keeps <main> (and the routed screen in it) third in this row, so a rotation never remounts the screen. */}
+      {/* Every layout keeps <main> (and the routed screen in it) second in this row, so a rotation never remounts the screen. */}
       <Box sx={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: bar ? 'column' : 'row' }}>
         {rail ? <Tabs route={route} onNavigate={onNavigate} rail /> : null}
-        {!phone && machinePanel !== null ? (
-          <Box
-            component="aside"
-            aria-label="Machine"
-            sx={{
-              flex: 'none',
-              width: machineColumnWidth(layout.width),
-              minHeight: 0,
-              borderRight: 1,
-              borderColor: 'divider',
-            }}
-          >
-            {machinePanel === undefined ? (
-              // The big graph in the main pane replaces the preview; the controls above it stay where they are.
-              <MachinePanel graph={onShot ? 'none' : 'preview'} onOpenGraph={openShot} />
-            ) : (
-              machinePanel
-            )}
-          </Box>
-        ) : null}
         <Box
           component="main"
           sx={{
@@ -583,7 +602,8 @@ function Shell({ route, onNavigate, children, machinePanel }: AppShellProps) {
             display: 'flex',
             flexDirection: 'column',
             position: 'relative',
-            // Its own stacking context: the guard and the Shot view stay over this pane and only this pane.
+            // Its own stacking context: the guard and the Shot view stay over this pane and
+            // only this pane, never over the top bar and its Stop.
             zIndex: 0,
             // Beside the rail, the content (not just its padding) ends above the home indicator.
             mb: rail ? 'var(--safe-bottom, 0px)' : 0,
@@ -617,8 +637,8 @@ function Shell({ route, onNavigate, children, machinePanel }: AppShellProps) {
 }
 
 export function AppShell(props: AppShellProps) {
-  // One reading of Decaid's workflow for the whole shell: the Profile line,
-  // the Shot view's step and the coach note all show it.
+  // One reading of Decaid's workflow for the whole shell: the stats card's
+  // profile, the Shot view's step and the coach note all show it.
   return (
     <LoadedProfileProvider>
       <Shell {...props} />
