@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ZodType } from 'zod';
-import { createCoachEngine, type CoachEngine, type PageVisibility } from './engine.ts';
+import { createCoachEngine, type CoachEngine, type EngineDeps, type PageVisibility } from './engine.ts';
 import type { OutboxTimers } from './outbox.ts';
 import type { ApiPort, ChangePlan, CoachPort, LlmPort, ProposalContext } from './ports.ts';
 import { message, progressNoticePart } from './uiMessages.ts';
@@ -9,8 +9,20 @@ import { DOSE_RULES, knownDose, REFERENCE_DOSE_G } from '../../coach/dose.ts';
 import { validateProposal as validateWithCoach } from '../../coach/validator.ts';
 import type { GrinderInfo, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
 import type { MachineProfileStatus } from '../../api/machineProfile.ts';
-import { GatewayError, type ShotAnnotations, type ShotRecord, type WireProfile, type Workflow, type WorkflowContext } from '../../api/types.ts';
+import { driftLog } from '../../api/drift.ts';
+import {
+  GatewayError,
+  type Bean,
+  type BeanBatch,
+  type EnjoymentScale,
+  type ShotAnnotations,
+  type ShotRecord,
+  type WireProfile,
+  type Workflow,
+  type WorkflowContext,
+} from '../../api/types.ts';
 import type { ContentBlock, LlmMessage, PendingUiCall, RunResult, ToolResultBlock } from '../../llm/types.ts';
+import type { Bag } from '../../storage/types.ts';
 import type { CoachUiPart } from '../types.ts';
 import { createFakeStorage, createFakeTelemetry, SAMPLE_WORKFLOW, type FakeStorage, type FakeTelemetry } from '../../ui/testing/fakeServices.ts';
 
@@ -220,11 +232,42 @@ const machine = {
   dedupe: false,
   /** The next POST /profiles fails with this error. */
   createError: null as Error | null,
+  /**
+   * Whether this Decaid has the bean library (D102). Off by default, as on a
+   * Decaid without the routes, so other tests never see CafAI add a bag to it.
+   */
+  beanLibrary: false,
+  /** Decaid's bean library: beans and their batches. */
+  beans: [] as Bean[],
+  batches: [] as BeanBatch[],
+  /** How many more bean library calls fail as if Decaid were away. */
+  failBeanCalls: 0,
+  /** Bean library calls wait until the test calls `releaseBeanCalls()`. */
+  holdBeanCalls: false,
+  heldBeanCalls: [] as Array<() => void>,
+  /** The next PUT /workflow is refused with this error. */
+  workflowRefusal: null as GatewayError | null,
+  /** What Decaid's rating scale probe answers (D101): 10, 100, null when it could not be asked, or something that tells neither. */
+  enjoymentScale: 10 as EnjoymentScale | null | 'unreadable',
+  /** The next PUT /shots/{id} is refused with this error. */
+  shotRefusal: null as GatewayError | null,
+  /** Shot records come back without the profile in their workflow (5.10). */
+  recordsWithoutProfile: false,
+  /** GET /shots/{id} answers something CafAI cannot read. */
+  unreadableRecords: false,
 };
+
+/** How the real client fails when Decaid does not answer. */
+const unreachable = (path: string) => new GatewayError(0, path, 'Decaid is not reachable.', 'network');
 
 function releaseGrinderReads(): void {
   machine.holdGrinderReads = false;
   for (const release of machine.heldGrinderReads.splice(0)) release();
+}
+
+function releaseBeanCalls(): void {
+  machine.holdBeanCalls = false;
+  for (const release of machine.heldBeanCalls.splice(0)) release();
 }
 
 function mergeContext(base: WorkflowContext, patch: WorkflowContext): WorkflowContext {
@@ -268,19 +311,62 @@ function makeApi(calls: ApiCall[]): ApiPort {
   machine.parentMissing = false;
   machine.dedupe = false;
   machine.createError = null;
+  machine.beanLibrary = false;
+  machine.beans = [];
+  machine.batches = [];
+  machine.failBeanCalls = 0;
+  machine.holdBeanCalls = false;
+  machine.heldBeanCalls = [];
+  machine.workflowRefusal = null;
+  machine.enjoymentScale = 10;
+  machine.shotRefusal = null;
+  machine.recordsWithoutProfile = false;
+  machine.unreadableRecords = false;
   const shotRecord = (id: string) => {
-    const workflow = { ...SAMPLE_WORKFLOW, profile: machine.loaded, context: machine.context };
+    const workflow: Record<string, unknown> = { ...SAMPLE_WORKFLOW, profile: machine.loaded, context: machine.context };
+    if (machine.recordsWithoutProfile) delete workflow.profile;
     const annotations = machine.annotations.get(id);
-    return { id, timestamp: '', createdAt: '', updatedAt: '', workflow, measurements: [], ...(annotations ? { annotations } : {}) } as ShotRecord;
+    return { id, timestamp: '', createdAt: '', updatedAt: '', workflow, measurements: [], ...(annotations ? { annotations } : {}) } as unknown as ShotRecord;
+  };
+  /** A bean library call: 404 without the library, fails while Decaid is away, else answers. */
+  const beanCall = async <T>(method: string, args: unknown[], answer: () => T): Promise<T> => {
+    calls.push({ method, args });
+    if (machine.holdBeanCalls) await new Promise<void>((resolve) => machine.heldBeanCalls.push(resolve));
+    if (!machine.beanLibrary) throw new GatewayError(404, '/api/v1/beans', 'Route not found', 'http');
+    if (machine.failBeanCalls > 0) {
+      machine.failBeanCalls -= 1;
+      throw unreachable('/api/v1/beans');
+    }
+    return answer();
   };
   return {
     getWorkflow: async () => {
       calls.push({ method: 'getWorkflow', args: [] });
       if (machine.failWorkflowReads > 0) {
         machine.failWorkflowReads -= 1;
-        throw new Error('Decaid is not reachable.');
+        throw unreachable('/api/v1/workflow');
       }
       return { ...SAMPLE_WORKFLOW, profile: machine.loaded, context: machine.context } as Workflow;
+    },
+    listBeans: () => beanCall('listBeans', [], () => machine.beans.filter((bean) => bean.archived !== true)),
+    createBean: (request) =>
+      beanCall('createBean', [request], () => {
+        const bean: Bean = { id: `bean-${machine.beans.length + 1}`, archived: false, ...request };
+        machine.beans.push(bean);
+        return bean;
+      }),
+    createBatch: (beanId, request) =>
+      beanCall('createBatch', [beanId, request], () => {
+        const batch: BeanBatch = { id: `batch-${machine.batches.length + 1}`, beanId, frozen: false, archived: false, ...request };
+        machine.batches.push(batch);
+        return batch;
+      }),
+    probeEnjoymentScale: async () => {
+      calls.push({ method: 'probeEnjoymentScale', args: [] });
+      if (machine.enjoymentScale === 'unreadable') {
+        throw new GatewayError(200, '/api/v1/shots/cafai-probe', "Decaid sent a reply CafAI doesn't recognise.", 'unexpected_reply');
+      }
+      return machine.enjoymentScale;
     },
     getGrinder: (id) => {
       calls.push({ method: 'getGrinder', args: [id] });
@@ -298,7 +384,13 @@ function makeApi(calls: ApiCall[]): ApiPort {
     updateWorkflow: async (patch) => {
       if (machine.failUpdates > 0) {
         machine.failUpdates -= 1;
-        throw new Error('Decaid is not reachable.');
+        throw unreachable('/api/v1/workflow');
+      }
+      if (machine.workflowRefusal) {
+        const refusal = machine.workflowRefusal;
+        machine.workflowRefusal = null;
+        calls.push({ method: 'updateWorkflow (refused)', args: [patch] });
+        throw refusal;
       }
       calls.push({ method: 'updateWorkflow', args: [patch] });
       return SAMPLE_WORKFLOW;
@@ -328,7 +420,13 @@ function makeApi(calls: ApiCall[]): ApiPort {
     updateShot: async (id, patch) => {
       if (machine.failShotUpdates > 0) {
         machine.failShotUpdates -= 1;
-        throw new Error('Decaid is not reachable.');
+        throw unreachable(`/api/v1/shots/${id}`);
+      }
+      if (machine.shotRefusal) {
+        const refusal = machine.shotRefusal;
+        machine.shotRefusal = null;
+        calls.push({ method: 'updateShot (refused)', args: [id, patch] });
+        throw refusal;
       }
       calls.push({ method: 'updateShot', args: [id, patch] });
       const merged = deepMerge((machine.annotations.get(id) ?? {}) as Record<string, unknown>, (patch.annotations ?? {}) as Record<string, unknown>);
@@ -364,11 +462,14 @@ function makeApi(calls: ApiCall[]): ApiPort {
     },
     getShot: async (id) => {
       calls.push({ method: 'getShot', args: [id] });
-      if (machine.missingShots.has(id)) throw new Error('404 Not found');
+      if (machine.unreadableRecords) {
+        throw new GatewayError(200, `/api/v1/shots/${id}`, "Decaid sent a reply CafAI doesn't recognise.", 'unexpected_reply');
+      }
+      if (machine.missingShots.has(id)) throw new GatewayError(404, `/api/v1/shots/${id}`, 'Shot not found', 'http');
       const misses = machine.shotMisses.get(id) ?? 0;
       if (misses > 0) {
         machine.shotMisses.set(id, misses - 1);
-        throw new Error('404 Not found');
+        throw new GatewayError(404, `/api/v1/shots/${id}`, 'Shot not found', 'http');
       }
       return shotRecord(id);
     },
@@ -549,7 +650,7 @@ describe('coach engine', () => {
   /** The engine's clock: tests move it on to space events apart. */
   let nowMs: number;
 
-  function build(): CoachEngine {
+  function build(extra: Partial<EngineDeps> = {}): CoachEngine {
     let counter = 0;
     return createCoachEngine({
       storage,
@@ -562,6 +663,7 @@ describe('coach engine', () => {
       timers: timers.timers,
       checkTimers: checks.timers,
       visibility: view.visibility,
+      ...extra,
     });
   }
 
@@ -929,7 +1031,7 @@ describe('coach engine', () => {
     expect((await storage.settings.get()).grinderSetting).toBe('13');
     const patches = apiCalls.filter((c) => c.method === 'updateWorkflow').map((c) => c.args[0]);
     // The whole grinder as last saved: one write per key, the latest wins (D64).
-    expect(patches.at(-1)).toEqual({ context: { grinderId: null, grinderModel: null, grinderSetting: '13' } });
+    expect(patches.at(-1)).toEqual({ context: { grinderId: null, grinderModel: null, grinderSetting: '13', grinderBurrs: null } });
     expect(engine.getState().activeVersion?.version).toBe(1);
   });
 
@@ -1106,7 +1208,7 @@ describe('coach engine', () => {
     await storage.settings.update({ grinderName: 'Niche Zero', grinderSetting: '13' });
     await engine.refresh();
     const patches = apiCalls.filter((c) => c.method === 'updateWorkflow').map((c) => c.args[0]);
-    expect(patches.at(-1)).toEqual({ context: { grinderId: null, grinderModel: 'Niche Zero', grinderSetting: '13' } });
+    expect(patches.at(-1)).toEqual({ context: { grinderId: null, grinderModel: 'Niche Zero', grinderSetting: '13', grinderBurrs: null } });
 
     scripts.push(() => [text('Got it.'), askTaste]);
     telemetry.emitShot({ type: 'finished', shotId: 'shot-g', stopReason: 'targetWeight' });
@@ -1313,10 +1415,18 @@ describe('coach engine', () => {
     expect(second!.outcome).toBe('pending');
   });
 
-  it('clears details of the previous coffee from the workflow context', async () => {
+  it("clears details of the previous coffee from the workflow context, another skin's grinder burrs too (5.2)", async () => {
     await throughTemplatePick();
     const context = apiCalls.find((c) => c.method === 'activateProfile')!.args[1] as Record<string, unknown>;
-    expect(context).toMatchObject({ beanBatchId: null, grinderId: null, coffeeName: 'Kiambu AA' });
+    expect(context).toMatchObject({
+      beanBatchId: null,
+      grinderId: null,
+      grinderModel: null,
+      grinderSetting: null,
+      grinderBurrs: null,
+      coffeeName: 'Kiambu AA',
+      coffeeRoaster: 'Square Mile',
+    });
   });
 
   it('never sends the API key anywhere the UI can see', async () => {
@@ -1613,7 +1723,7 @@ describe('coach engine', () => {
       expect(grinderWrites()).toEqual([]);
 
       decaidBack();
-      await vi.waitFor(() => expect(grinderWrites()).toEqual([{ context: { grinderId: null, grinderModel: null, grinderSetting: '15' } }]));
+      await vi.waitFor(() => expect(grinderWrites()).toEqual([{ context: { grinderId: null, grinderModel: null, grinderSetting: '15', grinderBurrs: null } }]));
       expect(notices().filter((p) => p.text.startsWith("Decaid can't be reached"))).toHaveLength(1);
       expect(timers.delays()).toEqual([]);
     });
@@ -1625,7 +1735,7 @@ describe('coach engine', () => {
       await engine.refresh();
       expect(notices().at(-1)).toMatchObject({ tone: 'warning', text: unreachable('14') });
       machineReconnects();
-      await vi.waitFor(() => expect(grinderWrites().at(-1)).toEqual({ context: { grinderId: null, grinderModel: 'Niche Zero', grinderSetting: '14' } }));
+      await vi.waitFor(() => expect(grinderWrites().at(-1)).toEqual({ context: { grinderId: null, grinderModel: 'Niche Zero', grinderSetting: '14', grinderBurrs: null } }));
     });
 
     it('sends only the latest grinder', async () => {
@@ -1638,7 +1748,7 @@ describe('coach engine', () => {
       decaidBack();
       await vi.waitFor(() => expect(grinderWrites()).toHaveLength(1));
       await drain();
-      expect(grinderWrites()).toEqual([{ context: { grinderId: null, grinderModel: null, grinderSetting: '13' } }]);
+      expect(grinderWrites()).toEqual([{ context: { grinderId: null, grinderModel: null, grinderSetting: '13', grinderBurrs: null } }]);
     });
 
     it('tries again every 30 s while a write waits, and stops when it is through', async () => {
@@ -1654,7 +1764,7 @@ describe('coach engine', () => {
       expect(grinderWrites()).toEqual([]);
 
       timers.fire();
-      await vi.waitFor(() => expect(grinderWrites()).toEqual([{ context: { grinderId: null, grinderModel: null, grinderSetting: '14' } }]));
+      await vi.waitFor(() => expect(grinderWrites()).toEqual([{ context: { grinderId: null, grinderModel: null, grinderSetting: '14', grinderBurrs: null } }]));
       expect(timers.delays()).toEqual([]);
     });
 
@@ -1665,7 +1775,7 @@ describe('coach engine', () => {
       await engine.refresh();
       scripts.push(() => [text('Got it.'), askTaste]);
       telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: 'targetWeight' });
-      await vi.waitFor(() => expect(grinderWrites()).toEqual([{ context: { grinderId: null, grinderModel: null, grinderSetting: '14' } }]));
+      await vi.waitFor(() => expect(grinderWrites()).toEqual([{ context: { grinderId: null, grinderModel: null, grinderSetting: '14', grinderBurrs: null } }]));
       await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
     });
 
@@ -2121,7 +2231,7 @@ describe('coach engine', () => {
       await engine.confirmChange('t-grind');
       expect((await storage.settings.get()).grinderSetting).toBe('14.5');
       expect(callsOf('updateWorkflow').at(-1)!.args[0]).toEqual({
-        context: { grinderId: 'g-niche', grinderModel: 'Niche Zero', grinderSetting: '14.5' },
+        context: { grinderId: 'g-niche', grinderModel: 'Niche Zero', grinderSetting: '14.5', grinderBurrs: null },
       });
 
       scripts.push(() => [text('Got it.'), askTaste]);
@@ -2147,7 +2257,7 @@ describe('coach engine', () => {
       decaidBack();
       await vi.waitFor(() =>
         expect(callsOf('updateWorkflow').map((c) => c.args[0])).toEqual([
-          { context: { grinderId: 'g-niche', grinderModel: 'Niche Zero', grinderSetting: '14.5' } },
+          { context: { grinderId: 'g-niche', grinderModel: 'Niche Zero', grinderSetting: '14.5', grinderBurrs: null } },
         ]),
       );
     });
@@ -2177,12 +2287,12 @@ describe('coach engine', () => {
       await saveInSettings('g-niche-2', NICHE, '15');
       expect(callsOf('getGrinder').at(-1)!.args).toEqual(['g-niche-2']);
       expect(callsOf('updateWorkflow').map((c) => c.args[0])).toEqual([
-        { context: { grinderId: 'g-niche-2', grinderModel: 'Niche Zero', grinderSetting: '15' } },
+        { context: { grinderId: 'g-niche-2', grinderModel: 'Niche Zero', grinderSetting: '15', grinderBurrs: null } },
       ]);
 
       await saveInSettings('g-encore', ENCORE, '5');
       expect(callsOf('updateWorkflow').at(-1)!.args[0]).toEqual({
-        context: { grinderId: 'g-encore', grinderModel: 'Baratza Encore ESP', grinderSetting: '5' },
+        context: { grinderId: 'g-encore', grinderModel: 'Baratza Encore ESP', grinderSetting: '5', grinderBurrs: null },
       });
       await throughTemplateCards();
       expect(intakeGrinder()).toEqual({
@@ -2249,7 +2359,7 @@ describe('coach engine', () => {
       await startLinked('g-niche', NICHE, '15');
       await saveInSettings(null, null, '15', 'Niche Zero');
       expect(callsOf('getGrinder')).toHaveLength(1);
-      expect(callsOf('updateWorkflow').at(-1)!.args[0]).toEqual({ context: { grinderId: null, grinderModel: 'Niche Zero', grinderSetting: '15' } });
+      expect(callsOf('updateWorkflow').at(-1)!.args[0]).toEqual({ context: { grinderId: null, grinderModel: 'Niche Zero', grinderSetting: '15', grinderBurrs: null } });
       await throughShot();
       expect(intakeGrinder()).toEqual({ name: 'Niche Zero', setting: '15', settingType: null, step: null, values: null, linked: false });
 
@@ -2283,7 +2393,7 @@ describe('coach engine', () => {
       await engine.confirmChange('t-grind');
       expect((await storage.settings.get()).grinderSetting).toBe('14.5');
       expect(callsOf('updateWorkflow').at(-1)!.args[0]).toEqual({
-        context: { grinderId: 'g-niche', grinderModel: 'Niche Zero', grinderSetting: '14.5' },
+        context: { grinderId: 'g-niche', grinderModel: 'Niche Zero', grinderSetting: '14.5', grinderBurrs: null },
       });
     });
 
@@ -2903,6 +3013,379 @@ describe('coach engine', () => {
       await engine.confirmChange('t-adj');
       expect(card('t-adj')).toMatchObject({ status: 'pending' });
       expect(engine.getState().phase).toBe('awaiting_confirmation');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // D102: bags in Decaid's bean library
+  // -------------------------------------------------------------------------
+
+  describe("Decaid's bean library (D102)", () => {
+    const ADDED = "Added to Decaid's beans.";
+    const bag = () => engine.getState().activeBag;
+
+    beforeEach(() => {
+      machine.beanLibrary = true;
+    });
+
+    async function throughIntake(details: ContentBlock = saveBag) {
+      await engine.newBag();
+      scripts.push(() => [text('Lovely.'), details, proposeTemplates]);
+      await engine.sendText('Kiambu AA, light, washed');
+    }
+
+    /** The coach saves the bag's details again, as after a correction in the chat. */
+    async function savedAgain(details: Record<string, unknown>) {
+      scripts.push(() => [toolUse('t-save-again', TOOL.saveBagDetails, details)]);
+      scripts.push(() => [text('Noted.')]);
+      await engine.sendText('One more thing about the bag.');
+    }
+
+    const KIAMBU = { name: 'Kiambu AA', roaster: 'Square Mile', origin: 'Kenya', roastLevel: 'light', process: 'washed', notes: null };
+
+    it('adds the bag to Decaid as a bean and a batch, links both, and says so once', async () => {
+      await throughIntake();
+      await vi.waitFor(() => expect(bag()?.decaidBatchId).toBe('batch-1'));
+      expect(bag()).toMatchObject({ decaidBeanId: 'bean-1', decaidBatchId: 'batch-1' });
+      expect(await storage.bags.get(bag()!.id)).toMatchObject({ decaidBeanId: 'bean-1', decaidBatchId: 'batch-1' });
+      expect(callsOf('createBean').map((c) => c.args[0])).toEqual([
+        { roaster: 'Square Mile', name: 'Kiambu AA', country: 'Kenya', processing: 'washed' },
+      ]);
+      expect(callsOf('createBatch').map((c) => c.args)).toEqual([['bean-1', { roastLevel: 'light' }]]);
+      expect(notices().filter((p) => p.text === ADDED)).toEqual([{ kind: 'notice', tone: 'info', text: ADDED }]);
+    });
+
+    it('writes the linked batch into every load, with the coffee and its roaster (6.1)', async () => {
+      await throughIntake();
+      await vi.waitFor(() => expect(bag()?.decaidBatchId).toBe('batch-1'));
+      scripts.push(() => [text('Loaded.')]);
+      await engine.pickTemplate('t-tpl', 'd-flow');
+      expect(callsOf('activateProfile').at(-1)!.args[1]).toMatchObject({
+        beanBatchId: 'batch-1',
+        coffeeName: 'Kiambu AA',
+        coffeeRoaster: 'Square Mile',
+      });
+    });
+
+    it('reuses a bean with the same roaster and name, whatever the case and the spaces around them', async () => {
+      machine.beans.push({ id: 'bean-9', roaster: ' square mile ', name: 'KIAMBU AA', archived: false });
+      await throughIntake();
+      await vi.waitFor(() => expect(bag()?.decaidBatchId).toBe('batch-1'));
+      expect(callsOf('createBean')).toEqual([]);
+      expect(callsOf('createBatch').map((c) => c.args[0])).toEqual(['bean-9']);
+      expect(bag()).toMatchObject({ decaidBeanId: 'bean-9' });
+    });
+
+    it('adds nothing for a bag without a name of its own: the placeholder "New bag" names no coffee', async () => {
+      await throughIntake(toolUse('t-save', TOOL.saveBagDetails, { ...KIAMBU, name: 'New bag' }));
+      await drain();
+      expect(bag()).toMatchObject({ name: 'New bag', roaster: 'Square Mile' });
+      expect(callsOf('listBeans')).toEqual([]);
+      expect(bag()?.decaidBatchId ?? null).toBeNull();
+      expect(notices().some((p) => p.text === ADDED)).toBe(false);
+    });
+
+    it('adds nothing for a bag without a roaster, since Decaid needs one', async () => {
+      await throughIntake(toolUse('t-save', TOOL.saveBagDetails, { ...KIAMBU, roaster: null }));
+      await drain();
+      expect(callsOf('listBeans')).toEqual([]);
+      expect(bag()?.decaidBatchId ?? null).toBeNull();
+      expect(notices().some((p) => p.text === ADDED)).toBe(false);
+    });
+
+    it('leaves the bag unlinked while Decaid is away, says nothing, and tries again at the next save', async () => {
+      machine.failBeanCalls = 1;
+      await throughIntake();
+      await vi.waitFor(() => expect(callsOf('listBeans')).toHaveLength(1));
+      await drain();
+      expect(bag()?.decaidBatchId ?? null).toBeNull();
+      expect(callsOf('createBean')).toEqual([]);
+      expect(notices().some((p) => p.text === ADDED)).toBe(false);
+
+      await savedAgain(KIAMBU);
+      await vi.waitFor(() => expect(bag()?.decaidBatchId).toBe('batch-1'));
+      expect(callsOf('createBean')).toHaveLength(1);
+    });
+
+    it('never edits or deletes a bean or batch: a detail corrected later changes the bag only', async () => {
+      await throughIntake();
+      await vi.waitFor(() => expect(bag()?.decaidBatchId).toBe('batch-1'));
+      await savedAgain({ ...KIAMBU, name: 'Kiambu AA Peaberry' });
+      await drain();
+      expect(bag()).toMatchObject({ name: 'Kiambu AA Peaberry', decaidBeanId: 'bean-1', decaidBatchId: 'batch-1' });
+      expect(apiCalls.map((c) => c.method).filter((method) => /bean|batch/i.test(method))).toEqual(['listBeans', 'createBean', 'createBatch']);
+      expect(machine.beans.map((bean) => bean.name)).toEqual(['Kiambu AA']);
+      expect(machine.batches).toHaveLength(1);
+    });
+
+    it('links the bag it saved even when another bag is on screen by then', async () => {
+      machine.holdBeanCalls = true;
+      await throughIntake();
+      const kiambu = bag()!.id;
+      await engine.newBag();
+      const other = bag()!.id;
+      expect(other).not.toBe(kiambu);
+      releaseBeanCalls();
+      await vi.waitFor(async () => expect(await storage.bags.get(kiambu)).toMatchObject({ decaidBatchId: 'batch-1' }));
+      await drain();
+      expect(engine.getState().bags.find((b) => b.id === kiambu)).toMatchObject({ decaidBeanId: 'bean-1', decaidBatchId: 'batch-1' });
+      expect(bag()!.id).toBe(other);
+      expect(bag()?.decaidBatchId ?? null).toBeNull();
+      expect(notices().some((p) => p.text === ADDED)).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // D101: the stars on Decaid's own rating scale
+  // -------------------------------------------------------------------------
+
+  describe("Decaid's rating scale (D101)", () => {
+    it('writes stars x 20 on a Decaid that rates out of 100', async () => {
+      machine.enjoymentScale = 100;
+      await throughShot();
+      await engine.rateShot('shot-1', 4);
+      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 80, extras: { cafai: { stars: 4 } } }));
+    });
+
+    it('asks Decaid its scale once per session, and only when the first stars go out', async () => {
+      await throughShot();
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      await vi.waitFor(() => expect(callsOf('updateShot')).toHaveLength(1));
+      expect(callsOf('probeEnjoymentScale')).toEqual([]);
+
+      await engine.rateShot('shot-1', 4);
+      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 8 }));
+      await engine.rateShot('shot-1', 3);
+      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 6 }));
+      expect(callsOf('probeEnjoymentScale')).toHaveLength(1);
+    });
+
+    it('holds the stars while Decaid cannot say its scale, sends the taste meanwhile, and asks again at the next try', async () => {
+      machine.enjoymentScale = null;
+      await throughShot();
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      await engine.rateShot('shot-1', 5);
+      await vi.waitFor(() => expect(callsOf('probeEnjoymentScale')).toHaveLength(1));
+      await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
+      expect(machine.annotations.get('shot-1')).toMatchObject({ espressoNotes: 'Taste: Sour. Kiambu AA v1 (CafAI)' });
+      expect(machine.annotations.get('shot-1')).not.toHaveProperty('enjoyment');
+
+      machine.enjoymentScale = 10;
+      timers.fire();
+      await vi.waitFor(() =>
+        expect(machine.annotations.get('shot-1')).toMatchObject({
+          espressoNotes: 'Taste: Sour. Kiambu AA v1 (CafAI)',
+          enjoyment: 10,
+          extras: { cafai: { selected: ['Sour'], stars: 5 } },
+        }),
+      );
+      expect(callsOf('probeEnjoymentScale')).toHaveLength(2);
+      expect(timers.delays()).toEqual([]);
+    });
+
+    it('after an answer that tells neither scale, asks again once per shot, not at every try', async () => {
+      machine.enjoymentScale = 'unreadable';
+      await throughShot();
+      await engine.rateShot('shot-1', 4);
+      await vi.waitFor(() => expect(callsOf('probeEnjoymentScale')).toHaveLength(1));
+      await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
+      timers.fire();
+      await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
+      decaidBack();
+      await drain();
+      expect(callsOf('probeEnjoymentScale')).toHaveLength(1);
+      expect(machine.annotations.get('shot-1')).toBeUndefined();
+
+      // The next shot asks once more; this time Decaid answers.
+      machine.enjoymentScale = 10;
+      scripts.push(() => [text('Again?'), askTaste]);
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: 'targetWeight' });
+      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 8, extras: { cafai: { stars: 4 } } }));
+      expect(callsOf('probeEnjoymentScale')).toHaveLength(2);
+      await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 5.10-5.12: refused writes, the barrier, shot credit
+  // -------------------------------------------------------------------------
+
+  describe('writes Decaid refuses (5.11)', () => {
+    const refusal = (status: number) =>
+      new GatewayError(status, '/api/v1/shots/shot-1', 'enjoyment must be between 0 and 10', 'http', {
+        error: 'Invalid request',
+        message: 'Invalid argument(s): enjoyment must be between 0 and 10',
+      });
+    const refusals = () => notices().filter((p) => p.text.startsWith('Decaid would not save'));
+    const drift = () => driftLog.list().map(({ source, problem }) => [source, problem]);
+
+    beforeEach(() => {
+      driftLog.clear();
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    it('drops stars Decaid refuses, reports it, says once why, and never sends them again', async () => {
+      await throughShot();
+      machine.shotRefusal = refusal(400);
+      await engine.rateShot('shot-1', 4);
+      await vi.waitFor(() => expect(refusals()).toHaveLength(1));
+      expect(refusals()[0]).toEqual({
+        kind: 'notice',
+        tone: 'warning',
+        text: 'Decaid would not save the stars for this shot: enjoyment must be between 0 and 10.',
+      });
+      expect(drift()).toContainEqual(['PUT /api/v1/shots/{id}', 'annotations: refused (HTTP 400)']);
+      expect(timers.delays()).toEqual([]);
+
+      decaidBack();
+      await drain();
+      expect(callsOf('updateShot (refused)')).toHaveLength(1);
+      expect(callsOf('updateShot')).toEqual([]);
+      expect(refusals()).toHaveLength(1);
+    });
+
+    it('names the taste when Decaid refuses the notes', async () => {
+      await throughShot();
+      machine.shotRefusal = new GatewayError(400, '/api/v1/shots/shot-1', 'Decaid answered HTTP 400 for /api/v1/shots/shot-1.', 'http');
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      await vi.waitFor(() => expect(refusals()).toHaveLength(1));
+      expect(refusals()[0]!.text).toBe('Decaid would not save the taste for this shot: Decaid answered HTTP 400 for /api/v1/shots/shot-1.');
+    });
+
+    it('drops the taste with a plain notice when the record cannot be read, never counting it as saved', async () => {
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+      await throughShot();
+      machine.unreadableRecords = true;
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      const notSaved = () => notices().filter((p) => p.text.startsWith('CafAI could not save'));
+      await vi.waitFor(() => expect(notSaved()).toHaveLength(1));
+      // The detail goes to the log Decaid keeps, not into the chat.
+      expect(notSaved()[0]).toEqual({ kind: 'notice', tone: 'warning', text: 'CafAI could not save the taste for this shot.' });
+      expect(logged).toHaveBeenCalledWith('CafAI could not save the taste for this shot:', "Decaid sent a reply CafAI doesn't recognise.");
+      expect(callsOf('updateShot')).toEqual([]);
+      expect(timers.delays()).toEqual([]);
+    });
+
+    it('reports a record Decaid no longer has under the read, not as a refused write', async () => {
+      await throughShot();
+      machine.missingShots.add('shot-1');
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      await vi.waitFor(() => expect(refusals()).toHaveLength(1));
+      expect(refusals()[0]!.text).toBe('Decaid would not save the taste for this shot: Shot not found.');
+      expect(drift()).toContainEqual(['GET /api/v1/shots/{id}', 'record: refused (HTTP 404)']);
+      expect(drift().filter(([source]) => source === 'PUT /api/v1/shots/{id}')).toEqual([]);
+      expect(callsOf('updateShot')).toEqual([]);
+    });
+
+    it('keeps a write Decaid answered 409 or 503, says nothing, and sends it once Decaid takes it', async () => {
+      await throughShot();
+      machine.shotRefusal = refusal(409);
+      await engine.rateShot('shot-1', 4);
+      await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
+      machine.shotRefusal = refusal(503);
+      timers.fire();
+      await vi.waitFor(() => expect(callsOf('updateShot (refused)')).toHaveLength(2));
+      await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
+      timers.fire();
+      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 8 }));
+      expect(refusals()).toEqual([]);
+    });
+
+    it('drops a grinder Decaid refuses, and says so instead of promising to send it later', async () => {
+      await throughTemplatePick();
+      await storage.settings.update({ grinderSetting: '14' });
+      machine.workflowRefusal = new GatewayError(400, '/api/v1/workflow', 'grinderSetting must be a string', 'http');
+      await engine.refresh();
+      await vi.waitFor(() => expect(refusals()).toHaveLength(1));
+      expect(refusals()[0]!.text).toBe('Decaid would not save the grinder for the next shots: grinderSetting must be a string.');
+      expect(notices().some((p) => p.text.startsWith("Decaid can't be reached"))).toBe(false);
+      expect(timers.delays()).toEqual([]);
+      expect(drift()).toContainEqual(['PUT /api/v1/workflow', 'context: refused (HTTP 400)']);
+    });
+  });
+
+  it('says once per session that this Decaid cannot confirm the machine took a profile (5.12)', async () => {
+    const said = 'This Decaid cannot confirm that the machine took a profile, so CafAI will assume it did.';
+    machine.barrier = 'unsupported';
+    await throughProposal();
+    scripts.push(() => [text('Done.')]);
+    await engine.confirmChange('t-adj');
+    expect(callsOf('activateProfile')).toHaveLength(2);
+    expect(notices().filter((p) => p.text === said)).toEqual([{ kind: 'notice', tone: 'info', text: said }]);
+  });
+
+  it("credits a shot whose record does not say which profile ran, reports it, and says so (5.10)", async () => {
+    driftLog.clear();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await throughTemplatePick();
+    machine.recordsWithoutProfile = true;
+    expect(await shotIsCredited('shot-1')).toBe(true);
+    expect(notices().filter((p) => p.text.startsWith("Decaid's record"))).toEqual([
+      { kind: 'notice', tone: 'info', text: "Decaid's record did not say which profile ran; CafAI counted it for v1." },
+    ]);
+    expect(driftLog.list().map(({ source, problem }) => [source, problem])).toContainEqual([
+      'GET /api/v1/shots/{id}',
+      'workflow.profile: missing',
+    ]);
+  });
+
+  // -------------------------------------------------------------------------
+  // D100: bags back from Decaid's backup
+  // -------------------------------------------------------------------------
+
+  describe("bags back from Decaid's backup (5.4, 5.5)", () => {
+    const BACK = "Your bags are back from Decaid's backup.";
+    const at = '2026-10-01T08:00:00.000Z';
+    const restoredBag: Bag = {
+      id: 'bag-restored',
+      name: 'Kiambu AA',
+      roaster: 'Square Mile',
+      origin: null,
+      roastLevel: 'light',
+      process: null,
+      notes: null,
+      templateId: null,
+      activeVersionId: null,
+      conversationId: 'conv-restored',
+      archived: false,
+      createdAt: at,
+      updatedAt: at,
+    };
+
+    async function backupLanded() {
+      await storage.bags.put(restoredBag);
+      await storage.conversations.put({ id: 'conv-restored', bagId: 'bag-restored', apiMessages: [], uiMessages: [], createdAt: at, updatedAt: at });
+      await storage.settings.update({ activeBagId: 'bag-restored' });
+    }
+
+    it('reads bags that came back after start, opens the last one, and says once that they are back', async () => {
+      expect(engine.getState()).toMatchObject({ bags: [], phase: 'no_bag', restoredFromBackup: false });
+      await backupLanded();
+      await engine.restored();
+      expect(engine.getState()).toMatchObject({ restoredFromBackup: true, activeBag: { id: 'bag-restored' } });
+      expect(engine.getState().bags.map((b) => b.id)).toEqual(['bag-restored']);
+      expect(notices().at(-1)).toEqual({ kind: 'notice', tone: 'success', text: BACK });
+      expect((await storage.conversations.get('conv-restored'))!.uiMessages.at(-1)!.parts).toEqual([
+        { kind: 'notice', tone: 'success', text: BACK },
+      ]);
+
+      await engine.restored();
+      expect(notices().filter((p) => p.text === BACK)).toHaveLength(1);
+    });
+
+    it('starts knowing the start-up restore brought the bags back, for the key card (5.5)', async () => {
+      engine.dispose();
+      storage.apiKey = null;
+      await backupLanded();
+      engine = build({ restoredFromBackup: true });
+      await engine.start();
+      expect(engine.getState()).toMatchObject({ hasApiKey: false, restoredFromBackup: true, activeBag: { id: 'bag-restored' } });
+      expect(notices().some((p) => p.text === BACK)).toBe(false);
     });
   });
 });

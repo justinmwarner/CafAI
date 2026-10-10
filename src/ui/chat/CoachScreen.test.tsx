@@ -99,13 +99,34 @@ describe('CoachScreen', () => {
   it('asks for an API key before anything else', () => {
     renderCoach({ ...coachStateFor('diff'), hasApiKey: false });
     expect(screen.getByText('Add your Anthropic API key to start coaching')).toBeInTheDocument();
-    // A phone's browser keeps its own key: the copy names no tablet.
-    expect(screen.getByText('The key stays on this device. You pay Anthropic directly for what the coach uses.')).toBeInTheDocument();
+    // A phone's browser keeps its own key: the copy names no tablet. A copy in Decaid is the user's choice (D99).
+    expect(
+      screen.getByText(
+        'The key stays on this device unless you choose in Settings to keep a copy in Decaid. You pay Anthropic directly for what the coach uses.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open Settings' })).toHaveAttribute('href', '#/settings');
     expect(screen.queryByTestId(TID.chat)).toBeNull();
     expect(screen.queryByTestId(TID.newBag)).toBeNull();
     // CafAI is an everyday skin before the coach can start: the machine stays on screen.
     expect(screen.getByTestId(TID.statsCard)).toBeInTheDocument();
+  });
+
+  it('says why it asks for the key again only after bags came back from Decaid without one (5.5)', () => {
+    const again = "Decaid was updated or this browser's storage was cleared. Your bags are back; paste your API key again.";
+    renderCoach({ ...coachStateFor('diff'), hasApiKey: false, restoredFromBackup: true });
+    expect(screen.getByText(again)).toBeInTheDocument();
+    expect(screen.getByText('Add your Anthropic API key to start coaching')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Settings' })).toHaveAttribute('href', '#/settings');
+    cleanup();
+
+    renderCoach({ ...coachStateFor('diff'), hasApiKey: false });
+    expect(screen.queryByText(again)).toBeNull();
+    cleanup();
+
+    renderCoach({ ...coachStateFor('diff'), hasApiKey: true, restoredFromBackup: true });
+    expect(screen.queryByText(again)).toBeNull();
+    expect(screen.getByTestId(TID.chat)).toBeInTheDocument();
   });
 
   it('offers one large New bag button when there are no bags', async () => {

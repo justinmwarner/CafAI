@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createDecaidClient } from '../api/client.ts';
 import type { Grinder } from '../api/grinders.ts';
 import type { ShotUpdateRequest, WireProfile } from '../api/types.ts';
 import { getTemplate } from '../coach/index.ts';
@@ -78,6 +79,33 @@ describe('createApiPort', () => {
   it('throws when Decaid cannot be read, so the engine keeps what it had', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('{"error":"boom"}', { status: 500 })));
     await expect(createApiPort(createFakeDecaid()).getGrinder('g-niche')).rejects.toThrow();
+  });
+
+  it("only reads Decaid's bean library and adds to it: GET and POST, never PUT or DELETE (D102)", async () => {
+    const seen: string[] = [];
+    const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      seen.push(`${method} ${new URL(url).pathname}`);
+      if (method === 'POST' && url.endsWith('/batches')) {
+        return new Response(JSON.stringify({ id: 'batch-1', beanId: 'bean-1', roastLevel: 'light', frozen: false, archived: false }), { status: 201 });
+      }
+      if (method === 'POST') {
+        return new Response(JSON.stringify({ id: 'bean-1', roaster: 'Square Mile', name: 'Kiambu AA', archived: false }), { status: 201 });
+      }
+      return new Response('[]', { status: 200 });
+    });
+    const port = createApiPort(createDecaidClient({ origin: 'http://localhost:8080', fetch: fetch as unknown as typeof globalThis.fetch }));
+    await expect(port.listBeans()).resolves.toEqual([]);
+    await expect(port.createBean({ roaster: 'Square Mile', name: 'Kiambu AA' })).resolves.toMatchObject({ id: 'bean-1' });
+    await expect(port.createBatch('bean-1', { roastLevel: 'light' })).resolves.toMatchObject({ id: 'batch-1', beanId: 'bean-1' });
+    expect(seen).toEqual(['GET /api/v1/beans', 'POST /api/v1/beans', 'POST /api/v1/beans/bean-1/batches']);
+    expect(Object.keys(port).filter((name) => /bean|batch/i.test(name)).sort()).toEqual(['createBatch', 'createBean', 'listBeans']);
+  });
+
+  it("asks Decaid's rating scale through the client (D101)", async () => {
+    const decaid = createFakeDecaid();
+    await expect(createApiPort(decaid).probeEnjoymentScale()).resolves.toBe(10);
+    expect(decaid.calls.map((call) => call.method)).toEqual(['probeEnjoymentScale']);
   });
 });
 

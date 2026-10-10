@@ -395,6 +395,11 @@ export class DecaidKvMirror implements KvMirror {
     }, delay);
   }
 
+  /**
+   * Learn what Decaid holds. A full read Decaid does not answer, or answers
+   * with something CafAI cannot read, throws (kv.ts): the push waits and
+   * retries rather than take it for an empty store (5.3).
+   */
   private async readRemote(): Promise<void> {
     const remote = await this.kv.getAll(KV_NAMESPACE);
     if (remote.notModified) throw new Error('Decaid answered "not modified" to a full read.');

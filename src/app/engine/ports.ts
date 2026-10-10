@@ -8,6 +8,11 @@
 import type { ZodType } from 'zod';
 import type { MachineProfileStatus } from '../../api/machineProfile.ts';
 import type {
+  BatchCreateRequest,
+  Bean,
+  BeanBatch,
+  BeanCreateRequest,
+  EnjoymentScale,
   ProfileRecord,
   ShotRecord,
   ShotRecordSummary,
@@ -129,11 +134,28 @@ export interface ApiPort {
   /** PUT /shots/{id}: Decaid deep-merges the annotations; the notes string is replaced. */
   updateShot(id: string, patch: ShotUpdateRequest): Promise<ShotRecord>;
   /**
+   * Decaid's rating scale (D101): 10 or 100, or null when Decaid did not
+   * answer or was busy. Throws when it answered something that tells neither
+   * (reported as drift where it was read).
+   */
+  probeEnjoymentScale(): Promise<EnjoymentScale | null>;
+  /**
    * GET /grinders/{id}: the grinder in Decaid's grinder library, reduced to
    * how its dial moves (D62). Null when Decaid has no grinder with that id;
    * throws when Decaid cannot be read.
    */
   getGrinder(id: string): Promise<GrinderInfo | null>;
+  /**
+   * GET /beans: the beans in Decaid's bean library that are not archived
+   * (D102). Throws when Decaid cannot be read. CafAI only reads the library
+   * and adds to it: it never edits or deletes a bean or batch, so the port
+   * has no way to.
+   */
+  listBeans(): Promise<Bean[]>;
+  /** POST /beans. */
+  createBean(request: BeanCreateRequest): Promise<Bean>;
+  /** POST /beans/{id}/batches. */
+  createBatch(beanId: string, request: BatchCreateRequest): Promise<BeanBatch>;
 }
 
 export interface Clock {

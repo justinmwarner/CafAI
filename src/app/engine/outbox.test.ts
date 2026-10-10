@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { createOutbox, OUTBOX_RETRY_MS, type OutboxTimers } from './outbox.ts';
+import { describe, expect, it, vi } from 'vitest';
+import { GatewayError } from '../../api/types.ts';
+import { createOutbox, OUTBOX_RETRY_MS, WriteLater, writeFailure, type OutboxTimers } from './outbox.ts';
 
 /** Timers the test fires by hand. */
 function manualTimers() {
@@ -26,12 +27,24 @@ function manualTimers() {
   };
 }
 
-/** A write that fails while `down` is true and records every call. */
+const unreachable = () => new GatewayError(0, '/api/v1/workflow', 'Could not reach Decaid.', 'network');
+
+/** A write that fails while `down` is true (Decaid does not answer) and records every call. */
 function decaid() {
   const state = { down: false, calls: [] as string[] };
   const write = (label: string) => async () => {
     state.calls.push(label);
-    if (state.down) throw new Error('Could not reach Decaid.');
+    if (state.down) throw unreachable();
+  };
+  return { state, write };
+}
+
+/** A write that always fails with `error`, counting its attempts. */
+function failing(error: unknown) {
+  const state = { calls: 0 };
+  const write = async () => {
+    state.calls += 1;
+    throw error;
   };
   return { state, write };
 }
@@ -114,7 +127,7 @@ describe('outbox', () => {
     const shot = outbox.put('shot:1', () => slow.promise);
     await expect(outbox.put('grinder', write('14'))).resolves.toBe(true);
     expect(state.calls).toEqual(['14']);
-    slow.reject(new Error('Decaid answered HTTP 500.'));
+    slow.reject(new GatewayError(500, '/api/v1/shots/1', 'Decaid answered HTTP 500 for /api/v1/shots/1.', 'http'));
     await expect(shot).resolves.toBe(false);
     expect(outbox.pending()).toEqual(['shot:1']);
   });
@@ -159,7 +172,7 @@ describe('outbox', () => {
     const outbox = createOutbox({ timers: manualTimers().timers });
     await expect(
       outbox.put('grinder', () => {
-        throw new Error('bad input');
+        throw unreachable();
       }),
     ).resolves.toBe(false);
     expect(outbox.pending()).toEqual(['grinder']);
@@ -185,5 +198,107 @@ describe('outbox', () => {
     const outbox = createOutbox({ timers: manualTimers().timers });
     await outbox.flush();
     expect(outbox.pending()).toEqual([]);
+  });
+});
+
+describe('writes that cannot succeed (5.11)', () => {
+  const refused = (status: number) =>
+    new GatewayError(status, '/api/v1/shots/shot-1', 'enjoyment must be between 0 and 10', 'http', {
+      error: 'Invalid request',
+      message: 'Invalid argument(s): enjoyment must be between 0 and 10',
+    });
+
+  it('drops a write Decaid refuses (a 400), says so once, and never sends it again', async () => {
+    const { timers, delays, fire } = manualTimers();
+    const onDrop = vi.fn();
+    const outbox = createOutbox({ timers, onDrop });
+    const error = refused(400);
+    const { state, write } = failing(error);
+    await expect(outbox.put('shot:shot-1', write)).resolves.toBe(true);
+    expect(outbox.pending()).toEqual([]);
+    expect(delays()).toEqual([]);
+    expect(onDrop).toHaveBeenCalledTimes(1);
+    expect(onDrop).toHaveBeenCalledWith('shot:shot-1', error);
+
+    await outbox.flush();
+    fire();
+    await settle();
+    expect(state.calls).toBe(1);
+    expect(onDrop).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a write that may go through later: no answer, a timeout, 408, 409, 425, 429 and 5xx', async () => {
+    const errors = [
+      unreachable(),
+      new GatewayError(0, '/api/v1/shots/shot-1', 'Decaid did not answer in time.', 'timeout'),
+      ...[408, 409, 425, 429, 500, 503].map((status) => refused(status)),
+    ];
+    for (const error of errors) {
+      const onDrop = vi.fn();
+      const outbox = createOutbox({ timers: manualTimers().timers, onDrop });
+      await expect(outbox.put('shot:shot-1', failing(error).write), `${error.status} ${error.code}`).resolves.toBe(false);
+      expect(outbox.pending()).toEqual(['shot:shot-1']);
+      expect(onDrop).not.toHaveBeenCalled();
+    }
+  });
+
+  it('drops a write that fails in CafAI itself (a TypeError) instead of trying it forever', async () => {
+    const { timers, delays, fire } = manualTimers();
+    const onDrop = vi.fn();
+    const outbox = createOutbox({ timers, onDrop });
+    const { state, write } = failing(new TypeError("Cannot read properties of undefined (reading 'trim')"));
+    await expect(outbox.put('shot:shot-1', write)).resolves.toBe(true);
+    expect(outbox.pending()).toEqual([]);
+    expect(delays()).toEqual([]);
+    fire();
+    await outbox.flush();
+    expect(state.calls).toBe(1);
+    expect(onDrop).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts a write Decaid took as sent when only its reply could not be read', async () => {
+    const onDrop = vi.fn();
+    const outbox = createOutbox({ timers: manualTimers().timers, onDrop });
+    const unread = new GatewayError(200, '/api/v1/shots/shot-1', "Decaid sent a reply CafAI doesn't recognise.", 'unexpected_reply');
+    const { state, write } = failing(unread);
+    await expect(outbox.put('shot:shot-1', write)).resolves.toBe(true);
+    expect(outbox.pending()).toEqual([]);
+    await outbox.flush();
+    expect(state.calls).toBe(1);
+    expect(onDrop).not.toHaveBeenCalled();
+  });
+
+  it('keeps a write that says it has to wait', async () => {
+    const onDrop = vi.fn();
+    const outbox = createOutbox({ timers: manualTimers().timers, onDrop });
+    await expect(outbox.put('shot:shot-1', failing(new WriteLater('The rating scale is not known yet.')).write)).resolves.toBe(false);
+    expect(outbox.pending()).toEqual(['shot:shot-1']);
+    expect(onDrop).not.toHaveBeenCalled();
+  });
+
+  it('says nothing about a refused write that a newer one replaced: the newer one carries it', async () => {
+    const onDrop = vi.fn();
+    const outbox = createOutbox({ timers: manualTimers().timers, onDrop });
+    const first = deferred();
+    const older = outbox.put('shot:shot-1', () => first.promise);
+    const newer = failing(refused(400));
+    const replaced = outbox.put('shot:shot-1', newer.write);
+    first.reject(refused(400));
+    await expect(older).resolves.toBe(true);
+    await expect(replaced).resolves.toBe(true);
+    expect(newer.state.calls).toBe(1);
+    expect(onDrop).toHaveBeenCalledTimes(1);
+  });
+
+  it('sorts failures the way the outbox treats them', () => {
+    expect(writeFailure(unreachable())).toBe('retry');
+    expect(writeFailure(refused(429))).toBe('retry');
+    expect(writeFailure(refused(502))).toBe('retry');
+    expect(writeFailure(new WriteLater('later'))).toBe('retry');
+    expect(writeFailure(refused(400))).toBe('drop');
+    expect(writeFailure(refused(404))).toBe('drop');
+    expect(writeFailure(new GatewayError(0, '/api/v1/store/cafai', 'bad key', 'invalid_key'))).toBe('drop');
+    expect(writeFailure(new TypeError('x.trim is not a function'))).toBe('drop');
+    expect(writeFailure(new GatewayError(200, '/api/v1/workflow', 'Decaid sent an empty reply.', 'http'))).toBe('landed');
   });
 });

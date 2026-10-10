@@ -24,6 +24,7 @@ import {
   makeSettings,
   makeVersion,
 } from './testing/fixtures.ts';
+import { unexpectedReply } from '../api/readers.ts';
 import { clone } from '../util/clone.ts';
 import { newId } from '../util/id.ts';
 import type { IterationRecord } from './types.ts';
@@ -241,6 +242,23 @@ describe('push', () => {
     expect(Object.keys(kv.values()).sort()).toEqual(['bags', 'conv.bag_kiambu', 'iterations', 'meta', 'settings', 'versions']);
   });
 
+  it('pushes nothing while Decaid answers its full read with something CafAI cannot read, even with data here, and tries again (5.3)', async () => {
+    vi.useFakeTimers();
+    const kv = createMemoryKv();
+    kv.failNext('getAll', 1, unexpectedReply('GET /api/v1/store/{ns}?full=1', '/api/v1/store/cafai?full=1'));
+    const { source } = memorySource(fullSnapshot());
+    const mirror = makeMirror(kv, source, { retryMs: 15_000 });
+    await mirror.pushNow();
+    expect(kv.writes()).toEqual([]);
+    expect(mirror.lastError).toBe("Could not back up to Decaid: Decaid sent a reply CafAI doesn't recognise.");
+    expect(mirror.lastPushAt).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    await mirror.settled();
+    expect(mirror.lastError).toBeNull();
+    expect(kv.values()['bags']).toEqual([makeBag()]);
+  });
+
   it('runs one push at a time; calls during a push share one follow-up push', async () => {
     const kv = createMemoryKv();
     const { source, state } = memorySource(fullSnapshot());
@@ -419,7 +437,12 @@ describe('pull', () => {
 
     const older = { model: MODEL, grinderName: 'DF64', grinderSetting: '2.5', activeBagId: 'bag_kiambu' };
     const oldKv = createMemoryKv({ cafai: { settings: older, bags: [makeBag()] } });
-    expect((await makeMirror(oldKv, memorySource().source).pull())?.settings).toEqual({ ...older, grinderId: null, appearance: DEFAULT_APPEARANCE });
+    expect((await makeMirror(oldKv, memorySource().source).pull())?.settings).toEqual({
+      ...older,
+      grinderId: null,
+      appearance: DEFAULT_APPEARANCE,
+      keepKeyInDecaid: false,
+    });
   });
 
   it('rejects when Decaid cannot be read, so a failure never looks like an empty backup', async () => {

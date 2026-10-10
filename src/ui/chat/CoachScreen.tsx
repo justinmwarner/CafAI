@@ -229,15 +229,24 @@ function EmptyState({ children }: { children: ReactNode }) {
   );
 }
 
-function ApiKeyCard({ settingsHref }: { settingsHref: string }) {
+/** Bags came back from Decaid's backup but the key did not (5.5). */
+const KEY_AGAIN = "Decaid was updated or this browser's storage was cleared. Your bags are back; paste your API key again.";
+
+function ApiKeyCard({ settingsHref, restored }: { settingsHref: string; restored: boolean }) {
   return (
     <EmptyState>
       <KeyIcon sx={{ fontSize: 40, color: 'primary.main' }} />
       <Typography variant="h6" component="h2" sx={{ mt: 1 }}>
         Add your Anthropic API key to start coaching
       </Typography>
+      {restored ? (
+        <Typography variant="body2" sx={{ mt: 1 }}>
+          {KEY_AGAIN}
+        </Typography>
+      ) : null}
       <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
-        The key stays on this device. You pay Anthropic directly for what the coach uses.
+        The key stays on this device unless you choose in Settings to keep a copy in Decaid. You pay Anthropic directly for
+        what the coach uses.
       </Typography>
       <Button variant="contained" href={settingsHref} sx={{ mt: 2.5, minHeight: 48, px: 3 }}>
         Open Settings
@@ -277,6 +286,7 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
   const { coach, telemetry } = useServices();
   const ready = useCoach((s) => s.ready);
   const hasApiKey = useCoach((s) => s.hasApiKey);
+  const restoredFromBackup = useCoach((s) => s.restoredFromBackup === true);
   const bags = useCoach((s) => s.bags);
   const activeBag = useCoach((s) => s.activeBag);
   const activeVersion = useCoach((s) => s.activeVersion);
@@ -330,7 +340,7 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
       </Stack>
     );
   } else if (!hasApiKey) {
-    body = <ApiKeyCard settingsHref={settingsHref} />;
+    body = <ApiKeyCard settingsHref={settingsHref} restored={restoredFromBackup} />;
   } else if (!activeBag) {
     body = <NewBagCta hasBags={listedBags.length > 0} disabled={busy || shotRunning} />;
   } else {

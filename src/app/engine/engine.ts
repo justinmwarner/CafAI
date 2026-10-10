@@ -14,7 +14,10 @@
  *   when the machine runs another profile (D66). Looking never changes the
  *   machine (D42).
  * - Writes to Decaid that fail (a grinder setting, a shot's notes) wait in an
- *   outbox and go out again when Decaid is back (D64).
+ *   outbox and go out again when Decaid is back (D64); a write Decaid refuses
+ *   is dropped and the chat says so once (5.11).
+ * - A bag whose details were saved is added to Decaid's bean library in the
+ *   background, and every load names its batch (D102).
  * - v1 starts from the dose Decaid has at the pick (D57). Grind moves use the
  *   steps of the grinder linked from Decaid's library (D62), read in the
  *   background so a slow or failed read never holds anything up.
@@ -36,8 +39,13 @@ import {
   type SaveBagDetails,
   type ToolName,
 } from '../../coach/contract.ts';
+import { reportDrift } from '../../api/drift.ts';
+import { describeValue } from '../../api/frames.ts';
 import {
   GatewayError,
+  type BatchCreateRequest,
+  type BeanCreateRequest,
+  type EnjoymentScale,
   type ShotAnnotations,
   type ShotRecord,
   type TelemetryStore,
@@ -69,7 +77,7 @@ import type {
   TemplateCardItem,
   VersionLoad,
 } from '../types.ts';
-import { browserTimers, createOutbox, type OutboxTimers } from './outbox.ts';
+import { browserTimers, createOutbox, writeFailure, WriteLater, type OutboxTimers } from './outbox.ts';
 import type { ApiPort, ChangePlan, Clock, CoachPort, LlmPort, ShotSource } from './ports.ts';
 import {
   UNANSWERED_SHOT,
@@ -86,7 +94,15 @@ import {
   type AdjustmentResultPayload,
   type TemplatePickedPayload,
 } from './protocol.ts';
-import { EXTRAS_KEY, cafaiNotesLine, isTasteQuestion, lastCafaiNotes, mergeNotes, tasteWords } from './shotNotes.ts';
+import {
+  EXTRAS_KEY,
+  cafaiNotesLine,
+  enjoymentFromStars,
+  isTasteQuestion,
+  lastCafaiNotes,
+  mergeNotes,
+  tasteWords,
+} from './shotNotes.ts';
 import {
   NEW_BAG_PROMPT,
   appendText,
@@ -127,6 +143,8 @@ export interface EngineDeps {
   checkTimers?: OutboxTimers;
   /** Whether the page is in view, and when that changes (always in view by default). */
   visibility?: PageVisibility;
+  /** The start-up restore brought the bags back from Decaid's backup (5.5). */
+  restoredFromBackup?: boolean;
 }
 
 /** The page's visibility: the WebView runs on with the page hidden behind another app or a dark screen. */
@@ -141,6 +159,8 @@ const ALWAYS_VISIBLE: PageVisibility = { visible: () => true, subscribe: () => (
 export interface CoachEngine extends CoachController {
   start(): Promise<void>;
   dispose(): void;
+  /** Records came back from Decaid's backup after start (5.4): read them again, and say so once. */
+  restored(): Promise<void>;
 }
 
 interface PendingCall {
@@ -212,7 +232,47 @@ const UPLOAD_GUARD_MS = 500;
  */
 export const MACHINE_CHECK_MS = 30_000;
 const GRINDER_WRITE = 'grinder';
-const shotWriteKey = (shotId: string) => `shot:${shotId}`;
+const SHOT_WRITE = 'shot:';
+const shotWriteKey = (shotId: string) => `${SHOT_WRITE}${shotId}`;
+/** A bag's name until its details are saved: it names no coffee. */
+const NEW_BAG_NAME = 'New bag';
+/** Said once per session, when Decaid has no barrier (5.12). */
+const NO_BARRIER = 'This Decaid cannot confirm that the machine took a profile, so CafAI will assume it did.';
+const ADDED_TO_BEANS = "Added to Decaid's beans.";
+const BAGS_ARE_BACK = "Your bags are back from Decaid's backup.";
+
+/** A new bean for Decaid's library from a bag's details (D102); a detail CafAI does not know is left out. */
+function beanRequest(bag: Bag, roaster: string, name: string): BeanCreateRequest {
+  const request: BeanCreateRequest = { roaster, name };
+  if (bag.origin) request.country = bag.origin;
+  if (bag.process) request.processing = bag.process;
+  if (bag.notes) request.notes = bag.notes;
+  return request;
+}
+
+/** The bag's batch: its roast date and roast level, when known. */
+function batchRequest(bag: Bag): BatchCreateRequest {
+  const request: BatchCreateRequest = {};
+  if (bag.roastDate) request.roastDate = bag.roastDate;
+  if (bag.roastLevel) request.roastLevel = bag.roastLevel;
+  return request;
+}
+
+/** Case and the spaces around it aside, the same name. */
+function sameName(a: string | undefined, b: string): boolean {
+  return (a ?? '').trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/** A write could not read the shot record it adds to (the notes, D61): the read is what failed. */
+class RecordReadFailed extends Error {
+  readonly reason: unknown;
+
+  constructor(reason: unknown) {
+    super(describe(reason));
+    this.name = 'RecordReadFailed';
+    this.reason = reason;
+  }
+}
 
 /** The CafAI version id a workflow context was tagged with at activation, if any. */
 function taggedVersionId(context: WorkflowContext | undefined): string | null {
@@ -265,6 +325,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     canUndo: false,
     activeLoad: null,
     machineTick: 0,
+    restoredFromBackup: deps.restoredFromBackup ?? false,
   };
   let settings: Settings = { model: 'claude-opus-5-5', grinderName: null, grinderSetting: null, activeBagId: null };
   let session: Session | null = null;
@@ -324,8 +385,20 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   let checkQueued = false;
   let disposed = false;
   let unsubscribeVisibility: (() => void) | null = null;
-  const outbox = createOutbox({ timers: deps.timers });
+  const outbox = createOutbox({ timers: deps.timers, onDrop: (key, error) => writeDropped(key, error) });
   const shotWrites = new Map<string, ShotWrite>();
+  /** Decaid's rating scale once it said (D101); asked again while it is null. */
+  let enjoymentScale: EnjoymentScale | null = null;
+  /** The question in flight, so two writes never ask it twice. */
+  let scaleProbe: Promise<EnjoymentScale | null> | null = null;
+  /**
+   * Decaid answered the question with something that tells neither scale
+   * (reported as drift where it was read): it is asked again after the next
+   * shot, not at every try of the waiting stars.
+   */
+  let scaleUnclear = false;
+  /** Bags being added to Decaid's bean library now, so a second save never adds a second batch. */
+  const linking = new Set<string>();
   let chain: Promise<void> = Promise.resolve();
 
   const nowIso = () => clock.now().toISOString();
@@ -474,18 +547,29 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (dose) context.targetDoseWeight = dose;
     // Decaid merges the context field by field, so anything left over from the
     // previous coffee (another skin's bean batch, the old roaster) would stick
-    // to this coffee's shots: send null to clear what CafAI does not know.
+    // to this coffee's shots: send the bag's own, or null to clear (D102).
     context.coffeeName = s.bag.name || null;
     context.coffeeRoaster = s.bag.roaster ?? null;
-    context.beanBatchId = null;
-    // The grinder linked from Decaid's library (D62); null clears another skin's.
-    context.grinderId = settings.grinderId ?? null;
-    context.grinderModel = settings.grinderName ?? null;
-    context.grinderSetting = settings.grinderSetting ?? null;
+    context.beanBatchId = s.bag.decaidBatchId ?? null;
+    Object.assign(context, grinderContext());
     // Which CafAI version this is: shot records keep the workflow, so a shot
     // can be told apart even from a same-named or same-content version.
     context.extras = { [EXTRAS_KEY]: { versionId, bagId: s.bag.id } };
     return context;
+  }
+
+  /**
+   * The grinder as last saved, linked from Decaid's library (D62); null clears
+   * another skin's. Its burrs are cleared too (5.2): a Decaid that keeps them
+   * fills them in from its grinder library when it stores a shot.
+   */
+  function grinderContext(): Pick<WorkflowContext, 'grinderId' | 'grinderModel' | 'grinderSetting' | 'grinderBurrs'> {
+    return {
+      grinderId: settings.grinderId ?? null,
+      grinderModel: settings.grinderName ?? null,
+      grinderSetting: settings.grinderSetting ?? null,
+      grinderBurrs: null,
+    };
   }
 
   function sameContent(profile: WireProfile | ProfileJson, version: ProfileVersion): boolean {
@@ -588,14 +672,11 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
    * Write the grinder as last saved to Decaid's workflow context, so the next
    * shots carry it (D54), with its id in Decaid's grinder library (D62). A
    * write Decaid cannot take now waits in the outbox; the chat says so once,
-   * and nothing when it goes through later.
+   * and nothing when it goes through later. One Decaid refuses is dropped,
+   * and writeDropped says so instead.
    */
   async function sendGrinder(): Promise<void> {
-    const grinder = {
-      grinderId: settings.grinderId ?? null,
-      grinderModel: settings.grinderName ?? null,
-      grinderSetting: settings.grinderSetting ?? null,
-    };
+    const grinder = grinderContext();
     const sent = await outbox.put(GRINDER_WRITE, () => api.updateWorkflow({ context: grinder }));
     const s = session;
     if (sent || !s) return;
@@ -607,34 +688,117 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
 
   /** Add to what CafAI writes to a shot's record, and send it all (latest wins in the outbox). */
   function queueShotWrite(shotId: string, change: ShotWrite): Promise<boolean> {
-    const next: ShotWrite = { ...shotWrites.get(shotId), ...change };
-    shotWrites.set(shotId, next);
-    return outbox.put(shotWriteKey(shotId), () => writeShot(shotId, next));
+    shotWrites.set(shotId, { ...shotWrites.get(shotId), ...change });
+    return outbox.put(shotWriteKey(shotId), () => writeShot(shotId));
   }
 
   /**
-   * One PUT /shots/{id} with everything CafAI has to say about the shot so
-   * far. Safe to repeat: Decaid merges extras key by key, and CafAI's notes
-   * line replaces its own previous line instead of piling up.
+   * Decaid's rating scale (D101), asked once per session before the first
+   * stars go out: 10 on current builds, 100 on 0.8.6 field builds. Null while
+   * Decaid could not be asked (the next try asks again) or after it answered
+   * something that tells neither (asked again after the next shot).
    */
-  async function writeShot(shotId: string, write: ShotWrite): Promise<void> {
+  function ratingScale(): Promise<EnjoymentScale | null> {
+    if (enjoymentScale !== null) return Promise.resolve(enjoymentScale);
+    if (scaleUnclear) return Promise.resolve(null);
+    scaleProbe ??= api
+      .probeEnjoymentScale()
+      .catch(() => {
+        scaleUnclear = true;
+        return null;
+      })
+      .then((scale) => {
+        enjoymentScale = scale;
+        scaleProbe = null;
+        return scale;
+      });
+    return scaleProbe;
+  }
+
+  /**
+   * One PUT /shots/{id} with everything CafAI still has to say about the shot.
+   * Safe to repeat: Decaid merges extras key by key, and CafAI's notes line
+   * replaces its own previous line instead of piling up. The stars wait in the
+   * outbox until Decaid has said its rating scale; the taste goes on without
+   * them.
+   */
+  async function writeShot(shotId: string): Promise<void> {
+    const write = shotWrites.get(shotId);
+    if (!write) return;
     const own: Record<string, unknown> = {};
     const annotations: ShotAnnotations = {};
     if (write.taste) {
       // The notes as they are now: a person may have written some in Decaid since.
-      const record = await api.getShot(shotId);
+      const record = await api.getShot(shotId).catch((error: unknown) => {
+        // The write waits while Decaid may answer later. Otherwise nothing was
+        // written (an unreadable record is no write Decaid took): the read failed.
+        throw writeFailure(error) === 'retry' ? error : new RecordReadFailed(error);
+      });
       shotCache.set(record.id, record);
       annotations.espressoNotes = mergeNotes(record.annotations?.espressoNotes, lastCafaiNotes(record.annotations), write.taste.notes);
       Object.assign(own, write.taste);
     }
-    if (write.stars !== undefined) {
-      // Decaid's scale is 0-10 (Visualizer shows it x10).
-      annotations.enjoyment = write.stars * 2;
+    const scale = write.stars === undefined ? null : await ratingScale();
+    if (write.stars !== undefined && scale !== null) {
+      annotations.enjoyment = enjoymentFromStars(write.stars, scale);
       own.stars = write.stars;
     }
-    annotations.extras = { [EXTRAS_KEY]: own };
-    await api.updateShot(shotId, { annotations });
-    if (shotWrites.get(shotId) === write) shotWrites.delete(shotId);
+    if (Object.keys(own).length > 0) {
+      annotations.extras = { [EXTRAS_KEY]: own };
+      try {
+        await api.updateShot(shotId, { annotations });
+      } catch (error) {
+        // Decaid took it and only its reply was unreadable (reported where it was read).
+        if (writeFailure(error) !== 'landed') throw error;
+      }
+    }
+    // A newer write came in meanwhile: it carries everything, stars included.
+    if (shotWrites.get(shotId) !== write) return;
+    if (write.stars === undefined || scale !== null) {
+      shotWrites.delete(shotId);
+      return;
+    }
+    shotWrites.set(shotId, { stars: write.stars });
+    throw new WriteLater('Decaid has not said which rating scale it uses yet.');
+  }
+
+  /**
+   * A write that cannot succeed was dropped rather than tried forever (5.11):
+   * a refusal is reported as drift under the request Decaid refused, and the
+   * chat says once what was not saved. A failure in CafAI itself gets a plain
+   * sentence; its detail goes to the log Decaid keeps of the WebView.
+   */
+  function writeDropped(key: string, error: unknown): void {
+    const readFailed = error instanceof RecordReadFailed;
+    const cause = readFailed ? error.reason : error;
+    let what = 'the grinder for the next shots';
+    let source = 'PUT /api/v1/workflow';
+    let field = 'context';
+    if (key.startsWith(SHOT_WRITE)) {
+      const shotId = key.slice(SHOT_WRITE.length);
+      const write = shotWrites.get(shotId);
+      shotWrites.delete(shotId);
+      const parts = [...(write?.taste ? ['the taste'] : []), ...(write?.stars !== undefined ? ['the stars'] : [])];
+      what = `${parts.join(' and ') || 'the notes'} for this shot`;
+      source = readFailed ? 'GET /api/v1/shots/{id}' : 'PUT /api/v1/shots/{id}';
+      field = readFailed ? 'record' : 'annotations';
+    }
+    const refused = cause instanceof GatewayError && cause.status >= 400 && cause.status < 500;
+    let text: string;
+    if (refused) {
+      reportDrift(source, `${field}: refused (HTTP ${cause.status})`);
+      text = `Decaid would not save ${what}: ${describe(cause).replace(/[.\s]+$/, '')}.`;
+    } else {
+      console.error(`CafAI could not save ${what}:`, describe(cause));
+      text = `CafAI could not save ${what}.`;
+    }
+    void enqueue(async () => {
+      const s = session;
+      if (!s) return;
+      addMessage('system', [noticePart('warning', text)]);
+      await persistConversation(s);
+      emit();
+    });
   }
 
   /**
@@ -655,6 +819,60 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       notes: cafaiNotesLine(words, version?.title ?? s.bag.name),
     };
     void queueShotWrite(iteration.shotId, { taste });
+  }
+
+  // -------------------------------------------------------------------------
+  // Decaid's bean library (D102)
+  // -------------------------------------------------------------------------
+
+  /**
+   * After a bag's details were saved: add it to Decaid's bean library, reusing
+   * the bean with the same roaster and name or adding one, then adding a batch
+   * for this bag, and keep both ids on the bag so every load names its batch.
+   * Not for a bag without a roaster (Decaid needs one) or a name of its own.
+   * In the background: nothing waits for it. A failure (Decaid away, or a
+   * reply CafAI could not read, reported as drift) leaves the bag unlinked
+   * for the next save to try again. CafAI never edits or deletes a bean or a
+   * batch: a detail corrected later changes the bag only.
+   */
+  function linkBag(bag: Bag): void {
+    const roaster = bag.roaster?.trim() ?? '';
+    const name = bag.name.trim();
+    if (bag.decaidBatchId || !roaster || !name || name === NEW_BAG_NAME || linking.has(bag.id)) return;
+    linking.add(bag.id);
+    void (async () => {
+      try {
+        const beans = await api.listBeans();
+        const bean =
+          beans.find((known) => sameName(known.roaster, roaster) && sameName(known.name, name)) ??
+          (await api.createBean(beanRequest(bag, roaster, name)));
+        const batch = await api.createBatch(bean.id, batchRequest(bag));
+        // In turn with the engine's actions, so the note never lands inside a reply.
+        await enqueue(() => storeLink(bag.id, bean.id, batch.id));
+      } catch {
+        // The next save tries again.
+      } finally {
+        linking.delete(bag.id);
+      }
+    })();
+  }
+
+  /** Keep a bag's link to Decaid's bean library; say so in its chat when it is on screen. */
+  async function storeLink(bagId: string, beanId: string, batchId: string): Promise<void> {
+    const link = { decaidBeanId: beanId, decaidBatchId: batchId };
+    const s = session;
+    if (s?.bag.id === bagId) {
+      await persistBag(s, link);
+      addMessage('system', [noticePart('info', ADDED_TO_BEANS)]);
+      await persistConversation(s);
+    } else {
+      const stored = await storage.bags.get(bagId);
+      if (!stored) return;
+      const linked: Bag = { ...stored, ...link, updatedAt: nowIso() };
+      await storage.bags.put(linked);
+      state = { ...state, bags: upsert(state.bags, linked) };
+    }
+    emit();
   }
 
   // -------------------------------------------------------------------------
@@ -695,7 +913,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         // The bag name travels to Decaid (coffee name, profile titles): never a key.
         const clean = (text: string | null) => (text === null ? null : redactKeyLike(text, 'key removed'));
         await persistBag(s, {
-          name: clean(details.name.trim()) || 'New bag',
+          name: clean(details.name.trim()) || NEW_BAG_NAME,
           roaster: clean(details.roaster),
           origin: clean(details.origin),
           roastLevel: details.roastLevel,
@@ -703,6 +921,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
           notes: clean(details.notes),
         });
         emit();
+        linkBag(s.bag);
         return { content: JSON.stringify({ saved: true }) };
       }
       case TOOL.getShotSummary:
@@ -992,7 +1211,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     const at = nowIso();
     const bag: Bag = {
       id: deps.newId('bag'),
-      name: 'New bag',
+      name: NEW_BAG_NAME,
       roaster: null,
       origin: null,
       roastLevel: null,
@@ -1115,7 +1334,11 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       barrierInFlight = true;
       try {
         const answer = await api.loadProfileOnMachine(profile);
-        if (answer === 'unsupported') barrierSupported = false;
+        if (answer === 'unsupported') {
+          // Not asked again this session, so this is said once (5.12).
+          barrierSupported = false;
+          addMessage('system', [noticePart('info', NO_BARRIER)]);
+        }
         outcome = { status: answer === 'loaded' ? 'loaded' : answer === 'offline' ? 'waiting' : 'assumed' };
       } catch (error) {
         outcome = { status: 'failed', reason: describe(error) };
@@ -1309,7 +1532,19 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     }
     const iterations = await bagIterations(s);
     if (iterations.some((i) => i.shotId === record.id)) return;
-    if (record.workflow?.profile && !ranVersion(record.workflow, current)) {
+    // A record that does not say which profile ran is credited as before; the
+    // chat says so with the shot card (5.10).
+    const ran: unknown = record.workflow?.profile;
+    const ranTitle: unknown = typeof ran === 'object' && ran !== null ? (ran as Record<string, unknown>).title : undefined;
+    const saysWhichRan = typeof ranTitle === 'string';
+    if (!saysWhichRan) {
+      const problem =
+        typeof ran === 'object' && ran !== null
+          ? `workflow.profile.title: ${describeValue(ranTitle, 'string')}`
+          : `workflow.profile: ${describeValue(ran, 'object')}`;
+      reportDrift('GET /api/v1/shots/{id}', problem);
+    }
+    if (saysWhichRan && !ranVersion(record.workflow, current)) {
       // The machine ran something else (another bag's profile, or a load that
       // failed): crediting this shot to the active version would corrupt the dial-in.
       const ran = record.workflow.profile.title;
@@ -1374,6 +1609,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       updatedAt: at,
     });
     addMessage('system', [shotPart(record.id, summary)]);
+    if (!saysWhichRan) {
+      addMessage('system', [noticePart('info', `Decaid's record did not say which profile ran; CafAI counted it for v${current.version}.`)]);
+    }
     const template = coach.getTemplate(current.templateId);
     const block = shotCompletedBlock({
       shotRef: 'latest',
@@ -1918,6 +2156,45 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     state = { ...state, hasApiKey: Boolean(await storage.secrets.getApiKey()) };
   }
 
+  /**
+   * Read the settings, the key and the bags again (after Settings saved, an
+   * import, or a restore from Decaid's backup). True when a coach reply waited
+   * for the key that is now there: the caller runs it once the screen is up
+   * to date.
+   */
+  async function reread(): Promise<boolean> {
+    const before = settings;
+    await refreshFromStorage();
+    const grinderChanged =
+      settings.grinderName !== before.grinderName ||
+      settings.grinderSetting !== before.grinderSetting ||
+      (settings.grinderId ?? null) !== (before.grinderId ?? null);
+    // The grinder's steps may have changed in Decaid's library too: read them again, in the background.
+    loadGrinder();
+    // After an import the bag list (and the active bag's records) may differ.
+    const bags = (await storage.bags.list()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    state = { ...state, bags };
+    const current = session;
+    if (current) {
+      const stored = bags.find((b) => b.id === current.bag.id);
+      if (!stored) {
+        session = null;
+        state = { ...state, messages: [] };
+      } else if (stored.updatedAt !== current.bag.updatedAt) {
+        await openSession(stored);
+      }
+    } else {
+      const active = bags.find((b) => b.id === settings.activeBagId);
+      if (active) await openSession(active);
+    }
+    // The next shots should carry the grinder the user just saved (D54).
+    // After the session is current, so a notice lands in the right chat.
+    if (grinderChanged) await sendGrinder();
+    const waitedForKey = state.hasApiKey && Boolean(state.error?.startsWith('Add your Anthropic API key'));
+    if (waitedForKey) setError(null);
+    return waitedForKey && session !== null && awaitingModel(session.conversation.apiMessages);
+  }
+
   return {
     getState: () => state,
     subscribe(listener) {
@@ -1943,6 +2220,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
           return;
         }
         const started = takeShotStart(event.shotId);
+        // A new shot: a rating scale Decaid could not tell is asked once more (D101).
+        scaleUnclear = false;
         void enqueue(() => handleShotFinished(event.shotId, started));
       });
       // React only to reports that arrive while CafAI runs, not a stale one.
@@ -2022,37 +2301,23 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     },
     refresh: () =>
       enqueue(async () => {
-        const before = settings;
-        await refreshFromStorage();
-        const grinderChanged =
-          settings.grinderName !== before.grinderName ||
-          settings.grinderSetting !== before.grinderSetting ||
-          (settings.grinderId ?? null) !== (before.grinderId ?? null);
-        // The grinder's steps may have changed in Decaid's library too: read them again, in the background.
-        loadGrinder();
-        // After an import the bag list (and the active bag's records) may differ.
-        const bags = (await storage.bags.list()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-        state = { ...state, bags };
-        const current = session;
-        if (current) {
-          const stored = bags.find((b) => b.id === current.bag.id);
-          if (!stored) {
-            session = null;
-            state = { ...state, messages: [] };
-          } else if (stored.updatedAt !== current.bag.updatedAt) {
-            await openSession(stored);
-          }
-        } else {
-          const active = bags.find((b) => b.id === settings.activeBagId);
-          if (active) await openSession(active);
-        }
-        // The next shots should carry the grinder the user just saved (D54).
-        // After the session is current, so a notice lands in the right chat.
-        if (grinderChanged) await sendGrinder();
-        const waitedForKey = state.hasApiKey && Boolean(state.error?.startsWith('Add your Anthropic API key'));
-        if (waitedForKey) setError(null);
+        const resume = await reread();
         emit();
-        if (waitedForKey && session && awaitingModel(session.conversation.apiMessages)) await runModel();
+        if (resume) await runModel();
+      }),
+    restored: () =>
+      enqueue(async () => {
+        const first = !state.restoredFromBackup;
+        // Without a key, the key card says why it asks again (5.5).
+        state = { ...state, restoredFromBackup: true };
+        const resume = await reread();
+        const s = session;
+        if (first && s) {
+          addMessage('system', [noticePart('success', BAGS_ARE_BACK)]);
+          await persistConversation(s);
+        }
+        emit();
+        if (resume) await runModel();
       }),
   };
 }

@@ -44,5 +44,10 @@ export function mockDecaidPort(state: MockDecaid): ApiPort {
       const grinder = parseGrinder(record);
       return grinder ? grinderInfo(grinder) : null;
     },
+    // The mock validates enjoyment 0-10, as current Decaid builds do.
+    probeEnjoymentScale: async () => 10,
+    listBeans: async () => state.listBeans(),
+    createBean: async (request) => state.createBean(request),
+    createBatch: async (beanId, request) => state.createBatch(beanId, request),
   };
 }

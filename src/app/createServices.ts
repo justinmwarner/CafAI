@@ -10,7 +10,7 @@ import {
 } from '../api/index.ts';
 import { createPluginDirectory } from '../api/plugins.ts';
 import { DEFAULT_MODEL, MODELS } from '../llm/index.ts';
-import { createIdbStorage, restoreFromMirrorIfEmpty } from '../storage/index.ts';
+import { createIdbStorage, restoreFromMirrorIfEmpty, startLateRestore } from '../storage/index.ts';
 import { newId } from '../util/id.ts';
 import { createApiPort, createCoachPort, createLlmPort } from './adapters.ts';
 import { createAppearanceStore } from './appearance.ts';
@@ -33,9 +33,11 @@ export async function createServices(win: Window): Promise<AppServices> {
   void plugins.refresh();
 
   const storage = await createIdbStorage({ kv: decaid.kv, appVersion: APP_VERSION, defaultModel: DEFAULT_MODEL });
-  // Browser storage can be lost (a temporary origin, a reinstall): bring the
-  // non-secret records back from Decaid's key-value backup before anything reads them.
-  await restoreFromMirrorIfEmpty(storage);
+  // Browser storage can be lost (a temporary origin, a reinstall, a Decaid
+  // update): bring the non-secret records back from Decaid's key-value backup
+  // before anything reads them, and the API key from its copy in Decaid when
+  // the user keeps one there (D99).
+  const [restore] = await Promise.all([restoreFromMirrorIfEmpty(storage), storage.keyBackup.restoreIfMissing()]);
 
   const appearance = createAppearanceStore(storage.settings, (await storage.settings.get()).appearance);
 
@@ -54,16 +56,51 @@ export async function createServices(win: Window): Promise<AppServices> {
         return () => win.document.removeEventListener('visibilitychange', listener);
       },
     },
+    restoredFromBackup: restore === 'restored',
   });
 
   telemetry.start();
   await coach.start();
 
+  // Records that came back after start (D100): the chat and the look read them again.
+  const landed = () => {
+    void coach.restored();
+    void appearance.reload();
+  };
+  const stopRestoredWatch = storage.onRestored(landed);
+  // Decaid did not answer the start-up restore (it may still be starting up,
+  // after an update say): keep trying its backup, and at once when it may be back.
+  const late =
+    restore === 'unreachable'
+      ? startLateRestore(storage, {
+          onRestored({ records }) {
+            if (records) landed();
+            else void coach.refresh();
+          },
+        })
+      : null;
+  let machineConnected = telemetry.getState().machineConnected;
+  let decaidOpen = telemetry.getState().sockets.devices === 'open';
+  const stopTelemetryWatch = late
+    ? telemetry.subscribe(() => {
+        const now = telemetry.getState();
+        const back = (now.machineConnected && !machineConnected) || (now.sockets.devices === 'open' && !decaidOpen);
+        machineConnected = now.machineConnected;
+        decaidOpen = now.sockets.devices === 'open';
+        if (back) late.retryNow();
+      })
+    : () => undefined;
+
   // Backgrounding can unload the page after ten minutes: back up on the way out.
-  // Coming back into view can mean a plugin was loaded or unloaded meanwhile.
+  // Coming back into view can mean a plugin was loaded or unloaded meanwhile,
+  // or that Decaid answers again.
   const onVisibility = () => {
-    if (win.document.visibilityState === 'hidden') void storage.mirror.pushNow();
-    else void plugins.refresh();
+    if (win.document.visibilityState === 'hidden') {
+      void storage.mirror.pushNow();
+    } else {
+      void plugins.refresh();
+      late?.retryNow();
+    }
   };
   win.document.addEventListener('visibilitychange', onVisibility);
 
@@ -80,6 +117,9 @@ export async function createServices(win: Window): Promise<AppServices> {
     plugins,
     dispose() {
       win.document.removeEventListener('visibilitychange', onVisibility);
+      late?.stop();
+      stopTelemetryWatch();
+      stopRestoredWatch();
       coach.dispose();
       telemetry.stop();
     },

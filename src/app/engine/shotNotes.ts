@@ -7,7 +7,9 @@
  * line (remembered in `annotations.extras.cafai.notes`) and otherwise
  * appends it on a new line.
  */
-import type { ShotAnnotations } from '../../api/types.ts';
+import { reportDrift } from '../../api/drift.ts';
+import { describeValue } from '../../api/frames.ts';
+import type { EnjoymentScale, ShotAnnotations } from '../../api/types.ts';
 import { OTHER_OPTION } from '../../coach/contract.ts';
 import { redactKeyLike } from '../../storage/redact.ts';
 
@@ -43,6 +45,11 @@ export function cafaiNotesLine(taste: string, versionTitle: string): string {
   return redactKeyLike(`Taste: ${words}${cut ? ' ' : '. '}${versionTitle} (CafAI)`);
 }
 
+/** 1-5 stars as Decaid's `enjoyment` on the scale it uses (D101): x2 out of 10, x20 out of 100. */
+export function enjoymentFromStars(stars: number, scale: EnjoymentScale): number {
+  return stars * (scale / 5);
+}
+
 /** The notes line CafAI wrote last time, from the record's extras. */
 export function lastCafaiNotes(annotations: ShotAnnotations | undefined): string | null {
   const own = annotations?.extras?.[EXTRAS_KEY];
@@ -55,10 +62,14 @@ export function lastCafaiNotes(annotations: ShotAnnotations | undefined): string
  * The record's notes with CafAI's line in: empty notes or exactly CafAI's
  * last line are replaced; CafAI's own last line under a person's notes is
  * swapped for the new one (so a repeated write stays one line); anything
- * else gets the line appended on a new line.
+ * else gets the line appended on a new line. Notes that are not text read
+ * as empty and are reported (5.11): failing on them would fail every retry.
  */
-export function mergeNotes(current: string | null | undefined, lastOwn: string | null, line: string): string {
-  const existing = current ?? '';
+export function mergeNotes(current: unknown, lastOwn: string | null, line: string): string {
+  if (current !== undefined && typeof current !== 'string') {
+    reportDrift('GET /api/v1/shots/{id}', `annotations.espressoNotes: ${describeValue(current, 'string')}`);
+  }
+  const existing = typeof current === 'string' ? current : '';
   if (existing.trim() === '') return line;
   if (lastOwn) {
     if (existing === lastOwn) return line;

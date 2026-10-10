@@ -12,22 +12,64 @@
  * time, so a slow attempt can never land after a newer one. Every write must
  * be idempotent: a retry may repeat one whose answer was lost.
  *
+ * Only a write that may still go through waits (5.11): Decaid did not answer,
+ * timed out, or answered 408, 409, 425, 429 or 5xx. Decaid refusing it (any
+ * other 4xx), or CafAI failing on its own (a TypeError), would fail the same
+ * way on every retry, so the write is dropped and `onDrop` says so. A write
+ * Decaid took whose reply CafAI could not read counts as sent: the reader
+ * reported the reply.
+ *
  * In memory only: a reload drops what waits (the next profile load writes the
  * grinder anyway).
  */
+import { GatewayError } from '../../api/types.ts';
 
 export interface OutboxTimers {
   setTimeout(callback: () => void, ms: number): unknown;
   clearTimeout(handle: unknown): void;
 }
 
+/**
+ * Thrown by a write that cannot go out yet although nothing failed (the stars
+ * wait until Decaid says which rating scale it uses, D101): it waits and runs
+ * again on the next flush.
+ */
+export class WriteLater extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'WriteLater';
+  }
+}
+
+/** Refusals that may pass later: a timeout, a conflict, too early, too many requests. */
+const RETRY_STATUSES = new Set([408, 409, 425, 429]);
+
+/**
+ * What the outbox does with a write that threw: `retry` it later, count it as
+ * `landed` (Decaid took it; only the reply was unreadable), or `drop` it.
+ */
+export function writeFailure(error: unknown): 'retry' | 'landed' | 'drop' {
+  if (error instanceof WriteLater) return 'retry';
+  if (!(error instanceof GatewayError)) return 'drop';
+  if (error.code === 'network' || error.code === 'timeout') return 'retry';
+  if (error.status >= 200 && error.status < 300) return 'landed';
+  return error.status >= 500 || RETRY_STATUSES.has(error.status) ? 'retry' : 'drop';
+}
+
+export interface OutboxOptions {
+  retryMs?: number;
+  timers?: OutboxTimers;
+  /** A write that cannot succeed was dropped (see writeFailure); not called for one a newer write replaced. */
+  onDrop?: (key: string, error: unknown) => void;
+}
+
 export interface Outbox {
   /**
    * Keep `write` under `key`, replacing a write that still waits there, and
    * send it at once (after the write in flight under the same key, if any).
-   * Resolves true when nothing waits on its account any more (sent, or
-   * replaced or dropped before it ran), false when it failed and waits for a
-   * retry.
+   * Resolves true when nothing waits on its account any more (sent, replaced
+   * or dropped before it ran, or dropped because it cannot succeed), false
+   * when it failed and waits for a retry.
    */
   put(key: string, write: () => Promise<unknown>): Promise<boolean>;
   /** Send every waiting write again now. */
@@ -47,11 +89,11 @@ export const browserTimers: OutboxTimers = {
   clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
 };
 
-export function createOutbox(options: { retryMs?: number; timers?: OutboxTimers } = {}): Outbox {
+export function createOutbox(options: OutboxOptions = {}): Outbox {
   const retryMs = options.retryMs ?? OUTBOX_RETRY_MS;
   const timers = options.timers ?? browserTimers;
   const waiting = new Map<string, () => Promise<unknown>>();
-  const inFlight = new Map<string, Promise<boolean>>();
+  const inFlight = new Map<string, Promise<unknown>>();
   let timer: unknown = null;
   let disposed = false;
 
@@ -75,27 +117,33 @@ export function createOutbox(options: { retryMs?: number; timers?: OutboxTimers 
   }
 
   async function runOnce(key: string, write: () => Promise<unknown>): Promise<boolean> {
+    let failure: unknown = null;
     const run = Promise.resolve()
       .then(write)
       .then(
-        () => true,
-        () => false,
+        () => 'sent' as const,
+        (error: unknown) => {
+          failure = error;
+          return writeFailure(error);
+        },
       );
     inFlight.set(key, run);
-    const delivered = await run;
+    const outcome = await run;
     if (inFlight.get(key) === run) inFlight.delete(key);
     // A newer write that arrived meanwhile still waits: it carries more.
-    if (delivered && waiting.get(key) === write) waiting.delete(key);
+    const current = waiting.get(key) === write;
+    if (outcome !== 'retry' && current) waiting.delete(key);
+    if (outcome === 'drop' && current) options.onDrop?.(key, failure);
     schedule();
-    return delivered;
+    return outcome !== 'retry';
   }
 
   /** Send `write` if it is still the one waiting under `key`, after any attempt in flight. */
   async function send(key: string, write: () => Promise<unknown>): Promise<boolean> {
     for (let running = inFlight.get(key); running; running = inFlight.get(key)) await running;
     if (disposed || waiting.get(key) !== write) return true;
-    const delivered = await runOnce(key, write);
-    return delivered || waiting.get(key) !== write;
+    const done = await runOnce(key, write);
+    return done || waiting.get(key) !== write;
   }
 
   async function flush(): Promise<void> {

@@ -1,12 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { unexpectedReply } from '../api/readers.ts';
+import { GatewayError } from '../api/types.ts';
 import {
   createIdbStorage,
   exportFileName,
+  LATE_RESTORE_FOR_MS,
+  restoreFromMirror,
   restoreFromMirrorIfEmpty,
   serializeExport,
+  startLateRestore,
   type CreateIdbStorageOptions,
   type IdbStorage,
+  type LateRestore,
+  type RestoreTimers,
 } from './index.ts';
+import { KEY_NAME, KEY_NAMESPACE } from './keyBackup.ts';
 import { createMemoryKv, type MemoryKv } from './testing/memoryKv.ts';
 import type { Bag, IterationRecord } from './types.ts';
 import {
@@ -22,12 +30,49 @@ import {
 
 const NOW = new Date('2026-10-03T09:30:00.000Z');
 const opened: IdbStorage[] = [];
+const restores: LateRestore[] = [];
 
 afterEach(() => {
+  for (const restore of restores.splice(0)) restore.stop();
   for (const storage of opened.splice(0)) storage.close();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
+
+/** How the KV client fails when Decaid does not answer, and when it answers something CafAI cannot read. */
+const away = () => new GatewayError(0, '/api/v1/store/cafai?full=1', 'Decaid is not answering.', 'network');
+const garbled = () => unexpectedReply('GET /api/v1/store/{ns}?full=1', '/api/v1/store/cafai?full=1');
+
+/** Timers the test fires by hand, with the clock they run on. */
+function manualTimers() {
+  const scheduled = new Map<number, { callback: () => void; ms: number }>();
+  let next = 0;
+  const clock = { now: Date.parse('2026-10-03T09:30:00.000Z') };
+  const timers: RestoreTimers = {
+    setTimeout(callback, ms) {
+      next += 1;
+      scheduled.set(next, { callback, ms });
+      return next;
+    },
+    clearTimeout(handle) {
+      scheduled.delete(handle as number);
+    },
+  };
+  return {
+    timers,
+    now: () => clock.now,
+    delays: () => [...scheduled.values()].map((timer) => timer.ms),
+    /** Move the clock on by the next delay and fire it. */
+    fire() {
+      const due = [...scheduled.values()];
+      scheduled.clear();
+      for (const timer of due) {
+        clock.now += timer.ms;
+        timer.callback();
+      }
+    },
+  };
+}
 
 function names() {
   return { dbName: uniqueDbName(), secretsDbName: uniqueDbName('secrets') };
@@ -145,7 +190,7 @@ describe('restoreFromMirrorIfEmpty', () => {
     await original.mirror.pushNow();
 
     const fresh = await open(kv);
-    expect(await restoreFromMirrorIfEmpty(fresh)).toBe(true);
+    expect(await restoreFromMirrorIfEmpty(fresh)).toBe('restored');
     expect(await fresh.bags.list()).toEqual([makeBag()]);
     expect(await fresh.versions.listByBag('bag_kiambu')).toEqual([makeVersion()]);
     expect(await fresh.conversations.get('conv_kiambu')).toEqual(makeConversation());
@@ -167,7 +212,7 @@ describe('restoreFromMirrorIfEmpty', () => {
 
     const fresh = await open(kv);
     await fresh.settings.update({ model: 'claude-haiku-4-5', grinderName: 'Lagom 01' });
-    expect(await restoreFromMirrorIfEmpty(fresh)).toBe(true);
+    expect(await restoreFromMirrorIfEmpty(fresh)).toBe('restored');
     expect(await fresh.settings.get()).toEqual(
       makeSettings({ model: 'claude-haiku-4-5', grinderName: 'Lagom 01', grinderSetting: '14', activeBagId: 'bag_kiambu' }),
     );
@@ -181,21 +226,184 @@ describe('restoreFromMirrorIfEmpty', () => {
 
     const other = await open(kv);
     await other.bags.put(OTHER_BAG);
-    expect(await restoreFromMirrorIfEmpty(other)).toBe(false);
+    expect(await restoreFromMirrorIfEmpty(other)).toBe('nothing');
     expect(await other.bags.list()).toEqual([OTHER_BAG]);
   });
 
   it('does nothing when the mirror is empty', async () => {
     const storage = await open(createMemoryKv());
-    expect(await restoreFromMirrorIfEmpty(storage)).toBe(false);
+    expect(await restoreFromMirrorIfEmpty(storage)).toBe('nothing');
     expect(await storage.bags.list()).toEqual([]);
   });
 
-  it('returns false instead of throwing when Decaid cannot be read', async () => {
+  it('tells a Decaid that does not answer from one that answers something CafAI cannot read, and never throws (5.3)', async () => {
     const kv = createMemoryKv();
-    kv.failNext('getAll');
     const storage = await open(kv);
-    expect(await restoreFromMirrorIfEmpty(storage)).toBe(false);
+    kv.failNext('getAll', 1, away());
+    expect(await restoreFromMirrorIfEmpty(storage)).toBe('unreachable');
+    kv.failNext('getAll', 1, new GatewayError(0, '/api/v1/store/cafai?full=1', 'Decaid did not answer in time.', 'timeout'));
+    expect(await restoreFromMirrorIfEmpty(storage)).toBe('unreachable');
+    kv.failNext('getAll', 1, new GatewayError(503, '/api/v1/store/cafai?full=1', 'Decaid is busy. Try again in a moment.', 'http'));
+    expect(await restoreFromMirrorIfEmpty(storage)).toBe('unreachable');
+    kv.failNext('getAll', 1, garbled());
+    expect(await restoreFromMirrorIfEmpty(storage)).toBe('unreadable');
+    expect(await storage.bags.list()).toEqual([]);
+  });
+
+  it('takes a backup this version cannot import for no backup, as the first push does', async () => {
+    const storage = await open(createMemoryKv());
+    const newer = { ...storage, mirror: { ...storage.mirror, pull: async () => ({ format: 'cafai-export', schemaVersion: 2 }) } };
+    expect(await restoreFromMirror(newer as unknown as IdbStorage)).toBe('nothing');
+  });
+
+  it('merges the backup in after start even when a bag was started meanwhile, filling blanks only', async () => {
+    const kv = createMemoryKv();
+    const original = await open(kv);
+    await seed(original);
+    await original.mirror.pushNow();
+
+    const fresh = await open(kv);
+    await fresh.bags.put(OTHER_BAG);
+    expect(await restoreFromMirror(fresh)).toBe('restored');
+    expect(bagIds(await fresh.bags.list())).toEqual(['bag_kiambu', 'bag_other']);
+    expect(await restoreFromMirror(fresh)).toBe('nothing');
+  });
+});
+
+describe('startLateRestore (5.4)', () => {
+  async function backedUp(kv: MemoryKv): Promise<void> {
+    const original = await open(kv);
+    await seed(original);
+    await original.mirror.pushNow();
+    original.close();
+  }
+
+  function start(storage: IdbStorage, clock: ReturnType<typeof manualTimers>) {
+    const onRestored = vi.fn();
+    const late = startLateRestore(storage, { onRestored, timers: clock.timers, now: clock.now });
+    restores.push(late);
+    return { late, onRestored };
+  }
+
+  const fullReads = (kv: MemoryKv) => kv.calls.filter((call) => call.method === 'getAll' && call.namespace === 'cafai').length;
+
+  it('keeps trying while Decaid does not answer, 2 s doubling to 30 s, and restores once it does', async () => {
+    const kv = createMemoryKv();
+    await backedUp(kv);
+    const fresh = await open(kv);
+    const clock = manualTimers();
+    kv.failNext('getAll', 5, away());
+    const { late, onRestored } = start(fresh, clock);
+
+    const delays: number[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      delays.push(...clock.delays());
+      clock.fire();
+      await late.settled();
+    }
+    expect(delays).toEqual([2000, 4000, 8000, 16_000, 30_000]);
+    expect(onRestored).not.toHaveBeenCalled();
+    expect(clock.delays()).toEqual([30_000]);
+
+    clock.fire();
+    await late.settled();
+    expect(onRestored).toHaveBeenCalledTimes(1);
+    expect(onRestored).toHaveBeenCalledWith({ records: true, key: false });
+    expect(await fresh.bags.list()).toEqual([makeBag()]);
+    expect(clock.delays()).toEqual([]);
+  });
+
+  it('tries at once when told Decaid may be back, and stops for good once Decaid says it holds nothing', async () => {
+    const kv = createMemoryKv();
+    const fresh = await open(kv);
+    const clock = manualTimers();
+    kv.failNext('getAll', 1, away());
+    const { late, onRestored } = start(fresh, clock);
+    late.retryNow();
+    await late.settled();
+    expect(fullReads(kv)).toBe(1);
+    expect(clock.delays()).toEqual([4000]);
+
+    late.retryNow();
+    await late.settled();
+    expect(fullReads(kv)).toBe(2);
+    expect(clock.delays()).toEqual([]);
+    late.retryNow();
+    clock.fire();
+    await late.settled();
+    expect(fullReads(kv)).toBe(2);
+    expect(onRestored).not.toHaveBeenCalled();
+  });
+
+  it('keeps trying after an unreadable reply, never taking it for an empty backup', async () => {
+    const kv = createMemoryKv();
+    await backedUp(kv);
+    const fresh = await open(kv);
+    const clock = manualTimers();
+    kv.failNext('getAll', 1, garbled());
+    const { late, onRestored } = start(fresh, clock);
+    clock.fire();
+    await late.settled();
+    expect(onRestored).not.toHaveBeenCalled();
+    expect(await fresh.bags.list()).toEqual([]);
+    expect(clock.delays()).toEqual([4000]);
+    clock.fire();
+    await late.settled();
+    expect(onRestored).toHaveBeenCalledWith({ records: true, key: false });
+  });
+
+  it('stops the timed tries after 10 minutes, but still restores when told Decaid is back later', async () => {
+    const kv = createMemoryKv();
+    await backedUp(kv);
+    const fresh = await open(kv);
+    const clock = manualTimers();
+    kv.failNext('getAll', 1000, away());
+    const { late, onRestored } = start(fresh, clock);
+    const started = clock.now();
+    while (clock.delays().length > 0) {
+      clock.fire();
+      await late.settled();
+    }
+    expect(clock.now() - started).toBeGreaterThanOrEqual(LATE_RESTORE_FOR_MS - 30_000);
+    expect(clock.now() - started).toBeLessThanOrEqual(LATE_RESTORE_FOR_MS + 30_000);
+    expect(onRestored).not.toHaveBeenCalled();
+
+    kv.failNext('getAll', 0);
+    late.retryNow();
+    await late.settled();
+    expect(onRestored).toHaveBeenCalledWith({ records: true, key: false });
+  });
+
+  it('brings the API key back from its copy in Decaid in the same tries, and writes nothing to Decaid (D99)', async () => {
+    const kv = createMemoryKv({ [KEY_NAMESPACE]: { [KEY_NAME]: API_KEY } });
+    const fresh = await open(kv);
+    const clock = manualTimers();
+    kv.failNext('getAll', 1, away());
+    kv.failNext('get', 1, away());
+    const { late, onRestored } = start(fresh, clock);
+    clock.fire();
+    await late.settled();
+    expect(await fresh.secrets.getApiKey()).toBeNull();
+    expect(onRestored).not.toHaveBeenCalled();
+
+    clock.fire();
+    await late.settled();
+    expect(onRestored).toHaveBeenCalledWith({ records: false, key: true });
+    expect(await fresh.secrets.getApiKey()).toBe(API_KEY);
+    expect(kv.writes()).toEqual([]);
+  });
+
+  it('stops when told to', async () => {
+    const kv = createMemoryKv();
+    const fresh = await open(kv);
+    const clock = manualTimers();
+    kv.failNext('getAll', 5, away());
+    const { late } = start(fresh, clock);
+    late.stop();
+    expect(clock.delays()).toEqual([]);
+    late.retryNow();
+    await late.settled();
+    expect(fullReads(kv)).toBe(0);
   });
 });
 
@@ -206,9 +414,11 @@ describe('backup safety', () => {
     await seed(original);
     await original.mirror.pushNow();
 
-    kv.failNext('getAll', 3);
+    kv.failNext('getAll', 3, away());
     const fresh = await open(kv);
-    expect(await restoreFromMirrorIfEmpty(fresh)).toBe(false);
+    const restored = vi.fn();
+    fresh.onRestored(restored);
+    expect(await restoreFromMirrorIfEmpty(fresh)).toBe('unreachable');
     await fresh.bags.put(OTHER_BAG);
 
     await fresh.mirror.pushNow();
@@ -216,12 +426,49 @@ describe('backup safety', () => {
     expect(kv.writes().filter((call) => call.key === 'bags')).toHaveLength(1);
     expect(bagIds(kv.values()['bags'])).toEqual(['bag_kiambu']);
     expect(fresh.mirror.lastError).toBe('Could not back up to Decaid: Decaid is not answering.');
+    expect(restored).not.toHaveBeenCalled();
 
     await fresh.mirror.pushNow();
     expect(fresh.mirror.lastError).toBeNull();
     expect(bagIds(await fresh.bags.list())).toEqual(['bag_kiambu', 'bag_other']);
     expect(bagIds(kv.values()['bags'])).toEqual(['bag_kiambu', 'bag_other']);
     expect(kv.values()['conv.bag_kiambu']).toEqual(makeConversation());
+    // The records the first push merged in came back after start: the screens are told (5.4).
+    expect(restored).toHaveBeenCalledTimes(1);
+  });
+
+  it('an empty store never pushes while Decaid answers something CafAI cannot read (5.3)', async () => {
+    const kv = createMemoryKv();
+    const original = await open(kv);
+    await seed(original);
+    await original.mirror.pushNow();
+    const before = kv.writes().length;
+
+    kv.failNext('getAll', 3, garbled());
+    const fresh = await open(kv);
+    expect(await restoreFromMirrorIfEmpty(fresh)).toBe('unreadable');
+    await fresh.bags.put(OTHER_BAG);
+    await fresh.mirror.pushNow();
+    await fresh.mirror.pushNow();
+    expect(kv.writes()).toHaveLength(before);
+    expect(bagIds(kv.values()['bags'])).toEqual(['bag_kiambu']);
+    expect(fresh.mirror.lastError).toBe("Could not back up to Decaid: Decaid sent a reply CafAI doesn't recognise.");
+  });
+
+  it('says nothing when the first push finds nothing new in the backup', async () => {
+    const kv = createMemoryKv();
+    const original = await open(kv);
+    await seed(original);
+    await original.mirror.pushNow();
+
+    const fresh = await open(kv);
+    const restored = vi.fn();
+    fresh.onRestored(restored);
+    expect(await restoreFromMirrorIfEmpty(fresh)).toBe('restored');
+    await fresh.settings.update({ grinderSetting: '15' });
+    await fresh.mirror.pushNow();
+    expect(fresh.mirror.lastError).toBeNull();
+    expect(restored).not.toHaveBeenCalled();
   });
 
   it('after an import that replaced everything, the old backup is not merged back', async () => {

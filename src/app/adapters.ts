@@ -115,9 +115,13 @@ export function createApiPort(decaid: DecaidClient): ApiPort {
     // Not on DecaidClient (other modules fake that interface): its own transport to the same origin.
     loadProfileOnMachine: (profile) => loadProfileOnMachine(decaid, profile),
     updateShot: (id, patch) => decaid.updateShot(id, patch),
+    probeEnjoymentScale: () => decaid.probeEnjoymentScale(),
     async getGrinder(id) {
       const grinder = await getGrinder(decaid, id);
       return grinder ? grinderInfo(grinder) : null;
     },
+    listBeans: () => decaid.listBeans(),
+    createBean: (request) => decaid.createBean(request),
+    createBatch: (beanId, request) => decaid.createBatch(beanId, request),
   };
 }

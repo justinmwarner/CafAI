@@ -115,7 +115,7 @@ export type CoachUiPart =
       kind: 'shot';
       shotId: string;
       summary: ShotSummary;
-      /** The barista's 1-5 star rating, written to Decaid's record as enjoyment (stars x 2). Absent until rated. */
+      /** The barista's 1-5 star rating, written to Decaid's record as enjoyment on Decaid's own scale (D101). Absent until rated. */
       stars?: number;
     }
   | {
@@ -194,6 +194,13 @@ export interface CoachState {
    * Optional: without it the line keeps its own 30 s clock.
    */
   machineTick?: number;
+  /**
+   * True once bags came back from Decaid's backup this session (browser
+   * storage was lost, or Decaid was updated): with no key, the key card says
+   * why it asks again (5.5). Optional: a controller that does not restore
+   * leaves it out.
+   */
+  restoredFromBackup?: boolean;
 }
 
 export interface CoachController {
@@ -212,7 +219,8 @@ export interface CoachController {
   undo(): Promise<void>;
   /**
    * Rate a shot 1-5 stars from its card. Written to Decaid's shot record as
-   * `enjoyment` (stars x 2); never sent to the coach.
+   * `enjoyment` on the scale Decaid uses (stars x 2 out of 10, x 20 out of
+   * 100, D101); never sent to the coach.
    */
   rateShot(shotId: string, stars: number): Promise<void>;
   /** Re-send the last failed request. */
