@@ -1,0 +1,15 @@
+{
+  "release": "v0.8.8",
+  "commit": "aab5f938fb3e1a8f44af24d99c6b707491b15ed7",
+  "specs": {
+    "rest": {
+      "file": "spec/rest_v1.yml",
+      "sha256": "781a8f364b44e2adfe66f8437a593f6ae1da2cfb62405927d3f6439a1d6963d1"
+    },
+    "ws": {
+      "file": "spec/websocket_v1.yml",
+      "sha256": "3f62265fec357894504bf54fbfe8828e48ea99fed311a8071027bdcb72dd1369"
+    }
+  },
+  "generator": "openapi-typescript@7.13.0"
+}

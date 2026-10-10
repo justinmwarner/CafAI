@@ -1,0 +1,88 @@
+name: Decaid drift watch
+
+# Would the newest Decaid break CafAI? Checks Decaid's latest release and its
+# main branch against the pinned specs (contract/decaid, spec 4.3).
+#
+# Two jobs, so the one that installs dependencies holds no write token: `watch`
+# runs the check with read access only and uploads the report; on a failed
+# check (exit 1), `issue` downloads it and opens an issue labelled
+# decaid-drift, or comments on the open one. GitHub out of reach (exit 2)
+# only warns; a broken watch (exit 3) fails the run without an issue.
+
+on:
+  schedule:
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      code: ${{ steps.watch.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Check the latest Decaid against the pin
+        id: watch
+        env:
+          # Read-only here; it only raises GitHub's API rate limit.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          npm run decaid:watch -- --report report.md --issue issue.md
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+
+      # The full report, also when an issue only holds its start.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: decaid-drift-report
+          path: |
+            report.md
+            issue.md
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Warn when GitHub could not be reached
+        if: steps.watch.outputs.code == '2'
+        run: echo "::warning::The Decaid drift watch could not reach GitHub; it runs again tomorrow."
+
+      - name: Fail the run when a check failed or the watch broke
+        if: steps.watch.outputs.code != '0' && steps.watch.outputs.code != '2'
+        run: exit 1
+
+  issue:
+    needs: watch
+    if: ${{ !cancelled() && needs.watch.outputs.code == '1' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: decaid-drift-report
+
+      - name: Open or update the drift issue
+        run: |
+          gh label create decaid-drift --color B60205 --description "A newer Decaid fails CafAI's contract checks" 2>/dev/null || true
+          number=$(gh issue list --label decaid-drift --state open --json number --jq '.[0].number')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file issue.md
+          else
+            gh issue create --label decaid-drift --title "Decaid changed something CafAI reads" --body-file issue.md
+          fi

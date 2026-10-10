@@ -38,6 +38,8 @@ export default defineConfig(
       'tools/chrome91/node_modules/**',
       'tools/chrome91/out/**',
       'mock/public/**',
+      // openapi-typescript output from Decaid's pinned specs (scripts/decaid-contract.mjs).
+      'contract/decaid/generated/**',
     ],
   },
   js.configs.recommended,
