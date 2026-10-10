@@ -25,6 +25,7 @@ import type {
   ShotRecord,
   ShotSnapshot,
   ShotStateEvent,
+  TimeToReadyFrame,
   WeightSnapshot,
   WireProfile,
 } from '../../src/api/types.ts';
@@ -650,6 +651,15 @@ const TTR_INSUFFICIENT_TICKS = 2;
 /** About 2.5 mock-minutes, so "Ready in about 2 min" is visible for a few ticks before it drops. */
 const TTR_HEATING_START_MS = 150_000;
 const TTR_HEATING_STEP_MS = 5_000;
+/** One mock-second of warming per tick, for the temperature's own approach to target (not the displayed countdown, which reports a separate, larger "time left" estimate). */
+const TTR_DT_S = TTR_TICK_MS / 1000;
+/**
+ * Time constant for that approach. TTR_INSUFFICIENT_TICKS + TTR_HEATING_START_MS /
+ * TTR_HEATING_STEP_MS ticks actually elapse before reached (2 + 30 = 32 mock-seconds
+ * here), so this is sized against that, not against the displayed 150 s estimate:
+ * 32 / 8 ticks of tau is >98% of the way there by reached.
+ */
+const TTR_WARM_TAU_S = 8;
 
 /** D6: the Visualizer plugin writes lastUploadedShot a few seconds after a shot ends (plugin.js SHOT_FETCH_DELAY_MS is 5s; the mock uses a shorter, documented delay). */
 const VISUALIZER_UPLOAD_DELAY_MS = 4000;
@@ -674,6 +684,14 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
   let ttrTimer: ReturnType<typeof setTimeout> | null = null;
   /** Ticks since the machine was last known awake; reset on sleep. */
   let ttrTicks = 0;
+  /**
+   * True from an explicit wake (not a fresh, never-slept player, and not just
+   * an activity returning to idle) until the countdown reaches reached. Drives
+   * the machine snapshot's idle/preparingForShot vs idle/idle (see
+   * emitResting), kept separate from ttrTicks/timeToReadyStatus so a fresh
+   * player or one finishing steam/espresso never shows "warming" by accident.
+   */
+  let warmingUp = false;
   const visualizerTimers = new Set<ReturnType<typeof setTimeout>>();
   let nextVisualizerId = FIRST_VISUALIZER_ID;
 
@@ -698,12 +716,28 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
     ttrTimer = setTimeout(timeToReadyTick, TTR_TICK_MS / speed);
   }
 
+  /** What time-to-ready.reaplugin would report right now, from `ttrTicks` alone (no side effects). */
+  function timeToReadyStatus(): TimeToReadyFrame {
+    if (ttrTicks < TTR_INSUFFICIENT_TICKS) return { status: 'insufficient_data', remainingTimeMs: null };
+    const heatingTicks = ttrTicks - TTR_INSUFFICIENT_TICKS;
+    const remaining = Math.max(0, TTR_HEATING_START_MS - heatingTicks * TTR_HEATING_STEP_MS);
+    return remaining > 0 ? { status: 'heating', remainingTimeMs: remaining } : { status: 'reached', remainingTimeMs: 0 };
+  }
+
+  /** One tick's worth of exponential approach toward `target`, quantized like the destination it replaces. */
+  function approachWarmingTemperature(current: number, target: number, steps: number): number {
+    return quantize(current + (target - current) * (1 - Math.exp(-TTR_DT_S / TTR_WARM_TAU_S)), steps);
+  }
+
   /**
    * D5: runs for the player's whole life, not just after a wake. The real
    * plugin hears a stateUpdate whether or not the machine is asleep and
    * decides for itself whether to emit; this mirrors that by checking
    * "awake and connected" on every tick instead of starting and stopping a
-   * one-shot sequence.
+   * one-shot sequence. Also carries warmingUp through to reached (D103
+   * follow-up): a real DE1 reports idle/preparingForShot while it warms up
+   * (de1.utils.dart mapDe1SubToMachineSubstate: heatWaterTank,
+   * heatWaterHeater, stabilizeMixTemp), idle/idle once ready.
    */
   function timeToReadyTick(): void {
     ttrTimer = null;
@@ -714,16 +748,15 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
       scheduleTimeToReady();
       return;
     }
-    if (state.isPluginLoaded(PLUGIN_IDS.timeToReady)) {
-      if (ttrTicks < TTR_INSUFFICIENT_TICKS) {
-        state.publishTimeToReady({ status: 'insufficient_data', remainingTimeMs: null });
-      } else {
-        const heatingTicks = ttrTicks - TTR_INSUFFICIENT_TICKS;
-        const remaining = Math.max(0, TTR_HEATING_START_MS - heatingTicks * TTR_HEATING_STEP_MS);
-        state.publishTimeToReady(remaining > 0 ? { status: 'heating', remainingTimeMs: remaining } : { status: 'reached', remainingTimeMs: 0 });
-      }
-      ttrTicks += 1;
-    }
+    const frame = timeToReadyStatus();
+    const wasWarming = warmingUp;
+    if (frame.status === 'reached') warmingUp = false;
+    // Only touch the machine snapshot while an actual wake's warm-up is running or ending
+    // this tick: this ticker has nothing to do with the machine channel otherwise, and
+    // must never step on the scripted shot's or an activity's own frames.
+    if (activity === null && (wasWarming || warmingUp)) emitResting();
+    if (state.isPluginLoaded(PLUGIN_IDS.timeToReady)) state.publishTimeToReady(frame);
+    ttrTicks += 1;
     scheduleTimeToReady();
   }
 
@@ -761,16 +794,19 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
     const idle = idleTemperature(state.getMachineProfile());
     const targetMix = idle === null ? current.targetMixTemperature : quantize(idle, 256);
     const targetGroup = idle === null ? current.targetGroupTemperature : quantize(idle, 256);
+    const warming = resting === 'idle' && warmingUp;
+    const settledMix = quantize(targetMix + wobble, 256);
+    const settledGroup = quantize(targetGroup - 0.9 + wobble, 65536);
     state.setMachineSnapshot({
       ...current,
       timestamp: formatLocalTimestamp(state.clock.now()),
-      state: { state: resting, substate: 'idle' },
+      state: { state: resting, substate: warming ? 'preparingForShot' : 'idle' },
       flow: 0,
       pressure: quantize(0.002 + Math.abs(wobble) / 100, 4096),
       targetMixTemperature: targetMix,
       targetGroupTemperature: targetGroup,
-      mixTemperature: quantize(targetMix + wobble, 256),
-      groupTemperature: quantize(targetGroup - 0.9 + wobble, 65536),
+      mixTemperature: warming ? approachWarmingTemperature(current.mixTemperature, settledMix, 256) : settledMix,
+      groupTemperature: warming ? approachWarmingTemperature(current.groupTemperature, settledGroup, 65536) : settledGroup,
     });
   }
 
@@ -1011,7 +1047,10 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
         if (activity === 'espresso') simulation?.requestStop('apiStop');
         else if (activity !== null) activityStop = true;
         else {
+          const wasAsleep = resting === 'sleeping';
           resting = 'idle';
+          // A real DE1 warms up after a wake, not after an activity just ending (de1.utils.dart).
+          if (wasAsleep) warmingUp = true;
           emitResting();
         }
         return;
@@ -1019,6 +1058,7 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
       if (name === 'sleeping') {
         if (activity === null) {
           resting = 'sleeping';
+          warmingUp = false;
           emitResting();
           // The real plugin discards its estimate while the machine sleeps (plugin.js
           // handleStateUpdate); reset now rather than waiting for the ticker's next

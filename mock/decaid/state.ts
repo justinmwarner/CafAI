@@ -174,7 +174,13 @@ export interface MockDecaid {
   setConnectionError(error: ConnectionError | null): void;
   /** e.g. raiseConnectionError('profileUploadFailed') to exercise the UI notice. */
   raiseConnectionError(kind: string, message?: string): ConnectionError;
-  scanDevices(quick: boolean): DeviceEntry[];
+  /**
+   * GET /devices/scan (devices_handler.dart at aab5f93): a scan connects every
+   * slot it can fill (the machine, then the scale) unless `connect` is false,
+   * which only discovers. A quick scan answers [] at once and does its work
+   * behind the answer (here, at once); a full one answers the list after.
+   */
+  scanDevices(options: { quick: boolean; connect: boolean }): DeviceEntry[];
   connectDevice(body: unknown): DeviceConnectResult;
 
   // Settings
@@ -660,7 +666,11 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
       mock.setConnectionError(error);
       return clone(error);
     },
-    scanDevices(quick) {
+    scanDevices({ quick, connect }) {
+      if (connect) {
+        mock.setMachineConnected(true);
+        mock.setScaleConnected(true);
+      }
       if (quick) return [];
       // A full scan finds both devices, so a connect-by-id can follow.
       return [machineEntry(), scaleEntry()].map((entry) =>

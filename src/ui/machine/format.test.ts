@@ -5,15 +5,45 @@ import {
   formatTemperature,
   formatWaterLevel,
   formatWeight,
+  isHeatingUp,
   isWaterLow,
   splitUnit,
 } from './format.ts';
+
+describe('isHeatingUp', () => {
+  it("is the machine's to say: heating, preheating, or a DE1 idle while it prepares its water", () => {
+    expect(isHeatingUp('heating', 'idle')).toBe(true);
+    expect(isHeatingUp('preheating', 'idle')).toBe(true);
+    // What a warming DE1 reports (de1.utils.dart at aab5f93).
+    expect(isHeatingUp('idle', 'preparingForShot')).toBe(true);
+  });
+
+  it('is not a machine at rest, asleep, or preheating for a shot it is pulling', () => {
+    expect(isHeatingUp('idle', 'idle')).toBe(false);
+    expect(isHeatingUp('schedIdle', 'idle')).toBe(false);
+    expect(isHeatingUp('sleeping', 'idle')).toBe(false);
+    expect(isHeatingUp('espresso', 'preparingForShot')).toBe(false);
+    expect(isHeatingUp('steam', 'pouring')).toBe(false);
+    expect(isHeatingUp(null, null)).toBe(false);
+  });
+});
 
 describe('describeMachineState', () => {
   it('says "Not connected" whenever the machine link is down, whatever the last frame said', () => {
     expect(describeMachineState('idle', 'idle', false)).toBe('Not connected');
     expect(describeMachineState('espresso', 'pouring', false)).toBe('Not connected');
     expect(describeMachineState(null, null, false)).toBe('Not connected');
+    expect(describeMachineState('idle', 'preparingForShot', false)).toBe('Not connected');
+  });
+
+  it('says "Heating" exactly while the machine heats up, by its own state', () => {
+    // A DE1 warming up after a wake reports idle, preparing its water: not ready yet.
+    expect(describeMachineState('idle', 'preparingForShot', true)).toBe('Heating');
+    expect(describeMachineState('heating', 'idle', true)).toBe('Heating');
+    expect(describeMachineState('preheating', 'idle', true)).toBe('Heating');
+    expect(describeMachineState('idle', 'idle', true)).toBe('Ready');
+    // A shot's own preheat is the shot.
+    expect(describeMachineState('espresso', 'preparingForShot', true)).toBe('Pulling a shot: preheating');
   });
 
   it('names the everyday states in plain words', () => {

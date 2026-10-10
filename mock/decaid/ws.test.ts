@@ -126,4 +126,18 @@ describe('Decaid WebSocket channels', () => {
     expect(frames[0]).toEqual({ status: 'insufficient_data', remainingTimeMs: null });
     ttr.socket.close();
   });
+
+  it('a wake reports idle/preparingForShot on the machine channel too, until the countdown reaches reached (D103 follow-up)', async () => {
+    mock.setSpeed(500);
+    mock.player.command('sleeping');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const machine = open('/machine/snapshot');
+    await machine.waitFor(1); // the replayed sleeping snapshot
+    mock.player.command('idle');
+    const frames = (await machine.waitFor(2)) as Array<{ state: { state: string; substate: string } }>;
+    expect(frames[1]!.state).toEqual({ state: 'idle', substate: 'preparingForShot' });
+    await new Promise((resolve) => setTimeout(resolve, 500)); // past the (sped-up) countdown to reached, with margin for real-timer overhead across 32 ticks
+    expect(machine.frames.at(-1)).toMatchObject({ state: { state: 'idle', substate: 'idle' } });
+    machine.socket.close();
+  });
 });

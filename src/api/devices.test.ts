@@ -12,7 +12,7 @@ describe('describeFailedConnect', () => {
     // a pairing problem they do not have.
     const devices = cremaFixtures.switchedOffMachine();
     expect(describeFailedConnect('machine', devices)).toMatch(/DE1 is paired but not responding/);
-    expect(describeFailedConnect('machine', devices)).toMatch(/switch it on/);
+    expect(describeFailedConnect('machine', devices)).toMatch(/switch it on/i);
   });
 
   it('a device the gateway has never seen reads as missing', () => {

@@ -675,3 +675,174 @@ describe('shot lifecycle and live samples', () => {
     expect(h.samples).toHaveLength(1);
   });
 });
+
+// ---- time-to-ready.reaplugin (spec 6.3) ----------------------------------------------------
+
+const TIME_TO_READY = '/ws/v1/plugins/time-to-ready.reaplugin/timeToReady';
+
+/** A frame as the plugin emits it (plugin.js at aab5f93): its estimate, and the temperatures it came from. */
+function readyFrame(status: string, remainingTimeMs: unknown, extra: Record<string, unknown> = {}) {
+  return { status, remainingTimeMs, heatingRate: 0.2, message: 'Estimated 2m 30s remaining', currentTemp: 70, targetTemp: 92, timestamp: 1_791_000_000_000, ...extra };
+}
+
+describe('time-to-ready (6.3)', () => {
+  it('opens the plugin channel only while watched, and closes it when unwatched, forgetting the estimate', () => {
+    const h = harness();
+    h.store.start();
+    expect(h.ws.sockets.some((s) => s.path === TIME_TO_READY), 'not with the other six').toBe(false);
+    expect(h.store.getState().timeToReady).toBeNull();
+
+    h.store.watchTimeToReady(true);
+    h.store.watchTimeToReady(true);
+    expect(h.ws.live(TIME_TO_READY)).toHaveLength(1);
+    expect(h.ws.latest(TIME_TO_READY).url).toBe(`ws://tablet.local:8080${TIME_TO_READY}`);
+    // Not one of the channels whose sockets the machine alert watches.
+    expect(Object.keys(h.store.getState().sockets)).not.toContain('timeToReady');
+
+    h.ws.latest(TIME_TO_READY).open().message(readyFrame('heating', 150_000));
+    expect(h.store.getState().timeToReady).toBe(150_000);
+
+    h.store.watchTimeToReady(false);
+    expect(h.ws.latest(TIME_TO_READY).closedByClient).toBe(true);
+    expect(h.store.getState().timeToReady).toBeNull();
+  });
+
+  it('waits for start, closes with stop (forgetting the estimate), and opens again with the next start while still watched', () => {
+    const h = harness();
+    h.store.watchTimeToReady(true);
+    expect(h.ws.sockets).toHaveLength(0);
+    h.store.start();
+    h.ws.latest(TIME_TO_READY).open().message(readyFrame('heating', 150_000));
+    h.store.stop();
+    expect(h.ws.sockets.every((s) => s.closedByClient)).toBe(true);
+    expect(h.store.getState().timeToReady).toBeNull();
+    h.store.start();
+    expect(h.ws.live(TIME_TO_READY)).toHaveLength(1);
+  });
+
+  it("takes only the plugin's number: a heating frame sets it, any other frame keeps it, counted down from its deadline", async () => {
+    const h = harness();
+    h.store.start();
+    h.store.watchTimeToReady(true);
+    const socket = h.ws.latest(TIME_TO_READY).open();
+    const estimate = () => h.store.getState().timeToReady;
+
+    socket.message(readyFrame('insufficient_data', null));
+    socket.message(readyFrame('reached', 0));
+    expect(estimate(), 'no estimate yet').toBeNull();
+    socket.message(readyFrame('heating', 150_000));
+    expect(estimate()).toBe(150_000);
+
+    // The plugin's status moves with every snapshot: none of these is a number to use.
+    await vi.advanceTimersByTimeAsync(1000);
+    socket.message(readyFrame('not_heating', null));
+    expect(estimate()).toBe(149_000);
+    await vi.advanceTimersByTimeAsync(1000);
+    socket.message(readyFrame('reached', 0));
+    const { remainingTimeMs: _gone, ...withoutEstimate } = readyFrame('heating', 0);
+    socket.message(withoutEstimate);
+    socket.message(readyFrame('heating', '2 min'));
+    socket.message(readyFrame('heating', null));
+    expect(estimate()).toBe(148_000);
+
+    socket.message(readyFrame('heating', 90_000));
+    expect(estimate()).toBe(90_000);
+    // Never more than five minutes: above that the plugin's estimate is noise.
+    socket.message(readyFrame('heating', 1_200_000));
+    expect(estimate()).toBe(300_000);
+    expect(driftLog.list().map((entry) => entry.problem)).toEqual(['remainingTimeMs: missing', 'remainingTimeMs: expected number, got string']);
+  });
+
+  it('goes 6 s after the last frame of any kind: the socket has gone quiet', async () => {
+    const h = harness();
+    h.store.start();
+    h.store.watchTimeToReady(true);
+    const socket = h.ws.latest(TIME_TO_READY).open();
+    socket.message(readyFrame('heating', 150_000));
+    // Every frame keeps it alive, numbers or not.
+    for (let i = 0; i < 4; i += 1) {
+      await vi.advanceTimersByTimeAsync(5000);
+      socket.message(readyFrame('not_heating', null));
+    }
+    expect(h.store.getState().timeToReady).toBe(130_000);
+    await vi.advanceTimersByTimeAsync(5999);
+    expect(h.store.getState().timeToReady).toBe(130_000);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(h.store.getState().timeToReady).toBeNull();
+  });
+
+  it('holds at zero past its deadline while the machine heats on, and goes 10 s after it', async () => {
+    const h = harness();
+    h.store.start();
+    h.store.watchTimeToReady(true);
+    const socket = h.ws.latest(TIME_TO_READY).open();
+    socket.message(readyFrame('heating', 4000));
+    // Frames keep coming every 2 s, so only the deadline can end it.
+    const tick = async (ms: number) => {
+      await vi.advanceTimersByTimeAsync(ms);
+      socket.message(readyFrame('reached', 0));
+    };
+    await tick(2000);
+    expect(h.store.getState().timeToReady).toBe(2000);
+    await tick(2000);
+    expect(h.store.getState().timeToReady, 'at the deadline').toBe(0);
+    for (let i = 0; i < 5; i += 1) await tick(2000);
+    expect(h.store.getState().timeToReady, '10 s past it').toBe(0);
+    await tick(1);
+    expect(h.store.getState().timeToReady).toBeNull();
+  });
+
+  it('reports a status it does not know without using it, and drops what it cannot read, reporting it', () => {
+    const h = harness();
+    h.store.start();
+    h.store.watchTimeToReady(true);
+    const socket = h.ws.latest(TIME_TO_READY).open();
+    socket.message(readyFrame('cooling', 60_000));
+    expect(h.store.getState().timeToReady).toBeNull();
+    const before = h.store.getState();
+    for (const junk of ['{not json', '42', '[]', 'null', JSON.stringify({ remainingTimeMs: 5 })]) {
+      expect(() => socket.message(junk)).not.toThrow();
+    }
+    expect(h.store.getState()).toBe(before);
+    expect(driftLog.list().map((entry) => `${entry.source} ${entry.problem}`)).toEqual([
+      'ws/v1/plugins/time-to-ready.reaplugin/timeToReady status: unknown value "cooling"',
+      'ws/v1/plugins/time-to-ready.reaplugin/timeToReady frame: expected object, got number',
+      'ws/v1/plugins/time-to-ready.reaplugin/timeToReady frame: expected object, got array',
+      'ws/v1/plugins/time-to-ready.reaplugin/timeToReady frame: expected object, got null',
+      'ws/v1/plugins/time-to-ready.reaplugin/timeToReady status: missing',
+    ]);
+  });
+
+  it('a frame that says the same again changes nothing', () => {
+    const h = harness();
+    h.store.start();
+    h.store.watchTimeToReady(true);
+    const socket = h.ws.latest(TIME_TO_READY).open();
+    socket.message(readyFrame('heating', 60_000));
+    const changes = h.changes();
+    socket.message(readyFrame('heating', 60_000, { currentTemp: 71 }));
+    socket.message(readyFrame('not_heating', null));
+    expect(h.changes()).toBe(changes);
+  });
+
+  it('reconnects with backoff while watched, at once when the page comes back, and never once unwatched', async () => {
+    const h = harness();
+    h.store.start();
+    h.store.watchTimeToReady(true);
+    h.ws.latest(TIME_TO_READY).open().drop();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(h.ws.live(TIME_TO_READY)).toHaveLength(1);
+
+    h.ws.latest(TIME_TO_READY).drop();
+    h.visibility.fire();
+    expect(h.ws.live(TIME_TO_READY)).toHaveLength(1);
+
+    h.ws.latest(TIME_TO_READY).drop();
+    h.store.watchTimeToReady(false);
+    const opened = () => h.ws.sockets.filter((s) => s.path === TIME_TO_READY).length;
+    const before = opened();
+    await vi.advanceTimersByTimeAsync(60_000);
+    h.visibility.fire();
+    expect(opened()).toBe(before);
+  });
+});

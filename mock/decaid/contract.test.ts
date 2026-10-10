@@ -281,7 +281,7 @@ const ROUTES: ReadonlyArray<[Method, RegExp]> = [
   ['POST', /^\/api\/v1\/machine\/profile$/],
   ['PUT', /^\/api\/v1\/scale\/tare$/],
   ['GET', /^\/api\/v1\/devices$/],
-  ['GET', /^\/api\/v1\/devices\/scan\?quick=true$/],
+  ['GET', /^\/api\/v1\/devices\/scan\?connect=false&quick=true$/],
   ['PUT', /^\/api\/v1\/devices\/connect$/],
   ['GET', /^\/api\/v1\/workflow$/],
   ['PUT', /^\/api\/v1\/workflow$/],

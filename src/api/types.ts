@@ -537,7 +537,7 @@ export interface DecaidClient {
   getDevices(): Promise<DeviceEntry[]>;
   /** Primary scale. Never before espresso: Decaid tares twice by itself. */
   tareScale(): Promise<void>;
-  /** Discovery only: never `connect=true`, which reconnects everything it sees. */
+  /** Discovery only (connect=false): otherwise Decaid connects whatever it sees. A quick scan answers [] at once. */
   scanDevices(options?: { quick?: boolean }): Promise<DeviceEntry[]>;
   connectDevice(deviceId: string, connectionRole?: 'primary' | 'auxiliary'): Promise<unknown>;
   /** Find and connect ONE device of a kind, leaving the others alone; returns the device list after. */
@@ -558,7 +558,11 @@ export interface DecaidClient {
   getLatestShot(): Promise<ShotRecordSummary | null>;
   getShot(id: string): Promise<ShotRecord>;
   updateShot(id: string, patch: ShotUpdateRequest): Promise<ShotRecord>;
-  /** D101: 10 or 100, or null when Decaid could not be asked. */
+  /**
+   * D101: 10 or 100; null when Decaid could not be asked (no answer, or busy).
+   * An answer that tells neither scale is reported as drift and thrown as an
+   * `unexpected_reply` GatewayError.
+   */
   probeEnjoymentScale(): Promise<EnjoymentScale | null>;
 
   listBeans(): Promise<Bean[]>;
@@ -586,6 +590,15 @@ export interface TelemetryState {
   devices: DevicesState | null;
   /** Latest devices connectionStatus.error, de-duplicated by timestamp. */
   connectionError: ConnectionError | null;
+  /**
+   * ms until ready by time-to-ready.reaplugin's estimate while the store
+   * follows it (watchTimeToReady, spec 6.3): set by a heating frame with a
+   * number, counted down from then and kept by every frame, gone 6 s after
+   * the last frame or 10 s past its deadline (streamline's rules); null
+   * otherwise. Only the number: the plugin's status moves with every
+   * snapshot, so whether the machine is heating is the machine's to say.
+   */
+  timeToReady: number | null;
 }
 
 /** One live sample for the shot graph, delivered imperatively (not via React state). */
@@ -609,6 +622,11 @@ export interface TelemetryStore {
   onShot(listener: (event: ShotLifecycleEvent) => void): () => void;
   start(): void;
   stop(): void;
+  /**
+   * Follows time-to-ready.reaplugin's channel (true) or stops (false), as
+   * Decaid loads or unloads the plugin (D103).
+   */
+  watchTimeToReady(on: boolean): void;
 }
 
 export interface Heartbeat {

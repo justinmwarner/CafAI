@@ -22,8 +22,12 @@
  * position and the composer's draft survive a shot; and every layout puts
  * the routed screen and the machine row at the same places in the tree, so a
  * rotation keeps them mounted too.
+ *
+ * The shell also keeps two things running for as long as the app does: the
+ * scale's revive when the machine wakes (useScaleRevive.ts), and Decaid's
+ * time-to-ready channel, followed while Decaid has the plugin loaded.
  */
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -38,6 +42,7 @@ import LogoutRounded from '@mui/icons-material/LogoutRounded';
 import OpenInNewRounded from '@mui/icons-material/OpenInNewRounded';
 import SettingsRounded from '@mui/icons-material/SettingsRounded';
 import ShowChartRounded from '@mui/icons-material/ShowChartRounded';
+import { PLUGIN } from '../../api/plugins.ts';
 import type { HostEnvironment } from '../../api/types.ts';
 import { useServices } from '../../app/services.tsx';
 import { LoadedProfileProvider } from '../machine/LoadedProfileContext.tsx';
@@ -45,6 +50,7 @@ import { MachineAlerts } from '../machine/MachineAlerts.tsx';
 import { MachineRow } from '../machine/MachineRow.tsx';
 import { shotTraceFor } from '../machine/shotTrace.ts';
 import { ShotView } from '../machine/ShotView.tsx';
+import { useScaleRevive } from '../machine/useScaleRevive.ts';
 import { dismissEngineWarning, engineWarning, isEngineWarningDismissed, readEngineCheck } from '../platform/engineCheck.ts';
 import { watchSafeArea } from '../platform/safeArea.ts';
 import { useHeartbeatOnInteraction } from '../platform/useHeartbeatOnInteraction.ts';
@@ -530,6 +536,20 @@ function EngineWarning() {
   );
 }
 
+/**
+ * Follows Decaid's time-to-ready channel while Decaid has the plugin loaded
+ * (D103), and stops when it goes, for the stats card's countdown (spec 6.3).
+ */
+function useTimeToReadyChannel(): void {
+  const { plugins, telemetry } = useServices();
+  const loaded = useSyncExternalStore(plugins.subscribe, () => plugins.isLoaded(PLUGIN.timeToReady));
+  useEffect(() => {
+    if (!loaded) return;
+    telemetry.watchTimeToReady(true);
+    return () => telemetry.watchTimeToReady(false);
+  }, [loaded, telemetry]);
+}
+
 /** Over the hidden coach: the Shot view. */
 const overlaySx = {
   position: 'absolute',
@@ -546,6 +566,8 @@ const overlaySx = {
 function Shell({ route, onNavigate, children }: AppShellProps) {
   const { heartbeat, host, telemetry } = useServices();
   useHeartbeatOnInteraction(heartbeat);
+  useScaleRevive();
+  useTimeToReadyChannel();
   // Before paint, so the first frame already respects the insets.
   useLayoutEffect(() => watchSafeArea(window), []);
   // The app's one recording of the shot starts with the shell (the first call

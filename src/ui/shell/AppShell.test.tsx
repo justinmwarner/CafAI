@@ -2,7 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { LiveSample } from '../../api/types.ts';
+import { PLUGIN } from '../../api/plugins.ts';
+import type { LiveSample, MachineFrame } from '../../api/types.ts';
+import { REVIVE_DELAY_MS } from '../machine/useScaleRevive.ts';
 import type { Route } from '../router.ts';
 import { TID } from '../testIds.ts';
 import { createFakeServices, IDLE_TELEMETRY, type FakeServices } from '../testing/fakeServices.ts';
@@ -224,6 +226,47 @@ describe('AppShell: the machine alert', () => {
       expect(follows(slot, screen.getByRole('main')), where).toBe(true);
       expect(screen.getByRole('main'), where).not.toContainElement(slot);
       unmount();
+    }
+  });
+});
+
+describe('AppShell: what the shell keeps running', () => {
+  function renderWith(services: FakeServices) {
+    return renderWithServices(
+      <AppShell route={{ name: 'coach' }} onNavigate={vi.fn()}>
+        <p>routed screen</p>
+      </AppShell>,
+      services,
+    );
+  }
+
+  it("follows time-to-ready's channel while Decaid has the plugin loaded, and stops when it goes (D103)", () => {
+    const services = createFakeServices();
+    const watch = vi.fn();
+    services.telemetry.watchTimeToReady = watch;
+    const { unmount } = renderWith(services);
+    expect(watch).not.toHaveBeenCalled();
+    act(() => services.plugins.setLoaded([PLUGIN.timeToReady, PLUGIN.dye2]));
+    expect(watch.mock.calls).toEqual([[true]]);
+    act(() => services.plugins.setLoaded([PLUGIN.dye2]));
+    expect(watch.mock.calls).toEqual([[true], [false]]);
+    act(() => services.plugins.setLoaded([PLUGIN.timeToReady]));
+    unmount();
+    expect(watch.mock.calls, 'and stops with the shell').toEqual([[true], [false], [true], [false]]);
+  });
+
+  it('looks for a scale that was connected, a moment after the machine wakes', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+    try {
+      const machine = (state: string): MachineFrame => ({ ...IDLE_TELEMETRY.machine!, state: { state, substate: 'idle' } });
+      const services = createFakeServices({ telemetry: { machine: machine('sleeping') } });
+      renderWith(services);
+      act(() => services.telemetry.setState({ scaleConnected: false, scale: null }));
+      act(() => services.telemetry.setState({ machine: machine('idle') }));
+      await act(async () => void (await vi.advanceTimersByTimeAsync(REVIVE_DELAY_MS)));
+      expect(services.decaid.calls.filter((call) => call.method === 'connectKind').map((call) => call.args)).toEqual([['scale']]);
+    } finally {
+      vi.useRealTimers();
     }
   });
 });

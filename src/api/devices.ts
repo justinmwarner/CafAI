@@ -21,7 +21,7 @@ export function describeFailedConnect(kind: 'machine' | 'scale', devices: readon
 
   if (!known) return `No ${noun} found. Check it is switched on and in Bluetooth range.`;
   if (known.available === false) {
-    return `${known.name} is paired but not responding — switch it on, or wake it if it has been idle.`;
+    return `${known.name} is paired but not responding. Switch it on, or wake it if it has been idle.`;
   }
   return `${known.name} was found but would not connect. Try again, or reconnect it from Decaid.`;
 }

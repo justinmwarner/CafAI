@@ -252,7 +252,10 @@ export function decaidHttpHandlers(state: MockDecaid, player: ShotPlayer): HttpH
 
     // ---- devices -------------------------------------------------------------------------
     route('get', '/devices', () => json(state.getDevices())),
-    route('get', '/devices/scan', ({ url }) => json(state.scanDevices(url.searchParams.get('quick') === 'true'))),
+    // Decaid reads each flag's first value: quick only when "true", connect unless "false".
+    route('get', '/devices/scan', ({ url }) =>
+      json(state.scanDevices({ quick: url.searchParams.get('quick') === 'true', connect: url.searchParams.get('connect') !== 'false' })),
+    ),
     route('put', '/devices/connect', ({ bodyText }) => {
       let body: unknown;
       try {

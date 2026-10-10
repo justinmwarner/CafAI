@@ -58,9 +58,21 @@ function humanize(name: string): string {
 }
 
 /**
- * The machine state as a short phrase: "Ready", "Pulling a shot: preinfusion",
- * "Not connected". `stepName` is the running profile step's name, when the
- * profile is known; it replaces the phase while a step runs.
+ * The machine is heating up, by its own state: Decaid says heating or
+ * preheating, or a DE1 says idle while it prepares its water
+ * (preparingForShot, what a warming DE1 reports: de1.utils.dart at aab5f93).
+ * Never by time-to-ready's status, which the plugin works out from a 2 s
+ * temperature slope on every snapshot, so a machine at rest moves between
+ * reached, not_heating and heating (streamline's rule, app.js).
+ */
+export function isHeatingUp(state: string | null | undefined, substate: string | null | undefined): boolean {
+  return state === 'heating' || state === 'preheating' || (state === 'idle' && substate === 'preparingForShot');
+}
+
+/**
+ * The machine state as a short phrase: "Ready", "Heating", "Pulling a shot:
+ * preinfusion", "Not connected". `stepName` is the running profile step's
+ * name, when the profile is known; it replaces the phase while a step runs.
  */
 export function describeMachineState(
   state: string | null | undefined,
@@ -70,6 +82,8 @@ export function describeMachineState(
 ): string {
   if (!connected) return 'Not connected';
   if (!state) return 'Connected';
+  // A DE1 warming up says it is idle: "Ready" would be wrong for minutes.
+  if (isHeatingUp(state, substate)) return 'Heating';
   // A shot, skipStep included: the moment it moves to its next step.
   if (isShotMachineState(state)) {
     const step = substate && STEP_SUBSTATES.has(substate) ? stepName?.trim() : undefined;

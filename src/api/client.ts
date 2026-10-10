@@ -10,7 +10,8 @@
  * reply CafAI uses passes a reader (readers.ts) on the way in, so a reply
  * Decaid changed is reported and never trusted blindly (D95).
  */
-import { DEFAULT_TIMEOUT_MS, requestJson, requestValue, type Transport } from './http.ts';
+import { reportDrift } from './drift.ts';
+import { DEFAULT_TIMEOUT_MS, request, requestJson, requestValue, type Transport } from './http.ts';
 import { toWebSocketOrigin } from './host.ts';
 import { createKvClient } from './kv.ts';
 import {
@@ -29,6 +30,7 @@ import {
   readShotPage,
   readShotSummary,
   readWorkflow,
+  unexpectedReply,
 } from './readers.ts';
 import { newId } from '../util/id.ts';
 import {
@@ -50,9 +52,11 @@ import {
  * workflow back after either (5.13).
  */
 const WORKFLOW_TIMEOUT_MS = 35_000;
-/** A quick scan answers in about a second; a full BLE scan legitimately takes much longer. */
+/** A quick scan answers [] at once and scans behind its answer; a full one answers when Decaid's 15 s Bluetooth scan is over. */
 const QUICK_SCAN_TIMEOUT_MS = 6_000;
 const FULL_SCAN_TIMEOUT_MS = 25_000;
+/** Decaid gives a connect 30 s (60 s on Linux) before it answers 504 (connection_manager.dart at aab5f93). */
+const CONNECT_TIMEOUT_MS = 35_000;
 
 export interface DecaidClientOptions {
   /** e.g. "http://localhost:8080" (see defaultGatewayOrigin in host.ts). */
@@ -74,6 +78,15 @@ function query(params: Record<string, string | number | boolean | undefined>): s
 }
 
 const id = (value: string) => encodeURIComponent(value);
+
+/** The rating scale probe, as drift reports name it. */
+const PROBE_SOURCE = 'PUT /api/v1/shots/{id}';
+/** Answers to the probe that say Decaid is busy, not which scale it uses: ask again later. */
+const PROBE_LATER = new Set([408, 425, 429, 503]);
+
+/** The entries of a device list as Decaid sent it, leaving out anything that is not one. */
+const deviceList = (value: unknown): DeviceEntry[] =>
+  Array.isArray(value) ? value.filter((entry): entry is DeviceEntry => typeof entry === 'object' && entry !== null) : [];
 
 export function createDecaidClient(options: DecaidClientOptions): GatewayClient {
   const origin = options.origin.trim().replace(/\/+$/, '');
@@ -174,21 +187,28 @@ export function createDecaidClient(options: DecaidClientOptions): GatewayClient 
     getShot: (shotId: string) => requestValue(transport, `/api/v1/shots/${id(shotId)}`, { read: readShot, source: 'GET /api/v1/shots/{id}' }),
     updateShot: (shotId: string, patch: ShotUpdateRequest) =>
       requestValue(transport, `/api/v1/shots/${id(shotId)}`, { method: 'PUT', body: patch, read: readShot, source: 'PUT /api/v1/shots/{id}' }),
+    /**
+     * Null when Decaid did not answer or was busy: ask again later. An answer
+     * that tells neither scale is reported and thrown as `unexpected_reply`
+     * (D95), so the stars never go out on a guess.
+     */
     async probeEnjoymentScale() {
       // A made-up id: current builds validate enjoyment (0-10) before looking
       // the shot up, 0.8.6 field builds look it up first (decaid-mcp's probe).
+      const path = `/api/v1/shots/${id(newId('cafai-probe'))}`;
+      let status: number;
       try {
-        await requestJson(transport, `/api/v1/shots/${id(newId('cafai-probe'))}`, {
-          method: 'PUT',
-          body: { annotations: { enjoyment: 11 } },
-        });
-        return null;
+        status = (await request(transport, path, { method: 'PUT', body: { annotations: { enjoyment: 11 } } })).status;
       } catch (error) {
-        if (!(error instanceof GatewayError)) return null;
+        if (!(error instanceof GatewayError) || error.code === 'network' || error.code === 'timeout') return null;
         if (error.status === 404) return 100;
         const said = [error.body?.error, error.body?.message, error.body?.details, error.message].join(' ');
-        return error.status === 400 && /enjoyment/i.test(said) ? 10 : null;
+        if (error.status === 400 && /enjoyment/i.test(said)) return 10;
+        if (PROBE_LATER.has(error.status)) return null;
+        status = error.status;
       }
+      reportDrift(PROBE_SOURCE, `enjoyment probe: unexpected ${status}`);
+      throw unexpectedReply(PROBE_SOURCE, path);
     },
     async listBeans() {
       return (await requestJson(transport, '/api/v1/beans', { read: readBeans })) ?? [];
@@ -208,32 +228,41 @@ export function createDecaidClient(options: DecaidClientOptions): GatewayClient 
 
     kv: createKvClient(origin, options.fetch, timeoutMs),
 
+    /**
+     * Discovery only. Decaid's scan connects every slot it can fill (the
+     * machine, then the scale) unless the query says connect=false, and a
+     * quick scan answers [] at once and finds its devices behind its answer
+     * (devices_handler.dart at aab5f93).
+     */
     async scanDevices(scanOptions = {}) {
       const quick = scanOptions.quick === true;
-      const path = quick ? '/api/v1/devices/scan?quick=true' : '/api/v1/devices/scan';
+      const path = `/api/v1/devices/scan${query({ connect: 'false', quick: quick ? 'true' : undefined })}`;
       return (await requestJson<DeviceEntry[]>(transport, path, { timeoutMs: slow(quick ? QUICK_SCAN_TIMEOUT_MS : FULL_SCAN_TIMEOUT_MS) })) ?? [];
     },
     connectDevice(deviceId, connectionRole) {
       const body: Record<string, unknown> = { deviceId };
       if (connectionRole) body.connectionRole = connectionRole;
-      return requestJson(transport, '/api/v1/devices/connect', { method: 'PUT', body });
+      return requestJson(transport, '/api/v1/devices/connect', { method: 'PUT', body, timeoutMs: slow(CONNECT_TIMEOUT_MS) });
     },
     /**
-     * The quick scan runs first because it answers in about a second, but it
-     * is not reliable: on a real DE1 it comes back empty while a full scan
-     * finds the machine every time. So an empty quick result falls through
-     * rather than being reported as "nothing there".
+     * A full scan that connects nothing, then a connect by id for the one
+     * device: the one Decaid's settings prefer when the scan found it, else
+     * the first it found that is there to connect. Never a quick scan, whose
+     * answer is always empty. A device of the kind connected by the end of
+     * the scan (Decaid reconnects on its own too) is left as it is. A connect
+     * Decaid refuses is not thrown: the device list after says how it went.
      */
     async connectKind(kind) {
-      const usable = (devices: DeviceEntry[] | null): DeviceEntry | undefined =>
-        (devices ?? []).find((device) => device.type === kind && device.available !== false && device.state !== 'connected');
-      const quick = await client.scanDevices({ quick: true }).catch(() => null);
-      let target = usable(quick);
-      if (!target) {
-        const full = await client.scanDevices().catch(() => null);
-        target = usable(full);
+      const [scanned, settings] = await Promise.all([client.scanDevices().catch(() => null), client.getSettings().catch(() => null)]);
+      // A scan that failed or ran out of time still left Decaid knowing what it saw.
+      const found = deviceList(Array.isArray(scanned) ? scanned : await client.getDevices());
+      const ofKind = found.filter((device) => device.type === kind);
+      if (!ofKind.some((device) => device.state === 'connected')) {
+        const ready = ofKind.filter((device) => device.available !== false && device.state !== 'connecting' && device.id);
+        const preferred = settings?.[kind === 'machine' ? 'preferredMachineId' : 'preferredScaleId'];
+        const target = ready.find((device) => device.id === preferred) ?? ready[0];
+        if (target) await client.connectDevice(target.id).catch(() => undefined);
       }
-      if (target?.id) await client.connectDevice(target.id);
       return client.getDevices();
     },
   };

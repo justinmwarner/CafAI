@@ -183,6 +183,76 @@ describe('grinder library over HTTP', () => {
   });
 });
 
+describe('device routes (devices_handler.dart at aab5f93)', () => {
+  /** Both away, as after a sleep that dropped them; put back afterwards. */
+  function bothAway() {
+    mock.state.setMachineConnected(false);
+    mock.state.setScaleConnected(false);
+    mock.state.setConnectionError(null);
+  }
+  function bothBack() {
+    mock.state.setMachineConnected(true);
+    mock.state.setScaleConnected(true);
+    mock.state.setConnectionError(null);
+  }
+  const states = (body: unknown) => (body as Array<{ type: string; state: string }>).map((device) => `${device.type}:${device.state}`);
+
+  it('a scan connects every slot it can fill unless told connect=false, and answers the list after', async () => {
+    bothAway();
+    try {
+      const reply = await call('/devices/scan');
+      expect(reply.status).toBe(200);
+      expect(states(reply.body)).toEqual(['machine:connected', 'scale:connected']);
+      expect(mock.state.isMachineConnected() && mock.state.isScaleConnected()).toBe(true);
+    } finally {
+      bothBack();
+    }
+  });
+
+  it('connect=false only discovers: what it found is ready to connect by id, and nothing connects', async () => {
+    bothAway();
+    try {
+      const reply = await call('/devices/scan?connect=false');
+      expect(reply.body).toEqual([
+        { name: expect.any(String), id: expect.any(String), state: 'discovered', type: 'machine', available: true },
+        { name: expect.any(String), id: expect.any(String), state: 'discovered', type: 'scale', available: true },
+      ]);
+      expect(mock.state.isMachineConnected() || mock.state.isScaleConnected()).toBe(false);
+
+      // Connecting one by id leaves the other as it was.
+      const [machine] = reply.body as Array<{ id: string }>;
+      const connected = await call('/devices/connect', { method: 'PUT', body: JSON.stringify({ deviceId: machine!.id }) });
+      expect(connected).toMatchObject({ status: 200, body: { deviceId: machine!.id, operation: 'connect', outcome: 'connected', state: 'connected' } });
+      expect(mock.state.isMachineConnected()).toBe(true);
+      expect(mock.state.isScaleConnected()).toBe(false);
+    } finally {
+      bothBack();
+    }
+  });
+
+  it('quick=true answers [] at once; it still connects behind its answer unless told connect=false', async () => {
+    bothAway();
+    try {
+      expect(await call('/devices/scan?connect=false&quick=true')).toMatchObject({ status: 200, body: [] });
+      expect(mock.state.isMachineConnected() || mock.state.isScaleConnected()).toBe(false);
+      expect(await call('/devices/scan?quick=true')).toMatchObject({ status: 200, body: [] });
+      expect(mock.state.isMachineConnected() && mock.state.isScaleConnected()).toBe(true);
+    } finally {
+      bothBack();
+    }
+  });
+
+  it('connect is any value but "false", as Decaid reads it', async () => {
+    bothAway();
+    try {
+      await call('/devices/scan?connect=0');
+      expect(mock.state.isMachineConnected()).toBe(true);
+    } finally {
+      bothBack();
+    }
+  });
+});
+
 describe('settings over HTTP (D1)', () => {
   it('GET starts with gatewayMode "tracking"; POST merges known keys and answers 200 null', async () => {
     expect((await call('/settings')).body).toMatchObject({ gatewayMode: 'tracking' });

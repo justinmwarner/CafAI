@@ -766,6 +766,89 @@ describe('createShotPlayer', () => {
     });
   });
 
+  describe('warming after a wake: idle/preparingForShot until reached, idle/idle after (D103 follow-up)', () => {
+    it('reports preparingForShot immediately on waking, the temperature rising toward target, then idle/idle once reached', async () => {
+      const { state, player } = setup();
+      player.command('sleeping');
+      // An artificially cold start (sleeping alone barely cools the mock's DE1), so the
+      // rise toward target is unambiguous rather than lost in the settled wobble.
+      state.setMachineSnapshot({ ...state.getMachineSnapshot(), groupTemperature: 60, mixTemperature: 60 });
+      player.command('idle');
+      const justWoke = state.getMachineSnapshot();
+      expect(justWoke.state).toEqual({ state: 'idle', substate: 'preparingForShot' });
+      expect(justWoke.groupTemperature).toBeGreaterThan(60);
+
+      await vi.advanceTimersByTimeAsync(1000); // several ticks into the countdown
+      const midWarm = state.getMachineSnapshot();
+      expect(midWarm.state).toEqual({ state: 'idle', substate: 'preparingForShot' });
+      expect(midWarm.groupTemperature).toBeGreaterThan(justWoke.groupTemperature);
+      expect(midWarm.groupTemperature).toBeLessThan(midWarm.targetGroupTemperature);
+
+      await vi.advanceTimersByTimeAsync(2300); // past the 32-tick (3300 ms) countdown to reached
+      const settled = state.getMachineSnapshot();
+      expect(settled.state).toEqual({ state: 'idle', substate: 'idle' });
+      expect(settled.groupTemperature).toBeGreaterThan(midWarm.groupTemperature);
+      expect(settled.groupTemperature).toBeCloseTo(settled.targetGroupTemperature - 0.9, 0);
+
+      await vi.advanceTimersByTimeAsync(1000); // stays idle/idle afterwards
+      expect(state.getMachineSnapshot().state).toEqual({ state: 'idle', substate: 'idle' });
+      player.dispose();
+    });
+
+    it('a fresh, never-slept player never shows preparingForShot', async () => {
+      const { state, player } = setup();
+      await vi.advanceTimersByTimeAsync(4000);
+      expect(state.getMachineSnapshot().state).toEqual({ state: 'idle', substate: 'idle' });
+      player.dispose();
+    });
+
+    it('an activity returning to idle does not show preparingForShot', async () => {
+      const { state, player } = setup();
+      player.command('steam');
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(player.activity).toBeNull();
+      expect(state.getMachineSnapshot().state).toEqual({ state: 'idle', substate: 'idle' });
+      player.dispose();
+    });
+
+    it('sleeping mid-warm-up resets it, so the next wake starts a fresh warm-up', async () => {
+      const { state, player } = setup();
+      player.command('sleeping');
+      player.command('idle');
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(state.getMachineSnapshot().state).toMatchObject({ substate: 'preparingForShot' });
+
+      player.command('sleeping');
+      expect(state.getMachineSnapshot().state).toEqual({ state: 'sleeping', substate: 'idle' });
+      player.command('idle');
+      expect(state.getMachineSnapshot().state).toEqual({ state: 'idle', substate: 'preparingForShot' });
+      player.dispose();
+    });
+
+    it('still cycles through preparingForShot and back even when time-to-ready.reaplugin is unloaded', async () => {
+      const { state, player } = setup({ loadedPlugins: [] });
+      player.command('sleeping');
+      player.command('idle');
+      expect(state.getMachineSnapshot().state).toEqual({ state: 'idle', substate: 'preparingForShot' });
+      await vi.advanceTimersByTimeAsync(3300);
+      expect(state.getMachineSnapshot().state).toEqual({ state: 'idle', substate: 'idle' });
+      player.dispose();
+    });
+
+    it('never overrides the scripted shot while a warm-up is still in progress', async () => {
+      const { state, player } = setup();
+      player.command('sleeping');
+      player.command('idle'); // starts warming
+      await vi.advanceTimersByTimeAsync(300); // still warming when the shot starts
+      expect(player.start()).toBe(true);
+      await vi.advanceTimersByTimeAsync(12_000);
+      expect(player.activity).toBeNull();
+      const record = state.getShot(player.lastShotId!);
+      expect(record.stopReason).toBe('targetWeight');
+      player.dispose();
+    });
+  });
+
   describe('skip step (D8)', () => {
     it('command("skipStep") during a shot advances the profile frame', async () => {
       const { state, player } = setup();

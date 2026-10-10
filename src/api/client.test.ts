@@ -234,12 +234,13 @@ describe('probeEnjoymentScale (D101)', () => {
     expect(await client.probeEnjoymentScale()).toBe(10);
   });
 
-  it('a 400 about anything but enjoyment cannot tell the scale', async () => {
+  it('a 400 about anything but enjoyment cannot tell the scale: reported, and never guessed from (D95)', async () => {
     const client = createDecaidClient({
       origin: 'http://localhost:8080',
       fetch: stubFetch(() => new Response(JSON.stringify({ error: 'ID in path does not match ID in body' }), { status: 400 })),
     });
-    expect(await client.probeEnjoymentScale()).toBeNull();
+    await expect(client.probeEnjoymentScale()).rejects.toMatchObject({ name: 'GatewayError', code: 'unexpected_reply' });
+    expect(drift()).toEqual([{ source: 'PUT /api/v1/shots/{id}', problem: 'enjoyment probe: unexpected 400' }]);
   });
 
   it('a 404 (the probe id does not exist) means the 0-100 scale', async () => {
@@ -247,17 +248,20 @@ describe('probeEnjoymentScale (D101)', () => {
     expect(await client.probeEnjoymentScale()).toBe(100);
   });
 
-  it('a 200 (the write went through) cannot tell the scale', async () => {
+  it('a 2xx for the made-up id cannot tell the scale: reported once however often it is asked (D95)', async () => {
     const client = createDecaidClient({ origin: 'http://localhost:8080', fetch: stubFetch(() => new Response(null, { status: 200 })) });
-    expect(await client.probeEnjoymentScale()).toBeNull();
+    await expect(client.probeEnjoymentScale()).rejects.toMatchObject({ name: 'GatewayError', code: 'unexpected_reply' });
+    await expect(client.probeEnjoymentScale()).rejects.toMatchObject({ code: 'unexpected_reply' });
+    expect(drift()).toEqual([{ source: 'PUT /api/v1/shots/{id}', problem: 'enjoyment probe: unexpected 200' }]);
+    expect(driftLog.list()[0]!.count).toBe(2);
   });
 
-  it('a network failure cannot tell the scale either', async () => {
-    const client = createDecaidClient({
-      origin: 'http://localhost:8080',
-      fetch: stubFetch(() => Promise.reject(new TypeError('Failed to fetch'))),
-    });
-    expect(await client.probeEnjoymentScale()).toBeNull();
+  it('no answer, or a busy Decaid, can be asked again later: null, nothing reported', async () => {
+    for (const answer of [() => Promise.reject(new TypeError('Failed to fetch')), () => new Response(null, { status: 503 }), () => new Response(null, { status: 429 })]) {
+      const client = createDecaidClient({ origin: 'http://localhost:8080', fetch: stubFetch(answer) });
+      expect(await client.probeEnjoymentScale()).toBeNull();
+    }
+    expect(drift()).toEqual([]);
   });
 
   it('probes a made-up shot id under /api/v1/shots/cafai-probe', async () => {
@@ -289,62 +293,123 @@ describe('the bean library', () => {
   });
 });
 
-// ---- connecting one device without disturbing the others (ported) ------------------------
+// ---- connecting one device without disturbing the others ---------------------------------
 
-async function connectCalls(kind: 'machine' | 'scale', scanResult: (url: string) => unknown[]): Promise<Array<{ url: string; body?: string }>> {
-  const calls: Array<{ url: string; body?: string }> = [];
+interface DeviceCall {
+  method: string;
+  url: string;
+  body?: string;
+}
+
+interface DecaidAnswers {
+  /** The scan's reply (default: `found`). */
+  scan?: () => Response;
+  /** GET /api/v1/settings (default: no preferred devices). */
+  settings?: () => Response;
+  /** PUT /api/v1/devices/connect (default: connected). */
+  connect?: () => Response;
+  /** GET /api/v1/devices: the list after (default: `found`). */
+  devices?: unknown[];
+}
+
+const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+
+/** A client on a stub Decaid whose scan finds `found`, and every call it made. */
+function deviceClient(found: unknown[], answers: DecaidAnswers = {}) {
+  const calls: DeviceCall[] = [];
   const client = createDecaidClient({
     origin: 'http://localhost:8080',
     fetch: stubFetch((url, init) => {
-      calls.push({ url, ...(typeof init?.body === 'string' ? { body: init.body } : {}) });
-      const body = url.includes('/devices/connect') ? '{}' : JSON.stringify(scanResult(url));
-      return new Response(body, { status: 200 });
+      calls.push({ method: init?.method ?? 'GET', url, ...(typeof init?.body === 'string' ? { body: init.body } : {}) });
+      const path = new URL(url).pathname;
+      if (path === '/api/v1/settings') return answers.settings?.() ?? reply({ gatewayMode: 'tracking' });
+      if (path === '/api/v1/devices/connect') return answers.connect?.() ?? reply({ outcome: 'connected', state: 'connected' });
+      if (path === '/api/v1/devices') return reply(answers.devices ?? found);
+      return answers.scan?.() ?? reply(found);
     }),
   });
-  await client.connectKind(kind);
-  return calls;
+  const scans = () => calls.filter((call) => call.url.includes('/devices/scan'));
+  const connects = () => calls.filter((call) => call.url.endsWith('/devices/connect'));
+  return { client, calls, scans, connects };
 }
 
-const de1 = { name: 'DE1', id: 'm-1', state: 'disconnected', type: 'machine', available: true };
+const de1 = { name: 'DE1', id: 'm-1', state: 'discovered', type: 'machine', available: true };
+const otherDe1 = { name: 'DE1 by the window', id: 'm-2', state: 'discovered', type: 'machine', available: true };
 const scale = { name: 'Decent Scale', id: 's-1', state: 'connected', type: 'scale', available: true };
+const lunar = { name: 'Lunar', id: 's-2', state: 'discovered', type: 'scale', available: true };
 
-describe('connectKind (ported)', () => {
-  it('connecting never asks the gateway to connect everything it can see', async () => {
-    // scan?connect=true connects whatever it finds. Asking for the scale then
-    // churned Bluetooth for the machine too, and a DE1 mid-handshake drops.
-    const calls = await connectCalls('machine', () => [de1, scale]);
-    expect(calls.some((c) => c.url.includes('connect=true')), 'no shotgun scan').toBe(false);
-    expect(calls.some((c) => c.url.includes('/devices/scan')), 'it still discovers').toBe(true);
+describe('scanDevices', () => {
+  it('only ever discovers: Decaid connects whatever a scan finds unless told connect=false', async () => {
+    const { client, scans } = deviceClient([de1]);
+    expect(await client.scanDevices()).toEqual([de1]);
+    await client.scanDevices({ quick: true });
+    expect(scans().map((call) => call.url)).toEqual([
+      'http://localhost:8080/api/v1/devices/scan?connect=false',
+      'http://localhost:8080/api/v1/devices/scan?connect=false&quick=true',
+    ]);
+  });
+});
+
+describe('connectKind', () => {
+  it('scans once, connecting nothing, and waits for the whole scan: a quick one answers [] at once', async () => {
+    const { client, scans } = deviceClient([de1, scale]);
+    await client.connectKind('machine');
+    expect(scans().map((call) => call.url)).toEqual(['http://localhost:8080/api/v1/devices/scan?connect=false']);
   });
 
-  it('only the device that was asked for is connected', async () => {
-    const calls = await connectCalls('machine', () => [de1, scale]);
-    const connects = calls.filter((c) => c.url.includes('/devices/connect'));
-    expect(connects).toHaveLength(1);
-    expect(connects[0]!.body, 'the machine, by id').toBe('{"deviceId":"m-1"}');
+  it('connects the one device that was asked for, by id, and answers the device list after', async () => {
+    const after = [{ ...de1, state: 'connected' }, scale];
+    const { client, connects } = deviceClient([de1, scale], { devices: after });
+    expect(await client.connectKind('machine')).toEqual(after);
+    expect(connects()).toEqual([{ method: 'PUT', url: 'http://localhost:8080/api/v1/devices/connect', body: '{"deviceId":"m-1"}' }]);
   });
 
-  it('a device already connected is left alone', async () => {
-    const calls = await connectCalls('scale', () => [de1, scale]);
-    expect(calls.filter((c) => c.url.includes('/devices/connect'))).toHaveLength(0);
+  it("prefers the device Decaid's settings name, when the scan found it", async () => {
+    const preferring = (settings: Record<string, unknown>) => ({ settings: () => reply({ gatewayMode: 'tracking', ...settings }) });
+    const machine = deviceClient([de1, otherDe1], preferring({ preferredMachineId: 'm-2' }));
+    await machine.client.connectKind('machine');
+    expect(machine.connects().map((call) => call.body)).toEqual(['{"deviceId":"m-2"}']);
+
+    const scales = deviceClient([de1, { ...scale, state: 'discovered' }, lunar], preferring({ preferredScaleId: 's-2' }));
+    await scales.client.connectKind('scale');
+    expect(scales.connects().map((call) => call.body)).toEqual(['{"deviceId":"s-2"}']);
+
+    // Not found, or settings Decaid could not give: the first one found.
+    const missing = deviceClient([de1, otherDe1], preferring({ preferredMachineId: 'm-9' }));
+    await missing.client.connectKind('machine');
+    expect(missing.connects().map((call) => call.body)).toEqual(['{"deviceId":"m-1"}']);
+    const unread = deviceClient([de1, otherDe1], { settings: () => reply({ error: 'boom' }, 500) });
+    await unread.client.connectKind('machine');
+    expect(unread.connects().map((call) => call.body)).toEqual(['{"deviceId":"m-1"}']);
   });
 
-  it('an unavailable device is not connected to', async () => {
-    const asleep = { ...de1, available: false };
-    const calls = await connectCalls('machine', () => [asleep]);
-    expect(calls.filter((c) => c.url.includes('/devices/connect')), 'connecting to hardware that is not advertising just errors').toHaveLength(0);
+  it('leaves a device of that kind that is connected by now as it is', async () => {
+    const { client, connects } = deviceClient([de1, scale, lunar]);
+    await client.connectKind('scale');
+    expect(connects()).toHaveLength(0);
   });
 
-  it('an empty quick scan falls through to the full one', async () => {
-    const calls = await connectCalls('machine', (url) => (url.includes('quick=true') ? [] : [de1]));
-    expect(calls[0]!.url).toMatch(/quick=true/);
-    expect(calls[1]!.url).toBe('http://localhost:8080/api/v1/devices/scan');
-    expect(calls[2]!.body).toBe('{"deviceId":"m-1"}');
+  it('never connects to a device Decaid remembers but cannot see, nor one it is connecting already', async () => {
+    const asleep = deviceClient([{ ...de1, available: false }]);
+    await asleep.client.connectKind('machine');
+    expect(asleep.connects(), 'connecting to hardware that is not advertising just errors').toHaveLength(0);
+    const busy = deviceClient([{ ...de1, state: 'connecting' }]);
+    await busy.client.connectKind('machine');
+    expect(busy.connects()).toHaveLength(0);
   });
 
-  it('a quick scan that finds the device is the end of the scanning', async () => {
-    const calls = await connectCalls('machine', () => [de1]);
-    expect(calls.filter((c) => c.url.includes('/devices/scan'))).toHaveLength(1);
+  it("picks from Decaid's device list when the scan itself fails", async () => {
+    const { client, connects, calls } = deviceClient([], { scan: () => reply({ error: 'Scan failed' }, 500), devices: [de1] });
+    await client.connectKind('machine');
+    expect(calls.filter((call) => call.method === 'GET' && call.url.endsWith('/api/v1/devices')).length).toBeGreaterThan(0);
+    expect(connects().map((call) => call.body)).toEqual(['{"deviceId":"m-1"}']);
+  });
+
+  it('answers the list after a connect Decaid refused, for the caller to say why, and never connects twice', async () => {
+    const refused = reply({ deviceId: 'm-1', operation: 'connect', outcome: 'failed', state: 'disconnected', connectionError: null }, 503);
+    const { client, connects } = deviceClient([de1, scale], { connect: () => refused });
+    expect(await client.connectKind('machine')).toEqual([de1, scale]);
+    expect(connects()).toHaveLength(1);
   });
 });
 
@@ -466,6 +531,20 @@ describe('against the mock Decaid', () => {
       ['scale', 'connected'],
       ['machine', 'connected'],
     ]);
+  });
+
+  it('connects the one device asked for, and leaves the other where it was', async () => {
+    mock.state.setMachineConnected(false);
+    mock.state.setScaleConnected(false);
+    try {
+      const after = await client.connectKind('machine');
+      expect(after.find((device) => device.type === 'machine')?.state).toBe('connected');
+      // The mock's scan connects everything it finds unless told not to, as Decaid's does.
+      expect(mock.state.isScaleConnected(), 'the scale was not asked for').toBe(false);
+    } finally {
+      mock.state.setMachineConnected(true);
+      mock.state.setScaleConnected(true);
+    }
   });
 
   it('tares, and explains a blocked or missing scale', async () => {

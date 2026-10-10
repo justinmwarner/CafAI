@@ -16,6 +16,8 @@ const machine = (patch: Partial<MachineFrame>): MachineFrame => ({ ...IDLE_TELEM
 
 const DISCONNECTED: Partial<TelemetryState> = { machineConnected: false, scaleConnected: false, scale: null };
 const SLEEPING: Partial<TelemetryState> = { machine: machine({ state: { state: 'sleeping', substate: 'idle' } }) };
+/** A DE1 warming up after a wake: idle, preparing its water (de1.utils.dart at aab5f93). */
+const WARMING = machine({ state: { state: 'idle', substate: 'preparingForShot' } });
 const PULLING: Partial<TelemetryState> = {
   machine: machine({ state: { state: 'espresso', substate: 'preinfusion' }, pressure: 2.1, flow: 3.9 }),
 };
@@ -120,6 +122,60 @@ describe('StatsCard: what it shows', () => {
   it('warns when the tank needs refilling', async () => {
     await renderCard(createFakeServices({ telemetry: { waterLevels: { currentLevel: 4, refillLevel: 5 } } }));
     expect(inCard(TID.waterLevel)).toHaveTextContent('Refill');
+  });
+});
+
+describe('StatsCard: heating, and ready in about N min (6.3)', () => {
+  const readyIn = () => within(card()).queryByTestId(TID.timeToReady);
+
+  it('says Heating and counts down in whole minutes, rounded up, while the machine heats up and the plugin has an estimate', async () => {
+    const { services } = await renderCard(createFakeServices({ telemetry: { machine: WARMING, timeToReady: 150_000 } }));
+    expect(inCard(TID.machineState)).toHaveTextContent(/^Heating$/);
+    expect(readyIn()).toHaveTextContent(/^Ready in about 3 min$/);
+    act(() => services.telemetry.setState({ timeToReady: 60_001 }));
+    expect(readyIn()).toHaveTextContent('Ready in about 2 min');
+    act(() => services.telemetry.setState({ timeToReady: 60_000 }));
+    expect(readyIn()).toHaveTextContent('Ready in about 1 min');
+    act(() => services.telemetry.setState({ timeToReady: 59_999 }));
+    expect(readyIn()).toHaveTextContent(/^Ready in under a minute$/);
+    // Past the plugin's deadline while the machine heats on.
+    act(() => services.telemetry.setState({ timeToReady: 0 }));
+    expect(readyIn()).toHaveTextContent(/^Ready in under a minute$/);
+  });
+
+  it("the machine decides, never the plugin: at rest an estimate shows nothing, and heating needs none", async () => {
+    // The plugin's status moves with every snapshot; a ready machine stays "Ready".
+    const { services } = await renderCard(createFakeServices({ telemetry: { timeToReady: 30_000 } }));
+    expect(inCard(TID.machineState)).toHaveTextContent(/^Ready$/);
+    expect(readyIn()).not.toBeInTheDocument();
+    // Heating by the machine's own word, with no fresh estimate: the line alone.
+    act(() => services.telemetry.setState({ machine: WARMING, timeToReady: null }));
+    expect(inCard(TID.machineState)).toHaveTextContent(/^Heating$/);
+    expect(readyIn()).not.toBeInTheDocument();
+    act(() => services.telemetry.setState({ machine: machine({ state: { state: 'idle', substate: 'idle' } }), timeToReady: 30_000 }));
+    expect(inCard(TID.machineState)).toHaveTextContent(/^Ready$/);
+    expect(readyIn()).not.toBeInTheDocument();
+  });
+
+  it('says Heating for heating and preheating too; nothing while away, asleep or making a drink', async () => {
+    const { services } = await renderCard();
+    for (const state of ['heating', 'preheating']) {
+      act(() => services.telemetry.setState({ ...IDLE_TELEMETRY, machine: machine({ state: { state, substate: 'idle' } }), timeToReady: 90_000 }));
+      expect(inCard(TID.machineState), state).toHaveTextContent(/^Heating$/);
+      expect(readyIn(), state).toHaveTextContent('Ready in about 2 min');
+    }
+    const patches: Array<Partial<TelemetryState>> = [
+      { ...DISCONNECTED, machine: WARMING },
+      SLEEPING,
+      PULLING,
+      // A shot's own preheat is the shot.
+      { machine: machine({ state: { state: 'espresso', substate: 'preparingForShot' } }) },
+      { machine: machine({ state: { state: 'steam', substate: 'pouring' } }) },
+    ];
+    for (const patch of patches) {
+      act(() => services.telemetry.setState({ ...IDLE_TELEMETRY, timeToReady: 90_000, ...patch }));
+      expect(readyIn(), JSON.stringify(patch.machine?.state)).not.toBeInTheDocument();
+    }
   });
 });
 
@@ -249,5 +305,24 @@ describe('StatsCard: rendering cost', () => {
       }
     });
     expect(commits).toBe(before);
+  });
+
+  it('a countdown that stays in its minute re-renders nothing', async () => {
+    const services = createFakeServices({ telemetry: { machine: WARMING, timeToReady: 170_000 } });
+    let commits = 0;
+    renderWithServices(
+      <Profiler id="card" onRender={() => (commits += 1)}>
+        <StatsCard />
+      </Profiler>,
+      services,
+    );
+    await act(async () => {});
+    const before = commits;
+    act(() => {
+      // The plugin estimates with every machine frame.
+      for (let ms = 169_000; ms > 121_000; ms -= 1_000) services.telemetry.setState({ timeToReady: ms });
+    });
+    expect(commits).toBe(before);
+    expect(screen.getByTestId(TID.timeToReady)).toHaveTextContent('Ready in about 3 min');
   });
 });

@@ -1,9 +1,10 @@
 /**
  * The machine at a glance, as a card in the chat (the chat posts it when the
  * app opens and on Stats, and takes it away once the chat moves on): the
- * machine's and the scale's links, the state line, Group (with its target),
- * Steam, Water (Refill when low) and Scale, the profile on the machine, and
- * Tare and Sleep or Wake. Everything in it updates live.
+ * machine's and the scale's links, the state line (and how long until the
+ * machine is ready, when Decaid's time-to-ready plugin can say), Group (with
+ * its target), Steam, Water (Refill when low) and Scale, the profile on the
+ * machine, and Tare and Sleep or Wake. Everything in it updates live.
  *
  * Laid out for its own width, not the window's (useOwnLayout.ts): four
  * readouts in a row where the card has the room, two by two on a phone, and
@@ -18,7 +19,9 @@ import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import BedtimeRounded from '@mui/icons-material/BedtimeRounded';
 import WbSunnyRounded from '@mui/icons-material/WbSunnyRounded';
+import { useTelemetry } from '../../app/services.tsx';
 import { TID } from '../testIds.ts';
+import { isHeatingUp } from './format.ts';
 import { LoadedProfile } from './LoadedProfile.tsx';
 import { ConnectionRow, MachineReadouts, StateLine } from './MachineStatus.tsx';
 import { useMachineCommands } from './useMachineCommands.ts';
@@ -38,6 +41,31 @@ const visuallyHidden = {
   clipPath: 'inset(50%)',
   whiteSpace: 'nowrap',
 } as const;
+
+/** "Ready in about 3 min": whole minutes, rounded up. */
+function readyInText(ms: number): string {
+  return ms < 60_000 ? 'Ready in under a minute' : `Ready in about ${Math.ceil(ms / 60_000)} min`;
+}
+
+/**
+ * How long until the machine is ready (spec 6.3), at the end of the state
+ * line's row, so nothing moves when it comes and goes. Only while the
+ * machine itself says it is heating up (isHeatingUp: the state line says
+ * "Heating" then) and time-to-ready has a fresh estimate; it changes once a
+ * minute, though the plugin estimates with every frame.
+ */
+function ReadyIn() {
+  const text = useTelemetry((s) => {
+    const state = s.machineConnected ? s.machine?.state : null;
+    return state && isHeatingUp(state.state, state.substate) && s.timeToReady !== null ? readyInText(s.timeToReady) : null;
+  });
+  if (text === null) return null;
+  return (
+    <Typography data-testid={TID.timeToReady} variant="label" component="p" color="text.secondary" noWrap sx={{ flex: 'none', ml: 'auto', pl: 1.5 }}>
+      {text}
+    </Typography>
+  );
+}
 
 function CardButtons({ narrow }: { narrow: boolean }) {
   const { model, pending, sleepWake, tare } = useMachineCommands();
@@ -103,7 +131,10 @@ export function StatsCard() {
           <ConnectionRow />
         </Box>
       </Box>
-      <StateLine stepNames={stepNames} />
+      <Box sx={{ display: 'flex', alignItems: 'baseline', minWidth: 0 }}>
+        <StateLine stepNames={stepNames} />
+        <ReadyIn />
+      </Box>
       <MachineReadouts columns={narrow ? 2 : 4} />
       <Box sx={{ display: 'flex', alignItems: 'center', columnGap: 1, mt: 1, pt: 1.25, borderTop: 1, borderColor: 'divider' }}>
         <LoadedProfile onStepNames={setStepNames} />

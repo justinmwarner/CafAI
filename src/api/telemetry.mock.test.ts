@@ -75,6 +75,24 @@ describe('telemetry against the mock Decaid', () => {
     }
   });
 
+  it("keeps time-to-ready's estimate after a wake, while watched (6.3)", async () => {
+    const store = createTelemetryStore({ client, wsOrigin: client.wsOrigin, visibility: null });
+    store.start();
+    store.watchTimeToReady(true);
+    try {
+      await waitFor(() => store.getState().machineConnected);
+      await client.setMachineState('sleeping');
+      await client.setMachineState('idle');
+      // The mock counts down from two and a half minutes after its insufficient_data frames.
+      await waitFor(() => (store.getState().timeToReady ?? 0) > 0);
+      expect(store.getState().timeToReady).toBeLessThanOrEqual(150_000);
+      store.watchTimeToReady(false);
+      expect(store.getState().timeToReady).toBeNull();
+    } finally {
+      store.stop();
+    }
+  });
+
   it('reconnects after the mock drops every socket', async () => {
     const store = createTelemetryStore({ client, wsOrigin: client.wsOrigin, visibility: null });
     store.start();

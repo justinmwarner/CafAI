@@ -420,7 +420,7 @@ test('a machine that drops off shows one slim alert under the top bar, and the r
   for (const { id } of STARTS) await expect(row.getByTestId(id)).toBeDisabled();
   // Closed, it gives way to what lasts as long as the problem does: what to do about it.
   await alert.getByRole('button', { name: 'Close' }).click();
-  await expect(alert).toContainText('Not connected. Wake the DE1 and pair it in Decaid.');
+  await expect(alert).toContainText("Not connected. Wake the DE1 and tap Connect DE1, or pair it in Decaid's settings.");
   await expect(alert).toHaveCount(1);
 
   await page.evaluate(() => (window as CafaiMockWindow).__CAFAI_MOCK__!.state.setMachineConnected(true));

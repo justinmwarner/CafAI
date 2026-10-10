@@ -20,8 +20,15 @@
  *   - Shots follow shotState, and the machine state stands in whenever
  *     shotState says nothing this build can read (5.9): a shot is never
  *     missed because Decaid renamed its shot states.
+ *   - time-to-ready.reaplugin's channel opens only while followed
+ *     (watchTimeToReady, while Decaid has the plugin loaded: D103), with the
+ *     same reconnects; its socket is not one of `sockets`, which say whether
+ *     Decaid itself can be reached. Only its estimate is kept, never its
+ *     status, by streamline's rules (heating-countdown.js).
  */
+import { reportDrift } from './drift.ts';
 import {
+  describeValue,
   deviceConnections,
   KNOWN_SHOT_STATES,
   parseDevicesFrame,
@@ -43,9 +50,12 @@ import type {
   SocketStatus,
   TelemetryState,
   TelemetryStore,
+  TimeToReadyFrame,
 } from './types.ts';
 
 type Channel = keyof TelemetryState['sockets'];
+/** The six channels, and the plugin's, which opens only while followed. */
+type SlotChannel = Channel | 'timeToReady';
 
 const CHANNEL_PATHS: Readonly<Record<Channel, string>> = {
   machine: '/ws/v1/machine/snapshot',
@@ -56,6 +66,42 @@ const CHANNEL_PATHS: Readonly<Record<Channel, string>> = {
   shotSettings: '/ws/v1/machine/shotSettings',
 };
 const CHANNELS = Object.keys(CHANNEL_PATHS) as Channel[];
+const TIME_TO_READY_PATH = '/ws/v1/plugins/time-to-ready.reaplugin/timeToReady';
+const pathOf = (channel: SlotChannel) => (channel === 'timeToReady' ? TIME_TO_READY_PATH : CHANNEL_PATHS[channel]);
+
+const TIME_TO_READY = 'ws/v1/plugins/time-to-ready.reaplugin/timeToReady';
+/** The statuses time-to-ready.reaplugin sends (plugin.js at aab5f93); any other is kept, and reported. */
+const TIME_TO_READY_STATUSES: ReadonlySet<string> = new Set(['heating', 'reached', 'not_heating', 'insufficient_data']);
+
+/**
+ * A time-to-ready.reaplugin frame: its status (one this build does not know
+ * is kept) and its estimate, null when the plugin has none or sent one that
+ * is not a number. A frame without a status cannot be used. What is wrong
+ * goes to the drift log.
+ */
+export function parseTimeToReadyFrame(value: unknown): TimeToReadyFrame | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    reportDrift(TIME_TO_READY, `frame: ${describeValue(value, 'object')}`);
+    return null;
+  }
+  const { status, remainingTimeMs } = value as Record<string, unknown>;
+  if (typeof status !== 'string') {
+    reportDrift(TIME_TO_READY, `status: ${describeValue(status, 'string')}`);
+    return null;
+  }
+  if (!TIME_TO_READY_STATUSES.has(status)) reportDrift(TIME_TO_READY, `status: unknown value "${status}"`);
+  const estimate = typeof remainingTimeMs === 'number' && Number.isFinite(remainingTimeMs) ? remainingTimeMs : null;
+  // The plugin sends null while it has no estimate; anything else that is not a number is new.
+  if (estimate === null && remainingTimeMs !== null) reportDrift(TIME_TO_READY, `remainingTimeMs: ${describeValue(remainingTimeMs, 'number')}`);
+  return { status, remainingTimeMs: estimate };
+}
+
+/** An estimate goes this long after the plugin's last frame: its socket has gone quiet (streamline's TTR_STALE_MS). */
+const READY_STALE_MS = 6000;
+/** How long past its deadline an estimate holds at zero: a machine can heat longer than predicted (streamline's TTR_OVERRUN_MS). */
+const READY_OVERRUN_MS = 10_000;
+/** Never more than five minutes: above that the estimate is noise (streamline's TTR_CAP_S; the plugin clamps to it too). */
+const READY_CAP_MS = 300_000;
 
 const BACKOFF_MIN_MS = 1000;
 const BACKOFF_MAX_MS = 30_000;
@@ -94,7 +140,7 @@ export interface TelemetryStoreOptions {
 }
 
 interface Slot {
-  channel: Channel;
+  channel: SlotChannel;
   socket: WebSocket | null;
   attempt: number;
   retry: unknown;
@@ -130,6 +176,7 @@ const INITIAL_STATE: TelemetryState = {
   shotState: null,
   devices: null,
   connectionError: null,
+  timeToReady: null,
 };
 
 function sameError(a: ConnectionError | null, b: ConnectionError | null): boolean {
@@ -164,6 +211,11 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
   const slots = Object.fromEntries(
     CHANNELS.map((channel) => [channel, { channel, socket: null, attempt: 0, retry: null, lastFrameAt: 0 } satisfies Slot]),
   ) as Record<Channel, Slot>;
+  const timeToReadySlot: Slot = { channel: 'timeToReady', socket: null, attempt: 0, retry: null, lastFrameAt: 0 };
+  let followingTimeToReady = false;
+  /** When the machine will be ready by the plugin's last estimate (the store's clock), and the timer that drops it. */
+  let readyDeadline: number | null = null;
+  let readyExpiry: unknown = null;
 
   let running = false;
   let runId = 0;
@@ -190,8 +242,8 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
     notifyAll(changeListeners, undefined);
   }
 
-  function setSocket(channel: Channel, status: SocketStatus): void {
-    if (state.sockets[channel] === status) return;
+  function setSocket(channel: SlotChannel, status: SocketStatus): void {
+    if (channel === 'timeToReady' || state.sockets[channel] === status) return;
     update({ sockets: { ...state.sockets, [channel]: status } });
   }
 
@@ -283,7 +335,7 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
 
   // ---- frames --------------------------------------------------------------------------
 
-  function handle(channel: Channel, value: unknown): void {
+  function handle(channel: SlotChannel, value: unknown): void {
     switch (channel) {
       case 'machine': {
         const frame = parseMachineFrame(value);
@@ -331,7 +383,41 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
         if (settings) update({ shotSettings: settings });
         return;
       }
+      case 'timeToReady': {
+        const frame = parseTimeToReadyFrame(value);
+        if (frame) onTimeToReady(frame);
+        return;
+      }
     }
+  }
+
+  // ---- time-to-ready ---------------------------------------------------------------------
+
+  /**
+   * The plugin works its status out from a 2 s temperature slope on every
+   * snapshot, so at rest it moves between reached, not_heating and heating:
+   * the status decides nothing here, and a frame without a number (most of
+   * them) wipes nothing. A heating frame with a number sets the deadline;
+   * every frame keeps it alive (streamline's readTimeToReadyFrame).
+   */
+  function onTimeToReady(frame: TimeToReadyFrame): void {
+    const at = now();
+    const estimate = frame.remainingTimeMs;
+    if (frame.status === 'heating' && estimate !== null && estimate > 0) readyDeadline = at + estimate;
+    if (readyDeadline === null || at - readyDeadline > READY_OVERRUN_MS) {
+      dropReadyEstimate();
+      return;
+    }
+    if (readyExpiry !== null) timers.clearTimeout(readyExpiry);
+    readyExpiry = timers.setTimeout(dropReadyEstimate, READY_STALE_MS);
+    update({ timeToReady: Math.min(Math.max(readyDeadline - at, 0), READY_CAP_MS) });
+  }
+
+  function dropReadyEstimate(): void {
+    if (readyExpiry !== null) timers.clearTimeout(readyExpiry);
+    readyExpiry = null;
+    readyDeadline = null;
+    update({ timeToReady: null });
   }
 
   // ---- sockets -------------------------------------------------------------------------
@@ -348,8 +434,11 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
     socket.onerror = null;
   }
 
+  /** The plugin's channel only while it is followed. */
+  const wanted = (slot: Slot) => slot.channel !== 'timeToReady' || followingTimeToReady;
+
   function scheduleReconnect(slot: Slot): void {
-    if (!running || slot.retry !== null) return;
+    if (!running || slot.retry !== null || !wanted(slot)) return;
     const delay = Math.min(BACKOFF_MAX_MS, BACKOFF_MIN_MS * 2 ** slot.attempt);
     slot.attempt += 1;
     slot.retry = timers.setTimeout(() => {
@@ -373,12 +462,12 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
   }
 
   function connect(slot: Slot): void {
-    if (!running || slot.socket) return;
+    if (!running || slot.socket || !wanted(slot)) return;
     clearRetry(slot);
     const Impl = options.WebSocketImpl ?? globalThis.WebSocket;
     let socket: WebSocket;
     try {
-      socket = new Impl(`${origin}${CHANNEL_PATHS[slot.channel]}`);
+      socket = new Impl(`${origin}${pathOf(slot.channel)}`);
     } catch {
       setSocket(slot.channel, 'closed');
       scheduleReconnect(slot);
@@ -432,11 +521,17 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
 
   function onVisibilityChange(): void {
     if (!running || visibility?.visibilityState !== 'visible') return;
-    for (const channel of CHANNELS) {
-      const slot = slots[channel];
+    for (const slot of [...CHANNELS.map((channel) => slots[channel]), timeToReadySlot]) {
       if (!slot.socket) connect(slot);
     }
     checkMachineSilence();
+  }
+
+  /** Closes a socket for good: no reconnect, and the backoff starts over. */
+  function close(slot: Slot): void {
+    clearRetry(slot);
+    slot.attempt = 0;
+    if (slot.socket) drop(slot, slot.socket, false);
   }
 
   async function seedFromRest(id: number): Promise<void> {
@@ -481,6 +576,7 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
       devicesSeen = false;
       machineSeen = false;
       for (const channel of CHANNELS) connect(slots[channel]);
+      connect(timeToReadySlot);
       scheduleWatchdog();
       visibility?.addEventListener('visibilitychange', onVisibilityChange);
       void seedFromRest(runId);
@@ -492,15 +588,23 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
       if (watchdog !== null) timers.clearTimeout(watchdog);
       watchdog = null;
       visibility?.removeEventListener('visibilitychange', onVisibilityChange);
-      for (const channel of CHANNELS) {
-        const slot = slots[channel];
-        clearRetry(slot);
-        slot.attempt = 0;
-        if (slot.socket) drop(slot, slot.socket, false);
-      }
+      for (const channel of CHANNELS) close(slots[channel]);
+      close(timeToReadySlot);
+      dropReadyEstimate();
       // Whatever shot was open is unknown now; the next start re-learns it.
       shot = null;
       espresso = null;
+    },
+    watchTimeToReady(on) {
+      if (on === followingTimeToReady) return;
+      followingTimeToReady = on;
+      if (on) {
+        connect(timeToReadySlot);
+        return;
+      }
+      close(timeToReadySlot);
+      // An estimate nothing updates any more is not one.
+      dropReadyEstimate();
     },
   };
 }
