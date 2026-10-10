@@ -86,6 +86,7 @@ export const IDLE_TELEMETRY: TelemetryState = {
   shotState: null,
   devices: null,
   connectionError: null,
+  timeToReady: null,
 };
 
 export interface FakeTelemetry extends TelemetryStore {
@@ -107,6 +108,7 @@ export function createFakeTelemetry(initial: Partial<TelemetryState> = {}): Fake
     onShot: (listener) => shots.on(listener),
     start() {},
     stop() {},
+    watchTimeToReady() {},
     setState(patch) {
       state = { ...state, ...patch };
       changes.emit();
@@ -263,7 +265,6 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
     grinderSetting: null,
     activeBagId: null,
   };
-  let keyBackupOn = false;
   const storage: FakeStorage = {
     apiKey: null,
     bags: {
@@ -318,10 +319,10 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
       lastPushAt: null,
       lastError: null,
     },
+    // The choice (Settings.keepKeyInDecaid) is what drives the switch; this fake's mechanics
+    // are a no-op by default so tests spy on setOn to see what SettingsScreen asked for.
     keyBackup: {
-      isOn: async () => keyBackupOn,
-      setOn: async (on) => void (keyBackupOn = on),
-      keyChanged: async () => {},
+      setOn: async () => {},
       restoreIfMissing: async () => false,
     },
   };

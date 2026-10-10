@@ -27,6 +27,7 @@ describe('defaultSettings', () => {
       grinderId: null,
       activeBagId: null,
       appearance: DEFAULT_APPEARANCE,
+      keepKeyInDecaid: false,
     });
   });
 });
@@ -52,6 +53,7 @@ describe('normalizeSettings', () => {
       grinderId: null,
       activeBagId: null,
       appearance: DEFAULT_APPEARANCE,
+      keepKeyInDecaid: false,
     });
   });
 
@@ -61,13 +63,21 @@ describe('normalizeSettings', () => {
 
   it('never carries fields outside Settings, such as an API key', () => {
     const normalized = normalizeSettings({ ...makeSettings(), apiKey: API_KEY, theme: 'dark' }, MODEL);
-    expect(Object.keys(normalized).sort()).toEqual(['activeBagId', 'appearance', 'grinderId', 'grinderName', 'grinderSetting', 'model']);
+    expect(Object.keys(normalized).sort()).toEqual([
+      'activeBagId',
+      'appearance',
+      'grinderId',
+      'grinderName',
+      'grinderSetting',
+      'keepKeyInDecaid',
+      'model',
+    ]);
     expect(JSON.stringify(normalized)).not.toContain(API_KEY);
   });
 
   it('reads settings saved before grinder links as not linked', () => {
     const older = { model: MODEL, grinderName: 'Niche Zero', grinderSetting: '14', activeBagId: 'bag_1' };
-    expect(normalizeSettings(older, MODEL)).toEqual({ ...older, grinderId: null, appearance: DEFAULT_APPEARANCE });
+    expect(normalizeSettings(older, MODEL)).toEqual({ ...older, grinderId: null, appearance: DEFAULT_APPEARANCE, keepKeyInDecaid: false });
   });
 
   it('keeps a linked grinder id, and reads an empty one as no link', () => {

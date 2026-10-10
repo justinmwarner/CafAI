@@ -183,6 +183,7 @@ describe('SettingsScreen coach settings', () => {
       grinderId: null,
       activeBagId: 'bag-1',
       appearance: DEFAULT_APPEARANCE,
+      keepKeyInDecaid: false,
     });
     expect(methods(services)).toEqual(['refresh']);
     // The fields show what was saved; nothing was taken out, so nothing more is said.
@@ -225,7 +226,13 @@ describe('SettingsScreen keeps a pasted API key out of the settings (D37)', () =
     expect(screen.getByText('Settings saved.')).toBeInTheDocument();
     expect(screen.getByTestId(TID.grinderName)).toHaveValue('Niche Zero');
     expect(screen.getByTestId(TID.grinderSetting)).toHaveValue('');
-    expect(await services.storage.settings.get()).toEqual({ ...typed, grinderSetting: null, grinderId: null, appearance: DEFAULT_APPEARANCE });
+    expect(await services.storage.settings.get()).toEqual({
+      ...typed,
+      grinderSetting: null,
+      grinderId: null,
+      appearance: DEFAULT_APPEARANCE,
+      keepKeyInDecaid: false,
+    });
     expect(methods(services)).toEqual(['refresh']);
     noKeyInAnyField();
     expect(document.body.innerHTML).not.toContain(PASTED_KEY.slice(0, 20));
@@ -318,6 +325,7 @@ describe('SettingsScreen grinder from Decaid', () => {
       grinderId: 'g-niche',
       activeBagId: 'bag-1',
       appearance: DEFAULT_APPEARANCE,
+      keepKeyInDecaid: false,
     });
     expect(methods(services)).toEqual(['refresh']);
     expect(services.decaid.calls.map((call) => call.method)).not.toContain('updateWorkflow');
@@ -522,15 +530,138 @@ describe('SettingsScreen grinder from Decaid', () => {
 });
 
 describe('SettingsScreen about', () => {
-  it('shows the app version and the Decaid version from the API', async () => {
+  it('shows the app version and the Decaid version from the API, against the one CafAI was verified with', async () => {
     renderSettings();
     expect(screen.getByText('CafAI 0.1.0-test')).toBeInTheDocument();
-    expect(await screen.findByText('Decaid 0.9.0+1')).toBeInTheDocument();
+    expect(await screen.findByText('Decaid 0.9.0+1 (CafAI was verified with 0.8.8)')).toBeInTheDocument();
   });
 
   it('prefers the version Decaid reports to the skin', () => {
     const services = renderSettings({ insideDecaid: true });
-    expect(screen.getByText('Decaid 0.9.0')).toBeInTheDocument();
+    expect(screen.getByText('Decaid 0.9.0 (CafAI was verified with 0.8.8)')).toBeInTheDocument();
     expect(services.decaid.calls.map((c) => c.method)).not.toContain('getInfo');
+  });
+
+  it('wires in the Decaid-about block and the drink settings section', async () => {
+    renderSettings();
+    expect(await screen.findByTestId(TID.aboutDecaid)).toBeInTheDocument();
+    expect(screen.getByTestId(TID.backupHealth)).toBeInTheDocument();
+    expect(screen.getByTestId(TID.drinkSettings)).toBeInTheDocument();
+  });
+});
+
+describe('SettingsScreen key in Decaid (5.6, D99)', () => {
+  const sentence =
+    "So you do not have to paste it again after a Decaid update. Any device on your network can read Decaid's store, and Decaid's backups include it.";
+  const withChoice = (keepKeyInDecaid: boolean) => ({
+    model: DEFAULT_MODEL,
+    grinderName: null,
+    grinderSetting: null,
+    activeBagId: null,
+    keepKeyInDecaid,
+  });
+
+  it('is off by default, with the reason underneath, once a key exists', async () => {
+    renderSettings();
+    const toggle = await screen.findByTestId(TID.keyInDecaid);
+    expect(toggle).not.toBeChecked();
+    expect(toggle).toBeEnabled();
+    expect(screen.getByText(sentence)).toBeInTheDocument();
+  });
+
+  it('disables the switch, with a short reason, when there is no key yet', async () => {
+    renderSettings({ coach: { hasApiKey: false } });
+    const toggle = await screen.findByTestId(TID.keyInDecaid);
+    expect(toggle).toBeDisabled();
+    expect(screen.getByText('Add a key above before turning this on.')).toBeInTheDocument();
+    expect(screen.queryByText(sentence)).toBeNull();
+  });
+
+  it('on copies the key to Decaid and stores the choice', async () => {
+    const services = renderSettings();
+    const setOn = vi.spyOn(services.storage.keyBackup, 'setOn');
+    const toggle = await screen.findByTestId(TID.keyInDecaid);
+    await userEvent.click(toggle);
+    await waitFor(() => expect(toggle).toBeChecked());
+    expect(setOn).toHaveBeenCalledWith(true);
+    expect((await services.storage.settings.get()).keepKeyInDecaid).toBe(true);
+  });
+
+  it('off deletes the copy in Decaid and stores the choice', async () => {
+    const services = renderSettings({ settings: withChoice(true) });
+    const setOn = vi.spyOn(services.storage.keyBackup, 'setOn');
+    const toggle = await screen.findByTestId(TID.keyInDecaid);
+    await waitFor(() => expect(toggle).toBeChecked());
+
+    await userEvent.click(toggle);
+    await waitFor(() => expect(toggle).not.toBeChecked());
+    expect(setOn).toHaveBeenCalledWith(false);
+    expect((await services.storage.settings.get()).keepKeyInDecaid).toBe(false);
+  });
+
+  it('a toggle that cannot reach Decaid reverts and says so', async () => {
+    const services = renderSettings();
+    vi.spyOn(services.storage.keyBackup, 'setOn').mockRejectedValue(new Error('Decaid is not answering.'));
+    const toggle = await screen.findByTestId(TID.keyInDecaid);
+    await userEvent.click(toggle);
+    expect(await screen.findByText('Could not reach Decaid: Decaid is not answering.')).toBeInTheDocument();
+    expect(toggle).not.toBeChecked();
+    expect((await services.storage.settings.get()).keepKeyInDecaid).toBe(false);
+  });
+
+  it('saving a new key copies it to Decaid while the choice is on', async () => {
+    const services = renderSettings({ coach: { hasApiKey: false }, settings: withChoice(true) });
+    const setOn = vi.spyOn(services.storage.keyBackup, 'setOn');
+    await screen.findByTestId(TID.keyInDecaid);
+
+    await userEvent.type(screen.getByTestId(TID.apiKeyInput), SECRET);
+    await userEvent.click(screen.getByTestId(TID.apiKeySave));
+    await waitFor(() => expect(services.storage.apiKey).toBe(SECRET));
+    expect(setOn).toHaveBeenCalledWith(true);
+    expect(screen.getByText('Key saved on this device.')).toBeInTheDocument();
+  });
+
+  it('a save that cannot reach Decaid still keeps the key here, and says both', async () => {
+    const services = renderSettings({ coach: { hasApiKey: false }, settings: withChoice(true) });
+    vi.spyOn(services.storage.keyBackup, 'setOn').mockRejectedValue(new Error('Decaid is not answering.'));
+    await screen.findByTestId(TID.keyInDecaid);
+
+    await userEvent.type(screen.getByTestId(TID.apiKeyInput), SECRET);
+    await userEvent.click(screen.getByTestId(TID.apiKeySave));
+    await waitFor(() => expect(services.storage.apiKey).toBe(SECRET));
+    expect(screen.getByText('Key saved on this device, but Decaid could not be updated: Decaid is not answering.')).toBeInTheDocument();
+  });
+
+  it('forgetting the key while the choice is on deletes the copy, and leaves the choice on for the next key', async () => {
+    const services = renderSettings({ settings: withChoice(true), key: SECRET });
+    const setOn = vi.spyOn(services.storage.keyBackup, 'setOn');
+    const toggle = await screen.findByTestId(TID.keyInDecaid);
+    await waitFor(() => expect(toggle).toBeChecked());
+
+    await userEvent.click(screen.getByTestId(TID.forgetKey));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Forget key' }));
+    await waitFor(() => expect(services.storage.apiKey).toBeNull());
+    expect(setOn).toHaveBeenCalledWith(false);
+    expect(screen.getByText('The key is gone from this device.')).toBeInTheDocument();
+    // Disabled (no key to back up), but still on: the next key saved here is copied again.
+    expect(screen.getByTestId(TID.keyInDecaid)).toBeDisabled();
+    expect(screen.getByTestId(TID.keyInDecaid)).toBeChecked();
+  });
+
+  it("forgetting the key when Decaid can't be reached keeps its copy there, says so, and keeps the switch on", async () => {
+    const services = renderSettings({ settings: withChoice(true), key: SECRET });
+    vi.spyOn(services.storage.keyBackup, 'setOn').mockRejectedValue(new Error('Decaid is not answering.'));
+    const toggle = await screen.findByTestId(TID.keyInDecaid);
+    await waitFor(() => expect(toggle).toBeChecked());
+
+    await userEvent.click(screen.getByTestId(TID.forgetKey));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Forget key' }));
+    await waitFor(() => expect(services.storage.apiKey).toBeNull());
+    expect(
+      screen.getByText(
+        'The key is gone from this device, but Decaid still has its copy; turn Keep my API key in Decaid off when Decaid is back.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId(TID.keyInDecaid)).toBeChecked();
   });
 });

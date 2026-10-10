@@ -150,6 +150,14 @@ export interface Settings {
    * absent); it is optional only so that older Settings literals compile.
    */
   appearance?: Appearance;
+  /**
+   * The choice to also keep the API key in Decaid (D99), off by default.
+   * Storage always reads and writes it (false when absent); it is optional
+   * only so that older Settings literals compile. src/storage/keyBackup.ts
+   * does the actual copying; this is only the choice, so that it is never
+   * confused with whether a copy happens to exist right now.
+   */
+  keepKeyInDecaid?: boolean;
 }
 
 export interface BagRepository {

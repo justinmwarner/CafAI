@@ -16,9 +16,11 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
 import Stack from '@mui/material/Stack';
+import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -30,11 +32,20 @@ import { useCoach, useServices } from '../../app/services.tsx';
 import { containsKeyLike } from '../../storage/redact.ts';
 import type { Settings } from '../../storage/types.ts';
 import { TID } from '../testIds.ts';
+import { AboutDecaid } from './AboutDecaid.tsx';
 import { AppearanceSection } from './AppearanceSection.tsx';
+import { DrinkSettingsSection } from './DrinkSettingsSection.tsx';
 import { GrinderFields } from './GrinderFields.tsx';
 import { grinderPatch, libraryAfterError, NOT_LISTED, type GrinderForm, type GrinderLibrary } from './grinderPicker.ts';
 import { revealInColumn } from './reveal.ts';
 import { Section } from './Section.tsx';
+
+// The test id goes on the switch's checkbox input, the one element a test (or a keyboard) can focus and drive.
+declare module '@mui/material/Switch' {
+  interface SwitchInputSlotPropsOverrides {
+    'data-testid'?: string;
+  }
+}
 
 type Message = { tone: 'success' | 'error'; text: string };
 
@@ -53,6 +64,9 @@ const fieldSx = { '& .MuiInputBase-root': { minHeight: 48 } } as const;
 /** A native select opens only from the select element itself, so it is the 48 px target. */
 const selectSx = { ...fieldSx, '& .MuiNativeSelect-select': { py: '12.5px' } } as const;
 
+/** Backup-in-Decaid state while the choice is still being read, or while it is in flight. */
+type KeepState = boolean | 'loading';
+
 function ApiKeySection() {
   const { storage, coach } = useServices();
   const hasApiKeyInEngine = useCoach((s) => s.hasApiKey);
@@ -64,6 +78,24 @@ function ApiKeySection() {
   const [busy, setBusy] = useState(false);
   const [confirmForget, setConfirmForget] = useState(false);
   const [message, setMessage] = useState<Message | null>(null);
+  // The choice to keep a copy in Decaid (Settings.keepKeyInDecaid), read once; KeyInDecaidSwitch
+  // both shows and changes it, so save() and forget() know whether to copy or delete there too.
+  const [keepInDecaid, setKeepInDecaid] = useState<KeepState>('loading');
+
+  useEffect(() => {
+    let live = true;
+    storage.settings
+      .get()
+      .then((settings) => {
+        if (live) setKeepInDecaid(settings.keepKeyInDecaid ?? false);
+      })
+      .catch(() => {
+        if (live) setKeepInDecaid(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [storage]);
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -73,10 +105,18 @@ function ApiKeySection() {
     setMessage(null);
     try {
       await storage.secrets.setApiKey(key);
+      let text = 'Key saved on this device.';
+      if (keepInDecaid === true) {
+        try {
+          await storage.keyBackup.setOn(true);
+        } catch (backupError) {
+          text = `Key saved on this device, but Decaid could not be updated: ${errorText(backupError)}`;
+        }
+      }
       setDraft('');
       setVisible(false);
       setSavedHere(true);
-      setMessage({ tone: 'success', text: 'Key saved on this device.' });
+      setMessage({ tone: 'success', text });
       await coach.refresh();
     } catch (error) {
       setMessage({ tone: 'error', text: `Could not save the key: ${errorText(error)}` });
@@ -91,8 +131,17 @@ function ApiKeySection() {
     setMessage(null);
     try {
       await storage.secrets.forgetApiKey();
+      let text = 'The key is gone from this device.';
+      if (keepInDecaid === true) {
+        try {
+          await storage.keyBackup.setOn(false);
+        } catch {
+          // The choice stays on: Decaid may still have the key, so the switch must not claim otherwise.
+          text = "The key is gone from this device, but Decaid still has its copy; turn Keep my API key in Decaid off when Decaid is back.";
+        }
+      }
       setSavedHere(false);
-      setMessage({ tone: 'success', text: 'The key is gone from this device.' });
+      setMessage({ tone: 'success', text });
       await coach.refresh();
     } catch (error) {
       setMessage({ tone: 'error', text: `Could not forget the key: ${errorText(error)}` });
@@ -173,6 +222,7 @@ function ApiKeySection() {
           {message.text}
         </Alert>
       ) : null}
+      <KeyInDecaidSwitch hasKey={hasKey} keepInDecaid={keepInDecaid} onChange={setKeepInDecaid} />
       <Dialog open={confirmForget} onClose={() => setConfirmForget(false)}>
         <DialogTitle>Forget the API key?</DialogTitle>
         <DialogContent>
@@ -194,6 +244,74 @@ function ApiKeySection() {
         </DialogActions>
       </Dialog>
     </Section>
+  );
+}
+
+/** Spec 5.6: why the key's copy in Decaid is worth having, and what it costs. */
+const KEY_IN_DECAID_SENTENCE =
+  "So you do not have to paste it again after a Decaid update. Any device on your network can read Decaid's store, and Decaid's backups include it.";
+
+/** A 38 px MUI Switch is under the 48 px touch target every other control here keeps; padding grows the whole hit area, track and thumb kept at their usual size. */
+const switchSx = { p: '17px' } as const;
+
+/**
+ * Settings > Coach's switch, D99: off by default. The checked state is
+ * Settings.keepKeyInDecaid (lifted into ApiKeySection, which also needs it
+ * to decide whether save() and forget() touch Decaid), never whether a
+ * copy happens to exist there right now. Disabled with no key to back up;
+ * a toggle that cannot reach Decaid reverts and says so, so the switch
+ * never claims a state that is not real.
+ */
+function KeyInDecaidSwitch({
+  hasKey,
+  keepInDecaid,
+  onChange,
+}: {
+  hasKey: boolean;
+  keepInDecaid: KeepState;
+  onChange(next: boolean): void;
+}) {
+  const { storage } = useServices();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const toggle = async (checked: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await storage.keyBackup.setOn(checked);
+      await storage.settings.update({ keepKeyInDecaid: checked });
+      onChange(checked);
+    } catch (caught) {
+      setError(`Could not reach Decaid: ${errorText(caught)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Box sx={{ mt: 1.5 }}>
+      <FormControlLabel
+        control={
+          <Switch
+            checked={keepInDecaid === true}
+            disabled={keepInDecaid === 'loading' || busy || !hasKey}
+            onChange={(event) => void toggle(event.target.checked)}
+            sx={switchSx}
+            slotProps={{ input: { 'data-testid': TID.keyInDecaid } }}
+          />
+        }
+        label="Keep my API key in Decaid"
+      />
+      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+        {hasKey ? KEY_IN_DECAID_SENTENCE : 'Add a key above before turning this on.'}
+      </Typography>
+      {error ? (
+        <Typography variant="body2" sx={{ color: 'error.main' }}>
+          {error}
+        </Typography>
+      ) : null}
+    </Box>
   );
 }
 
@@ -410,9 +528,7 @@ function AboutSection() {
   return (
     <Section title="About">
       <Typography variant="body2">CafAI {appVersion}</Typography>
-      <Typography variant="body2" sx={{ color: decaidVersion ? 'text.primary' : 'text.secondary' }}>
-        {decaidVersion ? `Decaid ${decaidVersion}` : 'Decaid version unknown (not connected)'}
-      </Typography>
+      <AboutDecaid decaidVersion={decaidVersion} />
     </Section>
   );
 }
@@ -429,6 +545,7 @@ export function SettingsScreen() {
         <AppearanceSection />
         <ApiKeySection />
         <CoachSettingsSection column={column} />
+        <DrinkSettingsSection />
         <AboutSection />
       </Stack>
     </Box>

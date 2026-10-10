@@ -24,7 +24,15 @@ import type { Appearance, AppearanceMode, Settings } from './types.ts';
 export const DEFAULT_APPEARANCE: Appearance = { mode: 'dark', tint: 'crema' };
 
 export function defaultSettings(defaultModel: string): Settings {
-  return { model: defaultModel, grinderName: null, grinderSetting: null, grinderId: null, activeBagId: null, appearance: DEFAULT_APPEARANCE };
+  return {
+    model: defaultModel,
+    grinderName: null,
+    grinderSetting: null,
+    grinderId: null,
+    activeBagId: null,
+    appearance: DEFAULT_APPEARANCE,
+    keepKeyInDecaid: false,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -33,6 +41,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function textOrNull(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
+}
+
+function boolOr(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
 }
 
 /**
@@ -88,10 +100,19 @@ export function normalizeSettings(raw: unknown, defaultModel: string): Settings 
     grinderId: idOrNull(raw['grinderId']),
     activeBagId: textOrNull(raw['activeBagId']),
     appearance: normalizeAppearance(raw['appearance']),
+    keepKeyInDecaid: boolOr(raw['keepKeyInDecaid'], false),
   };
 }
 
-const FIELDS: ReadonlyArray<keyof Settings> = ['model', 'grinderName', 'grinderSetting', 'grinderId', 'activeBagId', 'appearance'];
+const FIELDS: ReadonlyArray<keyof Settings> = [
+  'model',
+  'grinderName',
+  'grinderSetting',
+  'grinderId',
+  'activeBagId',
+  'appearance',
+  'keepKeyInDecaid',
+];
 
 /** `undefined` means "not part of this edit", never "clear it"; clearing takes an explicit null. */
 export function applySettingsPatch(current: Settings, patch: Partial<Settings>, defaultModel: string): Settings {
@@ -132,5 +153,8 @@ export function fillBlankSettings(local: Settings, incoming: Settings, defaultMo
     appearance: sameAppearance(local.appearance ?? DEFAULT_APPEARANCE, DEFAULT_APPEARANCE)
       ? (incoming.appearance ?? DEFAULT_APPEARANCE)
       : (local.appearance ?? DEFAULT_APPEARANCE),
+    // Like the model: on here wins; still off here takes the imported choice (a copy in Decaid
+    // means it was on somewhere, and local storage may be the part that was lost).
+    keepKeyInDecaid: (local.keepKeyInDecaid ?? false) || (incoming.keepKeyInDecaid ?? false),
   };
 }

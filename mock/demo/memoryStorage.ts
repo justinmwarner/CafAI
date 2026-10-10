@@ -122,9 +122,7 @@ export function createMemoryStorage(options: MemoryStorageOptions): MemoryStorag
       lastError: null,
     },
     keyBackup: {
-      isOn: async () => false,
       setOn: async () => {},
-      keyChanged: async () => {},
       restoreIfMissing: async () => false,
     },
     snapshot,

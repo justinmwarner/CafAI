@@ -118,6 +118,8 @@ export const SettingsSchema = z.object({
    * dropped as an unrecognised shape.
    */
   appearance: exact<Appearance>(z.unknown()).optional(),
+  /** Absent from exports made before D99; read as off (settings.ts), same treatment as appearance above. */
+  keepKeyInDecaid: z.boolean().optional(),
 });
 
 export const BagSchema = z.object({
