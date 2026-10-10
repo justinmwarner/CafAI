@@ -16,7 +16,10 @@ import { MockHttpError } from '../decaid/errors.ts';
 import type { MockDecaid } from '../decaid/state.ts';
 
 export function mockDecaidPort(state: MockDecaid): ApiPort {
-  const workflowClient = { updateWorkflow: async (patch: WorkflowPatch) => state.updateWorkflow(patch) };
+  const workflowClient = {
+    updateWorkflow: async (patch: WorkflowPatch) => state.updateWorkflow(patch),
+    getWorkflow: async () => state.getWorkflow(),
+  };
   const profileClient = { createProfile: async (body: ProfileCreateRequest) => state.createProfile(body) };
   return {
     getWorkflow: async () => state.getWorkflow(),

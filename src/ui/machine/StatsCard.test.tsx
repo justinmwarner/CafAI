@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { normalizeProfile } from '../../../mock/decaid/profiles.ts';
-import type { MachineSnapshot, TelemetryState } from '../../api/types.ts';
+import type { MachineFrame, TelemetryState } from '../../api/types.ts';
 import blooming from '../../coach/templates/source/Blooming_espresso.json';
 import { TID } from '../testIds.ts';
 import { createFakeServices, IDLE_TELEMETRY, SAMPLE_WORKFLOW, type FakeServices } from '../testing/fakeServices.ts';
@@ -12,7 +12,7 @@ import { renderWithServices } from '../testing/renderWithServices.tsx';
 import { MachineRow } from './MachineRow.tsx';
 import { StatsCard } from './StatsCard.tsx';
 
-const machine = (patch: Partial<MachineSnapshot>): MachineSnapshot => ({ ...IDLE_TELEMETRY.machine!, ...patch });
+const machine = (patch: Partial<MachineFrame>): MachineFrame => ({ ...IDLE_TELEMETRY.machine!, ...patch });
 
 const DISCONNECTED: Partial<TelemetryState> = { machineConnected: false, scaleConnected: false, scale: null };
 const SLEEPING: Partial<TelemetryState> = { machine: machine({ state: { state: 'sleeping', substate: 'idle' } }) };
@@ -71,10 +71,22 @@ describe('StatsCard: what it shows', () => {
   });
 
   it('shows something readable for a malformed machine frame', async () => {
-    const broken = { ...IDLE_TELEMETRY.machine!, state: undefined, groupTemperature: undefined } as unknown as MachineSnapshot;
+    const broken = { ...IDLE_TELEMETRY.machine!, state: undefined, groupTemperature: undefined } as unknown as MachineFrame;
     await renderCard(createFakeServices({ telemetry: { machine: broken } }));
     expect(inCard(TID.machineState)).toHaveTextContent('Connected');
     expect(inCard(TID.groupTemp)).toHaveTextContent('—');
+  });
+
+  it('shows the dash for a reading Decaid did not send, never 0 (5.8)', async () => {
+    const { services } = await renderCard(
+      createFakeServices({ telemetry: { machine: machine({ groupTemperature: null, targetGroupTemperature: null, steamTemperature: null }) } }),
+    );
+    expect(inCard(TID.groupTemp)).toHaveTextContent(/^Group—\s*$/);
+    expect(inCard(TID.steamTemp)).toHaveTextContent(/^Steam—\s*$/);
+    // The target alone is missing: the reading stays, the target goes.
+    act(() => services.telemetry.setState({ machine: machine({ targetGroupTemperature: null }) }));
+    expect(inCard(TID.groupTemp)).toHaveTextContent('92.4 °C');
+    expect(inCard(TID.groupTemp)).not.toHaveTextContent('target');
   });
 
   it('follows the machine live', async () => {

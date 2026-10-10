@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Derived from Crema web/src/test/profile.test.ts and gateway.test.ts (https://github.com/yarneo/crema @ 628cd714),
 // Copyright (C) 2026 Yarden (yarneo). Modified for CafAI: Vitest, error codes, Decaid's real bodies, retries and deadlines.
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { describeGatewayError, interpretGatewayError, requestJson, type Transport } from './http.ts';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { driftLog } from './drift.ts';
+import { describeGatewayError, interpretGatewayError, requestJson, requestValue, type Transport } from './http.ts';
 import { GatewayError } from './types.ts';
 
 // ---- gateway error bodies (ported from profile.test.ts) ------------------------
@@ -263,5 +264,54 @@ describe('requestJson', () => {
     expect(seen[0]!.init?.headers).toEqual({ 'If-None-Match': '"abc"' });
     await requestJson(transport, '/api/v1/store/cafai/k', { method: 'POST', body: 1, keepalive: true });
     expect(seen[1]!.init?.keepalive).toBe(true);
+  });
+});
+
+// ---- readers (D95) -------------------------------------------------------------------
+
+describe('a reply read by a reader', () => {
+  beforeEach(() => {
+    driftLog.clear();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('hands the reader the parsed reply and the route, named without its query', async () => {
+    const { transport } = stubTransport(() => new Response('{"a":1}'));
+    const read = vi.fn((data: unknown, source: string) => ({ data, source }));
+    expect(await requestValue(transport, '/api/v1/shots?limit=5&offset=0', { read })).toEqual({ data: { a: 1 }, source: 'GET /api/v1/shots' });
+    expect(await requestJson(transport, '/api/v1/workflow', { method: 'PUT', body: {}, read })).toEqual({
+      data: { a: 1 },
+      source: 'PUT /api/v1/workflow',
+    });
+  });
+
+  it('names a route with an id by its template, so one problem is one drift entry whatever the id', async () => {
+    const { transport } = stubTransport(() => new Response('{"a":1}'));
+    const read = vi.fn((_data: unknown, source: string) => source);
+    expect(await requestValue(transport, '/api/v1/shots/abc', { read, source: 'GET /api/v1/shots/{id}' })).toBe('GET /api/v1/shots/{id}');
+  });
+
+  it('never asks the reader about an empty reply', async () => {
+    const { transport } = stubTransport(() => new Response('null'));
+    const read = vi.fn(() => 'read');
+    expect(await requestJson(transport, '/api/v1/shots/latest', { read })).toBeNull();
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('reports an empty reply where Decaid owes a value, and fails the call as before', async () => {
+    const { transport } = stubTransport(() => new Response(''));
+    const error = await requestValue(transport, '/api/v1/workflow', { read: () => 'read' }).catch((e: unknown) => e);
+    expect(error).toMatchObject({ status: 200, code: 'http', message: 'Decaid sent an empty reply.' });
+    expect(driftLog.list()).toMatchObject([{ source: 'GET /api/v1/workflow', problem: 'reply: empty' }]);
+  });
+
+  it('a reader that cannot use the reply fails the call with its error', async () => {
+    const { transport } = stubTransport(() => new Response('[]'));
+    const refusal = new GatewayError(200, '/api/v1/workflow', "Decaid sent a reply CafAI doesn't recognise.", 'unexpected_reply');
+    const read = () => {
+      throw refusal;
+    };
+    await expect(requestValue(transport, '/api/v1/workflow', { read })).rejects.toBe(refusal);
   });
 });

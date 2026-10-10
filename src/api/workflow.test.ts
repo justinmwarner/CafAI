@@ -1,11 +1,11 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import blooming from '../coach/templates/source/Blooming_espresso.json';
 import { createMockServer } from '../../mock/node.ts';
 import { fixtures } from '../../mock/fixtures/index.ts';
 import { normalizeProfile } from '../../mock/decaid/profiles.ts';
 import { createDecaidClient } from './client.ts';
 import { activateProfile, createProfileVersion, findProfileMismatch, isShotRunning } from './workflow.ts';
-import { GatewayError, type DecaidClient, type Workflow, type WorkflowPatch } from './types.ts';
+import { GatewayError, type DecaidClient, type Workflow, type WorkflowContext, type WorkflowPatch } from './types.ts';
 import type { ProfileJson } from '../coach/types.ts';
 
 const mock = createMockServer();
@@ -128,6 +128,148 @@ describe('activateProfile', () => {
   });
 });
 
+describe('activateProfile after a workflow PUT that timed out or answered 503 (5.13)', () => {
+  const timeout = new GatewayError(0, '/api/v1/workflow', 'Decaid did not answer in time. Check that it is running, then try again.', 'timeout');
+  const busy = new GatewayError(503, '/api/v1/workflow', 'Workflow request queue timed out', 'http');
+  /** What the engine sends with a load: the targets, the coffee (beanBatchId cleared), the grinder and the tag. */
+  const context: WorkflowContext = {
+    targetYield: 36,
+    targetDoseWeight: 18,
+    coffeeName: 'Kiambu AA',
+    coffeeRoaster: 'Square Mile',
+    beanBatchId: null,
+    grinderId: 'g-niche',
+    grinderModel: 'Niche Zero',
+    grinderSetting: '14',
+    extras: { cafai: { versionId: 'v-3', bagId: 'bag-1' } },
+  };
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /** A PUT that fails with `failure`, then GETs answered by `readBack(what was sent, the read's number from 0)`. */
+  function slowDecaid(failure: Error, readBack: (sent: WorkflowPatch, read: number) => Workflow | Error) {
+    const calls: string[] = [];
+    let sent: WorkflowPatch = {};
+    const client = {
+      updateWorkflow: async (patch: WorkflowPatch) => {
+        calls.push('PUT');
+        sent = patch;
+        throw failure;
+      },
+      getWorkflow: async () => {
+        const answer = readBack(sent, calls.filter((call) => call === 'GET').length);
+        calls.push('GET');
+        if (answer instanceof Error) throw answer;
+        return answer;
+      },
+    } as unknown as DecaidClient;
+    return { client, calls };
+  }
+
+  /**
+   * What Decaid holds once the PUT is applied: the profile, the context merged
+   * key by key with the keys sent as null gone (Decaid omits them), and the
+   * extras merged too, the tag's keys in another order.
+   */
+  const applied = (sent: WorkflowPatch): Workflow => {
+    const merged = Object.entries({ ...fixtures.workflowGet().context, ...sent.context }).filter(([, value]) => value !== null);
+    return {
+      ...fixtures.workflowGet(),
+      profile: sent.profile!,
+      context: { ...Object.fromEntries(merged), extras: { other: { x: 1 }, cafai: { bagId: 'bag-1', versionId: 'v-3' } } },
+    };
+  };
+
+  /** The workflow as it stood before the PUT: v3 loaded earlier, with its yield since changed to 40 g in Decaid. */
+  const v3At40 = (sent: WorkflowPatch): Workflow => {
+    const workflow = applied(sent);
+    return { ...workflow, context: { ...workflow.context, targetYield: 40 } };
+  };
+
+  /** activateProfile's outcome once the timers have run out: the workflow, or what it threw. */
+  async function outcome(client: DecaidClient): Promise<unknown> {
+    const result = activateProfile(client, bloomingV1(), context, { shotRunning: false }).catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(10_000);
+    return result;
+  }
+
+  it('a timeout, then a read-back that holds everything sent: the load counts', async () => {
+    const { client, calls } = slowDecaid(timeout, applied);
+    expect(await outcome(client)).toMatchObject({ profile: { title: 'Kiambu AA v1' }, context: { targetYield: 36 } });
+    expect(calls).toEqual(['PUT', 'GET']);
+  });
+
+  it('after a timeout the PUT may still land: the workflow is read 3 times, 2 s apart', async () => {
+    const { client, calls } = slowDecaid(timeout, (sent, read) => (read < 2 ? v3At40(sent) : applied(sent)));
+    const result = activateProfile(client, bloomingV1(), context, { shotRunning: false });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(calls).toEqual(['PUT', 'GET']);
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(calls).toEqual(['PUT', 'GET']);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(calls).toEqual(['PUT', 'GET', 'GET']);
+    await vi.advanceTimersByTimeAsync(2000);
+    await expect(result).resolves.toMatchObject({ context: { targetYield: 36 } });
+    expect(calls).toEqual(['PUT', 'GET', 'GET', 'GET']);
+  });
+
+  it('after a timeout, 3 reads that never hold it, or that fail: the timeout stands', async () => {
+    const stale = slowDecaid(timeout, v3At40);
+    expect(await outcome(stale.client)).toBe(timeout);
+    expect(stale.calls).toEqual(['PUT', 'GET', 'GET', 'GET']);
+    const unreachable = slowDecaid(timeout, () => new GatewayError(0, '/api/v1/workflow', 'Could not reach Decaid.', 'network'));
+    expect(await outcome(unreachable.client)).toBe(timeout);
+    expect(unreachable.calls).toEqual(['PUT', 'GET', 'GET', 'GET']);
+  });
+
+  it('v3 active, its yield changed to 40 g in Decaid: reloading v3 with 36 g that gets a 503 fails', async () => {
+    // Decaid never applies a workflow PUT it answers 503 (queue timeout, write queue full, machine unavailable).
+    const { client, calls } = slowDecaid(busy, v3At40);
+    expect(await outcome(client)).toBe(busy);
+    expect(calls, 'one read: a 503 never lands later').toEqual(['PUT', 'GET']);
+  });
+
+  it('a 503 counts only when the workflow already holds everything sent', async () => {
+    const { client, calls } = slowDecaid(busy, applied);
+    expect(await outcome(client)).toMatchObject({ context: { targetYield: 36 } });
+    expect(calls).toEqual(['PUT', 'GET']);
+  });
+
+  it('every key sent counts: the dose, the coffee, the grinder, a key cleared, the tag', async () => {
+    const changes: Array<[string, (context: Record<string, unknown>) => Record<string, unknown>]> = [
+      ['targetDoseWeight', (c) => ({ ...c, targetDoseWeight: 19 })],
+      ['coffeeName', (c) => ({ ...c, coffeeName: 'Guji' })],
+      ['coffeeRoaster', (c) => ({ ...c, coffeeRoaster: 'Coffee Collective' })],
+      ['grinderId', (c) => ({ ...c, grinderId: 'g-other' })],
+      ['grinderModel', (c) => ({ ...c, grinderModel: 'EK43' })],
+      ['grinderSetting', (c) => ({ ...c, grinderSetting: '15' })],
+      ['beanBatchId (sent as null)', (c) => ({ ...c, beanBatchId: 'batch-1' })],
+      ['extras.cafai', (c) => ({ ...c, extras: { cafai: { versionId: 'v-2', bagId: 'bag-1' } } })],
+      ['targetYield missing', ({ targetYield: _yield, ...c }) => c],
+    ];
+    for (const [key, change] of changes) {
+      const { client } = slowDecaid(busy, (sent) => {
+        const workflow = applied(sent);
+        return { ...workflow, context: change(workflow.context as Record<string, unknown>) };
+      });
+      expect(await outcome(client), key).toBe(busy);
+    }
+  });
+
+  it('a different profile under the same context: the error stands', async () => {
+    const { client } = slowDecaid(busy, (sent) => ({ ...applied(sent), profile: { ...sent.profile!, title: 'Something else' } }));
+    expect(await outcome(client)).toBe(busy);
+  });
+
+  it('a 400 is never reconciled: Decaid refused what was sent', async () => {
+    const refused = new GatewayError(400, '/api/v1/workflow', 'Field "targetYield" cannot be null', 'http');
+    const { client, calls } = slowDecaid(refused, applied);
+    expect(await outcome(client)).toBe(refused);
+    expect(calls).toEqual(['PUT']);
+  });
+});
+
 describe('createProfileVersion', () => {
   it('a new version is created as sent', async () => {
     const request = fixtures.profileCreateRequest();
@@ -168,5 +310,19 @@ describe('isShotRunning', () => {
     expect(isShotRunning({ shotState: shot('preheating'), machine: idle })).toBe(true);
     expect(isShotRunning({ shotState: shot('stopping'), machine: idle })).toBe(true);
     expect(isShotRunning({ shotState: shot('idle'), machine: espresso })).toBe(true);
+  });
+
+  it('leaves a shot state it does not know to the machine state, so a renamed one never blocks loads (5.9)', () => {
+    const idle = fixtures.machineState();
+    const espresso = { ...idle, state: { state: 'espresso', substate: 'pouring' } };
+    const shot = (state: string) => ({ ...fixtures.shotStateWs(), state });
+    expect(isShotRunning({ shotState: shot('done'), machine: idle })).toBe(false);
+    expect(isShotRunning({ shotState: shot('brewing'), machine: espresso })).toBe(true);
+  });
+
+  it('counts skipStep, the moment a shot moves to its next step, as the shot', () => {
+    const skipping = { ...fixtures.machineState(), state: { state: 'skipStep', substate: 'pouring' } };
+    expect(isShotRunning({ shotState: { ...fixtures.shotStateWs(), state: 'done' }, machine: skipping })).toBe(true);
+    expect(isShotRunning({ shotState: null, machine: skipping })).toBe(true);
   });
 });

@@ -8,12 +8,20 @@
  * exception: a malformed frame must not take the live view down. Enums are
  * open (Decaid adds states and kinds without a version bump), so unknown
  * strings are kept.
+ *
+ * The machine and shotState channels are read, not trusted (D95): a machine
+ * reading Decaid did not send is null, never 0 (5.8), and a missing reading,
+ * a frame that cannot be used and a state this build does not know are
+ * reported to the drift log (drift.ts).
  */
+import { reportDrift } from './drift.ts';
+import { isKnownMachineState } from './machineStates.ts';
 import type {
   ConnectionError,
   DeviceEntry,
   DevicesState,
-  MachineSnapshot,
+  MachineFrame,
+  MachineReading,
   ShotDecision,
   ShotSettings,
   ShotStateEvent,
@@ -34,6 +42,38 @@ function finite(value: unknown): value is number {
 const number = (value: unknown, fallback = 0): number => (finite(value) ? value : fallback);
 const numberOrNull = (value: unknown): number | null => (finite(value) ? value : null);
 const stringOrNull = (value: unknown): string | null => (typeof value === 'string' ? value : null);
+
+/** "null", "array", "string": the JSON type of a value, for a drift report. */
+export function typeName(value: unknown): string {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  return typeof value;
+}
+
+/** What a drift report says about a value that is not what was expected: "missing", or "expected number, got string". */
+export function describeValue(value: unknown, expected: string): string {
+  return value === undefined ? 'missing' : `expected ${expected}, got ${typeName(value)}`;
+}
+
+const MACHINE_SNAPSHOT = 'ws/v1/machine/snapshot';
+const SHOT_STATE = 'ws/v1/machine/shotState';
+
+/** Every state Decaid's ShotState has (shot_state_event.dart); any other is reported (5.9). */
+export const KNOWN_SHOT_STATES: ReadonlySet<string> = new Set(['idle', 'preheating', 'pouring', 'stopping', 'finished']);
+
+/** In MachineSnapshot's order. */
+const MACHINE_READINGS: readonly MachineReading[] = [
+  'flow',
+  'pressure',
+  'targetFlow',
+  'targetPressure',
+  'mixTemperature',
+  'groupTemperature',
+  'targetMixTemperature',
+  'targetGroupTemperature',
+  'profileFrame',
+  'steamTemperature',
+];
 
 export type ParsedScaleFrame = { kind: 'status'; connected: boolean } | { kind: 'snapshot'; snapshot: WeightSnapshot } | null;
 
@@ -56,25 +96,40 @@ export function parseScaleFrame(value: unknown): ParsedScaleFrame {
   };
 }
 
-/** ws/v1/machine/snapshot: needs a timestamp and a state; missing numbers read as 0. */
-export function parseMachineFrame(value: unknown): MachineSnapshot | null {
-  if (!isObject(value) || typeof value.timestamp !== 'string' || !isObject(value.state)) return null;
+/** Reports why a frame cannot be used, and drops it. */
+function unusable(source: string, field: string, value: unknown, expected: string): null {
+  reportDrift(source, `${field}: ${describeValue(value, expected)}`);
+  return null;
+}
+
+/**
+ * ws/v1/machine/snapshot (and GET /api/v1/machine/state, named by `source`):
+ * needs a timestamp and a state. A reading Decaid did not send as a number is
+ * null, never 0, so a readout shows the dash and the graph leaves a gap.
+ */
+export function parseMachineFrame(value: unknown, source = MACHINE_SNAPSHOT): MachineFrame | null {
+  if (!isObject(value)) return unusable(source, 'frame', value, 'object');
+  if (typeof value.timestamp !== 'string') return unusable(source, 'timestamp', value.timestamp, 'string');
   const state = value.state;
-  if (typeof state.state !== 'string') return null;
-  return {
+  if (!isObject(state)) return unusable(source, 'state', state, 'object');
+  if (typeof state.state !== 'string') return unusable(source, 'state.state', state.state, 'string');
+  // Kept all the same, so the controls offer Stop for it (D97).
+  if (!isKnownMachineState(state.state)) reportDrift(source, `state: unknown value "${state.state}"`);
+  if (typeof state.substate !== 'string') reportDrift(source, `state.substate: ${describeValue(state.substate, 'string')}`);
+  const frame = {
     timestamp: value.timestamp,
     state: { state: state.state, substate: typeof state.substate === 'string' ? state.substate : '' },
-    flow: number(value.flow),
-    pressure: number(value.pressure),
-    targetFlow: number(value.targetFlow),
-    targetPressure: number(value.targetPressure),
-    mixTemperature: number(value.mixTemperature),
-    groupTemperature: number(value.groupTemperature),
-    targetMixTemperature: number(value.targetMixTemperature),
-    targetGroupTemperature: number(value.targetGroupTemperature),
-    profileFrame: number(value.profileFrame),
-    steamTemperature: number(value.steamTemperature),
-  };
+  } as MachineFrame;
+  for (const name of MACHINE_READINGS) {
+    const reading = value[name];
+    if (finite(reading)) {
+      frame[name] = reading;
+    } else {
+      frame[name] = null;
+      reportDrift(source, `${name}: ${describeValue(reading, 'number')}`);
+    }
+  }
+  return frame;
 }
 
 function parseDevice(value: unknown): DeviceEntry | null {
@@ -158,9 +213,10 @@ function parseDecision(value: unknown): ShotDecision | null {
   };
 }
 
-/** ws/v1/machine/shotState. */
+/** ws/v1/machine/shotState. A state this build does not know is kept, and reported. */
 export function parseShotStateFrame(value: unknown): ShotStateEvent | null {
   if (!isObject(value) || typeof value.state !== 'string' || typeof value.event !== 'string') return null;
+  if (!KNOWN_SHOT_STATES.has(value.state)) reportDrift(SHOT_STATE, `state: unknown value "${value.state}"`);
   return {
     event: value.event,
     timestamp: typeof value.timestamp === 'string' ? value.timestamp : '',

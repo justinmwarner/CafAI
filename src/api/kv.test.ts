@@ -1,7 +1,14 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockServer } from '../../mock/node.ts';
+import { driftLog } from './drift.ts';
 import { createKvClient } from './kv.ts';
 import { GatewayError } from './types.ts';
+
+beforeEach(() => {
+  driftLog.clear();
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+});
+afterEach(() => vi.restoreAllMocks());
 
 interface Seen {
   url: string;
@@ -73,10 +80,27 @@ describe('KV client wire behaviour', () => {
     expect(await kv.getAll('cafai', '"abc"')).toEqual({ notModified: true });
   });
 
-  it('a non-array list or non-object namespace reads as empty', async () => {
+  it('a non-array key list reads as empty', async () => {
     const { kv } = stub(() => new Response('null'));
     expect(await kv.list('cafai')).toEqual([]);
-    expect(await kv.getAll('cafai')).toEqual({ notModified: false, data: {}, etag: null });
+  });
+
+  it('a whole namespace that is not an object is unreadable, never empty (5.3)', async () => {
+    for (const body of ['[]', '["bags"]', 'null', '"cafai"', '42']) {
+      const { kv } = stub(() => new Response(body));
+      const error = await kv.getAll('cafai').catch((e: unknown) => e);
+      expect(error, body).toBeInstanceOf(GatewayError);
+      expect(error, body).toMatchObject({ code: 'unexpected_reply', path: '/api/v1/store/cafai?full=1' });
+    }
+    expect(driftLog.list()).toMatchObject([{ source: 'GET /api/v1/store/{ns}?full=1', problem: 'reply: not an object', count: 5 }]);
+  });
+
+  it('a namespace Decaid answers 404 or {} for is empty (the spec reading of a miss)', async () => {
+    const missing = stub(() => new Response('{"error":"Not found"}', { status: 404 }));
+    expect(await missing.kv.getAll('cafai')).toEqual({ notModified: false, data: {}, etag: null });
+    const empty = stub(() => new Response('{}', { headers: { ETag: '"e0"' } }));
+    expect(await empty.kv.getAll('cafai')).toEqual({ notModified: false, data: {}, etag: '"e0"' });
+    expect(driftLog.list()).toEqual([]);
   });
 
   it('a failed write throws a GatewayError', async () => {

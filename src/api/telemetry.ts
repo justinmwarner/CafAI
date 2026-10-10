@@ -17,14 +17,27 @@
  *     re-render only what changed. Live samples go to onSample listeners,
  *     not into state, so a 5 Hz shot never re-renders the app.
  *   - Malformed frames are ignored; nothing here throws.
+ *   - Shots follow shotState, and the machine state stands in whenever
+ *     shotState says nothing this build can read (5.9): a shot is never
+ *     missed because Decaid renamed its shot states.
  */
-import { deviceConnections, parseDevicesFrame, parseMachineFrame, parseScaleFrame, parseShotSettingsFrame, parseShotStateFrame, parseWaterLevelsFrame } from './frames.ts';
+import {
+  deviceConnections,
+  KNOWN_SHOT_STATES,
+  parseDevicesFrame,
+  parseMachineFrame,
+  parseScaleFrame,
+  parseShotSettingsFrame,
+  parseShotStateFrame,
+  parseWaterLevelsFrame,
+} from './frames.ts';
+import { isShotMachineState } from './machineStates.ts';
 import { parseDecaidTimestamp } from './time.ts';
 import type {
   ConnectionError,
   DecaidClient,
   LiveSample,
-  MachineSnapshot,
+  MachineFrame,
   ShotLifecycleEvent,
   ShotStateEvent,
   SocketStatus,
@@ -48,6 +61,10 @@ const BACKOFF_MIN_MS = 1000;
 const BACKOFF_MAX_MS = 30_000;
 const WATCHDOG_EVERY_MS = 5000;
 const MACHINE_SILENCE_MS = 20_000;
+/** How long the machine is in a shot state, with no shotState frame this build can read, before the machine state starts the shot. */
+const SHOT_STATE_WAIT_MS = 3000;
+/** Frames kept from that wait, for the shot's first seconds (about 15 at Decaid's rate). */
+const MAX_WAITING_FRAMES = 100;
 
 export interface TimerApi {
   setTimeout(callback: () => void, ms: number): unknown;
@@ -90,6 +107,16 @@ interface ShotTracking {
   t0: number | null;
   stopReason: string | null;
   source: 'shotState' | 'machine';
+}
+
+/** The machine's current stretch in a shot state (espresso, and skipStep between steps). */
+interface EspressoStretch {
+  /** When its first frame arrived (the store's clock). */
+  since: number;
+  /** Its frames while no shot covers it yet, for the shot that may start. */
+  frames: MachineFrame[];
+  /** A shot has covered it: the machine state starts no other in it. */
+  covered: boolean;
 }
 
 const INITIAL_STATE: TelemetryState = {
@@ -144,8 +171,11 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
   let devicesSeen = false;
   let machineSeen = false;
   let shotStateSeen = false;
+  /** When the last shotState frame with a state this build knows arrived. */
+  let knownShotStateAt = Number.NEGATIVE_INFINITY;
   let machineConnectedSince = 0;
   let shot: ShotTracking | null = null;
+  let espresso: EspressoStretch | null = null;
 
   // ---- state -------------------------------------------------------------------------
 
@@ -171,12 +201,12 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
     notifyAll(shotListeners, event);
   }
 
-  function sample(frame: MachineSnapshot): void {
+  function sample(frame: MachineFrame): void {
     if (!shot) return;
     const at = parseDecaidTimestamp(frame.timestamp);
     if (!Number.isFinite(at)) return;
     if (shot.t0 === null) {
-      if (frame.state.state !== 'espresso') return;
+      if (!isShotMachineState(frame.state.state)) return;
       shot.t0 = at;
     }
     const tS = (at - shot.t0) / 1000;
@@ -187,9 +217,16 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
   function startShot(id: string | null, source: ShotTracking['source']): void {
     shot = { id, t0: null, stopReason: null, source };
     emitShot({ type: 'started', shotId: id });
-    // The first espresso frame can arrive just before the shotState frame
-    // that announces the shot; it is t = 0.
-    if (source === 'shotState' && state.machine?.state.state === 'espresso') sample(state.machine);
+    const waited = espresso?.frames ?? [];
+    if (espresso) {
+      espresso.covered = true;
+      espresso.frames = [];
+    }
+    // The frames the machine sent before CafAI heard of the shot belong to
+    // it, the first of them t = 0. The first espresso frame can arrive just
+    // before the shotState frame that announces the shot.
+    if (waited.length > 0) for (const frame of waited) sample(frame);
+    else if (source === 'shotState' && state.machine && isShotMachineState(state.machine.state.state)) sample(state.machine);
   }
 
   function finishShot(): void {
@@ -201,6 +238,10 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
 
   function onShotState(event: ShotStateEvent): void {
     shotStateSeen = true;
+    // A state this build does not know, renamed or new, says nothing about
+    // the shot: the machine state stands in (frames.ts reports it).
+    if (!KNOWN_SHOT_STATES.has(event.state)) return;
+    knownShotStateAt = now();
     if (shot?.source === 'machine') {
       shot.source = 'shotState';
       shot.id ??= event.shotId;
@@ -212,16 +253,30 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
     if (shot && (event.state === 'finished' || event.state === 'idle')) finishShot();
   }
 
-  function onMachineFrame(frame: MachineSnapshot): void {
-    // Without shotState frames (older gateways), a shot is the time spent in
-    // the espresso state.
-    if (!shotStateSeen) {
-      const espresso = frame.state.state === 'espresso';
-      if (espresso && !shot) startShot(null, 'machine');
-      else if (!espresso && shot?.source === 'machine') {
+  function onMachineFrame(frame: MachineFrame): void {
+    // skipStep is the shot too: Decaid's name for the moment it moves to its next step.
+    if (!isShotMachineState(frame.state.state)) {
+      espresso = null;
+      // A shot the machine state started ends with it; shotState ends its
+      // own, after Decaid's stopping phase.
+      if (shot?.source === 'machine') {
         finishShot();
         return;
       }
+      sample(frame);
+      return;
+    }
+    espresso ??= { since: now(), frames: [], covered: shot !== null };
+    if (!espresso.covered) {
+      // Without shotState frames (older gateways), a shot is the time spent
+      // in the shot states. Once they come, they get a moment to announce
+      // the shot in words this build knows.
+      const quiet = now() - Math.max(espresso.since, knownShotStateAt);
+      if (shotStateSeen && quiet < SHOT_STATE_WAIT_MS) {
+        if (espresso.frames.length < MAX_WAITING_FRAMES) espresso.frames.push(frame);
+        return;
+      }
+      startShot(null, 'machine');
     }
     sample(frame);
   }
@@ -394,15 +449,14 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
       return;
     }
     // After a page reload the snapshot socket may not send a fresh frame for
-    // a while; seed the machine panel from REST.
+    // a while; seed the machine panel from REST (read like a frame by the client).
     if (!state.machineConnected) return;
     try {
-      const snapshot = await options.client.getMachineState();
+      const frame = await options.client.getMachineState();
       if (id !== runId || machineSeen) return;
-      const parsed = parseMachineFrame(snapshot);
-      if (parsed) update({ machine: parsed });
+      update({ machine: frame });
     } catch {
-      // Not connected after all, or a timeout: the sockets will tell us.
+      // Not connected after all, a reply CafAI could not read, or a timeout: the sockets will tell us.
     }
   }
 
@@ -446,6 +500,7 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
       }
       // Whatever shot was open is unknown now; the next start re-learns it.
       shot = null;
+      espresso = null;
     },
   };
 }

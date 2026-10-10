@@ -14,6 +14,7 @@
  * truth; it is checked against what was sent.
  */
 import type { ProfileJson } from '../coach/types.ts';
+import { isShotMachineState } from './machineStates.ts';
 import {
   GatewayError,
   type DecaidClient,
@@ -41,11 +42,14 @@ const PROFILE_KEYS = [
   'tank_temperature',
 ] as const;
 
-/** True while a shot is in progress: shotState past idle, or the machine in espresso. */
+/** shotState's states while a shot runs; any other, a renamed one included, leaves it to the machine state (5.9). */
+const SHOT_RUNNING_STATES: ReadonlySet<string> = new Set(['preheating', 'pouring', 'stopping']);
+
+/** True while a shot is in progress: shotState preheating, pouring or stopping, or the machine in a shot (espresso, skipStep). */
 export function isShotRunning(telemetry: Pick<TelemetryState, 'shotState' | 'machine'>): boolean {
   const shotState = telemetry.shotState?.state;
-  if (shotState && shotState !== 'idle' && shotState !== 'finished') return true;
-  return telemetry.machine?.state.state === 'espresso';
+  if (shotState && SHOT_RUNNING_STATES.has(shotState)) return true;
+  return isShotMachineState(telemetry.machine?.state.state);
 }
 
 type Loose = Record<string, unknown>;
@@ -108,6 +112,64 @@ export function findProfileMismatch(sent: ProfileJson | WireProfile, got: Profil
   return null;
 }
 
+/** Equal as JSON, whatever the key order. */
+function sameJson(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null || Array.isArray(a) !== Array.isArray(b)) return false;
+  const left = a as Loose;
+  const right = b as Loose;
+  const keys = Object.keys(left);
+  return keys.length === Object.keys(right).length && keys.every((key) => key in right && sameJson(left[key], right[key]));
+}
+
+/** After a timeout, the workflow is read this many times, this far apart, before the timeout stands. */
+const READS_AFTER_TIMEOUT = 3;
+const READ_EVERY_MS = 2000;
+
+/**
+ * Every key of the context sent holds its value in the one read back: a key
+ * sent as null is gone (Decaid leaves out a key without a value), and the
+ * extras are compared key by key, as Decaid merges them.
+ */
+function holdsContext(sent: WorkflowContext, got: WorkflowContext | undefined): boolean {
+  const held = (got ?? {}) as Loose;
+  return Object.entries(sent as Loose).every(([key, value]) => {
+    if (key === 'extras' && typeof value === 'object' && value !== null) {
+      const extras = typeof held.extras === 'object' && held.extras !== null ? (held.extras as Loose) : {};
+      return Object.entries(value as Loose).every(([name, entry]) => sameJson(entry ?? null, extras[name] ?? null));
+    }
+    return typeof value === 'number' ? sameNumber(value, held[key]) : sameJson(value ?? null, held[key] ?? null);
+  });
+}
+
+/**
+ * Whether a workflow PUT that failed holds after all (5.13). Decaid v0.8.8
+ * never applies a PUT it answers 503: one that waited 30 s in its queue is
+ * skipped, and a full machine write queue or an unavailable machine fail
+ * before the workflow is set (workflow_handler.dart), as admission control
+ * fails before the handler. A client-side timeout can still land, though: the
+ * PUT may be off the queue, writing to the DE1. So the workflow is read
+ * `reads` times, READ_EVERY_MS apart, and counts only when it holds
+ * everything that was sent: the profile, and every context key with its value.
+ */
+async function landedAnyway(
+  client: Pick<DecaidClient, 'getWorkflow'>,
+  profile: ProfileJson,
+  context: WorkflowContext,
+  reads: number,
+): Promise<Workflow | null> {
+  for (let read = 0; read < reads; read += 1) {
+    if (read > 0) await new Promise((resolve) => setTimeout(resolve, READ_EVERY_MS));
+    try {
+      const workflow = await client.getWorkflow();
+      if (findProfileMismatch(profile, workflow.profile) === null && holdsContext(context, workflow.context)) return workflow;
+    } catch {
+      // Not readable now either: the next read, or the PUT's own error.
+    }
+  }
+  return null;
+}
+
 /**
  * Activate a profile: one PUT /api/v1/workflow with the complete profile and
  * the context, then check Decaid kept what was sent.
@@ -117,9 +179,11 @@ export function findProfileMismatch(sent: ProfileJson | WireProfile, got: Profil
  * `context.targetYield` must be a number (0 = stop-at-weight off).
  * The machine upload happens after the response; Decaid only signals a
  * failure (devices connectionStatus.error kind `profileUploadFailed`).
+ * A PUT that timed out or answered 503 counts only when the workflow read
+ * back already holds everything that was sent; otherwise its error stands.
  */
 export async function activateProfile(
-  client: Pick<DecaidClient, 'updateWorkflow'>,
+  client: Pick<DecaidClient, 'updateWorkflow' | 'getWorkflow'>,
   profile: ProfileJson,
   context: WorkflowContext,
   options: { shotRunning: boolean },
@@ -140,8 +204,20 @@ export async function activateProfile(
     complete[key] = loose[key];
   }
 
-  const workflow = await client.updateWorkflow({ profile: complete as unknown as ProfileJson, context });
-  const mismatch = findProfileMismatch(complete as unknown as ProfileJson, workflow.profile);
+  const sent = complete as unknown as ProfileJson;
+  let workflow: Workflow;
+  try {
+    workflow = await client.updateWorkflow({ profile: sent, context });
+  } catch (error) {
+    // A timeout may still land, so it is read a few times; a 503 never lands, so once.
+    let reads = 0;
+    if (error instanceof GatewayError) reads = error.code === 'timeout' ? READS_AFTER_TIMEOUT : error.status === 503 ? 1 : 0;
+    if (reads === 0) throw error;
+    const landed = await landedAnyway(client, sent, context, reads);
+    if (landed === null) throw error;
+    return landed;
+  }
+  const mismatch = findProfileMismatch(sent, workflow.profile);
   if (mismatch) {
     throw new GatewayError(200, PATH, `Decaid kept a different profile than CafAI sent (${mismatch}). Try again.`, 'activation_mismatch');
   }

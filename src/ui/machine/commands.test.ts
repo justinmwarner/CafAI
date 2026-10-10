@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { isRunningMachineState, machineControls, type MachineControlInput } from './commands.ts';
+import { machineControls, type MachineControlInput } from './commands.ts';
+
+// Which state is which (running, at rest, not to interrupt) is tested with
+// the list itself, in src/api/machineStates.test.ts.
 
 const idle: MachineControlInput = {
   connected: true,
@@ -8,17 +11,6 @@ const idle: MachineControlInput = {
   hasGhc: false,
   pending: null,
 };
-
-describe('isRunningMachineState', () => {
-  it('knows what Stop can end', () => {
-    for (const state of ['espresso', 'steam', 'hotWater', 'flush', 'steamRinse', 'skipStep', 'cleaning', 'descaling', 'airPurge']) {
-      expect(isRunningMachineState(state)).toBe(true);
-    }
-    for (const state of ['idle', 'sleeping', 'heating', 'needsWater', 'error', 'booting', 'whatever', null, undefined]) {
-      expect(isRunningMachineState(state)).toBe(false);
-    }
-  });
-});
 
 describe('machineControls', () => {
   it('lets an idle machine start anything, and Stop has nothing to stop', () => {
@@ -115,5 +107,27 @@ describe('machineControls', () => {
   it('lets a heating machine start; the machine waits for temperature itself', () => {
     expect(machineControls({ ...idle, state: 'heating' }).startsEnabled).toBe(true);
     expect(machineControls({ ...idle, state: 'schedIdle' }).startsEnabled).toBe(true);
+  });
+
+  it('offers Stop in a state it does not know, and nothing else (D97)', () => {
+    const model = machineControls({ ...idle, state: 'brewing' });
+    expect(model.running).toBe(true);
+    expect(model.stopEnabled).toBe(true);
+    expect(model.stopProminent).toBe(true);
+    expect(model.startsEnabled).toBe(false);
+    expect(model.startReason).toMatch(/busy/i);
+    expect(model.sleepWake.enabled).toBe(false);
+    // Not without a machine.
+    expect(machineControls({ ...idle, connected: false, state: 'brewing' }).stopEnabled).toBe(false);
+  });
+
+  it('never interrupts a firmware upgrade, a calibration or a self test: no Stop, no Sleep', () => {
+    for (const state of ['fwUpgrade', 'calibration', 'selfTest']) {
+      const model = machineControls({ ...idle, state });
+      expect(model.running, state).toBe(false);
+      expect(model.stopEnabled, state).toBe(false);
+      expect(model.startsEnabled, state).toBe(false);
+      expect(model.sleepWake.enabled, state).toBe(false);
+    }
   });
 });

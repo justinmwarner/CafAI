@@ -99,6 +99,22 @@ export interface MachineSnapshot {
   steamTemperature: number;
 }
 
+/** The machine readings a snapshot carries as numbers. */
+export type MachineReading =
+  | 'flow'
+  | 'pressure'
+  | 'targetFlow'
+  | 'targetPressure'
+  | 'mixTemperature'
+  | 'groupTemperature'
+  | 'targetMixTemperature'
+  | 'targetGroupTemperature'
+  | 'profileFrame'
+  | 'steamTemperature';
+
+/** A parsed telemetry frame: a reading Decaid did not send is null, never 0 (5.8). */
+export type MachineFrame = Omit<MachineSnapshot, MachineReading> & { [K in MachineReading]: number | null };
+
 export interface WaterLevels {
   /** mm */
   currentLevel: number;
@@ -511,7 +527,8 @@ export interface DecaidClient {
   getPluginEndpoint<T = unknown>(pluginId: string, endpoint: string): Promise<T | null>;
 
   getMachineInfo(): Promise<MachineInfo>;
-  getMachineState(): Promise<MachineSnapshot>;
+  /** Read like a snapshot frame: a reading Decaid did not send is null. */
+  getMachineState(): Promise<MachineFrame>;
   getCapabilities(): Promise<string[]>;
   /** Actuates hardware: only ever call from an explicit tap. */
   setMachineState(state: CommandableState): Promise<void>;
@@ -561,7 +578,7 @@ export interface TelemetryState {
   machineConnected: boolean;
   /** From ws/v1/scale/snapshot status frames (or devices). */
   scaleConnected: boolean;
-  machine: MachineSnapshot | null;
+  machine: MachineFrame | null;
   scale: WeightSnapshot | null;
   waterLevels: WaterLevels | null;
   shotSettings: ShotSettings | null;
@@ -575,7 +592,7 @@ export interface TelemetryState {
 export interface LiveSample {
   /** Seconds since the current shot started (pour start excluded: t=0 is the first espresso frame). */
   tS: number;
-  machine: MachineSnapshot;
+  machine: MachineFrame;
   scale: WeightSnapshot | null;
 }
 

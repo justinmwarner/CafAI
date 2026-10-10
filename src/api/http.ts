@@ -11,7 +11,12 @@
  *
  * No custom request headers: Decaid's CORS allow-list only has the standard
  * ones, so a stray header turns every call into a failed preflight.
+ *
+ * A reply is read, not trusted (D95): a call that passes a reader
+ * (readers.ts) gets back what the reader made of the reply, and the reader
+ * reports to the drift log what Decaid sent that CafAI did not expect.
  */
+import { reportDrift } from './drift.ts';
 import { GatewayError, type DecaidErrorBody } from './types.ts';
 
 export const DEFAULT_TIMEOUT_MS = 8000;
@@ -44,6 +49,20 @@ export interface Reply<T> {
   status: number;
   headers: Headers;
   data: T | null;
+}
+
+/**
+ * Checks a parsed reply where it enters CafAI and answers it as CafAI's type.
+ * `source` names the route for the drift log, e.g. "GET /api/v1/workflow".
+ * Throws a GatewayError `unexpected_reply` when the reply cannot be used.
+ */
+export type Reader<T> = (data: unknown, source: string) => T;
+
+export interface ReadOptions<T> extends RequestOptions {
+  /** Applied to every reply with a body; an empty reply never reaches it. */
+  read?: Reader<T>;
+  /** The route as drift reports name it ("GET /api/v1/shots/{id}"); by default the method and the path without its query. */
+  source?: string;
 }
 
 const NOT_CONNECTED_MACHINE = 'The machine is not connected. Wake the DE1 and check it is paired with Decaid.';
@@ -209,14 +228,26 @@ export async function request<T>(transport: Transport, path: string, options: Re
   }
 }
 
-/** The parsed body of a successful request (null for an empty or literal-null body). */
-export async function requestJson<T>(transport: Transport, path: string, options: RequestOptions = {}): Promise<T | null> {
-  return (await request<T>(transport, path, options)).data;
+function sourceOf(path: string, options: ReadOptions<unknown>): string {
+  return options.source ?? `${options.method ?? 'GET'} ${path.split('?')[0]}`;
+}
+
+/**
+ * The parsed body of a successful request (null for an empty or literal-null
+ * body), through `options.read` when one is given.
+ */
+export async function requestJson<T>(transport: Transport, path: string, options: ReadOptions<T> = {}): Promise<T | null> {
+  const data = (await request<unknown>(transport, path, options)).data;
+  if (data === null || !options.read) return data as T | null;
+  return options.read(data, sourceOf(path, options));
 }
 
 /** Like requestJson, for routes that always answer with a value. */
-export async function requestValue<T>(transport: Transport, path: string, options: RequestOptions = {}): Promise<T> {
+export async function requestValue<T>(transport: Transport, path: string, options: ReadOptions<T> = {}): Promise<T> {
   const data = await requestJson<T>(transport, path, options);
-  if (data === null) throw new GatewayError(200, path, 'Decaid sent an empty reply.', 'http');
+  if (data === null) {
+    if (options.read) reportDrift(sourceOf(path, options), 'reply: empty');
+    throw new GatewayError(200, path, 'Decaid sent an empty reply.', 'http');
+  }
   return data;
 }

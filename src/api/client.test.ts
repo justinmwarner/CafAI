@@ -1,11 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Derived from Crema web/src/test/gateway.test.ts (https://github.com/yarneo/crema @ 628cd714),
 // Copyright (C) 2026 Yarden (yarneo). Modified for CafAI: Vitest, the DecaidClient API, and endpoint tests against the MSW mock.
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockServer } from '../../mock/node.ts';
 import { fixtures } from '../../mock/fixtures/index.ts';
 import { createDecaidClient } from './client.ts';
+import { driftLog } from './drift.ts';
 import { GatewayError, type ProfileCreateRequest } from './types.ts';
+
+const drift = () => driftLog.list().map(({ source, problem }) => ({ source, problem }));
+
+beforeEach(() => {
+  driftLog.clear();
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+});
+afterEach(() => vi.restoreAllMocks());
 
 // ---- transport, ported (stubbed fetch) ----------------------------------------------
 
@@ -83,6 +92,103 @@ describe('transport (ported)', () => {
   });
 });
 
+// ---- replies are read, not trusted (D95) ---------------------------------------------
+
+/** A client whose every call is answered with `body`. */
+function answering(body: unknown, status = 200) {
+  return createDecaidClient({ origin: 'http://localhost:8080', fetch: stubFetch(() => new Response(JSON.stringify(body), { status })) });
+}
+
+describe('replies are read, not trusted', () => {
+  it('a workflow without its profile fails the call, and the drift log says why', async () => {
+    const { profile: _profile, ...broken } = workflow;
+    const error = await answering(broken).getWorkflow().catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(GatewayError);
+    expect(error).toMatchObject({ code: 'unexpected_reply', message: "Decaid sent a reply CafAI doesn't recognise." });
+    expect(drift()).toEqual([{ source: 'GET /api/v1/workflow', problem: 'profile: missing' }]);
+    await expect(answering(broken).updateWorkflow({ context: { targetYield: 36 } })).rejects.toMatchObject({ code: 'unexpected_reply' });
+    expect(drift()).toContainEqual({ source: 'PUT /api/v1/workflow', problem: 'profile: missing' });
+  });
+
+  it('names a route with an id by its template, so every shot shares one entry', async () => {
+    const { workflow: _workflow, ...shot } = fixtures.shotRecord();
+    for (const id of ['shot-1', 'shot-2']) expect((await answering({ ...shot, id }).getShot(id)).workflow).toEqual({});
+    await answering(shot).updateShot('shot-1', { annotations: { enjoyment: 8 } });
+    await answering([{ id: 'batch-1', beanId: 'bean-1' }]).listBatches('bean-1');
+    expect(drift()).toEqual([
+      { source: 'GET /api/v1/shots/{id}', problem: 'workflow: missing' },
+      { source: 'PUT /api/v1/shots/{id}', problem: 'workflow: missing' },
+      { source: 'GET /api/v1/beans/{id}/batches', problem: '[].frozen: missing' },
+      { source: 'GET /api/v1/beans/{id}/batches', problem: '[].archived: missing' },
+    ]);
+  });
+
+  it('a list keeps what it can use, and an empty reply is still an empty list', async () => {
+    const bean = { id: 'bean-1', roaster: 'Square Mile', name: 'Guji', archived: false };
+    expect(await answering([bean, { name: 'no id' }]).listBeans()).toEqual([bean]);
+    expect(await answering(null).listBeans()).toEqual([]);
+    expect(await answering([{ id: 'p', loaded: true }, { loaded: true }]).listPlugins()).toEqual([{ id: 'p', loaded: true }]);
+    await expect(answering({ plugins: [] }).listPlugins()).rejects.toMatchObject({ code: 'unexpected_reply' });
+  });
+
+  it('reads the machine state like a snapshot frame: a missing reading is null, never 0 (5.8)', async () => {
+    const { groupTemperature: _group, ...state } = fixtures.machineState();
+    expect((await answering(state).getMachineState()).groupTemperature).toBeNull();
+    expect(drift()).toEqual([{ source: 'GET /api/v1/machine/state', problem: 'groupTemperature: missing' }]);
+    await expect(answering({ state: 'idle' }).getMachineState()).rejects.toMatchObject({ code: 'unexpected_reply' });
+  });
+
+  it('reads every other reply it used to cast', async () => {
+    expect((await answering({ ...fixtures.machineInfo(), GHC: undefined }).getMachineInfo()).GHC).toBe(false);
+    expect(await answering({ gatewayMode: 7 }).getSettings()).toEqual({});
+    expect((await answering({ ...fixtures.buildInfo(), fullVersion: null }).getInfo()).fullVersion).toBe('');
+    await expect(answering({ ...fixtures.profileRecord(), id: undefined }).createProfile(fixtures.profileCreateRequest())).rejects.toMatchObject({
+      code: 'unexpected_reply',
+    });
+    await expect(answering({ id: 'batch-1' }).createBatch('bean-1', {})).rejects.toMatchObject({ code: 'unexpected_reply' });
+    await expect(answering({ name: 'Guji' }).createBean({ roaster: 'Square Mile', name: 'Guji' })).rejects.toMatchObject({
+      code: 'unexpected_reply',
+    });
+    expect(await answering(null).getLatestShot()).toBeNull();
+    await expect(answering({ ...fixtures.shotRecord(), id: 5 }).getLatestShot()).rejects.toMatchObject({ code: 'unexpected_reply' });
+    expect((await answering({ ...fixtures.shotsList(), total: '2' }).listShots()).total).toBe(0);
+    expect(await answering([{ ...fixtures.profileRecord(), id: null }]).listProfiles()).toEqual([]);
+    expect(drift().map((entry) => entry.source)).toEqual([
+      'GET /api/v1/machine/info',
+      'GET /api/v1/settings',
+      'GET /api/v1/info',
+      'POST /api/v1/profiles',
+      'POST /api/v1/beans/{id}/batches',
+      'POST /api/v1/beans',
+      'GET /api/v1/shots/latest',
+      'GET /api/v1/shots',
+      'GET /api/v1/profiles',
+    ]);
+  });
+});
+
+describe('the workflow PUT deadline (5.13)', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('waits 35 s for Decaid, which can take about 30 s to answer', async () => {
+    vi.useFakeTimers();
+    const client = createDecaidClient({
+      origin: 'http://localhost:8080',
+      fetch: ((_url: string, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+        })) as unknown as typeof fetch,
+    });
+    let settled: unknown = null;
+    const pending = client.updateWorkflow({ context: { targetYield: 36 } }).catch((e: unknown) => (settled = e));
+    await vi.advanceTimersByTimeAsync(34_999);
+    expect(settled).toBeNull();
+    await vi.advanceTimersByTimeAsync(1);
+    await pending;
+    expect(settled).toMatchObject({ code: 'timeout', path: '/api/v1/workflow' });
+  });
+});
+
 // ---- settings, plugins and the enjoyment probe (0.3) ------------------------------------
 
 describe('updateSettings and listPlugins', () => {
@@ -126,6 +232,14 @@ describe('probeEnjoymentScale (D101)', () => {
       ),
     });
     expect(await client.probeEnjoymentScale()).toBe(10);
+  });
+
+  it('a 400 about anything but enjoyment cannot tell the scale', async () => {
+    const client = createDecaidClient({
+      origin: 'http://localhost:8080',
+      fetch: stubFetch(() => new Response(JSON.stringify({ error: 'ID in path does not match ID in body' }), { status: 400 })),
+    });
+    expect(await client.probeEnjoymentScale()).toBeNull();
   });
 
   it('a 404 (the probe id does not exist) means the 0-100 scale', async () => {
@@ -311,7 +425,8 @@ describe('against the mock Decaid', () => {
 
   it('reads build info, settings, machine info, state and capabilities', async () => {
     expect(await client.getInfo()).toEqual(fixtures.buildInfo());
-    expect(await client.getSettings()).toMatchObject({ gatewayMode: 'disabled', blockOnNoScale: false });
+    // The mock starts in Tracking, like a fresh Decaid (plan D1).
+    expect(await client.getSettings()).toMatchObject({ gatewayMode: 'tracking', blockOnNoScale: false });
     expect(await client.getMachineInfo()).toMatchObject({ model: 'DE1Pro', version: '1358' });
     expect((await client.getMachineState()).state).toEqual({ state: 'idle', substate: 'idle' });
     expect(await client.getCapabilities()).toEqual([]);
@@ -435,6 +550,21 @@ describe('against the mock Decaid', () => {
     expect(await client.kv.list('cafai')).toContain('meta');
     await client.kv.delete('cafai', 'meta');
     expect(await client.kv.get('cafai', 'meta')).toBeNull();
+  });
+
+  it('nothing the mock sends needs a reader to repair it', async () => {
+    await client.getInfo();
+    await client.getSettings();
+    await client.getMachineInfo();
+    await client.getMachineState();
+    await client.getWorkflow();
+    await client.listProfiles({ includeHidden: true });
+    await client.listShots({ limit: 5 });
+    const latest = await client.getLatestShot();
+    await client.getShot(latest!.id);
+    await client.listPlugins();
+    for (const bean of await client.listBeans()) await client.listBatches(bean.id);
+    expect(drift()).toEqual([]);
   });
 
   it('percent-encodes ids so an odd id stays one path segment', async () => {

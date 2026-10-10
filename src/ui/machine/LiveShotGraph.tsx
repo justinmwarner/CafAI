@@ -71,7 +71,15 @@ const READOUTS: readonly ReadoutItem[] = [PRESSURE, FLOW, WEIGHT, WEIGHT_FLOW];
 const reading = (value: number | null | undefined, unit: string) =>
   value === null || value === undefined ? '' : `${value.toFixed(1)} ${unit}`;
 
-const readoutValue = (item: ReadoutItem, values: ShotValues | null) => reading(values?.[item.key], item.unit);
+/** The machine's own readouts, as against the scale's. */
+const MACHINE_READOUTS: ReadonlySet<ReadoutKey> = new Set(['pressure', 'flow']);
+
+const readoutValue = (item: ReadoutItem, values: ShotValues | null) => {
+  const value = values?.[item.key] ?? null;
+  // A reading the machine did not send during a shot: the dash, never a 0 (5.8).
+  if (value === null && values !== null && MACHINE_READOUTS.has(item.key)) return DASH;
+  return reading(value, item.unit);
+};
 
 /** The numbers on a shot's card in the chat. */
 interface CardNumbers {

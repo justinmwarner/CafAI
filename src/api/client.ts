@@ -6,37 +6,50 @@
  *
  * Every call carries a deadline and turns failures into a GatewayError with
  * a sentence a barista can act on (see http.ts). Responses are Decaid's own
- * truth: render what the gateway answered, not an optimistic guess.
+ * truth: render what the gateway answered, not an optimistic guess. Every
+ * reply CafAI uses passes a reader (readers.ts) on the way in, so a reply
+ * Decaid changed is reported and never trusted blindly (D95).
  */
 import { DEFAULT_TIMEOUT_MS, requestJson, requestValue, type Transport } from './http.ts';
 import { toWebSocketOrigin } from './host.ts';
 import { createKvClient } from './kv.ts';
+import {
+  readBatch,
+  readBatches,
+  readBean,
+  readBeans,
+  readBuildInfo,
+  readMachineInfo,
+  readMachineState,
+  readPlugins,
+  readProfileRecord,
+  readProfileRecords,
+  readSettings,
+  readShot,
+  readShotPage,
+  readShotSummary,
+  readWorkflow,
+} from './readers.ts';
 import { newId } from '../util/id.ts';
 import {
   GatewayError,
-  type Bean,
-  type BeanBatch,
-  type BuildInfo,
   type CommandableState,
   type DecaidClient,
-  type DecaidSettings,
   type DeviceEntry,
   type HeartbeatResponse,
-  type MachineInfo,
-  type MachineSnapshot,
-  type PaginatedShots,
-  type PluginInfo,
   type ProfileCreateRequest,
-  type ProfileRecord,
-  type ShotRecord,
-  type ShotRecordSummary,
   type ShotUpdateRequest,
-  type Workflow,
   type WorkflowPatch,
 } from './types.ts';
 
-/** A workflow PUT waits for Decaid to write steam/water settings to the DE1. */
-const WORKFLOW_TIMEOUT_MS = 15_000;
+/**
+ * A workflow PUT waits in Decaid's queue, up to 30 s before Decaid answers
+ * 503 and skips it, and then for the steam and water settings to reach the
+ * DE1. A 503 never applies the change (v0.8.8, workflow_handler.dart); a PUT
+ * this deadline cuts off may still land, so activateProfile reads the
+ * workflow back after either (5.13).
+ */
+const WORKFLOW_TIMEOUT_MS = 35_000;
 /** A quick scan answers in about a second; a full BLE scan legitimately takes much longer. */
 const QUICK_SCAN_TIMEOUT_MS = 6_000;
 const FULL_SCAN_TIMEOUT_MS = 25_000;
@@ -72,25 +85,26 @@ export function createDecaidClient(options: DecaidClientOptions): GatewayClient 
     httpOrigin: origin,
     wsOrigin: toWebSocketOrigin(origin),
 
-    getInfo: () => requestValue<BuildInfo>(transport, '/api/v1/info'),
-    getSettings: () => requestValue<DecaidSettings>(transport, '/api/v1/settings'),
+    getInfo: () => requestValue(transport, '/api/v1/info', { read: readBuildInfo }),
+    getSettings: () => requestValue(transport, '/api/v1/settings', { read: readSettings }),
     async updateSettings(patch) {
       // Decaid answers 200 null (settings_handler.dart at aab5f93): read them back.
       await requestJson(transport, '/api/v1/settings', { method: 'POST', body: patch });
       return client.getSettings();
     },
     async listPlugins() {
-      return (await requestJson<PluginInfo[]>(transport, '/api/v1/plugins')) ?? [];
+      return (await requestJson(transport, '/api/v1/plugins', { read: readPlugins })) ?? [];
     },
+    /** A plugin's own reply: the caller knows its shape and reads it. */
     getPluginEndpoint: <T>(pluginId: string, endpoint: string) =>
       requestJson<T>(transport, `/api/v1/plugins/${id(pluginId)}/${id(endpoint)}`),
 
-    getMachineInfo: () => requestValue<MachineInfo>(transport, '/api/v1/machine/info'),
+    getMachineInfo: () => requestValue(transport, '/api/v1/machine/info', { read: readMachineInfo }),
     /**
      * Throws a `not_connected` GatewayError when no machine is paired, which
      * is a normal condition: callers show "not connected" and carry on.
      */
-    getMachineState: () => requestValue<MachineSnapshot>(transport, '/api/v1/machine/state'),
+    getMachineState: () => requestValue(transport, '/api/v1/machine/state', { read: readMachineState }),
     async getCapabilities() {
       const body = await requestJson<{ capabilities?: unknown }>(transport, '/api/v1/machine/capabilities');
       const list = body?.capabilities;
@@ -115,18 +129,19 @@ export function createDecaidClient(options: DecaidClientOptions): GatewayClient 
       await requestJson(transport, '/api/v1/scale/tare', { method: 'PUT' });
     },
 
-    getWorkflow: () => requestValue<Workflow>(transport, '/api/v1/workflow'),
+    getWorkflow: () => requestValue(transport, '/api/v1/workflow', { read: readWorkflow }),
     updateWorkflow: (patch: WorkflowPatch) =>
-      requestValue<Workflow>(transport, '/api/v1/workflow', { method: 'PUT', body: patch, timeoutMs: slow(WORKFLOW_TIMEOUT_MS) }),
+      requestValue(transport, '/api/v1/workflow', { method: 'PUT', body: patch, timeoutMs: slow(WORKFLOW_TIMEOUT_MS), read: readWorkflow }),
 
     async listProfiles(listOptions = {}) {
       const path = `/api/v1/profiles${query({
         includeHidden: listOptions.includeHidden ? 'true' : undefined,
         parentId: listOptions.parentId,
       })}`;
-      return (await requestJson<ProfileRecord[]>(transport, path)) ?? [];
+      return (await requestJson(transport, path, { read: readProfileRecords })) ?? [];
     },
-    getProfile: (profileId: string) => requestValue<ProfileRecord>(transport, `/api/v1/profiles/${id(profileId)}`),
+    getProfile: (profileId: string) =>
+      requestValue(transport, `/api/v1/profiles/${id(profileId)}`, { read: readProfileRecord, source: 'GET /api/v1/profiles/{id}' }),
     createProfile(request: ProfileCreateRequest) {
       // Decaid 0.8.6 refused a profile without these, one field per attempt
       // ("Invalid argument(s): Profile must have \"tank_temperature\""), and
@@ -143,16 +158,22 @@ export function createDecaidClient(options: DecaidClientOptions): GatewayClient 
       const body: Record<string, unknown> = { profile };
       if (request.parentId !== undefined) body.parentId = request.parentId;
       if (request.metadata !== undefined) body.metadata = request.metadata;
-      return requestValue<ProfileRecord>(transport, '/api/v1/profiles', { method: 'POST', body });
+      return requestValue(transport, '/api/v1/profiles', { method: 'POST', body, read: readProfileRecord });
     },
-    updateProfile: (profileId, body) => requestValue<ProfileRecord>(transport, `/api/v1/profiles/${id(profileId)}`, { method: 'PUT', body }),
+    updateProfile: (profileId, body) =>
+      requestValue(transport, `/api/v1/profiles/${id(profileId)}`, {
+        method: 'PUT',
+        body,
+        read: readProfileRecord,
+        source: 'PUT /api/v1/profiles/{id}',
+      }),
 
     listShots: (listOptions = {}) =>
-      requestValue<PaginatedShots>(transport, `/api/v1/shots${query({ limit: listOptions.limit, offset: listOptions.offset })}`),
-    getLatestShot: () => requestJson<ShotRecordSummary>(transport, '/api/v1/shots/latest'),
-    getShot: (shotId: string) => requestValue<ShotRecord>(transport, `/api/v1/shots/${id(shotId)}`),
+      requestValue(transport, `/api/v1/shots${query({ limit: listOptions.limit, offset: listOptions.offset })}`, { read: readShotPage }),
+    getLatestShot: () => requestJson(transport, '/api/v1/shots/latest', { read: readShotSummary }),
+    getShot: (shotId: string) => requestValue(transport, `/api/v1/shots/${id(shotId)}`, { read: readShot, source: 'GET /api/v1/shots/{id}' }),
     updateShot: (shotId: string, patch: ShotUpdateRequest) =>
-      requestValue<ShotRecord>(transport, `/api/v1/shots/${id(shotId)}`, { method: 'PUT', body: patch }),
+      requestValue(transport, `/api/v1/shots/${id(shotId)}`, { method: 'PUT', body: patch, read: readShot, source: 'PUT /api/v1/shots/{id}' }),
     async probeEnjoymentScale() {
       // A made-up id: current builds validate enjoyment (0-10) before looking
       // the shot up, 0.8.6 field builds look it up first (decaid-mcp's probe).
@@ -170,14 +191,20 @@ export function createDecaidClient(options: DecaidClientOptions): GatewayClient 
       }
     },
     async listBeans() {
-      return (await requestJson<Bean[]>(transport, '/api/v1/beans')) ?? [];
+      return (await requestJson(transport, '/api/v1/beans', { read: readBeans })) ?? [];
     },
     async listBatches(beanId) {
-      return (await requestJson<BeanBatch[]>(transport, `/api/v1/beans/${id(beanId)}/batches`)) ?? [];
+      const source = 'GET /api/v1/beans/{id}/batches';
+      return (await requestJson(transport, `/api/v1/beans/${id(beanId)}/batches`, { read: readBatches, source })) ?? [];
     },
-    createBean: (request) => requestValue<Bean>(transport, '/api/v1/beans', { method: 'POST', body: request }),
+    createBean: (request) => requestValue(transport, '/api/v1/beans', { method: 'POST', body: request, read: readBean }),
     createBatch: (beanId, request) =>
-      requestValue<BeanBatch>(transport, `/api/v1/beans/${id(beanId)}/batches`, { method: 'POST', body: request }),
+      requestValue(transport, `/api/v1/beans/${id(beanId)}/batches`, {
+        method: 'POST',
+        body: request,
+        read: readBatch,
+        source: 'POST /api/v1/beans/{id}/batches',
+      }),
 
     kv: createKvClient(origin, options.fetch, timeoutMs),
 

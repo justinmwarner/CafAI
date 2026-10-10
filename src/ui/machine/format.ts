@@ -5,6 +5,7 @@
  * build has never seen), so every function here accepts any string and falls
  * back to something readable instead of throwing.
  */
+import { isShotMachineState } from '../../api/machineStates.ts';
 import type { WaterLevels } from '../../api/types.ts';
 
 /** What a readout shows for a value the machine has not given: never a 0, never a unit alone. */
@@ -31,9 +32,6 @@ const STATE_WORDS: Record<string, string> = {
   airPurge: 'Air purge',
   fwUpgrade: 'Updating firmware',
 };
-
-// skipStep is a momentary command state while a shot moves to its next step.
-const SHOT_STATES = new Set(['espresso', 'skipStep']);
 
 const SHOT_PHASES: Record<string, string> = {
   preparingForShot: 'preheating',
@@ -72,7 +70,8 @@ export function describeMachineState(
 ): string {
   if (!connected) return 'Not connected';
   if (!state) return 'Connected';
-  if (SHOT_STATES.has(state)) {
+  // A shot, skipStep included: the moment it moves to its next step.
+  if (isShotMachineState(state)) {
     const step = substate && STEP_SUBSTATES.has(substate) ? stepName?.trim() : undefined;
     const phase = step || (substate ? SHOT_PHASES[substate] : undefined);
     return phase ? `Pulling a shot: ${phase}` : 'Pulling a shot';

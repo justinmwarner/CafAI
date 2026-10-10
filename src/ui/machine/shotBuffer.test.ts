@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { formatLocalTimestamp } from '../../../mock/decaid/clock.ts';
-import type { LiveSample, MachineSnapshot } from '../../api/types.ts';
+import type { LiveSample, MachineFrame } from '../../api/types.ts';
 import { createShotBuffer, SERIES_KEYS } from './shotBuffer.ts';
 
 function sample(
   tS: number,
   substate: string,
-  values: Partial<MachineSnapshot> = {},
+  values: Partial<MachineFrame> = {},
   scale: { weight: number; weightFlow: number } | null = null,
 ): LiveSample {
   return {
@@ -38,7 +38,7 @@ const column = (buffer: ReturnType<typeof createShotBuffer>, key: (typeof SERIES
 const T0 = new Date(2026, 9, 3, 8, 15, 0).getTime();
 const stampAt = (tS: number) => formatLocalTimestamp(T0 + tS * 1000);
 
-function frame(tS: number, substate: string, values: Partial<MachineSnapshot> = {}): LiveSample {
+function frame(tS: number, substate: string, values: Partial<MachineFrame> = {}): LiveSample {
   const state = substate === 'idle' ? 'idle' : 'espresso';
   return sample(tS, substate, { timestamp: stampAt(tS), state: { state, substate }, ...values });
 }
@@ -116,6 +116,17 @@ describe('shot buffer', () => {
     expect(column(buffer, 'pressure')).toEqual([null]);
     expect(column(buffer, 'flow')).toEqual([null]);
     expect(buffer.push({ ...sample(Number.NaN, 'pouring') })).toBe(false);
+  });
+
+  it('leaves out a reading Decaid did not send: a gap in its series, never a 0 (5.8)', () => {
+    const buffer = createShotBuffer();
+    buffer.push(sample(0, 'pouring', { pressure: 8.8, flow: 2 }));
+    buffer.push(sample(1, 'pouring', { pressure: null, targetPressure: null, flow: 2.1 }));
+    buffer.push(sample(2, 'pouring', { pressure: 9, flow: null }));
+    expect(column(buffer, 'pressure')).toEqual([8.8, null, 9]);
+    expect(column(buffer, 'targetPressure')).toEqual([null, null, null]);
+    expect(column(buffer, 'flow')).toEqual([2, 2.1, null]);
+    expect(buffer.latest()).toMatchObject({ pressure: 9, flow: null });
   });
 
   it('reset() empties everything for the next shot', () => {

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Derived from Crema web/src/test/live-connections.test.ts (https://github.com/yarneo/crema @ 628cd714),
 // Copyright (C) 2026 Yarden (yarneo). Modified for CafAI: Vitest, the verified frame types, and parsers for every channel.
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fixtures, cremaFixtures } from '../../mock/fixtures/index.ts';
+import { driftLog } from './drift.ts';
+import { AT_REST_STATES, DO_NOT_INTERRUPT_STATES, RUNNING_STATES } from './machineStates.ts';
 import {
   deviceConnections,
+  KNOWN_SHOT_STATES,
   parseDevicesFrame,
   parseMachineFrame,
   parseScaleFrame,
@@ -12,6 +15,14 @@ import {
   parseShotStateFrame,
   parseWaterLevelsFrame,
 } from './frames.ts';
+
+const drift = () => driftLog.list().map(({ source, problem }) => ({ source, problem }));
+
+beforeEach(() => {
+  driftLog.clear();
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+});
+afterEach(() => vi.restoreAllMocks());
 
 describe('scale frames (ported)', () => {
   it('scale status frames are distinct from live weight frames', () => {
@@ -77,10 +88,10 @@ describe('tolerant parsers', () => {
     }
   });
 
-  it('fill a missing machine field with 0 rather than dropping a usable frame', () => {
+  it('keep a usable frame whose reading is missing: the reading is null, never 0 (5.8)', () => {
     const frame = { ...fixtures.machineSnapshotWs() } as Record<string, unknown>;
     delete frame.steamTemperature;
-    expect(parseMachineFrame(frame)?.steamTemperature).toBe(0);
+    expect(parseMachineFrame(frame)?.steamTemperature).toBeNull();
     expect(parseMachineFrame({ ...frame, state: { state: 'espresso' } })?.state).toEqual({ state: 'espresso', substate: '' });
   });
 
@@ -96,5 +107,67 @@ describe('tolerant parsers', () => {
       devices: [],
       connectionStatus: { phase: 'idle', error: null, foundMachines: [], foundScales: [], pendingAmbiguity: null },
     });
+  });
+});
+
+describe('what a frame lacks is drift (D95)', () => {
+  it('a frame without groupTemperature gives null and one drift entry, however often it comes', () => {
+    const { groupTemperature: _group, ...frame } = fixtures.machineSnapshotWs();
+    for (let i = 0; i < 3; i += 1) expect(parseMachineFrame(frame)?.groupTemperature).toBeNull();
+    expect(drift()).toEqual([{ source: 'ws/v1/machine/snapshot', problem: 'groupTemperature: missing' }]);
+    expect(driftLog.list()[0]!.count).toBe(3);
+  });
+
+  it('a reading of another type is null too, and says what came', () => {
+    const frame = { ...fixtures.machineSnapshotWs(), pressure: '9.0', flow: null };
+    expect(parseMachineFrame(frame)).toMatchObject({ pressure: null, flow: null, groupTemperature: frame.groupTemperature });
+    expect(drift()).toEqual([
+      { source: 'ws/v1/machine/snapshot', problem: 'flow: expected number, got null' },
+      { source: 'ws/v1/machine/snapshot', problem: 'pressure: expected number, got string' },
+    ]);
+  });
+
+  it('a verified frame reports nothing', () => {
+    parseMachineFrame(fixtures.machineSnapshotWs());
+    parseMachineFrame(fixtures.machineState());
+    parseShotStateFrame(fixtures.shotStateWs());
+    expect(drift()).toEqual([]);
+  });
+
+  it('a machine state CafAI does not know is kept, and reported (D97)', () => {
+    expect(parseMachineFrame({ ...fixtures.machineSnapshotWs(), state: { state: 'brewing', substate: 'pouring' } })?.state.state).toBe('brewing');
+    // Every state machineStates.ts sorts is known (machineStates.test.ts checks that list against Decaid's).
+    for (const state of [...RUNNING_STATES, ...AT_REST_STATES, ...DO_NOT_INTERRUPT_STATES]) {
+      parseMachineFrame({ ...fixtures.machineSnapshotWs(), state: { state, substate: 'idle' } });
+    }
+    expect(drift()).toEqual([{ source: 'ws/v1/machine/snapshot', problem: 'state: unknown value "brewing"' }]);
+  });
+
+  it("knows every state Decaid's ShotState has", () => {
+    expect([...KNOWN_SHOT_STATES].sort()).toEqual(['finished', 'idle', 'pouring', 'preheating', 'stopping']);
+  });
+
+  it('a machine frame CafAI cannot use is dropped and reported', () => {
+    expect(parseMachineFrame({ ...fixtures.machineSnapshotWs(), timestamp: 1727600034216 })).toBeNull();
+    expect(parseMachineFrame({ ...fixtures.machineSnapshotWs(), state: 'idle' })).toBeNull();
+    expect(drift()).toEqual([
+      { source: 'ws/v1/machine/snapshot', problem: 'timestamp: expected string, got number' },
+      { source: 'ws/v1/machine/snapshot', problem: 'state: expected object, got string' },
+    ]);
+  });
+
+  it('names the route it was given, for the REST seed', () => {
+    const { flow: _flow, ...frame } = fixtures.machineState();
+    expect(parseMachineFrame(frame, 'GET /api/v1/machine/state')?.flow).toBeNull();
+    expect(drift()).toEqual([{ source: 'GET /api/v1/machine/state', problem: 'flow: missing' }]);
+  });
+
+  it('a renamed shot state is kept and reported (5.9)', () => {
+    for (const state of ['brewing', 'brewing', 'done']) parseShotStateFrame({ ...fixtures.shotStateWs(), state });
+    for (const state of KNOWN_SHOT_STATES) parseShotStateFrame({ ...fixtures.shotStateWs(), state });
+    expect(drift()).toEqual([
+      { source: 'ws/v1/machine/shotState', problem: 'state: unknown value "brewing"' },
+      { source: 'ws/v1/machine/shotState', problem: 'state: unknown value "done"' },
+    ]);
   });
 });

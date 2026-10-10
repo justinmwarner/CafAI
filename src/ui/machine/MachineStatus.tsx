@@ -12,6 +12,7 @@ import Typography from '@mui/material/Typography';
 import { useTelemetry } from '../../app/services.tsx';
 import { TID } from '../testIds.ts';
 import {
+  DASH,
   describeMachineState,
   formatTemperature,
   formatWaterLevel,
@@ -20,8 +21,6 @@ import {
   splitUnit,
 } from './format.ts';
 import { stepNameAt } from './loadedProfileModel.ts';
-
-const DASH = '—';
 
 const visuallyHidden = {
   position: 'absolute',
@@ -144,12 +143,12 @@ function Readout({ testId, label, value, detail, warn }: ReadoutProps) {
 }
 
 function GroupTemperature() {
+  // A reading Decaid did not send is null: the dash, and no target line (5.8).
   const value = useTelemetry((s) => (s.machineConnected && s.machine ? formatTemperature(s.machine.groupTemperature) : DASH));
-  const target = useTelemetry((s) =>
-    s.machineConnected && s.machine && Number.isFinite(s.machine.targetGroupTemperature)
-      ? s.machine.targetGroupTemperature.toFixed(1)
-      : null,
-  );
+  const target = useTelemetry((s) => {
+    const celsius = s.machineConnected ? s.machine?.targetGroupTemperature : null;
+    return typeof celsius === 'number' && Number.isFinite(celsius) ? celsius.toFixed(1) : null;
+  });
   return <Readout testId={TID.groupTemp} label="Group" value={value} detail={target ? `target ${target}` : null} />;
 }
 

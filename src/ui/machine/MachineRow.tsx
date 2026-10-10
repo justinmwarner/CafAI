@@ -6,6 +6,8 @@
  * While the machine runs anything, the start that runs turns into Stop in its
  * own place, filled in the error colour and the same size, so the finger that
  * started it finds Stop where it already is; the other starts are held. A
+ * state CafAI does not know gets Stop too (D97), in Espresso's place; a
+ * firmware upgrade, a calibration or a self test never does. A
  * machine with a group-head controller starts from the group head: its row is
  * empty until something runs, then holds Stop alone. A sleeping machine shows
  * Wake alone.
@@ -59,7 +61,7 @@ function stopPlace(state: string | null): StartCommand {
     case 'hotWater':
       return 'hotWater';
     default:
-      // A shot (espresso, skipStep), and anything else that runs (cleaning, descaling).
+      // A shot (espresso, skipStep), anything else that runs (cleaning, descaling), and a state CafAI does not know.
       return 'espresso';
   }
 }

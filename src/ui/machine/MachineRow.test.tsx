@@ -100,6 +100,33 @@ describe('MachineRow', () => {
     }
   });
 
+  it('shows Stop for a state it does not know, in the first place, and stops it (D97)', async () => {
+    const { services } = await renderRow(createFakeServices({ telemetry: withState('brewing') }));
+    expect(labels()).toEqual(['Stop', 'Steam', 'Flush', 'Hot water']);
+    for (const id of [TID.steamButton, TID.flushButton, TID.hotWaterButton]) expect(screen.getByTestId(id)).toBeDisabled();
+    await userEvent.click(screen.getByTestId(TID.stopButton));
+    expect(stateCalls(services)).toEqual(['idle']);
+  });
+
+  it('never offers Stop during a firmware upgrade, a calibration or a self test', async () => {
+    for (const state of ['fwUpgrade', 'calibration', 'selfTest']) {
+      const { unmount } = await renderRow(createFakeServices({ telemetry: withState(state, 'idle') }));
+      expect(labels(), state).toEqual(['Espresso', 'Steam', 'Flush', 'Hot water']);
+      expect(screen.queryByTestId(TID.stopButton), state).not.toBeInTheDocument();
+      for (const id of START_IDS) expect(screen.getByTestId(id), state).toBeDisabled();
+      unmount();
+    }
+  });
+
+  it('on a group-head machine too: Stop alone for a state it does not know, nothing during a firmware upgrade', async () => {
+    const services = groupHead();
+    await renderRow(services);
+    act(() => services.telemetry.setState(withState('brewing')));
+    expect(labels()).toEqual(['Stop']);
+    act(() => services.telemetry.setState(withState('fwUpgrade', 'idle')));
+    expect(labels()).toEqual([]);
+  });
+
   it('stops the machine from Stop', async () => {
     const { services } = await renderRow(createFakeServices({ telemetry: withState('espresso') }));
     await userEvent.click(screen.getByTestId(TID.stopButton));

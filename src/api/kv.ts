@@ -10,8 +10,13 @@
  * decodes the namespace or key, so they go into the path raw and must be
  * URL-safe; anything else is refused before a request is made.
  */
+import { reportDrift } from './drift.ts';
 import { DEFAULT_TIMEOUT_MS, request, requestJson, type Transport } from './http.ts';
+import { unexpectedReply } from './readers.ts';
 import { GatewayError, type KvClient } from './types.ts';
+
+/** A whole-namespace read, as the drift log names it. */
+const FULL_READ = 'GET /api/v1/store/{ns}?full=1';
 
 /** Chromium refuses keepalive bodies over 64 KiB; stay clear of the limit. */
 const KEEPALIVE_MAX_BYTES = 60 * 1024;
@@ -44,11 +49,19 @@ export function createKvClient(origin: string, fetchImpl?: typeof globalThis.fet
       const path = `${namespacePath(namespace)}?full=1`;
       const reply = await request<unknown>(transport, path, {
         headers: etag ? { 'If-None-Match': etag } : undefined,
-        allowStatus: [304],
+        allowStatus: [304, 404],
       });
       if (reply.status === 304) return { notModified: true };
-      const data = typeof reply.data === 'object' && reply.data !== null && !Array.isArray(reply.data) ? (reply.data as Record<string, unknown>) : {};
-      return { notModified: false, data, etag: reply.headers.get('ETag') };
+      // The spec's answer for a namespace that holds nothing.
+      if (reply.status === 404) return { notModified: false, data: {}, etag: null };
+      // Anything else that is not an object is unreadable, never "no backup":
+      // read as empty, it let a fresh device overwrite the backup (5.3).
+      const data = reply.data;
+      if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+        reportDrift(FULL_READ, 'reply: not an object');
+        throw unexpectedReply(FULL_READ, path);
+      }
+      return { notModified: false, data: data as Record<string, unknown>, etag: reply.headers.get('ETag') };
     },
 
     async get<T = unknown>(namespace: string, key: string): Promise<T | null> {

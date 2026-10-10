@@ -5,7 +5,7 @@
  * plausible telemetry into the fake store: a shot is ~2 s of preheat, 8 s of
  * flow-limited preinfusion and a declining 9 bar pour that stops at 36 g.
  */
-import { GatewayError, type CommandableState, type MachineSnapshot, type WeightSnapshot } from '../../api/types.ts';
+import { GatewayError, type CommandableState, type MachineFrame, type WeightSnapshot } from '../../api/types.ts';
 import { IDLE_TELEMETRY, type FakeServices } from '../testing/fakeServices.ts';
 
 const PERIOD_S = 0.2;
@@ -68,9 +68,9 @@ export function createPreviewMachine(services: FakeServices, scenario: Scenario,
   let shotId = 0;
   let failNextTare = false;
 
-  const base = (): MachineSnapshot => ({ ...IDLE_TELEMETRY.machine!, timestamp: stamp() });
+  const base = (): MachineFrame => ({ ...IDLE_TELEMETRY.machine!, timestamp: stamp() });
 
-  function setMachine(state: string, substate: string, values: Partial<MachineSnapshot> = {}) {
+  function setMachine(state: string, substate: string, values: Partial<MachineFrame> = {}) {
     telemetry.setState({ machine: { ...base(), state: { state, substate }, ...values } });
   }
 
@@ -95,7 +95,7 @@ export function createPreviewMachine(services: FakeServices, scenario: Scenario,
   function shotStep(): boolean {
     const point = shotPoint(shotTime);
     weight += point.weightFlow * PERIOD_S;
-    const machine: MachineSnapshot = {
+    const machine: MachineFrame = {
       ...base(),
       state: { state: 'espresso', substate: point.substate },
       pressure: Math.max(0, point.pressure),

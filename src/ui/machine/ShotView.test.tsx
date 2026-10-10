@@ -2,7 +2,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, within } from '@testing-library/react';
 import { TID } from '../testIds.ts';
+import { IDLE_TELEMETRY } from '../testing/fakeServices.ts';
 import { renderWithServices } from '../testing/renderWithServices.tsx';
+import { DASH } from './format.ts';
 import { ShotView } from './ShotView.tsx';
 
 vi.mock('uplot', () => import('../testing/uplotMock.ts'));
@@ -18,9 +20,28 @@ const header = () => screen.getByTestId(TID.shotTimer).parentElement!;
 const readouts = () => screen.getByRole('list', { name: 'Shot readouts' });
 const plot = () => screen.getByRole('img', { name: 'Pressure, flow and weight over the shot' });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe('ShotView', () => {
+  it('shows the dash for a machine reading Decaid did not send, never 0 (5.8)', () => {
+    const frames: (() => void)[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: () => void) => frames.push(callback));
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    const { services } = renderWithServices(<ShotView awaitingOutcome={false} />);
+    const machine = { ...IDLE_TELEMETRY.machine!, state: { state: 'espresso', substate: 'pouring' }, pressure: null, flow: 2.1 };
+    act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+    act(() => services.telemetry.emitSample({ tS: 1, machine, scale: null }));
+    act(() => {
+      for (const paint of frames.splice(0)) paint();
+    });
+    const value = (label: string) => within(readouts()).getByText(label).closest('li')!.lastElementChild!.firstElementChild!.textContent;
+    expect(value('Pressure')).toBe(DASH);
+    expect(value('Flow')).toBe('2.1 ml/s');
+  });
+
   it('is the full graph, with the coach note under it once a shot runs', () => {
     const { services } = renderWithServices(<ShotView awaitingOutcome={false} />);
     const view = screen.getByTestId(TID.shotView);

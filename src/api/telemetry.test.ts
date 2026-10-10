@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fixtures } from '../../mock/fixtures/index.ts';
+import { driftLog } from './drift.ts';
 import { createTelemetryStore, type TelemetryStoreOptions } from './telemetry.ts';
 import { createFakeWebSocket, type FakeWebSocketFactory } from './testing/fakeWebSocket.ts';
 import type {
@@ -7,6 +8,7 @@ import type {
   DecaidClient,
   DevicesState,
   LiveSample,
+  MachineFrame,
   MachineSnapshot,
   ShotLifecycleEvent,
   ShotStateEvent,
@@ -114,10 +116,13 @@ function harness(overrides: Partial<TelemetryStoreOptions> = {}, rest: { devices
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date(2026, 9, 3, 8, 0, 0));
+  driftLog.clear();
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
 });
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe('sockets', () => {
@@ -255,6 +260,20 @@ describe('link state', () => {
     expect(h.client.getDevices).toHaveBeenCalledTimes(1);
     expect(h.client.getMachineState).toHaveBeenCalledTimes(1);
     expect(h.store.getState()).toMatchObject({ machineConnected: true, scaleConnected: true, machine: snapshot });
+  });
+
+  it('keeps a missing reading null, never 0, from the socket and from the REST seed (5.8)', async () => {
+    const { groupTemperature: _group, ...seed } = fixtures.machineState();
+    const seeded: MachineFrame = { ...seed, groupTemperature: null };
+    const h = harness({}, { devices: devicesFrame('connected').devices, machine: seeded });
+    h.store.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.store.getState().machine?.groupTemperature).toBeNull();
+    h.open();
+    const { pressure: _pressure, ...frame } = machineFrame('idle', 'idle', '2026-10-03T08:00:01.000000');
+    h.ws.latest(PATHS.machine).message(frame);
+    expect(h.store.getState().machine).toMatchObject({ pressure: null, groupTemperature: frame.groupTemperature });
+    expect(driftLog.list().map((entry) => entry.problem)).toEqual(['pressure: missing']);
   });
 
   it('does not ask for the machine state when the machine is away, and survives REST failures', async () => {
@@ -484,6 +503,165 @@ describe('shot lifecycle and live samples', () => {
       { type: 'finished', shotId: null, stopReason: null },
     ]);
     expect(h.samples.map((s) => s.tS)).toEqual([0, 10.5]);
+  });
+
+  describe('when shotState frames come but none can be read (5.9)', () => {
+    /** Machine time t seconds into the shot, which starts at 08:15:00. */
+    const at = (t: number) => `2026-10-03T08:15:${t.toFixed(6).padStart(9, '0')}`;
+
+    it('renamed shot states: the machine state stands in after 3 s, one start and one finish', async () => {
+      const h = shotHarness();
+      const machine = h.ws.latest(PATHS.machine);
+      const shotState = h.ws.latest(PATHS.shotState);
+      machine.message(machineFrame('idle', 'idle', '2026-10-03T08:14:59.000000'));
+
+      machine.message(machineFrame('espresso', 'preparingForShot', at(0)));
+      shotState.message(shotEvent('brewing'));
+      await vi.advanceTimersByTimeAsync(1000);
+      machine.message(machineFrame('espresso', 'preparingForShot', at(1)));
+      expect(h.shots, 'shotState gets 3 s to speak').toEqual([]);
+
+      await vi.advanceTimersByTimeAsync(2000);
+      machine.message(machineFrame('espresso', 'preinfusion', at(3)));
+      expect(h.shots).toEqual([{ type: 'started', shotId: null }]);
+      // The frames the machine sent while CafAI waited belong to the shot: t = 0 is its first.
+      expect(h.samples.map((s) => s.tS)).toEqual([0, 1, 3]);
+
+      for (const t of [4, 5, 6]) {
+        await vi.advanceTimersByTimeAsync(1000);
+        machine.message(machineFrame('espresso', 'pouring', at(t)));
+      }
+      shotState.message(shotEvent('done'));
+      machine.message(machineFrame('idle', 'idle', at(7)));
+      shotState.message(shotEvent('idle', { shotId: null }));
+      machine.message(machineFrame('idle', 'idle', at(8)));
+
+      expect(h.shots).toEqual([
+        { type: 'started', shotId: null },
+        { type: 'finished', shotId: null, stopReason: null },
+      ]);
+      expect(h.samples.map((s) => s.tS)).toEqual([0, 1, 3, 4, 5, 6]);
+      expect(driftLog.list().map(({ source, problem }) => `${source} ${problem}`)).toEqual([
+        'ws/v1/machine/shotState state: unknown value "brewing"',
+        'ws/v1/machine/shotState state: unknown value "done"',
+      ]);
+    });
+
+    it('normal shotState frames still win, however long the shot runs: no double events', async () => {
+      const h = shotHarness();
+      const machine = h.ws.latest(PATHS.machine);
+      const shotState = h.ws.latest(PATHS.shotState);
+      machine.message(machineFrame('espresso', 'preparingForShot', at(0)));
+      await vi.advanceTimersByTimeAsync(50);
+      shotState.message(shotEvent('preheating'));
+      for (let t = 1; t <= 12; t += 1) {
+        await vi.advanceTimersByTimeAsync(1000);
+        machine.message(machineFrame('espresso', t < 4 ? 'preinfusion' : 'pouring', at(t)));
+        if (t === 4) shotState.message(shotEvent('pouring'));
+      }
+      shotState.message(shotEvent('pouring', { event: 'decision', decision: { kind: 'stop', reason: 'targetWeight', details: null, data: null } }));
+      shotState.message(shotEvent('stopping'));
+      // Decaid stays in its stopping state while the cup settles; the machine may linger in espresso a while.
+      for (let t = 13; t <= 17; t += 1) {
+        await vi.advanceTimersByTimeAsync(1000);
+        machine.message(machineFrame(t < 16 ? 'espresso' : 'idle', t < 16 ? 'pouringDone' : 'idle', at(t)));
+      }
+      shotState.message(shotEvent('finished'));
+      shotState.message(shotEvent('idle', { shotId: null }));
+      for (let t = 18; t <= 22; t += 1) {
+        await vi.advanceTimersByTimeAsync(1000);
+        machine.message(machineFrame('idle', 'idle', at(t)));
+      }
+      expect(h.shots).toEqual([
+        { type: 'started', shotId: 'shot-1' },
+        { type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' },
+      ]);
+      expect(driftLog.list()).toEqual([]);
+    });
+
+    it('a finished shot is never started again by the machine lingering in espresso', async () => {
+      const h = shotHarness();
+      const machine = h.ws.latest(PATHS.machine);
+      const shotState = h.ws.latest(PATHS.shotState);
+      shotState.message(shotEvent('preheating'));
+      machine.message(machineFrame('espresso', 'pouring', at(0)));
+      shotState.message(shotEvent('finished'));
+      for (let t = 1; t <= 6; t += 1) {
+        await vi.advanceTimersByTimeAsync(1000);
+        machine.message(machineFrame('espresso', 'pouringDone', at(t)));
+      }
+      expect(h.shots).toEqual([
+        { type: 'started', shotId: 'shot-1' },
+        { type: 'finished', shotId: 'shot-1', stopReason: null },
+      ]);
+    });
+
+    it('a readable shotState frame that comes late takes over the shot: still one start and one finish', async () => {
+      const h = shotHarness();
+      const machine = h.ws.latest(PATHS.machine);
+      const shotState = h.ws.latest(PATHS.shotState);
+      machine.message(machineFrame('espresso', 'preinfusion', at(0)));
+      await vi.advanceTimersByTimeAsync(3000);
+      machine.message(machineFrame('espresso', 'pouring', at(3)));
+      shotState.message(shotEvent('pouring', { shotId: 'shot-7' }));
+      // Decaid's shotState ends the shot now, after its stopping phase, not the machine.
+      machine.message(machineFrame('idle', 'idle', at(20)));
+      expect(h.shots).toEqual([{ type: 'started', shotId: null }]);
+      shotState.message(shotEvent('finished', { shotId: 'shot-7' }));
+      expect(h.shots).toEqual([
+        { type: 'started', shotId: null },
+        { type: 'finished', shotId: 'shot-7', stopReason: null },
+      ]);
+    });
+
+    it('a skipStep frame mid-pour is part of the shot: still one start and one finish', async () => {
+      const h = shotHarness();
+      const machine = h.ws.latest(PATHS.machine);
+      const shotState = h.ws.latest(PATHS.shotState);
+      machine.message(machineFrame('espresso', 'preinfusion', at(0)));
+      shotState.message(shotEvent('brewing'));
+      await vi.advanceTimersByTimeAsync(3000);
+      machine.message(machineFrame('espresso', 'pouring', at(3)));
+      await vi.advanceTimersByTimeAsync(1000);
+      // Decaid maps the DE1's move to its next step to skipStep, for a frame or so.
+      machine.message(machineFrame('skipStep', 'pouring', at(4)));
+      await vi.advanceTimersByTimeAsync(1000);
+      machine.message(machineFrame('espresso', 'pouring', at(5)));
+      machine.message(machineFrame('idle', 'idle', at(6)));
+      expect(h.shots).toEqual([
+        { type: 'started', shotId: null },
+        { type: 'finished', shotId: null, stopReason: null },
+      ]);
+      expect(h.samples.map((s) => s.tS)).toEqual([0, 3, 4, 5]);
+    });
+
+    it('a shot that starts on a skipStep frame is still a shot', async () => {
+      const h = harness();
+      h.store.start();
+      h.open();
+      const machine = h.ws.latest(PATHS.machine);
+      // No shotState channel at all (an older gateway): the machine state alone.
+      machine.message(machineFrame('skipStep', 'pouring', at(0)));
+      machine.message(machineFrame('espresso', 'pouring', at(1)));
+      machine.message(machineFrame('idle', 'idle', at(2)));
+      expect(h.shots).toEqual([
+        { type: 'started', shotId: null },
+        { type: 'finished', shotId: null, stopReason: null },
+      ]);
+      expect(h.samples.map((s) => s.tS)).toEqual([0, 1]);
+    });
+
+    it('a moment in espresso shorter than the wait starts nothing', async () => {
+      const h = shotHarness();
+      const machine = h.ws.latest(PATHS.machine);
+      machine.message(machineFrame('espresso', 'preparingForShot', at(0)));
+      await vi.advanceTimersByTimeAsync(1000);
+      machine.message(machineFrame('idle', 'idle', at(1)));
+      await vi.advanceTimersByTimeAsync(5000);
+      machine.message(machineFrame('idle', 'idle', at(6)));
+      expect(h.shots).toEqual([]);
+      expect(h.samples).toEqual([]);
+    });
   });
 
   it('unsubscribing stops delivery', () => {

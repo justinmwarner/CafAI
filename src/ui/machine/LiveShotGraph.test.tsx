@@ -25,6 +25,8 @@ import { createCafaiTheme, theme } from '../theme.ts';
 import { DASH, formatSeconds } from './format.ts';
 import { LiveShotGraph } from './LiveShotGraph.tsx';
 import { LoadedProfileContextForTests, LoadedProfileProvider } from './LoadedProfileContext.tsx';
+import { SERIES_KEYS } from './shotBuffer.ts';
+import { shotTraceFor } from './shotTrace.ts';
 import type { LoadedProfileState } from './useLoadedProfile.ts';
 
 vi.mock('uplot', () => import('../testing/uplotMock.ts'));
@@ -658,6 +660,27 @@ describe("LiveShotGraph: the Shot view's readouts and step", () => {
     expect(readout('Flow')).toBe('2.0 ml/s');
     expect(readout('Weight')).toBe('3.0 g');
     expect(readout('Weight flow')).toBe('1.5 g/s');
+  });
+
+  it('leaves a gap for a machine reading Decaid did not send, and its readout shows the dash (5.8)', () => {
+    const { services } = renderWithServices(<LiveShotGraph />);
+    act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+    act(() => {
+      services.telemetry.emitSample(sample(0));
+      services.telemetry.emitSample({ ...sample(1), machine: { ...sample(1).machine, pressure: null } });
+    });
+    runFrames();
+    // The arrays uPlot draws from; it draws a gap for null.
+    const plotted = shotTraceFor(services.telemetry).buffer.data;
+    expect(plotted[SERIES_KEYS.indexOf('pressure') + 1]).toEqual([9, null]);
+    expect(fakePlots[0]!.setDataCalls.at(-1)).toEqual([0, 1]);
+    expect(readout('Pressure')).toBe(DASH);
+    expect(readout('Flow')).toBe('2.0 ml/s');
+    // A scale that is not there stays blank, as before.
+    act(() => services.telemetry.emitSample({ ...sample(2), scale: null }));
+    runFrames();
+    expect(readout('Weight')).toBe('');
+    expect(readout('Pressure')).toBe('9.0 bar');
   });
 
   it('names the running step from the shared reading, only while the shot runs', () => {
