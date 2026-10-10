@@ -244,3 +244,65 @@ It cannot (use instead):
 `lib/src/services/webserver/de1handler.dart`,
 `lib/src/services/webserver/shots_handler.dart`,
 `lib/src/services/webserver/kv_store_handler.dart`). Not tried.*
+
+## 6. Check CafAI against the simulator
+
+`npm run test:decaid` runs CafAI's own Decaid client, parsers and shot
+summary against a running Decaid. Every reply and WebSocket frame is checked
+against the Decaid API CafAI was verified with (`contract/decaid/`), and
+nothing may land in CafAI's drift log (Settings > About).
+
+Start the simulator as parts 1 and 2 say, with the machine and the scale
+connected, and close CafAI's tabs: the shot check pulls a shot, and an open
+CafAI page would note it in its active bag. Then, from this repository:
+
+```powershell
+$env:DECAID_URL = 'http://localhost:8080'; $env:DECAID_WRITE = '1'; $env:DECAID_SIM = '1'
+npm run test:decaid
+Remove-Item Env:DECAID_URL, Env:DECAID_WRITE, Env:DECAID_SIM
+```
+
+In Git Bash it is one line:
+`DECAID_URL=http://localhost:8080 DECAID_WRITE=1 DECAID_SIM=1 npm run test:decaid`.
+
+What each switch adds:
+
+- **`DECAID_URL` alone:** the read-only checks: the REST reads CafAI relies
+  on, and five seconds of every WebSocket channel it opens.
+- **`DECAID_WRITE=1`:** CafAI's writes, each put back when the checks end,
+  even after a failure: a heartbeat, a key in the `cafai-contract-test`
+  namespace, the rating-scale probe, a workflow round trip (the original
+  workflow goes back), a test profile (hidden afterwards), a bean and a batch
+  (archived) and gateway mode (restored). They refuse to run unless Decaid
+  simulates the machine and no real machine is connected.
+- **`DECAID_SIM=1`** (writes too): one simulated shot with the profile Decaid
+  has loaded, notes and a rating written on it, then idle. It needs the
+  simulated scale, and gateway mode Disabled or Tracking. The shot stays in
+  Decaid's history, with "CafAI contract test" in its notes.
+- **`DECAID_REQUIRE=1`** (CI sets it): a check that cannot run fails
+  instead of being skipped, so a missing `DECAID_URL` or switch fails the run.
+
+Against a tablet, only the read-only checks (D104):
+
+```powershell
+$env:DECAID_URL = 'http://<tablet-ip>:8080'; npm run test:decaid
+```
+
+Without `DECAID_URL` every check is reported as skipped, and `npm test` never
+runs them.
+
+**CafAI in a browser, against Decaid:** `npm run e2e:real` opens CafAI from
+Decaid's port 3000 and checks that it is ready, with the machine connected
+and a group temperature showing. Decaid must serve this repository's build:
+`npm run build`, then start Decaid with
+`.\Decaid.exe --skin-path E:\source\cafai\dist` (part 4).
+
+**On Linux, and in CI:** `bash scripts/decaid-ci.sh` downloads Decaid's Linux
+release (`DECAID_TAG`, the latest by default), starts it headless under xvfb
+with a fresh profile and the simulated machine and scale, and waits until
+both are connected; `bash scripts/decaid-ci.sh stop` stops it.
+`.github/workflows/decaid-live.yml` runs that, all three checks and the
+browser check daily and before every release.
+
+*Not tried: written on 2026-10-09 with the checks, which have not yet run
+against a real Decaid.*

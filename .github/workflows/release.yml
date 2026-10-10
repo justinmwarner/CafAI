@@ -3,6 +3,8 @@ name: Release
 # Pushing a version tag (v1.2.3) builds the installable skin zip, with
 # index.html and the skin manifest at the zip root, and attaches it to a
 # GitHub Release that Decaid can install from (Skins -> + -> GitHub Release).
+# Nothing is built or published until CafAI has passed against the latest
+# Decaid release (decaid-live) and its own e2e suite (spec 4.7).
 on:
   push:
     tags:
@@ -13,7 +15,13 @@ permissions:
   contents: write
 
 jobs:
+  decaid-live:
+    uses: ./.github/workflows/decaid-live.yml
+    with:
+      decaid_tag: latest
+
   release:
+    needs: decaid-live
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,6 +45,19 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - run: npm run e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
+
       - run: npm run release:zip
 
       # A manual run (workflow_dispatch) publishes nothing; keep the zip to download.

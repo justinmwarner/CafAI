@@ -1,0 +1,90 @@
+name: Decaid live
+
+# CafAI against a real Decaid (spec 4.4): Decaid's Linux release (the latest,
+# or the tag given) started headless with a simulated machine and scale by
+# scripts/decaid-ci.sh, serving this build as its skin. Runs npm run
+# test:decaid with the writes and the simulated shot, then one Playwright
+# smoke test that opens CafAI from Decaid's port 3000. Daily, on demand, and
+# from the release workflow before it publishes (spec 4.7).
+on:
+  schedule:
+    - cron: '43 7 * * *'
+  workflow_dispatch:
+    inputs:
+      decaid_tag:
+        description: 'Decaid release tag (v0.8.8), or latest'
+        required: false
+        default: latest
+        type: string
+  workflow_call:
+    inputs:
+      decaid_tag:
+        description: 'Decaid release tag (v0.8.8), or latest'
+        required: false
+        default: latest
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  decaid-live:
+    runs-on: ubuntu-latest
+    # The long steps have their own limits, so a hang ends in its step and
+    # Decaid is still stopped and its logs kept.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Start Decaid with a simulated machine and scale
+        timeout-minutes: 8
+        env:
+          # A scheduled run has no inputs.
+          DECAID_TAG: ${{ inputs.decaid_tag || 'latest' }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/decaid-ci.sh
+
+      - name: Check CafAI against Decaid
+        timeout-minutes: 10
+        env:
+          DECAID_URL: http://localhost:8080
+          DECAID_WRITE: '1'
+          DECAID_SIM: '1'
+          # The gate: a suite or check that cannot run fails instead of being skipped.
+          DECAID_REQUIRE: '1'
+        run: npm run test:decaid
+
+      - name: Install Playwright Chromium
+        timeout-minutes: 5
+        run: npx playwright install --with-deps chromium
+      - name: Open CafAI from Decaid
+        timeout-minutes: 5
+        run: npm run e2e:real
+
+      - name: Stop Decaid
+        if: always()
+        run: bash scripts/decaid-ci.sh stop
+
+      - uses: actions/upload-artifact@v4
+        if: failure() || cancelled()
+        with:
+          name: decaid-live-log
+          path: ${{ runner.temp }}/decaid-ci/logs
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        if: failure() || cancelled()
+        with:
+          name: decaid-live-playwright-report
+          path: playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
