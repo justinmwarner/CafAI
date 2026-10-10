@@ -20,7 +20,7 @@
  * through MMR registers (_writeMMRScaled, unified_de1.mmr.dart:143), a
  * signed 32-bit int scaled by 10, which our ranges are nowhere near.
  */
-import { isRunningMachineState } from '../../api/machineStates.ts';
+import { AT_REST_STATES, isRunningMachineState } from '../../api/machineStates.ts';
 
 export interface Range {
   readonly min: number;
@@ -192,7 +192,13 @@ export const RINSE_FIELDS: readonly DrinkFieldSpec[] = [RINSE_DURATION, RINSE_TE
  * Spec 6.6: never write a drink setting while a shot, steam, hot water or
  * flush runs. Decaid's own machine-state list has more running states than
  * those four (steamRinse follows steam off, skipStep is mid-espresso), so
- * this reuses the same check the Stop button and the frame parser use
+ * this reuses the lists the Stop button and the frame parser use
  * (src/api/machineStates.ts) instead of a shorter, separately maintained one.
+ * It fails safe like Stop does (D97): only a state known to be at rest takes
+ * a write, so a firmware upgrade, a calibration or a state CafAI has never
+ * heard of blocks it too.
  */
-export const blocksDrinkSettings = isRunningMachineState;
+export function blocksDrinkSettings(state: string | null | undefined): boolean {
+  if (typeof state !== 'string' || state === '') return false;
+  return isRunningMachineState(state) || !AT_REST_STATES.has(state);
+}

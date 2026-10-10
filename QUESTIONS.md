@@ -1,9 +1,10 @@
 # Open questions
 
 Ranked by the cost of a wrong guess (most expensive first). Each says what
-CafAI assumes now and what would change if the guess is wrong. These came
-out of the morning session of 2026-10-04; the questions you answered are in
-"Answered" at the end.
+CafAI assumes now and what would change if the guess is wrong. Questions 1-8
+came out of the morning session of 2026-10-04, and 9-13 out of the Decaid
+alignment of 2026-10-09 (ranked the same way, in their own section); the
+questions you answered are in "Answered" at the end.
 
 1. **Does Decaid's barrier behave on a real DE1 the way its source says?**
    CafAI now waits for `POST /api/v1/machine/profile` after every load and
@@ -54,6 +55,81 @@ out of the morning session of 2026-10-04; the questions you answered are in
 8. **A dose changed in Decaid in the middle of a bag** is read again only
    when a bag opens and at a template pick; until then a yield change is
    checked against the dose CafAI read last.
+
+## From the Decaid alignment (2026-10-09)
+
+9. **Can this repository go on GitHub?** It has no remote, so nothing that
+   watches Decaid has ever run. Four workflows wait for it (D105):
+   `ci.yml` (every push: typecheck with the Decaid contract, lint, tests,
+   build, zip, e2e); `decaid-watch.yml` (daily: opens a `decaid-drift`
+   issue when Decaid's newest release or `main` fails one of CafAI's
+   checks); `decaid-live.yml` (daily and before each release: Decaid's
+   Linux release headless with a simulated machine and scale, CafAI's
+   checks against it, and a browser check); and `release.yml` (publishes
+   only after that job, its own checks and e2e pass). Until then the same
+   checks run only by hand: `npm run decaid:watch`, and
+   `npm run test:decaid` against your Windows simulator (docs/SIMULATOR.md
+   section 6); `scripts/decaid-ci.sh` runs only on Linux. If it stays local, a Decaid release that breaks
+   CafAI is found on a tablet, by a user. What it needs: a repository (a
+   private one spends Actions minutes on two daily jobs, each limited to 30
+   minutes), the branches pushed, and Actions allowed to open issues and
+   publish releases (the watch's issue job and the release job ask for
+   that). README's GitHub Release install needs it too.
+10. **Which rating scale does your tablet's Decaid use?** CafAI no longer
+    assumes 0-10. Once per session, before the first stars go out, it asks
+    Decaid with a made-up shot id (D101): a 400 that mentions enjoyment
+    means 0-10 (four stars are 8), a 404 means 0-100 (four stars are 80, as
+    Decaid 0.8.6 field builds keep it). That reading comes from Decaid's
+    source and decaid-mcp's probe and is tested against the mock both
+    ways; no real Decaid has answered it yet. If your tablet answers
+    differently, four stars go out as 80 to a 0-10 Decaid (refused; the
+    chat says so once) or as 8 to a 0-100 one (ten times too low, in Decaid
+    and Visualizer). An answer that tells neither leaves the stars waiting
+    in memory, so a reload drops them (as in #7). The hardware session
+    checks it (docs/HARDWARE_TEST_PLAN.md section 12, step 1).
+11. **With the key kept in Decaid, should every browser take it?** When
+    Keep my API key in Decaid is on, a browser that opens CafAI without a
+    key of its own takes Decaid's copy at start (D99). That is what brings
+    the key back after a Decaid update; it also means a phone on your
+    network gets the key without pasting it, and so does anyone else who
+    opens CafAI from your tablet's address. The note under the switch says
+    any device on the network can read Decaid's store, so this exposes
+    nothing new, but it makes using your key effortless for anyone on your
+    Wi-Fi. If you would rather other browsers ask for the key, that is a
+    small change.
+12. **Are CafAI's ranges for steam, hot water and flush right?** Decaid's
+    spec gives a range only for steam temperature, and Decaid writes these
+    values to the DE1 unchecked, so CafAI's clamp is the only one (D114).
+    Where neither Decaid nor streamline gives a range, CafAI chose one:
+
+    | Setting | CafAI's range | Step | Where it comes from |
+    |---|---|---|---|
+    | Steam temperature | 135-160 °C (165 on a Bengle) | 1 °C | Decaid's spec |
+    | Steam time | 1-120 s | 5 s | CafAI; the DE1 holds up to 255 |
+    | Steam flow | 0.1-2 ml/s | 0.1 ml/s | CafAI; Decaid's default is 0.8 |
+    | Hot water temperature | 1-100 °C | 1 °C | CafAI; water boils at 100 |
+    | Hot water volume | 1-255 ml | 10 ml | The DE1's one byte; streamline stops at 255 too |
+    | Hot water time | 1-120 s | 5 s | CafAI; the DE1 holds up to 255 |
+    | Hot water flow | 0.1-15 ml/s | 0.5 ml/s | CafAI; Decaid's default is 10 |
+    | Flush time | 1-30 s | 1 s | CafAI |
+    | Flush temperature | 1-100 °C | 1 °C | CafAI |
+    | Flush flow | 0.1-15 ml/s | 0.5 ml/s | CafAI; Decaid's default is 6 |
+
+    A range too narrow refuses a value you want (you would set it in
+    Decaid's own screens, and CafAI leaves it alone unless you change that
+    field in CafAI); one too wide lets a typo through to the machine. Each
+    range is one line in `src/ui/settings/drinkSettings.ts`.
+13. **Should the spec fixes go to Decent?** `docs/upstream/decaid-spec-fixes.md`
+    is a draft issue, with a patch outline, listing where Decaid's specs
+    disagree with its Dart code at v0.8.8, each with the Dart line. CafAI
+    does not send it (spec 4.8). If Decent fixed them, most of
+    `contract/decaid/drift.ts` would go, and other skins that generate
+    types from the specs would get them right; nothing in CafAI depends on
+    it either way. One finding is not in the draft yet: Decaid writes the
+    steam and hot water temperatures and times and the hot water volume to
+    the DE1 as single bytes, unchecked (`unified_de1.dart:611-630` at
+    `aab5f93`), so a skin that sends 300 ml gets 44 ml. Say if you want it
+    added.
 
 ## Answered
 

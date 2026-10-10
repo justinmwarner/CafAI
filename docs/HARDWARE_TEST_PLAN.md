@@ -3,8 +3,9 @@
 Everything in CafAI so far was verified against mocks built from Decaid's
 source; nothing has touched a real machine. This checklist is for the first
 session on a DE1 with Decaid. It covers what the owner's answers leave open
-(QUESTIONS #1, #4 and #9) and every check an answer deferred to the machine
-(#3, #7, #8). Allow 60-90 minutes and about 10 shots.
+(QUESTIONS #1, #4 and #9), every check an answer deferred to the machine
+(#3, #7, #8), and what the Decaid alignment of 2026-10-09 added (section 12,
+QUESTIONS #10). Allow 90-120 minutes and about 12 shots.
 
 For each step, write what you saw in the results table at the end (pass,
 fail, or a note). The saved JSON files and log excerpts matter as much as the
@@ -25,8 +26,22 @@ ticks: they decide the next changes.
   CafAI's own client, prompt and tools against the real API on the default
   model (`claude-opus-5-5`); `LIVE_ALL_MODELS=1` also checks every model in
   the Settings picker. A failure here is an API problem, not a machine one.
+- **CafAI against the tablet's Decaid, before anything else touches the
+  tablet (5 minutes, read-only; D104).** On the computer, from this repo:
+  `DECAID_URL=http://<tablet>:8080 npm run test:decaid` (in PowerShell:
+  `$env:DECAID_URL = 'http://<tablet>:8080'; npm run test:decaid`). Through
+  CafAI's own client and parsers it reads the routes CafAI relies on and
+  five seconds of every socket it opens, and checks each reply against the
+  Decaid CafAI was verified with (v0.8.8). It writes nothing. Never add
+  `DECAID_WRITE` or `DECAID_SIM` here: they are for Decaid's simulator, and
+  they refuse to run with a real machine connected. Expected: every check
+  passes (the write and shot suites show as skipped). A failure names the
+  route or channel and the field: save the whole output, it says what this
+  Decaid sends that CafAI did not expect.
 - **Record the versions:** Decaid (`http://<tablet>:8080/api/v1/info`),
-  DE1 model and firmware (`/api/v1/machine/info`), the tablet model.
+  DE1 model and firmware (`/api/v1/machine/info`), the tablet model, and
+  CafAI's Settings > About line ("Decaid ... (CafAI was verified with
+  0.8.8)").
 - **Useful URLs** (open them in the computer's browser):
   `/api/v1/workflow`, `/api/v1/shots?limit=1`, `/api/v1/shots/<id>`,
   `/api/v1/profiles?includeHidden=true`, `/api/v1/webview/logs`, all on
@@ -169,7 +184,8 @@ credits. Nothing to judge on the spot: send the files.
 
 1. After a shot, tap a taste option, then four stars on the shot card.
 2. `/api/v1/shots/<id>`: `annotations.espressoNotes` has CafAI's line,
-   `annotations.enjoyment` is 8, and `annotations.extras.cafai` is there.
+   `annotations.enjoyment` is 8 (80 on a Decaid that keeps 0-100: section
+   12, step 1), and `annotations.extras.cafai` is there.
 3. Write a note of your own on a shot in Decaid, then answer the taste
    question for that shot in CafAI. Expected: your note stays and CafAI's
    line is added below it.
@@ -248,14 +264,16 @@ this bag's, and the banner offers Retry to load the bag's version.
    not answer.
 5. **The machine switched off.** With CafAI open on the coach, switch the
    machine off (or disconnect it in Decaid). Expected: a slim alert under
-   the top bar says "Not connected. Wake the DE1 and pair it in Decaid."
-   (record how long after switching off it appeared: CafAI waits 1 s once
-   Decaid reports the machine gone). If Decaid reports the disconnect as an
-   error of its own, its words show there first, with a close button:
-   record them, close them, and the "Not connected" line follows. The
-   row's buttons grey out, and the card (tap Stats) says "No machine" and
-   "Not connected", with dashes for the readings. Switch the machine on:
-   the alert goes once it reconnects, and the buttons come back.
+   the top bar says "Not connected. Wake the DE1 and tap Connect DE1, or
+   pair it in Decaid's settings." with **Connect DE1** (record how long
+   after switching off it appeared: CafAI waits 1 s once Decaid reports the
+   machine gone; section 12, step 2 tries the button). If Decaid reports
+   the disconnect as an error of its own, its words show there first, with
+   a close button: record them, close them, and the "Not connected" line
+   follows. The row's buttons grey out, and the card (tap Stats) says "No
+   machine" and "Not connected", with dashes for the readings. Switch the
+   machine on: the alert goes once it reconnects, and the buttons come
+   back.
 6. **Appearance.** Settings > Appearance: choose Light, then Matcha. Every
    screen changes at once and stays changed after Exit and back. Note
    whether the tablet's own dark mode reaches CafAI: set the tablet to dark
@@ -270,11 +288,121 @@ this bag's, and the banner offers Retry to load the bag's version.
    tablet: the phone's Coach tab shows the live strip, and its Shot tab the
    running time.
 
+## 12. Decaid alignment: the rating scale, Connect, gateway mode, drink settings, Next step, Heating, the keyboard, the camera (D98, D101, D111-D114)
+
+1. **The rating scale (QUESTIONS #10, D101).** Before the first stars of a
+   session, CafAI asks the tablet's Decaid which rating scale it keeps.
+   After a shot, tap four stars on its card, then open `/api/v1/shots/<id>`:
+   `annotations.enjoyment` is 8 on a Decaid that keeps 0-10, and 80 on one
+   that keeps 0-100 (Decaid 0.8.6 field builds). Record which, with the
+   Decaid version. Expected: no notice in the chat that starts "Decaid
+   would not save the stars" (that would mean the scale was read wrong), and
+   no "enjoyment probe" line in Settings > About (that would mean this
+   Decaid answered in a way CafAI cannot read; copy the report).
+2. **Connect and the scale (D111).**
+   1. With CafAI on the coach, switch the DE1 off. Expected: about a second
+      later the alert "Not connected. Wake the DE1 and tap Connect DE1, or
+      pair it in Decaid's settings." with **Connect DE1** (and **Connect
+      scale** if the scale went too).
+   2. Switch the DE1 on and tap **Connect DE1** at once, before Decaid
+      reconnects it by itself (if Decaid is quicker, note it and try again).
+      Expected: "Looking for your DE1…" with a spinner, then the alert goes
+      and the stats card shows "DE1" with a filled dot. Record how long it
+      took, and that the scale's link did not change. If it fails, record
+      the sentence that replaces the words.
+   3. With the machine awake, switch the scale off. Expected: about 3 s
+      later, "The scale is not connected. Switch it on and tap Connect
+      scale, or pair it in Decaid's settings." with **Connect scale**.
+      Switch the scale on and tap it: the scale connects, the DE1 stays
+      connected, and the alert goes.
+   4. The scale coming back by itself: put the machine to sleep, switch the
+      scale off, wake the machine from CafAI, and switch the scale on right
+      away. About 5 s after the wake CafAI looks for the scale once, without
+      a word (the scale's alert may show before that). Record whether the
+      scale came back without a tap, after how long, and whether Decaid got
+      it back first.
+3. **Gateway mode (D98).** Note the Gateway Mode Decaid's settings show now.
+   Set it to **Full**, then come back to CafAI (CafAI reads the setting when
+   its page comes back into view and when the machine connects). Expected:
+   the alert "Decaid is set to leave stopping shots to the skin, and CafAI
+   does not stop them, so shots will not stop at the target weight." with
+   **Let Decaid stop shots**. Do not pull a shot in Full: it would run past
+   the target. Tap the button. Expected: the alert goes, Decaid's settings
+   show Tracking, and `/api/v1/settings` has `"gatewayMode":"tracking"`.
+   Pull one shot: it stops at the target weight as before. If Gateway Mode
+   was Disabled before, put it back.
+4. **Steam, hot water and flush (D114).**
+   1. Settings > Steam, hot water and flush: each value matches
+      `/api/v1/workflow` (`steamSettings`, `hotWaterData`, `rinseData`). If
+      steam is off in Decaid, the steam temperature shows "Off" with "Steam
+      is off in Decaid", and cannot be changed.
+   2. Flush time: tap the buttons to 5 s. `/api/v1/workflow` ->
+      `rinseData.duration` is 5. Tap **Flush** in the top bar: it runs about
+      5 s, and while it runs every field in the section is disabled, with
+      "Not while the machine is running".
+   3. Steam: raise the temperature by 1 °C and the time by one step (5 s).
+      `/api/v1/workflow` has both. Steam once: it stops after that time.
+   4. Hot water near the limit: with a jug that holds at least 300 ml on
+      the scale, type 250 into the hot water volume and tap elsewhere.
+      `hotWaterData.volume` is 250. Tap **Hot water** and record what lands
+      in the jug. Then type 300: the field shows 255 and the workflow has
+      255. Run it again and record the volume: it must be near 255 ml, never
+      about 44 ml, which is what 300 becomes in the DE1's one byte.
+   5. Tap into a field and out again without typing: nothing in
+      `/api/v1/workflow` changes.
+   6. Throughout, the stats card's Profile line still marks the bag's
+      version: these writes never touch the profile. Put every value back as
+      it was.
+5. **Next step on a real shot (D113).** Load a version of **Blooming
+   Espresso** (its steps: preinfusion start, preinfusion, pause, ramp, flat
+   flow, reset temperature) and pull a shot from CafAI. Expected: once the
+   shot is past the preheat, **Next step** at the end of the coach's note
+   row under the graph. During "Preinfusion", tap it once: within about a
+   second the step in the Shot view's header moves to "Pause", and the pump
+   stops for the bloom. During "Pause", tap it twice quickly: the header
+   moves one step only, to "Ramp". On the last step ("Reset temperature")
+   Next step is gone. Record how long each step took to change after the
+   tap. This shot is not a fair one: answer its taste question with Other,
+   "test shot, steps skipped".
+6. **Heating and the countdown after a wake (D112).** Check
+   `/api/v1/plugins`: record whether `time-to-ready.reaplugin` is there with
+   `"loaded": true`. Let the machine sleep at least 20 minutes, so the group
+   cools. Wake it from CafAI and watch the stats card (tap **Stats** if it
+   is not at the end of the chat). Expected: the state line says "Heating",
+   never "Ready", until the machine is warm. With the plugin loaded, once it
+   has an estimate, "Ready in about N min" at the end of that line, going
+   down by the minute, then "Ready in under a minute", then gone when the
+   state line says "Ready". Record the first estimate, the time from the
+   wake to "Ready", and whether Group had reached its target then. Without
+   the plugin, "Heating" shows with no minutes.
+7. **The soft keyboard over the composer (spec 5.17).** On the tablet, tap
+   the composer at the bottom of the chat. Expected: the keyboard opens and
+   the composer, with what you type, stays in view above it; the top bar
+   keeps its place; the chat above can still be scrolled. Close the
+   keyboard: the layout is back as it was. Repeat in Settings with the API
+   key field and a drink settings field near the bottom of the screen. If
+   the keyboard covers the field you type in, photograph it and note it:
+   CafAI does not lift its layout for the keyboard, and streamline does (it
+   lifts its whole canvas by the focused field's overlap with the keyboard,
+   read from `visualViewport`, b10fabe); that would be the fix.
+8. **Camera consent for the bag photo.** This needs the bag photo, which
+   comes with the next build; until then, skip it. Install CafAI from its
+   zip, as section 0 says: Decaid ties camera consent to an installed skin,
+   and gives none to one served from `--skin-path`. Start a new bag and
+   take a photo of the bag. Expected: Decaid asks for your consent before
+   the camera opens. Record the prompt's words, and whether Decaid asks
+   again for the next photo (its source says each photo taken through a
+   file input needs its own confirmation, whatever the stored camera answer
+   is). Answer Deny once and record what CafAI shows. Decaid gives up on its
+   live-camera prompt after 30 s, which counts as no answer; that answer can
+   be changed later in Decaid's skin selector (Ask, Allow or Deny).
+
 ## Results
 
 | Section | Step | Expected | Observed | Pass? |
 |---|---|---|---|---|
 | 0 | Versions | Decaid, firmware, tablet recorded | | |
+| 0 | `test:decaid` | Read-only checks pass against the tablet | | |
 | 1 | 2 | `supported: true` | | |
 | 1 | 3 | WebView 91+ | | |
 | 3 | 2 | Loading -> Loaded, about 1 s; log timing | | |
@@ -296,6 +424,16 @@ this bag's, and the banner offers Retry to load the bag's version.
 | 11 | 6 | Appearance applies; Auto follows the tablet's dark mode? | | |
 | 11 | 7 | Bag picker list matches Light | | |
 | 11 | 8 | Phone layout over the network (optional) | | |
+| 12 | 1 | Four stars are 8 (0-10) or 80 (0-100); which one | | |
+| 12 | 2 | Connect DE1, Connect scale; the scale back after a wake without a tap? | | |
+| 12 | 3 | Gateway alert in Full; the button sets Tracking | | |
+| 12 | 4 | Drink settings reach Decaid and the machine; 300 ml becomes 255 | | |
+| 12 | 5 | Next step moves one step per tap, gone on the last step | | |
+| 12 | 6 | Heating after a wake, the countdown, then Ready | | |
+| 12 | 7 | Composer in view with the keyboard open | | |
+| 12 | 8 | Camera consent for the bag photo (next build) | | |
 
-Send back this table, the saved shot and profile JSON files, and the
-`[CafAI]` lines from `/api/v1/webview/logs`.
+Send back this table, the saved shot and profile JSON files, the `[CafAI]`
+lines from `/api/v1/webview/logs`, the output of `npm run test:decaid`, and,
+if Settings > About lists anything Decaid sent that CafAI did not expect,
+its report (**Copy report**).

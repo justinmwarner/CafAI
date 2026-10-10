@@ -876,3 +876,436 @@ small phone on its side.
   (were 18), and its weight shows the target ("of 36") too. With the column
   go D87's cover on a short upright phone and the split panel of a phone on
   its side.
+
+## Decaid alignment and update safety (2026-10-09)
+
+The owner's ask: audit CafAI against the patterns and practices of the other
+skins for Decaid, leaning on streamline-js because Decent builds it; use what
+Decaid offers natively; and make sure Decaid updates do not break CafAI, with
+type checking and whatever else is possible. The audit (docs/audit/2026-10-09/:
+streamline.md, decaid.md, cafai.md, others.md, typegen.md) found CafAI ahead
+of every skin surveyed on engineering, Decent's included, but with a view of
+Decaid read once from `a45961b` and never checked again, and seven ways a
+Decaid change would break it without anyone noticing (cafai.md section 2.5).
+Answers given: all eight update-safety layers; the Decaid features in the
+spec's section 1; an alert with a one-tap fix for gateway mode Full; the API
+key in Decaid only by the user's choice. Design:
+docs/superpowers/specs/2026-10-09-decaid-alignment-design.md; plan:
+docs/superpowers/plans/2026-10-09-decaid-alignment.md. Built on branch
+feat/decaid-alignment in waves, one agent per area: wave 0 (292615e), wave 1
+(the readers 487f115, the mock bd4f0fd, the contract f9862f3, the real-Decaid
+tests 120ae40) and wave 2 (the machine 1358c82, the engine 7c4e2eb, Settings
+fc21cd1). D93 to D104 are the spec's decisions; D105 onward were settled while
+building. The intake features (the bean card, the bag photo, the coach's DYE2
+tool and the Visualizer link) are being built; D102 and D103 gain them when
+they land. The repository has no git remote, so none of the new GitHub
+workflows has run.
+
+- **D93. The pin is Decaid v0.8.8 (`aab5f93`).** CafAI is checked against
+  the specs of the release people run, not Decaid's `main`, which moves
+  daily. `contract/decaid/spec/` holds `rest_v1.yml` and `websocket_v1.yml`
+  verbatim from `aab5f93`; `contract/decaid/PIN.json` holds the tag, the
+  commit, both specs' sha256 and the generator (openapi-typescript 7.13.0);
+  `src/api/decaidVersion.ts` tells the app, so About can say which Decaid
+  CafAI was verified with (D96). Decaid gives skins no compatibility
+  contract to lean on instead: `GET /api/v1/info` reports the build, not an
+  API version, both specs say `1.0.0` and are written by hand, and there is
+  no changelog or deprecation policy (decaid.md sections 3.1 to 3.3).
+  `npm run decaid:update -- <tag>` (`scripts/decaid-contract.mjs`) moves the
+  pin: it fetches both specs at a tag, branch or sha, regenerates the types
+  and rewrites `PIN.json` and `decaidVersion.ts`; `contract/decaid/README.md`
+  says what to do with what then fails. v0.8.8 was the newest release
+  (2026-10-06) and ships the Linux builds the CI job runs (D105).
+- **D94. Typecheck checks CafAI's wire types against the pinned spec.**
+  `npm run typecheck` runs CafAI's own typecheck, then
+  `tsc -p tsconfig.contract.json` over the 73 checks in
+  `contract/decaid/checks/` (28 REST replies, 10 REST bodies, 10 WebSocket
+  frames, 17 enums, 8 status codes), then `scripts/decaid-contract.mjs
+  --check` (the specs match `PIN.json`, and regenerating gives the committed
+  `generated/` files byte for byte). Replies are diffed spec to CafAI (what
+  Decaid may send must fit what CafAI expects), bodies CafAI to spec. Each
+  diff must equal the exceptions recorded for it in
+  `contract/decaid/drift.ts`, each with its kind (spec gap, spec drift,
+  CafAI narrower, CafAI looser, parsed shape), a reason and the Dart
+  file:line at the pin that proves it. A new mismatch fails as `unexpected`
+  and an exception Decaid has fixed as `stale`, so the list cannot rot.
+  `mock/decaid/contract.test.ts` holds the mock to the same spec with ajv
+  (`contract/decaid/schema.ts`): every fixture, the mock's replies and
+  frames for every route and channel CafAI uses, and the bodies CafAI
+  sends, with the runtime exceptions (`SPEC_EXCEPTIONS`) in the same
+  registry. Why: CafAI's types were written by hand from Dart, and the mock
+  was typed with CafAI's own types, so the two checked each other, never
+  Decaid (cafai.md section 3.3). The experiment (typegen.md) showed the
+  checks catch real changes: run on `a45961b` they failed on exactly the one
+  real spec change, and on a mutated spec they caught a renamed, a newly
+  nullable and a removed field. No other skin or plugin checks itself
+  against Decaid's spec. `ci.yml` already runs typecheck, so the contract
+  runs on every push.
+- **D95. Tolerant reader, fail safe, never silent.** Every Decaid reply is
+  checked where it enters CafAI: zod readers in `src/api/readers.ts`
+  (`z.looseObject`, optional where Decaid leaves a key out, open enums) for
+  build and machine info, settings, plugins, the workflow, profile records,
+  shot summaries and records, beans and batches, and the frame parsers in
+  `src/api/frames.ts`. Extra fields pass through, and an enum value CafAI
+  does not know is kept. A field CafAI cannot do without (the workflow's
+  profile, a record's id) fails the call with
+  `GatewayError('unexpected_reply')`; anything else falls back to its
+  default. Either way it goes to the drift log (`src/api/drift.ts`): a
+  route or channel and a field path, with types and enum values only, never
+  free text, a note or the key. A kind is kept once, with a count, at most
+  50 kinds, and each new kind is written once to the console, which Decaid
+  serves at `/api/v1/webview/logs`. Why: `requestValue` cast `JSON.parse`,
+  so workflows, profile records and shot records were trusted blindly, and
+  the audit found seven ways a renamed or retyped field would fail
+  silently: a backup read as empty, shots never detected, every shot
+  credited to the active version, readings shown as 0, loads assumed,
+  writes retried forever, no Stop (cafai.md section 2.5). D97 and D106 to
+  D110 are the rules for each.
+- **D96. Drift is visible.** Settings > About
+  (`src/ui/settings/AboutDecaid.tsx`) shows "Decaid 0.9.0 (CafAI was
+  verified with 0.8.8)". A running Decaid older than the pin adds "Older
+  than the Decaid CafAI was checked against; update Decaid if something
+  does not work." Versions compare on their numeric part ("0.8.8+2850" is
+  0.8.8); one that does not parse is shown without a comparison. When the
+  drift log holds anything, "Decaid sent N things CafAI did not expect"
+  lists the entries, and **Copy report** copies them with CafAI's version
+  and both of Decaid's (`formatDriftReport`). The last line is the backup's
+  health (spec 5.15), from the mirror's last push and last error: "Backed
+  up to Decaid N min ago", "Backup paused: <reason>" or "Not backed up yet".
+  Why: drift that only reaches a console is drift nobody sees. On a tablet
+  the owner reads it where CafAI runs and can send the report, and a newer
+  Decaid that changed something shows as a list, not a mystery. The report
+  holds routes, field paths, types and counts, never the user's words or
+  the key (D95).
+- **D97. Stop for unknown states.** `src/api/machineStates.ts` sorts
+  Decaid's machine states (`MachineState` in `machine.dart` at `aab5f93`)
+  by what CafAI may do. The nine running ones (espresso, steam, hotWater,
+  flush, steamRinse, skipStep, cleaning, descaling, airPurge) get Stop. The
+  nine at rest (idle, schedIdle, sleeping, heating, preheating, booting,
+  busy, needsWater, error) do not. fwUpgrade, calibration and selfTest,
+  which nothing may interrupt, get neither Stop nor Sleep. Any other state
+  gets Stop, shows humanised in the state line ("someFutureState" reads
+  "Some future state") and is reported as drift; Sleep is disabled there
+  too (`src/ui/machine/commands.ts`). Why: Stop showed only for the running
+  states CafAI knew, so a running state Decaid renamed or added would have
+  shown no Stop while water ran (cafai.md section 2.5). An unneeded Stop only puts the machine to idle; a
+  missing one leaves the pump running. The frame parser and the controls
+  read the one list, so they cannot disagree.
+- **D98. Gateway mode Full gets an alert with a one-tap fix.** In Full,
+  Decaid leaves stopping at the target weight to the skin, and CafAI does
+  not stop shots, so they would run past the target. CafAI reads
+  `GET /api/v1/settings` at start, each time the machine connects and when
+  the page comes back into view (`src/ui/machine/useGatewayMode.ts`). While
+  `gatewayMode` is `full`, the machine alert says "Decaid is set to leave
+  stopping shots to the skin, and CafAI does not stop them, so shots will
+  not stop at the target weight." with **Let Decaid stop shots**, which
+  posts `{"gatewayMode":"tracking"}` and follows what Decaid reads back: if
+  Decaid kept Full, "Decaid kept its setting. Set Gateway Mode to Tracking
+  in Decaid's settings."; if the post failed, "Couldn't change Decaid's
+  setting." with Decaid's reason. A read that fails keeps the last answer,
+  and a reply without a mode is no mode, so the alert never says what CafAI
+  is not sure of. It comes after the water alert and before the scale's
+  (`MachineAlerts.tsx`). CafAI never changes Decaid's settings by itself.
+  Why: streamline forces `tracking` at every start (streamline.md section
+  6, rule 14), but gateway mode is Decaid's, for every skin and for
+  Decaid's own screens; the owner chose a visible fix one tap away over a
+  silent change (spec section 1).
+- **D99. The API key may live in Decaid, by choice.** **Keep my API key in
+  Decaid**, under the key in Settings > Anthropic API key, is off by
+  default. The choice is stored as `keepKeyInDecaid` in the settings record
+  (`src/storage/settings.ts`). The copy lives in its own KV namespace,
+  `cafai-key` (key `anthropic`, `src/storage/keyBackup.ts`), never in
+  `cafai`, an export or a log, so the backup the mirror writes never
+  carries it and D37's redaction stays. The switch is disabled until a key
+  is saved. Turning it on copies the key, turning it off deletes the copy,
+  and a key saved while it is on is copied; a switch that cannot reach
+  Decaid goes back and says why. Forget key deletes the copy too; when
+  Decaid cannot be reached the choice stays on, and Settings says "The key
+  is gone from this device, but Decaid still has its copy; turn Keep my API
+  key in Decaid off when Decaid is back." A start with no key on the device
+  takes Decaid's copy (`src/app/createServices.ts`, and each try of D100's
+  late restore), in any browser, a phone's too. The note under the switch
+  says the cost: "So you do not have to paste it again after a Decaid
+  update. Any device on your network can read Decaid's store, and Decaid's
+  backups include it." The setup card says "The key stays on this device
+  unless you choose in Settings to keep a copy in Decaid." Why: a Decaid
+  update wipes a skin's browser storage (Decent's b0aa1ce; streamline.md
+  section 6, rule 2), so the key had to be pasted again after every update,
+  and anyone on the network can read Decaid's store, so keeping it there is
+  the user's call. The plan read the switch from whether a copy existed;
+  the build stores the choice, because a copy's presence let the switch
+  show on while nothing was backed up, and let a Forget that could not
+  reach Decaid say the key was gone.
+- **D100. Restore waits for Decaid.** A start-up restore has four outcomes
+  (`RestoreResult` in `src/storage/index.ts`): `restored`; `nothing` (the
+  device already has bags, or Decaid holds no backup, or one this version
+  cannot import); `unreachable` (no answer, a timeout, 408, 429 or 5xx);
+  and `unreadable` (an answer CafAI cannot read, reported as drift and
+  never taken for an empty backup, D107). After `unreachable` CafAI keeps
+  trying Decaid's backup: 2 s after start, doubling to every 30 s, for 10
+  minutes, and at once when the machine connects, Decaid's sockets open or
+  the page comes back into view (`startLateRestore`). Each try also brings
+  the key back when the user keeps a copy in Decaid (D99). When records
+  land, the chat and the look are read again and the open bag's chat says
+  "Your bags are back from Decaid's backup." A start that restored bags but
+  has no key shows on the key card "Decaid was updated or this browser's
+  storage was cleared. Your bags are back; paste your API key again." Why:
+  Decent's b0aa1ce says every Decaid update wipes the skin's IndexedDB, and
+  after an update the WebView can start before Decaid's web service answers
+  (streamline.md section 6, rules 1 and 2). CafAI restored once at start: a
+  Decaid not answering yet meant an empty CafAI, and the backup was merged
+  only at the next write, without the screen refreshing.
+- **D101. The rating scale is probed, not assumed.** Decaid 0.8.6 field
+  builds keep `enjoyment` 0-100 and later builds 0-10 (others.md section
+  6.2, finding 1), and CafAI wrote stars x 2 everywhere. Now, before the
+  first stars of a session go out, CafAI sends
+  `PUT /api/v1/shots/<a made-up id> {"annotations":{"enjoyment":11}}`
+  (`probeEnjoymentScale` in `src/api/client.ts`, decaid-mcp's probe).
+  Current builds check `enjoyment` before they look the shot up, so a 400
+  that mentions enjoyment means 0-10 (stars x 2); 0.8.6 looks the shot up
+  first, so a 404 means 0-100 (stars x 20). No answer, a timeout, 408, 425,
+  429 or 503 asks again at the next write. An answer that tells neither is
+  reported as drift and asked again only after the next shot. The answer
+  holds for the session, and until it is known the stars wait in the
+  outbox while the taste goes on without them. Why: a guess writes a wrong
+  number into every rated shot in Decaid and Visualizer, refused (80 on a
+  0-10 build) or ten times too low (8 on 0-100); a made-up id changes
+  nothing on either.
+- **D102. Bags link to Decaid's bean library.** As built so far: `Bag` has
+  `decaidBeanId`, `decaidBatchId` and `roastDate`, all `null` until set
+  (the storage schema, the mirror, export and import accept bags without
+  them). After the coach saves a bag's details, CafAI looks in
+  `GET /api/v1/beans` for a bean with the same roaster and name, ignoring
+  case, and reuses it or adds one, then adds a batch for the bag, keeps
+  both ids on it and says "Added to Decaid's beans." (`linkBag` in
+  `src/app/engine/engine.ts`). A bag without a roaster or a name of its own
+  is not added, and a failure leaves it unlinked for the next save to try.
+  CafAI only adds beans and batches: it never edits or deletes one, so a
+  detail corrected later changes the bag only. Every load writes the bag's
+  batch (`beanBatchId`, null when unlinked), name (`coffeeName`) and
+  roaster (`coffeeRoaster`) into the workflow context, where it used to
+  clear them, and clears `grinderBurrs` with the other grinder fields (spec
+  5.2). Why: Decaid keeps the workflow with each shot, and its shot filters
+  and DYE2's history find the coffee there (decaid.md section 1.3, others.md
+  section 4.4). Decaid merges the context field by field, so another
+  skin's batch, the last coffee's roaster or a stale `grinderBurrs` (new
+  since `a45961b`) would stick to this coffee's shots (decaid.md section
+  4.3). Never editing keeps CafAI off beans the user keeps in Decaid or
+  DYE2. Being built, and added here when they land: the card that picks a
+  bag from the library, and the bag photo.
+- **D103. Decaid's plugins are optional.** `src/api/plugins.ts` reads
+  `GET /api/v1/plugins` at start and when the page comes back into view. A
+  plugin counts only while Decaid lists it `loaded`; a failed read keeps the
+  last answer, and before the first answer every plugin counts as absent.
+  As built so far, one feature uses one: the stats card's countdown follows
+  `time-to-ready.reaplugin`'s channel only while it is loaded (D112), and
+  without it Heating shows with no minutes. Being built, and added here
+  when they land: the Visualizer link on shot cards and the coach's tool
+  that reads DYE2. Why: plugins are the user's to install, load and unload
+  in Decaid's settings, and a tablet may not have a given one loaded; CafAI
+  must work the same without them.
+- **D104. Real-Decaid tests are read-only on a tablet.**
+  `npm run test:decaid` (`vitest.decaid.config.ts`,
+  `src/api/live/*.decaid.ts`) runs CafAI's own client and parsers against
+  the Decaid at `DECAID_URL` and checks every reply and frame against the
+  pinned spec, with D94's exceptions; without `DECAID_URL` every check is
+  reported as skipped, and `npm test` never runs them. `DECAID_URL` alone
+  only reads: the routes CafAI relies on and five seconds of each socket it
+  opens. `DECAID_WRITE=1` adds CafAI's writes, each put back (a key in the
+  `cafai-contract-test` namespace, the rating-scale probe, a workflow round
+  trip with the machine-profile barrier, a test profile then hidden, a bean
+  and a batch then archived, gateway mode set and restored), and
+  `DECAID_SIM=1` a simulated shot with notes and a rating; both refuse to
+  run unless Decaid simulates the machine and no real machine is connected
+  (`src/api/live/harness.ts`). `DECAID_REQUIRE=1`, the release gate, fails a
+  check that cannot run instead of skipping it (`src/api/live/env.ts`).
+  `npm run e2e:real` (`playwright.real.config.ts`) opens CafAI from
+  Decaid's port 3000 and checks it is ready, connected and showing a live
+  group temperature. docs/SIMULATOR.md section 6 has the steps for the
+  owner's Windows simulator. Why: a write against a tablet changes a real
+  machine's workflow, profile library and bean library, while the reads
+  alone show whether a Decaid sends what CafAI expects.
+- **D105. A daily watch, a real Decaid in CI, and a release gate.**
+  `npm run decaid:watch` (`scripts/decaid-watch.mjs`) asks whether the
+  newest Decaid would break CafAI, for the latest release and for `main`.
+  When their specs differ from the pin's, it generates their types in a
+  temporary folder, runs the contract typecheck and the mock contract test
+  against them, and diffs the specs: operations added or removed (and
+  whether CafAI calls them), and fields added, removed or retyped in the
+  schemas CafAI reads or writes. It also lists the Decaid files changed
+  since the pin that CafAI depends on (the specs, `doc/Skins.md`,
+  `doc/Api.md`, the webserver handlers and models, the Visualizer,
+  time-to-ready and settings plugins, DYE2's fetch script) as "read these".
+  Exit 0: nothing changed, or the changes are additive and pass (an
+  exception Decaid fixed is reported, not failed); 1: a check failed; 2:
+  GitHub could not be reached; 3: the watch itself broke.
+  `.github/workflows/decaid-watch.yml` runs it daily and on demand: on 1 it
+  opens an issue labelled `decaid-drift` (or comments on the open one), on 2
+  it warns, on 3 it fails without an issue; the job that installs
+  dependencies holds no write token. `.github/workflows/decaid-live.yml`
+  (daily, on demand, and called by the release) starts Decaid's Linux
+  release headless with a simulated machine and scale
+  (`scripts/decaid-ci.sh`: xvfb, a fresh profile, this build as the skin),
+  runs `test:decaid` with the writes, the simulated shot and
+  `DECAID_REQUIRE=1`, then `npm run e2e:real`. `release.yml` publishes only
+  after that job passes against the latest Decaid and its own typecheck,
+  lint, unit tests and `npm run e2e` pass. Why: Decaid has no compatibility
+  policy (D93), so the warning has to be CafAI's own: a release that breaks
+  a check should be an issue the next morning, not a surprise on a user's
+  tablet. None of these workflows has run, as the repository has no remote
+  yet (QUESTIONS #9); until then `npm run decaid:watch` by hand is the same
+  check as the daily one.
+- **D106. A workflow PUT waits 35 s and counts only what Decaid holds.** A
+  load's `PUT /api/v1/workflow` now has 35 s (it had 15): Decaid can hold it
+  in its queue for 30 s before it answers 503 and skips it, and then waits
+  for the steam and water settings to reach the DE1 (streamline.md section
+  6, rule 8; `src/api/client.ts`). After a 503 CafAI reads the workflow
+  back once; after its own timeout, three times, 2 s apart. The load counts
+  only if Decaid already holds everything that was sent: the profile, and
+  every context key with its value (a key sent as null must be gone, and
+  the extras are compared key by key, as Decaid merges them; `landedAnyway`
+  in `src/api/workflow.ts`). Otherwise the PUT's own error stands. Why: at
+  15 s CafAI reported a failure Decaid might still apply. Decaid v0.8.8
+  never applies a change it answered 503 (`workflow_handler.dart`), so that
+  one read only finds a workflow that already held it, but a PUT the client
+  gave up on may still be on its way to the DE1, so a timeout gets time to
+  land. Counting a load whose context did not land would leave the last
+  coffee and version on the shots. The mock plays both cases
+  (`?mockSlowWorkflow=<ms|503>`).
+- **D107. A missing reading is a dash; an unreadable backup is not an empty
+  one.** A machine reading missing from a frame is `null`: a dash on
+  screen, a gap in the graph, and drift reported, never 0
+  (`src/api/frames.ts`, `src/ui/machine/MachineStatus.tsx`). A reply to the
+  read of the whole backup (`GET /api/v1/store/cafai?full=1`) that is not an
+  object (an array, `null`, a string, a number) is unreadable: the restore
+  does nothing, the mirror pushes nothing until a read succeeds (About says
+  "Backup paused"), and drift is reported (`src/api/kv.ts`). A 404 (the
+  spec's answer for a namespace that holds nothing) or `{}` is an empty
+  namespace. Why: a renamed reading showed 0, which reads as a real
+  measurement, and a backup read as empty let a fresh device's first push
+  overwrite it with empty lists (cafai.md section 2.5). The spec counted
+  `200 null` as empty too; the build does not, since Decaid answers `null`
+  only for a single missing key, never for a namespace (decaid.md section
+  1.10).
+- **D108. Shots are found under any shot-state names.** The machine-state
+  fallback now stays armed: when the machine is in a shot (espresso, or
+  skipStep as it moves on) and no `shotState` frame with a state CafAI
+  knows has come for 3 s, the machine state starts the shot, and the shot
+  ends when the machine leaves it (`src/api/telemetry.ts`). A `shotState`
+  state CafAI does not know is reported as drift. Skip step's moment belongs
+  to the same shot, so a shot still gives one start and one finish. Why:
+  the fallback switched off after the first `shotState` frame, so had
+  Decaid renamed its shot states, CafAI would never have seen another shot
+  (cafai.md section 2.5).
+- **D109. A write Decaid refuses is dropped, once, out loud.** The outbox
+  (`src/app/engine/outbox.ts`, D64) retries only what may still go
+  through: no answer, a timeout, 408, 409, 425, 429 and 5xx. Any other 4xx,
+  or a failure inside CafAI, would fail the same way every time, so the
+  write is dropped and the chat says so once: "Decaid would not save the
+  taste for this shot: <reason>." (or the stars, the taste and the stars,
+  or the grinder for the next shots), with the refusal reported as drift
+  under the request; a failure inside CafAI says "CafAI could not save the
+  taste for this shot." and so on, and logs its detail to the console
+  Decaid keeps (`writeDropped` in `src/app/engine/engine.ts`). A 2xx whose
+  reply CafAI cannot read counts as landed: Decaid took it, and the reader
+  reported the reply. Shot notes that are not text read as empty, with
+  drift (`src/app/engine/shotNotes.ts`). Why: a Decaid that validated notes
+  or `enjoyment` differently had CafAI retry the write forever, silently
+  (cafai.md section 2.5); one notice tells the user what is missing in
+  Decaid, and repeating a write that landed would only send it again.
+- **D110. When Decaid cannot say, CafAI says what it assumed.** When
+  `POST /api/v1/machine/profile`, the barrier after each load (D55),
+  answers 404 or 405, this Decaid has no barrier: CafAI assumes the machine
+  took the profile and says once per session "This Decaid cannot confirm
+  that the machine took a profile, so CafAI will assume it did." When a
+  shot record does not name the profile that ran (no `workflow.profile`),
+  the shot is credited to the active version as before, drift is reported,
+  and the chat says "Decaid's record did not say which profile ran; CafAI
+  counted it for v<N>." Why: both used to happen silently: loads were
+  assumed for the whole session, and the guard against a shot run from
+  another profile was skipped (cafai.md section 2.5). Going on keeps the
+  coach working with an older or changed Decaid; saying so lets the user
+  weigh the shot.
+- **D111. Connect looks without connecting, then connects one device.** The
+  "not connected" alert says "Not connected. Wake the DE1 and tap Connect
+  DE1, or pair it in Decaid's settings." with **Connect DE1**, and
+  **Connect scale** too when the scale is missing. A Connect always scans
+  with `connect=false`, because Decaid's scan otherwise connects everything
+  it finds, then connects the one device by id: Decaid's preferred device
+  (`preferredMachineId`, `preferredScaleId`) when the scan found it, else
+  the first found (`connectKind` in `src/api/client.ts`). While it runs the
+  alert says "Looking for your DE1…" (or scale) and the button spins; one
+  Connect runs at a time in the whole app, as Decaid has one radio to scan
+  with (`src/ui/machine/deviceConnect.ts`). A Connect that fails says why
+  until the next try or until the device is back. A scale missing while
+  the machine is awake (none connected though one was this session, or
+  Decaid lists one not connected) gets its own alert after 3 s, below the
+  machine's other problems: "The scale is not connected. Switch it on and
+  tap Connect scale, or pair it in Decaid's settings.", with Connect scale
+  held while the machine runs something. The scale is also looked for once
+  by itself, quietly, 5 s after the machine wakes or the page comes back
+  into view, when none is connected though one was this session: at most
+  every 30 s, and only while the machine is awake and at rest
+  (`useScaleRevive.ts`, decaid-zen's rule). Why: the alert used to send the
+  user to Decaid's settings, a skin switch away. Connecting only the one
+  device never disturbs the other. The 5 s wait lets Decaid get its
+  preferred scale back by itself, and keeps a scan out of the seconds after
+  a wake, when scans upset Bluetooth (streamline.md section 6, rule 20).
+- **D112. Heating is the machine's word; time-to-ready only gives the
+  minutes.** The stats card says Heating while the machine says heating or
+  preheating, or says idle with the substate `preparingForShot`, which is
+  what a warming DE1 reports (`isHeatingUp` in `src/ui/machine/format.ts`;
+  `de1.utils.dart` at `aab5f93`); it used to say Ready for minutes while
+  the group was cold. When Decaid has `time-to-ready.reaplugin` loaded
+  (D103), CafAI follows its channel and, while the machine heats, shows
+  "Ready in about N min" (whole minutes, rounded up) or "Ready in under a
+  minute" at the end of the state line's row. A heating frame with an
+  estimate sets a deadline and every frame keeps it alive; it goes 6 s
+  after the plugin's last frame, holds at zero for 10 s past its deadline,
+  and never shows more than 5 minutes (streamline's timings,
+  `src/api/telemetry.ts`). Why: the plugin works its status out from a 2 s
+  temperature slope on every snapshot, so a machine at rest moves between
+  `reached`, `not_heating` and `heating`; taken for the machine's state,
+  it would show Heating on a ready machine. The spec had the plugin's
+  status decide; the build lets the machine decide and keeps only the
+  plugin's number.
+- **D113. Next step moves one step per tap.** While the machine pulls a
+  shot (espresso, or skipStep as it moves on) in preinfusion or pouring,
+  and the profile in Decaid's workflow has a step after the current one,
+  the Shot view shows **Next step**, which sends
+  `PUT /api/v1/machine/state/skipStep` (`src/ui/machine/ShotView.tsx`). It
+  goes through the app's one command sender, like the machine row: held
+  while another command is in flight, sent once per tap, a failure shown in
+  the machine alert ("Couldn't move to the next step."). After a tap it
+  stays disabled until the machine shows another step, or 1.5 s if it
+  never does, so a double tap cannot skip two steps. Never in the top bar.
+  Why: Decaid answers the skip before a snapshot shows the new step, and
+  unlike Stop a second skip is not the same as one: it takes the step
+  after. The spec put it beside the step's name; as built it sits at the
+  end of the coach note's row under the plot, its icon alone on a phone
+  (DESIGN.md, the Shot view).
+- **D114. Steam, hot water and flush stay within what the DE1 can hold.**
+  Settings > Steam, hot water and flush
+  (`src/ui/settings/DrinkSettingsSection.tsx`) reads `steamSettings`,
+  `hotWaterData` and `rinseData` from `GET /api/v1/workflow` and writes
+  only the field that changed, as a partial `PUT /api/v1/workflow` that
+  never carries the profile. Only steam temperature has a range in Decaid's
+  spec: 135-160 °C on a DE1, 165 on a Bengle (the model from
+  `GET /api/v1/machine/info`; the DE1's range until it is known). Decaid
+  writes the steam temperature and time and the hot water temperature,
+  volume and time to the DE1 as single bytes, unchecked
+  (`unified_de1.dart:611-630` at `aab5f93`), so 300 ml would run as 44: hot
+  water volume stops at 255 ml, as streamline's does, and both times at
+  120 s. The flows, and the flush's time and temperature, go through a
+  scaled register far from its limits, so their ranges are CafAI's own
+  practical ceilings (`src/ui/settings/drinkSettings.ts`; QUESTIONS #12
+  lists them all). A value is written only when the user changed it: a
+  field left alone never re-sends or clamps what Decaid holds, even outside
+  CafAI's range. Steam that is off in Decaid (temperature 0) shows "Off" and
+  is never written; turning steam on or off stays in Decaid. Nothing is
+  written while the machine runs ("Not while the machine is running"), and
+  a failed write puts the old value back and says why. Why: Decaid writes
+  these unchecked, so CafAI's clamp is the only one between a typo and the
+  machine (streamline.md section 4.1: validate and clamp at the skin
+  boundary), and writing only what changed keeps CafAI from undoing values
+  another skin set.

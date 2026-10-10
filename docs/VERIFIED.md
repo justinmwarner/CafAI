@@ -1,5 +1,17 @@
 # VERIFIED — what the sources actually say
 
+> **Since 2026-10-09 the living check is [`contract/decaid/`](../contract/decaid/README.md).**
+> CafAI's wire types are checked against Decaid's own API specs at the
+> pinned release, v0.8.8 (`aab5f93`), on every `npm run typecheck`, and
+> every place where those specs are wrong is recorded there with the Dart
+> line at `aab5f93` that proves it (D93, D94). `npm run decaid:watch`
+> checks Decaid's latest release and `main` against them (daily in
+> `.github/workflows/decaid-watch.yml` once the repository is on GitHub,
+> D105). The write-ups below were read from Decaid at `a45961b`
+> (2026-10-01) and are not kept up to date: where they and the contract
+> differ, the contract is newer. What changed from `a45961b` to `af4e995`
+> is in [audit/2026-10-09/decaid.md](audit/2026-10-09/decaid.md) section 4.
+
 Phase 0 of the CafAI build. Every fact here was read from the repositories
 below at the listed commits (file:line citations are in the detailed
 documents). Where a repo and `docs/RESEARCH.md` disagree, **the repo wins**.

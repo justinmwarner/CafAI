@@ -230,10 +230,15 @@ components:
     backgroundColor: "{colors.bar-surface}"
     padding: 0 4px 0 16px
     height: 52px
-  machine-alert:           # one slim MUI Alert under the top bar, a line below; 14 px text
+  machine-alert:           # one slim MUI Alert under the top bar, a line below; 14 px text; 48 px tall with buttons
     rounded: "{rounded.none}"
     padding: 0 12px
     height: 40px
+  machine-alert-button:    # Connect DE1, Connect scale, Let Decaid stop shots: text buttons in the alert's own text colour, at the strip's end
+    typography: "{typography.button}"
+    rounded: "{rounded.button}"
+    padding: 6px 8px
+    height: 48px
   tab-bar:                 # phone upright, plus the bottom safe-area inset
     backgroundColor: "{colors.bar-surface}"
     padding: 6px
@@ -291,6 +296,21 @@ components:
     textColor: "{colors.ink}"
     rounded: "{rounded.prompt}"
     height: 40px
+  ready-in:                # "Ready in about 3 min" at the end of the stats card's state line row
+    textColor: "{colors.ink-muted}"
+    typography: "{typography.label}"
+  next-step:               # the Shot view's Next step, at the end of the coach note's row; on a phone a 48 px square, the icon alone
+    backgroundColor: "{colors.bar-raised}"
+    textColor: "{colors.ink}"
+    typography: "{typography.button}"
+    rounded: "{rounded.button}"
+    padding: 6px 16px
+    height: 48px
+  drink-stepper:           # Settings > Steam, hot water and flush: a 48 px minus, an outlined number field, a 48 px plus, 4 px apart
+    textColor: "{colors.ink}"
+    typography: "{typography.body}"
+    rounded: "{rounded.button}"
+    height: 48px
   readout:
     textColor: "{colors.ink}"
     typography: "{typography.readout}"
@@ -396,7 +416,7 @@ components:
 
 ## 1. Overview: The Barista's Instrument
 
-> **As built** on branch `feat/ux-modes-theme`, 8 October 2026: all three UX stages (palette, theme and Figtree; Appearance; layouts and shot focus), the fixes from their fresh-eyes check, and "chat first, the machine on demand" (no machine column; the machine row in the top bar; the stats card in the chat; the phone's Shot tab). The sources of truth are `src/ui/palette.ts`, `src/ui/color.ts`, `src/ui/theme.ts` and the components under `src/ui/`; the why is in the specs (`docs/superpowers/specs/2026-10-07-ux-modes-and-theme-design.md` and `docs/superpowers/specs/2026-10-08-chat-first-machine-design.md`) and DECISIONS.md D80 to D92. Where a spec and the code differ, this file follows the code and says so.
+> **As built** on branch `feat/ux-modes-theme`, 8 October 2026: all three UX stages (palette, theme and Figtree; Appearance; layouts and shot focus), the fixes from their fresh-eyes check, and "chat first, the machine on demand" (no machine column; the machine row in the top bar; the stats card in the chat; the phone's Shot tab). The sources of truth are `src/ui/palette.ts`, `src/ui/color.ts`, `src/ui/theme.ts` and the components under `src/ui/`; the why is in the specs (`docs/superpowers/specs/2026-10-07-ux-modes-and-theme-design.md` and `docs/superpowers/specs/2026-10-08-chat-first-machine-design.md`) and DECISIONS.md D80 to D92. Where a spec and the code differ, this file follows the code and says so. Since then, on branch `feat/decaid-alignment` (9 and 10 October 2026): the machine alert's buttons (Connect DE1, Connect scale, Let Decaid stop shots), Heating and the countdown on the stats card, Next step in the Shot view, and Settings' key switch, drink settings and About lines (`docs/superpowers/specs/2026-10-09-decaid-alignment-design.md`, DECISIONS.md D93 onward).
 
 **Creative North Star: The Barista's Instrument.** CafAI is a chat-first AI espresso dial-in coach that runs as a web skin inside Decaid, the Decent Espresso app: on the tablet mounted on a DE1 (962x602 CSS px and up, in a WebView as old as Chromium 91) and in phone browsers. The barista reads it from a step back, often with wet hands and a cup in the other, in morning daylight or evening lamplight. It should feel like a good espresso scale or a well-made grinder: calm, precise, warm, and quiet until it matters.
 
@@ -574,7 +594,7 @@ Fixed rem sizes (product register), about 1.125 to 1.2 between steps. "Tabular" 
 | body-small | `body2` | 0.9375rem (15 px) | 400 | 1.5 | 0 | | secondary text, notices, helper text, the coach's note |
 | readout | `readout` | 1.1875rem (19 px) | 650 | 1.2 | 0 | tabular | the stats card's readouts |
 | metric | `body1` at 650 | 1rem | 650 | 1.55 | 0 | tabular | the numbers on a shot card |
-| label | `label` | 0.8125rem (13 px) | 550 | 1.3 | 0 | | readout and field labels, swatch names, the profile line's label, the stats card's "DE1" and "Scale" |
+| label | `label` | 0.8125rem (13 px) | 550 | 1.3 | 0 | | readout and field labels, swatch names, the profile line's label, the stats card's "DE1" and "Scale" and its "Ready in about 3 min" |
 | caption | `caption` | 0.8125rem (13 px) | 400 | 1.35 | 0 | | "target 98.5", the profile's mark, the Exit button's "to Decaid" |
 | button | `button` | 1rem (16 px) | 600 | 1.25 | 0.005em | | every button (the machine row's labels 0.71875rem, 11.5 px, at line height 1.15 with no tracking, Stop's at 700) |
 | wordmark | (sx) | 1.1875rem (19 px) | 750 | 24 px | 0.005em | | "CafAI" in the top bar, in the accent |
@@ -628,19 +648,20 @@ Everything here is MUI 9 with CafAI's theme, plus x-chat for the thread and uPlo
 | Kind | MUI | Fill and text | Height | Used for |
 |---|---|---|---|---|
 | Primary | `variant="contained"` | accent, on-accent | 48 px | the one main action of a region or card: Confirm, Use this, Send, Save key, Save settings, Open Settings; the empty state's New bag (`size="large"`, 56 px) |
-| Tonal | `variant="tonal"` | raised, ink; hover ink at 8% over raised | 48 px | every secondary action: the stats card's Tare and Sleep or Wake, Undo, New bag in the bag header, Export, Import, Exit on a tablet |
+| Tonal | `variant="tonal"` | raised, ink; hover ink at 8% over raised | 48 px | every secondary action: the stats card's Tare and Sleep or Wake, Undo, New bag in the bag header, Export, Import, Exit on a tablet, the Shot view's Next step |
 | Tonal, coloured | `variant="tonal" color="error"` (also `warning`, `success`) | raised, the status colour | 48 px | Forget key |
-| Text | `variant="text"` | none, accent | 48 px | the quiet choice beside a primary (Not now, Keep it), the shot card's Graph link, the dialogs' Download file and Copy |
+| Text | `variant="text"` | none, accent | 48 px | the quiet choice beside a primary (Not now, Keep it), the shot card's Graph link, the dialogs' Download file and Copy, About's Copy report |
+| Alert action | `variant="text" color="inherit"` | none, the alert's own text colour | 48 px | the fixes in the machine alert: Connect DE1, Connect scale, Let Decaid stop shots |
 | Machine row | `variant="text" color="inherit"` | none, ink | 54x48 px (44x44 on a phone) | Espresso, Steam, Flush, Hot water, and Wake while the machine sleeps |
 | Bar icon | `IconButton` | none, ink-muted | 48 px | Decaid settings in both bars, Exit on a phone |
 | Destructive | `variant="contained" color="error"` | error, on-error | 48 px (Stop: 54x48, 44x44 on a phone) | Stop in the machine row, the dialog's Forget key |
 
-- **Touch targets**: the theme makes Button, IconButton, ToggleButton, Tab, ListItemButton, MenuItem and every clickable or deletable Chip at least 48 px (`TOUCH_TARGET`); text fields and native selects are 48 px too. The Stats chip draws 40 px and takes taps on a 48 px band. The machine row is 54x48 on a tablet, and 44x44 on a phone, where it falls short of the floor. Only status chips, which are not tappable, stay compact.
+- **Touch targets**: the theme makes Button, IconButton, ToggleButton, Tab, ListItemButton, MenuItem and every clickable or deletable Chip at least 48 px (`TOUCH_TARGET`); text fields and native selects are 48 px too. The Stats chip draws 40 px and takes taps on a 48 px band. A switch (Keep my API key in Decaid) is padded so its touch area reaches 48 px, its track and thumb at MUI's size. The machine row is 54x48 on a tablet, and 44x44 on a phone, where it falls short of the floor. Only status chips, which are not tappable, stay compact.
 - **Shape**: radius 12, 16 px sides (24 px on the screen's main action), `disableElevation`, sentence case, a Rounded icon before the label where it helps recognition.
 - **Hover** exists only under `@media (hover: hover)`; nothing depends on it.
 - **Disabled, never removed**: a control that cannot act right now is disabled in place. A disabled tonal button keeps its raised fill and dims its label to `ink-disabled`; a disabled contained or text button takes MUI's default disabled colours. The machine row is the exception, by design: Stop takes the running start's place, a sleeping machine shows Wake alone, and a group-head machine's row is empty between runs.
 - **Pending**: a tapped start, Wake, Tare or Sleep shows MUI's loading spinner in its own place (Stop has none). One command is in flight for the whole app, shared by the machine row and the stats card: while it is, a tap on a start, Tare or Sleep sends nothing, and Stop always goes. A command is sent once per tap and never retried on its own; a failure shows in the machine alert under the top bar, in plain words, until it is closed or the next command goes.
-- **Stop, as built**: there is no Stop while nothing runs. Whenever the machine runs anything (a shot, steam, flush, hot water, cleaning, descaling), the start that runs turns into Stop in its own box: filled in the error colour, on-error text at 700, the square stop icon over "Stop" (the icon alone on a phone, named "Stop"). Box and place never change, so the finger that started the run finds Stop under it.
+- **Stop, as built**: there is no Stop while nothing runs. Whenever the machine runs anything (a shot, steam, flush, hot water, cleaning, descaling) or is in a state CafAI does not know (D97), the start that runs turns into Stop in its own box: filled in the error colour, on-error text at 700, the square stop icon over "Stop" (the icon alone on a phone, named "Stop"). Box and place never change, so the finger that started the run finds Stop under it.
 
 ### The shell
 
@@ -670,7 +691,7 @@ Everything here is MUI 9 with CafAI's theme, plus x-chat for the thread and uPlo
 `src/ui/machine/MachineRow.tsx`, with `useMachineCommands.ts` (sending) and `commands.ts` (which controls are live). In the top bar on every screen, as a group named "Machine". Water moves when these run, so their rules are strict: a tap sends once, a failure is shown and never retried, and a button never moves.
 
 - **Starts**: **Espresso**, **Steam**, **Flush** and **Hot water**, 2 px apart. On a tablet each is a 54x48 text button in ink with no fill: its icon (21 px) over an 11.5 px label at 600 (line height 1.15, no tracking, never wrapped, so "Hot water" stays on one line). On a phone each is its icon alone (22 px) in 44x44, named for screen readers. They are enabled while the machine is connected and idle or heating and no command is in flight; otherwise they are disabled in place, in MUI's disabled text colour, and a visually hidden line tells a screen reader why ("The machine is asleep. Tap Wake first.", "Not connected. Wake the DE1 and pair it in Decaid."). The machine alert says it on screen.
-- **Stop**: while the machine runs anything, the start that runs becomes Stop in its own box (see Buttons): Espresso's place for a shot (espresso, skipStep), Steam's for steam and steamRinse, Flush's for flush and airPurge, Hot water's for hot water, and the first place for anything else (cleaning, descaling). The other starts are held. Stop puts the machine to idle and is never held behind another command.
+- **Stop**: while the machine runs anything, the start that runs becomes Stop in its own box (see Buttons): Espresso's place for a shot (espresso, skipStep), Steam's for steam and steamRinse, Flush's for flush and airPurge, Hot water's for hot water, and the first place for anything else (cleaning, descaling, and a state CafAI does not know, which the state line shows humanised and CafAI reports as drift, D97). The other starts are held. Stop puts the machine to idle and is never held behind another command. There is no Stop at rest (idle, schedIdle, sleeping, heating, preheating, booting, busy, needsWater, error), and none during a firmware upgrade, calibration or self test, when the stats card's Sleep is held too.
 - **After a run, and after a wake**: the starts stay held for 1 s (`STARTS_HOLD_MS`), so a second tap meant for Stop or Wake lands on a disabled start instead of starting something. Stop itself is never delayed.
 - **Asleep**: the row is **Wake** alone (a sun icon over "Wake", a text button in ink), with its spinner while the wake is in flight.
 - **Group-head controller**: a machine that starts its own runs has an empty row until something runs, then Stop alone; between runs a screen reader hears "Start on the machine". The answer is remembered across loads, so four starts never flash before the machine has said.
@@ -682,7 +703,8 @@ Everything here is MUI 9 with CafAI's theme, plus x-chat for the thread and uPlo
 
 - **Card**: outlined Paper, surface, a 1 px line, radius 16, 12 px padding, 4 px above and below in the chat, a section named by its title. It lays itself out for its own width (`useOwnLayout.ts`, measured before the first paint, as Chromium 91 has no container queries): from 520 px the readouts sit four in a row; under 520 px (a phone) two by two, and Sleep shows its icon alone.
 - **Header**: "Machine" (subtitle at 700) and, at the right, the links: "DE1" and "Scale" in `label`, ink-muted, 12 px apart, each after an 8 px dot, filled success when connected (a screen reader hears "DE1 connected"); "No machine" and "No scale" after a hollow 2 px ring in MUI's disabled text colour when not. Decaid out of reach is the alert's to say.
-- **State line**: headline (h5), polite live region: "Ready", "Heating", "Sleeping", "Not connected", "Pulling a shot: pour" (the running step's name from the profile, when it has one). Always one line: too long for the card ("Pulling a shot: reset temperature" on a phone), it ends in an ellipsis rather than wrapping, the whole text is its title and what a screen reader hears, and the Shot view names the step in full.
+- **State line**: headline (h5), polite live region: "Ready", "Heating", "Sleeping", "Not connected", "Pulling a shot: pour" (the running step's name from the profile, when it has one). "Heating" follows the machine's own state: heating, preheating, or idle with the substate preparingForShot, which is what a warming DE1 reports (D112), so a cold machine never reads "Ready". Always one line: too long for the card ("Pulling a shot: reset temperature" on a phone), it ends in an ellipsis rather than wrapping, the whole text is its title and what a screen reader hears, and the Shot view names the step in full.
+- **Countdown**: while the machine heats and Decaid's time-to-ready plugin has a fresh estimate, "Ready in about 3 min" (whole minutes, rounded up) or "Ready in under a minute" sits at the end of the state line's row: `label`, ink-muted, on one line, 12 px from the state line, on its baseline. The state line gives way to it (its ellipsis comes first), never the other way round, and nothing under the row moves when it comes or goes. Its text changes with the minute, not with every frame the plugin sends, and it goes 6 s after the plugin's last frame. Without the plugin, "Heating" stands alone.
 - **Readouts**: Group, Steam, Water and Scale in a grid with 8 px gaps. Each is a label (13 px, 550, ink-muted), the value in `readout` with its unit at 0.68em, weight 550, ink-muted, and a caption line under it ("target 98.5", "No scale", or "Refill" in warning, when the value turns warning too). Every readout keeps its caption line, empty or not, so the rows line up and nothing moves when one appears. A missing value is a dash.
 - **Foot**: under a 1 px line, the Profile line on the left and **Tare** and **Sleep** at the right (tonal, 48 px, 8 px apart). The Profile line: the label "Profile", then the profile's title on one line (subtitle, cut with an ellipsis, the full title in its tooltip) and a mark that keeps its place: "This bag" (success, with a check), "loading…" (ink-muted), "not confirmed" (warning, with an outlined alert icon). Offline, a muted caption beside the label says "Decaid loads it when the machine connects". Tare needs a scale (a screen reader hears "Connect a scale to tare." otherwise). Sleep (a moon icon) is Wake (a sun) while the machine sleeps, and is held while something runs or no machine is connected. On a narrow card Tare has 12 px sides and Sleep is a 48 px square with its icon alone, named. A failed Tare or Sleep shows in the machine alert, not on the card: the card comes and goes with the chat, and a failure must not go with it.
 
@@ -691,7 +713,8 @@ Everything here is MUI 9 with CafAI's theme, plus x-chat for the thread and uPlo
 `src/ui/machine/MachineAlerts.tsx`. One slim strip right under the top bar, across the whole width, only while a problem lasts, one problem at a time, the most important first. Nothing shows while the machine is fine, or before Decaid has said anything about its devices.
 
 - **Look**: a standard MUI Alert (its tinted fill, in warning or error), at least 40 px tall, square corners, a 1 px line below, 12 px sides, 14 px text at line height 1.35. A closable alert sets its 48 px close button into the strip, so it stays as slim as the rest. It is in the flow, so it pushes the screen down rather than covering a control.
-- **Order**: a failed command from the machine row or the stats card ("Couldn't start the shot." plus Decaid's own sentence; error, closable, cleared by the next command); Decaid's latest device error, in its own words with its suggestion (closable); "Can't reach Decaid. Trying again…" (warning, once that has lasted 2.5 s); "Not connected. Wake the DE1 and pair it in Decaid." (warning, once the machine has been away for 1 s); "The machine reports an error. Check it first." (error); "Refill the water tank to continue." (warning, once the water has been low for 3 s, and gone 3 s after it recovers, so a level wobbling at the line never flickers).
+- **Buttons**: where one tap fixes the problem, the alert carries the fix at its end: 48 px text buttons in the alert's own text colour (never the accent), 4 px apart, so the strip is 48 px tall. The words keep at least 16em; where they would get less (a phone), the buttons drop to a line of their own under the words, at the right, rather than squeeze them. One Connect runs at a time in the whole app: the one looking shows its spinner and the other is disabled, and the words say "Looking for your DE1…" (or "Looking for your scale…") until it is done. A Connect that fails puts its reason in place of the words ("No machine found. Check it is switched on and in Bluetooth range.", or "Couldn't connect the DE1." and Decaid's reason) until the next try, or until the device is back. A fix never acts by itself, and it does only what its label says.
+- **Order**: a failed command from the machine row, the stats card or Next step ("Couldn't start the shot." plus Decaid's own sentence; error, closable, cleared by the next command); Decaid's latest device error, in its own words with its suggestion (closable); "Can't reach Decaid. Trying again…" (warning, once that has lasted 2.5 s); "Not connected. Wake the DE1 and tap Connect DE1, or pair it in Decaid's settings." with **Connect DE1**, and **Connect scale** when the scale is missing too (warning, once the machine has been away for 1 s); "The machine reports an error. Check it first." (error); "Refill the water tank to continue." (warning, once the water has been low for 3 s, and gone 3 s after it recovers, so a level wobbling at the line never flickers); "Decaid is set to leave stopping shots to the skin, and CafAI does not stop them, so shots will not stop at the target weight." with **Let Decaid stop shots** (warning, while Decaid's gateway mode is Full; if Decaid keeps its setting the words become "Decaid kept its setting. Set Gateway Mode to Tracking in Decaid's settings."); "The scale is not connected. Switch it on and tap Connect scale, or pair it in Decaid's settings." with **Connect scale** (warning, once the scale has been away for 3 s while the machine is awake; the button is held while the machine runs something).
 - **Old-engine warning** (D58): under the machine alert, a full-width strip in warning drawn the same way, with a 48 px dismiss button; dismissed once per engine version.
 
 ### The live shot graph
@@ -712,6 +735,7 @@ Everything here is MUI 9 with CafAI's theme, plus x-chat for the thread and uPlo
 - **Header**: a 9 px live dot, "Live shot" (subtitle at 700), the running step ("Pour · step 3 of 3", body-small at 550, ink-muted, on one line with its full text as its title), and the pour timer in `display` at the right (34 px when narrow or short). The step is in sentence case, as CafAI writes its own labels ("pause" shows as "Pause", "Pressure Up" as "Pressure up"); a word in capitals or mixed case ("PI", "LRv3") stays as its author wrote it. When narrow, the step has a full-width line of its own under the caption and the timer; once a shot has started that line keeps its place, empty when there is no name to show (none read yet, a step the profile does not name, the pour over), so nothing under it moves as the steps change. Wide or short, the step sits between the caption and the timer, cut with an ellipsis when it is too long.
 - **Readouts**: **Pressure**, **Flow**, **Weight**, **Weight flow**, each a label (13 px) with its 12x3 series swatch over a `readout-large` value such as "5.0 bar"; Weight adds " of 50" at half size, ink-muted, when a stop-at-weight target is known and there is a shot, on a phone too. These replace the legend. Four in a row with 10 px between columns (wide, short), or two by two with 16 px between columns (narrow); 8 px between rows. The values are 30 px on a tablet, 24 px on a tablet window under 900 px wide, and 24 px on a phone (narrow or short; they were 18 px).
 - **Plot**: it fills the rest, at least 120 px tall in every layout. The coach's note sits under it.
+- **Next step** (D113): a tonal button at the end of the coach note's row under the plot. The row is a grid: the note takes the rest, Next step its own width, 10 px from the note, both aligned to the bottom; with neither showing, the row is gone. Wide, it is a skip icon and "Next step" with 16 px sides; narrow or short (a phone), the icon alone in a 48 px square, named "Next step", so the note keeps its width. It shows only while the machine pulls a shot in preinfusion or pouring and the profile has a step after the current one: never in the preheat, never on the last step, never in the top bar. It shares the app's one command in flight with the machine row (held while another command is in flight, its own spinner while it goes), and after a tap it stays disabled until the machine shows the next step, or 1.5 s, so a double tap moves one step. The spec put it beside the step's name in the header; the code puts it here.
 
 ### The coach's note
 
@@ -743,7 +767,7 @@ All cards are outlined Paper: surface, a 1 px line, radius 16, 12 px padding (16
 - **Change card** (the coach's proposed change): the summary as its title; each change line in `body` as "Grind: 12 → 11" with the label and the old value ink-muted (the old value struck through), an ink-muted arrow icon read as "changes to", and the new value in ink at 600; by-hand steps after an accent hand icon at 600. While pending it has a **2 px accent border**, a muted line saying what Confirm will do ("Confirm saves this as v5 and loads it onto the machine."), then **Confirm** (contained, 24 px sides) and **Not now** (text). Afterwards the status replaces the buttons: a progress bar while loading, a success check with "Saved as v5" and a tonal **Undo** on the latest one, or a muted "Not applied. Nothing changed on the machine.", "Undone. Back on the previous version.", or an error line. The reasoning ("Why:", "Expect:", their labels ink-muted) comes last, under a 1 px line, so even the longest card keeps Confirm in view when it lands at 962x602.
 - **Starting profiles** (template cards): a list of cards 8 px apart; each has the name (subtitle at 600) and a small confidence chip (outlined: success for high, accent for medium, default for low), "style · shape" in ink-muted, the reason, and at the right **Use this** (contained, 48 px; a text button once a choice is made) or "In use" in the accent with a check. The chosen card gets a 2 px accent border. The others, once one is picked or the suggestions are set aside, keep their place in ink-muted: the name and the reason muted, the confidence chip muted with a line-colour outline, and Use this a disabled text button.
 - **Empty states** (no API key, no bag): one card centred in the pane, at most 460 px wide, 24 px padding, centred text: a 40 px accent icon, a `title`, a muted body-small sentence, then a single contained button ("Open Settings", 48 px; "New bag", 56 px with 32 px sides).
-- **Settings**: a column at most 760 px wide, 16 px padding, a `title` "Settings", then sections 16 px apart, each a card with 16 px padding and its title in subtitle at 700 with 8 px under it. Fields are outlined text fields and native selects, 48 px tall, radius 12; a section that saves has one contained Save, and its secondary actions are tonal. Appearance is the first section and needs no Save: it applies at once.
+- **Settings**: a column at most 760 px wide, 16 px padding, a `title` "Settings", then sections 16 px apart, each a card with 16 px padding and its title in subtitle at 700 with 8 px under it: Appearance, Anthropic API key, Coach, Steam, hot water and flush, About. Fields are outlined text fields and native selects, 48 px tall, radius 12; a section that saves has one contained Save, and its secondary actions are tonal. Appearance is the first section and needs no Save: it applies at once, as do the key switch and the drink settings (below).
 - **History**: a header ("History" in `title`, tonal **Export** and **Import**; 16 px sides, 12 px above, 8 px below, a line under it), then a column with 16 px padding in which the bags sit 8 px apart. A bag is a card holding one 64 px row button: its name (subtitle at 600) and details (ink-muted body-small) on the left, the shot count and the date on the right, an ink-muted chevron. A version card carries a small status chip (Active filled in success, Superseded outlined, Undone outlined in warning) and dated shot rows separated by 1 px lines, their facts joined by middle dots; the active version's card has a 1 px success border. An undone version's card is in ink-muted throughout, its Undone chip still in warning.
 
 ### Chips
@@ -754,7 +778,7 @@ All cards are outlined Paper: surface, a 1 px line, radius 16, 12 px padding (16
 ### Notices, alerts and dialogs
 
 - **Notice** (a line from the app itself in the chat, `parts/Notice.tsx`): a small icon and body-small text. Info is ink-muted, icon and text; success, warning and error put the icon in their colour and keep the text in ink. With progress, a rounded bar sits under the line, indented 28 px to align with the text, with an optional caption at the right ("Try 2 of 3"), at most 480 px wide.
-- **Alerts**: MUI Alerts with plain-word messages that name the next step, all standard, with MUI's tinted fill: the machine alert under the top bar (a failed command, a device error, the connection, the machine's error, water; see The machine alert) and the old-engine warning under it, the coach's error banner (with Retry and a 48 px dismiss), and the saved and failed messages in Settings.
+- **Alerts**: MUI Alerts with plain-word messages that name the next step, all standard, with MUI's tinted fill: the machine alert under the top bar (a failed command, a device error, the connection, the machine's error, water, gateway mode, the scale; see The machine alert) and the old-engine warning under it, the coach's error banner (with Retry and a 48 px dismiss), and the saved and failed messages in Settings.
 - **Dialogs**: only for confirming a destructive step (Forget the API key) and for an export's result. A short title, one sentence, then the actions at the right: the quiet choice as a text button, the decisive one contained ("Forget key" in error, "Done" in the accent).
 
 ### Appearance controls
@@ -765,6 +789,29 @@ All cards are outlined Paper: surface, a 1 px line, radius 16, 12 px padding (16
 - **Tint**: a radio group of eight cells in four columns (10 px between rows, 6 px between columns). Each cell is one button: a 48 px circle, the tint's accent as a 9 px ring around its background (both as the current mode draws them), over its name in `label`. Custom's ring is a conic wheel of the slider's hues. The chosen cell gets the one ring (section 4) and an ink name; the others are ink-muted. A press scales the circle to 0.94. Arrow keys, Home and End move between the tints.
 - **Custom hue**: a slider, 0 to 359, on a 30 px fully round rail whose gradient is 13 hex stops at OKLCH L 0.76, C 0.11 (every 30°, in both modes), with the thumb travelling between the centres of the rail's round ends. The thumb is 36 px: the current accent inside a 4 px white ring, with a soft shadow, a 48 px touch area, and an accent halo while dragged. Dragging previews every hue live and saves where it stops; it selects Custom.
 - Helper text: "The tint colours the buttons and tints the backgrounds. Shot graph colours never change: pressure green, flow blue."
+
+### Steam, hot water and flush
+
+`src/ui/settings/DrinkSettingsSection.tsx`, with the ranges and steps in `drinkSettings.ts` (D114). The section after Coach. Changes apply at once: there is no Save.
+
+- **Layout**: three groups 16 px apart, in this order: steam (temperature, time, flow), hot water (temperature, volume, time, flow), flush (time, temperature, flow). Each group is a grid of steppers with 16 px gaps, two per row in a window 600 px wide and up and one per row under that (an upright phone), so three or four steppers never share a row.
+- **Stepper**: a 48 px minus icon button, an outlined number field 48 px tall whose label names the drink and the unit ("Hot water volume (ml)", always raised above the value), and a 48 px plus icon button, 4 px apart. The buttons are named for screen readers ("Less hot water volume", "More hot water volume"). The field opens the numeric keyboard (with a decimal point for flows).
+- **Values**: a tap moves by the field's step (1 °C; 5 s for the steam and hot water times, 1 s for the flush; 10 ml; 0.1 ml/s for steam, 0.5 ml/s for hot water and flush), and leaving the field commits what was typed. Either is clamped into the field's range and rounded (whole numbers, flows to one decimal), and the field shows the result. Only a value that changed is written; a field left alone never re-sends or clamps what Decaid holds.
+- **Steam off**: a steam temperature of 0 (steam off in Decaid) shows "Off" in a disabled field, with no buttons and "Steam is off in Decaid" under it. Turning steam on or off is Decaid's.
+- **While the machine runs**: every field and button is disabled in place and a muted line at the top of the section says "Not while the machine is running". Until Decaid's values have arrived the fields are disabled too.
+- **Failures**: a failed write puts the old value back and shows an error Alert under the groups ("Could not save the hot water volume: …"), with a close button; a failed read shows "Could not read Decaid's drink settings: …" at the top.
+
+### The key switch
+
+In Settings > Anthropic API key, under the key's field and buttons (`KeyInDecaidSwitch` in `src/ui/settings/SettingsScreen.tsx`, D99): a switch labelled "Keep my API key in Decaid", off by default, on in the accent. Under it, in body-small and ink-muted, what it costs: "So you do not have to paste it again after a Decaid update. Any device on your network can read Decaid's store, and Decaid's backups include it." With no key saved the switch is disabled and the line says "Add a key above before turning this on."; it is disabled too while the choice is read or sent. It applies at once. A toggle that cannot reach Decaid goes back and says "Could not reach Decaid: …" in the error colour under the note, so the switch never shows a state that is not real. Forget key's dialog is unchanged; when Decaid cannot delete its copy, the section's message says so in plain words.
+
+### About
+
+The last section of Settings: "CafAI <version>", then the Decaid lines (`src/ui/settings/AboutDecaid.tsx`, D96), all in body-small.
+
+- **Versions**: "Decaid 0.9.0 (CafAI was verified with 0.8.8)" in ink, or "Decaid version unknown (not connected)" in ink-muted. A running Decaid older than the verified one adds, in ink-muted, "Older than the Decaid CafAI was checked against; update Decaid if something does not work."
+- **Drift**: only when Decaid has sent something CafAI did not expect: 8 px down, "Decaid sent 3 things CafAI did not expect", then a bulleted list indented 24 px, one entry per line as "route or channel: field and what was wrong" (each kind once, at most 50), then **Copy report**, a 48 px text button in the accent. After a copy a status line says "Copied." in success or "Copying failed. Tap the text, select all, then copy." in error. The list is in ink, not a warning colour: it is a report to send, not an alarm.
+- **Backup**: last, 8 px down, in ink-muted: "Backed up to Decaid 4 min ago", "Backup paused: <reason>" or "Not backed up yet".
 
 ### Motion
 
@@ -787,6 +834,9 @@ All cards are outlined Paper: surface, a 1 px line, radius 16, 12 px padding (16
 - **Do make anything tappable at least 48 px** and space them 8 px apart. The machine row is the exception: 54x48 boxes 2 px apart in the tablet's top bar, 44x44 in the phone's.
 - **Do set live numbers in tabular figures** with a space before the unit, one decimal for live readings, and a dash for a value the machine has not given.
 - **Do write states in words beside their colour**, in sentence case, in plain language, with the next step in an error.
+- **Do put the fix in the alert when one tap can fix the problem** (Connect DE1, Let Decaid stop shots), and let the tap do only what its label says.
+- **Do hold a button after a tap until the machine shows the result** when a second tap would do more than the first (Next step). Stop needs no hold: a second Stop does no more than the first.
+- **Do follow the machine's own state for what it is doing** (Heating, Ready); a plugin may add a number, never the state.
 - **Do show a change in plain words and wait for a tap** before anything reaches the machine; put the decision before the reasoning.
 - **Do keep Exit and Decaid settings on every screen**, in every layout, during a shot too.
 - **Do give every animation a still alternative** under reduced motion, and keep motion between 150 and 250 ms.
@@ -805,7 +855,8 @@ All cards are outlined Paper: surface, a 1 px line, radius 16, 12 px padding (16
 - **Don't build metric tiles or a dashboard of charts**; one graph, drawn like Decent's, with the numbers beside it, and the machine's numbers in one card in the chat that goes when the chat moves on.
 - **Don't use mascots, latte-art clip art, novelty fonts** or emoji in the interface.
 - **Don't let the page scroll or add edge gestures**; a region scrolls inside itself.
-- **Don't send a machine command without a tap, or retry one on its own.**
+- **Don't send a machine command or change one of Decaid's settings without a tap, or retry one on its own.**
+- **Don't show a 0 for a reading Decaid did not send**, and don't write back a setting the barista did not change.
 - **Don't rely on hover**, a cursor, or drag on the graph: hover styles live only under `@media (hover: hover)`.
 - **Don't draw a colour pair the contrast sweep does not check, and don't dim content with opacity**: a faded colour is a pair the sweep never sees (set-aside cards and chips fell to 2.3 to 3.7:1 in light mode that way). Set content aside in ink-muted instead; only a control disabled for the moment keeps MUI's faded look.
 - **Don't use em dashes in interface copy.**

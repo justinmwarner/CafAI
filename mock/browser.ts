@@ -23,6 +23,15 @@
  *                           not found", like an older Decaid
  *   ?mockGrinders=0         Decaid's grinder library starts empty (by default
  *                           it holds three test grinders)
+ *   ?mockGateway=full       Decaid's gateway mode starts at full (or disabled,
+ *                           tracking; the default is tracking)
+ *   ?mockEnjoyment=100      shot ratings on 0.8.6's 0-100 scale, unvalidated
+ *                           (the default validates 0-10, as current Decaid does)
+ *   ?mockPlugins=none       no Decaid plugin is loaded (no time-to-ready,
+ *                           Visualizer or DYE2)
+ *   ?mockSlowWorkflow=N     the workflow PUT answers after N ms; =503 answers
+ *                           503 after 30 s without applying the change, as a
+ *                           request that timed out in Decaid's queue does
  *
  * Read in src/main.tsx, also once at start:
  *   ?mockDecaid=0           this mock does not start at all: only the scripted

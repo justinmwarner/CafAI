@@ -116,11 +116,18 @@ describe('blocksDrinkSettings', () => {
     expect(blocksDrinkSettings('airPurge')).toBe(true);
   });
 
-  it('does not block at rest or in an unknown state', () => {
+  it('does not block at rest, or before there is a state', () => {
     expect(blocksDrinkSettings('idle')).toBe(false);
+    expect(blocksDrinkSettings('sleeping')).toBe(false);
     expect(blocksDrinkSettings('heating')).toBe(false);
-    expect(blocksDrinkSettings('somethingNew')).toBe(false);
     expect(blocksDrinkSettings(null)).toBe(false);
     expect(blocksDrinkSettings(undefined)).toBe(false);
+  });
+
+  it('fails safe like Stop: an unknown state, a firmware upgrade or a calibration blocks', () => {
+    expect(blocksDrinkSettings('somethingNew')).toBe(true);
+    expect(blocksDrinkSettings('fwUpgrade')).toBe(true);
+    expect(blocksDrinkSettings('calibration')).toBe(true);
+    expect(blocksDrinkSettings('selfTest')).toBe(true);
   });
 });

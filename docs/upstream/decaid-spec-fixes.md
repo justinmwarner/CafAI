@@ -165,6 +165,15 @@ and `RinseDataPatch`.
   `De1ShotSettings.fromJson` throws on a missing one
   (`models/device/de1_interface.dart:160-170`), so the schema wants a
   `required` list.
+- The steam and hot water values reach the DE1 as single bytes, unchecked:
+  `UnifiedDe1.updateShotSettings` packs `targetSteamTemp`,
+  `targetSteamDuration`, `targetHotWaterTemp`, `targetHotWaterVolume` and
+  `targetHotWaterDuration` into a `Uint8List`
+  (`models/device/impl/de1/unified_de1/unified_de1.dart:611-630`), so a
+  hot water volume of 300 ml becomes 44 ml. Neither the workflow handler nor
+  the spec bounds them. A `maximum: 255` in `SteamSettings` and
+  `HotWaterData` (and a range check in the handler) would stop it; Decent's
+  streamline already caps the volume at 255.
 
 ### 11. The docs
 

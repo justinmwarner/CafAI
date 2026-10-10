@@ -101,7 +101,7 @@ describe('SettingsScreen API key', () => {
     const services = renderSettings({ coach: { hasApiKey: false } });
     expect(screen.getByText('No key saved yet. The coach needs one to work.')).toBeInTheDocument();
     // A phone keeps its own key too: the copy says "this device", never "this tablet".
-    expect(screen.getByText('The key stays on this device. It is never sent to Decaid or included in exports.')).toBeInTheDocument();
+    expect(screen.getByText('The key stays on this device unless you keep a copy in Decaid (below). It is never included in exports.')).toBeInTheDocument();
     const input = screen.getByTestId(TID.apiKeyInput);
     expect(input).toHaveAttribute('type', 'password');
     expect(screen.getByTestId(TID.apiKeySave)).toBeDisabled();

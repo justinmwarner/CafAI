@@ -159,7 +159,7 @@ function ApiKeySection() {
         </Typography>
       </Stack>
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }}>
-        The key stays on this device. It is never sent to Decaid or included in exports.
+        The key stays on this device unless you keep a copy in Decaid (below). It is never included in exports.
       </Typography>
       <Box component="form" onSubmit={(event) => void save(event)} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <TextField
