@@ -1,5 +1,9 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { getResponse } from 'msw';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createMockServer } from '../node.ts';
+import { decaidFallbackHandlers, decaidHttpHandlers } from './handlers.ts';
+import { createShotPlayer } from './shotPlayer.ts';
+import { createMockDecaid } from './state.ts';
 
 const mock = createMockServer();
 const BASE = 'http://tablet.local:8080/api/v1';
@@ -176,6 +180,173 @@ describe('grinder library over HTTP', () => {
     }
     expect(await call('/grinders/unknown', { method: 'PUT', body: 'not json' })).toMatchObject({ status: 404, body: { error: 'Grinder not found' } });
     expect(await call('/grinders/unknown', { method: 'DELETE' })).toMatchObject({ status: 200, body: { success: true, id: 'unknown' } });
+  });
+});
+
+describe('settings over HTTP (D1)', () => {
+  it('GET starts with gatewayMode "tracking"; POST merges known keys and answers 200 null', async () => {
+    expect((await call('/settings')).body).toMatchObject({ gatewayMode: 'tracking' });
+    const reply = await call('/settings', { method: 'POST', body: JSON.stringify({ gatewayMode: 'full' }) });
+    expect(reply).toMatchObject({ status: 200, text: 'null' });
+    expect((await call('/settings')).body).toMatchObject({ gatewayMode: 'full' });
+    await call('/settings', { method: 'POST', body: JSON.stringify({ gatewayMode: 'tracking' }) });
+  });
+
+  it('rejects an unknown gatewayMode with 400 {message}', async () => {
+    expect(await call('/settings', { method: 'POST', body: JSON.stringify({ gatewayMode: 'bogus' }) })).toMatchObject({
+      status: 400,
+      body: { message: 'bogus is not a gateway mode' },
+    });
+  });
+
+  it('a body that is not JSON is a plain-text 500', async () => {
+    expect(await call('/settings', { method: 'POST', body: 'not json' })).toMatchObject({ status: 500, text: 'Internal Server Error' });
+  });
+});
+
+describe('plugins over HTTP (D3, D7)', () => {
+  it('lists the four plugins loaded, with manifest fields', async () => {
+    const reply = await call('/plugins');
+    expect(reply.status).toBe(200);
+    const plugins = reply.body as Array<{ id: string; loaded: boolean; version: string }>;
+    expect(plugins.map((p) => p.id)).toEqual(['time-to-ready.reaplugin', 'visualizer.reaplugin', 'dye2.reaplugin', 'settings.reaplugin']);
+    expect(plugins.every((p) => p.loaded === true)).toBe(true);
+  });
+
+  it("GET recent-favs answers DYE2's two seeded setups", async () => {
+    const reply = await call('/plugins/dye2.reaplugin/recent-favs');
+    expect(reply.status).toBe(200);
+    const entries = reply.body as Array<{ auto: boolean }>;
+    expect(entries).toHaveLength(2);
+    expect(entries.every((entry) => entry.auto === true)).toBe(true);
+  });
+
+  it('404s an unloaded plugin, and an unknown endpoint on a loaded one', async () => {
+    expect(await call('/plugins/no-such.reaplugin/recent-favs')).toMatchObject({
+      status: 404,
+      body: { error: 'plugin with no-such.reaplugin not loaded' },
+    });
+    expect(await call('/plugins/dye2.reaplugin/no-such-endpoint')).toMatchObject({
+      status: 404,
+      body: { error: 'endpoint no-such-endpoint not available' },
+    });
+  });
+});
+
+describe('beans library over HTTP (D4)', () => {
+  it('lists the two seeded beans, unarchived, with a strong ETag', async () => {
+    const reply = await call('/beans');
+    expect(reply.status).toBe(200);
+    expect(reply.body).toHaveLength(2);
+    expect(reply.headers.get('ETag')).toMatch(/^"[0-9a-f]{16}"$/);
+  });
+
+  it('creates a bean and a batch, lists both ways, and archives each with a PUT', async () => {
+    const created = await call('/beans', { method: 'POST', body: JSON.stringify({ roaster: 'Heart', name: 'Ethiopia' }) });
+    expect(created.status).toBe(201);
+    const bean = created.body as { id: string };
+    expect(await call(`/beans/${bean.id}`)).toMatchObject({ status: 200, body: bean });
+
+    const batch = await call(`/beans/${bean.id}/batches`, { method: 'POST', body: JSON.stringify({ roastLevel: 'light' }) });
+    expect(batch.status).toBe(201);
+    const batchId = (batch.body as { id: string }).id;
+    expect((await call(`/beans/${bean.id}/batches`)).body).toHaveLength(1);
+    expect((await call('/bean-batches')).body as Array<{ id: string }>).toEqual(expect.arrayContaining([expect.objectContaining({ id: batchId })]));
+    expect(await call(`/bean-batches/${batchId}`)).toMatchObject({ status: 200, body: { id: batchId, beanId: bean.id } });
+
+    expect(await call(`/beans/${bean.id}`, { method: 'PUT', body: JSON.stringify({ archived: true }) })).toMatchObject({
+      status: 200,
+      body: { archived: true },
+    });
+    expect((await call('/beans')).body as Array<{ id: string }>).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: bean.id })]));
+    expect(await call(`/bean-batches/${batchId}`, { method: 'PUT', body: JSON.stringify({ archived: true }) })).toMatchObject({
+      status: 200,
+      body: { archived: true },
+    });
+  });
+
+  it('404s an unknown bean or batch id before reading the body, 400 for a missing roaster/name', async () => {
+    expect(await call('/beans/no-such-bean')).toMatchObject({ status: 404, body: { error: 'Bean not found' } });
+    expect(await call('/bean-batches/no-such-batch')).toMatchObject({ status: 404, body: { error: 'Batch not found' } });
+    expect(await call('/beans', { method: 'POST', body: JSON.stringify({ name: 'Only a name' }) })).toMatchObject({ status: 400 });
+    expect(await call('/beans/no-such-bean', { method: 'PUT', body: 'not json' })).toMatchObject({ status: 404, body: { error: 'Bean not found' } });
+  });
+});
+
+describe('skip step over HTTP (D8)', () => {
+  it('answers 200 null whether or not a shot is running', async () => {
+    expect(mock.player.activity).toBeNull();
+    expect(await call('/machine/state/skipStep', { method: 'PUT' })).toMatchObject({ status: 200, text: 'null' });
+    expect(mock.player.activity).toBeNull();
+  });
+});
+
+describe('a slow or hanging workflow PUT (D9)', () => {
+  /** Its own state/player/handlers (fake timers), isolated from the shared real server above. */
+  function setup(options: Parameters<typeof createMockDecaid>[0] = {}) {
+    vi.useFakeTimers();
+    const state = createMockDecaid({ seedExamples: false, ...options });
+    const player = createShotPlayer(state);
+    const handlers = [...decaidHttpHandlers(state, player), ...decaidFallbackHandlers()];
+    async function put(body: unknown) {
+      const response = await getResponse(handlers, new Request('http://tablet.local:8080/api/v1/workflow', { method: 'PUT', body: JSON.stringify(body) }));
+      if (!response) throw new Error('no handler for PUT /workflow');
+      const text = await response.text();
+      return { status: response.status, body: text ? (JSON.parse(text) as unknown) : null };
+    }
+    return { state, put };
+  }
+
+  /** Tracks whether `promise` has settled yet, without disturbing its own rejection handling. */
+  function pendingFlag(promise: Promise<unknown>): () => boolean {
+    let settled = false;
+    promise.then(
+      () => void (settled = true),
+      () => void (settled = true),
+    );
+    return () => settled;
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('?mockSlowWorkflow=<ms> applies the change and answers only after the delay', async () => {
+    const { state, put } = setup({ slowWorkflowMs: 5000 });
+    const promise = put({ context: { targetYield: 39 } });
+    const isSettled = pendingFlag(promise);
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(isSettled(), 'still waiting just before the delay ends').toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(isSettled()).toBe(true);
+    const reply = await promise;
+    expect(reply).toMatchObject({ status: 200, body: { context: { targetYield: 39 } } });
+    expect(state.getWorkflow().context?.targetYield).toBe(39);
+  });
+
+  it("?mockSlowWorkflow=503 never applies the change, and answers Decaid's own timeout body after 30 s (aab5f93)", async () => {
+    const { state, put } = setup({ slowWorkflowTimeout: true });
+    const before = state.getWorkflow();
+    const promise = put({ context: { targetYield: 39 } });
+    const isSettled = pendingFlag(promise);
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(isSettled(), 'still waiting just before the 30 s mark').toBe(false);
+    expect(state.getWorkflow()).toEqual(before);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(isSettled()).toBe(true);
+    const reply = await promise;
+    expect(reply).toEqual({ status: 503, body: { error: 'Workflow request queue timed out' } });
+    expect(state.getWorkflow()).toEqual(before);
+  });
+
+  it('?mockSlowWorkflow=503 never even reads the body: an otherwise-invalid request just times out too', async () => {
+    const { state, put } = setup({ slowWorkflowTimeout: true });
+    const before = state.getWorkflow();
+    const promise = put({ context: { targetYield: null } }); // a 400 without the switch
+    await vi.advanceTimersByTimeAsync(30_000);
+    const reply = await promise;
+    expect(reply).toEqual({ status: 503, body: { error: 'Workflow request queue timed out' } });
+    expect(state.getWorkflow()).toEqual(before);
   });
 });
 

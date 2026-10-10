@@ -159,9 +159,10 @@ describe('the DE1 holds its own profile', () => {
   });
 
   it('dispose() stops an upload timer', async () => {
-    const { state } = setup();
+    const { state, player } = setup();
     state.updateWorkflow({ profile: variant('B') });
     state.dispose();
+    player.dispose(); // also stops the player's own free-running timers (D5's time-to-ready ticker)
     await vi.advanceTimersByTimeAsync(5000);
     expect(state.getMachineProfile().title).not.toBe('B');
     expect(vi.getTimerCount()).toBe(0);

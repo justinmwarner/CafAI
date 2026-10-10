@@ -55,4 +55,37 @@ describe('mockOptionsFromUrl', () => {
       expect(mockOptionsFromUrl(search), search).toEqual({});
     }
   });
+
+  it('?mockGateway=<mode> starts settings.gatewayMode there (D1)', () => {
+    expect(mockOptionsFromUrl('?mockGateway=full')).toEqual({ settings: { gatewayMode: 'full' } });
+    expect(mockOptionsFromUrl('?mockGateway=tracking')).toEqual({ settings: { gatewayMode: 'tracking' } });
+    expect(mockOptionsFromUrl('?mockGateway=disabled')).toEqual({ settings: { gatewayMode: 'disabled' } });
+    for (const bad of ['bogus', '', '1']) expect(mockOptionsFromUrl(`?mockGateway=${bad}`), bad).toEqual({});
+  });
+
+  it('?mockEnjoyment=100 switches to the 0.8.6 enjoyment scale (D2)', () => {
+    expect(mockOptionsFromUrl('?mockEnjoyment=100')).toEqual({ enjoymentScale: 100 });
+    for (const other of ['10', 'bogus', '']) expect(mockOptionsFromUrl(`?mockEnjoyment=${other}`), other).toEqual({});
+  });
+
+  it('?mockPlugins=none lists every plugin unloaded (D3)', () => {
+    expect(mockOptionsFromUrl('?mockPlugins=none')).toEqual({ loadedPlugins: [] });
+    expect(mockOptionsFromUrl('?mockPlugins=all')).toEqual({});
+  });
+
+  it('?mockSlowWorkflow=<ms> delays the workflow PUT; =503 answers Decaid\'s hang (D9)', () => {
+    expect(mockOptionsFromUrl('?mockSlowWorkflow=5000')).toEqual({ slowWorkflowMs: 5000 });
+    expect(mockOptionsFromUrl('?mockSlowWorkflow=0')).toEqual({ slowWorkflowMs: 0 });
+    expect(mockOptionsFromUrl('?mockSlowWorkflow=503')).toEqual({ slowWorkflowTimeout: true });
+    for (const bad of ['-1', 'slow', '']) expect(mockOptionsFromUrl(`?mockSlowWorkflow=${bad}`), bad).toEqual({});
+  });
+
+  it('combines the new switches with the existing ones', () => {
+    expect(mockOptionsFromUrl('?mockGateway=full&mockEnjoyment=100&mockPlugins=none&mockSlowWorkflow=503')).toEqual({
+      settings: { gatewayMode: 'full' },
+      enjoymentScale: 100,
+      loadedPlugins: [],
+      slowWorkflowTimeout: true,
+    });
+  });
 });

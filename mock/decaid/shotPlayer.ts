@@ -34,6 +34,7 @@ import { newId } from '../../src/util/id.ts';
 import { formatLocalTimestamp, formatUtcTimestamp } from './clock.ts';
 import { dartDouble } from './json.ts';
 import { idleTemperature } from './machine.ts';
+import { PLUGIN_IDS } from './plugins.ts';
 import type { MockDecaid } from './state.ts';
 
 /** One frame every 200 ms of data time (5 Hz). */
@@ -631,6 +632,30 @@ export interface ShotPlayer {
 
 const ACTIVITIES: readonly MockActivity[] = ['steam', 'hotWater', 'flush', 'steamRinse', 'cleaning', 'descaling', 'airPurge'];
 
+/**
+ * D5: the real time-to-ready.reaplugin plugin reacts to every machine
+ * stateUpdate while the machine is not asleep (plugin.js handleStateUpdate),
+ * needs two temperature samples before it can estimate a rate
+ * (estimateRemainingTime), and clamps its estimate to 5 min
+ * (plugin_manager.dart emit path). The mock free-runs its own ticker rather
+ * than modelling real temperatures: insufficient_data for the first couple
+ * of ticks, then a heating countdown from a few mock-minutes, then reached,
+ * repeated for as long as the machine stays awake. Wall-clock ms per tick
+ * (at speed 1), scaled by the player's speed; a late subscriber, or one
+ * reconnecting after the machine already reached temperature, hears the
+ * current status within one tick either way.
+ */
+const TTR_TICK_MS = 1000;
+const TTR_INSUFFICIENT_TICKS = 2;
+/** About 2.5 mock-minutes, so "Ready in about 2 min" is visible for a few ticks before it drops. */
+const TTR_HEATING_START_MS = 150_000;
+const TTR_HEATING_STEP_MS = 5_000;
+
+/** D6: the Visualizer plugin writes lastUploadedShot a few seconds after a shot ends (plugin.js SHOT_FETCH_DELAY_MS is 5s; the mock uses a shorter, documented delay). */
+const VISUALIZER_UPLOAD_DELAY_MS = 4000;
+/** Visualizer's real ids are large sequential numbers; the mock just counts up from one. */
+const FIRST_VISUALIZER_ID = 1_000_000;
+
 export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions = {}): ShotPlayer {
   let speed = options.speed && options.speed > 0 ? options.speed : 1;
   let activity: MockActivity | null = null;
@@ -646,12 +671,60 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
   let activityStop = false;
   let idleTick = 0;
   const waiters: Array<() => void> = [];
+  let ttrTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Ticks since the machine was last known awake; reset on sleep. */
+  let ttrTicks = 0;
+  const visualizerTimers = new Set<ReturnType<typeof setTimeout>>();
+  let nextVisualizerId = FIRST_VISUALIZER_ID;
 
   const wallDelay = () => FRAME_MS / speed;
 
   function clearTimer(): void {
     if (timer !== null) clearTimeout(timer);
     timer = null;
+  }
+
+  function stopTimeToReady(): void {
+    if (ttrTimer !== null) clearTimeout(ttrTimer);
+    ttrTimer = null;
+  }
+
+  function resetTimeToReady(): void {
+    ttrTicks = 0;
+  }
+
+  function scheduleTimeToReady(): void {
+    stopTimeToReady();
+    ttrTimer = setTimeout(timeToReadyTick, TTR_TICK_MS / speed);
+  }
+
+  /**
+   * D5: runs for the player's whole life, not just after a wake. The real
+   * plugin hears a stateUpdate whether or not the machine is asleep and
+   * decides for itself whether to emit; this mirrors that by checking
+   * "awake and connected" on every tick instead of starting and stopping a
+   * one-shot sequence.
+   */
+  function timeToReadyTick(): void {
+    ttrTimer = null;
+    if (resting === 'sleeping' || !state.isMachineConnected()) {
+      // The real plugin resets lastEstimation to null while asleep (plugin.js); the next
+      // wake's first ticks are insufficient_data again, exactly as a real heat-up would be.
+      resetTimeToReady();
+      scheduleTimeToReady();
+      return;
+    }
+    if (state.isPluginLoaded(PLUGIN_IDS.timeToReady)) {
+      if (ttrTicks < TTR_INSUFFICIENT_TICKS) {
+        state.publishTimeToReady({ status: 'insufficient_data', remainingTimeMs: null });
+      } else {
+        const heatingTicks = ttrTicks - TTR_INSUFFICIENT_TICKS;
+        const remaining = Math.max(0, TTR_HEATING_START_MS - heatingTicks * TTR_HEATING_STEP_MS);
+        state.publishTimeToReady(remaining > 0 ? { status: 'heating', remainingTimeMs: remaining } : { status: 'reached', remainingTimeMs: 0 });
+      }
+      ttrTicks += 1;
+    }
+    scheduleTimeToReady();
   }
 
   function settle(): void {
@@ -743,6 +816,31 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
       stopReason: sim.stopReason ?? 'machineEnded',
     };
     state.addShot(record);
+    scheduleVisualizerUpload(record.id);
+  }
+
+  /**
+   * D6: visualizer.reaplugin writes lastUploadedShot and lastVisualizerId a
+   * few seconds after it uploads a finished shot, and stamps the shot's own
+   * annotations.extras.visualizerId with a PUT (rememberSuccessfulUpload /
+   * rememberUpload, plugin.js, aab5f93 and af4e995 alike), so the shot
+   * card's Visualizer link (spec 6.4) has an id to link to.
+   */
+  function scheduleVisualizerUpload(uploadedShotId: string): void {
+    if (!state.isPluginLoaded(PLUGIN_IDS.visualizer)) return;
+    const timer = setTimeout(() => {
+      visualizerTimers.delete(timer);
+      const visualizerId = nextVisualizerId;
+      nextVisualizerId += 1;
+      state.kvSet(PLUGIN_IDS.visualizer, 'lastUploadedShot', JSON.stringify(uploadedShotId));
+      state.kvSet(PLUGIN_IDS.visualizer, 'lastVisualizerId', JSON.stringify(visualizerId));
+      try {
+        state.updateShot(uploadedShotId, { annotations: { extras: { visualizerId: String(visualizerId) } } });
+      } catch {
+        // The shot could have been deleted since; the real plugin's own PUT would fail the same way.
+      }
+    }, VISUALIZER_UPLOAD_DELAY_MS / speed);
+    visualizerTimers.add(timer);
   }
 
   function finishEspresso(): void {
@@ -922,6 +1020,10 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
         if (activity === null) {
           resting = 'sleeping';
           emitResting();
+          // The real plugin discards its estimate while the machine sleeps (plugin.js
+          // handleStateUpdate); reset now rather than waiting for the ticker's next
+          // tick, so a sleep immediately followed by a wake still starts fresh.
+          resetTimeToReady();
         }
         return;
       }
@@ -961,8 +1063,14 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
       idleIntervalMs = 0;
       scheduleIdle();
       settle();
+      stopTimeToReady();
+      for (const timer of visualizerTimers) clearTimeout(timer);
+      visualizerTimers.clear();
     },
   };
+  // D5: starts right away, since a fresh mock begins awake (resting 'idle'); the tick
+  // itself checks connectivity and sleep state every time, so this never needs restarting.
+  scheduleTimeToReady();
   return player;
 }
 

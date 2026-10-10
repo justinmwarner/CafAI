@@ -19,9 +19,17 @@ import type { MachineStateName } from '../../src/api/types.ts';
 import { fixtures } from '../fixtures/index.ts';
 import { MockHttpError } from './errors.ts';
 import { isPlainObject } from './json.ts';
+import { PLUGIN_IDS } from './plugins.ts';
 import { sha256Hex } from './sha256.ts';
 import type { ShotPlayer } from './shotPlayer.ts';
 import type { MockDecaid } from './state.ts';
+
+/** workflow_handler.dart's queueWaitTimeout (aab5f93, decaid#634, D9). */
+const WORKFLOW_HANG_MS = 30_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /** Any host, Decaid's port. */
 export const DECAID_ORIGIN_PATTERN = '*:8080';
@@ -149,6 +157,30 @@ export function decaidHttpHandlers(state: MockDecaid, player: ShotPlayer): HttpH
     // ---- info and settings ---------------------------------------------------------
     route('get', '/info', () => json(fixtures.buildInfo())),
     route('get', '/settings', () => json(state.getSettings())),
+    route('post', '/settings', ({ bodyText }) => {
+      let body: unknown;
+      try {
+        body = parseBody(bodyText);
+      } catch {
+        // jsonDecode throws outside any handler try/catch: shelf's plain 500.
+        return plain('Internal Server Error', 500);
+      }
+      state.applySettingsPatch(body);
+      return json(null);
+    }),
+
+    // ---- plugins ---------------------------------------------------------------------
+    route('get', '/plugins', () => json(state.listPlugins())),
+    route('get', '/plugins/:id/:endpoint', ({ params }) => {
+      const pluginId = params.id ?? '';
+      const endpoint = params.endpoint ?? '';
+      if (!state.isPluginLoaded(pluginId)) return json({ error: `plugin with ${pluginId} not loaded` }, 404);
+      if (pluginId === PLUGIN_IDS.dye2 && endpoint === 'recent-favs') {
+        const favourites = state.kvGet(PLUGIN_IDS.dye2, 'autoFavourites');
+        return json(Array.isArray(favourites) ? favourites : []);
+      }
+      return json({ error: `endpoint ${endpoint} not available` }, 404);
+    }),
 
     // ---- machine -----------------------------------------------------------------------
     route('get', '/machine/info', () => json(state.getMachineInfo())),
@@ -233,14 +265,25 @@ export function decaidHttpHandlers(state: MockDecaid, player: ShotPlayer): HttpH
 
     // ---- workflow -------------------------------------------------------------------------
     route('get', '/workflow', () => json(state.getWorkflow())),
-    route('put', '/workflow', ({ bodyText }) => {
+    route('put', '/workflow', async ({ bodyText }) => {
+      if (state.slowWorkflowTimeout) {
+        // workflow_handler.dart (aab5f93): a request waits behind
+        // _workflowQueue, and a 30 s Timer marks it `expired` and completes
+        // the 503 itself. The queued operation checks `if (expired) return;`
+        // BEFORE it ever reads or applies the body, so an expired request
+        // never parses, validates or merges anything.
+        await sleep(WORKFLOW_HANG_MS);
+        return json({ error: 'Workflow request queue timed out' }, 503);
+      }
       let body: unknown;
       try {
         body = parseBody(bodyText);
       } catch {
         return json({ error: 'Invalid request', message: invalidJson(bodyText) }, 400);
       }
-      return json(state.updateWorkflow(body));
+      const updated = state.updateWorkflow(body);
+      if (state.slowWorkflowMs !== null) await sleep(state.slowWorkflowMs);
+      return json(updated);
     }),
 
     // ---- profiles (specific routes before :id) ---------------------------------------------
@@ -333,6 +376,56 @@ export function decaidHttpHandlers(state: MockDecaid, player: ShotPlayer): HttpH
       return json(state.updateGrinder(id, body));
     }),
     route('delete', '/grinders/:id', ({ params }) => json(state.deleteGrinder(params.id ?? ''))),
+
+    // ---- beans library (specific routes before :id) ----------------------------------------
+    route('get', '/beans', ({ request, url }) => conditional(request, state.listBeans({ includeArchived: url.searchParams.get('includeArchived') }))),
+    route('post', '/beans', ({ bodyText }) => {
+      let body: unknown;
+      try {
+        body = parseBody(bodyText);
+      } catch {
+        return json({ error: invalidJson(bodyText) }, 400);
+      }
+      return json(state.createBean(body), 201);
+    }),
+    route('get', '/beans/:id', ({ params }) => json(state.getBean(params.id ?? ''))),
+    route('put', '/beans/:id', ({ params, bodyText }) => {
+      const id = params.id ?? '';
+      // beans_handler.dart checks the bean exists before it reads the body.
+      state.getBean(id);
+      let body: unknown;
+      try {
+        body = parseBody(bodyText);
+      } catch {
+        return json({ error: invalidJson(bodyText) }, 400);
+      }
+      return json(state.updateBean(id, body));
+    }),
+    route('get', '/beans/:beanId/batches', ({ request, url, params }) =>
+      conditional(request, state.listBatches({ beanId: params.beanId ?? '', includeArchived: url.searchParams.get('includeArchived') })),
+    ),
+    route('post', '/beans/:beanId/batches', ({ params, bodyText }) => {
+      let body: unknown;
+      try {
+        body = parseBody(bodyText);
+      } catch {
+        return json({ error: invalidJson(bodyText) }, 400);
+      }
+      return json(state.createBatch(params.beanId ?? '', body), 201);
+    }),
+    route('get', '/bean-batches', ({ request, url }) => conditional(request, state.listBatches({ includeArchived: url.searchParams.get('includeArchived') }))),
+    route('get', '/bean-batches/:id', ({ params }) => json(state.getBatch(params.id ?? ''))),
+    route('put', '/bean-batches/:id', ({ params, bodyText }) => {
+      const id = params.id ?? '';
+      state.getBatch(id);
+      let body: unknown;
+      try {
+        body = parseBody(bodyText);
+      } catch {
+        return json({ error: invalidJson(bodyText) }, 400);
+      }
+      return json(state.updateBatch(id, body));
+    }),
 
     // ---- key-value store (raw namespace and key) -------------------------------------------
     route('get', '/store/:namespace', ({ request, url }) => {

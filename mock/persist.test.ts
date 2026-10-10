@@ -94,6 +94,24 @@ describe('snapshotStore + restoreStore', () => {
     expect(v1).toMatchObject({ parentId: BLOOMING, visibility: 'hidden' });
   });
 
+  it('restores a bean and batch CafAI created, alongside the two seeded ones, and the cafai-key namespace (D4/D10)', () => {
+    const state = usedStore();
+    const bean = state.createBean({ roaster: 'Heart', name: 'Ethiopia' });
+    const batch = state.createBatch(bean.id, { roastLevel: 'light' });
+    state.kvSet('cafai-key', 'anthropic', '"sk-ant-mock"');
+    const snapshot = roundTrip(snapshotStore(state));
+    const fresh = createMockDecaid();
+    const report = restoreStore(fresh, snapshot);
+
+    expect(report.skipped).toEqual([]);
+    expect(fresh.getBean(bean.id)).toEqual(state.getBean(bean.id));
+    expect(fresh.getBatch(batch.id)).toEqual(state.getBatch(batch.id));
+    expect(fresh.listBeans({ includeArchived: true }).map((b) => b.id).sort()).toEqual(
+      state.listBeans({ includeArchived: true }).map((b) => b.id).sort(),
+    );
+    expect(fresh.kvGet('cafai-key', 'anthropic')).toBe('sk-ant-mock');
+  });
+
   it('keeps data time moving forward across the reload', () => {
     const state = usedStore();
     const snapshot = snapshotStore(state);
@@ -102,12 +120,12 @@ describe('snapshotStore + restoreStore', () => {
     expect(fresh.clock.now()).toBeGreaterThanOrEqual(snapshot.clockMs);
   });
 
-  it('saves only the cafai namespace and the profiles CafAI created, never the request log', () => {
+  it('saves only cafai and cafai-key, and the profiles CafAI created, never the request log', () => {
     const state = usedStore();
     state.kvSet('dye2.reaplugin', 'beans', JSON.stringify([{ name: 'not ours' }]));
     state.logRequest({ method: 'POST', path: '/api/v1/store/cafai/bags', query: '', body: [] });
     const snapshot = snapshotStore(state);
-    expect(Object.keys(snapshot.kv)).toEqual(['cafai']);
+    expect(Object.keys(snapshot.kv)).toEqual(['cafai', 'cafai-key']);
     expect(snapshot.profiles.length).toBeGreaterThan(0);
     expect(snapshot.profiles.every((record) => !record.isDefault)).toBe(true);
     expect(JSON.stringify(snapshot)).not.toContain('"requests"');
@@ -405,5 +423,32 @@ describe('startMockPersistence', () => {
       persistence?.stop();
       mock.close();
     }
+  });
+
+  it('a bean created through POST /api/v1/beans survives a reload (D4)', async () => {
+    const mock = createMockServer();
+    const { storage, env } = setup('?mockPersist=1');
+    const persistence = startMockPersistence(mock.state, { ...env, pollMs: 10 });
+    mock.server.listen({ onUnhandledRequest: 'error' });
+    let beanId: string;
+    try {
+      const response = await fetch('http://localhost:8080/api/v1/beans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roaster: 'Heart', name: 'Ethiopia' }),
+      });
+      expect(response.status).toBe(201);
+      beanId = ((await response.json()) as { id: string }).id;
+      await vi.waitFor(() => expect(saved(storage)?.beans.map((bean) => bean.id)).toContain(beanId));
+    } finally {
+      persistence?.stop();
+      mock.close();
+    }
+
+    // The reload: a fresh mock restores from exactly what was saved.
+    const reloaded = createMockDecaid();
+    const report = restoreStore(reloaded, saved(storage)!);
+    expect(report.skipped).toEqual([]);
+    expect(reloaded.getBean(beanId)).toMatchObject({ roaster: 'Heart', name: 'Ethiopia' });
   });
 });

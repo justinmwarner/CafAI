@@ -5,8 +5,10 @@
  * runs and every page load gets a fresh mock, as the other e2e specs expect.
  *
  * With it, the mock keeps what a real Decaid keeps on disk: the `cafai`
- * key-value namespace (CafAI's backup), the shot records, the workflow
- * (profile and context) and the profiles CafAI created. Live state starts
+ * key-value namespace (CafAI's backup) and the `cafai-key` one (D99's
+ * optional copy of the API key), the shot records, the workflow (profile
+ * and context), the profiles CafAI created, and the bean library (D4/D10):
+ * the two seeded beans and batches, and any CafAI added. Live state starts
  * fresh, as after a Decaid restart: machine and scale links, frames, the shot
  * player, faults and the request log. So a test can empty CafAI's own browser
  * storage, reload, and watch CafAI restore itself from the backup
@@ -39,7 +41,7 @@
  * come back with the restore time as createdAt/updatedAt (Decaid sets them),
  * and profiles are added or updated, never removed (the API has no hard delete).
  */
-import type { ProfileRecord, ShotRecord, Workflow, WorkflowContext } from '../src/api/types.ts';
+import type { Bean, BeanBatch, ProfileRecord, ShotRecord, Workflow, WorkflowContext } from '../src/api/types.ts';
 import { isPlainObject } from './decaid/json.ts';
 import type { MockDecaid, MockRequestLog } from './decaid/state.ts';
 
@@ -47,8 +49,8 @@ export const MOCK_PERSIST_PARAM = 'mockPersist';
 /** Every localStorage key of the mock starts with this; CafAI's own keys start with `cafai.`. */
 export const MOCK_STORE_PREFIX = 'cafai-mock:';
 export const MOCK_STORE_KEY = `${MOCK_STORE_PREFIX}store`;
-/** CafAI's backup namespace (D16); nothing else in the key-value store is CafAI's to keep. */
-export const PERSISTED_KV_NAMESPACES: readonly string[] = ['cafai'];
+/** CafAI's backup namespace (D16) and its optional copy of the API key (D99, D10); nothing else in the key-value store is CafAI's to keep. */
+export const PERSISTED_KV_NAMESPACES: readonly string[] = ['cafai', 'cafai-key'];
 /** UTF-16 code units a saved snapshot may take: well under Chromium's ~5.2 million per origin. */
 export const MAX_SNAPSHOT_CHARS = 4 * 1024 * 1024;
 
@@ -70,6 +72,9 @@ export interface MockStoreSnapshot {
   workflow: Workflow;
   /** Every profile record that is not a bundled default: visible, hidden or deleted. */
   profiles: ProfileRecord[];
+  /** Every bean and batch, archived included (D4/D10): the seeded two and any CafAI created. */
+  beans: Bean[];
+  batches: BeanBatch[];
 }
 
 export interface RestoreReport {
@@ -94,6 +99,8 @@ export function snapshotStore(state: MockDecaid): MockStoreSnapshot {
     shots: state.getShotIds().map((id) => state.getShot(id)),
     workflow: state.getWorkflow(),
     profiles: state.listProfiles({ includeHidden: true }).filter((record) => !record.isDefault),
+    beans: state.listBeans({ includeArchived: true }),
+    batches: state.listBatches({ includeArchived: true }),
   };
 }
 
@@ -125,6 +132,12 @@ export function restoreStore(state: MockDecaid, snapshot: MockStoreSnapshot): Re
   // The saved set exactly, in its order: a shot deleted before the save stays deleted.
   for (const id of state.getShotIds()) attempt(`shot ${id}`, () => void state.deleteShot(id));
   for (const shot of snapshot.shots) attempt(`shot ${shot.id}`, () => state.addShot(shot));
+
+  // Beans and batches are a straight upsert by id (D4/D10): the fresh mock's two seeded ones
+  // are already in the saved set under the same fixed ids, so this never duplicates them, and
+  // any bean or batch CafAI created is added back exactly as it was.
+  for (const bean of snapshot.beans) attempt(`bean ${bean.id}`, () => state.addBean(bean));
+  for (const batch of snapshot.batches) attempt(`batch ${batch.id}`, () => state.addBatch(batch));
 
   for (const record of parentsFirst(snapshot.profiles)) attempt(`profile ${record.id}`, () => restoreProfile(state, record));
 
@@ -235,6 +248,8 @@ export function parseSnapshot(text: string | null | undefined): MockStoreSnapsho
   if (!Array.isArray(raw.shots) || !raw.shots.every(isShotRecord)) return null;
   if (!isWorkflow(raw.workflow)) return null;
   if (!Array.isArray(raw.profiles) || !raw.profiles.every(isProfileRecord)) return null;
+  if (!Array.isArray(raw.beans) || !raw.beans.every(isBeanRecord)) return null;
+  if (!Array.isArray(raw.batches) || !raw.batches.every(isBatchRecord)) return null;
   return raw as unknown as MockStoreSnapshot;
 }
 
@@ -275,6 +290,14 @@ function isProfileRecord(value: unknown): boolean {
     (parentId === null || parentId === undefined || typeof parentId === 'string') &&
     (metadata === null || metadata === undefined || isPlainObject(metadata))
   );
+}
+
+function isBeanRecord(value: unknown): boolean {
+  return isPlainObject(value) && isText(value.id) && typeof value.roaster === 'string' && typeof value.name === 'string';
+}
+
+function isBatchRecord(value: unknown): boolean {
+  return isPlainObject(value) && isText(value.id) && isText(value.beanId);
 }
 
 // ---------------------------------------------------------------------------

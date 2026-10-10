@@ -9,6 +9,8 @@
  * Playwright through window.__CAFAI_MOCK__) can never corrupt the state.
  */
 import type {
+  Bean,
+  BeanBatch,
   ConnectionError,
   DecaidSettings,
   DeviceEntry,
@@ -17,12 +19,14 @@ import type {
   MachineInfo,
   MachineSnapshot,
   PaginatedShots,
+  PluginInfo,
   ProfileRecord,
   ScaleWsFrame,
   ShotRecord,
   ShotRecordSummary,
   ShotSettings,
   ShotStateEvent,
+  TimeToReadyFrame,
   WaterLevels,
   WeightSnapshot,
   WireProfile,
@@ -36,15 +40,18 @@ import londonium from '../../src/coach/templates/source/Londonium.json';
 import allonge from '../../src/coach/templates/source/rao_allonge.json';
 import gentle from '../../src/coach/templates/source/Gentle_and_sweet1.json';
 import { fixtures } from '../fixtures/index.ts';
+import { createBatchRecord, createBeanRecord, foreignKeyError, seedBeans, updateBatchRecord, updateBeanRecord } from './beans.ts';
 import { createDataClock, formatLocalTimestamp, formatUtcTimestamp, type DataClock } from './clock.ts';
+import { seedDye2Baskets, seedDye2Equipment, seedDye2Recipes, seedDye2RecentFavourites } from './dye2.ts';
 import { DartError, MockHttpError } from './errors.ts';
 import { createGrinderRecord, seedGrinders, sortGrinders, updateGrinderRecord, type GrinderRecord } from './grinders.ts';
 import { deepMergeJson, isPlainObject, type JsonObject } from './json.ts';
 import { createMachineProfile, DEFAULT_UPLOAD_MS, idleTemperature } from './machine.ts';
+import { ALL_PLUGIN_IDS, listPluginInfos, PLUGIN_IDS } from './plugins.ts';
 import { buildProfileRecord, normalizeProfile, profileHash } from './profiles.ts';
 import { normalizeWorkflow, validateWorkflowPatch } from './workflow.ts';
 
-export type MockChannel = 'machine' | 'scale' | 'devices' | 'shotState' | 'waterLevels' | 'shotSettings';
+export type MockChannel = 'machine' | 'scale' | 'devices' | 'shotState' | 'waterLevels' | 'shotSettings' | 'timeToReady';
 
 export interface MockFrames {
   machine: MachineSnapshot;
@@ -53,6 +60,7 @@ export interface MockFrames {
   shotState: ShotStateEvent;
   waterLevels: WaterLevels;
   shotSettings: ShotSettings;
+  timeToReady: TimeToReadyFrame;
 }
 
 export interface MockDecaidOptions {
@@ -68,6 +76,8 @@ export interface MockDecaidOptions {
   seedExamples?: boolean;
   /** Seed three test grinders in Decaid's grinder library (default true). */
   seedGrinders?: boolean;
+  /** Seed two beans with a batch each, and DYE2's two recent setups for the first (default true). */
+  seedBeans?: boolean;
   /**
    * How long the DE1 takes to take a new profile, in wall-clock ms (default
    * 800; not scaled by the player's speed). 0 uploads at once.
@@ -75,6 +85,14 @@ export interface MockDecaidOptions {
   uploadMs?: number;
   /** false: POST /api/v1/machine/profile answers 404 "Route not found", like an older Decaid (default true). */
   machineProfileRoute?: boolean;
+  /** 0.8.6 field builds had no `enjoyment` range check (D101). Default 10 (current builds' 0-10 scale). */
+  enjoymentScale?: 10 | 100;
+  /** Plugin ids GET /api/v1/plugins reports loaded (default every id in plugins.ts's ALL_PLUGIN_IDS). */
+  loadedPlugins?: readonly string[];
+  /** PUT /api/v1/workflow answers after this many wall-clock ms, having already applied the change (default: no delay). */
+  slowWorkflowMs?: number;
+  /** PUT /api/v1/workflow answers 503 after 30 s, never applying the change (Decaid's queue timeout, aab5f93, decaid#634). Overrides slowWorkflowMs. */
+  slowWorkflowTimeout?: boolean;
   /** Wall clock in epoch ms (default Date.now). */
   now?: () => number;
 }
@@ -162,11 +180,20 @@ export interface MockDecaid {
   // Settings
   getSettings(): DecaidSettings;
   setSettings(patch: Partial<DecaidSettings>): void;
+  /** POST /settings: merges only the keys Decaid's handler recognises, validated as it does; throws 400/500 on a bad one. */
+  applySettingsPatch(body: unknown): void;
+
+  // Plugins (D3)
+  listPlugins(): PluginInfo[];
+  isPluginLoaded(id: string): boolean;
 
   // Workflow
   getWorkflow(): Workflow;
   /** PUT /workflow; a profile that differs from the machine's starts an upload (see machine.ts). */
   updateWorkflow(body: unknown): Workflow;
+  /** The PUT /workflow delay switches (D9), read by the route. */
+  readonly slowWorkflowMs: number | null;
+  readonly slowWorkflowTimeout: boolean;
 
   // The machine's own profile, separate from the workflow's (machine.ts)
   /** The profile the DE1 holds and a shot runs (a copy). */
@@ -217,6 +244,20 @@ export interface MockDecaid {
   /** A hard delete; success even for an unknown id. */
   deleteGrinder(id: string): { success: true; id: string };
 
+  // Beans library (D4): ids and shapes follow beans_handler.dart.
+  listBeans(query?: { includeArchived?: string | boolean | null }): Bean[];
+  getBean(id: string): Bean;
+  createBean(body: unknown): Bean;
+  updateBean(id: string, body: unknown): Bean;
+  /** omit beanId for GET /bean-batches (every batch). */
+  listBatches(query?: { beanId?: string; includeArchived?: string | boolean | null }): BeanBatch[];
+  getBatch(id: string): BeanBatch;
+  createBatch(beanId: string, body: unknown): BeanBatch;
+  updateBatch(id: string, body: unknown): BeanBatch;
+  /** A raw upsert (D4/D10 restore), like addShot: bypasses validation, keeps the given id. */
+  addBean(record: Bean): void;
+  addBatch(record: BeanBatch): void;
+
   // Key-value store (namespaces and keys are raw, never decoded)
   kvKeys(namespace: string): string[];
   kvAll(namespace: string): Record<string, unknown>;
@@ -227,6 +268,8 @@ export interface MockDecaid {
   // Shot state
   getShotState(): ShotStateEvent;
   publishShotState(event: ShotStateEvent): void;
+  /** time-to-ready.reaplugin's channel (D5); shotPlayer.ts drives it on a wake from sleep. */
+  publishTimeToReady(frame: TimeToReadyFrame): void;
 
   // Faults and logs (for tests and Playwright)
   failNext(fault: MockFault): void;
@@ -257,7 +300,7 @@ const TEMPLATE_SOURCES: Array<{ filename: string; json: unknown }> = [
 ];
 
 const DEFAULT_SETTINGS: DecaidSettings = {
-  gatewayMode: 'disabled',
+  gatewayMode: 'tracking',
   logLevel: 'INFO',
   weightFlowMultiplier: 1.0,
   volumeFlowMultiplier: 0.3,
@@ -329,9 +372,10 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
     shotState: new Set(),
     waterLevels: new Set(),
     shotSettings: new Set(),
+    timeToReady: new Set(),
   };
   const dropListeners = new Set<(channel: MockChannel | null) => void>();
-  const sockets: Record<MockChannel, number> = { machine: 0, scale: 0, devices: 0, shotState: 0, waterLevels: 0, shotSettings: 0 };
+  const sockets: Record<MockChannel, number> = { machine: 0, scale: 0, devices: 0, shotState: 0, waterLevels: 0, shotSettings: 0, timeToReady: 0 };
 
   function emit<C extends MockChannel>(channel: C, frame: MockFrames[C]): void {
     for (const listener of [...listeners[channel]]) listener(clone(frame));
@@ -354,6 +398,10 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
     : null;
   let connectionError: ConnectionError | null = null;
   let settings: DecaidSettings = { ...DEFAULT_SETTINGS, ...options.settings };
+  const enjoymentScale = options.enjoymentScale === 100 ? 100 : 10;
+  const loadedPlugins = new Set(options.loadedPlugins ?? ALL_PLUGIN_IDS);
+  const slowWorkflowMs = options.slowWorkflowMs !== undefined && Number.isFinite(options.slowWorkflowMs) ? Math.max(0, options.slowWorkflowMs) : null;
+  const slowWorkflowTimeout = options.slowWorkflowTimeout === true;
 
   // ---- workflow, profiles, shots, kv ------------------------------------------------
   let workflow: Workflow = fixtures.workflowGet();
@@ -372,7 +420,25 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
   let shots: ShotRecord[] = options.seedExamples === false ? [] : [fixtures.shotRecord()];
   const grinders = new Map<string, GrinderRecord>();
   if (options.seedGrinders !== false) for (const grinder of seedGrinders()) grinders.set(grinder.id, grinder);
+  const beans = new Map<string, Bean>();
+  const batches = new Map<string, BeanBatch>();
   const kv = new Map<string, Map<string, unknown>>();
+  if (options.seedBeans !== false) {
+    const seeded = seedBeans(clock.now());
+    for (const bean of seeded.beans) beans.set(bean.id, bean);
+    for (const batch of seeded.batches) batches.set(batch.id, batch);
+    const [firstBean] = seeded.beans;
+    const [firstBatch] = seeded.batches;
+    if (firstBean && firstBatch) {
+      const capturedAt = [formatUtcTimestamp(clock.now() - 1 * 24 * 60 * 60 * 1000), formatUtcTimestamp(clock.now() - 3 * 24 * 60 * 60 * 1000)];
+      const recents = seedDye2RecentFavourites(firstBean, firstBatch, capturedAt);
+      kvNamespace(PLUGIN_IDS.dye2).set('autoFavourites', recents);
+      // D7: the other DYE2 KV keys, so a reader never has to special-case "never written" vs "empty".
+      kvNamespace(PLUGIN_IDS.dye2).set('equipment', seedDye2Equipment(formatUtcTimestamp(clock.now())));
+      kvNamespace(PLUGIN_IDS.dye2).set('baskets', seedDye2Baskets(formatUtcTimestamp(clock.now())));
+      kvNamespace(PLUGIN_IDS.dye2).set('recipes', seedDye2Recipes(firstBean, capturedAt[0]!));
+    }
+  }
   let shotState: ShotStateEvent = {
     event: 'state',
     timestamp: localNow(),
@@ -476,6 +542,18 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
     const grinder = grinders.get(id);
     if (!grinder) throw new MockHttpError(404, { error: 'Grinder not found' });
     return grinder;
+  }
+
+  function requireBean(id: string): Bean {
+    const bean = beans.get(id);
+    if (!bean) throw new MockHttpError(404, { error: 'Bean not found' });
+    return bean;
+  }
+
+  function requireBatch(id: string): BeanBatch {
+    const batch = batches.get(id);
+    if (!batch) throw new MockHttpError(404, { error: 'Batch not found' });
+    return batch;
   }
 
   function kvNamespace(namespace: string): Map<string, unknown> {
@@ -611,8 +689,131 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
     setSettings(patch) {
       settings = { ...settings, ...patch };
     },
+    applySettingsPatch(body) {
+      if (!isPlainObject(body)) {
+        // jsonDecode's cast to Map<String, dynamic> throws outside any handler try/catch: shelf's plain 500.
+        throw new MockHttpError(500, null, { plainText: 'Internal Server Error' });
+      }
+      const fail = (message: string): never => {
+        throw new MockHttpError(400, { message });
+      };
+      const patch: Partial<DecaidSettings> = {};
+      if ('gatewayMode' in body) {
+        const value = body.gatewayMode;
+        if (value !== 'disabled' && value !== 'full' && value !== 'tracking') fail(`${String(value)} is not a gateway mode`);
+        patch.gatewayMode = value as DecaidSettings['gatewayMode'];
+      }
+      if ('webUiPath' in body) patch.webUiPath = body.webUiPath === null ? null : String(body.webUiPath);
+      // Decaid stores logLevel as given, with no type check of its own.
+      if ('logLevel' in body) patch.logLevel = body.logLevel;
+      for (const key of ['weightFlowMultiplier', 'volumeFlowMultiplier', 'hotWaterFlowMultiplier'] as const) {
+        if (!(key in body)) continue;
+        if (typeof body[key] !== 'number') fail(`${key} must be a number`);
+        patch[key] = body[key] as number;
+      }
+      if ('scalePowerMode' in body) {
+        const value = body.scalePowerMode;
+        if (value !== 'disabled' && value !== 'displayOff' && value !== 'disconnect') fail(`${String(value)} is not a valid scale power mode`);
+        patch.scalePowerMode = value as string;
+      }
+      for (const key of [
+        'blockOnNoScale',
+        'blockTareDuringShot',
+        'stopHotWaterAtWeight',
+        'automaticUpdateCheck',
+        'nightModeEnabled',
+        'lowBatteryBrightnessLimit',
+        'keepAwake',
+      ] as const) {
+        if (!(key in body)) continue;
+        if (typeof body[key] !== 'boolean') fail(`${key} must be a boolean`);
+        patch[key] = body[key] as boolean;
+      }
+      for (const key of ['preferredMachineId', 'preferredScaleId', 'preferredGrinderDeviceId'] as const) {
+        if (!(key in body)) continue;
+        const value = body[key];
+        if (value !== null && typeof value !== 'string') fail(`${key} must be a string or null`);
+        patch[key] = value as string | null;
+      }
+      if ('defaultSkinId' in body) {
+        if (typeof body.defaultSkinId !== 'string') fail('defaultSkinId must be a string');
+        patch.defaultSkinId = body.defaultSkinId;
+      }
+      if ('chargingMode' in body) {
+        const value = body.chargingMode;
+        if (value !== 'disabled' && value !== 'longevity' && value !== 'balanced' && value !== 'highAvailability') {
+          fail(`${String(value)} is not a valid charging mode`);
+        }
+        patch.chargingMode = value as string;
+      }
+      for (const key of ['nightModeSleepTime', 'nightModeMorningTime'] as const) {
+        if (!(key in body)) continue;
+        const value = body[key];
+        if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value >= 1440) fail(`${key} must be an integer 0-1439`);
+        patch[key] = value as number;
+      }
+      if ('simulatedDevices' in body) {
+        const value = body.simulatedDevices;
+        if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) fail('simulatedDevices must be a list');
+        patch.simulatedDevices = value as string[];
+      }
+      if ('themeMode' in body) {
+        const value = body.themeMode;
+        if (value !== 'system' && value !== 'light' && value !== 'dark') fail(`Invalid theme mode: ${String(value)}. Valid values: system, light, dark`);
+        patch.themeMode = value;
+      }
+      settings = { ...settings, ...patch };
+    },
+
+    // ---- plugins ----------------------------------------------------------------------
+    listPlugins: () => listPluginInfos(loadedPlugins),
+    isPluginLoaded: (id) => loadedPlugins.has(id),
+
+    // ---- beans ------------------------------------------------------------------------
+    listBeans(query = {}) {
+      const includeArchived = query.includeArchived === true || query.includeArchived === 'true';
+      return clone([...beans.values()].filter((bean) => includeArchived || !bean.archived));
+    },
+    getBean: (id) => clone(requireBean(id)),
+    createBean(body) {
+      const bean = createBeanRecord(body, newId(), localNow());
+      beans.set(bean.id, bean);
+      return clone(bean);
+    },
+    updateBean(id, body) {
+      const updated = updateBeanRecord(requireBean(id), body, localNow());
+      beans.set(id, updated);
+      return clone(updated);
+    },
+    listBatches(query = {}) {
+      const includeArchived = query.includeArchived === true || query.includeArchived === 'true';
+      const all = [...batches.values()].filter((batch) => includeArchived || !batch.archived);
+      return clone(query.beanId ? all.filter((batch) => batch.beanId === query.beanId) : all);
+    },
+    getBatch: (id) => clone(requireBatch(id)),
+    createBatch(beanId, body) {
+      // beans_handler.dart's own code never checks beanId exists, but the real
+      // database's foreign key constraint on BeanBatches.beanId does (beans.ts).
+      if (!beans.has(beanId)) throw foreignKeyError();
+      const batch = createBatchRecord(beanId, body, newId(), localNow());
+      batches.set(batch.id, batch);
+      return clone(batch);
+    },
+    updateBatch(id, body) {
+      const updated = updateBatchRecord(requireBatch(id), body, localNow());
+      batches.set(id, updated);
+      return clone(updated);
+    },
+    addBean(record) {
+      beans.set(record.id, clone(record));
+    },
+    addBatch(record) {
+      batches.set(record.id, clone(record));
+    },
 
     // ---- workflow ---------------------------------------------------------------------
+    slowWorkflowMs,
+    slowWorkflowTimeout,
     getWorkflow: () => clone(workflow),
     updateWorkflow(body) {
       if (!isPlainObject(body)) throw badRequest({ error: 'Request body must be a JSON object' });
@@ -851,8 +1052,10 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
       if ('createdAt' in body || 'updatedAt' in body) {
         throw badRequest({ error: 'createdAt and updatedAt are system-managed and cannot be modified via this endpoint' });
       }
+      // D101/D2: current builds validate 0-10 before the id lookup; ?mockEnjoyment=100
+      // reproduces 0.8.6 field builds, which had no such check (the id lookup runs first).
       const annotationsPatch = body.annotations;
-      if (isPlainObject(annotationsPatch) && 'enjoyment' in annotationsPatch && annotationsPatch.enjoyment !== null) {
+      if (enjoymentScale === 10 && isPlainObject(annotationsPatch) && 'enjoyment' in annotationsPatch && annotationsPatch.enjoyment !== null) {
         const enjoyment = annotationsPatch.enjoyment;
         if (typeof enjoyment !== 'number' || Number.isNaN(enjoyment)) {
           throw badRequest({ error: 'annotations.enjoyment must be a number between 0 and 10' });
@@ -970,6 +1173,9 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
     publishShotState(event) {
       shotState = clone(event);
       emit('shotState', shotState);
+    },
+    publishTimeToReady(frame) {
+      emit('timeToReady', frame);
     },
 
     // ---- faults and logs ------------------------------------------------------------------

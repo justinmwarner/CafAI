@@ -30,5 +30,15 @@ export function mockOptionsFromUrl(search: string): CreateDecaidMockOptions {
   if (uploadText !== '' && Number.isFinite(uploadMs) && uploadMs >= 0) options.uploadMs = uploadMs;
   if (params.get('mockNoMachineProfile') === '1') options.machineProfileRoute = false;
   if (params.get('mockGrinders') === '0') options.seedGrinders = false;
+  const gateway = params.get('mockGateway');
+  if (gateway === 'disabled' || gateway === 'full' || gateway === 'tracking') options.settings = { ...options.settings, gatewayMode: gateway };
+  if (params.get('mockEnjoyment') === '100') options.enjoymentScale = 100;
+  if (params.get('mockPlugins') === 'none') options.loadedPlugins = [];
+  const slowWorkflowText = params.get('mockSlowWorkflow')?.trim() ?? '';
+  if (slowWorkflowText === '503') options.slowWorkflowTimeout = true;
+  else {
+    const slowWorkflowMs = Number(slowWorkflowText);
+    if (slowWorkflowText !== '' && Number.isFinite(slowWorkflowMs) && slowWorkflowMs >= 0) options.slowWorkflowMs = slowWorkflowMs;
+  }
   return options;
 }

@@ -425,7 +425,10 @@ describe('createShotPlayer', () => {
     expect(record.workflow.profile).toEqual(state.getWorkflow().profile);
     expect((record.workflow as { machine?: unknown }).machine).toMatchObject({ provenanceStatus: 'captured', model: 'DE1Pro' });
     const last = record.measurements.at(-1)!;
-    expect(record.annotations).toEqual({ actualDoseWeight: 18, actualYield: state.getScaleSnapshot()!.weight });
+    // extras is D6's visualizer stamp, which can also have landed by now; strip it to keep
+    // this check about dose and yield only.
+    const { extras: _extras, ...coreAnnotations } = record.annotations ?? {};
+    expect(coreAnnotations).toEqual({ actualDoseWeight: 18, actualYield: state.getScaleSnapshot()!.weight });
     expect(record.measurements[0]!.machine.state.substate).toBe('preparingForShot');
     const start = parseDecaidTimestamp(record.measurements[0]!.machine.timestamp);
     expect(parseDecaidTimestamp(record.timestamp) - start).toBeGreaterThan(0);
@@ -459,7 +462,10 @@ describe('createShotPlayer', () => {
     const { state, player } = setup({ scaleConnected: false });
     player.start();
     await vi.advanceTimersByTimeAsync(12_000);
-    expect(state.getShot(player.lastShotId!).annotations).toEqual({ actualDoseWeight: 18 });
+    // extras is D6's visualizer stamp, which can also have landed by now; strip it so this
+    // still checks that actualYield specifically is absent.
+    const { extras: _extras, ...coreAnnotations } = state.getShot(player.lastShotId!).annotations ?? {};
+    expect(coreAnnotations).toEqual({ actualDoseWeight: 18 });
   });
 
   it('stays in stopping for about 4 s (wall time divided by the speed) and stores the shot only after it', async () => {
@@ -692,5 +698,136 @@ describe('createShotPlayer', () => {
     await vi.advanceTimersByTimeAsync(12_000);
     await idle;
     player.dispose();
+  });
+
+  describe('time-to-ready (D5)', () => {
+    it('ticks once a second (at speed 1): insufficient_data, then a heating countdown', async () => {
+      const { state, player } = setup();
+      const frames: Array<{ status: string; remainingTimeMs: number | null }> = [];
+      state.on('timeToReady', (frame) => frames.push(frame));
+      await vi.advanceTimersByTimeAsync(500); // 5 ticks at speed 10 (100 ms/tick)
+      expect(frames).toHaveLength(5);
+      expect(frames[0]).toEqual({ status: 'insufficient_data', remainingTimeMs: null });
+      expect(frames[1]).toEqual({ status: 'insufficient_data', remainingTimeMs: null });
+      expect(frames[2]).toEqual({ status: 'heating', remainingTimeMs: 150_000 });
+      expect(frames[3]).toEqual({ status: 'heating', remainingTimeMs: 145_000 });
+      expect(frames[4]).toEqual({ status: 'heating', remainingTimeMs: 140_000 });
+      player.dispose();
+    });
+
+    it('reaches, then keeps reporting reached for as long as the machine stays awake', async () => {
+      const { state, player } = setup();
+      const frames: Array<{ status: string; remainingTimeMs: number | null }> = [];
+      state.on('timeToReady', (frame) => frames.push(frame));
+      // 2 insufficient_data ticks + 30 heating ticks (150000 / 5000) = 32 ticks to reach, at 100 ms/tick.
+      await vi.advanceTimersByTimeAsync(3300);
+      expect(frames.at(-1)).toEqual({ status: 'reached', remainingTimeMs: 0 });
+      const countAtReach = frames.length;
+      await vi.advanceTimersByTimeAsync(500);
+      expect(frames.length).toBeGreaterThan(countAtReach);
+      expect(frames.every((f, i) => i < countAtReach || (f.status === 'reached' && f.remainingTimeMs === 0))).toBe(true);
+      player.dispose();
+    });
+
+    it('a late subscriber hears the current status within one tick', async () => {
+      const { state, player } = setup();
+      await vi.advanceTimersByTimeAsync(3300); // past reached, before anyone is listening
+      const frames: Array<{ status: string }> = [];
+      state.on('timeToReady', (frame) => frames.push(frame));
+      await vi.advanceTimersByTimeAsync(100); // one tick at speed 10
+      expect(frames).toHaveLength(1);
+      expect(frames[0]).toMatchObject({ status: 'reached' });
+      player.dispose();
+    });
+
+    it('emits nothing while sleeping, and restarts from insufficient_data on waking', async () => {
+      const { state, player } = setup();
+      const frames: Array<{ status: string; remainingTimeMs: number | null }> = [];
+      state.on('timeToReady', (frame) => frames.push(frame));
+      await vi.advanceTimersByTimeAsync(350); // past the two insufficient_data ticks, into heating
+      expect(frames.some((f) => f.status === 'heating')).toBe(true);
+      player.command('sleeping');
+      frames.length = 0;
+      await vi.advanceTimersByTimeAsync(500); // several ticks' worth, all asleep
+      expect(frames).toEqual([]);
+      player.command('idle');
+      await vi.advanceTimersByTimeAsync(250);
+      expect(frames[0]).toEqual({ status: 'insufficient_data', remainingTimeMs: null });
+      player.dispose();
+    });
+
+    it('does not run when time-to-ready.reaplugin is not loaded', async () => {
+      const { state, player } = setup({ loadedPlugins: [] });
+      const frames: unknown[] = [];
+      state.on('timeToReady', (frame) => frames.push(frame));
+      await vi.advanceTimersByTimeAsync(3300);
+      expect(frames).toEqual([]);
+      player.dispose();
+    });
+  });
+
+  describe('skip step (D8)', () => {
+    it('command("skipStep") during a shot advances the profile frame', async () => {
+      const { state, player } = setup();
+      player.start();
+      // setup() plays at speed 10, so each 200 ms frame is 20 ms of wall time: 220 ms clears
+      // the 10-frame preheat and lands just inside the profile's own steps.
+      await vi.advanceTimersByTimeAsync(220);
+      const before = state.getMachineSnapshot().profileFrame;
+      player.command('skipStep');
+      await vi.advanceTimersByTimeAsync(20); // the next tick applies the skip
+      expect(state.getMachineSnapshot().profileFrame).toBeGreaterThan(before);
+      player.dispose();
+    });
+
+    it('is a no-op outside a shot', () => {
+      const { player } = setup();
+      expect(player.activity).toBeNull();
+      player.command('skipStep');
+      expect(player.activity).toBeNull();
+    });
+  });
+
+  describe('visualizer upload (D6)', () => {
+    it('writes lastUploadedShot and lastVisualizerId, and stamps the shot itself, a few seconds after it finishes', async () => {
+      const { state, player } = setup();
+      player.start();
+      while (player.activity !== null) await vi.advanceTimersByTimeAsync(100);
+      const shotId = player.lastShotId!;
+      expect(state.kvGet('visualizer.reaplugin', 'lastUploadedShot')).toBeNull();
+      expect(state.kvGet('visualizer.reaplugin', 'lastVisualizerId')).toBeNull();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(state.kvGet('visualizer.reaplugin', 'lastUploadedShot')).toBe(shotId);
+      const visualizerId = state.kvGet('visualizer.reaplugin', 'lastVisualizerId');
+      expect(typeof visualizerId).toBe('number');
+      expect(state.getShot(shotId).annotations?.extras?.visualizerId).toBe(String(visualizerId));
+      player.dispose();
+    });
+
+    it('gives each upload its own, increasing visualizer id', async () => {
+      const { state, player } = setup();
+      player.start();
+      while (player.activity !== null) await vi.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(1000);
+      const first = state.kvGet('visualizer.reaplugin', 'lastVisualizerId') as number;
+      player.start();
+      while (player.activity !== null) await vi.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(1000);
+      const second = state.kvGet('visualizer.reaplugin', 'lastVisualizerId') as number;
+      expect(second).toBeGreaterThan(first);
+      player.dispose();
+    });
+
+    it('does not write anything when visualizer.reaplugin is not loaded', async () => {
+      const { state, player } = setup({ loadedPlugins: [] });
+      player.start();
+      while (player.activity !== null) await vi.advanceTimersByTimeAsync(100);
+      const shotId = player.lastShotId!;
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(state.kvGet('visualizer.reaplugin', 'lastUploadedShot')).toBeNull();
+      expect(state.kvGet('visualizer.reaplugin', 'lastVisualizerId')).toBeNull();
+      expect(state.getShot(shotId).annotations?.extras?.visualizerId).toBeUndefined();
+      player.dispose();
+    });
   });
 });

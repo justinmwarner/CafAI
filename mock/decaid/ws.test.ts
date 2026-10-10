@@ -109,4 +109,21 @@ describe('Decaid WebSocket channels', () => {
     expect(frames[1]).toMatchObject({ deviceId: 'CF:3A:91:0B:7E:12', operation: 'connect', outcome: 'alreadyConnected' });
     devices.socket.close();
   });
+
+  it('time-to-ready: no replay while asleep; waking restarts from insufficient_data (D5)', async () => {
+    // The ticker free-runs for the player's whole life, so put the machine to sleep first:
+    // that is a deterministic "nothing to emit" state, unlike a short wait at high speed
+    // (set by an earlier test and never reset), which the ticker could still race.
+    mock.setSpeed(500);
+    mock.player.command('sleeping');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const ttr = open('/plugins/time-to-ready.reaplugin/timeToReady');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(ttr.frames).toHaveLength(0);
+
+    mock.player.command('idle');
+    const frames = (await ttr.waitFor(1)) as Array<{ status: string; remainingTimeMs: number | null }>;
+    expect(frames[0]).toEqual({ status: 'insufficient_data', remainingTimeMs: null });
+    ttr.socket.close();
+  });
 });

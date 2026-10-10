@@ -338,6 +338,140 @@ describe('key-value store', () => {
     expect(mock.kvKeys('cafai')).toEqual(['a%2Fb']);
     expect(mock.kvGet('other', 'a%2Fb')).toBe(2);
   });
+
+  it('the cafai-key namespace works like any other (D10)', () => {
+    const mock = createMockDecaid();
+    expect(mock.kvGet('cafai-key', 'anthropic')).toBeNull();
+    mock.kvSet('cafai-key', 'anthropic', '"sk-ant-mock"');
+    expect(mock.kvGet('cafai-key', 'anthropic')).toBe('sk-ant-mock');
+    expect(mock.kvKeys('cafai-key')).toEqual(['anthropic']);
+    expect(mock.kvAll('cafai-key')).toEqual({ anthropic: 'sk-ant-mock' });
+    mock.kvDelete('cafai-key', 'anthropic');
+    expect(mock.kvGet('cafai-key', 'anthropic')).toBeNull();
+  });
+});
+
+describe('settings (D1)', () => {
+  it('starts with gatewayMode "tracking"', () => {
+    expect(createMockDecaid().getSettings().gatewayMode).toBe('tracking');
+  });
+
+  it('can start in "full" (the ?mockGateway=full switch sets the same settings option)', () => {
+    const mock = createMockDecaid({ settings: { gatewayMode: 'full' } });
+    expect(mock.getSettings().gatewayMode).toBe('full');
+  });
+
+  it('POST merges only the keys it recognises, leaving the rest untouched', () => {
+    const mock = createMockDecaid();
+    mock.applySettingsPatch({ gatewayMode: 'full', blockOnNoScale: true, somethingUnknown: 'ignored' });
+    const settings = mock.getSettings();
+    expect(settings.gatewayMode).toBe('full');
+    expect(settings.blockOnNoScale).toBe(true);
+    expect('somethingUnknown' in settings).toBe(false);
+    expect(settings.weightFlowMultiplier).toBe(1.0);
+  });
+
+  it('rejects an unknown gatewayMode with {message}, no "error" field (SettingsHandler\'s own shape)', () => {
+    const error = expectHttpError(() => createMockDecaid().applySettingsPatch({ gatewayMode: 'bogus' }), 400, { message: 'bogus is not a gateway mode' });
+    expect('error' in (error.body ?? {})).toBe(false);
+  });
+
+  it('rejects a non-boolean and a non-number setting', () => {
+    const mock = createMockDecaid();
+    expectHttpError(() => mock.applySettingsPatch({ blockOnNoScale: 'yes' }), 400, { message: 'blockOnNoScale must be a boolean' });
+    expectHttpError(() => mock.applySettingsPatch({ weightFlowMultiplier: 'fast' }), 400, { message: 'weightFlowMultiplier must be a number' });
+  });
+
+  it('a non-object body is a plain 500, like an uncaught jsonDecode cast', () => {
+    const error = expectHttpError(() => createMockDecaid().applySettingsPatch([1, 2]), 500);
+    expect(error.plainText).toBe('Internal Server Error');
+  });
+});
+
+describe('enjoyment scale (D2)', () => {
+  it('validates 0-10 before the id lookup by default', () => {
+    const mock = createMockDecaid();
+    expectHttpError(() => mock.updateShot('no-such-shot', { annotations: { enjoyment: 11 } }), 400, {
+      error: 'annotations.enjoyment must be between 0 and 10, got 11',
+    });
+  });
+
+  it('?mockEnjoyment=100 skips validation and looks the id up first, like 0.8.6', () => {
+    const mock = createMockDecaid({ enjoymentScale: 100 });
+    expectHttpError(() => mock.updateShot('no-such-shot', { annotations: { enjoyment: 11 } }), 404, { error: 'Shot not found' });
+    const id = '3f6b0a9e-8c1d-4e52-9b7a-2d4f61c08e17';
+    const updated = mock.updateShot(id, { annotations: { enjoyment: 80 } });
+    expect(updated.annotations?.enjoyment).toBe(80);
+  });
+});
+
+describe('plugins (D3)', () => {
+  it('lists the four plugins loaded by default, with manifest fields', () => {
+    const mock = createMockDecaid();
+    const plugins = mock.listPlugins();
+    expect(plugins.map((p) => p.id)).toEqual(['time-to-ready.reaplugin', 'visualizer.reaplugin', 'dye2.reaplugin', 'settings.reaplugin']);
+    expect(plugins.every((p) => p.loaded === true)).toBe(true);
+    const ttr = plugins.find((p) => p.id === 'time-to-ready.reaplugin');
+    expect(ttr).toMatchObject({ name: 'Time To Ready', version: '1.0.4', apiVersion: 1 });
+    expect(mock.isPluginLoaded('time-to-ready.reaplugin')).toBe(true);
+  });
+
+  it('?mockPlugins=none lists every plugin with loaded false', () => {
+    const mock = createMockDecaid({ loadedPlugins: [] });
+    const plugins = mock.listPlugins();
+    expect(plugins).toHaveLength(4);
+    expect(plugins.every((p) => p.loaded === false)).toBe(true);
+    expect(mock.isPluginLoaded('dye2.reaplugin')).toBe(false);
+  });
+});
+
+describe('dye2 (D7)', () => {
+  it('seeds two recent setups for the first seeded bean, in autoFavourites', () => {
+    const mock = createMockDecaid();
+    const [firstBean] = mock.listBeans({});
+    const firstBatch = mock.listBatches({ beanId: firstBean!.id })[0]!;
+    const recents = mock.kvGet('dye2.reaplugin', 'autoFavourites') as Array<Record<string, unknown>>;
+    expect(Array.isArray(recents)).toBe(true);
+    expect(recents).toHaveLength(2);
+    for (const entry of recents) {
+      expect(entry.auto).toBe(true);
+      expect((entry.snapshot as Record<string, unknown>).beanBatchId).toBe(firstBatch.id);
+      expect((entry.workflow as Record<string, unknown>).context).toBeTruthy();
+    }
+  });
+
+  it('also seeds equipment, baskets and recipes, in their KV_CONTRACT.md shapes', () => {
+    const mock = createMockDecaid();
+    const [firstBean] = mock.listBeans({});
+
+    const equipment = mock.kvGet('dye2.reaplugin', 'equipment') as Array<Record<string, unknown>>;
+    expect(Array.isArray(equipment)).toBe(true);
+    expect(equipment.length).toBeGreaterThan(0);
+    for (const item of equipment) {
+      expect(typeof item.id).toBe('string');
+      expect(typeof item.name).toBe('string');
+      expect(Array.isArray(item.custom)).toBe(true);
+      expect(typeof item.createdAt).toBe('string');
+    }
+
+    const baskets = mock.kvGet('dye2.reaplugin', 'baskets') as Array<Record<string, unknown>>;
+    expect(Array.isArray(baskets)).toBe(true);
+    expect(baskets.length).toBeGreaterThan(0);
+    expect(['single', 'double', 'triple', 'bottomless', 'other']).toContain(baskets[0]!.size);
+
+    const recipes = mock.kvGet('dye2.reaplugin', 'recipes') as Array<Record<string, unknown>>;
+    expect(Array.isArray(recipes)).toBe(true);
+    expect(recipes.length).toBeGreaterThan(0);
+    expect(recipes[0]).toMatchObject({ beanName: firstBean!.name, showOnStreamlineDashboard: true });
+    expect(recipes[0]!.dashboardVariables).toBeTruthy();
+  });
+
+  it('seedBeans: false seeds none of DYE2\'s KV keys', () => {
+    const mock = createMockDecaid({ seedBeans: false });
+    for (const key of ['autoFavourites', 'equipment', 'baskets', 'recipes']) {
+      expect(mock.kvGet('dye2.reaplugin', key), key).toBeNull();
+    }
+  });
 });
 
 describe('frames', () => {

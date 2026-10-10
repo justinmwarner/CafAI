@@ -21,6 +21,7 @@ export const WS_CHANNEL_PATHS: Readonly<Record<MockChannel, string>> = {
   shotState: '/ws/v1/machine/shotState',
   waterLevels: '/ws/v1/machine/waterLevels',
   shotSettings: '/ws/v1/machine/shotSettings',
+  timeToReady: '/ws/v1/plugins/time-to-ready.reaplugin/timeToReady',
 };
 
 interface ClientLike {
@@ -43,6 +44,10 @@ function replay(state: MockDecaid, channel: MockChannel): unknown[] {
       return machineConnected ? [state.getWaterLevels()] : [];
     case 'shotSettings':
       return machineConnected ? [state.getShotSettings()] : [];
+    case 'timeToReady':
+      // A plugin's emitted events are a plain stream (pluginManager.emitStream), not a
+      // BehaviorSubject: a new client gets nothing until the next frame fires.
+      return [];
   }
 }
 
@@ -78,6 +83,7 @@ export function decaidWsHandlers(state: MockDecaid): WebSocketHandler[] {
     shotState: new Set(),
     waterLevels: new Set(),
     shotSettings: new Set(),
+    timeToReady: new Set(),
   };
 
   const handlers: WebSocketHandler[] = [];
