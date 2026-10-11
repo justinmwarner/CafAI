@@ -55,8 +55,8 @@ you see.
 
 ## Screenshots
 
-From the built-in demo (`npm run demo`, no machine needed); `npm run
-screenshots` takes them again.
+From the built-in demo (`npm run demo`, no machine needed);
+`npm run screenshots` takes them again.
 
 | The big shot graph, from a shot's card | History: every version, its change and its shots |
 |---|---|
@@ -400,8 +400,9 @@ troubleshooting.
   supports: on Android, update the Android System WebView (Decaid's README
   recommends that for display problems on older Teclast tablets).
 - **Settings > About lists things Decaid sent that CafAI did not expect.**
-  A Decaid newer than 0.8.8 changed something CafAI reads. Tap **Copy
-  report** and paste it into a [bug report](https://github.com/justinmwarner/CafAI/issues/new/choose):
+  Your Decaid sends something in another shape than the Decaid CafAI was
+  checked against (usually because it is newer). Tap **Copy report** and
+  paste it into a [bug report](https://github.com/justinmwarner/CafAI/issues/new/choose):
   it holds routes and field names only.
 - **Claude on my computer: Test fails.** Run `npm run bridge -- doctor` on
   the computer: it checks Node, Claude Code, its sign-in, one real turn, the
