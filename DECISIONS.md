@@ -281,6 +281,8 @@ evidence lives. "Repo wins" means a cloned source contradicted
   Expect, so even a card at the coach's length limits keeps Confirm in view.
   `e2e/chat-scroll.spec.ts` checks each prompt is inside the chat viewport at
   all three sizes.
+  *Amended by D127: the card's last line reads "What it changes:", no
+  longer "Expect:".*
 - **D49. The skin zip carries LICENSE, NOTICE and the font licence.** The
   zip is the distributed object code, so the GPL text and the credits travel
   with it, and the bundled Roboto files bring their SIL OFL 1.1 text
@@ -429,6 +431,10 @@ says which reading was taken and MORNING.md lists it among the top questions.
   card; stars x 2). It is never derived from the taste options, which are
   free text from the model: a derived number would put invented data into
   Decaid and Visualizer. Failed writes are retried (D64).
+  *Amended by D126: the rating is a word against the shot before (Much
+  worse to Much better), not stars; `enjoyment` gets a running score from
+  it, no longer stars x 2, and the verdict and what it was compared with go
+  to `extras.cafai` too.*
 - **D62. Grind moves use Decaid's grinder library (QUESTIONS #8).** Settings
   lists Decaid's grinders and links the one the user picks (`grinderId`,
   sent in the workflow context). With its small step (numeric) or its list
@@ -844,6 +850,9 @@ small phone on its side.
   (the key, or New bag) has the stats card under it, because CafAI is an
   everyday skin too and the machine's readings, Tare and Sleep must not
   wait for the coach.
+  *Amended by D127: Stats is no longer the only prompt: while the taste
+  question is open, Taste words and Need help? join it in that row, and
+  neither sends anything either.*
 - **D92. The graph from Shot, the phone's Shot tab, and a top bar the guard
   never covers.** The big graph is the Shot view (`#/shot`), opened from
   Shot: the tablet's top bar, or the phone's tab, renamed from Machine and
@@ -1116,6 +1125,8 @@ workflows has run.
   number into every rated shot in Decaid and Visualizer, refused (80 on a
   0-10 build) or ten times too low (8 on 0-100); a made-up id changes
   nothing on either.
+  *Amended by D126: what goes out is the running score of the barista's
+  words, not stars: the score as it is on 0-10, ten times it on 0-100.*
 - **D102. Bags link to Decaid's bean library.** `Bag` has `decaidBeanId`,
   `decaidBatchId` and `roastDate`, all `null` until set (the storage
   schema, the mirror, export and import accept bags without them). A bag
@@ -1309,6 +1320,8 @@ workflows has run.
   or `enjoyment` differently had CafAI retry the write forever, silently
   (cafai.md section 2.5); one notice tells the user what is missing in
   Decaid, and repeating a write that landed would only send it again.
+  *Amended by D126: the notices say "the rating" where they said "the
+  stars".*
 - **D110. When Decaid cannot say, CafAI says what it assumed.** When
   `POST /api/v1/machine/profile`, the barrier after each load (D55),
   answers 404 or 405, this Decaid has no barrier: CafAI assumes the machine
@@ -1452,6 +1465,9 @@ workflows has run.
   whose Less wrote 135 and turned the heater on; and clamped every step,
   so Less on steam time 0 wrote 1 s and More above the range wrote its
   top, both the wrong way.
+  *Amended by D124: steam off reads "Off in Decaid" in the field, an
+  unknown value has no buttons, and a failed write says why under its
+  field.*
 - **D115. "Which coffee is it?" comes first.** A new bag's chat opens with
   this card above the coach's question about the bag
   (`src/ui/chat/parts/BeanCard.tsx`, the `beanPicker` part in
@@ -1652,10 +1668,206 @@ workflows has run.
 
 ## The owner's list after the alignment (2026-10-11)
 
-The owner's notes of 2026-10-11: tint names, the drink settings, grinders,
-ratings in words, a coach that does not lead the barista's taste, and a
-repository ready for the public.
+The owner's notes of 2026-10-11 (D123-D128): tint names, the drink
+settings, grinders, ratings in words, a coach that does not lead the
+barista's taste, and a repository ready for the public.
 
+- **D123. The tints are named for coffee.** Settings > Appearance offers
+  Crema, Matcha, Cold Brew, Blueberry, Plum, Cherry and Tamper
+  (`src/ui/palette.ts`). Crema and Matcha stay, as do Plum, a common
+  tasting note, and Cherry, the fruit coffee grows in. Lagoon became Cold
+  Brew (the same cyan, hue 200: iced coffee's cold), Ocean became Blueberry
+  (the tasting note of natural Ethiopians; its hue moved from 250 to 265,
+  nearer the fruit and off the flow line's blue at 245-250), and Steel
+  became Tamper (the same steel grey). The ids follow the names
+  (`cold-brew`, `blueberry`, `tamper`); `normalizeTint` in
+  `src/storage/settings.ts` reads the old ids (`lagoon`, `ocean`, `steel`)
+  as the new ones wherever settings are read (the store, a backup in
+  Decaid, an import), so a look saved before keeps its tint and is written
+  back under the new id at the next save; an older CafAI reads a new id as
+  Crema (D82). The contrast sweep passes for all seven in both modes, its
+  worst cases unchanged. A name that wraps on a 320 px phone ("Cold Brew")
+  grows down from the top of its cell, so the swatches of a row stay
+  level. Why: the owner asked for tints named for coffee and cafés, with
+  name and colour agreeing; old ids read as aliases keep every saved look
+  without leaving the code with ids that name other colours.
+- **D124. Steam, hot water and flush are laid out as the machine row's
+  three drinks.** Settings > Steam, hot water and flush
+  (`src/ui/settings/DrinkSettingsSection.tsx`) groups its ten settings by
+  drink, each under the drink's name and the machine row's icon: the three
+  side by side from 600 px wide (a tablet, a phone on its side), stacked on
+  a phone, where each setting is one row, its label and then a stepper
+  184 px wide (narrower on the narrowest phones, the same for every row of
+  a drink). Labels lose the drink and the unit ("Temperature" under
+  Steam), and flush lists temperature first, as steam and hot water do. A
+  stepper is one outlined field: Less and More fill 30% of it at each end,
+  at least 48 px, so a thumb that misses the icon still lands on its button
+  rather than in the value, which would open the keyboard, and the icons
+  line up from row to row; between them the value in tabular figures with
+  its unit beside it, smaller and muted (D81). The value is a spin button
+  named for its drink ("Steam time"), its unit in words in the value text;
+  Up and Down step it from what is typed, and the two buttons are out of
+  the tab order (WAI-ARIA's spin button pattern). One line under the title
+  holds the help ("The Steam, Hot water and Flush buttons use these.
+  Changes go to Decaid at once.") or, as a status, why the settings cannot
+  be changed now ("Reading Decaid's drink settings…", "Connect the DE1 to
+  change these.", "Not while the machine is running."), in a space that
+  keeps its height. An unknown value is a dash with no buttons; steam off
+  in Decaid reads "Off in Decaid" in the field, with no note. Disabled
+  values stay in ink-muted; only the buttons fade. A write still on its
+  way after 0.4 s says "Saving…" under its field; a failed one says why
+  there, as an alert, the field outlined in the error colour and only that
+  field put back, so a write of another field that landed meanwhile stays.
+  A field disabled while it has focus (the machine started) shows Decaid's
+  value again instead of what was typed. What each control writes, and its
+  range, are D114's, unchanged. Why: the old section was ten equal fields
+  in a two-column grid whose 3/4/3 rows left orphans, so the drinks ran
+  together and every label repeated the drink and the unit; the reason
+  line came and went above the fields, moving them under a thumb that had
+  just started steam; disabled values at MUI's 38% could not be read from
+  a step back; a failed write's alert sat at the section's end, off screen
+  on a phone; and a dash between a minus and a plus read as a third minus.
+- **D125. A grinder Decaid's library lacks is added from Settings or the
+  coach's card, only on a tap.** Decaid's own app has no screen for its
+  grinder library (no route for one in `lib/src/app.dart` at `af4e995`;
+  the README of the DYE2 plugin in Decaid's tree says the core app
+  "provides no management UI for these entities"). A fresh Decaid's
+  library is empty; grinders come from DYE2's Grinders page (DYE2 is
+  bundled and loaded by default), a de1app import, a backup, or another
+  skin. Settings > Coach has **Add a grinder** under the grinder fields
+  once Decaid answered with its library (not while Decaid cannot be read,
+  nor on a Decaid without one, which answers 404). A dialog takes the
+  grinder, its burrs and its dial: a numbered dial with its smallest and
+  big step, or a list of settings, finest first
+  (`src/ui/settings/AddGrinder.tsx`, `addGrinder.ts`). It adds it with
+  `POST /api/v1/grinders` (`createGrinder` in `src/api/grinders.ts`; its
+  body, 201 and 400 checked against the pinned spec), puts it first in the
+  picker and picks it, and Save links it as any pick (D62).
+  `addOrFindGrinder` reads the list afresh and takes a grinder with the
+  same model, and the same burrs when both say, instead of adding one,
+  because Decaid itself takes duplicates. A key in any field is refused,
+  never sent (D69). The coach has `offer_grinder`, a UI tool: when the
+  barista names a grinder that is not linked, the chat shows what the
+  coach heard with **Add to Decaid** and **Not now**
+  (`src/ui/chat/parts/GrinderOfferCard.tsx`). Only Add writes: CafAI then
+  links the grinder as Settings does (its id, its model as the name, the
+  setting kept), writes it to the workflow for the next shots (D54), and
+  gives the coach its dial (`addGrinder` in `src/app/engine/engine.ts`,
+  `docs/briefs/ENGINE_PROTOCOL.md` rule 5b). A failed Add says why on the
+  card and waits for another tap; typing instead sets the card aside, and
+  nothing is added. **Edit grinders in DYE2**, shown while Decaid runs
+  DYE2 (D103), opens DYE2's Grinders page: inside Decaid the WebView keeps
+  `localhost:8080/api/v1/plugins/*` in place, as for the Decaid settings
+  button, and the page's Done goes back. CafAI never edits or deletes a
+  grinder. Grinder replies pass a zod rule (`readGrinderRecord(s)` in
+  `src/api/readers.ts`), and `listGrinders` goes through `requestList`, so
+  `null` or an empty body fails the read with drift instead of reading as
+  no grinders (D95); `getGrinder` reports an unreadable record and still
+  reads it as gone. Why: the owner asked where "Grinder from Decaid" comes
+  from and how to add a grinder. The step size is what lets the coach say
+  how far to turn (D62), and on a fresh Decaid the picker was empty and
+  CafAI could only point at DYE2. No skin can open a screen of Decaid's
+  (no deep link, route or bridge beyond `exitToDashboard()`), so CafAI
+  adds the grinder through the API every skin shares and links the one
+  page that edits them. Every skin that lists grinders reads that library,
+  so the barista's tap, never the model, decides what goes in, and an
+  existing entry is reused rather than duplicated.
+- **D126. A shot is rated in words against the shot before it, not with
+  stars.** The shot card asks "Compared with your previous shot?" and
+  offers five words in one row: **Much worse**, **Worse**, **About the
+  same**, **Better** and **Much better** (`ComparisonRating` in
+  `src/ui/chat/parts/ShotCard.tsx`). It is a radio group as the stars
+  were: one Tab stop (About the same until there is an answer), the arrow
+  keys move the answer (right and up towards better), every word at least
+  48 px tall on the Mode control's raised track, wrapping inside its
+  segment on a phone; a later tap changes the answer. The question names
+  what the shot is compared with (`baselineFor` in
+  `src/app/engine/shotRating.ts`): the shot before it in the bag's chat;
+  for a bag's first shot, the last shot CafAI credited to another bag
+  ("Compared with your last shot of Red Brick?"); before any shot at all,
+  "the coffee you usually enjoy". A card keeps that from the moment it is
+  posted (`baseline` on the shot part), and cards made before get one when
+  their chat opens. The answer is CafAI's own record, kept where the stars
+  were: `rating` (the word and its score) beside `baseline` on the shot
+  card in the stored chat, so the export and Decaid's backup carry it, and
+  `extras.cafai.verdict` and `extras.cafai.comparedWith` on Decaid's shot
+  record. Stars already given stay as they were: such a card says "You
+  rated it 4 of 5 stars." and asks nothing. Decaid's `enjoyment` still gets
+  a number, for Decaid and Visualizer, as a running score out of 10: a
+  bag's first rated shot is 5, and each later one is the score of the shot
+  it was compared with (past shots nobody rated, of the latest rated one)
+  plus one step per word, -2 to +2, kept within 0-10; old stars count as
+  twice their number, as they were written. A Decaid that rates out of 100
+  gets ten times the score (a step of 10), so Visualizer shows the same
+  number from either build. A changed answer rewrites its own shot's
+  number only, as a changed star did. The score waits in the outbox until
+  the scale is known and is dropped out loud when Decaid refuses it, as
+  the stars were ("Decaid would not save the rating for this shot: …").
+  The coach now hears the verdict: the shot's own event goes before the
+  barista can answer, so a block `[event:shot_rated]` (the word in lower
+  case and what the shot was compared with) rides in the next user turn
+  the engine sends; `untoldRatings` reads what the transcript already
+  told, so a verdict is sent once, a changed one again, and a reload loses
+  neither (`docs/briefs/ENGINE_PROTOCOL.md` rule 9). The prompt says the
+  barista's verdict outranks the numbers and the coach never contradicts
+  or explains their taste. Amends D61, D101 and D109, and ends the
+  engine-loop brief's "the rating is not sent to the coach", which only
+  kept the model protocol unchanged for that feature. Why: the owner wants
+  vaguer, relational words instead of a score ("Better, Much better …
+  Everything is relational"), and whether this cup beat the last one is a
+  judgment a barista makes reliably; Decaid's number is derived from the
+  words rather than asked for, and a bag's first shot starts in the middle
+  because another coffee's score is not on this bag's scale.
+- **D127. The coach leaves the taste to the barista: generic about taste,
+  specific about the machine.** The owner asked that the coach never guide
+  the barista's taste ("don't tell them 'It should taste…'") and that
+  tasting become a learning experience, with descriptors and a Need help?
+  option. A prompt section, "Taste is the barista's"
+  (`src/coach/prompt.ts`, after the heuristics, before the rules), says the
+  coach never says what a shot should, will or ought to taste like, never
+  predicts a flavour from a change, never tells the barista their taste is
+  wrong and never names a flavour they did not (the taste question's
+  options aside). Their own words can be the reason for a change ("You
+  found it sharp, so…"), explained by its mechanics (a finer grind slows
+  the flow, so the water stays longer and extracts more), and it invites
+  them to notice the difference against this shot. The heuristics and
+  lever descriptions stay as knowledge for choosing a change, never a
+  promise; the taste question offers neutral options, never a guess from
+  the numbers; when words and numbers disagree it asks; asked for help
+  tasting, it asks one question at a time and never answers for them. The
+  tool descriptions (`src/coach/tools.ts`) and schema comments
+  (`src/coach/contract.ts`) follow: `expectedEffect` and a template's
+  `reason` say what the profile does, never how the cup will taste.
+  `proposalWordingError` (`src/coach/validator.ts`) sends back an
+  `expectedEffect` with a word that only describes a cup (sweeter,
+  acidity, body…), a described or judged cup or finish ("a lighter cup",
+  "the same good cup", "less sharp") or a taste foretold ("should taste",
+  "it'll taste"); words with a sense at the machine pass ("a smoother
+  pressure curve", "a shorter, stronger shot"). The engine asks it of what
+  the model just wrote, beside the bounds errors, as an is_error result the
+  model fixes within the run; a proposal recovered after a reload keeps the
+  words its card already shows. The change card's last line reads "What it
+  changes:", no longer "Expect:" (amends D48). While the taste question is
+  open, **Taste words** and **Need help?** join Stats above the composer
+  (amends D91). Taste words opens neutral descriptors one group at a time
+  (acidity, sweetness, bitterness, body, finish), each with what to notice
+  as a question ("Does it make your mouth water?"); a tapped word goes into
+  the composer's draft and a second tap takes it out, so nothing is sent
+  until Send, and what is sent is the shot's taste (D44, D79). Need help?
+  opens "How to taste": what to notice, that there are no wrong answers,
+  and that the last shot is the best guide (`src/ui/chat/TasteWords.tsx`,
+  `src/ui/chat/tasteWords.ts`). On a phone on its side the prompt row
+  scrolls so the composer stays whole. The scripted coach's two voices,
+  the demo story and the fixtures follow the rules, and every proposal and
+  template reason they write passes the same check. Not built: a button
+  asking the coach to walk the barista through tasting, because text sent
+  while the taste question is open is kept as the shot's taste (D44), so
+  the request would become the taste. Why: a coach that says what a cup
+  should taste like teaches its palate, not the barista's, and a promise
+  the next cup breaks makes them doubt their own; the check sits on
+  `expectedEffect`, the field made for an effect and the one place a word
+  list is reliable, while the rationale may quote the barista's own words
+  and is left to the prompt.
 - **D128. The repository is ready for the public: a README for people who
   install CafAI, the files a public repository needs, and screenshots a
   script retakes.** `README.md` is rewritten for a reader who has never
