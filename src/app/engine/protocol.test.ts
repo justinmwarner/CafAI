@@ -3,6 +3,8 @@ import {
   awaitingModel,
   grinderPayload,
   intakeBlocks,
+  photoIntakeText,
+  pickedIntakeText,
   shotCompletedBlock,
   summaryForModel,
   toolResult,
@@ -54,12 +56,15 @@ describe('engine protocol', () => {
       grinder: grinderPayload('Niche', '12', null, false),
       scaleConnected: true,
       doseG: null,
+      bag: null,
+      roast: null,
+      today: '2026-10-10',
     });
     expect(blocks).toEqual([
       { type: 'text', text: 'Kenya Kiambu, light, washed' },
       {
         type: 'text',
-        text: '[context]\n{"grinder":{"name":"Niche","setting":"12","settingType":null,"step":null,"values":null,"linked":false},"scaleConnected":true,"doseG":null}',
+        text: '[context]\n{"grinder":{"name":"Niche","setting":"12","settingType":null,"step":null,"values":null,"linked":false},"scaleConnected":true,"doseG":null,"bag":null,"roast":null,"today":"2026-10-10"}',
       },
     ]);
   });
@@ -69,10 +74,57 @@ describe('engine protocol', () => {
       grinder: grinderPayload('Niche Zero', '15', NICHE, true),
       scaleConnected: true,
       doseG: 18,
+      bag: null,
+      roast: null,
+      today: '2026-10-10',
     });
     expect(blocks[1]).toEqual({
       type: 'text',
-      text: '[context]\n{"grinder":{"name":"Niche Zero","setting":"15","settingType":"numeric","step":0.5,"values":null,"linked":true},"scaleConnected":true,"doseG":18}',
+      text: '[context]\n{"grinder":{"name":"Niche Zero","setting":"15","settingType":"numeric","step":0.5,"values":null,"linked":true},"scaleConnected":true,"doseG":18,"bag":null,"roast":null,"today":"2026-10-10"}',
+    });
+  });
+
+  describe('a bag picked from Decaid or read from a photo (6.1, 6.8)', () => {
+    const bag = {
+      name: 'Red Brick',
+      roaster: 'Square Mile',
+      origin: 'Brazil, Mogiana',
+      roastLevel: 'medium' as const,
+      process: 'washed',
+      notes: 'chocolate, plum',
+      roastDate: '2026-09-24',
+    };
+
+    it('says what the user picked, by whom, with its details', () => {
+      expect(pickedIntakeText(bag)).toBe(
+        "The user picked Red Brick by Square Mile from Decaid's bean library: Brazil, Mogiana; washed; medium roast; roasted 2026-09-24; tasting notes: chocolate, plum.",
+      );
+      expect(pickedIntakeText({ ...bag, roaster: null, origin: null, process: null, roastLevel: null, notes: null, roastDate: null })).toBe(
+        "The user picked Red Brick from Decaid's bean library: no other details.",
+      );
+    });
+
+    it('says the user confirmed the details read from a photo of the bag', () => {
+      expect(photoIntakeText(bag)).toBe(
+        'The user confirmed these details read from a photo of the bag: Red Brick by Square Mile; Brazil, Mogiana; washed; medium roast; roasted 2026-09-24; tasting notes: chocolate, plum.',
+      );
+    });
+
+    it('puts the saved details and the roast in the context block', () => {
+      const blocks = intakeBlocks(pickedIntakeText(bag), {
+        grinder: grinderPayload(null, null, null, false),
+        scaleConnected: false,
+        doseG: 18,
+        bag,
+        roast: 'Roasted 2026-09-24 (9 days ago)',
+        today: '2026-10-03',
+      });
+      expect(JSON.parse((blocks[1] as { text: string }).text.split('\n')[1]!)).toMatchObject({
+        doseG: 18,
+        bag,
+        roast: 'Roasted 2026-09-24 (9 days ago)',
+        today: '2026-10-03',
+      });
     });
   });
 
@@ -157,11 +209,14 @@ describe('engine protocol', () => {
       doseG: 18,
       targetYieldG: 36,
       grinder: grinderPayload('Niche Zero', '13', null, false),
+      roast: 'Roasted 2026-09-24 (9 days ago)',
       summary: summaryForModel(summary),
     });
     expect(block.text.startsWith('[event:shot_completed]\n')).toBe(true);
     const payload = JSON.parse(block.text.split('\n')[1]!);
     expect(payload.levers.temp).toBe(88);
+    // The coffee's age on the day of the shot (6.1).
+    expect(payload.roast).toBe('Roasted 2026-09-24 (9 days ago)');
     expect(payload.grinder).toEqual({ name: 'Niche Zero', setting: '13', settingType: null, step: null, values: null, linked: false });
     expect(payload.summary.series).toBeUndefined();
     expect(payload.summary.yieldG).toBe(36.4);
@@ -179,6 +234,7 @@ describe('engine protocol', () => {
       doseG: 18,
       targetYieldG: 50,
       grinder: grinderPayload('Baratza Encore ESP', '5', ENCORE, true),
+      roast: null,
       summary: summaryForModel(summary),
     });
     expect(block.text).toContain(

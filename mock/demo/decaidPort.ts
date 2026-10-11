@@ -47,7 +47,14 @@ export function mockDecaidPort(state: MockDecaid): ApiPort {
     // The mock validates enjoyment 0-10, as current Decaid builds do.
     probeEnjoymentScale: async () => 10,
     listBeans: async () => state.listBeans(),
+    listBatches: async (beanId) => state.listBatches({ beanId }),
+    listAllBatches: async (options) => state.listBatches({ includeArchived: options?.includeArchived ?? false }),
     createBean: async (request) => state.createBean(request),
     createBatch: async (beanId, request) => state.createBatch(beanId, request),
+    // The demo runs no plugin: their keys hold what the mock seeded, and no endpoint answers.
+    readStore: async (namespace, key) => state.kvGet(namespace, key),
+    async getPluginEndpoint(pluginId, endpoint) {
+      throw new MockHttpError(404, { error: `plugin with ${pluginId} not loaded (${endpoint})` });
+    },
   };
 }

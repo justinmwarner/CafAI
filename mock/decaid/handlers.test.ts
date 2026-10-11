@@ -333,6 +333,10 @@ describe('beans library over HTTP (D4)', () => {
       status: 200,
       body: { archived: true },
     });
+    // Archived, the batch leaves every batch's list, and is back in it with includeArchived (a bean's earlier batches, 6.5).
+    const listed = async (path: string) => ((await call(path)).body as Array<{ id: string }>).map((item) => item.id);
+    expect(await listed('/bean-batches')).not.toContain(batchId);
+    expect(await listed('/bean-batches?includeArchived=true')).toContain(batchId);
   });
 
   it('404s an unknown bean or batch id before reading the body, 400 for a missing roaster/name', async () => {

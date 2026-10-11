@@ -291,6 +291,20 @@ describe('the bean library', () => {
     await client.listBatches('bean:1');
     expect(seen).toBe('http://localhost:8080/api/v1/beans/bean%3A1/batches');
   });
+
+  it('lists every batch in one request, the archived ones only when asked', async () => {
+    const seen: string[] = [];
+    const client = createDecaidClient({
+      origin: 'http://localhost:8080',
+      fetch: stubFetch((url) => {
+        seen.push(url);
+        return new Response(JSON.stringify([{ id: 'batch-1', beanId: 'bean-1', frozen: false, archived: false }]), { status: 200 });
+      }),
+    });
+    expect(await client.listAllBatches()).toEqual([{ id: 'batch-1', beanId: 'bean-1', frozen: false, archived: false }]);
+    await client.listAllBatches({ includeArchived: true });
+    expect(seen).toEqual(['http://localhost:8080/api/v1/bean-batches', 'http://localhost:8080/api/v1/bean-batches?includeArchived=true']);
+  });
 });
 
 // ---- connecting one device without disturbing the others ---------------------------------
@@ -643,6 +657,7 @@ describe('against the mock Decaid', () => {
     await client.getShot(latest!.id);
     await client.listPlugins();
     for (const bean of await client.listBeans()) await client.listBatches(bean.id);
+    expect((await client.listAllBatches({ includeArchived: true })).length).toBeGreaterThan(0);
     expect(drift()).toEqual([]);
   });
 

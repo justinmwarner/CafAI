@@ -34,4 +34,36 @@ describe('COACH_TOOL_SPECS', () => {
     expect(COACH_TOOL_SPECS.get_shot_series.description).toMatch(/resistance/);
     expect(COACH_TOOL_SPECS.get_shot_summary.description).toMatch(/"latest", "previous"/);
   });
+
+  it('asks save_bag_details for the roast date as YYYY-MM-DD, null when the bag does not say (6.1)', () => {
+    const { description } = COACH_TOOL_SPECS.save_bag_details;
+    expect(description).toMatch(/roast date \(YYYY-MM-DD\)/);
+    expect(description).toMatch(/Use null for anything the user has not told you; never guess/);
+  });
+
+  it('asks a correction to send every detail again as saved, since each call replaces them all', () => {
+    const { description } = COACH_TOOL_SPECS.save_bag_details;
+    expect(description).toMatch(/again only when the user corrects a detail: then send every detail as it was saved/);
+    expect(description).toMatch(/each call replaces all of them/);
+  });
+
+  it("describes DYE2's recent setups, what each holds, when there is no DYE2, and that it is for intake (6.5)", () => {
+    const { description, kind } = COACH_TOOL_SPECS.get_recent_setups;
+    expect(kind).toBe('auto');
+    for (const field of ['kind', 'sameBatch', 'profileTitle', 'grindSetting', 'doseG', 'yieldG', 'rpm', 'basket', 'date']) expect(description).toContain(field);
+    expect(description).toMatch(/equipment and basket names/);
+    expect(description).toContain('{"available":false}');
+    expect(description).toMatch(/at intake/);
+    expect(description).toMatch(/batch/);
+    expect(description).toMatch(/name and roaster/);
+  });
+
+  it('says a recent setup was only used, not that it worked, and to look once the bag has its name', () => {
+    const { description } = COACH_TOOL_SPECS.get_recent_setups;
+    expect(description).toMatch(/"recent" is one DYE2 saw used lately, which says nothing about how it tasted/);
+    expect(description).toMatch(/"favourite" and "recipe" are ones the user saved/);
+    expect(description).toMatch(/sameBatch is false for an earlier batch of the same bean/);
+    expect(description).toMatch(/after save_bag_details/);
+    expect(description).not.toMatch(/worked/);
+  });
 });

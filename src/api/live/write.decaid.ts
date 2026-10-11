@@ -161,10 +161,13 @@ describeDecaid('write', ({ url }) => {
     expect(batch.beanId, 'the batch’s bean').toBe(bean.id);
     expect((await client.listBeans()).map((item) => item.id), 'beans').toContain(bean.id);
     expect((await client.listBatches(bean.id)).map((item) => item.id), 'its batches').toContain(batch.id);
+    expect((await client.listAllBatches()).map((item) => item.id), 'every batch, as the bean card reads them').toContain(batch.id);
 
     await archiveBatch();
     await archiveBean();
     expect((await client.listBatches(bean.id)).map((item) => item.id), 'batches after archiving').not.toContain(batch.id);
+    expect((await client.listAllBatches()).map((item) => item.id), 'every batch after archiving').not.toContain(batch.id);
+    expect((await client.listAllBatches({ includeArchived: true })).map((item) => item.id), 'with the archived ones').toContain(batch.id);
     expect((await client.listBeans()).map((item) => item.id), 'beans after archiving').not.toContain(bean.id);
     expect(live.problems()).toEqual([]);
   });

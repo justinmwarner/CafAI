@@ -80,17 +80,20 @@ export {
   createShotSource,
   getBagHistory,
   getPhaseStats,
+  getRecentSetups,
   getShotSeries,
   getShotSummary,
   QUERY_TOOLS,
   runQueryTool,
+  type BagIdentity,
   type QueryContext,
   type QueryResult,
   type ResolvedShot,
   type ShotSource,
 } from './queries.ts';
 export { COACH_TOOL_SPECS } from './tools.ts';
-export { buildSystemPrompt, type SystemPromptOptions } from './prompt.ts';
+export { buildSystemPrompt, roastLine, type SystemPromptOptions } from './prompt.ts';
+export { freezerDays, localDay, roastAgeDays, todayOf, writtenDate, type FreezerDates } from './roastAge.ts';
 export { COACH_HEURISTICS, type CoachHeuristics } from './heuristics.ts';
 export { DEFAULT_TASTE_OPTIONS, isOtherLike, withOther } from './feedback.ts';
 export { buildVersionProfile, MAX_TITLE_LENGTH, versionTitle } from './version.ts';

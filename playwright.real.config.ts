@@ -6,6 +6,9 @@ import { defineConfig, devices } from '@playwright/test';
 // web server and no mocks: not part of `npm run e2e`.
 export default defineConfig({
   testDir: './e2e-real',
+  // Not test-results/: each run empties its output folder first, which would
+  // take the traces of an `npm run e2e` running at the same time.
+  outputDir: './test-results-real',
   timeout: 90_000,
   // Decaid's sockets and the first readings can take a moment after the page loads.
   expect: { timeout: 30_000 },

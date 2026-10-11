@@ -37,11 +37,18 @@ const KEY_PREFIX = ['sk', 'ant', ''].join('-');
 
 const S0 = { templateId: 'blooming-espresso', confidence: 'high', reason: 'A bloom suits a dense light roast.' };
 const S1 = { templateId: 'd-flow', confidence: 'low', reason: 'Forgiving for most roasts.' };
-const SAVE_INPUT = { name: 'Kiambu AA', roaster: null, origin: 'Kenya', roastLevel: 'light', process: 'washed', notes: null };
+const SAVE_INPUT = { name: 'Kiambu AA', roaster: null, origin: 'Kenya', roastLevel: 'light', process: 'washed', notes: null, roastDate: null };
 const ASK_INPUT = { question: 'Milk or straight?', options: ['Straight', 'With milk'], multiSelect: false };
 
 const INTAKE = userMessage(
-  intakeBlocks('Kiambu AA, light roast, washed', { grinder: grinderPayload(null, null, null, false), scaleConnected: true, doseG: null }),
+  intakeBlocks('Kiambu AA, light roast, washed', {
+    grinder: grinderPayload(null, null, null, false),
+    scaleConnected: true,
+    doseG: null,
+    bag: null,
+    roast: null,
+    today: '2026-10-10',
+  }),
 );
 const REPLY: LlmMessage = {
   role: 'assistant',

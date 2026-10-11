@@ -196,6 +196,14 @@ describe('import validation', () => {
     expect(JSON.stringify(parsed.conversations[0]?.apiMessages)).toBe(JSON.stringify(conversation.apiMessages));
   });
 
+  it("keeps an iteration's Visualizer link, and leaves an older iteration without one as it was (6.4)", () => {
+    const url = 'https://visualizer.coffee/shots/c5b6b2b8-0f2e';
+    const parsed = parseCafaiExport(exportOf({ iterations: [makeIteration({ visualizerUrl: url }), makeIteration({ id: 'iter_older' })] }));
+    expect(parsed.iterations[0]?.visualizerUrl).toBe(url);
+    expect(parsed.iterations[1]).not.toHaveProperty('visualizerUrl');
+    expect(() => parseCafaiExport(exportOf({ iterations: [makeIteration({ visualizerUrl: 42 as never })] }))).toThrow(ImportError);
+  });
+
   it('accepts iterations without summary.series, as restored from the mirror', () => {
     const { series: _series, ...summary } = makeSummary();
     const parsed = parseCafaiExport(exportOf({ iterations: [makeIteration({ summary: summary as never })] }));

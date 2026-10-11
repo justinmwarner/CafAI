@@ -96,6 +96,16 @@ export function formatDateTime(iso: string): string {
   return `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}, ${hh}:${mm}`;
 }
 
+/**
+ * "3 Sep 2026" for a calendar day ("YYYY-MM-DD"), read from its own digits:
+ * through Date a plain date is midnight UTC, the day before west of Greenwich.
+ */
+export function formatDate(day: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  const month = match ? MONTHS[Number(match[2]) - 1] : undefined;
+  return match && month ? `${Number(match[3])} ${month} ${match[1]}` : day;
+}
+
 export interface DiffLineParts {
   label: string;
   before: string;

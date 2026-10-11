@@ -17,7 +17,7 @@ import { afterAll, assert, beforeAll, describe, expect, inject, it } from 'vites
 import { anthropicHandlers, resetAnthropicMock } from '../../../mock/anthropic/handlers.ts';
 import { grinderPayload, intakeBlocks, userMessage, type IntakeContext } from '../../app/engine/protocol.ts';
 import { TEMPLATE_IDS, TOOL, TOOL_INPUTS } from '../../coach/contract.ts';
-import { TEMPLATES, buildSystemPrompt } from '../../coach/index.ts';
+import { TEMPLATES, buildSystemPrompt, todayOf } from '../../coach/index.ts';
 import {
   DEFAULT_EFFORT,
   DEFAULT_MODEL,
@@ -61,11 +61,17 @@ const TINY_MAX_TOKENS = 1024;
 
 const CATALOG: readonly string[] = TEMPLATE_IDS;
 const BAG = 'Kiambu AA from Square Mile, a washed Kenyan, light roast. Blackcurrant, grapefruit and brown sugar.';
-/** As the engine sends it (rule 1): a grinder typed in Settings, not linked to Decaid's library, and no dose to coach from. */
+/**
+ * As the engine sends it (rule 1): a grinder typed in Settings, not linked to
+ * Decaid's library, no dose to coach from, and the bag described in words.
+ */
 const INTAKE_CONTEXT: IntakeContext = {
   grinder: grinderPayload('Niche Zero', '15', null, false),
   scaleConnected: true,
   doseG: null,
+  bag: null,
+  roast: null,
+  today: todayOf(new Date()),
 };
 const TINY: LlmMessage = userMessage([{ type: 'text', text: 'Reply with the single word OK.' }]);
 

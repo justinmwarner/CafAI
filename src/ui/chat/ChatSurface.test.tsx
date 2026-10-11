@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import './testing/setup.ts';
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { CoachUiMessage } from '../../app/types.ts';
 import { TID } from '../testIds.ts';
 import { ChatSurface, latestAppliedDiffId, toChatMessages, type ChatSurfaceProps } from './ChatSurface.tsx';
-import { conversation, sampleSummary } from './testing/fixtures.ts';
+import { BAG_FROM_PHOTO, BEAN_OPTIONS, conversation, sampleSummary } from './testing/fixtures.ts';
 import { previewTheme } from './testing/previewTheme.ts';
 import { renderWithServices } from './testing/render.tsx';
 
@@ -157,6 +157,123 @@ describe('ChatSurface', () => {
   it('blocks card taps while busy', () => {
     renderSurface({ messages: conversation('diff'), busy: true });
     expect(screen.getByTestId(TID.diffConfirm)).toBeDisabled();
+  });
+
+  describe("a new bag's first cards (6.1, 6.8)", () => {
+    const beanCard: CoachUiMessage = {
+      id: 'm-bean',
+      role: 'assistant',
+      parts: [{ kind: 'beanPicker', options: BEAN_OPTIONS, choice: null }],
+      createdAt: '2026-10-03T08:00:00.000Z',
+    };
+    const confirmCard: CoachUiMessage = {
+      id: 'm-confirm',
+      role: 'assistant',
+      parts: [{ kind: 'bagConfirm', details: BAG_FROM_PHOTO, confirmed: false }],
+      createdAt: '2026-10-03T08:01:00.000Z',
+    };
+
+    it('shows "Which coffee is it?" and passes a pick and Something else on', async () => {
+      const onPickBean = vi.fn();
+      const onSkipBeanPick = vi.fn();
+      renderSurface({ messages: [beanCard, textMessage('m-q', 'assistant', 'New bag!')], onPickBean, onSkipBeanPick });
+      const card = screen.getByTestId(TID.beanCard);
+      await userEvent.click(within(card).getAllByTestId(TID.beanOption)[0]!);
+      expect(onPickBean).toHaveBeenCalledWith('batch-red');
+      await userEvent.click(within(card).getByTestId(TID.beanSomethingElse));
+      expect(onSkipBeanPick).toHaveBeenCalledTimes(1);
+    });
+
+    it('blocks the bean card while the coach works', () => {
+      renderSurface({ messages: [beanCard], busy: true });
+      expect(screen.getByTestId(TID.bagPhoto)).toBeDisabled();
+    });
+
+    it("opens a new bag's chat at the top of the card, keeps it there while its rows arrive, and follows once it is answered", async () => {
+      const onSkipBeanPick = vi.fn();
+      const question = textMessage('m-q', 'assistant', 'New bag! Tell me about it.');
+      const looking: CoachUiMessage = { ...beanCard, parts: [{ kind: 'beanPicker', options: [], choice: null, loading: true }] };
+      const { rerender } = renderSurface({ messages: conversation('options'), onSkipBeanPick, statsCard: true });
+      const scroller = screen.getByTestId(TID.chat).querySelector<HTMLElement>('.MuiChatMessageList-scroller')!;
+      // jsdom lays nothing out: a 300 px view over 1000 px of thread, read to its end.
+      Object.defineProperty(scroller, 'scrollHeight', { configurable: true, get: () => 1000 });
+      Object.defineProperty(scroller, 'clientHeight', { configurable: true, get: () => 300 });
+      Object.defineProperty(scroller, 'scrollTop', { configurable: true, writable: true, value: 700 });
+
+      rerender({ messages: [looking, question], onSkipBeanPick, statsCard: true });
+      expect(scroller.scrollTop).toBe(0);
+      rerender({ messages: [beanCard, question], onSkipBeanPick, statsCard: true });
+      expect(scroller.scrollTop).toBe(0);
+
+      await userEvent.click(screen.getByTestId(TID.beanSomethingElse));
+      expect(onSkipBeanPick).toHaveBeenCalledTimes(1);
+      const skipped: CoachUiMessage = { ...beanCard, parts: [{ kind: 'beanPicker', options: BEAN_OPTIONS, choice: { kind: 'other' } }] };
+      rerender({ messages: [skipped, question], onSkipBeanPick, statsCard: true });
+      expect(scroller.scrollTop).toBe(700);
+    });
+
+    it("keeps a new bag's card at its top when x-chat draws the new thread only after it was handed over", () => {
+      // As in a browser: the thread's resizes reach the follower (jsdom has no ResizeObserver).
+      const observers: ResizeObserverCallback[] = [];
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(callback: ResizeObserverCallback) {
+            observers.push(callback);
+          }
+          observe() {}
+          disconnect() {}
+        },
+      );
+      const resized = () => act(() => observers.forEach((callback) => callback([], {} as ResizeObserver)));
+      try {
+        const question = textMessage('m-q', 'assistant', 'New bag! Tell me about it.');
+        const looking: CoachUiMessage = { ...beanCard, parts: [{ kind: 'beanPicker', options: [], choice: null, loading: true }] };
+        const { rerender } = renderSurface({ messages: conversation('options') });
+        const scroller = screen.getByTestId(TID.chat).querySelector<HTMLElement>('.MuiChatMessageList-scroller')!;
+        Object.defineProperty(scroller, 'scrollHeight', { configurable: true, get: () => 1000 });
+        Object.defineProperty(scroller, 'clientHeight', { configurable: true, get: () => 300 });
+        Object.defineProperty(scroller, 'scrollTop', { configurable: true, writable: true, value: 700 });
+
+        // The old bag's thread, read to its end, gives way to the new bag's: drawn by x-chat a moment later.
+        rerender({ messages: [looking, question] });
+        resized();
+        expect(scroller.scrollTop).toBe(0);
+        rerender({ messages: [beanCard, question] });
+        resized();
+        expect(scroller.scrollTop).toBe(0);
+        // Something newer than the coach's question: followed.
+        rerender({ messages: [beanCard, question, noticeMessage('m-n', "Added to Decaid's beans.")] });
+        resized();
+        expect(scroller.scrollTop).toBe(700);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('opens a chat at its end when its bean card was answered', () => {
+      const { rerender } = renderSurface({ messages: conversation('options') });
+      const scroller = screen.getByTestId(TID.chat).querySelector<HTMLElement>('.MuiChatMessageList-scroller')!;
+      Object.defineProperty(scroller, 'scrollHeight', { configurable: true, get: () => 1000 });
+      Object.defineProperty(scroller, 'clientHeight', { configurable: true, get: () => 300 });
+      Object.defineProperty(scroller, 'scrollTop', { configurable: true, writable: true, value: 0 });
+      const picked: CoachUiMessage = { ...beanCard, parts: [{ kind: 'beanPicker', options: BEAN_OPTIONS, choice: { kind: 'batch', batchId: 'batch-red' } }] };
+      rerender({ messages: [picked, textMessage('m-q', 'assistant', 'New bag!'), textMessage('m-r', 'assistant', 'Lovely.')] });
+      expect(scroller.scrollTop).toBe(700);
+    });
+
+    it("shows the photo's details to confirm and passes them on as confirmed", async () => {
+      const onConfirmBag = vi.fn();
+      renderSurface({ messages: [{ ...beanCard, parts: [{ kind: 'beanPicker', options: [], choice: { kind: 'photo' } }] }, confirmCard], onConfirmBag });
+      await userEvent.click(within(screen.getByTestId(TID.bagConfirm)).getByRole('button', { name: 'Confirm' }));
+      expect(onConfirmBag).toHaveBeenCalledWith(BAG_FROM_PHOTO);
+    });
+  });
+
+  it("shows On Visualizer on a shot's card once it has the link (6.4)", () => {
+    const url = 'https://visualizer.coffee/shots/viz-1';
+    renderSurface({ messages: [{ ...shotMessage('m-shot', 'shot-1'), parts: [{ kind: 'shot', shotId: 'shot-1', summary: sampleSummary(), visualizerUrl: url }] }] });
+    expect(within(screen.getByTestId(TID.shotCard)).getByTestId(TID.visualizerLink)).toHaveAttribute('href', url);
   });
 
   it('offers Undo only on the latest applied card, and only when undo is possible', async () => {

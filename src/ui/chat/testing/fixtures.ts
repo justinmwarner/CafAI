@@ -3,7 +3,8 @@
  * one light Kenyan bag dialed in over three days, with every chat part kind.
  * Not shipped.
  */
-import type { CoachState, CoachUiMessage, CoachUiPart } from '../../../app/types.ts';
+import type { BeanPickerOption, CoachState, CoachUiMessage, CoachUiPart } from '../../../app/types.ts';
+import type { SaveBagDetails } from '../../../coach/contract.ts';
 import type { ShotSeries, ShotSummary } from '../../../coach/types.ts';
 import type { Bag, IterationRecord, ProfileVersion } from '../../../storage/types.ts';
 
@@ -228,6 +229,47 @@ function msg(role: CoachUiMessage['role'], parts: CoachUiPart[]): CoachUiMessage
   return { id: `m-${clock}`, role, parts, createdAt: new Date(T0 + clock * 60_000).toISOString() };
 }
 const text = (value: string, streaming = false): CoachUiPart => ({ kind: 'text', text: value, ...(streaming ? { streaming } : {}) });
+
+/** Two batches of Decaid's bean library as the bean card offers them (6.1), the second frozen for 12 days. */
+export const BEAN_OPTIONS: BeanPickerOption[] = [
+  {
+    beanId: 'bean-red',
+    batchId: 'batch-red',
+    name: 'Red Brick',
+    roaster: 'Square Mile Coffee Roasters',
+    origin: 'Brazil, Mogiana',
+    process: 'washed',
+    notes: 'Chocolate, plum',
+    roastLevel: 'medium',
+    roastDate: '2026-09-24',
+    freezeDate: null,
+    unfreezeDate: null,
+  },
+  {
+    beanId: 'bean-chel',
+    batchId: 'batch-chel',
+    name: 'Ethiopia Chelchele',
+    roaster: 'Heart Coffee Roasters',
+    origin: 'Ethiopia, Guji',
+    process: 'natural',
+    notes: null,
+    roastLevel: 'light',
+    roastDate: '2026-09-03',
+    freezeDate: '2026-09-04',
+    unfreezeDate: '2026-09-16',
+  },
+];
+
+/** A bag's details as read from a photo of it (6.8). */
+export const BAG_FROM_PHOTO: SaveBagDetails = {
+  name: 'Kiambu AA',
+  roaster: 'Square Mile',
+  origin: 'Kenya, Kiambu',
+  roastLevel: 'light',
+  process: 'washed',
+  notes: 'blackcurrant, grapefruit, brown sugar',
+  roastDate: '2026-09-28',
+};
 
 export const TEMPLATE_ITEMS = [
   {

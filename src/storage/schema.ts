@@ -168,6 +168,8 @@ export const IterationSchema = z.object({
   proposal: exact<ProposeAdjustment>(ProposalShape).nullable().default(null),
   change: exact<AppliedChange>(AppliedChangeShape).nullable().default(null),
   outcome: z.enum(['pending', 'applied', 'declined', 'undone', 'kept', 'superseded']),
+  /** The shot's Visualizer page (6.4); left absent on older iterations, as the bag's Decaid link is. */
+  visualizerUrl: optionalNullableText,
   createdAt: timestamp,
   updatedAt: timestamp,
 });

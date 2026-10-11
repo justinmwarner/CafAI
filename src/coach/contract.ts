@@ -30,6 +30,8 @@ export const TOOL = {
   getPhaseStats: 'get_phase_stats',
   compareShots: 'compare_shots',
   getBagHistory: 'get_bag_history',
+  /** Auto tool: DYE2's recent setups for this bag's coffee (D103). Read-only. */
+  getRecentSetups: 'get_recent_setups',
 } as const;
 
 export type ToolName = (typeof TOOL)[keyof typeof TOOL];
@@ -45,6 +47,7 @@ export const AUTO_TOOLS: readonly ToolName[] = [
   TOOL.getPhaseStats,
   TOOL.compareShots,
   TOOL.getBagHistory,
+  TOOL.getRecentSetups,
 ];
 
 /** The label CafAI always appends as the last option of every ask_user. */
@@ -53,15 +56,31 @@ export const OTHER_OPTION = 'Other';
 export const ROAST_LEVELS = ['light', 'medium-light', 'medium', 'medium-dark', 'dark'] as const;
 export type RoastLevel = (typeof ROAST_LEVELS)[number];
 
+/**
+ * One of CafAI's five roast levels, matched whatever the case (a space or an
+ * underscore counts as the hyphen): "Medium Light" from Decaid's bean
+ * library or a photo of the bag is "medium-light". Null for anything else.
+ */
+export function toRoastLevel(value: unknown): RoastLevel | null {
+  if (typeof value !== 'string') return null;
+  const words = value.trim().toLowerCase().replace(/[\s_]+/g, '-');
+  return (ROAST_LEVELS as readonly string[]).includes(words) ? (words as RoastLevel) : null;
+}
+
+/** The longest text each bag detail takes, in characters (the bag photo's confirm card shows the same). */
+export const BAG_LIMITS = { name: 40, roaster: 60, origin: 80, process: 40, notes: 300 } as const;
+
 export const SaveBagDetailsInput = z.object({
   /** Short name used in profile titles ("<name> v1"), e.g. "Kiambu AA". */
-  name: z.string().trim().min(1).max(40),
-  roaster: z.string().max(60).nullable(),
-  origin: z.string().max(80).nullable(),
+  name: z.string().trim().min(1).max(BAG_LIMITS.name),
+  roaster: z.string().max(BAG_LIMITS.roaster).nullable(),
+  origin: z.string().max(BAG_LIMITS.origin).nullable(),
   roastLevel: z.enum(ROAST_LEVELS).nullable(),
-  process: z.string().max(40).nullable(),
+  process: z.string().max(BAG_LIMITS.process).nullable(),
   /** Tasting notes from the bag, comma separated. */
-  notes: z.string().max(300).nullable(),
+  notes: z.string().max(BAG_LIMITS.notes).nullable(),
+  /** The roast date printed on the bag (6.1). */
+  roastDate: z.iso.date().nullable(),
 });
 export type SaveBagDetails = z.infer<typeof SaveBagDetailsInput>;
 
@@ -152,6 +171,7 @@ export const GetShotSeriesInput = z.object({
 export const GetPhaseStatsInput = z.object({ shot: ShotRefSchema });
 export const CompareShotsInput = z.object({ shotA: ShotRefSchema, shotB: ShotRefSchema });
 export const GetBagHistoryInput = z.object({});
+export const GetRecentSetupsInput = z.object({});
 
 export const TOOL_INPUTS = {
   [TOOL.saveBagDetails]: SaveBagDetailsInput,
@@ -163,6 +183,7 @@ export const TOOL_INPUTS = {
   [TOOL.getPhaseStats]: GetPhaseStatsInput,
   [TOOL.compareShots]: CompareShotsInput,
   [TOOL.getBagHistory]: GetBagHistoryInput,
+  [TOOL.getRecentSetups]: GetRecentSetupsInput,
 } as const satisfies Record<ToolName, z.ZodType>;
 
 /**

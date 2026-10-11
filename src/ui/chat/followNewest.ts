@@ -8,6 +8,16 @@
  * arrives or the reader scrolls to its end. Scrolling up stops following;
  * scrolling back to the bottom, sending or tapping a card resumes it.
  *
+ * A new thread that opens on a card to answer first (the bean card, 6.1) is
+ * shown from that card's top instead, and stays there while the rows below
+ * it grow (the card's own rows arriving, the stats card's numbers), until
+ * something newer arrives, the reader scrolls to the end, or acts. "Newer"
+ * is told by the thread's newest row as the app has it, not by the
+ * scroller's elements: x-chat draws a new thread a moment after it is
+ * handed over, so the elements at first are the old thread's. A reader who
+ * scrolls the card meanwhile is reading it: the thread stops following
+ * until they act or reach the end.
+ *
  * Our own scrolls are told apart from the reader's by position, not by
  * "is it at the bottom": the scroll event can be dispatched after more
  * content rendered, which made a programmatic scroll look like the reader
@@ -41,16 +51,31 @@ export interface FollowNewest {
   resume(): void;
   /** A new thread replaced the old one: follow it from scratch. */
   reset(): void;
+  /**
+   * A new thread that opens on a card to answer first: show the thread from
+   * its start, the card's top, and stay there while its newest row (newestRow) stays the same.
+   */
+  showStart(): void;
   /** Call from the scroller's scroll listener. */
   onScroll(): void;
   readonly following: boolean;
 }
 
-export function createFollowNewest(scroller: ScrollBox, newest: () => NewestMessage | null): FollowNewest {
+/**
+ * `newestRow` names the thread's newest row as the app has it (its id),
+ * which the scroller may draw a moment later; by default the newest element.
+ */
+export function createFollowNewest(
+  scroller: ScrollBox,
+  newest: () => NewestMessage | null,
+  newestRow: () => unknown = () => newest()?.key ?? null,
+): FollowNewest {
   let following = true;
   /** The view shows the end of the thread (as opposed to a tall message's start). */
   let atEnd = true;
   let revealed: unknown = null;
+  /** While a new thread is shown from its start (showStart): its newest row then, whose successor ends the hold. */
+  let held: { row: unknown } | null = null;
   let expectedTop: number | null = null;
   let lastTop = scroller.scrollTop;
 
@@ -67,6 +92,15 @@ export function createFollowNewest(scroller: ScrollBox, newest: () => NewestMess
     },
     update() {
       if (!following) return;
+      if (held) {
+        // At the start until something newer arrives, also when the thread
+        // itself is drawn only now, or grows from its first rows to all of them.
+        if (newestRow() === held.row) {
+          scrollTo(0);
+          return;
+        }
+        held = null;
+      }
       const message = newest();
       if (message && message.height > scroller.clientHeight - REVEAL_MARGIN_PX) {
         if (message.key !== revealed) {
@@ -83,11 +117,19 @@ export function createFollowNewest(scroller: ScrollBox, newest: () => NewestMess
     },
     resume() {
       following = true;
+      held = null;
     },
     reset() {
       following = true;
       atEnd = true;
       revealed = null;
+      held = null;
+    },
+    showStart() {
+      following = true;
+      atEnd = false;
+      held = { row: newestRow() };
+      scrollTo(0);
     },
     onScroll() {
       const top = scroller.scrollTop;
@@ -101,8 +143,11 @@ export function createFollowNewest(scroller: ScrollBox, newest: () => NewestMess
       if (scroller.scrollHeight - top - scroller.clientHeight < STICK_THRESHOLD_PX) {
         following = true;
         atEnd = true;
+        held = null;
       } else {
-        if (top < lastTop - 1) following = false;
+        // Up, or anywhere in a card held at its start: the reader is reading.
+        if (top < lastTop - 1 || held) following = false;
+        held = null;
         atEnd = false;
       }
       lastTop = top;

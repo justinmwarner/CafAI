@@ -57,6 +57,8 @@ export async function createServices(win: Window): Promise<AppServices> {
       },
     },
     restoredFromBackup: restore === 'restored',
+    // DYE2's setups for the coach and the Visualizer link on shot cards, while those plugins run (D103).
+    plugins,
   });
 
   telemetry.start();

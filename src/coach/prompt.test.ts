@@ -7,10 +7,11 @@ import { EVENT, TOOL, TEMPLATE_IDS } from './contract.ts';
 import { COACH_HEURISTICS } from './heuristics.ts';
 import { formatLeverValue } from './diff.ts';
 import { readLeverValue } from './levers.ts';
-import { buildSystemPrompt } from './prompt.ts';
+import { buildSystemPrompt, roastLine } from './prompt.ts';
 import { getTemplate, TEMPLATES } from './templates/index.ts';
 
 const prompt = buildSystemPrompt(TEMPLATES);
+const loopOf = (text: string) => text.slice(text.indexOf('# The loop'), text.indexOf('# Template catalog'));
 
 describe('buildSystemPrompt: determinism', () => {
   it('is byte-identical on every call, so it caches', () => {
@@ -131,9 +132,41 @@ describe('buildSystemPrompt: content', () => {
       '"linked"',
       '"onMachine"',
       '"loadError"',
+      '"bag"',
+      '"roast"',
     ]) {
       expect(prompt).toContain(key);
     }
+  });
+
+  it("says details from Decaid's bean library or a confirmed bag photo are already saved, and how the roast reads (6.1, 6.8)", () => {
+    const intake = loopOf(prompt)
+      .split('\n')
+      .find((line) => line.startsWith('1. Intake.'))!;
+    expect(intake).toContain(
+      '"bag":{"name":string,"roaster":string|null,"origin":string|null,"roastLevel":string|null,"process":string|null,"notes":string|null,"roastDate":string|null}|null,"roast":string|null,"today":"YYYY-MM-DD"}',
+    );
+    expect(intake).toMatch(/"bag" is set when the user picked the coffee from Decaid's bean library or confirmed the details read from a photo of the bag/);
+    expect(intake).toMatch(/already saved, so call save_bag_details only to correct one, with every other detail as saved/);
+    expect(intake).toContain('"Roasted YYYY-MM-DD (n days ago; m days in the freezer not counted)"');
+    expect(intake).toMatch(/null when the roast date is unknown/);
+  });
+
+  it("gives today's date at intake, to read a roast date said in words (6.1)", () => {
+    const intake = loopOf(prompt)
+      .split('\n')
+      .find((line) => line.startsWith('1. Intake.'))!;
+    expect(intake).toMatch(/"today" is the date where the user is/);
+    expect(intake).toMatch(/"roasted 28 September" is the latest 28 September that is not after today/);
+    expect(intake).toMatch(/"roasted 3 days ago" counts back from today/);
+  });
+
+  it('gives the roast with every shot, counted to the day of the shot (6.1)', () => {
+    const shot = loopOf(prompt)
+      .split('\n')
+      .find((line) => line.startsWith('3. Shot completed.'))!;
+    expect(shot).toContain('"grinder":{the same fields as at intake},"roast":string|null,"summary":{aggregates and phases}}');
+    expect(shot).toMatch(/"roast" reads as at intake, counted to the day of the shot/);
   });
 
   it('tells a connected machine that has not confirmed a version from one that is away (loadError)', () => {
@@ -152,7 +185,7 @@ describe('buildSystemPrompt: content', () => {
 
   it('tells the model the dose at intake and where v1 stops (D57)', () => {
     const loop = prompt.slice(prompt.indexOf('# The loop'), prompt.indexOf('# Template catalog'));
-    expect(loop).toContain('"scaleConnected":boolean,"doseG":number|null}');
+    expect(loop).toContain('"scaleConnected":boolean,"doseG":number|null,"bag":');
     expect(loop).toMatch(/doseG is the dose set in Decaid when CafAI coaches from it \(12-25 g\), else null/);
     expect(loop).toContain('{"picked":"<templateId>","version":1,"title":"<Bag> v1","yieldG":number,"doseG":number|null,"uploaded":true|false,');
     expect(loop).toMatch(/yieldG is where v1 stops: the template's start ratio times doseG, or times 18 g when doseG is null/);
@@ -254,6 +287,41 @@ describe('buildSystemPrompt: content', () => {
     expect(catalog).toBeGreaterThan(0);
     expect(reading).toBeGreaterThan(catalog);
     expect(rules).toBeGreaterThan(reading);
+  });
+});
+
+describe('roastLine', () => {
+  const TODAY = new Date(2026, 9, 10, 9, 30);
+
+  it('gives the roast date and the age in days (6.1)', () => {
+    expect(roastLine('2026-10-01', TODAY)).toBe('Roasted 2026-10-01 (9 days ago)');
+    expect(roastLine('2026-10-09', TODAY)).toBe('Roasted 2026-10-09 (1 day ago)');
+    expect(roastLine('2026-10-10', TODAY)).toBe('Roasted 2026-10-10 (today)');
+  });
+
+  it('reads a roast date written in UTC as its own day, in New York too', () => {
+    const before = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+    try {
+      expect(roastLine('2026-10-01T00:00:00.000Z', new Date(2026, 9, 10, 9, 30))).toBe('Roasted 2026-10-01 (9 days ago)');
+    } finally {
+      if (before === undefined) delete process.env.TZ;
+      else process.env.TZ = before;
+    }
+  });
+
+  it('leaves out the days in the freezer, and says how many', () => {
+    const batch = { freezeDate: '2026-09-11T00:00:00.000', unfreezeDate: '2026-09-23T00:00:00.000' };
+    expect(roastLine('2026-09-10', TODAY, batch)).toBe('Roasted 2026-09-10 (18 days ago; 12 days in the freezer not counted)');
+    expect(roastLine('2026-09-10', TODAY, { freezeDate: '2026-09-11', unfreezeDate: '2026-09-12' })).toBe(
+      'Roasted 2026-09-10 (29 days ago; 1 day in the freezer not counted)',
+    );
+  });
+
+  it('gives the date alone when it is after today, and nothing without one', () => {
+    expect(roastLine('2026-10-12', TODAY)).toBe('Roasted 2026-10-12');
+    expect(roastLine(null, TODAY)).toBeNull();
+    expect(roastLine('last week', TODAY)).toBeNull();
   });
 });
 

@@ -189,6 +189,27 @@ describe('ShotCard graph link', () => {
   });
 });
 
+describe('ShotCard Visualizer link (6.4)', () => {
+  const url = 'https://visualizer.coffee/shots/c5b6b2b8-0f2e';
+
+  it("links to the shot's page on Visualizer with a plain link, once the plugin uploaded it", () => {
+    renderThemed(<ShotCard summary={sampleSummary()} visualizerUrl={url} />);
+    const link = screen.getByTestId(TID.visualizerLink);
+    expect(link.tagName).toBe('A');
+    expect(link).toHaveAttribute('href', url);
+    expect(link).not.toHaveAttribute('target');
+    expect(link).toHaveTextContent('On Visualizer');
+    expect(screen.getByRole('link', { name: 'On Visualizer' })).toBe(link);
+  });
+
+  it('shows no link before the upload, nor one that does not lead to Visualizer', () => {
+    renderThemed(<ShotCard summary={sampleSummary()} />);
+    expect(screen.queryByTestId(TID.visualizerLink)).toBeNull();
+    renderThemed(<ShotCard summary={sampleSummary()} visualizerUrl="javascript:alert(1)" />);
+    expect(screen.queryByTestId(TID.visualizerLink)).toBeNull();
+  });
+});
+
 describe('ShotCard sparkline', () => {
   it('keys the curves with drawn swatches, not box-drawing characters', () => {
     renderThemed(<ShotCard summary={sampleSummary()} />);

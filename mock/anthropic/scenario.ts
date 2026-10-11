@@ -12,7 +12,7 @@
  * default; the demo voice (demoVoice.ts) writes fuller prose around the same
  * tool calls.
  */
-import { EVENT, TEMPLATE_IDS, TOOL, type ProposeAdjustment, type RoastLevel } from '../../src/coach/contract.ts';
+import { EVENT, TEMPLATE_IDS, TOOL, toRoastLevel, type ProposeAdjustment, type RoastLevel } from '../../src/coach/contract.ts';
 import { resolveGrindMove } from '../../src/coach/grinder.ts';
 import { pourTime } from '../../src/coach/summary/pourClock.ts';
 import type { GrinderInfo } from '../../src/coach/types.ts';
@@ -172,6 +172,27 @@ function resultText(block: Raw): string {
 // Request checks
 // ---------------------------------------------------------------------------
 
+const IMAGE_TYPES: readonly string[] = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/** The API takes images in user turns only, as base64 data of four types: a data URL or anything else is refused. */
+function checkImages(messages: Message[]): ScenarioResponse | null {
+  for (const [i, message] of messages.entries()) {
+    for (const [j, block] of message.content.entries()) {
+      if (block.type !== 'image') continue;
+      if (message.role !== 'user') return invalid(`messages.${i}.content.${j}: images are only accepted in user messages.`);
+      const source = isRecord(block.source) ? block.source : {};
+      if (source.type !== 'base64' || typeof source.media_type !== 'string' || !IMAGE_TYPES.includes(source.media_type)) {
+        return invalid(`messages.${i}.content.${j}.image.source: expected base64 data of type image/jpeg, image/png, image/gif or image/webp.`);
+      }
+      if (typeof source.data !== 'string' || !BASE64.test(source.data)) {
+        return invalid(`messages.${i}.content.${j}.image.source.data: the image is not valid base64 data.`);
+      }
+    }
+  }
+  return null;
+}
+
 function checkHeaders(headers: HeaderSource): ScenarioResponse | null {
   if (!(headers.get('content-type') ?? '').includes('application/json')) {
     return invalid('content-type: expected application/json.');
@@ -210,6 +231,8 @@ function checkBody(body: Raw, messages: Message[], memory: ScenarioMemory): Scen
   if (messages[messages.length - 1]?.role !== 'user') {
     return invalid('messages: the last message must be a user message (assistant prefill is not supported).');
   }
+  const imageError = checkImages(messages);
+  if (imageError) return imageError;
 
   for (let i = 0; i < messages.length; i++) {
     const message = messages[i];
@@ -665,7 +688,22 @@ function suggestionsFor(roastLevel: RoastLevel | null) {
   return ranking.map(([templateId, confidence]) => ({ templateId, confidence, reason: TEMPLATE_REASONS[templateId] }));
 }
 
-/** The roast level saved at intake (the save_bag_details call), else read from the bag description. */
+/**
+ * The bag's details CafAI saved before the intake, when it picked them from
+ * Decaid's bean library or read them from a photo the user confirmed: the
+ * first message's context block carries them as "bag" (6.1, 6.8). Else null.
+ */
+function knownBag(messages: Message[]): Raw | null {
+  const first = messages.find((m) => m.role === 'user');
+  for (const text of textsOf(first)) {
+    if (!text.startsWith(EVENT.context)) continue;
+    const bag = eventPayload(text)?.bag;
+    if (isRecord(bag)) return bag;
+  }
+  return null;
+}
+
+/** The roast level saved at intake (the save_bag_details call, or the bag CafAI saved itself), else read from the bag description. */
 function savedRoast(messages: Message[]): RoastLevel | null {
   for (const message of messages) {
     if (message.role !== 'assistant') continue;
@@ -675,6 +713,8 @@ function savedRoast(messages: Message[]): RoastLevel | null {
       if (typeof level === 'string') return level as RoastLevel;
     }
   }
+  const known = knownBag(messages);
+  if (known) return toRoastLevel(known.roastLevel);
   const description = messages.find((m) => m.role === 'user')?.content.find((b) => b.type === 'text');
   return typeof description?.text === 'string' ? detectRoast(description.text) : null;
 }
@@ -703,7 +743,7 @@ function intake(script: Script, description: string): Reply {
         type: 'tool_use',
         id: script.newToolId(),
         name: TOOL.saveBagDetails,
-        input: { name, roaster: null, origin, roastLevel, process, notes: null },
+        input: { name, roaster: null, origin, roastLevel, process, notes: null, roastDate: null },
       },
       {
         type: 'tool_use',
@@ -716,10 +756,48 @@ function intake(script: Script, description: string): Reply {
   };
 }
 
+const textOf = (value: unknown) => (typeof value === 'string' && value.trim() !== '' ? value : null);
+
+/** Rule 7a: the details are saved already (picked from Decaid's library, or a confirmed photo): only the templates. */
+function knownBagIntake(script: Script, bag: Raw): Reply {
+  const roastLevel = toRoastLevel(bag.roastLevel);
+  const suggestions = suggestionsFor(roastLevel);
+  const facts = { name: textOf(bag.name) ?? 'My coffee', roastLevel, process: textOf(bag.process), origin: textOf(bag.origin) };
+  return {
+    blocks: [
+      { type: 'text', text: script.voice.intake({ ...facts, topTemplate: suggestions[0]!.templateId }) },
+      { type: 'tool_use', id: script.newToolId(), name: TOOL.proposeTemplates, input: { suggestions } },
+    ],
+    stopReason: 'tool_use',
+  };
+}
+
 const say = (text: string): Reply => ({ blocks: [{ type: 'text', text }], stopReason: 'end_turn' });
+
+/**
+ * What the scripted coach reads on any photo of a bag (6.8): one canned bag,
+ * in the JSON src/llm/extractBag.ts asks for. Not a bag in the mock's own
+ * bean library, so a confirmed photo adds a bean and a batch to it.
+ */
+export const BAG_PHOTO_ANSWER = {
+  name: 'Kiambu AA',
+  roaster: 'Square Mile',
+  origin: 'Kenya, Kiambu',
+  process: 'washed',
+  roastLevel: 'light',
+  roastDate: '2026-09-28',
+  notes: 'blackcurrant, grapefruit, brown sugar',
+} as const;
+
+/** Rule 0: a request with a photo in it is CafAI reading a bag (src/llm/extractBag.ts), never a turn of the coach's chat. */
+function readsPhoto(messages: Message[]): boolean {
+  return messages.some((message) => message.content.some((block) => block.type === 'image'));
+}
 
 function decide(script: Script): Reply {
   const { messages, voice } = script;
+  // 0. A photo of the bag: the canned bag's details, as JSON.
+  if (readsPhoto(messages)) return say(JSON.stringify(BAG_PHOTO_ANSWER));
   const lastIndex = messages.length - 1;
   const last = messages[lastIndex];
   const results = namedResults(messages, lastIndex);
@@ -827,8 +905,13 @@ function decide(script: Script): Reply {
 
   // 7. The bag description, before anything was saved.
   const plain = texts.find((t) => !t.startsWith('[event:') && !t.startsWith(EVENT.context));
-  const saved = messages.some((m) => m.role === 'assistant' && toolUses(m).some((b) => b.name === TOOL.saveBagDetails));
+  const known = knownBag(messages);
+  const saved = known !== null || messages.some((m) => m.role === 'assistant' && toolUses(m).some((b) => b.name === TOOL.saveBagDetails));
   if (plain !== undefined && !saved) return intake(script, plain);
+
+  // 7a. A bag CafAI saved itself, picked from Decaid's library or read from a
+  // photo: nothing to save, so the starting profiles alone.
+  if (plain !== undefined && known !== null && messages.length === 1) return knownBagIntake(script, known);
 
   // 7b. Described, but no starting profile picked (the suggestions were set
   // aside): offer them again.

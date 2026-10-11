@@ -1,16 +1,18 @@
 /**
  * The named, read-only queries behind the model's auto tools
  * (get_shot_summary, get_shot_series, get_phase_stats, compare_shots,
- * get_bag_history). Every query returns compact JSON-ready data or an error
- * sentence the model can act on. There is no eval and no free-form code: the
- * model can only pick a shot, a metric and a time window.
+ * get_bag_history, get_recent_setups). Every query returns compact JSON-ready
+ * data or an error sentence the model can act on. There is no eval and no
+ * free-form code: the model can only pick a shot, a metric and a time window.
  */
+import type { Dye2Data, Dye2Setup } from '../api/pluginData.ts';
 import type { ShotRecord } from '../api/types.ts';
-import type { IterationRecord, ProfileVersion } from '../storage/types.ts';
+import type { Bag, IterationRecord, ProfileVersion } from '../storage/types.ts';
 import { TOOL, TOOL_INPUTS, type SeriesMetric } from './contract.ts';
 import { diffProfiles } from './diff.ts';
 import { normalizeProfile } from './profile.ts';
 import { profileId } from './profileId.ts';
+import { localDay } from './roastAge.ts';
 import { shotRows, type ShotRow } from './summary/analysis.ts';
 import { analyseFlowPhases, stallVerdict } from './summary/phases.ts';
 import { pourStartIndex, resampleValues, secondsGrid, summarizeShot, summaryForModel } from './summary/summarize.ts';
@@ -364,15 +366,88 @@ export function getBagHistory(versions: readonly ProfileVersion[], iterations: r
   });
 }
 
+/**
+ * What a bag's DYE2 setups are matched on: its Decaid link, and the batches
+ * of its bean in Decaid's library (its earlier roasts) when the engine read
+ * them; else its name and roaster.
+ */
+export type BagIdentity = Pick<Bag, 'name' | 'roaster' | 'decaidBeanId' | 'decaidBatchId'> & { beanBatchIds?: readonly string[] };
+
+/** At most this many setups go to the model: DYE2 lists the newest first. */
+const MAX_SETUPS = 10;
+
+const sameText = (a: string | null, b: string | null) => a !== null && b !== null && a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/**
+ * Whether a DYE2 setup was made with this bag's coffee, and with its very
+ * batch: true for the bag's batch, false for an earlier batch of the same
+ * bean, null when DYE2 or the bag knows no batch (a recipe names the bean;
+ * otherwise the coffee's name and roaster tell, a roaster either side left
+ * out not counting against it). Undefined for another coffee.
+ */
+function sameBatchOf(setup: Dye2Setup, bag: BagIdentity): boolean | null | undefined {
+  const batchId = bag.decaidBatchId ?? null;
+  if (batchId !== null && setup.beanBatchId !== null) {
+    if (setup.beanBatchId === batchId) return true;
+    return bag.beanBatchIds?.includes(setup.beanBatchId) ? false : undefined;
+  }
+  const beanId = bag.decaidBeanId ?? null;
+  if (beanId !== null && setup.beanId !== null) return setup.beanId === beanId ? null : undefined;
+  if (!sameText(setup.coffeeName, bag.name)) return undefined;
+  return bag.roaster === null || setup.coffeeRoaster === null || sameText(setup.coffeeRoaster, bag.roaster) ? null : undefined;
+}
+
+/**
+ * get_recent_setups (6.5): the setups DYE2 recorded for this bag's coffee,
+ * newest first, each with its kind (a recent one DYE2 saw used, or a
+ * favourite or recipe the user saved) and whether it was this very batch,
+ * with the equipment and basket names DYE2 knows; {"available":false}
+ * without DYE2.
+ */
+export function getRecentSetups(dye2: Dye2Data | null, bag: BagIdentity): QueryResult {
+  if (!dye2) return ok({ available: false });
+  const setups = dye2.setups.flatMap((setup) => {
+    const sameBatch = sameBatchOf(setup, bag);
+    return sameBatch === undefined ? [] : [{ setup, sameBatch }];
+  });
+  return ok({
+    available: true,
+    setups: setups.slice(0, MAX_SETUPS).map(({ setup, sameBatch }) => ({
+      kind: setup.kind,
+      sameBatch,
+      profileTitle: setup.profileTitle,
+      grindSetting: setup.grindSetting,
+      doseG: setup.doseG,
+      yieldG: setup.yieldG,
+      rpm: setup.rpm,
+      basket: setup.basket,
+      date: localDay(setup.capturedAt),
+    })),
+    equipment: dye2.equipment,
+    baskets: dye2.baskets,
+  });
+}
+
 /** What the query tools read from. */
 export interface QueryContext {
   source: ShotSource;
   versions: readonly ProfileVersion[];
   iterations: readonly IterationRecord[];
+  /** get_recent_setups: DYE2's data as the engine read it from Decaid, null without DYE2. */
+  dye2?: Dye2Data | null;
+  /** get_recent_setups: the bag on screen. */
+  bag?: BagIdentity;
 }
 
 /** The auto tools answered by these queries (save_bag_details is the engine's). */
-export const QUERY_TOOLS = [TOOL.getShotSummary, TOOL.getShotSeries, TOOL.getPhaseStats, TOOL.compareShots, TOOL.getBagHistory] as const;
+export const QUERY_TOOLS = [
+  TOOL.getShotSummary,
+  TOOL.getShotSeries,
+  TOOL.getPhaseStats,
+  TOOL.compareShots,
+  TOOL.getBagHistory,
+  TOOL.getRecentSetups,
+] as const;
 
 /**
  * Run one query tool on raw tool input: validate it with the contract schema,
@@ -413,6 +488,12 @@ export function runQueryTool(name: string, input: unknown, ctx: QueryContext): {
     case TOOL.getBagHistory: {
       const value = parse(TOOL_INPUTS[TOOL.getBagHistory]);
       return invalid(value) ? { content: value.invalid, isError: true } : answer(getBagHistory(ctx.versions, ctx.iterations));
+    }
+    case TOOL.getRecentSetups: {
+      const value = parse(TOOL_INPUTS[TOOL.getRecentSetups]);
+      if (invalid(value)) return { content: value.invalid, isError: true };
+      if (!ctx.bag) return { content: 'No bag is active.', isError: true };
+      return answer(getRecentSetups(ctx.dye2 ?? null, ctx.bag));
     }
     default:
       return { content: `${name} is not a query tool.`, isError: true };

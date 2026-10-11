@@ -12,7 +12,7 @@ export const COACH_TOOL_SPECS: Record<ToolName, { description: string; kind: 'ui
   [TOOL.saveBagDetails]: {
     kind: 'auto',
     description:
-      'Save what the user told you about this bag: a short name used in profile titles (e.g. "Kiambu AA", at most 40 characters), roaster, origin, roast level (light, medium-light, medium, medium-dark or dark), process and tasting notes. Use null for anything the user did not say; never guess. Call it once at intake, before propose_templates, and again only when the user corrects a detail. Answers {"saved":true}.',
+      'Save what the user told you about this bag: a short name used in profile titles (e.g. "Kiambu AA", at most 40 characters), roaster, origin, roast level (light, medium-light, medium, medium-dark or dark), process, tasting notes and roast date (YYYY-MM-DD). Use null for anything the user has not told you; never guess. Call it once at intake, before propose_templates, and again only when the user corrects a detail: then send every detail as it was saved (your earlier call, or the intake\'s "bag") with the correction, because each call replaces all of them. Answers {"saved":true}.',
   },
   [TOOL.proposeTemplates]: {
     kind: 'ui',
@@ -48,5 +48,10 @@ export const COACH_TOOL_SPECS: Record<ToolName, { description: string; kind: 'ui
     kind: 'auto',
     description:
       "This bag's profile versions (with each lever change) and its recent iterations, oldest first: shot ids, taste feedback, what was proposed and whether it was applied, declined, kept or undone. Check it before repeating a change, and to find shot ids.",
+  },
+  [TOOL.getRecentSetups]: {
+    kind: 'auto',
+    description:
+      'Setups DYE2 (a Decaid plugin) recorded for this coffee: its batch in Decaid\'s bean library and earlier batches of the same bean, else its name and roaster. Answers {"available":true,"setups":[{"kind","sameBatch","profileTitle","grindSetting","doseG","yieldG","rpm","basket","date"}],"equipment":[...],"baskets":[...]} (null where DYE2 recorded nothing; equipment and basket names DYE2 knows), or {"available":false} without DYE2. kind "recent" is one DYE2 saw used lately, which says nothing about how it tasted; "favourite" and "recipe" are ones the user saved. sameBatch is false for an earlier batch of the same bean, null when unknown. Read-only. Call it at intake when the coffee came from Decaid\'s bean library or was brewed before; for a bag described in words, after save_bag_details, as it has no name to match before.',
   },
 };

@@ -18,6 +18,12 @@
  *   is dropped and the chat says so once (5.11).
  * - A bag whose details were saved is added to Decaid's bean library in the
  *   background, and every load names its batch (D102).
+ * - A new bag opens with "Which coffee is it?": a batch from Decaid's bean
+ *   library, a photo of the bag read by the coach's model, or the bag
+ *   described in the chat (6.1, 6.8). The coach hears the roast date and the
+ *   coffee's age at intake and with every shot.
+ * - Decaid's plugins are optional (D103): the coach may read DYE2's setups,
+ *   and a shot the Visualizer plugin uploaded gets a link to its page.
  * - v1 starts from the dose Decaid has at the pick (D57). Grind moves use the
  *   steps of the grinder linked from Decaid's library (D62), read in the
  *   background so a slow or failed read never holds anything up.
@@ -31,19 +37,26 @@
  */
 import {
   AUTO_TOOLS,
+  BAG_LIMITS,
   TOOL,
   TOOL_INPUTS,
+  toRoastLevel,
   type AskUser,
   type ProposeAdjustment,
   type ProposeTemplates,
   type SaveBagDetails,
   type ToolName,
 } from '../../coach/contract.ts';
+import { todayOf, writtenDate, type FreezerDates } from '../../coach/roastAge.ts';
 import { reportDrift } from '../../api/drift.ts';
 import { describeValue } from '../../api/frames.ts';
+import { readDye2, visualizerIdFor, visualizerShotUrl, type Dye2Data } from '../../api/pluginData.ts';
+import { PLUGIN, type PluginDirectory } from '../../api/plugins.ts';
 import {
   GatewayError,
   type BatchCreateRequest,
+  type Bean,
+  type BeanBatch,
   type BeanCreateRequest,
   type EnjoymentScale,
   type ShotAnnotations,
@@ -56,6 +69,7 @@ import {
 import { isShotRunning as shotInProgress } from '../../api/workflow.ts';
 import { redactKeyLike } from '../../storage/redact.ts';
 import type { GrinderInfo, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
+import type { BagPhoto, ExtractedBag } from '../../llm/extractBag.ts';
 import type { ContentBlock, Effort, PendingUiCall, RunnerTool, ToolResultBlock } from '../../llm/types.ts';
 import type {
   AppliedChange,
@@ -67,6 +81,8 @@ import type {
   Storage,
 } from '../../storage/types.ts';
 import type {
+  BeanChoice,
+  BeanPickerOption,
   CoachController,
   CoachPhase,
   CoachState,
@@ -84,6 +100,8 @@ import {
   UNANSWERED_TEXT,
   grinderPayload,
   intakeBlocks,
+  photoIntakeText,
+  pickedIntakeText,
   shotCompletedBlock,
   summaryForModel,
   textBlock,
@@ -106,9 +124,15 @@ import {
 import {
   NEW_BAG_PROMPT,
   appendText,
+  bagConfirmPart,
   byRequestId,
   diffPart,
+  filledBeanCard,
   finishStreaming,
+  isLoadingBeanCard,
+  isOpenBagConfirm,
+  isOpenBeanCard,
+  loadingBeanPickerPart,
   message,
   noticePart,
   optionsPart,
@@ -118,6 +142,7 @@ import {
   setAside,
   setDiffStatus,
   setShotStars,
+  setVisualizerLink,
   shotPart,
   startingYieldText,
   templatesPart,
@@ -145,6 +170,8 @@ export interface EngineDeps {
   visibility?: PageVisibility;
   /** The start-up restore brought the bags back from Decaid's backup (5.5). */
   restoredFromBackup?: boolean;
+  /** Which of Decaid's optional plugins run (D103); none by default. */
+  plugins?: Pick<PluginDirectory, 'isLoaded'>;
 }
 
 /** The page's visibility: the WebView runs on with the page hidden behind another app or a dark screen. */
@@ -162,6 +189,8 @@ export interface CoachEngine extends CoachController {
   /** Records came back from Decaid's backup after start (5.4): read them again, and say so once. */
   restored(): Promise<void>;
 }
+
+const NO_PLUGINS: Pick<PluginDirectory, 'isLoaded'> = { isLoaded: () => false };
 
 interface PendingCall {
   id: string;
@@ -239,7 +268,92 @@ const NEW_BAG_NAME = 'New bag';
 /** Said once per session, when Decaid has no barrier (5.12). */
 const NO_BARRIER = 'This Decaid cannot confirm that the machine took a profile, so CafAI will assume it did.';
 const ADDED_TO_BEANS = "Added to Decaid's beans.";
+/** The bean and the batch were in the library already (a photo of a bag picked before): linked, nothing added. */
+const ALREADY_IN_BEANS = "Already in Decaid's beans.";
 const BAGS_ARE_BACK = "Your bags are back from Decaid's backup.";
+/** The bean card lists at most this many batches (6.1). */
+const MAX_BEAN_OPTIONS = 8;
+const NEEDS_KEY = 'Add your API key in Settings first.';
+const READING_BAG = 'Reading the bag…';
+const NO_PHOTO_READER = 'CafAI cannot read photos here. Describe the bag in the chat.';
+const DYE2_UNREACHABLE = "Decaid can't be reached right now, so DYE2's setups could not be read.";
+/** How often, and for how long, CafAI looks for a shot's Visualizer upload: every 3 s for 30 s (streamline's rule, 6.4). */
+const VISUALIZER_LOOK_MS = 3_000;
+const VISUALIZER_WATCH_MS = 30_000;
+
+/** Text from Decaid or a photo that travels on to the coach and Decaid: never a key (D37). */
+function withoutKey(text: string | null): string | null {
+  return text === null ? null : redactKeyLike(text, 'key removed');
+}
+
+/** Text cut to what a bag detail holds; blank, or not text, is null. */
+function clip(value: unknown, max: number): string | null {
+  return typeof value === 'string' ? value.trim().slice(0, max).trim() || null : null;
+}
+
+/** A batch as the bean card offers it, with the date it was added for the order. */
+interface Pickable {
+  option: BeanPickerOption;
+  createdAt: string;
+}
+
+/** A batch of Decaid's bean library as a row of the bean card, filled the way a pick fills the bag (6.1). */
+function pickable(bean: Bean, batch: BeanBatch): Pickable[] {
+  const name = clip(bean.name, BAG_LIMITS.name);
+  if (!name) return [];
+  const origin = [clip(bean.country, BAG_LIMITS.origin), clip(bean.region, BAG_LIMITS.origin)].filter(Boolean).join(', ');
+  return [
+    {
+      option: {
+        beanId: bean.id,
+        batchId: batch.id,
+        name,
+        roaster: clip(bean.roaster, BAG_LIMITS.roaster),
+        origin: clip(origin, BAG_LIMITS.origin),
+        process: clip(bean.processing, BAG_LIMITS.process),
+        notes: clip(bean.notes, BAG_LIMITS.notes),
+        roastLevel: toRoastLevel(batch.roastLevel),
+        roastDate: writtenDate(batch.roastDate),
+        freezeDate: writtenDate(batch.freezeDate),
+        unfreezeDate: writtenDate(batch.unfreezeDate),
+      },
+      createdAt: typeof batch.createdAt === 'string' ? batch.createdAt : '',
+    },
+  ];
+}
+
+/** Newest roast first; batches without a roast date after them, the newest added first. */
+function newestRoastFirst(a: Pickable, b: Pickable): number {
+  const [roastA, roastB] = [a.option.roastDate, b.option.roastDate];
+  if (roastA !== roastB) {
+    if (roastA === null) return 1;
+    if (roastB === null) return -1;
+    return roastB.localeCompare(roastA);
+  }
+  return b.createdAt.localeCompare(a.createdAt);
+}
+
+/** The bag's details as save_bag_details takes them. */
+function bagDetails(bag: Bag): SaveBagDetails {
+  return {
+    name: bag.name,
+    roaster: bag.roaster,
+    origin: bag.origin,
+    roastLevel: bag.roastLevel,
+    process: bag.process,
+    notes: bag.notes,
+    roastDate: bag.roastDate ?? null,
+  };
+}
+
+/**
+ * A save_bag_details call written before roastDate existed (a stored chat
+ * replayed after an update, a recorded one) reads as a roast date nobody
+ * knows. The model itself always sends every key: its tools are strict.
+ */
+function withRoastDate(input: unknown): unknown {
+  return typeof input === 'object' && input !== null && !Array.isArray(input) && !('roastDate' in input) ? { ...input, roastDate: null } : input;
+}
 
 /** A new bean for Decaid's library from a bag's details (D102); a detail CafAI does not know is left out. */
 function beanRequest(bag: Bag, roaster: string, name: string): BeanCreateRequest {
@@ -310,6 +424,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   const shotFetch = deps.shotFetch ?? { attempts: 6, delayMs: 500 };
   const checkTimers = deps.checkTimers ?? browserTimers;
   const visibility = deps.visibility ?? ALWAYS_VISIBLE;
+  const plugins = deps.plugins ?? NO_PLUGINS;
 
   let state: CoachState = {
     ready: false,
@@ -399,6 +514,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   let scaleUnclear = false;
   /** Bags being added to Decaid's bean library now, so a second save never adds a second batch. */
   const linking = new Set<string>();
+  /** Bags whose bean card is reading Decaid's batches now, so a second open reads them once. */
+  const filling = new Set<string>();
   let chain: Promise<void> = Promise.resolve();
 
   const nowIso = () => clock.now().toISOString();
@@ -827,13 +944,15 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
 
   /**
    * After a bag's details were saved: add it to Decaid's bean library, reusing
-   * the bean with the same roaster and name or adding one, then adding a batch
-   * for this bag, and keep both ids on the bag so every load names its batch.
-   * Not for a bag without a roaster (Decaid needs one) or a name of its own.
-   * In the background: nothing waits for it. A failure (Decaid away, or a
-   * reply CafAI could not read, reported as drift) leaves the bag unlinked
-   * for the next save to try again. CafAI never edits or deletes a bean or a
-   * batch: a detail corrected later changes the bag only.
+   * the bean with the same roaster and name or adding one, then reusing that
+   * bean's unarchived batch with the bag's roast date (or, for a bag without
+   * one, a batch without one) or adding a batch, and keep both ids on the bag
+   * so every load names its batch. Not for a bag without a roaster (Decaid
+   * needs one) or a name of its own. In the background: nothing waits for it.
+   * A failure (Decaid away, or a reply CafAI could not read, reported as
+   * drift) leaves the bag unlinked for the next save to try again. CafAI never
+   * edits or deletes a bean or a batch: a detail corrected later changes the
+   * bag only.
    */
   function linkBag(bag: Bag): void {
     const roaster = bag.roaster?.trim() ?? '';
@@ -843,12 +962,16 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     void (async () => {
       try {
         const beans = await api.listBeans();
-        const bean =
-          beans.find((known) => sameName(known.roaster, roaster) && sameName(known.name, name)) ??
-          (await api.createBean(beanRequest(bag, roaster, name)));
-        const batch = await api.createBatch(bean.id, batchRequest(bag));
+        const known = beans.find((b) => sameName(b.roaster, roaster) && sameName(b.name, name));
+        const bean = known ?? (await api.createBean(beanRequest(bag, roaster, name)));
+        // A bean already in the library may hold this very bag, as when its photo was taken instead of picking it.
+        const roastDate = bag.roastDate ?? null;
+        const same = known
+          ? (await api.listBatches(bean.id)).find((b) => b.archived !== true && writtenDate(b.roastDate) === roastDate)
+          : undefined;
+        const batch = same ?? (await api.createBatch(bean.id, batchRequest(bag)));
         // In turn with the engine's actions, so the note never lands inside a reply.
-        await enqueue(() => storeLink(bag.id, bean.id, batch.id));
+        await enqueue(() => storeLink(bag.id, bean.id, batch.id, same ? ALREADY_IN_BEANS : ADDED_TO_BEANS));
       } catch {
         // The next save tries again.
       } finally {
@@ -857,13 +980,13 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     })();
   }
 
-  /** Keep a bag's link to Decaid's bean library; say so in its chat when it is on screen. */
-  async function storeLink(bagId: string, beanId: string, batchId: string): Promise<void> {
+  /** Keep a bag's link to Decaid's bean library; say so (`note`) in its chat when it is on screen. */
+  async function storeLink(bagId: string, beanId: string, batchId: string, note: string): Promise<void> {
     const link = { decaidBeanId: beanId, decaidBatchId: batchId };
     const s = session;
     if (s?.bag.id === bagId) {
       await persistBag(s, link);
-      addMessage('system', [noticePart('info', ADDED_TO_BEANS)]);
+      addMessage('system', [noticePart('info', note)]);
       await persistConversation(s);
     } else {
       const stored = await storage.bags.get(bagId);
@@ -875,12 +998,312 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     emit();
   }
 
+  /**
+   * The bag's details as the coach (save_bag_details) or the photo's confirm
+   * card gave them, roast date included, then its place in Decaid's bean
+   * library: saved first, as the batch Decaid gets is read from the bag.
+   */
+  async function saveBagDetails(s: Session, details: SaveBagDetails): Promise<void> {
+    await persistBag(s, {
+      name: withoutKey(details.name.trim()) || NEW_BAG_NAME,
+      roaster: withoutKey(details.roaster),
+      origin: withoutKey(details.origin),
+      roastLevel: details.roastLevel,
+      process: withoutKey(details.process),
+      notes: withoutKey(details.notes),
+      roastDate: details.roastDate,
+    });
+    emit();
+    linkBag(s.bag);
+  }
+
+  // -------------------------------------------------------------------------
+  // "Which coffee is it?": the bean card and the bag photo (6.1, 6.8)
+  // -------------------------------------------------------------------------
+
+  /**
+   * The bean card's rows: Decaid's unarchived batches of unarchived beans,
+   * newest roast first, at most 8, in two requests whatever the size of the
+   * library (the beans, and every batch at once). None when the library is
+   * empty or Decaid cannot be read.
+   */
+  async function beanOptions(): Promise<BeanPickerOption[]> {
+    let beans: Bean[];
+    let batches: BeanBatch[];
+    try {
+      [beans, batches] = await Promise.all([api.listBeans(), api.listAllBatches()]);
+    } catch {
+      return []; // Decaid away, or a Decaid without the bean library: a photo or something else.
+    }
+    const byId = new Map(beans.filter((bean) => bean.archived !== true).map((bean) => [bean.id, bean]));
+    return batches
+      .flatMap((batch) => {
+        const bean = byId.get(batch.beanId);
+        return bean && batch.archived !== true ? pickable(bean, batch) : [];
+      })
+      .sort(newestRoastFirst)
+      .slice(0, MAX_BEAN_OPTIONS)
+      .map(({ option }) => option);
+  }
+
+  /**
+   * The bean card's rows, read in the background once the card is up: the
+   * barista can take a photo or say something else meanwhile, and nothing
+   * waits for Decaid. The rows land in turn with the engine's actions, on the
+   * card still loading, answered or not; a bag no longer on screen keeps its
+   * loading card, read again when the bag is opened.
+   */
+  function fillBeanCard(bagId: string): void {
+    if (filling.has(bagId)) return;
+    filling.add(bagId);
+    void (async () => {
+      try {
+        const options = await beanOptions();
+        await enqueue(async () => {
+          const s = session;
+          if (disposed || s?.bag.id !== bagId || !state.messages.some((m) => m.parts.some(isLoadingBeanCard))) return;
+          setMessages(updatePart(state.messages, isLoadingBeanCard, (part) => filledBeanCard(part, options)));
+          await persistConversation(s);
+          emit();
+        });
+      } finally {
+        filling.delete(bagId);
+      }
+    })();
+  }
+
+  /** The bean card while it waits for an answer, if the chat on screen has one. */
+  function openBeanCard(): Extract<CoachUiPart, { kind: 'beanPicker' }> | null {
+    for (const m of state.messages) {
+      for (const part of m.parts) if (part.kind === 'beanPicker' && isOpenBeanCard(part)) return part;
+    }
+    return null;
+  }
+
+  function answerBeanCard(choice: BeanChoice): void {
+    setMessages(updatePart(state.messages, isOpenBeanCard, (part) => (part.kind === 'beanPicker' ? { ...part, choice } : part)));
+  }
+
+  /** The freezer dates of the batch picked on the bean card, as Decaid had them then (6.1). */
+  function freezerOf(s: Session): FreezerDates | null {
+    const batchId = s.bag.decaidBatchId ?? null;
+    if (batchId === null) return null;
+    for (const m of state.messages) {
+      for (const part of m.parts) {
+        if (part.kind !== 'beanPicker' || part.choice?.kind !== 'batch' || part.choice.batchId !== batchId) continue;
+        const option = part.options.find((o) => o.batchId === batchId);
+        if (option) return { freezeDate: option.freezeDate, unfreezeDate: option.unfreezeDate };
+      }
+    }
+    return null;
+  }
+
+  /** The roast as the coach reads it, the coffee's age counted to today (6.1). */
+  function roastFor(s: Session): string | null {
+    return coach.roastLine(s.bag.roastDate ?? null, clock.now(), freezerOf(s));
+  }
+
+  /**
+   * The bag's first user turn (rule 1): the words, then the context block
+   * with the grinder, the scale, the dose, the details already saved when
+   * they came from Decaid's library or a confirmed photo, the roast, and
+   * today's date (in the turn: the system prompt holds no dates).
+   */
+  async function startIntake(s: Session, words: string, bag: SaveBagDetails | null): Promise<void> {
+    // A bag opened a moment ago: let its dose read finish.
+    await s.numbers;
+    const blocks = intakeBlocks(words, {
+      grinder: grinderForModel(),
+      scaleConnected: telemetry.getState().scaleConnected,
+      doseG: coach.knownDose(s.doseG),
+      bag,
+      roast: roastFor(s),
+      today: todayOf(clock.now()),
+    });
+    await sendUser(s, new Map(), UNANSWERED_TEXT, blocks, 'typed');
+  }
+
+  /**
+   * A batch picked on the bean card fills the bag (the bean's name, roaster,
+   * country and region, process and notes; the batch's roast level and
+   * date) and links it, both ids before anything else: a save_bag_details
+   * after this finds the bag linked and adds no second batch (D102). Then
+   * the coach's intake, told what was picked.
+   */
+  async function pickBean(batchId: string): Promise<void> {
+    const s = session;
+    const option = openBeanCard()?.options.find((o) => o.batchId === batchId);
+    if (!s || !option) return;
+    answerBeanCard({ kind: 'batch', batchId });
+    await persistBag(s, {
+      name: withoutKey(option.name) || NEW_BAG_NAME,
+      roaster: withoutKey(option.roaster),
+      origin: withoutKey(option.origin),
+      roastLevel: option.roastLevel,
+      process: withoutKey(option.process),
+      notes: withoutKey(option.notes),
+      roastDate: option.roastDate,
+      decaidBeanId: option.beanId,
+      decaidBatchId: option.batchId,
+    });
+    emit();
+    const bag = bagDetails(s.bag);
+    await startIntake(s, pickedIntakeText(bag), bag);
+  }
+
+  /** "Something else": the card closes; the coach's question under it waits for the bag described in the chat. */
+  async function skipBeanPick(): Promise<void> {
+    const s = session;
+    if (!s || !openBeanCard()) return;
+    answerBeanCard({ kind: 'other' });
+    await persistConversation(s);
+    emit();
+  }
+
+  /**
+   * A photo of the bag (6.8), read by the coach's model into details the
+   * barista confirms. The photo goes into that one request and is dropped
+   * with this call: never stored, mirrored, logged or kept in the transcript.
+   * Unreadable, the bean card stays open and the chat says why.
+   */
+  async function readBagPhoto(photo: BagPhoto): Promise<void> {
+    const s = session;
+    if (!s || !openBeanCard()) return;
+    const warn = async (text: string) => {
+      addMessage('system', [noticePart('warning', text)]);
+      await persistConversation(s);
+      emit();
+    };
+    if (!llm.readBag) return warn(NO_PHOTO_READER);
+    if (!(await storage.secrets.getApiKey())) return warn(NEEDS_KEY);
+    state = { ...state, busy: true };
+    const progressId = showProgress(null, READING_BAG, { value: null, label: null });
+    emit();
+    let read: ExtractedBag | null = null;
+    let failure = '';
+    try {
+      read = await llm.readBag({ model: settings.model, photo });
+    } catch (error) {
+      failure = describe(error);
+    }
+    hideProgress(progressId);
+    state = { ...state, busy: false };
+    if (read) {
+      answerBeanCard({ kind: 'photo' });
+      addMessage('assistant', [
+        bagConfirmPart({
+          name: read.name ?? '',
+          roaster: read.roaster,
+          origin: read.origin,
+          roastLevel: read.roastLevel,
+          process: read.process,
+          notes: read.notes,
+          roastDate: read.roastDate,
+        }),
+      ]);
+      await persistConversation(s);
+      emit();
+      return;
+    }
+    await warn(failure);
+  }
+
+  /** The photo's details as the barista confirmed them: saved like save_bag_details, then the coach's intake (6.8). */
+  async function confirmBag(details: SaveBagDetails): Promise<void> {
+    const s = session;
+    if (!s || !state.messages.some((m) => m.parts.some(isOpenBagConfirm))) return;
+    // The card asks for a name before it offers Confirm; anything else invalid is refused the same way.
+    const parsed = TOOL_INPUTS[TOOL.saveBagDetails].safeParse(details);
+    if (!parsed.success) return;
+    const confirmed = parsed.data;
+    setMessages(
+      updatePart(state.messages, isOpenBagConfirm, (part) => (part.kind === 'bagConfirm' ? { ...part, details: confirmed, confirmed: true } : part)),
+    );
+    await saveBagDetails(s, confirmed);
+    const bag = bagDetails(s.bag);
+    await startIntake(s, photoIntakeText(bag), bag);
+  }
+
+  // -------------------------------------------------------------------------
+  // The Visualizer link (6.4)
+  // -------------------------------------------------------------------------
+
+  /**
+   * After a shot's card lands, while Decaid's Visualizer plugin runs: look
+   * every 3 s, for 30 s of time however long each look takes, for the
+   * plugin's upload of this shot. The link shows on the card at once and is
+   * kept with the iteration and the chat in turn with the engine's actions,
+   * so it never lands inside another action's writes. In the background; a
+   * look Decaid does not answer is a look missed.
+   */
+  function watchVisualizer(s: Session, shotId: string, iterationId: string): void {
+    if (!plugins.isLoaded(PLUGIN.visualizer)) return;
+    void (async () => {
+      const started = clock.now().getTime();
+      let waited = 0;
+      // A clock that stands still (a test's) still ends the watch: the waits add up to 30 s too.
+      while (Math.max(clock.now().getTime() - started, waited) < VISUALIZER_WATCH_MS) {
+        await clock.sleep(VISUALIZER_LOOK_MS);
+        waited += VISUALIZER_LOOK_MS;
+        if (disposed) return;
+        let visualizerId: string | null;
+        try {
+          visualizerId = await visualizerIdFor(api, shotId);
+        } catch {
+          continue;
+        }
+        if (disposed) return;
+        if (visualizerId === null) continue;
+        const url = visualizerShotUrl(visualizerId);
+        if (session?.bag.id === s.bag.id) {
+          // Only a card changes, never the order of the chat: on screen now, kept in turn below.
+          setMessages(setVisualizerLink(state.messages, shotId, url));
+          emit();
+        }
+        await enqueue(() => storeVisualizerLink(s, shotId, iterationId, url));
+        return;
+      }
+    })();
+  }
+
+  async function storeVisualizerLink(s: Session, shotId: string, iterationId: string, url: string): Promise<void> {
+    if (disposed) return;
+    const iteration = await storage.iterations.get(iterationId);
+    if (iteration) await putIteration({ ...iteration, visualizerUrl: url });
+    const current = session;
+    if (current?.bag.id === s.bag.id) {
+      // Again: an action since may have set the chat's messages from before the link.
+      setMessages(setVisualizerLink(state.messages, shotId, url));
+      await persistConversation(current);
+      emit();
+      return;
+    }
+    // Another bag is on screen by now: the link goes into this bag's stored chat.
+    const stored = await storage.conversations.get(s.conversation.id);
+    if (stored) await storage.conversations.put({ ...stored, uiMessages: setVisualizerLink(stored.uiMessages, shotId, url), updatedAt: nowIso() });
+  }
+
   // -------------------------------------------------------------------------
   // Shots and query tools
   // -------------------------------------------------------------------------
 
   async function bagIterations(s: Session): Promise<IterationRecord[]> {
     return storage.iterations.listByBag(s.bag.id);
+  }
+
+  /**
+   * Every batch of a linked bag's bean in Decaid's library, archived ones
+   * too: DYE2's setups for an earlier batch of the same coffee (6.5). None
+   * for a bag without a bean, or when Decaid cannot say.
+   */
+  async function beanBatchIds(bag: Bag): Promise<string[]> {
+    const beanId = bag.decaidBeanId;
+    if (!beanId) return [];
+    try {
+      return (await api.listAllBatches({ includeArchived: true })).filter((batch) => batch.beanId === beanId).map((batch) => batch.id);
+    } catch {
+      return [];
+    }
   }
 
   const shotSource: ShotSource = {
@@ -909,20 +1332,25 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (!s) return { content: JSON.stringify({ error: 'No bag is active.' }), isError: true };
     switch (name) {
       case TOOL.saveBagDetails: {
-        const details = value as SaveBagDetails;
         // The bag name travels to Decaid (coffee name, profile titles): never a key.
-        const clean = (text: string | null) => (text === null ? null : redactKeyLike(text, 'key removed'));
-        await persistBag(s, {
-          name: clean(details.name.trim()) || NEW_BAG_NAME,
-          roaster: clean(details.roaster),
-          origin: clean(details.origin),
-          roastLevel: details.roastLevel,
-          process: clean(details.process),
-          notes: clean(details.notes),
-        });
-        emit();
-        linkBag(s.bag);
+        await saveBagDetails(s, value as SaveBagDetails);
         return { content: JSON.stringify({ saved: true }) };
+      }
+      case TOOL.getRecentSetups: {
+        // Read-only: CafAI never writes DYE2's data (6.5).
+        let dye2: Dye2Data | null;
+        try {
+          dye2 = await readDye2(api, plugins.isLoaded(PLUGIN.dye2));
+        } catch {
+          return { content: DYE2_UNREACHABLE, isError: true };
+        }
+        return coach.runQuery(name, value, {
+          source: shotSource,
+          versions: s.versions,
+          iterations: await bagIterations(s),
+          dye2,
+          bag: { ...s.bag, beanBatchIds: dye2 ? await beanBatchIds(s.bag) : [] },
+        });
       }
       case TOOL.getShotSummary:
       case TOOL.getShotSeries:
@@ -983,7 +1411,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       definition: llm.toolDefinition(name, coach.toolDescription(name), schema),
       kind: auto ? 'auto' : 'ui',
       validate(input) {
-        const parsed = zodValidate(input);
+        const parsed = zodValidate(name === TOOL.saveBagDetails ? withRoastDate(input) : input);
         if (!parsed.ok) return parsed;
         const error = domainError(name, parsed.value);
         return error ? { ok: false, error } : parsed;
@@ -1205,9 +1633,17 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     emit();
     // In the background; the intake turn waits for it (it tells the coach the dose).
     s.numbers = loadWorkflowNumbers(s);
+    // A bean card still without its rows: just made, or a reload came before they were read.
+    if (state.messages.some((m) => m.parts.some(isLoadingBeanCard))) fillBeanCard(bag.id);
   }
 
-  async function createBag(): Promise<Session> {
+  /**
+   * A new bag and its chat: "Which coffee is it?" first (6.1), then the
+   * coach's question, which takes the bag described in words. The card is up
+   * at once and reads Decaid's batches in the background. A bag started by
+   * typing (no card to answer) skips the card.
+   */
+  async function createBag(withBeanCard: boolean): Promise<Session> {
     const at = nowIso();
     const bag: Bag = {
       id: deps.newId('bag'),
@@ -1224,11 +1660,12 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       createdAt: at,
       updatedAt: at,
     };
+    const card = withBeanCard ? [message(deps.newId('msg'), 'assistant', [loadingBeanPickerPart()], at)] : [];
     const conversation: ConversationRecord = {
       id: bag.conversationId,
       bagId: bag.id,
       apiMessages: [],
-      uiMessages: [message(deps.newId('msg'), 'assistant', [{ kind: 'text', text: NEW_BAG_PROMPT }], at)],
+      uiMessages: [...card, message(deps.newId('msg'), 'assistant', [{ kind: 'text', text: NEW_BAG_PROMPT }], at)],
       createdAt: at,
       updatedAt: at,
     };
@@ -1593,8 +2030,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       return;
     }
     const at = nowIso();
+    const iterationId = deps.newId('iter');
     await putIteration({
-      id: deps.newId('iter'),
+      id: iterationId,
       bagId: s.bag.id,
       bagName: s.bag.name,
       profileVersionId: current.id,
@@ -1609,6 +2047,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       updatedAt: at,
     });
     addMessage('system', [shotPart(record.id, summary)]);
+    watchVisualizer(s, record.id, iterationId);
     if (!saysWhichRan) {
       addMessage('system', [noticePart('info', `Decaid's record did not say which profile ran; CafAI counted it for v${current.version}.`)]);
     }
@@ -1622,6 +2061,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       doseG: summary.doseG ?? s.doseG,
       targetYieldG: summary.targetYieldG ?? s.targetYieldG,
       grinder: grinderForModel(),
+      roast: roastFor(s),
       summary: summaryForModel(summary),
     });
     emit();
@@ -2116,7 +2556,11 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   async function sendText(text: string): Promise<void> {
     const typed = text.trim();
     if (!typed) return;
-    const s = session ?? (await createBag());
+    const s = session ?? (await createBag(false));
+    // The bag described in words instead of picked or read from a photo: those cards close (6.1, 6.8).
+    for (const open of [isOpenBeanCard, isOpenBagConfirm]) {
+      if (state.messages.some((m) => m.parts.some(open))) setMessages(updatePart(state.messages, open, (part) => setAside(part, 'typed')));
+    }
     // A pasted API key never reaches the coach, the transcript or Decaid.
     const trimmed = redactKeyLike(typed, '[API key removed]');
     addMessage('user', [{ kind: 'text', text: trimmed }]);
@@ -2138,14 +2582,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       }
     }
     if (s.conversation.apiMessages.length === 0) {
-      // A bag started by typing opened a moment ago: let its dose read finish.
-      await s.numbers;
-      const blocks = intakeBlocks(trimmed, {
-        grinder: grinderForModel(),
-        scaleConnected: telemetry.getState().scaleConnected,
-        doseG: coach.knownDose(s.doseG),
-      });
-      await sendUser(s, new Map(), UNANSWERED_TEXT, blocks, 'typed');
+      await startIntake(s, trimmed, null);
     } else {
       await sendUser(s, new Map(), UNANSWERED_TEXT, [textBlock(trimmed)], 'typed');
     }
@@ -2266,7 +2703,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         const current = session;
         if (current && current.conversation.apiMessages.length === 0 && !current.bag.templateId) return;
         standing = null;
-        await createBag();
+        await createBag(true);
       }),
     selectBag: (bagId) =>
       enqueue(async () => {
@@ -2284,6 +2721,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     declineChange: (requestId) => enqueue(() => declineChange(requestId)),
     undo: () => enqueue(() => undo()),
     rateShot: (shotId, stars) => enqueue(() => rateShot(shotId, stars)),
+    pickBean: (batchId) => enqueue(() => pickBean(batchId)),
+    skipBeanPick: () => enqueue(() => skipBeanPick()),
+    readBagPhoto: (photo) => enqueue(() => readBagPhoto(photo)),
+    confirmBag: (details) => enqueue(() => confirmBag(details)),
     retry: () =>
       enqueue(async () => {
         const task = lastFailed;

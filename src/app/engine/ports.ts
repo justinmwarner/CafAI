@@ -7,6 +7,7 @@
  */
 import type { ZodType } from 'zod';
 import type { MachineProfileStatus } from '../../api/machineProfile.ts';
+import type { Dye2Data, PluginReads } from '../../api/pluginData.ts';
 import type {
   BatchCreateRequest,
   Bean,
@@ -23,7 +24,10 @@ import type {
   WorkflowPatch,
 } from '../../api/types.ts';
 import type { ProposeAdjustment, ToolName } from '../../coach/contract.ts';
+import type { BagIdentity } from '../../coach/queries.ts';
+import type { FreezerDates } from '../../coach/roastAge.ts';
 import type { GrinderInfo, LeverValues, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
+import type { BagPhoto, ExtractedBag } from '../../llm/extractBag.ts';
 import type { LlmProvider, RunRequest, RunResult, ToolDefinition, ToolValidation } from '../../llm/types.ts';
 import type { IterationRecord, ProfileVersion } from '../../storage/types.ts';
 
@@ -97,12 +101,21 @@ export interface CoachPort {
   withOther(options: readonly string[]): string[];
   /** Run one read-only query tool (get_shot_summary, get_shot_series, ...) on validated input. */
   runQuery(name: ToolName, input: unknown, context: QueryContext): Promise<{ content: string; isError: boolean }>;
+  /**
+   * The roast as the coach reads it (6.1): "Roasted <date> (<n> days ago;
+   * <m> days in the freezer not counted)", or null when the date is unknown.
+   */
+  roastLine(roastDate: string | null, today: Date, freezer: FreezerDates | null): string | null;
 }
 
 export interface QueryContext {
   source: ShotSource;
   versions: ProfileVersion[];
   iterations: IterationRecord[];
+  /** get_recent_setups (6.5): DYE2's data as read from Decaid, null without DYE2. */
+  dye2?: Dye2Data | null;
+  /** get_recent_setups: the bag on screen. */
+  bag?: BagIdentity;
 }
 
 export interface LlmPort {
@@ -110,9 +123,19 @@ export interface LlmPort {
   run(request: RunRequest): Promise<RunResult>;
   toolDefinition(name: string, description: string, schema: ZodType): ToolDefinition;
   validator(schema: ZodType): (input: unknown) => ToolValidation;
+  /**
+   * Read a photo of the bag with `model` (6.8): one request, the photo in it
+   * and nowhere else. Throws an LlmError with a sentence when it cannot.
+   * Optional: without it the bean card's photo has nothing to read it with.
+   */
+  readBag?(request: { model: string; photo: BagPhoto }): Promise<ExtractedBag>;
 }
 
-export interface ApiPort {
+/**
+ * What the engine reads and writes in Decaid. The plugin reads (D103) are
+ * read-only: CafAI never writes a plugin's data, so the port has no way to.
+ */
+export interface ApiPort extends PluginReads {
   getWorkflow(): Promise<Workflow>;
   updateWorkflow(patch: WorkflowPatch): Promise<Workflow>;
   /** Full-profile activation in one PUT /workflow; refuses while a shot runs. */
@@ -152,6 +175,10 @@ export interface ApiPort {
    * has no way to.
    */
   listBeans(): Promise<Bean[]>;
+  /** GET /beans/{id}/batches: a bean's unarchived batches. Throws when Decaid cannot be read. */
+  listBatches(beanId: string): Promise<BeanBatch[]>;
+  /** GET /bean-batches: every bean's batches in one request, archived ones only when asked. Throws when Decaid cannot be read. */
+  listAllBatches(options?: { includeArchived?: boolean }): Promise<BeanBatch[]>;
   /** POST /beans. */
   createBean(request: BeanCreateRequest): Promise<Bean>;
   /** POST /beans/{id}/batches. */

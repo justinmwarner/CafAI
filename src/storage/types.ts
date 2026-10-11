@@ -102,6 +102,8 @@ export interface IterationRecord {
   proposal: ProposeAdjustment | null;
   change: AppliedChange | null;
   outcome: IterationOutcome;
+  /** The shot's page on Visualizer, once Decaid's Visualizer plugin uploaded it (6.4); absent on iterations made before 2026-10-09. */
+  visualizerUrl?: string | null;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }

@@ -201,7 +201,7 @@ describe('zodValidator', () => {
     });
     expect(result).toEqual({
       ok: false,
-      error: 'roaster: required; roastLevel: expected one of "light", "medium-light", "medium", "medium-dark", "dark"',
+      error: 'roaster: required; roastLevel: expected one of "light", "medium-light", "medium", "medium-dark", "dark"; roastDate: required',
     });
   });
 

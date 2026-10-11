@@ -217,6 +217,10 @@ export function createDecaidClient(options: DecaidClientOptions): GatewayClient 
       const source = 'GET /api/v1/beans/{id}/batches';
       return (await requestJson(transport, `/api/v1/beans/${id(beanId)}/batches`, { read: readBatches, source })) ?? [];
     },
+    async listAllBatches(options = {}) {
+      const path = options.includeArchived ? '/api/v1/bean-batches?includeArchived=true' : '/api/v1/bean-batches';
+      return (await requestJson(transport, path, { read: readBatches, source: 'GET /api/v1/bean-batches' })) ?? [];
+    },
     createBean: (request) => requestValue(transport, '/api/v1/beans', { method: 'POST', body: request, read: readBean }),
     createBatch: (beanId, request) =>
       requestValue(transport, `/api/v1/beans/${id(beanId)}/batches`, {

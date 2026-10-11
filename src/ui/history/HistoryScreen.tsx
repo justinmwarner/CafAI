@@ -38,6 +38,7 @@ import {
   shotRatio,
   splitDiffLine,
 } from '../chat/format.ts';
+import { VisualizerLink } from '../chat/parts/ShotCard.tsx';
 import { copyText, downloadText, exportFileName } from './exportFile.ts';
 import { groupHistory, outcomeLabel, templateName, versionStatusLabel } from './historyModel.ts';
 
@@ -212,6 +213,8 @@ function IterationRow({ record }: { record: IterationRecord }) {
       <Typography variant="body2" sx={{ color: record.outcome === 'applied' ? 'success.main' : 'text.secondary' }}>
         {outcomeLabel(record.outcome)}
       </Typography>
+      {/* The shot's page on Visualizer, kept with the iteration (6.4). */}
+      <VisualizerLink url={record.visualizerUrl} />
     </Box>
   );
 }

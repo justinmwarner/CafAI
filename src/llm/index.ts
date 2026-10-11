@@ -28,5 +28,13 @@ export {
   type AnthropicProviderOptions,
 } from './anthropic.ts';
 export { CUT_OFF_MESSAGE, DEFAULT_MAX_MODEL_CALLS, contentText, runConversation } from './runner.ts';
+export {
+  EXTRACT_BAG_PROMPT,
+  extractBag,
+  parseExtractedBag,
+  type BagPhoto,
+  type ExtractBagOptions,
+  type ExtractedBag,
+} from './extractBag.ts';
 export { markUnparsedToolInput, unparsedToolInput } from './toolInput.ts';
 export { coerceNumber, extractJsonObject } from './parse.ts';

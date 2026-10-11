@@ -567,6 +567,8 @@ export interface DecaidClient {
 
   listBeans(): Promise<Bean[]>;
   listBatches(beanId: string): Promise<BeanBatch[]>;
+  /** GET /api/v1/bean-batches: every bean's batches in one request; archived ones only when asked. */
+  listAllBatches(options?: { includeArchived?: boolean }): Promise<BeanBatch[]>;
   createBean(request: BeanCreateRequest): Promise<Bean>;
   createBatch(beanId: string, request: BatchCreateRequest): Promise<BeanBatch>;
 

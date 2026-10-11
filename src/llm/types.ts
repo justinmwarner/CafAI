@@ -47,7 +47,7 @@ export interface RedactedThinkingBlock {
   data: string;
 }
 
-/** Seam for bag photos (picked via <input type="file">). Not used tonight. */
+/** A photo of the bag (6.8): sent in one request that reads its details, never in a conversation, never stored. */
 export interface ImageBlock {
   type: 'image';
   source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png' | 'image/webp'; data: string };
@@ -90,6 +90,12 @@ export interface LlmRequest {
   maxTokens?: number;
   /** Ignored for models that do not support effort (Haiku 4.5). */
   effort?: Effort;
+  /**
+   * False for a request that will not repeat (a photo of the bag): nothing is
+   * written to the prompt cache, which bills a write at 1.25x the input.
+   * Cached by default.
+   */
+  cache?: boolean;
   signal?: AbortSignal;
 }
 

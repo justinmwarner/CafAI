@@ -109,6 +109,15 @@ describe('HistoryScreen bag detail', () => {
     expect(within(screen.getByTestId(TID.historyVersion(4))).getByText('No shots on this version.')).toBeInTheDocument();
   });
 
+  it("links a shot the Visualizer plugin uploaded to its page there, and only those (6.4)", async () => {
+    const url = 'https://visualizer.coffee/shots/viz-1';
+    const iterations = KIAMBU_ITERATIONS.map((record) => (record.id === 'it-2' ? { ...record, visualizerUrl: url } : record));
+    renderHistory(KIAMBU.id, createFakeServices({ storage: { bags: [KIAMBU], versions: KIAMBU_VERSIONS, iterations } }));
+    const second = within(await screen.findByTestId(TID.historyVersion(2))).getByTestId(TID.historyIteration('it-2'));
+    expect(within(second).getByTestId(TID.visualizerLink)).toHaveAttribute('href', url);
+    expect(screen.getAllByTestId(TID.visualizerLink)).toHaveLength(1);
+  });
+
   it('goes back to the list', async () => {
     const { onSelectBag } = renderHistory(KIAMBU.id);
     await userEvent.click(await screen.findByRole('button', { name: 'All bags' }));

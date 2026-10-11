@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createMockServer } from '../node.ts';
 
 const mock = createMockServer();
@@ -136,8 +136,12 @@ describe('Decaid WebSocket channels', () => {
     mock.player.command('idle');
     const frames = (await machine.waitFor(2)) as Array<{ state: { state: string; substate: string } }>;
     expect(frames[1]!.state).toEqual({ state: 'idle', substate: 'preparingForShot' });
-    await new Promise((resolve) => setTimeout(resolve, 500)); // past the (sped-up) countdown to reached, with margin for real-timer overhead across 32 ticks
-    expect(machine.frames.at(-1)).toMatchObject({ state: { state: 'idle', substate: 'idle' } });
+    // The countdown's 32 ticks run on real timers; under a loaded test run they can
+    // take far longer than their sped-up 64 ms, so wait for the outcome, not a fixed time.
+    await vi.waitFor(() => expect(machine.frames.at(-1)).toMatchObject({ state: { state: 'idle', substate: 'idle' } }), {
+      timeout: 5000,
+      interval: 20,
+    });
     machine.socket.close();
   });
 });

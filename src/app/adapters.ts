@@ -21,6 +21,7 @@ import {
   knownDose,
   profileId,
   readLeverValues,
+  roastLine,
   runQueryTool,
   summarizeShot,
   validateProposal,
@@ -28,7 +29,7 @@ import {
   withOther,
 } from '../coach/index.ts';
 import type { GrinderInfo } from '../coach/types.ts';
-import { createAnthropicProvider, resolveModel, runConversation, toToolDefinition, zodValidator } from '../llm/index.ts';
+import { createAnthropicProvider, extractBag, resolveModel, runConversation, toToolDefinition, zodValidator } from '../llm/index.ts';
 import type { SecretStore } from '../storage/types.ts';
 import type { ApiPort, CoachPort, LlmPort, ShotSource } from './engine/ports.ts';
 
@@ -54,6 +55,7 @@ export function createCoachPort(): CoachPort {
     doseRange: { min: DOSE_RULES.min, max: DOSE_RULES.max },
     profileId,
     withOther: (options) => withOther([...options]),
+    roastLine,
     async runQuery(name, input, context) {
       // The coach's queries read a synchronous shot list. Resolve each shot
       // reference ("latest", "previous", an id) through the engine's source,
@@ -74,17 +76,28 @@ export function createCoachPort(): CoachPort {
         rewritten[key] = shot.record.id;
       }
       const source = createShotSource(shots.filter((s): s is NonNullable<typeof s> => s !== null));
-      return runQueryTool(name, rewritten, { source, versions: context.versions, iterations: context.iterations });
+      return runQueryTool(name, rewritten, {
+        source,
+        versions: context.versions,
+        iterations: context.iterations,
+        dye2: context.dye2,
+        bag: context.bag,
+      });
     },
   };
 }
 
 export function createLlmPort(secrets: SecretStore): LlmPort {
+  const getApiKey = () => secrets.getApiKey();
+  // A photo of the bag goes once (6.8): a failed request is not sent again
+  // on its own; the barista takes another photo.
+  const photoReader = createAnthropicProvider({ getApiKey, maxRetries: 0 });
   return {
-    provider: createAnthropicProvider({ getApiKey: () => secrets.getApiKey() }),
+    provider: createAnthropicProvider({ getApiKey }),
     run: (request) => runConversation({ ...request, model: resolveModel(request.model) }),
     toolDefinition: toToolDefinition,
     validator: zodValidator,
+    readBag: ({ model, photo }) => extractBag({ provider: photoReader, model: resolveModel(model), photo }),
   };
 }
 
@@ -121,7 +134,12 @@ export function createApiPort(decaid: DecaidClient): ApiPort {
       return grinder ? grinderInfo(grinder) : null;
     },
     listBeans: () => decaid.listBeans(),
+    listBatches: (beanId) => decaid.listBatches(beanId),
+    listAllBatches: (options) => decaid.listAllBatches(options),
     createBean: (request) => decaid.createBean(request),
     createBatch: (beanId, request) => decaid.createBatch(beanId, request),
+    // What Decaid's plugins leave for CafAI (D103): read, never written.
+    readStore: (namespace, key) => decaid.kv.get<unknown>(namespace, key),
+    getPluginEndpoint: (pluginId, endpoint) => decaid.getPluginEndpoint<unknown>(pluginId, endpoint),
   };
 }

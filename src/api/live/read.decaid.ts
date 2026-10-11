@@ -106,6 +106,13 @@ describeDecaid('read', ({ url }) => {
     expect(live.problems()).toEqual([]);
   });
 
+  it('GET /api/v1/bean-batches: every batch at once, as the bean card reads them (6.1)', async () => {
+    const batches = await live.client.listAllBatches();
+    const withArchived = await live.client.listAllBatches({ includeArchived: true });
+    expect(withArchived.length, 'with the archived ones').toBeGreaterThanOrEqual(batches.length);
+    expect(live.problems()).toEqual([]);
+  });
+
   it('GET /api/v1/plugins: each says whether it is loaded (D103)', async () => {
     const plugins = await live.client.listPlugins();
     expect(plugins.filter((plugin) => typeof plugin.loaded !== 'boolean').map((plugin) => plugin.id), 'without a loaded flag').toEqual([]);

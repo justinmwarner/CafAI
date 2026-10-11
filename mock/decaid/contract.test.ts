@@ -301,6 +301,8 @@ const ROUTES: ReadonlyArray<[Method, RegExp]> = [
   ['PUT', /^\/api\/v1\/beans\/[^/]+$/],
   ['GET', /^\/api\/v1\/beans\/[^/]+\/batches$/],
   ['POST', /^\/api\/v1\/beans\/[^/]+\/batches$/],
+  ['GET', /^\/api\/v1\/bean-batches$/],
+  ['GET', /^\/api\/v1\/bean-batches\?includeArchived=true$/],
   ['PUT', /^\/api\/v1\/bean-batches\/[^/]+$/],
   ['GET', /^\/api\/v1\/store\/cafai$/],
   ['GET', /^\/api\/v1\/store\/cafai\?full=1$/],
@@ -415,6 +417,9 @@ describe('the mock against the spec', () => {
     if (bean) {
       await attempt(() => client.listBatches(bean.id));
       const batch = await attempt(() => client.createBatch(bean.id, { roastDate: '2026-09-30', roastLevel: 'light' }));
+      // Every batch in one read, as the bean card makes it (spec 6.1).
+      await attempt(() => client.listAllBatches());
+      await attempt(() => client.listAllBatches({ includeArchived: true }));
       // Archiving is not CafAI's (D102), but the tests against a real Decaid undo with it.
       await attempt(() => recording(`${ORIGIN}/api/v1/beans/${encodeURIComponent(bean.id)}`, { method: 'PUT', body: JSON.stringify({ archived: true }) }));
       if (batch) {

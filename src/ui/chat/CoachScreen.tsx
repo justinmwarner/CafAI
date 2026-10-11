@@ -359,6 +359,10 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
           onDecline={(requestId) => fire(coach.declineChange(requestId))}
           onUndo={() => fire(coach.undo())}
           onRateShot={(shotId, stars) => fire(coach.rateShot(shotId, stars))}
+          onPickBean={(batchId) => fire(coach.pickBean(batchId))}
+          onSkipBeanPick={() => fire(coach.skipBeanPick())}
+          onBagPhoto={(photo) => fire(coach.readBagPhoto(photo))}
+          onConfirmBag={(details) => fire(coach.confirmBag(details))}
           onOpenGraph={() => navigate({ name: 'shot' })}
           statsCard={statsShown}
           onStats={showStats}

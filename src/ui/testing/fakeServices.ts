@@ -224,6 +224,7 @@ export function createFakeDecaid(): FakeDecaid {
     probeEnjoymentScale: () => call<EnjoymentScale | null>('probeEnjoymentScale', [], 10),
     listBeans: () => call('listBeans', [], beans),
     listBatches: (beanId) => call('listBatches', [beanId], batchesByBean.get(beanId) ?? []),
+    listAllBatches: (options) => call('listAllBatches', [options], [...batchesByBean.values()].flat()),
     createBean: (request) => {
       beanSeq += 1;
       const bean: Bean = { id: `bean_${beanSeq}`, roaster: request.roaster, name: request.name, country: request.country, processing: request.processing, notes: request.notes };
@@ -374,6 +375,10 @@ export function createFakeCoach(initial: Partial<CoachState> = {}): FakeCoach {
     declineChange: record('declineChange'),
     undo: record('undo'),
     rateShot: record('rateShot'),
+    pickBean: record('pickBean'),
+    skipBeanPick: record('skipBeanPick'),
+    readBagPhoto: record('readBagPhoto'),
+    confirmBag: record('confirmBag'),
     retry: record('retry'),
     dismissError: () => void calls.push({ method: 'dismissError', args: [] }),
     refresh: record('refresh'),

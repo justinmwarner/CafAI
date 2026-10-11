@@ -11,8 +11,8 @@ const chromium91Properties = [
   { object: 'AbortSignal', property: 'timeout', message: 'Chromium 103+. Use AbortController + setTimeout.' },
   { object: 'AbortSignal', property: 'any', message: 'Chromium 116+. Combine signals manually.' },
   { property: 'throwIfAborted', message: 'Chromium 100+. Check signal.aborted instead.' },
-  { object: 'navigator', property: 'mediaDevices', message: 'Decaid skins cannot use camera or microphone.' },
-  { property: 'getUserMedia', message: 'Decaid skins cannot use camera or microphone.' },
+  { object: 'navigator', property: 'mediaDevices', message: "Camera access needs Decaid's per-skin consent; CafAI uses <input type=file capture>." },
+  { property: 'getUserMedia', message: "Camera access needs Decaid's per-skin consent; CafAI uses <input type=file capture>." },
   { object: 'Response', property: 'json', message: 'Static Response.json() is Chromium 105+.' },
 ];
 
@@ -29,6 +29,8 @@ export default defineConfig(
       'dist/**',
       'dist-mock/**',
       '.verify/**',
+      // Git worktrees of agents working beside this tree: another checkout, linted there.
+      '.claude/worktrees/**',
       'coverage/**',
       'playwright-report/**',
       'test-results/**',

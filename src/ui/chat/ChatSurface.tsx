@@ -40,9 +40,13 @@ import type {
   ChatPartRendererProps,
 } from '@mui/x-chat/headless';
 import type { CoachUiMessage, CoachUiPart } from '../../app/types.ts';
+import type { SaveBagDetails } from '../../coach/contract.ts';
+import type { BagPhoto } from '../../llm/extractBag.ts';
 import { StatsCard } from '../machine/StatsCard.tsx';
 import { TID } from '../testIds.ts';
 import { RichText } from './RichText.tsx';
+import { BagConfirmCard } from './parts/BagConfirmCard.tsx';
+import { BeanCard } from './parts/BeanCard.tsx';
 import { DiffCard } from './parts/DiffCard.tsx';
 import { Notice } from './parts/Notice.tsx';
 import { OptionChips } from './parts/OptionChips.tsx';
@@ -68,6 +72,14 @@ export interface ChatSurfaceProps {
   onUndo(): void;
   /** A star tapped on a shot card (1-5). */
   onRateShot(shotId: string, stars: number): void;
+  /** A batch of Decaid's bean library picked on "Which coffee is it?" (6.1). */
+  onPickBean?(batchId: string): void;
+  /** The bean card's Something else. */
+  onSkipBeanPick?(): void;
+  /** A photo of the bag, ready to send (6.8). */
+  onBagPhoto?(photo: BagPhoto): void;
+  /** The details read from the photo, as the barista confirmed them. */
+  onConfirmBag?(details: SaveBagDetails): void;
   /** Opens the shot route (#/shot) from graphShotId's card. Without it no card shows Graph. */
   onOpenGraph?(): void;
   /** Show the live stats card after the newest message (statsCard.ts decides when). */
@@ -186,6 +198,10 @@ interface PartActions {
   openGraph(): void;
   /** The Stats prompt (it lives in x-chat's slot above the composer, so it reaches ChatSurface through here too). */
   askStats(): void;
+  pickBean(batchId: string): void;
+  skipBeanPick(): void;
+  bagPhoto(photo: BagPhoto): void;
+  confirmBag(details: SaveBagDetails): void;
 }
 
 interface PartsContextValue {
@@ -275,6 +291,42 @@ function ShotView({ data }: { data: unknown }) {
       disabled={busy}
       onRate={(stars) => actions.rateShot(part.shotId, stars)}
       onOpenGraph={showGraph ? actions.openGraph : undefined}
+      visualizerUrl={part.visualizerUrl ?? null}
+    />
+  );
+}
+
+function BeanPickerView({ data }: { data: unknown }) {
+  const { busy, actions } = usePartsContext();
+  const part = cardOf(data, 'beanPicker');
+  if (!part) return null;
+  return (
+    <BeanCard
+      options={part.options}
+      choice={part.choice}
+      disabled={busy}
+      expired={part.expired ?? false}
+      setAsideReason={part.setAsideReason}
+      loading={part.loading ?? false}
+      onPick={actions.pickBean}
+      onSomethingElse={actions.skipBeanPick}
+      onPhoto={actions.bagPhoto}
+    />
+  );
+}
+
+function BagConfirmView({ data }: { data: unknown }) {
+  const { busy, actions } = usePartsContext();
+  const part = cardOf(data, 'bagConfirm');
+  if (!part) return null;
+  return (
+    <BagConfirmCard
+      details={part.details}
+      confirmed={part.confirmed}
+      disabled={busy}
+      expired={part.expired ?? false}
+      setAsideReason={part.setAsideReason}
+      onConfirm={actions.confirmBag}
     />
   );
 }
@@ -316,6 +368,8 @@ const PART_RENDERERS: ChatPartRendererMap = {
   [`${DATA_PREFIX}diff`]: ({ part }: DataRendererProps) => <DiffView data={part.data} />,
   [`${DATA_PREFIX}shot`]: ({ part }: DataRendererProps) => <ShotView data={part.data} />,
   [`${DATA_PREFIX}notice`]: ({ part }: DataRendererProps) => <NoticeView data={part.data} />,
+  [`${DATA_PREFIX}beanPicker`]: ({ part }: DataRendererProps) => <BeanPickerView data={part.data} />,
+  [`${DATA_PREFIX}bagConfirm`]: ({ part }: DataRendererProps) => <BagConfirmView data={part.data} />,
   [THINKING_TYPE]: () => <ThinkingView />,
   [STATS_TYPE]: () => <StatsCard />,
 };
@@ -414,17 +468,31 @@ function newestMessage(scroller: HTMLElement): NewestMessage | null {
 }
 
 /**
+ * A new bag's chat opens on "Which coffee is it?" still to answer (6.1): it
+ * is shown from that card's top, the thread's start, not from its end.
+ */
+function opensOnBeanCard(messages: readonly CoachUiMessage[]): boolean {
+  return messages[0]?.parts.some((part) => part.kind === 'beanPicker' && part.choice === null && part.expired !== true) ?? false;
+}
+
+/**
  * Wire followNewest.ts to x-chat's scroller: follow every resize of the
  * thread (a card that grows after it renders included) and of the view, and
- * every scroll.
+ * every scroll. `open` shows the thread the first time, once the follower
+ * exists; `newestRow` is the id of the thread's newest row as handed to
+ * x-chat, which draws it a moment later.
  */
-function useFollowNewest(rootRef: { current: HTMLElement | null }): { current: FollowNewest | null } {
+function useFollowNewest(
+  rootRef: { current: HTMLElement | null },
+  open: (follower: FollowNewest) => void,
+  newestRow: { current: string | null },
+): { current: FollowNewest | null } {
   const followerRef = useRef<FollowNewest | null>(null);
   useEffect(() => {
     const scroller = rootRef.current?.querySelector<HTMLElement>(SCROLLER_SELECTOR) ?? null;
     const content = rootRef.current?.querySelector<HTMLElement>(CONTENT_SELECTOR) ?? null;
     if (!scroller) return undefined;
-    const follower = createFollowNewest(scroller, () => newestMessage(scroller));
+    const follower = createFollowNewest(scroller, () => newestMessage(scroller), () => newestRow.current);
     followerRef.current = follower;
     const onScroll = () => follower.onScroll();
     scroller.addEventListener('scroll', onScroll, { passive: true });
@@ -433,13 +501,13 @@ function useFollowNewest(rootRef: { current: HTMLElement | null }): { current: F
     // The view itself shrinks when a banner appears above the chat (or an
     // on-screen keyboard resizes the page): keep the newest prompt in view.
     if (observer) observer.observe(scroller);
-    follower.update();
+    open(follower);
     return () => {
       scroller.removeEventListener('scroll', onScroll);
       observer?.disconnect();
       followerRef.current = null;
     };
-  }, [rootRef]);
+  }, [rootRef, open, newestRow]);
   return followerRef;
 }
 
@@ -544,6 +612,10 @@ export function ChatSurface(props: ChatSurfaceProps) {
         setStatsAsked((count) => count + 1);
         propsRef.current.onStats?.();
       },
+      pickBean: act((batchId: string) => propsRef.current.onPickBean?.(batchId)),
+      skipBeanPick: act(() => propsRef.current.onSkipBeanPick?.()),
+      bagPhoto: act((photo: BagPhoto) => propsRef.current.onBagPhoto?.(photo)),
+      confirmBag: act((details: SaveBagDetails) => propsRef.current.onConfirmBag?.(details)),
     };
   }, []);
 
@@ -554,6 +626,11 @@ export function ChatSurface(props: ChatSurfaceProps) {
   );
 
   const chatMessages = useMemo(() => toChatMessages(messages, busy, statsCard), [messages, busy, statsCard]);
+  // The thread's newest row as handed to x-chat, the stats card included: what a new thread held at its start waits on.
+  const newestRowRef = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    newestRowRef.current = chatMessages[chatMessages.length - 1]?.id ?? null;
+  }, [chatMessages]);
 
   // The card joins the run of messages above it, so it never carries an
   // author label of its own ("Coach" over the machine's numbers would read as
@@ -568,14 +645,19 @@ export function ChatSurface(props: ChatSurfaceProps) {
 
   // Keep the newest message in view (followNewest.ts): on mount and on a bag
   // switch (the thread is replaced), after the barista acted (sent, tapped a
-  // card), and for everything that arrives while they follow the thread.
+  // card), and for everything that arrives while they follow the thread. A
+  // new bag's chat opens on its bean card's top instead (opensOnBeanCard).
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const followerRef = useFollowNewest(rootRef);
+  const openThread = useCallback((follower: FollowNewest) => {
+    follower.reset();
+    if (opensOnBeanCard(propsRef.current.messages)) follower.showStart();
+    else follower.update();
+  }, []);
+  const followerRef = useFollowNewest(rootRef, openThread, newestRowRef);
   const firstId = messages[0]?.id;
   useLayoutEffect(() => {
-    followerRef.current?.reset();
-    followerRef.current?.update();
-  }, [firstId, followerRef]);
+    if (followerRef.current) openThread(followerRef.current);
+  }, [firstId, followerRef, openThread]);
   useLayoutEffect(() => {
     if (followNextRef.current) {
       followNextRef.current = false;

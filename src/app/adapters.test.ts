@@ -2,9 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDecaidClient } from '../api/client.ts';
 import type { Grinder } from '../api/grinders.ts';
 import type { ShotUpdateRequest, WireProfile } from '../api/types.ts';
+import { TOOL } from '../coach/contract.ts';
 import { getTemplate } from '../coach/index.ts';
 import { createFakeDecaid } from '../ui/testing/fakeServices.ts';
-import { createApiPort, createCoachPort, grinderInfo } from './adapters.ts';
+import { createApiPort, createCoachPort, createLlmPort, grinderInfo } from './adapters.ts';
 
 const profile = {
   version: '2',
@@ -96,10 +97,31 @@ describe('createApiPort', () => {
     });
     const port = createApiPort(createDecaidClient({ origin: 'http://localhost:8080', fetch: fetch as unknown as typeof globalThis.fetch }));
     await expect(port.listBeans()).resolves.toEqual([]);
+    await expect(port.listBatches('bean-1')).resolves.toEqual([]);
+    await expect(port.listAllBatches({ includeArchived: true })).resolves.toEqual([]);
     await expect(port.createBean({ roaster: 'Square Mile', name: 'Kiambu AA' })).resolves.toMatchObject({ id: 'bean-1' });
     await expect(port.createBatch('bean-1', { roastLevel: 'light' })).resolves.toMatchObject({ id: 'batch-1', beanId: 'bean-1' });
-    expect(seen).toEqual(['GET /api/v1/beans', 'POST /api/v1/beans', 'POST /api/v1/beans/bean-1/batches']);
-    expect(Object.keys(port).filter((name) => /bean|batch/i.test(name)).sort()).toEqual(['createBatch', 'createBean', 'listBeans']);
+    expect(seen).toEqual([
+      'GET /api/v1/beans',
+      'GET /api/v1/beans/bean-1/batches',
+      'GET /api/v1/bean-batches',
+      'POST /api/v1/beans',
+      'POST /api/v1/beans/bean-1/batches',
+    ]);
+    expect(Object.keys(port).filter((name) => /bean|batch/i.test(name)).sort()).toEqual(['createBatch', 'createBean', 'listAllBatches', 'listBatches', 'listBeans']);
+  });
+
+  it("only reads what Decaid's plugins leave: a key of the store and a loaded plugin's endpoint (D103)", async () => {
+    const seen: string[] = [];
+    const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      seen.push(`${init?.method ?? 'GET'} ${new URL(url).pathname}`);
+      return new Response(url.includes('/store/') ? '"shot-7"' : '[]', { status: 200 });
+    });
+    const port = createApiPort(createDecaidClient({ origin: 'http://localhost:8080', fetch: fetch as unknown as typeof globalThis.fetch }));
+    await expect(port.readStore('visualizer.reaplugin', 'lastUploadedShot')).resolves.toBe('shot-7');
+    await expect(port.getPluginEndpoint('dye2.reaplugin', 'recent-favs')).resolves.toEqual([]);
+    expect(seen).toEqual(['GET /api/v1/store/visualizer.reaplugin/lastUploadedShot', 'GET /api/v1/plugins/dye2.reaplugin/recent-favs']);
+    expect(Object.keys(port).filter((name) => /store|plugin/i.test(name)).sort()).toEqual(['getPluginEndpoint', 'readStore']);
   });
 
   it("asks Decaid's rating scale through the client (D101)", async () => {
@@ -156,5 +178,78 @@ describe('createCoachPort', () => {
     expect(coach.knownDose(null)).toBeNull();
     expect(coach.referenceDoseG).toBe(18);
     expect(coach.doseRange).toEqual({ min: 12, max: 25 });
+  });
+
+  it("gives the roast as the coach reads it (6.1)", () => {
+    const today = new Date(2026, 9, 10, 9, 0);
+    expect(coach.roastLine('2026-10-01', today, null)).toBe('Roasted 2026-10-01 (9 days ago)');
+    expect(coach.roastLine(null, today, null)).toBeNull();
+  });
+
+  it("answers get_recent_setups from DYE2's data the engine read, for the bag on screen (6.5)", async () => {
+    const setup = {
+      kind: 'recent' as const,
+      beanBatchId: 'batch-1',
+      beanId: null,
+      coffeeName: 'Red Brick',
+      coffeeRoaster: 'Square Mile',
+      profileTitle: 'D-Flow / default',
+      grindSetting: '4.2',
+      doseG: 18,
+      yieldG: 36,
+      rpm: null,
+      basket: null,
+      capturedAt: '2026-10-08',
+    };
+    // Another coffee's setup, which DYE2 lists too.
+    const other = { ...setup, beanBatchId: 'batch-9', coffeeName: 'Kiambu AA', grindSetting: '3.0' };
+    const source = { resolve: async () => null };
+    const bag = { name: 'Red Brick', roaster: 'Square Mile', decaidBeanId: 'bean-1', decaidBatchId: 'batch-1' };
+    const dye2 = { setups: [other, setup], equipment: ['Niche Zero'], baskets: [] };
+    const answer = await coach.runQuery(TOOL.getRecentSetups, {}, { source, versions: [], iterations: [], dye2, bag });
+    expect(answer.isError).toBe(false);
+    expect(JSON.parse(answer.content)).toEqual({
+      available: true,
+      setups: [
+        {
+          kind: 'recent',
+          sameBatch: true,
+          profileTitle: 'D-Flow / default',
+          grindSetting: '4.2',
+          doseG: 18,
+          yieldG: 36,
+          rpm: null,
+          basket: null,
+          date: '2026-10-08',
+        },
+      ],
+      equipment: ['Niche Zero'],
+      baskets: [],
+    });
+  });
+});
+
+describe('createLlmPort', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("reads a bag photo with the coach's model in one request, never retried, so the photo goes once (6.8)", async () => {
+    const bodies: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        bodies.push(String(init?.body));
+        return new Response('{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}', { status: 529 });
+      }),
+    );
+    const port = createLlmPort({ getApiKey: async () => 'sk-ant-test', setApiKey: async () => {}, forgetApiKey: async () => {} });
+    const photo = { mediaType: 'image/jpeg' as const, data: '/9j/4AAQ' };
+    await expect(port.readBag!({ model: ' ', photo })).rejects.toThrow('Anthropic is overloaded right now.');
+    expect(bodies).toHaveLength(1);
+    const body = JSON.parse(bodies[0]!);
+    expect(body.model).toBe('claude-opus-5-5');
+    expect(body.messages[0].content[0]).toEqual({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: '/9j/4AAQ' } });
+    expect(body.tools).toBeUndefined();
   });
 });

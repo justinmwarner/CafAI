@@ -109,7 +109,7 @@ export function buildAnthropicRequest(request: LlmRequest, apiKey: string, baseU
   }
   body.stream = true;
   // Caches the stable prefix (tools, system, earlier turns) up to the last block.
-  body.cache_control = { type: 'ephemeral' };
+  if (request.cache !== false) body.cache_control = { type: 'ephemeral' };
   if (modelInfo(model).supportsEffort) body.output_config = { effort: request.effort ?? DEFAULT_EFFORT };
   if (supportsRefusalFallbacks(model)) {
     body.fallbacks = 'default';

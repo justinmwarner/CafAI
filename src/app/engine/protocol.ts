@@ -4,7 +4,7 @@
  * Pure functions; the scripted fake model in mock/anthropic parses exactly
  * these shapes.
  */
-import { EVENT } from '../../coach/contract.ts';
+import { EVENT, type SaveBagDetails } from '../../coach/contract.ts';
 import type { GrinderInfo, ShotSummary } from '../../coach/types.ts';
 import type { ContentBlock, LlmMessage, TextBlock, ToolResultBlock, ToolUseBlock } from '../../llm/types.ts';
 
@@ -73,11 +73,45 @@ export interface IntakeContext {
   scaleConnected: boolean;
   /** The dose in Decaid when CafAI coaches from it (12-25 g), else null. */
   doseG: number | null;
+  /**
+   * The bag's details when they came from Decaid's bean library or a photo
+   * of the bag the user confirmed (6.1, 6.8): already saved. Null when the
+   * user describes the bag.
+   */
+  bag: SaveBagDetails | null;
+  /** "Roasted <date> (<n> days ago...)" when the roast date is known, else null (6.1). */
+  roast: string | null;
+  /** Today's date where the user is, "YYYY-MM-DD": what a roast date said in words counts from. */
+  today: string;
 }
 
 /** The first user turn of a bag: the user's words plus the app context block. */
 export function intakeBlocks(text: string, context: IntakeContext): ContentBlock[] {
   return [textBlock(text), textBlock(`${EVENT.context}\n${JSON.stringify(context)}`)];
+}
+
+/** A bag's details in one line for the coach, fields apart by semicolons (an origin has commas of its own). */
+function bagFacts(bag: SaveBagDetails): string[] {
+  return [
+    bag.origin,
+    bag.process,
+    bag.roastLevel ? `${bag.roastLevel} roast` : null,
+    bag.roastDate ? `roasted ${bag.roastDate}` : null,
+    bag.notes ? `tasting notes: ${bag.notes}` : null,
+  ].filter((fact): fact is string => fact !== null && fact !== '');
+}
+
+/** The first words of a bag picked from Decaid's bean library (6.1). */
+export function pickedIntakeText(bag: SaveBagDetails): string {
+  const by = bag.roaster ? ` by ${bag.roaster}` : '';
+  const facts = bagFacts(bag);
+  return `The user picked ${bag.name}${by} from Decaid's bean library: ${facts.length > 0 ? facts.join('; ') : 'no other details'}.`;
+}
+
+/** The first words of a bag read from a photo the user confirmed (6.8). */
+export function photoIntakeText(bag: SaveBagDetails): string {
+  const coffee = bag.roaster ? `${bag.name} by ${bag.roaster}` : bag.name;
+  return `The user confirmed these details read from a photo of the bag: ${[coffee, ...bagFacts(bag)].join('; ')}.`;
 }
 
 export const UNANSWERED_TEXT = { answered: false, note: 'The user typed a message instead.' } as const;
@@ -93,6 +127,8 @@ export interface ShotCompletedPayload {
   targetYieldG: number | null;
   /** The grinder as the user last saved it (Settings, or a confirmed grind move). */
   grinder: GrinderPayload;
+  /** The roast as at intake, its age counted to the day of the shot (6.1); null when the roast date is unknown. */
+  roast: string | null;
   summary: Omit<ShotSummary, 'series'>;
 }
 

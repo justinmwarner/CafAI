@@ -8,7 +8,7 @@ import type { LiveSample, ShotStateEvent } from '../../api/types.ts';
 import { createFakeServices, IDLE_TELEMETRY, type FakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
 import { CoachScreen } from './CoachScreen.tsx';
-import { KIAMBU, SANTOS, coachStateFor } from './testing/fixtures.ts';
+import { BAG_FROM_PHOTO, BEAN_OPTIONS, KIAMBU, SANTOS, coachStateFor } from './testing/fixtures.ts';
 import { renderWithServices } from './testing/render.tsx';
 
 function renderCoach(coach: Partial<CoachState>): FakeServices {
@@ -291,6 +291,30 @@ describe('CoachScreen', () => {
     expect(services.coach.calls).toEqual([
       { method: 'pickTemplate', args: ['tu-templates', 'blooming-espresso'] },
       { method: 'confirmChange', args: ['tu-adjust'] },
+    ]);
+  });
+
+  it("passes the bean card's answers and the photo's confirmed details to the controller (6.1, 6.8)", async () => {
+    const at = '2026-10-03T09:00:00.000Z';
+    const bean: CoachUiMessage = { id: 'm-bean', role: 'assistant', parts: [{ kind: 'beanPicker', options: BEAN_OPTIONS, choice: null }], createdAt: at };
+    const services = createFakeServices({ coach: { ...coachStateFor('intake'), messages: [bean] } });
+    const asked: Array<[string, unknown[]]> = [];
+    services.coach.pickBean = async (...args) => void asked.push(['pickBean', args]);
+    services.coach.skipBeanPick = async () => void asked.push(['skipBeanPick', []]);
+    services.coach.confirmBag = async (...args) => void asked.push(['confirmBag', args]);
+    renderWithServices(<CoachScreen />, services);
+    await userEvent.click(screen.getAllByTestId(TID.beanOption)[0]!);
+    await userEvent.click(screen.getByTestId(TID.beanSomethingElse));
+    act(() =>
+      services.coach.setState({
+        messages: [bean, { id: 'm-confirm', role: 'assistant', parts: [{ kind: 'bagConfirm', details: BAG_FROM_PHOTO, confirmed: false }], createdAt: at }],
+      }),
+    );
+    await userEvent.click(within(screen.getByTestId(TID.bagConfirm)).getByRole('button', { name: 'Confirm' }));
+    expect(asked).toEqual([
+      ['pickBean', ['batch-red']],
+      ['skipBeanPick', []],
+      ['confirmBag', [BAG_FROM_PHOTO]],
     ]);
   });
 

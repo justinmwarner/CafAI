@@ -8,9 +8,11 @@ import Typography from '@mui/material/Typography';
 import { useTheme } from '@mui/material/styles';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import LocalCafeIcon from '@mui/icons-material/LocalCafe';
+import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import StarIcon from '@mui/icons-material/Star';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import { isVisualizerShotUrl } from '../../../api/pluginData.ts';
 import { pourTime } from '../../../coach/summary/pourClock.ts';
 import type { ShotSummary } from '../../../coach/types.ts';
 import { TID } from '../../testIds.ts';
@@ -94,6 +96,30 @@ function Sparkline({ summary, onOpenGraph }: { summary: ShotSummary; onOpenGraph
   );
 }
 
+/**
+ * "On Visualizer" (6.4): a plain link to the shot's page, which Decaid opens
+ * in the system browser. Only a Visualizer shot page is linked, whatever an
+ * imported record says.
+ */
+export function VisualizerLink({ url }: { url: string | null | undefined }) {
+  if (!isVisualizerShotUrl(url)) return null;
+  return (
+    <Button
+      component="a"
+      href={url}
+      rel="noreferrer"
+      variant="text"
+      color="primary"
+      endIcon={<OpenInNewRoundedIcon />}
+      data-testid={TID.visualizerLink}
+      // Its own width in a grid row too (History's shot rows).
+      sx={{ minHeight: 48, mt: 0.5, justifySelf: 'start' }}
+    >
+      On Visualizer
+    </Button>
+  );
+}
+
 const STARS = [1, 2, 3, 4, 5] as const;
 
 /**
@@ -157,10 +183,12 @@ export interface ShotCardProps {
   disabled?: boolean;
   /** Opens the shot's full graph (#/shot). Without it the card shows no Graph link. */
   onOpenGraph?: () => void;
+  /** The shot's page on Visualizer, once Decaid's Visualizer plugin uploaded it (6.4). */
+  visualizerUrl?: string | null;
 }
 
 /** A finished shot at a glance: the numbers the coach reasons about, its curves, and the barista's rating. */
-export function ShotCard({ summary, stars = null, onRate, disabled = false, onOpenGraph }: ShotCardProps) {
+export function ShotCard({ summary, stars = null, onRate, disabled = false, onOpenGraph, visualizerUrl = null }: ShotCardProps) {
   // The shot time is the pour, so every other time counts from its start too:
   // a peak "at 61 s" of a 60 s shot would come after the shot ended.
   const peakAt = pourTime(summary.peakPressureAtS, summary.pourStartS);
@@ -199,6 +227,7 @@ export function ShotCard({ summary, stars = null, onRate, disabled = false, onOp
           </Typography>
         </Stack>
       ) : null}
+      <VisualizerLink url={visualizerUrl} />
       {onRate ? <StarRating stars={stars} disabled={disabled} onRate={onRate} /> : null}
     </Paper>
   );

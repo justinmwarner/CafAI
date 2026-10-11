@@ -4,10 +4,12 @@ import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { TOOL, TOOL_INPUTS, UI_TOOLS, type ToolName } from '../../src/coach/contract.ts';
 import { createAnthropicProvider } from '../../src/llm/anthropic.ts';
+import { extractBag } from '../../src/llm/extractBag.ts';
 import { runConversation } from '../../src/llm/runner.ts';
 import { toToolDefinition, zodValidator } from '../../src/llm/schema.ts';
 import type { LlmMessage, RunnerTool, RunResult, ToolResultBlock } from '../../src/llm/types.ts';
 import { anthropicHandlers, resetAnthropicMock } from './handlers.ts';
+import { BAG_PHOTO_ANSWER } from './scenario.ts';
 
 const server = setupServer(...anthropicHandlers({ speed: Infinity }));
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
@@ -87,7 +89,7 @@ describe('the scripted coach, end to end', () => {
     expect(coach.executed).toEqual([
       {
         name: TOOL.saveBagDetails,
-        input: { name: 'Kiambu AA', roaster: null, origin: 'Kenya', roastLevel: 'light', process: 'washed', notes: null },
+        input: { name: 'Kiambu AA', roaster: null, origin: 'Kenya', roastLevel: 'light', process: 'washed', notes: null, roastDate: null },
       },
     ]);
     const templates = intake.pendingUiCalls[0]!;
@@ -155,6 +157,12 @@ describe('the scripted coach, end to end', () => {
     for (const message of coach.transcript.filter((m) => m.role === 'assistant')) {
       expect(message.content[0]).toMatchObject({ type: 'thinking', thinking: '' });
     }
+  });
+
+  it('reads a photo of the bag sent the way CafAI sends it, and answers the canned bag (6.8)', async () => {
+    const provider = createAnthropicProvider({ getApiKey: () => Promise.resolve('sk-ant-test') });
+    const bag = await extractBag({ provider, model: 'claude-opus-5-5', photo: { mediaType: 'image/jpeg', data: '/9j/4AAQSkZJRgABAQ==' } });
+    expect(bag).toEqual(BAG_PHOTO_ANSWER);
   });
 
   it('keeps the version when the user declines the change', async () => {

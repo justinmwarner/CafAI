@@ -3,6 +3,7 @@
  * Immutable updates only: the UI subscribes with Object.is selectors.
  */
 import type {
+  BeanPickerOption,
   CoachUiMessage,
   CoachUiPart,
   DiffStatus,
@@ -11,6 +12,7 @@ import type {
   TemplateCardItem,
   UiRole,
 } from '../types.ts';
+import type { SaveBagDetails } from '../../coach/contract.ts';
 import type { ShotSummary } from '../../coach/types.ts';
 
 export const NEW_BAG_PROMPT =
@@ -47,14 +49,54 @@ export function diffPart({
   return { kind: 'diff', ...fields, ...(keep ? { keep } : {}), status: 'pending', error: null };
 }
 
+/** "Which coffee is it?" (6.1), open: the batches of Decaid's bean library to pick from. */
+export function beanPickerPart(options: BeanPickerOption[]): CoachUiPart {
+  return { kind: 'beanPicker', options, choice: null };
+}
+
+/** "Which coffee is it?" (6.1) before Decaid's batches are read: up at once, its rows to come. */
+export function loadingBeanPickerPart(): CoachUiPart {
+  return { kind: 'beanPicker', options: [], choice: null, loading: true };
+}
+
+/** The bean card that still waits for Decaid's batches, answered or not. */
+export function isLoadingBeanCard(part: CoachUiPart): boolean {
+  return part.kind === 'beanPicker' && part.loading === true;
+}
+
+/** The bean card once Decaid's batches are read: its rows, and no longer loading. */
+export function filledBeanCard(part: CoachUiPart, options: BeanPickerOption[]): CoachUiPart {
+  if (part.kind !== 'beanPicker') return part;
+  const { loading: _loading, ...rest } = part;
+  return { ...rest, options };
+}
+
+/** The details read from a photo of the bag, for the barista to check and confirm (6.8). */
+export function bagConfirmPart(details: SaveBagDetails): CoachUiPart {
+  return { kind: 'bagConfirm', details, confirmed: false };
+}
+
+/** The bean card while it waits for an answer. */
+export function isOpenBeanCard(part: CoachUiPart): boolean {
+  return part.kind === 'beanPicker' && part.choice === null && !part.expired;
+}
+
+/** The photo's details while they wait for Confirm. */
+export function isOpenBagConfirm(part: CoachUiPart): boolean {
+  return part.kind === 'bagConfirm' && !part.confirmed && !part.expired;
+}
+
 /**
  * A card the conversation went past unanswered, closed with the reason, so it
- * can say why. A change that was already decided, and every other part, stay
- * as they are.
+ * can say why. A change that was already decided, an answered bean card,
+ * confirmed details, and every other part, stay as they are.
  */
 export function setAside(part: CoachUiPart, reason: SetAsideReason): CoachUiPart {
   if (part.kind === 'templates' || part.kind === 'options') return { ...part, expired: true, setAsideReason: reason };
   if (part.kind === 'diff' && part.status === 'pending') return { ...part, status: 'expired', setAsideReason: reason };
+  if ((part.kind === 'beanPicker' || part.kind === 'bagConfirm') && (isOpenBeanCard(part) || isOpenBagConfirm(part))) {
+    return { ...part, expired: true, setAsideReason: reason };
+  }
   return part;
 }
 
@@ -139,6 +181,15 @@ export function setShotStars(messages: readonly CoachUiMessage[], shotId: string
     messages,
     (part) => part.kind === 'shot' && part.shotId === shotId,
     (part) => (part.kind === 'shot' ? { ...part, stars } : part),
+  );
+}
+
+/** The link to a shot's page on Visualizer, on its card (6.4). */
+export function setVisualizerLink(messages: readonly CoachUiMessage[], shotId: string, url: string): CoachUiMessage[] {
+  return updatePart(
+    messages,
+    (part) => part.kind === 'shot' && part.shotId === shotId,
+    (part) => (part.kind === 'shot' ? { ...part, visualizerUrl: url } : part),
   );
 }
 

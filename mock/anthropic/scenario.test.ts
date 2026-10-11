@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TOOL, TOOL_INPUTS, type ToolName } from '../../src/coach/contract.ts';
-import { createScenarioMemory, respond, type ScenarioMemory, type ScenarioResponse } from './scenario.ts';
+import { BAG_PHOTO_ANSWER, createScenarioMemory, respond, type ScenarioMemory, type ScenarioResponse } from './scenario.ts';
 
 type Block = Record<string, unknown>;
 type Message = { role: 'user' | 'assistant'; content: Block[] };
@@ -230,6 +230,7 @@ describe('scripted replies', () => {
       roastLevel: 'light',
       process: 'washed',
       notes: null,
+      roastDate: null,
     });
     const suggestions = (reply.tools[1]?.input as { suggestions: Array<{ templateId: string; confidence: string }> })
       .suggestions;
@@ -261,6 +262,76 @@ describe('scripted replies', () => {
     expect(name.length).toBeLessThanOrEqual(40);
     expect('A very long coffee name that goes on and on forever and ever'.startsWith(name)).toBe(true);
     expectValidInputs(long.tools);
+  });
+
+  describe("rule 7a: a bag picked from Decaid's bean library or read from a photo (6.1, 6.8)", () => {
+    const PICKED_BAG = {
+      name: 'Ethiopia Chelchele',
+      roaster: 'Heart Coffee Roasters',
+      origin: 'Ethiopia, Guji',
+      roastLevel: 'light',
+      process: 'natural',
+      notes: null,
+      roastDate: '2026-09-03',
+    };
+    const PICK = user(
+      text("The user picked Ethiopia Chelchele by Heart Coffee Roasters from Decaid's bean library: Ethiopia, Guji; natural; light roast; roasted 2026-09-03."),
+      text(
+        `[context]\n${JSON.stringify({
+          grinder: { name: 'Niche Zero', setting: '14', settingType: null, step: null, values: null, linked: false },
+          scaleConnected: true,
+          doseG: 18,
+          bag: PICKED_BAG,
+          roast: 'Roasted 2026-09-03 (18 days ago; 12 days in the freezer not counted)',
+        })}`,
+      ),
+    );
+
+    it('offers the starting profiles for its roast and saves nothing: the details are saved already', () => {
+      const reply = ok(call([PICK]));
+      expect(reply.text).toBe('Lovely. Here is where I would start.');
+      expect(reply.tools.map((t) => t.name)).toEqual([TOOL.proposeTemplates]);
+      expectValidInputs(reply.tools);
+      const suggestions = (reply.tools[0]?.input as { suggestions: Array<{ templateId: string }> }).suggestions;
+      expect(suggestions.map((s) => s.templateId)).toEqual(['blooming-espresso', 'allonge', 'd-flow']);
+    });
+
+    it('offers them again for the same roast when they were set aside, and still saves nothing (rule 7b)', () => {
+      const memory = createScenarioMemory({ session: 't' });
+      const first = ok(call([PICK], { memory }));
+      const tpl = first.tools[0]!.id;
+      const again = ok(
+        call([PICK, assistant(...first.content), user(toolResult(tpl, { answered: false, note: 'The user typed a message instead.' }), text('Something gentler?'))], {
+          memory,
+        }),
+      );
+      expect(again.text).toBe('Here are the starting profiles again. Tap one to begin.');
+      expect(again.tools.map((t) => t.name)).toEqual([TOOL.proposeTemplates]);
+      expect((again.tools[0]?.input as { suggestions: Array<{ templateId: string }> }).suggestions[0]?.templateId).toBe('blooming-espresso');
+    });
+  });
+
+  describe('rule 0: a photo of the bag (6.8)', () => {
+    const photo = (source: Record<string, unknown>) =>
+      call([user({ type: 'image', source }, text('Read the bag.'))], { over: { system: undefined, tools: undefined, tool_choice: undefined } });
+
+    it('answers with the canned bag as JSON, and nothing else', () => {
+      const reply = ok(photo({ type: 'base64', media_type: 'image/jpeg', data: '/9j/4AAQSkZJRg==' }));
+      expect(reply.tools).toEqual([]);
+      expect(reply.stopReason).toBe('end_turn');
+      expect(JSON.parse(reply.text)).toEqual(BAG_PHOTO_ANSWER);
+    });
+
+    it('answers 400 for an image that is not base64 JPEG, PNG, GIF or WebP data', () => {
+      for (const source of [
+        { type: 'url', url: 'https://example.com/bag.jpg' },
+        { type: 'base64', media_type: 'image/heic', data: 'AAAA' },
+        { type: 'base64', media_type: 'image/jpeg', data: 'data:image/jpeg;base64,AAAA' },
+        { type: 'base64', media_type: 'image/jpeg', data: '' },
+      ]) {
+        expect(errorOf(photo(source)), JSON.stringify(source)).toMatchObject({ status: 400, type: 'invalid_request_error' });
+      }
+    });
   });
 
   it('rule 5: a picked template is loaded', () => {

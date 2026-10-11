@@ -9,6 +9,7 @@ release/
 # test output
 coverage/
 test-results/
+test-results-real/
 playwright-report/
 blob-report/
 playwright/.cache/

@@ -8,8 +8,9 @@
  */
 import type { DecaidClient, Heartbeat, HostEnvironment, TelemetryStore } from '../api/types.ts';
 import type { PluginDirectory } from '../api/plugins.ts';
-import type { Confidence } from '../coach/contract.ts';
+import type { Confidence, RoastLevel, SaveBagDetails } from '../coach/contract.ts';
 import type { ShotSummary } from '../coach/types.ts';
+import type { BagPhoto } from '../llm/extractBag.ts';
 import type { ModelInfo } from '../llm/types.ts';
 import type { Bag, ProfileVersion, Storage } from '../storage/types.ts';
 import type { AppearanceStore } from './appearance.ts';
@@ -43,6 +44,33 @@ export interface TemplateCardItem {
   confidence: Confidence;
   reason: string;
 }
+
+/**
+ * One batch of Decaid's bean library on the "Which coffee is it?" card
+ * (D102), with everything a pick fills the bag with, so the card works
+ * after a reload and while Decaid is away.
+ */
+export interface BeanPickerOption {
+  beanId: string;
+  batchId: string;
+  /** The bean's name, at most 40 characters: it names the bag's profile versions. */
+  name: string;
+  roaster: string | null;
+  /** The bean's country and region. */
+  origin: string | null;
+  process: string | null;
+  notes: string | null;
+  /** The batch's roast level when it is one of CafAI's five, else null. */
+  roastLevel: RoastLevel | null;
+  /** YYYY-MM-DD, or null when the batch has none. */
+  roastDate: string | null;
+  /** When the batch went into and came out of a freezer (YYYY-MM-DD), as Decaid recorded it. */
+  freezeDate: string | null;
+  unfreezeDate: string | null;
+}
+
+/** The answer on the bean card: a batch, a photo of the bag, or something else (the bag described in the chat). */
+export type BeanChoice = { kind: 'batch'; batchId: string } | { kind: 'photo' } | { kind: 'other' };
 
 /** `expired`: the conversation moved on (the user typed instead of tapping). */
 export type DiffStatus = 'pending' | 'applying' | 'applied' | 'declined' | 'failed' | 'undone' | 'expired';
@@ -117,6 +145,36 @@ export type CoachUiPart =
       summary: ShotSummary;
       /** The barista's 1-5 star rating, written to Decaid's record as enjoyment on Decaid's own scale (D101). Absent until rated. */
       stars?: number;
+      /** The shot's page on Visualizer, once Decaid's Visualizer plugin uploaded it (6.4). Absent until then. */
+      visualizerUrl?: string;
+    }
+  | {
+      kind: 'beanPicker';
+      /**
+       * "Which coffee is it?" (6.1): Decaid's unarchived batches, newest roast
+       * first, at most 8; none when the library is empty or Decaid was out of
+       * reach, and the card offers a photo of the bag and something else.
+       */
+      options: BeanPickerOption[];
+      /**
+       * True while CafAI reads Decaid's batches: the card is already up, and
+       * a photo of the bag and something else already work. Absent once read.
+       */
+      loading?: boolean;
+      /** Null while the card waits for an answer. */
+      choice: BeanChoice | null;
+      /** The user described the bag in the chat instead: the card is closed. */
+      expired?: boolean;
+      setAsideReason?: SetAsideReason;
+    }
+  | {
+      kind: 'bagConfirm';
+      /** The bag's details as read from its photo (a name not on the bag is empty), then as confirmed (6.8). */
+      details: SaveBagDetails;
+      confirmed: boolean;
+      /** The user typed in the chat instead: the details were not saved. */
+      expired?: boolean;
+      setAsideReason?: SetAsideReason;
     }
   | {
       kind: 'notice';
@@ -223,6 +281,17 @@ export interface CoachController {
    * 100, D101); never sent to the coach.
    */
   rateShot(shotId: string, stars: number): Promise<void>;
+  /**
+   * The bean card (6.1): fill the bag from a batch of Decaid's bean library,
+   * link it, and start the coach's intake with it.
+   */
+  pickBean(batchId: string): Promise<void>;
+  /** The bean card's "Something else": close it; the barista describes the bag in the chat. */
+  skipBeanPick(): Promise<void>;
+  /** Read a photo of the bag (6.8) into a confirm card. The photo is sent once and never kept. */
+  readBagPhoto(photo: BagPhoto): Promise<void>;
+  /** The photo's details as the barista confirmed them: saved like save_bag_details, then the coach's intake. */
+  confirmBag(details: SaveBagDetails): Promise<void>;
   /** Re-send the last failed request. */
   retry(): Promise<void>;
   dismissError(): void;

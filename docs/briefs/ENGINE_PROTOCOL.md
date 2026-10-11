@@ -9,7 +9,7 @@ real engine agree. Tool names and input schemas: `src/coach/contract.ts`.
 
 - `system`: `buildSystemPrompt(TEMPLATES)` from `src/coach/prompt.ts`,
   byte-identical across turns (cacheable).
-- `tools`: all nine contract tools, in `TOOL` declaration order, strict
+- `tools`: all ten contract tools, in `TOOL` declaration order, strict
   schemas, `tool_choice: {type: "auto"}`.
 - `messages`: the bag's append-only transcript. Assistant turns are replayed
   exactly as received, thinking blocks and signatures included.
@@ -31,11 +31,32 @@ Bounds, granularity and max change per iteration:
 
 All JSON payloads are compact `JSON.stringify` output.
 
-1. **Bag intake** (first user turn of a bag). The UI shows a local placeholder
-   message asking for origin, roast, process and notes; it is NOT sent. The
-   user's reply is sent as:
-   `[{type:"text", text:<user text>}, {type:"text", text:"[context]\n" + JSON}]`
-   where JSON = `{"grinder":<grinder>,"scaleConnected":boolean,"doseG":number|null}`.
+1. **Bag intake** (first user turn of a bag). A new bag's chat opens with the
+   card "Which coffee is it?" (6.1: the batches of Decaid's bean library, a
+   photo of the bag, Something else), then a local placeholder message asking
+   for origin, roast, process and notes; neither is sent. The card is up at
+   once, saying it is looking in Decaid's beans; its rows fill in when
+   `GET /api/v1/beans` and `GET /api/v1/bean-batches` (every batch in one
+   request) answer. The first user turn is sent as:
+   `[{type:"text", text:<words>}, {type:"text", text:"[context]\n" + JSON}]`
+   where JSON = `{"grinder":<grinder>,"scaleConnected":boolean,"doseG":number|null,"bag":<bag>|null,"roast":string|null,"today":"YYYY-MM-DD"}`.
+   `<words>` is what the user typed; or, for a batch picked on the card,
+   `"The user picked <name> by <roaster> from Decaid's bean library: <details>."`;
+   or, for a photo of the bag the user confirmed (6.8),
+   `"The user confirmed these details read from a photo of the bag: <name> by <roaster>; <details>."`
+   (`<details>`: origin, process, "<level> roast", "roasted YYYY-MM-DD",
+   "tasting notes: ..." when known, apart by semicolons). `<bag>` is set in
+   those two cases only, with the details CafAI already saved on the bag:
+   `{"name":string,"roaster":string|null,"origin":string|null,"roastLevel":string|null,"process":string|null,"notes":string|null,"roastDate":string|null}`;
+   the coach need not call `save_bag_details` then. `roast` is
+   `"Roasted YYYY-MM-DD (<n> days ago)"` (`"(today)"` on the roast day), with
+   `"; <m> days in the freezer not counted"` inside the brackets when the
+   picked batch spent days frozen (`freezeDate` to `unfreezeDate`, or to
+   today while not thawed), or null when the roast date is unknown. A roast,
+   freeze or thaw date is the day it is written with, whatever zone its
+   timestamp carries. `today` is the date on the device's calendar, so the
+   coach can turn "roasted 28 September" or "3 days ago" into a date; it is in
+   the turn, not the system prompt, which holds no dates.
    `doseG` is Decaid's dose (`context.targetDoseWeight`) when CafAI coaches
    from it (12-25 g, D57), else null (none set, or outside that range).
    `<grinder>` =
@@ -71,9 +92,10 @@ All JSON payloads are compact `JSON.stringify` output.
    without a parent.
 3. **Shot completed**: a text block
    `"[event:shot_completed]\n" + JSON` with JSON =
-   `{"shotRef":"latest","shotId":string,"version":number,"templateId":string,"levers":{"<leverId>":number,...},"doseG":number|null,"targetYieldG":number|null,"grinder":<grinder>,"summary":<ShotSummary without "series">}`.
+   `{"shotRef":"latest","shotId":string,"version":number,"templateId":string,"levers":{"<leverId>":number,...},"doseG":number|null,"targetYieldG":number|null,"grinder":<grinder>,"roast":string|null,"summary":<ShotSummary without "series">}`.
    `grinder` (fields as in rule 1) is what the user last saved (Settings or
-   a confirmed grind move); it supersedes the intake context.
+   a confirmed grind move); it supersedes the intake context. `roast` reads
+   as in rule 1, the age counted to the day of the shot.
    If UI tool calls are still pending, their tool_results come first in the
    same message (rule 7).
 4. **Feedback**: tool_result for `ask_user` with JSON
@@ -92,11 +114,37 @@ All JSON payloads are compact `JSON.stringify` output.
 8. **Plain free text** otherwise: one text block.
 
 Auto tools (`save_bag_details`, `get_shot_summary`, `get_shot_series`,
-`get_phase_stats`, `compare_shots`, `get_bag_history`) are executed by the
-runner immediately; their results are JSON objects. `save_bag_details`
-answers `{"saved":true}`. Invalid tool input (schema or coach bounds) is
-answered with `is_error: true` and the validation sentences, so the model can
-retry.
+`get_phase_stats`, `compare_shots`, `get_bag_history`, `get_recent_setups`)
+are executed by the runner immediately; their results are JSON objects.
+`save_bag_details` takes `roastDate` (`"YYYY-MM-DD"` or null) with the other
+details and answers `{"saved":true}`; a call stored before `roastDate` existed
+reads as null. Each call replaces every detail, so a correction resends the
+others as saved (the tool description says so). `get_recent_setups` (no
+input, read-only, 6.5) answers
+`{"available":true,"setups":[{"kind","sameBatch","profileTitle","grindSetting","doseG","yieldG","rpm","basket","date"}],"equipment":[string],"baskets":[string]}`
+from DYE2 (its `recent-favs` endpoint while it is loaded, else its KV keys),
+or `{"available":false}` without DYE2. The setups are those of the bag's
+batch and of its bean's earlier batches (archived ones included, from
+`GET /api/v1/bean-batches?includeArchived=true`), or, unlinked, of its name
+and roaster; at most 10, the recent ones first as DYE2 lists them, then the
+favourites and recipes. `kind` is `"recent"` (DYE2 saw it used lately),
+`"favourite"` or `"recipe"` (the user saved it); `sameBatch` is true for the
+bag's batch, false for an earlier one, null when unknown; `date` is the day
+DYE2 captured it, on the device's calendar. Invalid tool input (schema or
+coach bounds) is answered with `is_error: true` and the validation
+sentences, so the model can retry.
+
+## The bag photo request (6.8)
+
+Not part of a conversation: one request with the photo, sent once (never
+retried by the client) to the coach's model, nothing stored or replayed.
+`{model, max_tokens: 4096, stream: true, output_config: {effort: "low"}, messages: [{role:"user", content:[{type:"image", source:{type:"base64", media_type:"image/jpeg", data:<base64>}}, {type:"text", text:<EXTRACT_BAG_PROMPT>}]}]}`,
+no `system`, no `tools`, and no `cache_control`: it never repeats, so
+nothing is written to the prompt cache (`src/llm/extractBag.ts`). The
+answer is one JSON object
+`{"name","roaster","origin","process","roastLevel","roastDate","notes"}`,
+each null when the bag does not show it; CafAI reads it leniently and the
+user confirms it before anything is saved.
 
 ## Scripted fake model (mock/anthropic/scenario.ts)
 
@@ -121,6 +169,10 @@ paces the stream like the real model
 (`firstEventDelayMs`, `eventDelayMs`, `jitterMs`, `sentencePauseMs` in
 mock/anthropic/handlers.ts).
 
+0. A request with an `image` block (the bag photo request above) -> text:
+   the canned bag `BAG_PHOTO_ANSWER` as JSON (Kiambu AA by Square Mile,
+   Kenya, Kiambu, washed, light, roasted 2026-09-28, blackcurrant,
+   grapefruit, brown sugar). End turn.
 1. tool_result for `propose_adjustment` with `is_error` (CafAI rejected it)
    -> text "That one is outside what this profile allows. Here is another
    change." + a new `propose_adjustment`: the grind move below, or
@@ -194,27 +246,33 @@ mock/anthropic/handlers.ts).
    after that.") A result marked `answered:false` is no pick. End turn.
 6. text starting `[event:undo]` -> text "Back on v{to}. Pull a shot when you
    are ready." End turn.
-7. Plain user text and no `save_bag_details` call anywhere earlier in the
-   transcript -> text "Lovely. Here is where I would start." + tool_use
-   `save_bag_details` (name = user text up to the first comma, trimmed, at most
-   40 chars; roastLevel from the words light / medium-light / medium /
-   medium-dark / dark; process from washed / natural / honey / anaerobic;
-   origin and notes null or simple guesses) + tool_use `propose_templates`
-   with suggestions ranked by roast: light -> blooming-espresso high, allonge
-   medium, d-flow low; dark -> londonium high, gentle-and-sweet medium,
-   d-flow low; otherwise d-flow high, gentle-and-sweet medium,
-   blooming-espresso medium, londonium low.
-7b. Plain user text, bag details saved, but no `propose_templates` result
-   that picked a template (the suggestions were set aside) -> text "Here are
-   the starting profiles again. Tap one to begin." + tool_use
-   `propose_templates` with the rule 7 ranking for the saved roast level (or
-   the roast words of the bag description).
+7. Plain user text, no `save_bag_details` call anywhere earlier in the
+   transcript and no `bag` in the intake context -> text "Lovely. Here is
+   where I would start." + tool_use `save_bag_details` (name = user text up
+   to the first comma, trimmed, at most 40 chars; roastLevel from the words
+   light / medium-light / medium / medium-dark / dark; process from washed /
+   natural / honey / anaerobic; origin and notes null or simple guesses;
+   roastDate null) + tool_use `propose_templates` with suggestions ranked by
+   roast: light -> blooming-espresso high, allonge medium, d-flow low; dark
+   -> londonium high, gentle-and-sweet medium, d-flow low; otherwise d-flow
+   high, gentle-and-sweet medium, blooming-espresso medium, londonium low.
+7a. The intake (the only message) carries a `bag` in its context block (a
+   batch picked from Decaid's bean library, or a confirmed photo) -> the
+   same text + tool_use `propose_templates` ranked for `bag.roastLevel`; no
+   `save_bag_details`, the details are saved already.
+7b. Plain user text, bag details saved (a `save_bag_details` call, or a `bag`
+   in the intake context), but no `propose_templates` result that picked a
+   template (the suggestions were set aside) -> text "Here are the starting
+   profiles again. Tap one to begin." + tool_use `propose_templates` with
+   the rule 7 ranking for the saved roast level (or the roast words of the
+   bag description).
 8. Anything else -> text "Got it. Pull a shot when you are ready, or tell me
    more about the coffee." End turn.
 
 The fake also checks the request and answers HTTP 400 with an Anthropic-style
 error body when the client breaks the protocol: missing or wrong headers,
-`stream !== true`, `tool_choice` not `auto`, a tool without `strict: true`, a
+`stream !== true`, `tool_choice` not `auto`, a tool without `strict: true`, an
+image that is not base64 JPEG, PNG, GIF or WebP data in a user message, a
 tool_use not answered by a tool_result in the next user message, or an
 assistant turn it remembers producing that was modified on replay (unknown
 assistant turns, e.g. after a page reload, are not checked). API key

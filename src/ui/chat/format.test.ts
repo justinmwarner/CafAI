@@ -3,6 +3,7 @@ import {
   confidenceLabel,
   describeChannelingFlag,
   formatBar,
+  formatDate,
   formatDateTime,
   formatGrams,
   formatRatio,
@@ -74,6 +75,17 @@ describe('formatDateTime', () => {
   it('accepts zone-less timestamps and passes garbage through', () => {
     expect(formatDateTime('2026-10-03T08:05:00')).toMatch(/^3 Oct 2026, 08:05$/);
     expect(formatDateTime('not a date')).toBe('not a date');
+  });
+});
+
+describe('formatDate', () => {
+  it('shows a calendar day as day, short month and year, the same on every clock', () => {
+    expect(formatDate('2026-09-03')).toBe('3 Sep 2026');
+    expect(formatDate('2026-12-31')).toBe('31 Dec 2026');
+  });
+
+  it('passes anything else through', () => {
+    expect(formatDate('soon')).toBe('soon');
   });
 });
 

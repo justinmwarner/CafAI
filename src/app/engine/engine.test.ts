@@ -3,13 +3,17 @@ import type { ZodType } from 'zod';
 import { createCoachEngine, type CoachEngine, type EngineDeps, type PageVisibility } from './engine.ts';
 import type { OutboxTimers } from './outbox.ts';
 import type { ApiPort, ChangePlan, CoachPort, LlmPort, ProposalContext } from './ports.ts';
-import { message, progressNoticePart } from './uiMessages.ts';
+import { message, NEW_BAG_PROMPT, progressNoticePart } from './uiMessages.ts';
 import { OTHER_OPTION, TOOL, type ProposeAdjustment } from '../../coach/contract.ts';
 import { DOSE_RULES, knownDose, REFERENCE_DOSE_G } from '../../coach/dose.ts';
+import { roastLine } from '../../coach/prompt.ts';
+import { createShotSource, runQueryTool } from '../../coach/queries.ts';
 import { validateProposal as validateWithCoach } from '../../coach/validator.ts';
 import type { GrinderInfo, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
 import type { MachineProfileStatus } from '../../api/machineProfile.ts';
 import { driftLog } from '../../api/drift.ts';
+import { PLUGIN } from '../../api/plugins.ts';
+import type { BagPhoto, ExtractedBag } from '../../llm/extractBag.ts';
 import {
   GatewayError,
   type Bean,
@@ -21,7 +25,7 @@ import {
   type Workflow,
   type WorkflowContext,
 } from '../../api/types.ts';
-import type { ContentBlock, LlmMessage, PendingUiCall, RunResult, ToolResultBlock } from '../../llm/types.ts';
+import { LlmError, type ContentBlock, type LlmMessage, type PendingUiCall, type RunResult, type ToolResultBlock } from '../../llm/types.ts';
 import type { Bag } from '../../storage/types.ts';
 import type { CoachUiPart } from '../types.ts';
 import { createFakeStorage, createFakeTelemetry, SAMPLE_WORKFLOW, type FakeStorage, type FakeTelemetry } from '../../ui/testing/fakeServices.ts';
@@ -182,8 +186,11 @@ const coach: CoachPort = {
   doseRange: { min: DOSE_RULES.min, max: DOSE_RULES.max },
   profileId: (p) => `id:${JSON.stringify((p as ProfileJson).steps)}:${(p as ProfileJson).target_weight}`,
   withOther: (options) => [...options.filter((o) => o.toLowerCase() !== 'other'), OTHER_OPTION],
+  roastLine,
   async runQuery(name, input, context) {
     if (name === TOOL.getBagHistory) return { content: JSON.stringify({ versions: context.versions.length }), isError: false };
+    // DYE2's setups are the coach's own query over what the engine read (6.5).
+    if (name === TOOL.getRecentSetups) return runQueryTool(name, input, { ...context, source: createShotSource([]) });
     const ref = (input as { shot?: string }).shot ?? 'latest';
     const shot = await context.source.resolve(ref);
     if (!shot) return { content: 'No such shot.', isError: true };
@@ -255,6 +262,20 @@ const machine = {
   recordsWithoutProfile: false,
   /** GET /shots/{id} answers something CafAI cannot read. */
   unreadableRecords: false,
+  /**
+   * Decaid's key-value store as the plugins left it (D103), by
+   * "namespace/key"; a function answers each read anew (and may throw, as
+   * when Decaid is away).
+   */
+  store: new Map<string, unknown>(),
+  /** A loaded plugin's endpoint replies, by "pluginId/endpoint"; an Error fails the call. */
+  pluginEndpoints: new Map<string, unknown>(),
+};
+
+/** The coach's model reading a photo of a bag (6.8): what it was asked, and what it answers. */
+const reader = {
+  asked: [] as Array<{ model: string; photo: BagPhoto }>,
+  answer: null as ExtractedBag | Error | null,
 };
 
 /** How the real client fails when Decaid does not answer. */
@@ -322,6 +343,8 @@ function makeApi(calls: ApiCall[]): ApiPort {
   machine.shotRefusal = null;
   machine.recordsWithoutProfile = false;
   machine.unreadableRecords = false;
+  machine.store = new Map();
+  machine.pluginEndpoints = new Map();
   const shotRecord = (id: string) => {
     const workflow: Record<string, unknown> = { ...SAMPLE_WORKFLOW, profile: machine.loaded, context: machine.context };
     if (machine.recordsWithoutProfile) delete workflow.profile;
@@ -349,6 +372,21 @@ function makeApi(calls: ApiCall[]): ApiPort {
       return { ...SAMPLE_WORKFLOW, profile: machine.loaded, context: machine.context } as Workflow;
     },
     listBeans: () => beanCall('listBeans', [], () => machine.beans.filter((bean) => bean.archived !== true)),
+    // Archived batches too: CafAI must leave them out itself.
+    listBatches: (beanId) => beanCall('listBatches', [beanId], () => machine.batches.filter((batch) => batch.beanId === beanId)),
+    listAllBatches: (options) =>
+      beanCall('listAllBatches', [options], () => machine.batches.filter((batch) => options?.includeArchived === true || batch.archived !== true)),
+    readStore: async (namespace, key) => {
+      calls.push({ method: 'readStore', args: [namespace, key] });
+      const value = machine.store.get(`${namespace}/${key}`);
+      return typeof value === 'function' ? (value as () => unknown)() : (value ?? null);
+    },
+    getPluginEndpoint: async (pluginId, endpoint) => {
+      calls.push({ method: 'getPluginEndpoint', args: [pluginId, endpoint] });
+      const reply = machine.pluginEndpoints.get(`${pluginId}/${endpoint}`);
+      if (reply instanceof Error) throw reply;
+      return reply ?? null;
+    },
     createBean: (request) =>
       beanCall('createBean', [request], () => {
         const bean: Bean = { id: `bean-${machine.beans.length + 1}`, archived: false, ...request };
@@ -544,6 +582,12 @@ function makeLlm(scripts: Script[], requests: LlmMessage[][]): LlmPort {
       const parsed = schema.safeParse(input);
       return parsed.success ? { ok: true, value: parsed.data } : { ok: false, error: parsed.error.message };
     },
+    async readBag(request) {
+      reader.asked.push(request);
+      if (reader.answer instanceof Error) throw reader.answer;
+      if (!reader.answer) throw new Error('No photo answer scripted');
+      return reader.answer;
+    },
     async run(request): Promise<RunResult> {
       let messages = request.messages;
       for (;;) {
@@ -565,7 +609,7 @@ function makeLlm(scripts: Script[], requests: LlmMessage[][]): LlmPort {
             results.push({ type: 'tool_result', tool_use_id: block.id, content: validation.error, is_error: true });
           } else if (tool.kind === 'auto') {
             const outcome = await tool.execute!(validation.value);
-            results.push({ type: 'tool_result', tool_use_id: block.id, content: outcome.content });
+            results.push({ type: 'tool_result', tool_use_id: block.id, content: outcome.content, ...(outcome.isError ? { is_error: true } : {}) });
           } else {
             pendingUiCalls.push({ id: block.id, name: block.name, input: validation.value });
           }
@@ -649,6 +693,8 @@ describe('coach engine', () => {
   let view: ReturnType<typeof fakeVisibility>;
   /** The engine's clock: tests move it on to space events apart. */
   let nowMs: number;
+  /** Decaid's plugins that are running (D103). None by default. */
+  let loadedPlugins: Set<string>;
 
   function build(extra: Partial<EngineDeps> = {}): CoachEngine {
     let counter = 0;
@@ -663,6 +709,7 @@ describe('coach engine', () => {
       timers: timers.timers,
       checkTimers: checks.timers,
       visibility: view.visibility,
+      plugins: { isLoaded: (id) => loadedPlugins.has(id) },
       ...extra,
     });
   }
@@ -678,6 +725,9 @@ describe('coach engine', () => {
     checks = manualTimers();
     view = fakeVisibility();
     nowMs = Date.parse('2026-10-03T08:00:00Z');
+    loadedPlugins = new Set();
+    reader.asked = [];
+    reader.answer = null;
     engine = build();
     await engine.start();
   });
@@ -692,6 +742,12 @@ describe('coach engine', () => {
   const callsOf = (method: string) => apiCalls.filter((c) => c.method === method);
   /** Let everything already queued in the engine run: a tap on a card that does not exist queues behind it and does nothing. */
   const drain = () => engine.declineChange('no-such-card');
+  /** A new bag, with its bean card's read of Decaid's library done (in the background, landing in turn). */
+  const openBag = async () => {
+    await engine.newBag();
+    await vi.waitFor(() => expect(allParts().some((p) => p.kind === 'beanPicker' && p.loading === true)).toBe(false));
+    await drain();
+  };
 
   async function throughTemplatePick() {
     await engine.newBag();
@@ -750,11 +806,11 @@ describe('coach engine', () => {
     expect(engine.getState().phase).toBe('awaiting_confirmation');
   }
 
-  it('starts a bag with the placeholder question and sends the intake turn with context', async () => {
+  it('starts a bag with the bean card, then the placeholder question, and sends the intake turn with context', async () => {
     await engine.newBag();
-    const first = engine.getState().messages[0]!;
-    expect(first.role).toBe('assistant');
-    expect(first.parts[0]).toMatchObject({ kind: 'text' });
+    const [card, question] = engine.getState().messages;
+    expect(card).toMatchObject({ role: 'assistant', parts: [{ kind: 'beanPicker', choice: null }] });
+    expect(question).toMatchObject({ role: 'assistant', parts: [{ kind: 'text', text: NEW_BAG_PROMPT }] });
 
     scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);
     await engine.sendText('Kiambu AA, light, washed');
@@ -762,6 +818,11 @@ describe('coach engine', () => {
     expect(intake[0]).toEqual({ type: 'text', text: 'Kiambu AA, light, washed' });
     expect(intake[1]).toMatchObject({ type: 'text' });
     expect((intake[1] as { text: string }).text).toMatch(/^\[context\]\n\{"grinder"/);
+    // Described in the chat: nothing came from Decaid's library or a photo, and no roast date is known yet;
+    // today's date, on this device's calendar, for a roast date said in words.
+    const local = new Date(nowMs);
+    const today = `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(local.getDate()).padStart(2, '0')}`;
+    expect(JSON.parse((intake[1] as { text: string }).text.split('\n')[1]!)).toMatchObject({ bag: null, roast: null, today });
 
     const state = engine.getState();
     expect(state.activeBag?.name).toBe('Kiambu AA');
@@ -3076,11 +3137,53 @@ describe('coach engine', () => {
       expect(bag()).toMatchObject({ decaidBeanId: 'bean-9' });
     });
 
+    describe("a reused bean's batch (a photo of a bag already in the library)", () => {
+      const batchOf = (id: string, roastDate: string | null, archived = false): BeanBatch => ({
+        id,
+        beanId: 'bean-9',
+        ...(roastDate ? { roastDate } : {}),
+        frozen: false,
+        archived,
+      });
+
+      beforeEach(() => {
+        machine.beans.push({ id: 'bean-9', roaster: 'Square Mile', name: 'Kiambu AA', archived: false });
+      });
+
+      it('reuses the batch with the same roast date, never an archived one, and adds no second batch', async () => {
+        machine.batches.push(batchOf('batch-gone', '2026-09-28T00:00:00.000Z', true), batchOf('batch-28', '2026-09-28T00:00:00.000Z'), batchOf('batch-30', '2026-09-30'));
+        await throughIntake(toolUse('t-save', TOOL.saveBagDetails, { ...KIAMBU, roastDate: '2026-09-28' }));
+        await vi.waitFor(() => expect(bag()?.decaidBatchId).toBe('batch-28'));
+        expect(bag()).toMatchObject({ decaidBeanId: 'bean-9' });
+        expect(callsOf('createBatch')).toEqual([]);
+        // Nothing was added, so the note does not say it was.
+        expect(notices().map((p) => p.text)).toContain("Already in Decaid's beans.");
+        expect(notices().some((p) => p.text === ADDED)).toBe(false);
+      });
+
+      it('reuses a batch without a roast date for a bag without one', async () => {
+        machine.batches.push(batchOf('batch-28', '2026-09-28'), batchOf('batch-undated', null));
+        await throughIntake();
+        await vi.waitFor(() => expect(bag()?.decaidBatchId).toBe('batch-undated'));
+        expect(callsOf('createBatch')).toEqual([]);
+      });
+
+      it('adds a batch when none has the same roast date', async () => {
+        machine.batches.push(batchOf('batch-28', '2026-09-28'));
+        await throughIntake(toolUse('t-save', TOOL.saveBagDetails, { ...KIAMBU, roastDate: '2026-10-02' }));
+        await vi.waitFor(() => expect(bag()?.decaidBatchId).toBe('batch-2'));
+        expect(callsOf('createBatch').map((c) => c.args)).toEqual([['bean-9', { roastDate: '2026-10-02', roastLevel: 'light' }]]);
+        expect(notices().filter((p) => p.text === ADDED)).toHaveLength(1);
+      });
+    });
+
     it('adds nothing for a bag without a name of its own: the placeholder "New bag" names no coffee', async () => {
       await throughIntake(toolUse('t-save', TOOL.saveBagDetails, { ...KIAMBU, name: 'New bag' }));
       await drain();
       expect(bag()).toMatchObject({ name: 'New bag', roaster: 'Square Mile' });
-      expect(callsOf('listBeans')).toEqual([]);
+      // The bean card's own read only.
+      expect(callsOf('listBeans')).toHaveLength(1);
+      expect(callsOf('createBean')).toEqual([]);
       expect(bag()?.decaidBatchId ?? null).toBeNull();
       expect(notices().some((p) => p.text === ADDED)).toBe(false);
     });
@@ -3088,15 +3191,19 @@ describe('coach engine', () => {
     it('adds nothing for a bag without a roaster, since Decaid needs one', async () => {
       await throughIntake(toolUse('t-save', TOOL.saveBagDetails, { ...KIAMBU, roaster: null }));
       await drain();
-      expect(callsOf('listBeans')).toEqual([]);
+      expect(callsOf('listBeans')).toHaveLength(1);
+      expect(callsOf('createBean')).toEqual([]);
       expect(bag()?.decaidBatchId ?? null).toBeNull();
       expect(notices().some((p) => p.text === ADDED)).toBe(false);
     });
 
     it('leaves the bag unlinked while Decaid is away, says nothing, and tries again at the next save', async () => {
+      await openBag();
       machine.failBeanCalls = 1;
-      await throughIntake();
-      await vi.waitFor(() => expect(callsOf('listBeans')).toHaveLength(1));
+      scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);
+      await engine.sendText('Kiambu AA, light, washed');
+      // The bean card's read, then the failed one.
+      await vi.waitFor(() => expect(callsOf('listBeans')).toHaveLength(2));
       await drain();
       expect(bag()?.decaidBatchId ?? null).toBeNull();
       expect(callsOf('createBean')).toEqual([]);
@@ -3113,25 +3220,646 @@ describe('coach engine', () => {
       await savedAgain({ ...KIAMBU, name: 'Kiambu AA Peaberry' });
       await drain();
       expect(bag()).toMatchObject({ name: 'Kiambu AA Peaberry', decaidBeanId: 'bean-1', decaidBatchId: 'batch-1' });
-      expect(apiCalls.map((c) => c.method).filter((method) => /bean|batch/i.test(method))).toEqual(['listBeans', 'createBean', 'createBatch']);
+      // The bean card's read, then adding the bag; nothing after.
+      expect(apiCalls.map((c) => c.method).filter((method) => /bean|batch/i.test(method))).toEqual([
+        'listBeans',
+        'listAllBatches',
+        'listBeans',
+        'createBean',
+        'createBatch',
+      ]);
       expect(machine.beans.map((bean) => bean.name)).toEqual(['Kiambu AA']);
       expect(machine.batches).toHaveLength(1);
     });
 
     it('links the bag it saved even when another bag is on screen by then', async () => {
+      await openBag();
       machine.holdBeanCalls = true;
-      await throughIntake();
+      scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);
+      await engine.sendText('Kiambu AA, light, washed');
       const kiambu = bag()!.id;
-      await engine.newBag();
+      // The next bag's card reads the library after the held calls are let go.
+      const opening = engine.newBag();
+      releaseBeanCalls();
+      await opening;
       const other = bag()!.id;
       expect(other).not.toBe(kiambu);
-      releaseBeanCalls();
       await vi.waitFor(async () => expect(await storage.bags.get(kiambu)).toMatchObject({ decaidBatchId: 'batch-1' }));
       await drain();
       expect(engine.getState().bags.find((b) => b.id === kiambu)).toMatchObject({ decaidBeanId: 'bean-1', decaidBatchId: 'batch-1' });
       expect(bag()!.id).toBe(other);
       expect(bag()?.decaidBatchId ?? null).toBeNull();
       expect(notices().some((p) => p.text === ADDED)).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 6.1: "Which coffee is it?", Decaid's bean library at intake
+  // -------------------------------------------------------------------------
+
+  const RED_BRICK: Bean = {
+    id: 'bean-red',
+    roaster: 'Square Mile Coffee Roasters',
+    name: 'Red Brick',
+    country: 'Brazil',
+    region: 'Mogiana',
+    processing: 'washed',
+    notes: 'Chocolate, plum',
+    archived: false,
+  };
+  const CHELCHELE: Bean = { id: 'bean-chel', roaster: 'Heart Coffee Roasters', name: 'Ethiopia Chelchele', country: 'Ethiopia', region: 'Guji', processing: 'natural', archived: false };
+  const libraryBatch = (id: string, beanId: string, fields: Partial<BeanBatch> = {}): BeanBatch => ({
+    id,
+    beanId,
+    frozen: false,
+    archived: false,
+    createdAt: '2026-09-01T08:00:00.000',
+    ...fields,
+  });
+  /** A library like the mock's: two beans, a frozen batch, an archived one and one without a roast date. */
+  function stockLibrary() {
+    machine.beanLibrary = true;
+    machine.beans = [RED_BRICK, CHELCHELE, { id: 'bean-old', roaster: 'Gone', name: 'Archived bean', archived: true }];
+    machine.batches = [
+      libraryBatch('batch-red-old', 'bean-red', { roastDate: '2026-08-01T00:00:00.000', roastLevel: 'Medium' }),
+      libraryBatch('batch-red', 'bean-red', { roastDate: '2026-09-24T00:00:00.000', roastLevel: 'Medium' }),
+      libraryBatch('batch-chel', 'bean-chel', {
+        roastDate: '2026-09-03T00:00:00.000',
+        roastLevel: 'Light',
+        freezeDate: '2026-09-04T00:00:00.000',
+        unfreezeDate: '2026-09-16T00:00:00.000',
+      }),
+      libraryBatch('batch-chel-gone', 'bean-chel', { roastDate: '2026-09-30T00:00:00.000', archived: true }),
+      libraryBatch('batch-undated', 'bean-red', { createdAt: '2026-09-20T08:00:00.000' }),
+      libraryBatch('batch-old-bean', 'bean-old', { roastDate: '2026-09-29T00:00:00.000' }),
+    ];
+  }
+  type BeanCardPart = Extract<CoachUiPart, { kind: 'beanPicker' }>;
+  type BagConfirmPart = Extract<CoachUiPart, { kind: 'bagConfirm' }>;
+  const beanCard = () => allParts().find((p): p is BeanCardPart => p.kind === 'beanPicker');
+  const confirmCard = () => allParts().find((p): p is BagConfirmPart => p.kind === 'bagConfirm');
+  /** The [context] block of the latest intake turn, parsed. */
+  const intakeContext = () => JSON.parse((requests[0]![0]!.content[1] as { text: string }).text.split('\n')[1]!);
+  const roastToday = (date: string, freezer: { freezeDate: string | null; unfreezeDate: string | null } | null = null) =>
+    roastLine(date, new Date(nowMs), freezer);
+
+  describe('the bean card (6.1)', () => {
+    it("asks which coffee it is first, with Decaid's batches newest roast first, then the coach's question", async () => {
+      stockLibrary();
+      await openBag();
+      const [card, question] = engine.getState().messages;
+      expect(question!.parts).toEqual([{ kind: 'text', text: NEW_BAG_PROMPT }]);
+      const part = card!.parts[0] as BeanCardPart;
+      expect(part.kind).toBe('beanPicker');
+      expect(part.choice).toBeNull();
+      expect(part.options.map((option) => option.batchId)).toEqual(['batch-red', 'batch-chel', 'batch-red-old', 'batch-undated']);
+      expect(part.options[0]).toEqual({
+        beanId: 'bean-red',
+        batchId: 'batch-red',
+        name: 'Red Brick',
+        roaster: 'Square Mile Coffee Roasters',
+        origin: 'Brazil, Mogiana',
+        process: 'washed',
+        notes: 'Chocolate, plum',
+        roastLevel: 'medium',
+        roastDate: '2026-09-24',
+        freezeDate: null,
+        unfreezeDate: null,
+      });
+      expect(part.options[1]).toMatchObject({ roastLevel: 'light', freezeDate: '2026-09-04', unfreezeDate: '2026-09-16' });
+      expect(part.options[3]).toMatchObject({ roastDate: null, roastLevel: null });
+      expect(engine.getState().phase).toBe('intake');
+      // Two requests, whatever the size of the library: the beans, and every batch at once.
+      expect(apiCalls.map((c) => c.method).filter((method) => /bean|batch/i.test(method))).toEqual(['listBeans', 'listAllBatches']);
+    });
+
+    it("shows the card at once, looking in Decaid's beans, and its rows once they are read", async () => {
+      stockLibrary();
+      machine.holdBeanCalls = true;
+      await engine.newBag();
+      expect(beanCard()).toMatchObject({ options: [], choice: null, loading: true });
+      expect(engine.getState().messages[1]!.parts).toEqual([{ kind: 'text', text: NEW_BAG_PROMPT }]);
+      expect(engine.getState().busy).toBe(false);
+      // The barista can answer meanwhile: nothing waits for Decaid.
+      await engine.declineChange('no-such-card');
+      releaseBeanCalls();
+      await vi.waitFor(() => expect(beanCard()).not.toHaveProperty('loading'));
+      expect(beanCard()!.options.map((option) => option.batchId)).toEqual(['batch-red', 'batch-chel', 'batch-red-old', 'batch-undated']);
+      const stored = await storage.conversations.get(engine.getState().activeBag!.conversationId);
+      expect(stored!.uiMessages[0]!.parts[0]).toEqual(beanCard());
+    });
+
+    it('looks again after a reload that came while the card was still looking', async () => {
+      stockLibrary();
+      machine.holdBeanCalls = true;
+      await engine.newBag();
+      const firstReads = machine.heldBeanCalls.splice(0);
+      expect(firstReads).toHaveLength(2);
+      engine.dispose();
+      engine = build();
+      // The rebuilt machine starts afresh: the same library, its reads held again.
+      stockLibrary();
+      machine.holdBeanCalls = true;
+      await engine.start();
+      expect(beanCard()).toMatchObject({ loading: true });
+      const storedCard = async () => (await storage.conversations.get(engine.getState().activeBag!.conversationId))!.uiMessages[0]!.parts[0];
+      // The first engine's reads answer after the reload: it is gone, and writes nothing.
+      for (const release of firstReads) release();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(await storedCard()).toMatchObject({ loading: true });
+      releaseBeanCalls();
+      await vi.waitFor(() => expect(beanCard()).not.toHaveProperty('loading'));
+      expect(beanCard()!.options).toHaveLength(4);
+      await drain();
+      expect(await storedCard()).toEqual(beanCard());
+    });
+
+    it('lets the barista answer while the card is still looking, and fills the rows on the card answered', async () => {
+      stockLibrary();
+      machine.holdBeanCalls = true;
+      await engine.newBag();
+      await engine.skipBeanPick();
+      expect(beanCard()).toMatchObject({ choice: { kind: 'other' }, loading: true });
+      releaseBeanCalls();
+      await vi.waitFor(() => expect(beanCard()).not.toHaveProperty('loading'));
+      expect(beanCard()).toMatchObject({ choice: { kind: 'other' } });
+      expect(beanCard()!.options).toHaveLength(4);
+    });
+
+    it('lists at most eight batches, and cuts a long name to fit a profile title', async () => {
+      machine.beanLibrary = true;
+      machine.beans = [{ ...RED_BRICK, name: 'Red Brick Seasonal Espresso Blend, Autumn Edition' }];
+      machine.batches = Array.from({ length: 10 }, (_, i) => libraryBatch(`batch-${i}`, 'bean-red', { roastDate: `2026-09-${String(10 + i)}` }));
+      await openBag();
+      expect(beanCard()!.options).toHaveLength(8);
+      expect(beanCard()!.options[0]).toMatchObject({ batchId: 'batch-9', name: 'Red Brick Seasonal Espresso Blend, Autum' });
+    });
+
+    it('offers only a photo and something else when Decaid is out of reach', async () => {
+      stockLibrary();
+      machine.failBeanCalls = 1;
+      await openBag();
+      expect(beanCard()).toMatchObject({ options: [], choice: null });
+      expect(beanCard()).not.toHaveProperty('loading');
+      expect(engine.getState().messages[1]!.parts).toEqual([{ kind: 'text', text: NEW_BAG_PROMPT }]);
+    });
+
+    it("offers nothing to pick on a Decaid without the bean library's routes", async () => {
+      await openBag();
+      expect(beanCard()).toMatchObject({ options: [], choice: null });
+      expect(engine.getState().messages[1]!.parts).toEqual([{ kind: 'text', text: NEW_BAG_PROMPT }]);
+    });
+
+    it('fills the bag from the batch, links both ids first, closes the card, and starts the intake with what was picked', async () => {
+      stockLibrary();
+      await openBag();
+      scripts.push(() => [text('Lovely.'), toolUse('t-save', TOOL.saveBagDetails, { ...savedRedBrick(), roastDate: '2026-09-24' }), proposeTemplates]);
+      await engine.pickBean('batch-red');
+      expect(engine.getState().activeBag).toMatchObject({
+        name: 'Red Brick',
+        roaster: 'Square Mile Coffee Roasters',
+        origin: 'Brazil, Mogiana',
+        process: 'washed',
+        notes: 'Chocolate, plum',
+        roastLevel: 'medium',
+        roastDate: '2026-09-24',
+        decaidBeanId: 'bean-red',
+        decaidBatchId: 'batch-red',
+      });
+      expect(beanCard()!.choice).toEqual({ kind: 'batch', batchId: 'batch-red' });
+      const intake = requests[0]![0]!.content;
+      expect(intake[0]).toEqual({
+        type: 'text',
+        text: "The user picked Red Brick by Square Mile Coffee Roasters from Decaid's bean library: Brazil, Mogiana; washed; medium roast; roasted 2026-09-24; tasting notes: Chocolate, plum.",
+      });
+      expect(intakeContext()).toMatchObject({
+        bag: { name: 'Red Brick', roaster: 'Square Mile Coffee Roasters', origin: 'Brazil, Mogiana', roastLevel: 'medium', process: 'washed', notes: 'Chocolate, plum', roastDate: '2026-09-24' },
+        roast: roastToday('2026-09-24'),
+      });
+      expect(engine.getState().phase).toBe('choosing_template');
+      // The coach saved the details again: the bag was linked already, so Decaid gets no second bean or batch.
+      await drain();
+      expect(callsOf('createBean')).toEqual([]);
+      expect(callsOf('createBatch')).toEqual([]);
+      expect(await storage.bags.get(engine.getState().activeBag!.id)).toMatchObject({ decaidBeanId: 'bean-red', decaidBatchId: 'batch-red' });
+    });
+
+    it('tells the coach the age without the days the batch spent frozen', async () => {
+      stockLibrary();
+      await openBag();
+      scripts.push(() => [text('Lovely.'), proposeTemplates]);
+      await engine.pickBean('batch-chel');
+      const roast = intakeContext().roast as string;
+      expect(roast).toBe(roastToday('2026-09-03', { freezeDate: '2026-09-04', unfreezeDate: '2026-09-16' }));
+      expect(roast).toMatch(/; 12 days in the freezer not counted\)$/);
+    });
+
+    it("closes the card on Something else, and what is typed next is today's intake", async () => {
+      stockLibrary();
+      await openBag();
+      await engine.skipBeanPick();
+      expect(beanCard()!.choice).toEqual({ kind: 'other' });
+      expect(requests).toEqual([]);
+      scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);
+      await engine.sendText('Kiambu AA, light, washed');
+      expect(requests[0]![0]!.content[0]).toEqual({ type: 'text', text: 'Kiambu AA, light, washed' });
+      expect(intakeContext()).toMatchObject({ bag: null, roast: null });
+      expect(engine.getState().activeBag).toMatchObject({ name: 'Kiambu AA' });
+    });
+
+    it('sets the card aside when the bag is described in the chat instead', async () => {
+      stockLibrary();
+      await openBag();
+      scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);
+      await engine.sendText('Kiambu AA, light, washed');
+      expect(beanCard()).toMatchObject({ choice: null, expired: true, setAsideReason: 'typed' });
+      // A tap on the card set aside does nothing.
+      await engine.pickBean('batch-red');
+      expect(engine.getState().activeBag).toMatchObject({ name: 'Kiambu AA' });
+      expect(engine.getState().activeBag?.decaidBatchId).not.toBe('batch-red');
+      expect(requests).toHaveLength(1);
+    });
+
+    it('rebuilds an open card from the stored chat after a reload, and a pick still works', async () => {
+      stockLibrary();
+      await openBag();
+      engine.dispose();
+      engine = build();
+      await engine.start();
+      expect(beanCard()).toMatchObject({ choice: null, options: [expect.objectContaining({ batchId: 'batch-red' }), expect.anything(), expect.anything(), expect.anything()] });
+      scripts.push(() => [text('Lovely.'), proposeTemplates]);
+      await engine.pickBean('batch-red');
+      expect(engine.getState().activeBag).toMatchObject({ decaidBatchId: 'batch-red' });
+      expect(engine.getState().phase).toBe('choosing_template');
+    });
+
+    it('ignores a batch the card does not offer, and an answer once the card is closed', async () => {
+      stockLibrary();
+      await openBag();
+      await engine.pickBean('batch-chel-gone');
+      expect(beanCard()!.choice).toBeNull();
+      await engine.skipBeanPick();
+      await engine.skipBeanPick();
+      await engine.pickBean('batch-red');
+      expect(beanCard()!.choice).toEqual({ kind: 'other' });
+      expect(requests).toEqual([]);
+    });
+  });
+
+  /** What the coach saves for Red Brick (the scripted save_bag_details input), without the roast date. */
+  function savedRedBrick() {
+    return { name: 'Red Brick', roaster: 'Square Mile Coffee Roasters', origin: 'Brazil, Mogiana', roastLevel: 'medium', process: 'washed', notes: 'Chocolate, plum' };
+  }
+
+  // -------------------------------------------------------------------------
+  // 6.8: a photo of the bag
+  // -------------------------------------------------------------------------
+
+  describe('the bag photo (6.8)', () => {
+    const PHOTO: BagPhoto = { mediaType: 'image/jpeg', data: 'UEhPVE8tT0YtVEhFLUJBRy1ieXRlcw==' };
+    const READ: ExtractedBag = {
+      name: 'Kiambu AA',
+      roaster: 'Square Mile',
+      origin: 'Kenya, Kiambu',
+      process: 'washed',
+      roastLevel: 'light',
+      roastDate: '2026-09-28',
+      notes: 'blackcurrant, grapefruit',
+    };
+    const CONFIRMED = { ...READ, name: 'Kiambu AA' };
+
+    it("reads the photo with the coach's model, closes the bean card and shows the details to confirm", async () => {
+      reader.answer = READ;
+      await engine.newBag();
+      await engine.readBagPhoto(PHOTO);
+      expect(reader.asked).toEqual([{ model: 'claude-opus-5-5', photo: PHOTO }]);
+      expect(beanCard()!.choice).toEqual({ kind: 'photo' });
+      expect(confirmCard()).toEqual({ kind: 'bagConfirm', details: READ, confirmed: false });
+      expect(engine.getState().busy).toBe(false);
+      expect(progressNotices()).toEqual([]);
+      expect(requests).toEqual([]);
+    });
+
+    it('leaves a name the bag does not show empty, for the barista to fill in', async () => {
+      reader.answer = { ...READ, name: null };
+      await engine.newBag();
+      await engine.readBagPhoto(PHOTO);
+      expect(confirmCard()!.details.name).toBe('');
+    });
+
+    it("saves the confirmed details like save_bag_details, adds the bean to Decaid, and starts the intake with them", async () => {
+      machine.beanLibrary = true;
+      reader.answer = READ;
+      await engine.newBag();
+      await engine.readBagPhoto(PHOTO);
+      scripts.push(() => [text('Lovely.'), proposeTemplates]);
+      await engine.confirmBag({ ...CONFIRMED, notes: 'blackcurrant, grapefruit, brown sugar' });
+      expect(confirmCard()).toMatchObject({ confirmed: true, details: { notes: 'blackcurrant, grapefruit, brown sugar' } });
+      expect(engine.getState().activeBag).toMatchObject({ name: 'Kiambu AA', roaster: 'Square Mile', roastDate: '2026-09-28', notes: 'blackcurrant, grapefruit, brown sugar' });
+      expect(requests[0]![0]!.content[0]).toEqual({
+        type: 'text',
+        text: 'The user confirmed these details read from a photo of the bag: Kiambu AA by Square Mile; Kenya, Kiambu; washed; light roast; roasted 2026-09-28; tasting notes: blackcurrant, grapefruit, brown sugar.',
+      });
+      expect(intakeContext()).toMatchObject({ bag: { name: 'Kiambu AA', roastDate: '2026-09-28' }, roast: roastToday('2026-09-28') });
+      // Added to Decaid's bean library as any saved bag is, the roast date with the batch.
+      await vi.waitFor(() => expect(engine.getState().activeBag?.decaidBatchId).toBe('batch-1'));
+      expect(callsOf('createBatch').map((c) => c.args)).toEqual([['bean-1', { roastDate: '2026-09-28', roastLevel: 'light' }]]);
+    });
+
+    it('keeps the photo out of storage and out of every request but the one that read it', async () => {
+      reader.answer = READ;
+      await engine.newBag();
+      await engine.readBagPhoto(PHOTO);
+      scripts.push(() => [text('Lovely.'), proposeTemplates]);
+      await engine.confirmBag(CONFIRMED);
+      const kept = JSON.stringify(await storage.porter.exportAll()) + JSON.stringify(engine.getState()) + JSON.stringify(requests);
+      expect(kept).not.toContain(PHOTO.data);
+      expect(JSON.stringify(requests)).not.toContain('"image"');
+    });
+
+    it('says to add the API key first, and sends nothing, without one', async () => {
+      storage.apiKey = null;
+      reader.answer = READ;
+      await engine.newBag();
+      await engine.readBagPhoto(PHOTO);
+      expect(reader.asked).toEqual([]);
+      expect(notices().map((p) => p.text)).toContain('Add your API key in Settings first.');
+      expect(beanCard()!.choice).toBeNull();
+      expect(confirmCard()).toBeUndefined();
+    });
+
+    it('keeps the bean card open and says why when the photo cannot be read', async () => {
+      reader.answer = new LlmError('protocol', "CafAI could not read the coffee's details in that photo. Try another one.");
+      await engine.newBag();
+      await engine.readBagPhoto(PHOTO);
+      expect(beanCard()!.choice).toBeNull();
+      expect(confirmCard()).toBeUndefined();
+      expect(notices().filter((p) => p.tone === 'warning').map((p) => p.text)).toEqual([
+        "CafAI could not read the coffee's details in that photo. Try another one.",
+      ]);
+      expect(engine.getState().busy).toBe(false);
+    });
+
+    it('takes no confirm without a name, and nothing once the details are confirmed', async () => {
+      reader.answer = READ;
+      await engine.newBag();
+      await engine.readBagPhoto(PHOTO);
+      await engine.confirmBag({ ...CONFIRMED, name: '  ' });
+      expect(confirmCard()!.confirmed).toBe(false);
+      expect(requests).toEqual([]);
+      scripts.push(() => [text('Lovely.'), proposeTemplates]);
+      await engine.confirmBag(CONFIRMED);
+      await engine.confirmBag({ ...CONFIRMED, name: 'Something else' });
+      expect(engine.getState().activeBag?.name).toBe('Kiambu AA');
+      expect(requests).toHaveLength(1);
+    });
+
+    it('sets the details aside when the bag is described in the chat instead', async () => {
+      reader.answer = READ;
+      await engine.newBag();
+      await engine.readBagPhoto(PHOTO);
+      scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);
+      await engine.sendText('Kiambu AA, light, washed');
+      expect(confirmCard()).toMatchObject({ confirmed: false, expired: true, setAsideReason: 'typed' });
+      expect(requests[0]![0]!.content[0]).toEqual({ type: 'text', text: 'Kiambu AA, light, washed' });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 6.1: the roast date and the coffee's age
+  // -------------------------------------------------------------------------
+
+  describe('the roast date (6.1)', () => {
+    it("saves the roast date the coach read, before the bag's batch goes to Decaid with it", async () => {
+      machine.beanLibrary = true;
+      await engine.newBag();
+      scripts.push(() => [text('Lovely.'), toolUse('t-save', TOOL.saveBagDetails, { ...savedRedBrick(), roastDate: '2026-09-28' }), proposeTemplates]);
+      await engine.sendText('Red Brick, roasted 28 September');
+      expect(engine.getState().activeBag?.roastDate).toBe('2026-09-28');
+      await vi.waitFor(() => expect(callsOf('createBatch')).toHaveLength(1));
+      expect(callsOf('createBatch')[0]!.args[1]).toEqual({ roastDate: '2026-09-28', roastLevel: 'medium' });
+    });
+
+    it('reads a save_bag_details written before the roast date existed (a stored chat) as a date nobody knows', async () => {
+      await engine.newBag();
+      expect(saveBag).not.toHaveProperty('input.roastDate');
+      scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);
+      await engine.sendText('Kiambu AA, light, washed');
+      expect(engine.getState().activeBag).toMatchObject({ name: 'Kiambu AA', roastDate: null });
+      scripts.push(() => [text('Loaded.')]);
+      await engine.pickTemplate('t-tpl', 'd-flow');
+      expect(parsed(lastUserTurn(requests)[0])).toEqual({ saved: true });
+    });
+
+    it("tells the coach the coffee's age with every shot", async () => {
+      stockLibrary();
+      await openBag();
+      scripts.push(() => [text('Lovely.'), proposeTemplates]);
+      await engine.pickBean('batch-red');
+      scripts.push(() => [text('Loaded.')]);
+      await engine.pickTemplate('t-tpl', 'd-flow');
+      nowMs += 2 * 24 * 60 * 60 * 1000;
+      scripts.push(() => [text('Got it.'), askTaste]);
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' });
+      await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+      const event = lastUserTurn(requests).find((b) => b.type === 'text') as { text: string };
+      const payload = JSON.parse(event.text.split('\n')[1]!);
+      expect(payload.roast).toBe(roastToday('2026-09-24'));
+      expect(payload.roast).toMatch(/^Roasted 2026-09-24 \(1[01] days ago\)$/);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 6.5: DYE2's recent setups
+  // -------------------------------------------------------------------------
+
+  describe("DYE2's recent setups (6.5)", () => {
+    const recentFor = (batchId: string, grind: string) => ({
+      id: `recent:${grind}`,
+      auto: true,
+      snapshot: { profileTitle: 'D-Flow / default', beanBatchId: batchId, coffeeName: 'Red Brick', coffeeRoaster: 'Square Mile Coffee Roasters', grindSetting: grind, dose: 18, drink: 36 },
+      capturedAt: '2026-10-01T07:00:00.000',
+    });
+
+    /** Pick Red Brick; the coach looks at DYE2 before it suggests anything. */
+    async function setupsAtIntake(addToLibrary: () => void = () => {}): Promise<unknown> {
+      stockLibrary();
+      addToLibrary();
+      await openBag();
+      scripts.push(() => [toolUse('t-dye2', TOOL.getRecentSetups, {})]);
+      scripts.push(() => [text('Lovely.'), proposeTemplates]);
+      await engine.pickBean('batch-red');
+      const answer = requests[1]![requests[1]!.length - 1]!.content[0] as ToolResultBlock;
+      return { content: answer.content, isError: answer.is_error ?? false };
+    }
+
+    it("answers from DYE2's endpoint while it is loaded, for this bag's batch, with DYE2's kit", async () => {
+      loadedPlugins.add(PLUGIN.dye2);
+      machine.pluginEndpoints.set('dye2.reaplugin/recent-favs', [recentFor('batch-red', '4.2'), recentFor('batch-other', '9')]);
+      machine.store.set('dye2.reaplugin/equipment', [{ id: 'eqp-1', name: 'WDT tool' }]);
+      machine.store.set('dye2.reaplugin/baskets', [{ id: 'bskt-1', name: 'VST 18g' }]);
+      const { content, isError } = (await setupsAtIntake()) as { content: string; isError: boolean };
+      expect(isError).toBe(false);
+      expect(JSON.parse(content)).toEqual({
+        available: true,
+        setups: [
+          {
+            kind: 'recent',
+            sameBatch: true,
+            profileTitle: 'D-Flow / default',
+            grindSetting: '4.2',
+            doseG: 18,
+            yieldG: 36,
+            rpm: null,
+            basket: null,
+            date: '2026-10-01',
+          },
+        ],
+        equipment: ['WDT tool'],
+        baskets: ['VST 18g'],
+      });
+      expect(callsOf('getPluginEndpoint').map((c) => c.args)).toEqual([['dye2.reaplugin', 'recent-favs']]);
+    });
+
+    it("counts the setups of the same bean's earlier batches too, archived ones included, as another batch", async () => {
+      loadedPlugins.add(PLUGIN.dye2);
+      machine.pluginEndpoints.set('dye2.reaplugin/recent-favs', [
+        recentFor('batch-red', '4.2'),
+        recentFor('batch-red-old', '4.6'),
+        recentFor('batch-red-archived', '4.8'),
+        recentFor('batch-chel', '9'),
+      ]);
+      const { content } = (await setupsAtIntake(() => machine.batches.push(libraryBatch('batch-red-archived', 'bean-red', { archived: true })))) as {
+        content: string;
+      };
+      expect((JSON.parse(content).setups as Array<{ grindSetting: string; sameBatch: boolean }>).map((s) => [s.grindSetting, s.sameBatch])).toEqual([
+        ['4.2', true],
+        ['4.6', false],
+        ['4.8', false],
+      ]);
+      expect(callsOf('listAllBatches').at(-1)!.args).toEqual([{ includeArchived: true }]);
+    });
+
+    it("reads DYE2's keys from the store when it is not loaded", async () => {
+      machine.store.set('dye2.reaplugin/autoFavourites', [recentFor('batch-red', '4.5')]);
+      const { content } = (await setupsAtIntake()) as { content: string };
+      expect(JSON.parse(content)).toMatchObject({ available: true, setups: [{ grindSetting: '4.5' }] });
+      expect(callsOf('getPluginEndpoint')).toEqual([]);
+    });
+
+    it('answers {"available":false} without DYE2', async () => {
+      const { content, isError } = (await setupsAtIntake()) as { content: string; isError: boolean };
+      expect(isError).toBe(false);
+      expect(JSON.parse(content)).toEqual({ available: false });
+    });
+
+    it("says so when Decaid's store cannot be read", async () => {
+      machine.store.set('dye2.reaplugin/autoFavourites', () => {
+        throw unreachable('/api/v1/store/dye2.reaplugin/autoFavourites');
+      });
+      const { content, isError } = (await setupsAtIntake()) as { content: string; isError: boolean };
+      expect(isError).toBe(true);
+      expect(content).toBe("Decaid can't be reached right now, so DYE2's setups could not be read.");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 6.4: the Visualizer link
+  // -------------------------------------------------------------------------
+
+  describe('the Visualizer link (6.4)', () => {
+    const URL = 'https://visualizer.coffee/shots/viz-1';
+    type ShotPart = Extract<CoachUiPart, { kind: 'shot' }>;
+    const shotCard = () => allParts().find((p): p is ShotPart => p.kind === 'shot');
+    const lastUploadReads = () => callsOf('readStore').filter((c) => c.args[1] === 'lastUploadedShot');
+
+    it('puts On Visualizer on the shot card and the iteration once the plugin uploaded the shot', async () => {
+      loadedPlugins.add(PLUGIN.visualizer);
+      let reads = 0;
+      machine.store.set('visualizer.reaplugin/lastUploadedShot', () => (++reads < 3 ? 'shot-0' : 'shot-1'));
+      machine.store.set('visualizer.reaplugin/lastVisualizerId', 'viz-1');
+      await throughShot();
+      await vi.waitFor(() => expect(shotCard()?.visualizerUrl).toBe(URL));
+      await vi.waitFor(async () => expect((await storage.iterations.listAll())[0]!.visualizerUrl).toBe(URL));
+      expect(lastUploadReads()).toHaveLength(3);
+      // Kept with the chat, so the card shows it after a reload too.
+      await drain();
+      const stored = await storage.conversations.get(engine.getState().activeBag!.conversationId);
+      expect(stored!.uiMessages.flatMap((m) => m.parts).find((p) => p.kind === 'shot')).toMatchObject({ visualizerUrl: URL });
+    });
+
+    it('shows the link on the card at once, and keeps it in storage in turn with the change being confirmed', async () => {
+      // Each 3 s wait ends when the test says.
+      let endWait: (() => void) | null = null;
+      engine.dispose();
+      engine = build({
+        clock: {
+          now: () => new Date(nowMs),
+          sleep: (ms) => (ms === 3000 ? new Promise<void>((resolve) => (endWait = resolve)) : Promise.resolve()),
+        },
+      });
+      await engine.start();
+      loadedPlugins.add(PLUGIN.visualizer);
+      machine.store.set('visualizer.reaplugin/lastUploadedShot', 'shot-1');
+      machine.store.set('visualizer.reaplugin/lastVisualizerId', 'viz-1');
+      await throughProposal();
+      await vi.waitFor(() => expect(endWait).not.toBeNull());
+      // Confirm, and the machine takes its time: the engine is busy until it answers.
+      machine.barrier = 'hold';
+      scripts.push(() => [text('Done.')]);
+      const confirming = engine.confirmChange('t-adj');
+      await vi.waitFor(() => expect(machine.held).not.toBeNull());
+      endWait!();
+      await vi.waitFor(() => expect(shotCard()?.visualizerUrl).toBe(URL));
+      // Stored only once the engine's turn comes, never inside another action's writes.
+      expect((await storage.iterations.listAll())[0]!.visualizerUrl).toBeUndefined();
+      machine.held!.resolve('loaded');
+      await confirming;
+      await drain();
+      expect((await storage.iterations.listAll())[0]).toMatchObject({ outcome: 'applied', visualizerUrl: URL });
+      const stored = await storage.conversations.get(engine.getState().activeBag!.conversationId);
+      expect(stored!.uiMessages.flatMap((m) => m.parts).find((p) => p.kind === 'shot')).toMatchObject({ visualizerUrl: URL });
+    });
+
+    it('looks every 3 s and stops after 30 s without a match', async () => {
+      engine.dispose();
+      const sleeps: number[] = [];
+      engine = build({ clock: { now: () => new Date(nowMs), sleep: async (ms) => void sleeps.push(ms) } });
+      await engine.start();
+      loadedPlugins.add(PLUGIN.visualizer);
+      machine.store.set('visualizer.reaplugin/lastUploadedShot', 'shot-0');
+      await throughShot();
+      await vi.waitFor(() => expect(lastUploadReads()).toHaveLength(10));
+      await drain();
+      expect(lastUploadReads()).toHaveLength(10);
+      expect(sleeps.filter((ms) => ms === 3000)).toHaveLength(10);
+      expect(shotCard()!.visualizerUrl).toBeUndefined();
+      expect((await storage.iterations.listAll())[0]!.visualizerUrl ?? null).toBeNull();
+    });
+
+    it('stops after 30 s of time, however long each look takes', async () => {
+      engine.dispose();
+      engine = build({ clock: { now: () => new Date(nowMs), sleep: async (ms) => void (nowMs += ms) } });
+      await engine.start();
+      loadedPlugins.add(PLUGIN.visualizer);
+      // Each look takes Decaid 2 s: 5 s a round, so six rounds fill the 30 s.
+      machine.store.set('visualizer.reaplugin/lastUploadedShot', () => {
+        nowMs += 2000;
+        return 'shot-0';
+      });
+      await throughShot();
+      await vi.waitFor(() => expect(lastUploadReads()).toHaveLength(6));
+      await drain();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(lastUploadReads()).toHaveLength(6);
+    });
+
+    it('looks for nothing without the plugin', async () => {
+      machine.store.set('visualizer.reaplugin/lastUploadedShot', 'shot-1');
+      await throughShot();
+      await drain();
+      expect(callsOf('readStore')).toEqual([]);
+      expect(shotCard()!.visualizerUrl).toBeUndefined();
     });
   });
 

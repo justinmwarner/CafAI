@@ -1,5 +1,6 @@
 export { ANTHROPIC_API_ORIGIN, anthropicHandlers, resetAnthropicMock, type AnthropicMockOptions } from './handlers.ts';
 export {
+  BAG_PHOTO_ANSWER,
   createScenarioMemory,
   resetScenarioMemory,
   respond,

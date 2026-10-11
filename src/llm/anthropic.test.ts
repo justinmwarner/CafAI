@@ -131,6 +131,12 @@ describe('buildAnthropicRequest', () => {
     for (const key of ['thinking', 'temperature', 'top_p', 'top_k', 'fallbacks']) expect(body).not.toHaveProperty(key);
   });
 
+  it('leaves caching out of a request that will not repeat (a photo of the bag), so it is not written to the cache', () => {
+    const body = JSON.parse(buildAnthropicRequest({ ...request(), cache: false }, KEY).body);
+    expect(body).not.toHaveProperty('cache_control');
+    expect(JSON.parse(buildAnthropicRequest({ ...request(), cache: true }, KEY).body).cache_control).toEqual({ type: 'ephemeral' });
+  });
+
   it('sends effort only to models that support it', () => {
     const effortOf = (model: string) => JSON.parse(buildAnthropicRequest(request({ model, effort: 'high' }), KEY).body).output_config;
     expect(effortOf('claude-sonnet-5')).toEqual({ effort: 'high' });
@@ -224,7 +230,7 @@ describe('createAnthropicProvider: streaming', () => {
     expect((turn.content[0] as { signature: string }).signature).toMatch(/^mock-sig-/);
     const save = turn.content[2] as ToolUseBlock;
     expect(save.name).toBe('save_bag_details');
-    expect(save.input).toEqual({ name: 'Kiambu AA', roaster: null, origin: null, roastLevel: 'light', process: 'washed', notes: null });
+    expect(save.input).toEqual({ name: 'Kiambu AA', roaster: null, origin: null, roastLevel: 'light', process: 'washed', notes: null, roastDate: null });
   });
 
   it('sends the headers and body the API requires', async () => {

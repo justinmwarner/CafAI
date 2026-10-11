@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import type { CoachUiMessage, CoachUiPart } from '../types.ts';
+import type { BeanPickerOption, CoachUiMessage, CoachUiPart } from '../types.ts';
 import type { ShotSummary } from '../../coach/types.ts';
 import {
+  bagConfirmPart,
+  beanPickerPart,
   diffPart,
+  filledBeanCard,
+  isLoadingBeanCard,
+  isOpenBagConfirm,
+  isOpenBeanCard,
   isTransient,
+  loadingBeanPickerPart,
   message,
   noticePart,
   optionsPart,
@@ -12,6 +19,7 @@ import {
   replaceParts,
   setAside,
   setShotStars,
+  setVisualizerLink,
   shotPart,
   startingYieldText,
   templatesPart,
@@ -63,6 +71,40 @@ describe('cards', () => {
     expect(setAside(applied, 'other')).toBe(applied);
     const shot = shotPart('shot-1', summary);
     expect(setAside(shot, 'other')).toBe(shot);
+  });
+
+  it('opens the bean card and the photo confirm card unanswered, and sets them aside only while open (6.1, 6.8)', () => {
+    const card = beanPickerPart([]);
+    expect(card).toEqual({ kind: 'beanPicker', options: [], choice: null });
+    expect(isOpenBeanCard(card)).toBe(true);
+    expect(setAside(card, 'typed')).toEqual({ ...card, expired: true, setAsideReason: 'typed' });
+    expect(isOpenBeanCard(setAside(card, 'typed'))).toBe(false);
+    const picked = { ...card, choice: { kind: 'other' as const } };
+    expect(isOpenBeanCard(picked)).toBe(false);
+    expect(setAside(picked, 'typed')).toBe(picked);
+
+    const details = { name: '', roaster: 'Square Mile', origin: null, roastLevel: null, process: null, notes: null, roastDate: null };
+    const confirm = bagConfirmPart(details);
+    expect(confirm).toEqual({ kind: 'bagConfirm', details, confirmed: false });
+    expect(isOpenBagConfirm(confirm)).toBe(true);
+    expect(setAside(confirm, 'typed')).toEqual({ ...confirm, expired: true, setAsideReason: 'typed' });
+    const confirmed = { ...confirm, confirmed: true };
+    expect(isOpenBagConfirm(confirmed)).toBe(false);
+    expect(setAside(confirmed, 'typed')).toBe(confirmed);
+  });
+
+  it("puts the bean card up before Decaid's batches are read, open, then fills it, answered or not (6.1)", () => {
+    const card = loadingBeanPickerPart();
+    expect(card).toEqual({ kind: 'beanPicker', options: [], choice: null, loading: true });
+    expect(isOpenBeanCard(card)).toBe(true);
+    expect(isLoadingBeanCard(card)).toBe(true);
+    expect(isLoadingBeanCard(beanPickerPart([]))).toBe(false);
+    const option = { beanId: 'bean-1', batchId: 'batch-1', name: 'Red Brick' } as BeanPickerOption;
+    expect(filledBeanCard(card, [option])).toEqual({ kind: 'beanPicker', options: [option], choice: null });
+    const skipped = { ...card, choice: { kind: 'other' as const } };
+    expect(filledBeanCard(skipped, [option])).toEqual({ kind: 'beanPicker', options: [option], choice: { kind: 'other' } });
+    const shot = shotPart('shot-1', summary);
+    expect(filledBeanCard(shot, [option])).toBe(shot);
   });
 });
 
@@ -119,6 +161,13 @@ describe('message updates', () => {
     expect(result[0]!.parts[0]).toEqual({ kind: 'shot', shotId: 'shot-1', summary, stars: 4 });
     expect(result[1]).toBe(messages[1]);
     expect(setShotStars(messages, 'shot-unknown', 4)).toEqual(messages);
+  });
+
+  it("puts the Visualizer link on a shot's card (6.4)", () => {
+    const url = 'https://visualizer.coffee/shots/viz-1';
+    const result = setVisualizerLink(messages, 'shot-1', url);
+    expect(result[0]!.parts[0]).toEqual({ kind: 'shot', shotId: 'shot-1', summary, visualizerUrl: url });
+    expect(result[1]).toBe(messages[1]);
   });
 });
 

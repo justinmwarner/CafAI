@@ -4,14 +4,18 @@ import type { ShotRecord } from '../api/types.ts';
 import type { IterationRecord, ProfileVersion } from '../storage/types.ts';
 import { syntheticShotRecord } from './__fixtures__/syntheticShot.ts';
 import { TOOL } from './contract.ts';
+import type { Dye2Setup } from '../api/pluginData.ts';
 import {
   compareShots,
   createShotSource,
   getBagHistory,
   getPhaseStats,
+  getRecentSetups,
   getShotSeries,
   getShotSummary,
+  QUERY_TOOLS,
   runQueryTool,
+  type BagIdentity,
   type QueryResult,
 } from './queries.ts';
 import { summarizeShot } from './summary/summarize.ts';
@@ -244,5 +248,125 @@ describe('runQueryTool', () => {
     });
     expect(runQueryTool(TOOL.getShotSummary, { shot: 'nope' }, ctx)).toMatchObject({ isError: true });
     expect(runQueryTool(TOOL.askUser, {}, ctx).content).toMatch(/not a query tool/);
+  });
+});
+
+describe('getRecentSetups (6.5)', () => {
+  const setup = (fields: Partial<Dye2Setup>): Dye2Setup => ({
+    kind: 'recent',
+    beanBatchId: null,
+    beanId: null,
+    coffeeName: 'Red Brick',
+    coffeeRoaster: 'Square Mile',
+    profileTitle: 'D-Flow / default',
+    grindSetting: '4.2',
+    doseG: 18,
+    yieldG: 36,
+    rpm: null,
+    basket: null,
+    capturedAt: '2026-10-08T07:12:00.000',
+    ...fields,
+  });
+  const linked = { name: 'Red Brick', roaster: 'Square Mile', decaidBeanId: 'bean-1', decaidBatchId: 'batch-1' };
+  const unlinked = { name: 'Red Brick', roaster: 'Square Mile', decaidBeanId: null, decaidBatchId: null };
+  const kit = { equipment: ['WDT tool'], baskets: ['VST 18g'] };
+
+  it('answers {"available":false} without DYE2', () => {
+    expect(data(getRecentSetups(null, linked))).toEqual({ available: false });
+  });
+
+  it("keeps the setups of the bag's batch, each in the coach's words with its kind, with DYE2's kit", () => {
+    const result = data(
+      getRecentSetups(
+        {
+          setups: [
+            setup({ beanBatchId: 'batch-1', basket: 'VST 18g', rpm: 1200 }),
+            setup({ beanBatchId: 'batch-2', profileTitle: 'Londonium' }),
+            setup({ kind: 'favourite', beanBatchId: null, profileTitle: 'Gentle and sweet', capturedAt: '2026-10-01' }),
+          ],
+          ...kit,
+        },
+        linked,
+      ),
+    );
+    expect(result).toEqual({
+      available: true,
+      setups: [
+        {
+          kind: 'recent',
+          sameBatch: true,
+          profileTitle: 'D-Flow / default',
+          grindSetting: '4.2',
+          doseG: 18,
+          yieldG: 36,
+          rpm: 1200,
+          basket: 'VST 18g',
+          date: '2026-10-08',
+        },
+        // No batch on DYE2's side: the name and roaster tell, and which batch is not known.
+        {
+          kind: 'favourite',
+          sameBatch: null,
+          profileTitle: 'Gentle and sweet',
+          grindSetting: '4.2',
+          doseG: 18,
+          yieldG: 36,
+          rpm: null,
+          basket: null,
+          date: '2026-10-01',
+        },
+      ],
+      equipment: ['WDT tool'],
+      baskets: ['VST 18g'],
+    });
+  });
+
+  it("keeps the setups of the same bean's earlier batches too, marked as another batch", () => {
+    const setups = [
+      setup({ beanBatchId: 'batch-1', grindSetting: '4.2' }),
+      setup({ beanBatchId: 'batch-0', grindSetting: '4.6' }),
+      setup({ beanBatchId: 'batch-9', grindSetting: '9', coffeeName: 'Red Brick' }),
+    ];
+    const result = data(getRecentSetups({ setups, ...kit }, { ...linked, beanBatchIds: ['batch-0', 'batch-1'] }));
+    expect((result.setups as Array<{ grindSetting: string; sameBatch: boolean | null }>).map((s) => [s.grindSetting, s.sameBatch])).toEqual([
+      ['4.2', true],
+      ['4.6', false],
+    ]);
+  });
+
+  it('matches by name and roaster, whatever the case, when the bag is not linked', () => {
+    const setups = [
+      setup({ beanBatchId: 'batch-1', coffeeName: ' RED BRICK ', coffeeRoaster: 'square mile' }),
+      setup({ coffeeName: 'Red Brick', coffeeRoaster: 'Another Roaster' }),
+      setup({ coffeeName: 'Ethiopia Chelchele' }),
+      setup({ coffeeRoaster: null, profileTitle: 'No roaster recorded' }),
+    ];
+    const result = data(getRecentSetups({ setups, ...kit }, unlinked));
+    expect((result.setups as Array<{ profileTitle: string }>).map((s) => s.profileTitle)).toEqual(['D-Flow / default', 'No roaster recorded']);
+  });
+
+  it('matches a recipe by its bean when the bag is linked, else by its name', () => {
+    const recipe = setup({ kind: 'recipe', beanId: 'bean-1', coffeeName: 'Red Brick', coffeeRoaster: null, profileTitle: 'Morning Espresso' });
+    const other = setup({ kind: 'recipe', beanId: 'bean-9', coffeeName: 'Red Brick', coffeeRoaster: null, profileTitle: 'Other bean' });
+    const titles = (bag: BagIdentity) =>
+      (data(getRecentSetups({ setups: [recipe, other], ...kit }, bag)).setups as Array<{ profileTitle: string }>).map((s) => s.profileTitle);
+    expect(titles(linked)).toEqual(['Morning Espresso']);
+    expect(titles(unlinked)).toEqual(['Morning Espresso', 'Other bean']);
+  });
+
+  it('keeps the ten most recent at most, and a date only when DYE2 recorded one', () => {
+    const many = Array.from({ length: 14 }, (_, i) => setup({ beanBatchId: 'batch-1', grindSetting: String(i), capturedAt: i === 0 ? null : '2026-10-08' }));
+    const setups = data(getRecentSetups({ setups: many, ...kit }, linked)).setups as Array<{ grindSetting: string; date: string | null }>;
+    expect(setups).toHaveLength(10);
+    expect(setups[0]).toMatchObject({ grindSetting: '0', date: null });
+  });
+
+  it('runs through runQueryTool with what the engine read, and is a query tool', () => {
+    const ctx = { source: createShotSource([]), versions: [], iterations: [], dye2: { setups: [setup({ beanBatchId: 'batch-1' })], ...kit }, bag: linked };
+    const outcome = runQueryTool(TOOL.getRecentSetups, {}, ctx);
+    expect(outcome.isError).toBe(false);
+    expect(JSON.parse(outcome.content)).toMatchObject({ available: true, setups: [{ grindSetting: '4.2' }] });
+    expect(runQueryTool(TOOL.getRecentSetups, {}, { ...ctx, dye2: null }).content).toBe('{"available":false}');
+    expect(QUERY_TOOLS).toContain(TOOL.getRecentSetups);
   });
 });

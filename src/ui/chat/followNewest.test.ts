@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { REVEAL_MARGIN_PX, createFollowNewest, type ScrollBox } from './followNewest.ts';
 
-/** A thread of stacked messages in a scroller that clamps like a browser. */
-function thread(initialViewport = 400) {
-  const messages: Array<{ height: number }> = [];
+/**
+ * A thread of stacked messages in a scroller that clamps like a browser.
+ * `newestRow` stands in for the app's own newest row (the default: the newest element).
+ */
+function thread(initialViewport = 400, newestRow?: () => unknown) {
+  let messages: Array<{ height: number }> = [];
   let top = 0;
   let viewport = initialViewport;
   const box: ScrollBox = {
@@ -20,11 +23,15 @@ function thread(initialViewport = 400) {
       return viewport;
     },
   };
-  const follower = createFollowNewest(box, () => {
-    const last = messages[messages.length - 1];
-    if (!last) return null;
-    return { key: last, top: messages.slice(0, -1).reduce((sum, m) => sum + m.height, 0), height: last.height };
-  });
+  const follower = createFollowNewest(
+    box,
+    () => {
+      const last = messages[messages.length - 1];
+      if (!last) return null;
+      return { key: last, top: messages.slice(0, -1).reduce((sum, m) => sum + m.height, 0), height: last.height };
+    },
+    newestRow,
+  );
   return {
     box,
     follower,
@@ -32,6 +39,12 @@ function thread(initialViewport = 400) {
       const message = { height };
       messages.push(message);
       return message;
+    },
+    /** The scroller draws another thread in place of this one: new elements, the scroll position kept where the browser can. */
+    redraw(heights: number[]) {
+      messages = heights.map((height) => ({ height }));
+      top = Math.min(top, Math.max(0, box.scrollHeight - box.clientHeight));
+      return messages;
     },
     /** The reader drags the thread to `to`; the browser then fires its scroll event. */
     readerScrollsTo(to: number) {
@@ -159,6 +172,106 @@ describe('following the newest message', () => {
     t.follower.update(); // the resize observer fires
     expect(t.gapToBottom()).toBe(0);
     expect(t.follower.following).toBe(true);
+  });
+
+  describe('a new thread that opens on a card to answer first (the bean card, 6.1)', () => {
+    /** The bean card still looking in Decaid's beans, the coach's question, the stats card (D91). */
+    function newBag() {
+      const t = thread(400);
+      const card = t.add(180);
+      t.add(90);
+      const stats = t.add(260);
+      t.follower.showStart();
+      return { t, card, stats };
+    }
+
+    it("shows the card from its top, and stays there while its rows arrive and the stats card's numbers move", () => {
+      const { t, card, stats } = newBag();
+      expect(t.box.scrollTop).toBe(0);
+      t.follower.onScroll(); // the event for our own scroll
+      card.height = 620; // Decaid's batches arrived
+      t.follower.update();
+      expect(t.box.scrollTop).toBe(0);
+      stats.height = 280; // a readout wrapped
+      t.follower.update();
+      expect(t.box.scrollTop).toBe(0);
+      t.resizeView(330); // a banner above the chat
+      t.follower.update();
+      expect(t.box.scrollTop).toBe(0);
+      expect(t.follower.following).toBe(true);
+    });
+
+    it('follows again once something new arrives', () => {
+      const { t, card } = newBag();
+      card.height = 620;
+      t.follower.update();
+      t.add(60); // "Reading the bag…"
+      t.follower.update();
+      expect(t.gapToBottom()).toBe(0);
+    });
+
+    it('follows again once the reader acts, or scrolls to the end', () => {
+      const acted = newBag();
+      acted.card.height = 620;
+      acted.t.follower.resume(); // tapped Something else
+      acted.t.follower.update();
+      expect(acted.t.gapToBottom()).toBe(0);
+
+      const scrolled = newBag();
+      scrolled.card.height = 620;
+      scrolled.t.follower.update();
+      scrolled.t.readerScrollsTo(scrolled.t.box.scrollHeight - scrolled.t.box.clientHeight);
+      scrolled.stats.height = 300;
+      scrolled.t.follower.update();
+      expect(scrolled.t.gapToBottom()).toBe(0);
+    });
+
+    it('starts over on the next thread', () => {
+      const { t, card } = newBag();
+      card.height = 620;
+      t.follower.reset();
+      t.follower.update();
+      expect(t.gapToBottom()).toBe(0);
+    });
+
+    it('stays at the start when the scroller draws the new thread only after it opened, as x-chat does', () => {
+      // The app's newest row: the new bag's coach question, until something new arrives.
+      let row = 'question';
+      const t = thread(400, () => row);
+      // The old bag's long thread, read to its end.
+      for (let i = 0; i < 6; i++) t.add(300);
+      t.follower.update();
+      expect(t.gapToBottom()).toBe(0);
+
+      t.follower.showStart();
+      // Now the new thread is drawn: the bean card, still looking, and the question.
+      const [card] = t.redraw([180, 90]);
+      t.follower.update();
+      expect(t.box.scrollTop).toBe(0);
+      card!.height = 620; // Decaid's batches arrived
+      t.follower.update();
+      expect(t.box.scrollTop).toBe(0);
+
+      row = 'reading'; // "Reading the bag…"
+      t.add(60);
+      t.follower.update();
+      expect(t.gapToBottom()).toBe(0);
+    });
+
+    it('leaves the view where the reader scrolled the card, until they act or reach the end', () => {
+      const { t, card, stats } = newBag();
+      card.height = 620;
+      t.follower.update();
+      t.readerScrollsTo(150); // down to the older roasts
+      expect(t.follower.following).toBe(false);
+      stats.height = 300;
+      t.follower.update();
+      expect(t.box.scrollTop).toBe(150);
+
+      t.follower.resume(); // tapped Use this
+      t.follower.update();
+      expect(t.gapToBottom()).toBe(0);
+    });
   });
 
   it('starts over on a new thread', () => {
