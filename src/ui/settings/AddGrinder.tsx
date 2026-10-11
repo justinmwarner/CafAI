@@ -157,7 +157,7 @@ function AddGrinderDialog({ initialModel, add, onClose, onAdded }: AddGrinderDia
           autoFocus
           onChange={(event) => change({ model: event.target.value })}
           error={fieldError('model') !== null}
-          helperText={fieldError('model') ?? ' '}
+          helperText={fieldError('model')}
           sx={fieldSx}
           slotProps={{ htmlInput: { 'data-testid': TID.addGrinderModel, maxLength: GRINDER_LIMITS.model }, inputLabel: { shrink: true } }}
         />
@@ -169,7 +169,7 @@ function AddGrinderDialog({ initialModel, add, onClose, onAdded }: AddGrinderDia
           disabled={busy}
           onChange={(event) => change({ burrs: event.target.value })}
           error={fieldError('burrs') !== null}
-          helperText={fieldError('burrs') ?? ' '}
+          helperText={fieldError('burrs')}
           sx={fieldSx}
           slotProps={{ htmlInput: { 'data-testid': TID.addGrinderBurrs, maxLength: GRINDER_LIMITS.burrs }, inputLabel: { shrink: true } }}
         />
@@ -200,7 +200,7 @@ function AddGrinderDialog({ initialModel, add, onClose, onAdded }: AddGrinderDia
                 disabled={busy}
                 onChange={(event) => change({ smallStep: event.target.value })}
                 error={fieldError('smallStep') !== null}
-                helperText={fieldError('smallStep') ?? ' '}
+                helperText={fieldError('smallStep')}
                 sx={fieldSx}
                 slotProps={{
                   htmlInput: { 'data-testid': TID.addGrinderSmallStep, inputMode: 'decimal', maxLength: 10 },
@@ -215,7 +215,7 @@ function AddGrinderDialog({ initialModel, add, onClose, onAdded }: AddGrinderDia
                 disabled={busy}
                 onChange={(event) => change({ bigStep: event.target.value })}
                 error={fieldError('bigStep') !== null}
-                helperText={fieldError('bigStep') ?? ' '}
+                helperText={fieldError('bigStep')}
                 sx={fieldSx}
                 slotProps={{
                   htmlInput: { 'data-testid': TID.addGrinderBigStep, inputMode: 'decimal', maxLength: 10 },
