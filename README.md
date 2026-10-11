@@ -262,6 +262,9 @@ with **Retry**; it never loads anything on the machine by itself.
   shot's card links to the shot's page on visualizer.coffee once the plugin
   has uploaded it (CafAI looks for 30 s after the card lands), and
   History's shot rows keep the link. Decaid opens it in the system browser.
+- **History**: every bag, its versions with the change that made each, and
+  their shots; **Export** writes it all as JSON and **Import** merges a file
+  back.
 - **Settings > Appearance**: Dark, Light or Auto (follows the device), and a
   tint: Crema, Matcha, Lagoon, Ocean, Plum, Cherry, Steel, or any hue from the
   slider. Every colour comes from the tint (in OKLCH, written out as plain
@@ -272,15 +275,12 @@ with **Retry**; it never loads anything on the machine by itself.
 - **Settings > Where the coach runs**: **Anthropic API key** (the default)
   or **Claude on my computer** (CafAI Bridge's address and code, with
   **Find** and **Test**).
-- **Settings > Coach**: the model (Opus 5.5 by default, Opus 5, Sonnet 5,
-  Haiku 4.5 or Fable 5.1, each with its price per million tokens) and your
-  grinder, from Decaid's grinder library.
 - **Settings > Anthropic API key**: the key, and **Keep my API key in
   Decaid** (off by default; see Privacy for what it means). A key pasted
   into the chat or another field is taken out, with a note.
-- **History**: every bag, its versions with the change that made each, and
-  their shots; **Export** writes it all as JSON and **Import** merges a file
-  back.
+- **Settings > Coach**: the model (Opus 5.5 by default, Opus 5, Sonnet 5,
+  Haiku 4.5 or Fable 5.1, each with its price per million tokens) and your
+  grinder, from Decaid's grinder library.
 - **Settings > Steam, hot water and flush**: the presets Decaid keeps for
   the machine row's Steam, Hot water and Flush (steam temperature, time and
   flow; hot water temperature, volume, time and flow; flush time,
@@ -301,9 +301,9 @@ with **Retry**; it never loads anything on the machine by itself.
 
 A phone on the same network opens CafAI at `http://<tablet-ip>:3000`
 (Decaid's entry for the skin it serves, so CafAI must be the selected skin)
-and gets the phone layout. Its browser storage
-is its own, so the API key is entered again there, unless you keep a copy in
-Decaid; bags and the look come back from Decaid's key-value store.
+and gets the phone layout. Its browser storage is its own, so the API key is
+entered again there, unless you keep a copy in Decaid; bags and the look
+come back from Decaid's key-value store.
 
 ## Claude on your computer (no API key)
 
@@ -659,7 +659,8 @@ General, "Read repository contents and packages permissions") can stay.
 - **A release** (`release.yml`): push a tag that matches `package.json`'s
   version (`v0.1.0`). It runs Decaid live, the checks and e2e, then publishes
   `cafai-<version>.zip` as a GitHub Release, the asset Decaid installs, with
-  the tag's message as the notes.
+  the tag's message and GitHub's generated notes. A manual run publishes
+  nothing and keeps the zip as a workflow artifact.
 - **Scheduled runs stop after 60 days without activity** in a public
   repository; re-enable them on the Actions tab.
 - **Private vulnerability reporting**, in the repository's security
