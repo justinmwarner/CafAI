@@ -129,7 +129,11 @@ describeDecaid('shot', ({ url, require }) => {
     );
     expect(record.measurements.length, 'measurements').toBeGreaterThan(0);
     const summary = summarizeShot(record);
-    expect(summary.durationS, 'the pour, in s').toBeGreaterThan(10);
+    // A real pour, not a full-length shot: a fresh Decaid (scripts/decaid-ci.sh
+    // starts each run with a new profile) pours its default for about 4 s on
+    // the simulated machine and scale, a simulator full of CafAI's versions
+    // for much longer.
+    expect(summary.durationS, 'the pour, in s').toBeGreaterThan(2);
     expect(summary.peakPressureBar ?? 0, 'peak pressure, in bar').toBeGreaterThan(1);
     expect(live.problems()).toEqual([]);
   });

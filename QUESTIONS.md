@@ -80,10 +80,11 @@ you answered are in "Answered" at the end.
    minutes), the branches pushed, and Actions allowed to open issues and
    publish releases (the watch's issue job and the release job ask for
    that). README's GitHub Release install needs it too.
-   **Answered 2026-10-11: yes.** `main` and the tag `v0.1.0` are on
-   https://github.com/justinmwarner/CafAI. Scheduled workflows run from
-   `main`, so this branch's watch, exit codes and labels start once it is
-   merged.
+   *Answered (2026-10-11):* yes. It is public at
+   github.com/justinmwarner/CafAI, with `main` and the tag `v0.1.0`
+   pushed; CI runs on pull requests, and every version tag on main is a
+   release (D138). Scheduled workflows run from `main`, so this branch's
+   watch, exit codes and labels start once it is merged.
 10. **Which rating scale does your tablet's Decaid use?** CafAI no longer
     assumes 0-10. Once per session, before the first stars go out, it asks
     Decaid with a made-up shot id (D101): a 400 that mentions enjoyment

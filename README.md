@@ -96,8 +96,9 @@ From the built-in demo (`npm run demo`, no machine needed);
 1. On the tablet, open Decaid's dashboard -> **Skins** (Decaid's docs call
    it **Launcher -> Skins**), tap **+** (Install skin) and choose **GitHub
    Release**.
-2. Enter `justinmwarner/CafAI`. Decaid takes the release's `.zip` asset,
-   installs it and lists **CafAI**.
+2. Enter `justinmwarner/CafAI`. Decaid takes the latest release's `.zip`
+   asset, installs it and lists **CafAI**, and checks for a newer release
+   every 12 hours.
 3. Select **CafAI** as the skin.
 
 **Check for updates** on the same page fetches a newer release from the same
@@ -513,6 +514,14 @@ npm run test:bridge-live          # CafAI Bridge against your own Claude Code an
 [CONTRIBUTING.md](CONTRIBUTING.md) has the rules the code keeps, the
 decisions log and how a pull request is checked.
 
+**CI and releases.** CI (`.github/workflows/ci.yml`) runs on pull requests.
+Every version tag pushed on a commit of `main` is a release: `npm version
+patch` (it bumps `package.json`, commits and tags `v<version>`), then `git
+push --follow-tags`. The release workflow checks that the tag is on `main`
+and names `package.json`'s version, runs CafAI against the latest Decaid
+release, the whole check and the e2e suite, and only then publishes the zip
+as a GitHub Release, which Decaid installs and updates to.
+
 **Against Decaid's API.** CafAI is checked against Decaid **v0.8.8**
 (`aab5f93`), the pin in `contract/decaid/PIN.json`. `npm run typecheck`
 compares CafAI's wire types with Decaid's own specs at that release (78
@@ -640,9 +649,9 @@ each asks in its own `permissions:` for what it needs (the drift watch's
 reads only). So the default workflow permissions (Settings > Actions >
 General, "Read repository contents and packages permissions") can stay.
 
-- **CI** (`ci.yml`) runs on every push to `main` and every pull request:
-  typecheck, lint, unit tests, the build, the release zip and e2e, and the
-  Chromium 91 smoke as an informational job.
+- **CI** (`ci.yml`) runs on every pull request and by hand, not on a push
+  to `main` (D138): typecheck, lint, unit tests, the build, the release zip
+  and e2e, and the Chromium 91 smoke as an informational job.
 - **The drift watch** (`decaid-watch.yml`, daily at 07:17 UTC and on demand)
   files its issues under three labels. It creates each label the first time
   it needs it; to have them ready for filters and notifications, create
@@ -656,8 +665,10 @@ General, "Read repository contents and packages permissions") can stay.
 
 - **Decaid live** (`decaid-live.yml`, daily at 07:43 UTC, on demand and
   before every release) runs CafAI against Decaid's latest Linux release.
-- **A release** (`release.yml`): push a tag that matches `package.json`'s
-  version (`v0.1.0`). It runs Decaid live, the checks and e2e, then publishes
+- **A release** (`release.yml`): push a tag on a commit of `main` that
+  matches `package.json`'s version (`npm version patch`, then `git push
+  --follow-tags`). A first job checks both; then it runs Decaid live, the
+  checks and e2e, and publishes
   `cafai-<version>.zip` as a GitHub Release, the asset Decaid installs, with
   the tag's message and GitHub's generated notes. A manual run publishes
   nothing and keeps the zip as a workflow artifact.
