@@ -334,15 +334,16 @@ this bag's, and the banner offers Retry to load the bag's version.
    show Tracking, and `/api/v1/settings` has `"gatewayMode":"tracking"`.
    Pull one shot: it stops at the target weight as before. If Gateway Mode
    was Disabled before, put it back.
-4. **Steam, hot water and flush (D114).**
+4. **Steam, hot water and flush (D114, D124).**
    1. Settings > Steam, hot water and flush: each value matches
       `/api/v1/workflow` (`steamSettings`, `hotWaterData`, `rinseData`). If
-      steam is off in Decaid, the steam temperature shows "Off" with "Steam
-      is off in Decaid", and cannot be changed.
+      steam is off in Decaid, the steam temperature reads "Off in Decaid",
+      without buttons, and cannot be changed.
    2. Flush time: tap the buttons to 5 s. `/api/v1/workflow` ->
       `rinseData.duration` is 5. Tap **Flush** in the top bar: it runs about
-      5 s, and while it runs every field in the section is disabled, with
-      "Not while the machine is running".
+      5 s, and while it runs every field in the section is disabled, the
+      line under the title saying "Not while the machine is running.", and
+      nothing in the section moves.
    3. Steam: raise the temperature by 1 °C and the time by one step (5 s).
       `/api/v1/workflow` has both. Steam once: it stops after that time.
    4. Hot water near the limit: with a jug that holds at least 300 ml on

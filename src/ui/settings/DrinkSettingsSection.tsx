@@ -169,8 +169,6 @@ const labelSx: SxProps<Theme> = (theme) => ({
   [theme.breakpoints.up('sm')]: { ...theme.typography.label, color: theme.palette.text.secondary },
 });
 
-const RADIUS = 12;
-
 /**
  * One outlined field, MUI's as in the other settings. Less and More each fill
  * 30% of it at its ends (at least 48 px), so a thumb that misses the icon
@@ -195,7 +193,7 @@ const stepperSx: SxProps<Theme> = (theme) => ({
   },
   '& .MuiOutlinedInput-input.Mui-disabled': { WebkitTextFillColor: theme.palette.text.secondary },
   // Steam off in Decaid: words across the whole field, in body text rather than figures.
-  '&.stepper-off .MuiOutlinedInput-input': { ...theme.typography.body2, flex: '1 1 auto', p: 0 },
+  '&.stepper-off .MuiOutlinedInput-input': { ...theme.typography.body2, flex: '1 1 auto' },
   // Smaller and muted, as units are beside live numbers (D81), on the number's baseline; a tap on it reaches the field.
   '& .stepper-unit': {
     ...theme.typography.label,
@@ -210,8 +208,9 @@ const stepperSx: SxProps<Theme> = (theme) => ({
   // In ink, as the machine row's starts are: they are what the barista reaches for.
   '& .stepper-button': { flex: '0 0 30%', minWidth: 48, height: 48, color: theme.palette.text.primary },
   '& .stepper-button.Mui-disabled': { color: theme.palette.action.disabled },
-  '& .stepper-less': { borderRadius: `${RADIUS}px 0 0 ${RADIUS}px` },
-  '& .stepper-more': { borderRadius: `0 ${RADIUS}px ${RADIUS}px 0` },
+  // The field's own corners, so a pressed button fills its end of the outline exactly.
+  '& .stepper-less': { borderRadius: `${theme.shape.borderRadius}px 0 0 ${theme.shape.borderRadius}px` },
+  '& .stepper-more': { borderRadius: `0 ${theme.shape.borderRadius}px ${theme.shape.borderRadius}px 0` },
 });
 
 interface DrinkFieldProps {
@@ -363,7 +362,7 @@ interface DrinkGroupProps {
   onCommit(drink: Drink, spec: DrinkFieldSpec, value: number): void;
 }
 
-/** One drink: its name under the machine row's icon, then its settings. A group, named by its heading. */
+/** One drink: the machine row's icon and its name, then its settings. A group, named by its heading. */
 function DrinkGroup({ drink, data, loaded, disabled, pending, failed, onCommit }: DrinkGroupProps) {
   const headingId = useId();
   return (
