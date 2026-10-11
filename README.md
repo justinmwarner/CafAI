@@ -182,19 +182,27 @@ You need Claude Code signed in with a Claude Pro or Max plan (install it
 and run `claude` once, then `/login`; the copy the Claude desktop app keeps
 works too) and Node 18 or newer.
 
-1. On the computer, in CafAI's folder: `npm run bridge`. It prints the
-   addresses to use and a pairing code, for example `192.168.1.20` and
-   `K7QM-2XWD`.
+1. On the computer, in CafAI's folder: `npm run bridge`. The first time it
+   asks a few questions: is Claude Code there and signed in, does CafAI run
+   on a tablet or on this computer, when should the bridge run (every
+   morning on a schedule, 05:00-10:00 unless you say otherwise; always; or
+   only when you start it), and, on Windows, may the firewall let the
+   tablet in. Then it prints the address to use and a pairing code, for
+   example `192.168.1.20` and `K7QM-2XWD`.
 2. In CafAI, **Settings > Where the coach runs > Claude on my computer**:
    type the address (`127.0.0.1` when Decaid runs on that same computer) and
    the code, **Save**, then **Test**.
-3. To have it start with the computer: `npm run bridge -- install` (Windows
-   and macOS). `npm run bridge -- doctor` checks Claude Code, its sign-in
-   and a real turn.
+3. `npm run bridge -- setup` changes the answers later; `status` says
+   whether it runs and when it starts next; `doctor` checks Claude Code, its
+   sign-in and a real turn.
 
-The first time it listens, Windows Defender Firewall (or macOS's firewall)
-asks whether Node.js may accept connections: allow it on private networks,
-or the tablet cannot reach it. Claude Code must be new enough for the
+On a schedule the computer must be on (or asleep: the Windows task wakes
+it), and on Windows you must be signed in (a locked screen is fine); the
+bridge keeps the computer awake while it runs and stops itself at the end
+of the window. The first time it listens, Windows Defender Firewall (or
+macOS's firewall) asks whether Node.js may accept connections: allow it on
+private networks, or the tablet cannot reach it (setup checks this). A VPN
+must allow LAN connections. Claude Code must be new enough for the
 model picked in Settings (Opus 5.5 needs 2.1.280): **Test** says so, and
 `claude update` fixes it. The bridge is for your own use with your own
 plan; [bridge/README.md](bridge/README.md) has the details and

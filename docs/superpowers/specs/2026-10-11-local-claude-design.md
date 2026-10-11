@@ -266,6 +266,14 @@ accept that code. Check the code it shows on your computer.".
 
 ## Running it
 
+The first `npm run bridge` in a terminal runs `setup`, which asks about
+Claude Code, where CafAI runs, when the bridge runs (a daily window such as
+05:00-10:00, always, or by hand), keep-awake and, on Windows, the firewall,
+and sets it up (`setup --yes ...` for scripts). A schedule is a Task
+Scheduler task (no admin: 05:00 daily and at sign-in, wakes the PC, runs a
+missed start late), a LaunchAgent with StartCalendarInterval, or printed
+systemd units; the bridge itself starts only inside `--window` and stops at
+its end, and `--keep-awake` holds off idle sleep meanwhile. After setup,
 `npm run bridge` (or `node bridge/cafai-bridge.mjs`) prints the addresses and
 the code to type into CafAI. `start`/`stop`/`status` run it in the background;
 `install`/`uninstall` start it at login (Windows: a Startup-folder shortcut
@@ -280,4 +288,5 @@ networks; macOS: allow incoming connections for node), the same-computer case
 
 A packaged installer or single-file release asset; sweeping the LAN to re-find
 a computer whose address changed (Crema's `discover.ts`); mirroring the
-address to Decaid; Linux autostart (the bridge itself runs on Linux).
+address to Decaid; installing the Linux units by itself (setup prints them;
+the bridge itself runs on Linux); any run on a Mac.

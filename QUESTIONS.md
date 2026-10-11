@@ -192,7 +192,7 @@ you answered are in "Answered" at the end.
    default (and, with `LIVE_ALL_MODELS=1`, every picker id) against the real
    API. Commits: 6904582 (roadmap), 60cb646 (live test).
    *Built since (2026-10-11):* the coach can run on your own Claude Code and
-   plan, on a Mac or a Windows PC, through CafAI Bridge (D130-D136; README,
+   plan, on a Mac or a Windows PC, through CafAI Bridge (D130-D137; README,
    "Claude on your computer").
 
 3. **Are the lever bounds and the starting yields right for your coffee?**

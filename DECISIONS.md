@@ -1649,3 +1649,30 @@ docs/superpowers/specs/2026-10-11-local-claude-design.md.
   the price of a plain console program. Tried on this PC: start, status,
   stop and doctor against the real Claude Code, and install and uninstall
   into a scratch Startup folder; not tried: macOS.
+- **D137. `npm run bridge` sets itself up, and can run every morning in a
+  window.** The first `npm run bridge` in a terminal runs `setup`: Claude
+  Code (found, signed in with a plan, one test turn), where CafAI runs (the
+  network, or this computer only), when the bridge runs (every morning in a
+  window, 05:00-10:00 unless changed, every day or weekdays; always from
+  sign-in; or only by hand), whether to keep the computer awake while it
+  runs, and on Windows the firewall (an inbound rule for Node.js only with
+  the user's UAC approval; a Public network offered as Private, default
+  No) with a note when a VPN is up. `setup --yes ...` does the same from a
+  script; after setup, no command means serve again. A schedule is a
+  Windows Task Scheduler task made without admin (05:00 daily and at
+  sign-in, waking the PC, a missed start run late), a macOS LaunchAgent
+  with StartCalendarInterval, or printed systemd units. Whatever starts it,
+  the bridge runs only inside its `--window` and stops itself at the end;
+  `--keep-awake` holds off idle sleep meanwhile (SetThreadExecutionState,
+  caffeinate, systemd-inhibit; no admin). Why: the owner wants it ready for
+  the morning coffee without a terminal, and checking the window at every
+  start, rather than a second task to stop it, makes a missed 05:00, a
+  sign-in at 07:00 and a 10:00 slept through all come out right. The task
+  runs only while the user is signed in (no stored password, no admin), so
+  after an overnight update restart Windows must sign back in by itself
+  ("Use my sign-in info to automatically finish setting up after an
+  update") or the user signs in once. Tried on this PC (2026-10-11): the
+  real task, run by Task Scheduler with a five-minute window, started the
+  bridge, which outlived the task's own action (Ready, result 0), answered
+  throughout, and stopped itself at the window's end with its keep-awake
+  helper; not tried: a real 05:00 wake, a Mac.

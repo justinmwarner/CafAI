@@ -4,7 +4,7 @@ Things the owner wants next that are not built yet. Each item says why, the
 shape of the work, and what has to be checked first. Decisions that put an
 item here are in [DECISIONS.md](../DECISIONS.md).
 
-## Claude on your computer: what is left (D130-D136)
+## Claude on your computer: what is left (D130-D137)
 
 Built on 2026-10-11 (D56's item): CafAI Bridge (`bridge/`, its README)
 answers the coach through the owner's own Claude Code and plan, on a Mac or
@@ -22,8 +22,12 @@ needs nothing installed beside Claude Code (D130). Left:
   perhaps a packaged app with a tray icon instead of a console.
 - **The address in Decaid's backup**, so a reinstalled skin keeps it (the
   code would stay on the device, like the API key).
-- **Starting at login on Linux** (a systemd user unit; the bridge itself
-  runs there).
+- **Installing the systemd units on Linux by itself** (setup prints the
+  service and timer today; the bridge itself runs there), and waking a Mac
+  for the schedule without the printed `sudo pmset` line.
+- **Tried on a Mac**: the LaunchAgent, its calendar start, `caffeinate`
+  and the sign-in under launchd are written from the documentation and
+  unit-tested, never run.
 - **A morning of dial-in on the plan**: how much of the 5-hour window a
   session of Opus 5.5 turns uses, measured on a real machine.
 
