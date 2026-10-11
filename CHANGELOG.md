@@ -9,7 +9,9 @@ workflow checks against it. Settings > About shows the version you run.
 ## 0.1.0 (first release)
 
 The first public version: a complete skin for Decaid with an AI dial-in
-coach.
+coach. It has passed every check against Decaid 0.8.8's simulated machine
+and scale, but has not yet been used on a real Decent machine (see the
+README's Status).
 
 ### The coach
 

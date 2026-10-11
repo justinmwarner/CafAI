@@ -11,6 +11,8 @@ const PORT = Number(process.env.SCREENSHOTS_PORT ?? 4176);
 
 /** What every scene shares: the same language, time zone and colour scheme on any computer. */
 const STABLE = { locale: 'en-US', timezoneId: 'UTC', colorScheme: 'dark', hasTouch: true } as const;
+/** Desktop Chrome on a phone's own screen, as e2e's phone projects (playwright.config.ts). */
+const PHONE = { ...devices['Desktop Chrome'], screen: { width: 390, height: 844 } };
 
 export default defineConfig({
   testDir: './e2e/screenshots',
@@ -26,6 +28,9 @@ export default defineConfig({
   use: {
     baseURL: `http://127.0.0.1:${PORT}/`,
     trace: 'retain-on-failure',
+    // Whole-tile raster, sRGB and greyscale text, so the edges of what changed on screen are drawn
+    // the same way every run (without these a few edge pixels differ by antialiasing noise).
+    launchOptions: { args: ['--disable-partial-raster', '--force-color-profile=srgb', '--disable-lcd-text'] },
   },
   projects: [
     {
@@ -37,8 +42,7 @@ export default defineConfig({
       // An iPhone-sized phone upright, as e2e's phone-390x844 project.
       name: 'phone',
       use: {
-        ...devices['Desktop Chrome'],
-        screen: { width: 390, height: 844 },
+        ...PHONE,
         viewport: { width: 390, height: 844 },
         deviceScaleFactor: 2,
         isMobile: true,

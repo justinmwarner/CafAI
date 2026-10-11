@@ -366,17 +366,24 @@ troubleshooting.
 
 ## Troubleshooting
 
-- **"Can't reach Decaid"** in the alert under the top bar: CafAI gets no
-  answer from Decaid on port 8080 of the page's host. Inside Decaid, restart
-  Decaid. In a browser, open CafAI from the tablet's address
-  (`http://<tablet-ip>:3000`); on a development computer, see
-  [Against a real tablet](#develop) for `localStorage.reaHostname`.
-- **The machine or the scale is not connected.** Use the alert's **Connect
-  DE1** or **Connect scale**. When the alert sends you to Decaid's scan
-  screen, Decaid has to choose the device: connect it there.
+- **"Can't reach Decaid. Trying again…"** (the alert under the top bar):
+  CafAI gets no answer from Decaid's API on port 8080 of the address the
+  page came from, and keeps trying. Check that Decaid is running; in a
+  browser, open CafAI from the tablet's address (`http://<tablet-ip>:3000`).
+  On a development computer, see "Against a real tablet" under
+  [Develop](#develop) for `localStorage.reaHostname`.
+- **"Not connected. Wake the DE1 and tap Connect DE1, or pair it in
+  Decaid's settings."** and **"The scale is not connected. Switch it on
+  and tap Connect scale, or pair it in Decaid's settings."** Do what they
+  say. When the alert sends you to Decaid's scan screen instead, Decaid has
+  to choose the device: connect it there.
 - **Shots run past the target weight.** Decaid stops a shot at its target
-  weight only with a scale connected and with gateway mode Disabled or
-  Tracking; in Full, the alert's **Let Decaid stop shots** sets Tracking.
+  weight only with a scale connected, and not in gateway mode Full. In
+  Full the alert says "Decaid is set to leave stopping shots to the skin,
+  and CafAI does not stop them, so shots will not stop at the target
+  weight.", and **Let Decaid stop shots** sets Tracking.
+- **"Refill the water tank to continue."** or **"The machine reports an
+  error. Check it first."**: the machine says so; see to the machine.
 - **The key is gone after a Decaid update.** Decaid clears a skin's browser
   storage when it updates. Your bags come back from Decaid's backup by
   themselves, and the key does too if **Keep my API key in Decaid** is on;
@@ -385,10 +392,13 @@ troubleshooting.
   accept your API key. Check it in Settings.", "Anthropic is overloaded
   right now. Try again in a minute.") and has **Retry**. Check the key in
   Settings and that the tablet reaches the internet.
-- **CafAI warns about the engine, or does not start, on an old tablet.**
-  Decaid shows skins in the tablet's Android System WebView; CafAI needs
-  Chromium 91 or newer. Updating Android System WebView fixes it (Decaid's
-  README says the same for older Teclast tablets).
+- **"CafAI could not start."** with **Exit to Decaid** and **Decaid
+  settings**: exit to Decaid and open CafAI again (it can happen while
+  Decaid replaces the skin's files during an update). When the page says
+  instead "CafAI could not start on this device's browser engine" and "It
+  needs Chromium 91 or newer", the device's WebView is older than CafAI
+  supports: on Android, update the Android System WebView (Decaid's README
+  recommends that for display problems on older Teclast tablets).
 - **Settings > About lists things Decaid sent that CafAI did not expect.**
   A Decaid newer than 0.8.8 changed something CafAI reads. Tap **Copy
   report** and paste it into a [bug report](https://github.com/justinmwarner/CafAI/issues/new/choose):

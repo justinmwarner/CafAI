@@ -44,6 +44,9 @@ async function snap(page: Page, name: string): Promise<void> {
   await page.evaluate(async () => {
     await document.fonts.ready;
   });
+  // The pointer stays where the last tap was, and whatever moved under it since would show its
+  // hover colour, or not, by timing: park it on the top bar's corner, over the name, which has none.
+  await page.mouse.move(0, 0);
   // Let a scroll, a route change or the graph's canvas settle before the picture.
   await page.waitForTimeout(500);
   const path = `${OUT_DIR}/${test.info().project.name}-${name}.png`;
@@ -62,6 +65,15 @@ test('coach: a taste answered, and the one change the coach proposes', async ({ 
   await expect(changes.last()).toContainText('Kiambu AA v5');
   await expect(changes.last().getByTestId(TID.diffConfirm)).toBeVisible();
   await coachIdle(page);
+  // The chat follows the newest message by itself, but at the mock's 25x pace it sometimes stops
+  // following before the card lands; end at the thread's end, as a reader would (followNewest.ts
+  // resumes following there). The scroller is x-chat's, as ChatSurface.tsx finds it.
+  await page
+    .getByTestId(TID.chat)
+    .locator('.MuiChatMessageList-scroller')
+    .evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
   await snap(page, 'coach');
 });
 

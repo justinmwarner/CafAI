@@ -53,7 +53,9 @@ GPL-3.0-or-later
   - Not part of the skin: contract/decaid/spec/ holds Decaid's REST and
     WebSocket specs verbatim at v0.8.8 (aab5f93), from which the types in
     contract/decaid/generated/ are generated; src/coach/__fixtures__/ holds
-    two of its bundled profiles as test vectors.
+    two of its bundled profiles as test vectors; and the mock Decaid in
+    mock/decaid/ reproduces its API's behaviour, with a second port of
+    ProfileHash (mock/decaid/profiles.ts).
 
 -------------------------------------------------------------------------------
 Libraries

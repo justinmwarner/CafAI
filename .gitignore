@@ -21,6 +21,11 @@ tools/chrome91/out/
 /crema/
 /.ref/
 
+# local tool and agent state, never shared
+/.claude/settings.local.json
+/.claude/worktrees/
+/nimbalyst-local/
+
 # editor / OS
 .DS_Store
 Thumbs.db
