@@ -12,57 +12,94 @@ import { sampleSummary } from '../testing/fixtures.ts';
 import { ShotCard } from './ShotCard.tsx';
 import { Notice } from './Notice.tsx';
 
-const stars = () => screen.getAllByRole('radio');
-const checked = () => stars().map((star) => star.getAttribute('aria-checked'));
+const words = () => screen.getAllByRole('radio');
+const checked = () => words().map((word) => word.getAttribute('aria-checked'));
+const question = (name: string) => screen.getByRole('radiogroup', { name });
 
-describe('ShotCard rating', () => {
-  it('asks how much the shot was enjoyed, with one named target per star', async () => {
+describe('ShotCard rating (D126)', () => {
+  it('asks how the shot compared with the one before it, in five words, each one named target', async () => {
     const onRate = vi.fn();
-    renderThemed(<ShotCard summary={sampleSummary()} onRate={onRate} />);
-    const group = screen.getByRole('radiogroup', { name: 'How much did you enjoy it?' });
-    expect(within(group).getAllByRole('radio').map((star) => star.getAttribute('aria-label'))).toEqual([
-      'Rate 1 out of 5',
-      'Rate 2 out of 5',
-      'Rate 3 out of 5',
-      'Rate 4 out of 5',
-      'Rate 5 out of 5',
+    renderThemed(<ShotCard summary={sampleSummary()} baseline={{ kind: 'previous', shotId: 'shot-0' }} onRate={onRate} />);
+    const group = question('Compared with your previous shot?');
+    expect(group).toHaveAttribute('data-testid', TID.shotRating);
+    expect(within(group).getAllByRole('radio').map((word) => word.textContent)).toEqual([
+      'Much worse',
+      'Worse',
+      'About the same',
+      'Better',
+      'Much better',
     ]);
     expect(checked()).toEqual(['false', 'false', 'false', 'false', 'false']);
-    await userEvent.click(screen.getByRole('radio', { name: 'Rate 4 out of 5' }));
-    expect(onRate).toHaveBeenCalledWith(4);
+    // Words only: nothing on the card reads as a score.
+    expect(screen.getByTestId(TID.shotCard).querySelector('svg[data-testid*="Star"]')).toBeNull();
+    await userEvent.click(screen.getByRole('radio', { name: 'Better' }));
+    expect(onRate).toHaveBeenCalledWith('better');
   });
 
-  it('shows the rating it has, and lets a re-tap change it', async () => {
-    const onRate = vi.fn();
-    renderThemed(<ShotCard summary={sampleSummary()} stars={3} onRate={onRate} />);
-    expect(checked()).toEqual(['false', 'false', 'true', 'false', 'false']);
-    await userEvent.click(screen.getByRole('radio', { name: 'Rate 5 out of 5' }));
-    expect(onRate).toHaveBeenCalledWith(5);
+  it("names what the shot is compared with: another coffee's last shot, or the coffee usually enjoyed", () => {
+    const card = (baseline: Parameters<typeof ShotCard>[0]['baseline']) =>
+      renderThemed(<ShotCard summary={sampleSummary()} baseline={baseline} onRate={vi.fn()} />);
+    let view = card({ kind: 'otherCoffee', shotId: 'shot-r', coffee: 'Red Brick' });
+    expect(question('Compared with your last shot of Red Brick?')).toBeInTheDocument();
+    view.unmount();
+    view = card({ kind: 'otherCoffee', shotId: 'shot-r', coffee: null });
+    expect(question('Compared with your last shot?')).toBeInTheDocument();
+    view.unmount();
+    view = card({ kind: 'usual' });
+    expect(question('Compared with the coffee you usually enjoy?')).toBeInTheDocument();
+    view.unmount();
+    card(null);
+    expect(question('Compared with your previous shot?')).toBeInTheDocument();
   });
 
-  it('moves the rating with the arrow keys, from the one star that takes focus', async () => {
+  it('shows the answer it has, and lets a re-tap change it', async () => {
     const onRate = vi.fn();
-    renderThemed(<ShotCard summary={sampleSummary()} stars={3} onRate={onRate} />);
-    expect(stars().map((star) => star.tabIndex)).toEqual([-1, -1, 0, -1, -1]);
-    screen.getByRole('radio', { name: 'Rate 3 out of 5' }).focus();
+    renderThemed(<ShotCard summary={sampleSummary()} verdict="worse" onRate={onRate} />);
+    expect(checked()).toEqual(['false', 'true', 'false', 'false', 'false']);
+    await userEvent.click(screen.getByRole('radio', { name: 'Much better' }));
+    expect(onRate).toHaveBeenCalledWith('muchBetter');
+  });
+
+  it('moves the answer with the arrow keys, from the one word that takes focus', async () => {
+    const onRate = vi.fn();
+    const { rerender } = renderThemed(<ShotCard summary={sampleSummary()} onRate={onRate} />);
+    // Unanswered, About the same takes the Tab stop, and an arrow moves from it.
+    expect(words().map((word) => word.tabIndex)).toEqual([-1, -1, 0, -1, -1]);
+    words()[2]!.focus();
     await userEvent.keyboard('{ArrowRight}');
-    expect(onRate).toHaveBeenLastCalledWith(4);
+    expect(onRate).toHaveBeenLastCalledWith('better');
     await userEvent.keyboard('{ArrowLeft}');
-    expect(onRate).toHaveBeenLastCalledWith(2);
+    expect(onRate).toHaveBeenLastCalledWith('worse');
+
+    rerender(<ShotCard summary={sampleSummary()} verdict="muchBetter" onRate={onRate} />);
+    expect(words().map((word) => word.tabIndex)).toEqual([-1, -1, -1, -1, 0]);
+    words()[4]!.focus();
+    onRate.mockClear();
+    await userEvent.keyboard('{ArrowUp}');
+    expect(onRate).not.toHaveBeenCalled();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(onRate).toHaveBeenLastCalledWith('better');
   });
 
   it('blocks a rating while the coach is working', () => {
     const onRate = vi.fn();
-    renderThemed(<ShotCard summary={sampleSummary()} stars={2} onRate={onRate} disabled />);
-    for (const star of stars()) expect(star).toBeDisabled();
-    fireEvent.click(screen.getByRole('radio', { name: 'Rate 4 out of 5' }));
+    renderThemed(<ShotCard summary={sampleSummary()} verdict="worse" onRate={onRate} disabled />);
+    for (const word of words()) expect(word).toBeDisabled();
+    fireEvent.click(screen.getByRole('radio', { name: 'Better' }));
     expect(onRate).not.toHaveBeenCalled();
     expect(checked()).toEqual(['false', 'true', 'false', 'false', 'false']);
   });
 
-  it('shows no rating where nobody can rate', () => {
-    renderThemed(<ShotCard summary={sampleSummary()} />);
+  it('says the stars a shot was given before shots were compared, and asks nothing more', () => {
+    renderThemed(<ShotCard summary={sampleSummary()} stars={4} onRate={vi.fn()} />);
+    expect(screen.getByText('You rated it 4 of 5 stars.')).toBeInTheDocument();
     expect(screen.queryByRole('radiogroup')).toBeNull();
+  });
+
+  it('shows no rating where nobody can rate', () => {
+    renderThemed(<ShotCard summary={sampleSummary()} stars={4} />);
+    expect(screen.queryByRole('radiogroup')).toBeNull();
+    expect(screen.queryByText(/stars/)).toBeNull();
   });
 });
 

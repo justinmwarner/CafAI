@@ -5,8 +5,9 @@
  * from the engine itself; only the coach's turns are written here, by hand.
  *
  * Two bags. Santos (Brazil, natural, medium-dark), a day ago: Gentle and
- * Sweet, one 5-star shot answered "Balanced, sweet", and the coach's keep
- * card confirmed, so History says it was kept. Then Kiambu AA (Kenya,
+ * Sweet, one shot rated better than the coffee usually enjoyed (D126) and
+ * answered "Balanced, sweet", and the coach's keep card confirmed, so
+ * History says it was kept. Then Kiambu AA (Kenya,
  * washed, light): Blooming Espresso over four shots, with a hotter v2, a
  * by-hand grind move, a shot that ran another profile, a slower pour
  * declined, re-offered, applied and undone, a middle way as v4, and the last
@@ -30,6 +31,7 @@ import { TOOL, type ProposeAdjustment, type ToolName } from '../../src/coach/con
 import { resolveGrindMove } from '../../src/coach/grinder.ts';
 import { pourTime } from '../../src/coach/summary/pourClock.ts';
 import type { ShotCompletedPayload, TemplatePickedPayload, AdjustmentResultPayload } from '../../src/app/engine/protocol.ts';
+import type { ShotVerdict } from '../../src/app/types.ts';
 import type { LlmMessage } from '../../src/llm/types.ts';
 import { MOCK_GRINDER_IDS } from '../decaid/grinders.ts';
 import type { ShotSpec } from './shots.ts';
@@ -59,8 +61,8 @@ export type StoryStep =
   /** A shot of whatever the machine runs that is not the bag's version: CafAI says so and offers Retry. */
   | (At & { kind: 'strayShot'; shot: ShotSpec })
   | (At & { kind: 'retry' })
-  /** Stars on the latest shot card. */
-  | (At & { kind: 'rate'; stars: number })
+  /** The verdict on the latest shot card: how it compared with the shot its card names (D126). */
+  | (At & { kind: 'rate'; verdict: ShotVerdict })
   | (At & { kind: 'answer'; selected: string[]; other: string | null; coach: CoachReply[] })
   | (At & { kind: 'confirm'; coach: CoachReply[] })
   | (At & { kind: 'decline'; coach: CoachReply[] })
@@ -532,7 +534,7 @@ export const STORY: readonly StoryStep[] = [
   },
   { kind: 'pick', minutesAgo: 26.5 * HOUR - 2, templateId: 'gentle-and-sweet', coach: [onTheMachine] },
   { kind: 'shot', minutesAgo: 26.5 * HOUR - 7, shot: SHOTS.santos, coach: [santosShot] },
-  { kind: 'rate', minutesAgo: 26.5 * HOUR - 8, stars: 5 },
+  { kind: 'rate', minutesAgo: 26.5 * HOUR - 8, verdict: 'better' },
   { kind: 'answer', minutesAgo: 26.5 * HOUR - 8.5, selected: ['Balanced, sweet'], other: null, coach: [santosKeep] },
   { kind: 'confirm', minutesAgo: 26.5 * HOUR - 9, coach: [santosKept] },
 
@@ -546,11 +548,11 @@ export const STORY: readonly StoryStep[] = [
   },
   { kind: 'pick', minutesAgo: 24 * HOUR - 2, templateId: 'blooming-espresso', coach: [onTheMachine] },
   { kind: 'shot', minutesAgo: 24 * HOUR - 8, shot: SHOTS.kiambu1, coach: [firstShot] },
-  { kind: 'rate', minutesAgo: 24 * HOUR - 9.5, stars: 2 },
+  { kind: 'rate', minutesAgo: 24 * HOUR - 9.5, verdict: 'muchWorse' },
   { kind: 'answer', minutesAgo: 24 * HOUR - 10, selected: ['Sour / sharp'], other: null, coach: [lookAtPressure, hotter] },
   { kind: 'confirm', minutesAgo: 24 * HOUR - 11, coach: [pullAnother] },
   { kind: 'shot', minutesAgo: 24 * HOUR - 19, shot: SHOTS.kiambu2, coach: [unevenPuck] },
-  { kind: 'rate', minutesAgo: 24 * HOUR - 20.5, stars: 3 },
+  { kind: 'rate', minutesAgo: 24 * HOUR - 20.5, verdict: 'better' },
   { kind: 'answer', minutesAgo: 24 * HOUR - 21, selected: ['Pinholes', 'Wet patches'], other: null, coach: [grindFiner] },
   { kind: 'confirm', minutesAgo: 24 * HOUR - 22, coach: [afterGrind] },
 
@@ -559,7 +561,7 @@ export const STORY: readonly StoryStep[] = [
   { kind: 'strayShot', minutesAgo: 50, shot: SHOTS.stray },
   { kind: 'retry', minutesAgo: 47 },
   { kind: 'shot', minutesAgo: 38, shot: SHOTS.kiambu3, coach: [betterShot] },
-  { kind: 'rate', minutesAgo: 36.5, stars: 4 },
+  { kind: 'rate', minutesAgo: 36.5, verdict: 'better' },
   { kind: 'answer', minutesAgo: 36, selected: ['Other'], other: 'Sweeter, but a little thin', coach: [thin] },
   { kind: 'decline', minutesAgo: 35, coach: [keepV2] },
   { kind: 'say', minutesAgo: 33, text: "Actually, let's try the slower pour after all.", coach: [offerAgain] },

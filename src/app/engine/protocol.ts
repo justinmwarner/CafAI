@@ -7,6 +7,7 @@
 import { EVENT, type SaveBagDetails } from '../../coach/contract.ts';
 import type { GrinderInfo, ShotSummary } from '../../coach/types.ts';
 import type { ContentBlock, LlmMessage, TextBlock, ToolResultBlock, ToolUseBlock } from '../../llm/types.ts';
+import type { ShotBaseline } from '../types.ts';
 
 export function textBlock(text: string): TextBlock {
   return { type: 'text', text };
@@ -141,6 +142,22 @@ export function summaryForModel(summary: ShotSummary): Omit<ShotSummary, 'series
 
 export function shotCompletedBlock(payload: ShotCompletedPayload): TextBlock {
   return textBlock(`${EVENT.shotCompleted}\n${JSON.stringify(payload)}`);
+}
+
+/**
+ * The barista's verdict on a shot (D126): the word they tapped on its card,
+ * in lower case, and what the shot was compared with. It goes with the next
+ * user turn after the verdict was given or changed, since the shot's own
+ * event left before the barista could answer.
+ */
+export interface ShotRatedPayload {
+  shotId: string;
+  verdict: string;
+  comparedWith: ShotBaseline;
+}
+
+export function shotRatedBlock(payload: ShotRatedPayload): TextBlock {
+  return textBlock(`${EVENT.shotRated}\n${JSON.stringify(payload)}`);
 }
 
 export function undoBlock(payload: { from: number; to: number; title: string }): TextBlock {

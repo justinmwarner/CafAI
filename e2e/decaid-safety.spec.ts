@@ -114,21 +114,33 @@ test('Keep my API key in Decaid copies the key to its own namespace while on, an
   await expect.poll(() => keyCopy(page)).toBeNull();
 });
 
-test('a Decaid on the 0-100 rating scale gets the stars x 20, after one probe with a made-up shot', async ({ page }) => {
+test('a Decaid on the 0-100 rating scale gets ten times the running score, after one probe with a made-up shot', async ({ page }) => {
   await openAppWithSwitches(page, { mockEnjoyment: '100' });
   await saveApiKey(page);
   await pullFirstShot(page);
   const shotId = (await latestShot(page))!.id;
   await page.getByTestId(TID.optionChip('Sour / sharp')).click();
 
-  // The stars wait until the coach is done (busy blocks them), then 4 stars = enjoyment 80 of 100.
+  // The verdict waits until the coach is done (busy blocks it).
   await expect(page.getByTestId(TID.diffCard).last()).toBeVisible();
-  const four = page.getByTestId(TID.shotCard).last().getByRole('radio', { name: 'Rate 4 out of 5' });
-  await expect(four).toBeEnabled();
-  await four.click();
-  await expect(four).toHaveAttribute('aria-checked', 'true');
-  await expect.poll(async () => (await latestShot(page))?.annotations?.enjoyment).toBe(80);
-  expect((await latestShot(page))?.annotations?.extras?.cafai).toMatchObject({ stars: 4 });
+  const card = page.getByTestId(TID.shotCard).last();
+  const worse = card.getByRole('radio', { name: 'Worse', exact: true });
+  await expect(worse).toBeEnabled();
+  // The five words sit in one row inside the card, on a phone too, each a 48 px target (D126).
+  const cardBox = (await card.boundingBox())!;
+  const rowBox = (await card.getByTestId(TID.shotRating).boundingBox())!;
+  expect(rowBox.x).toBeGreaterThanOrEqual(cardBox.x);
+  expect(rowBox.x + rowBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width + 0.5);
+  const words = await Promise.all((await card.getByRole('radio').all()).map(async (word) => (await word.boundingBox())!));
+  expect(words).toHaveLength(5);
+  expect(Math.min(...words.map((word) => word.height))).toBeGreaterThanOrEqual(47.5);
+  expect(Math.max(...words.map((word) => word.y)) - Math.min(...words.map((word) => word.y))).toBeLessThan(1);
+
+  // A bag's first rated shot is the middle of the scale: enjoyment 50 of 100.
+  await worse.click();
+  await expect(worse).toHaveAttribute('aria-checked', 'true');
+  await expect.poll(async () => (await latestShot(page))?.annotations?.enjoyment).toBe(50);
+  expect((await latestShot(page))?.annotations?.extras?.cafai).toMatchObject({ verdict: 'worse', comparedWith: { kind: 'usual' } });
 
   // The scale came from one probe: enjoyment 11 for a shot that does not exist, which 0.8.6 answers 404 instead of 400.
   const probes = (await decaidRequests(page)).filter(

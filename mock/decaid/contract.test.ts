@@ -452,8 +452,10 @@ describe('the mock against the spec', () => {
       const shot = await attempt(() => client.getShot(latest.id));
       const line = cafaiNotesLine('Sweet, a little sharp', 'Kiambu AA v1');
       const espressoNotes = mergeNotes(shot?.annotations?.espressoNotes, null, line);
+      // As CafAI writes a verdict (D126): the running score, and the words with what they compared.
+      const rating = { verdict: 'better', comparedWith: { kind: 'previous', shotId: 'shot-0' } };
       await attempt(() =>
-        client.updateShot(latest.id, { annotations: { espressoNotes, enjoyment: 8, extras: { [EXTRAS_KEY]: { notes: line, stars: 4 } } } }),
+        client.updateShot(latest.id, { annotations: { espressoNotes, enjoyment: 7, extras: { [EXTRAS_KEY]: { notes: line, ...rating } } } }),
       );
     }
     await attempt(() => client.probeEnjoymentScale());

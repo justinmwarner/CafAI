@@ -27,7 +27,7 @@ import {
 } from '../../api/types.ts';
 import { LlmError, type ContentBlock, type LlmMessage, type PendingUiCall, type RunResult, type ToolResultBlock } from '../../llm/types.ts';
 import type { Bag } from '../../storage/types.ts';
-import type { CoachUiPart } from '../types.ts';
+import type { CoachUiPart, ShotVerdict } from '../types.ts';
 import { createFakeStorage, createFakeTelemetry, SAMPLE_WORKFLOW, type FakeStorage, type FakeTelemetry } from '../../ui/testing/fakeServices.ts';
 
 // ---------------------------------------------------------------------------
@@ -797,6 +797,35 @@ describe('coach engine', () => {
     telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' });
     await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
   }
+
+  /** Another shot in the open bag, credited, with the coach asking how it tasted. */
+  async function pullAnother(shotId: string) {
+    scripts.push(() => [text('Again?'), askTaste]);
+    telemetry.emitShot({ type: 'finished', shotId, stopReason: 'targetWeight' });
+    await vi.waitFor(() => expect(cardOf(shotId)).toBeDefined());
+    await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+  }
+
+  type ShotPart = Extract<CoachUiPart, { kind: 'shot' }>;
+  const cardOf = (shotId: string) => allParts().find((p): p is ShotPart => p.kind === 'shot' && p.shotId === shotId);
+
+  /**
+   * The open bag's chat as an older CafAI stored it (each shot card changed
+   * by `change`), read again: another bag and back, since a new engine would
+   * also start a new fake Decaid.
+   */
+  async function asStoredBefore(change: (part: ShotPart) => ShotPart) {
+    const bag = engine.getState().activeBag!;
+    const stored = (await storage.conversations.get(bag.conversationId))!;
+    const uiMessages = stored.uiMessages.map((m) => ({ ...m, parts: m.parts.map((p) => (p.kind === 'shot' ? change(p) : p)) }));
+    await storage.conversations.put({ ...stored, uiMessages });
+    await engine.newBag();
+    await engine.selectBag(bag.id);
+  }
+
+  /** A card from before D126: no baseline, and the stars it was given, if any. */
+  const before = (stars?: number) => ({ baseline: _baseline, rating: _rating, ...part }: ShotPart): ShotPart =>
+    stars === undefined ? part : { ...part, stars };
 
   async function throughProposal() {
     await throughShot();
@@ -1869,7 +1898,7 @@ describe('coach engine', () => {
   });
 
   // -------------------------------------------------------------------------
-  // D61: taste feedback and the star rating in Decaid's shot record
+  // D61: taste feedback (and the rating, D126) in Decaid's shot record
   // -------------------------------------------------------------------------
 
   describe("writing to Decaid's shot record (D61)", () => {
@@ -1941,40 +1970,12 @@ describe('coach engine', () => {
       expect(JSON.stringify(requests)).not.toContain('sk-ant-api03');
     });
 
-    it('rates a shot: enjoyment is stars x 2, the stars stay on the card, and the coach hears nothing', async () => {
-      await throughShot();
-      const turns = requests.length;
-      await engine.rateShot('shot-1', 4);
-      expect(allParts().find((p) => p.kind === 'shot')).toMatchObject({ shotId: 'shot-1', stars: 4 });
-      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 8, extras: { cafai: { stars: 4 } } }));
-
-      await engine.rateShot('shot-1', 2);
-      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 4, extras: { cafai: { stars: 2 } } }));
-      expect(requests).toHaveLength(turns);
-
-      engine.dispose();
-      engine = build();
-      await engine.start();
-      expect(allParts().find((p) => p.kind === 'shot')).toMatchObject({ stars: 2 });
-    });
-
-    it('ignores a rating outside one to five stars, or for a shot not in the chat', async () => {
-      await throughShot();
-      await engine.rateShot('shot-1', 0);
-      await engine.rateShot('shot-1', 6);
-      await engine.rateShot('shot-1', 2.5);
-      await engine.rateShot('shot-elsewhere', 3);
-      await drain();
-      expect(callsOf('updateShot')).toEqual([]);
-      expect(allParts().find((p) => p.kind === 'shot')).not.toHaveProperty('stars');
-    });
-
     it('sends a shot write Decaid could not take again, with everything said so far', async () => {
       await throughShot();
       machine.failShotUpdates = 2;
       await answerTaste(['Sour']);
       await vi.waitFor(() => expect(machine.failShotUpdates).toBe(1));
-      await engine.rateShot('shot-1', 5);
+      await engine.rateShot('shot-1', 'better');
       await vi.waitFor(() => expect(machine.failShotUpdates).toBe(0));
       expect(machine.annotations.get('shot-1')).toBeUndefined();
 
@@ -1982,11 +1983,172 @@ describe('coach engine', () => {
       await vi.waitFor(() =>
         expect(machine.annotations.get('shot-1')).toMatchObject({
           espressoNotes: 'Taste: Sour. Kiambu AA v1 (CafAI)',
-          enjoyment: 10,
-          extras: { cafai: { selected: ['Sour'], stars: 5 } },
+          enjoyment: 5,
+          extras: { cafai: { selected: ['Sour'], verdict: 'better' } },
         }),
       );
       expect(callsOf('updateShot')).toHaveLength(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // D126: the shot compared with the one before it, in words
+  // -------------------------------------------------------------------------
+
+  describe('the verdict on a shot (D126)', () => {
+    it('rates a shot against what its card names: the words stay on the card, enjoyment starts at the middle, and a re-tap changes it', async () => {
+      await throughShot();
+      const turns = requests.length;
+      // The very first shot: there is only the coffee the barista usually enjoys to compare it with.
+      expect(cardOf('shot-1')).toMatchObject({ baseline: { kind: 'usual' } });
+      await engine.rateShot('shot-1', 'better');
+      expect(cardOf('shot-1')).toMatchObject({ baseline: { kind: 'usual' }, rating: { verdict: 'better', score: 5 } });
+      await vi.waitFor(() =>
+        expect(machine.annotations.get('shot-1')).toMatchObject({
+          enjoyment: 5,
+          extras: { cafai: { verdict: 'better', comparedWith: { kind: 'usual' } } },
+        }),
+      );
+
+      await engine.rateShot('shot-1', 'muchWorse');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 5, extras: { cafai: { verdict: 'muchWorse' } } }));
+      // A rating asks nothing of the coach: it hears the verdict with the next turn.
+      expect(requests).toHaveLength(turns);
+
+      engine.dispose();
+      engine = build();
+      await engine.start();
+      expect(cardOf('shot-1')).toMatchObject({ baseline: { kind: 'usual' }, rating: { verdict: 'muchWorse', score: 5 } });
+    });
+
+    it('keeps a running score in the bag: the shot compared with plus a step per word, a changed answer moving only its own', async () => {
+      await throughShot();
+      await engine.rateShot('shot-1', 'better');
+      await pullAnother('shot-2');
+      expect(cardOf('shot-2')!.baseline).toEqual({ kind: 'previous', shotId: 'shot-1' });
+      await engine.rateShot('shot-2', 'muchBetter');
+      await vi.waitFor(() =>
+        expect(machine.annotations.get('shot-2')).toMatchObject({
+          enjoyment: 7,
+          extras: { cafai: { verdict: 'muchBetter', comparedWith: { kind: 'previous', shotId: 'shot-1' } } },
+        }),
+      );
+      await engine.rateShot('shot-2', 'worse');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-2')).toMatchObject({ enjoyment: 4 }));
+
+      // A shot nobody rated carries the score before it.
+      await pullAnother('shot-3');
+      await pullAnother('shot-4');
+      await engine.rateShot('shot-4', 'muchBetter');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-4')).toMatchObject({ enjoyment: 6 }));
+      expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 5 });
+      expect(machine.annotations.has('shot-3')).toBe(false);
+    });
+
+    it("compares a bag's first shot with the last shot of another coffee, and starts its score at the middle", async () => {
+      await throughShot();
+      await engine.rateShot('shot-1', 'muchBetter');
+      nowMs += 60_000;
+      await anotherBag('Red Brick', 'londonium');
+      await pullAnother('shot-2');
+      expect(cardOf('shot-2')!.baseline).toEqual({ kind: 'otherCoffee', shotId: 'shot-1', coffee: 'Kiambu AA' });
+      nowMs += 60_000;
+      await pullAnother('shot-3');
+      expect(cardOf('shot-3')!.baseline).toEqual({ kind: 'previous', shotId: 'shot-2' });
+
+      await engine.rateShot('shot-2', 'muchWorse');
+      await vi.waitFor(() =>
+        expect(machine.annotations.get('shot-2')).toMatchObject({
+          enjoyment: 5,
+          extras: { cafai: { verdict: 'muchWorse', comparedWith: { kind: 'otherCoffee', shotId: 'shot-1', coffee: 'Kiambu AA' } } },
+        }),
+      );
+      await engine.rateShot('shot-3', 'better');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-3')).toMatchObject({ enjoyment: 6 }));
+    });
+
+    it('leaves stars given before shots were compared as they were, and counts them as twice their number for the next shot', async () => {
+      await throughShot();
+      await asStoredBefore(before(4));
+      expect(cardOf('shot-1')).toMatchObject({ stars: 4 });
+      expect(cardOf('shot-1')).not.toHaveProperty('baseline');
+      await engine.rateShot('shot-1', 'better');
+      await drain();
+      expect(cardOf('shot-1')).not.toHaveProperty('rating');
+      expect(callsOf('updateShot')).toEqual([]);
+
+      await pullAnother('shot-2');
+      await engine.rateShot('shot-2', 'better');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-2')).toMatchObject({ enjoyment: 9 }));
+      expect(machine.annotations.has('shot-1')).toBe(false);
+    });
+
+    it('gives the cards of a chat from before shots were compared what they compare with when it opens', async () => {
+      await throughShot();
+      await pullAnother('shot-2');
+      await asStoredBefore(before());
+      expect(cardOf('shot-1')!.baseline).toEqual({ kind: 'usual' });
+      expect(cardOf('shot-2')!.baseline).toEqual({ kind: 'previous', shotId: 'shot-1' });
+    });
+
+    it('tells the coach the verdict with its next turn, once, and again when it changes', async () => {
+      await throughShot();
+      await engine.rateShot('shot-1', 'better');
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      const answer = lastUserTurn(requests);
+      expect(answer).toHaveLength(2);
+      expect(answer[0]).toMatchObject({ type: 'tool_result', tool_use_id: 't-ask' });
+      expect(answer[1]).toEqual(text('[event:shot_rated]\n{"shotId":"shot-1","verdict":"better","comparedWith":{"kind":"usual"}}'));
+
+      scripts.push(() => [text('Sure.')]);
+      await engine.sendText('Anything else?');
+      expect(lastUserTurn(requests)).toEqual([text('Anything else?')]);
+
+      await engine.rateShot('shot-1', 'muchWorse');
+      scripts.push(() => [text('Noted.')]);
+      await engine.sendText('Hmm.');
+      expect(lastUserTurn(requests)).toEqual([
+        text('[event:shot_rated]\n{"shotId":"shot-1","verdict":"much worse","comparedWith":{"kind":"usual"}}'),
+        text('Hmm.'),
+      ]);
+    });
+
+    it('still tells a verdict given just before a reload', async () => {
+      await throughShot();
+      await engine.rateShot('shot-1', 'worse');
+      engine.dispose();
+      engine = build();
+      await engine.start();
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      expect(lastUserTurn(requests).filter((block) => block.type === 'text')).toEqual([
+        text('[event:shot_rated]\n{"shotId":"shot-1","verdict":"worse","comparedWith":{"kind":"usual"}}'),
+      ]);
+    });
+
+    it("tells a verdict given before the next shot ahead of that shot's event", async () => {
+      await throughShot();
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      await engine.rateShot('shot-1', 'same');
+      await pullAnother('shot-2');
+      expect(lastUserTurn(requests)[0]).toEqual(
+        text('[event:shot_rated]\n{"shotId":"shot-1","verdict":"about the same","comparedWith":{"kind":"usual"}}'),
+      );
+      expect(lastUserTurn(requests).map((block) => (block.type === 'text' ? block.text.split('\n')[0] : block.type))).toEqual([
+        '[event:shot_rated]',
+        '[event:shot_completed]',
+      ]);
+    });
+
+    it('ignores a verdict that is not one of the five words, or a shot not in the chat', async () => {
+      await throughShot();
+      await engine.rateShot('shot-1', 'great' as ShotVerdict);
+      await engine.rateShot('shot-elsewhere', 'better');
+      await drain();
+      expect(callsOf('updateShot')).toEqual([]);
+      expect(cardOf('shot-1')).not.toHaveProperty('rating');
     });
   });
 
@@ -3945,37 +4107,50 @@ describe('coach engine', () => {
   });
 
   // -------------------------------------------------------------------------
-  // D101: the stars on Decaid's own rating scale
+  // D101: the rating on Decaid's own rating scale
   // -------------------------------------------------------------------------
 
   describe("Decaid's rating scale (D101)", () => {
-    it('writes stars x 20 on a Decaid that rates out of 100', async () => {
+    it('writes ten times the running score on a Decaid that rates out of 100', async () => {
       machine.enjoymentScale = 100;
       await throughShot();
-      await engine.rateShot('shot-1', 4);
-      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 80, extras: { cafai: { stars: 4 } } }));
+      await engine.rateShot('shot-1', 'worse');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 50, extras: { cafai: { verdict: 'worse' } } }));
+      await pullAnother('shot-2');
+      await engine.rateShot('shot-2', 'muchBetter');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-2')).toMatchObject({ enjoyment: 70 }));
     });
 
-    it('asks Decaid its scale once per session, and only when the first stars go out', async () => {
+    it('converts old stars by the scale when the next shot is compared with them', async () => {
+      machine.enjoymentScale = 100;
+      await throughShot();
+      await asStoredBefore(before(3));
+      await pullAnother('shot-2');
+      await engine.rateShot('shot-2', 'worse');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-2')).toMatchObject({ enjoyment: 50 }));
+    });
+
+    it('asks Decaid its scale once per session, and only when the first rating goes out', async () => {
       await throughShot();
       scripts.push(() => [text('Thanks.')]);
       await engine.answerOptions('t-ask', ['Sour'], null);
       await vi.waitFor(() => expect(callsOf('updateShot')).toHaveLength(1));
       expect(callsOf('probeEnjoymentScale')).toEqual([]);
 
-      await engine.rateShot('shot-1', 4);
-      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 8 }));
-      await engine.rateShot('shot-1', 3);
-      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 6 }));
+      await engine.rateShot('shot-1', 'better');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 5 }));
+      await pullAnother('shot-2');
+      await engine.rateShot('shot-2', 'worse');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-2')).toMatchObject({ enjoyment: 4 }));
       expect(callsOf('probeEnjoymentScale')).toHaveLength(1);
     });
 
-    it('holds the stars while Decaid cannot say its scale, sends the taste meanwhile, and asks again at the next try', async () => {
+    it('holds the rating while Decaid cannot say its scale, sends the taste meanwhile, and asks again at the next try', async () => {
       machine.enjoymentScale = null;
       await throughShot();
       scripts.push(() => [text('Thanks.')]);
       await engine.answerOptions('t-ask', ['Sour'], null);
-      await engine.rateShot('shot-1', 5);
+      await engine.rateShot('shot-1', 'muchBetter');
       await vi.waitFor(() => expect(callsOf('probeEnjoymentScale')).toHaveLength(1));
       await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
       expect(machine.annotations.get('shot-1')).toMatchObject({ espressoNotes: 'Taste: Sour. Kiambu AA v1 (CafAI)' });
@@ -3986,8 +4161,8 @@ describe('coach engine', () => {
       await vi.waitFor(() =>
         expect(machine.annotations.get('shot-1')).toMatchObject({
           espressoNotes: 'Taste: Sour. Kiambu AA v1 (CafAI)',
-          enjoyment: 10,
-          extras: { cafai: { selected: ['Sour'], stars: 5 } },
+          enjoyment: 5,
+          extras: { cafai: { selected: ['Sour'], verdict: 'muchBetter' } },
         }),
       );
       expect(callsOf('probeEnjoymentScale')).toHaveLength(2);
@@ -3997,7 +4172,7 @@ describe('coach engine', () => {
     it('after an answer that tells neither scale, asks again once per shot, not at every try', async () => {
       machine.enjoymentScale = 'unreadable';
       await throughShot();
-      await engine.rateShot('shot-1', 4);
+      await engine.rateShot('shot-1', 'better');
       await vi.waitFor(() => expect(callsOf('probeEnjoymentScale')).toHaveLength(1));
       await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
       timers.fire();
@@ -4011,7 +4186,7 @@ describe('coach engine', () => {
       machine.enjoymentScale = 10;
       scripts.push(() => [text('Again?'), askTaste]);
       telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: 'targetWeight' });
-      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 8, extras: { cafai: { stars: 4 } } }));
+      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 5, extras: { cafai: { verdict: 'better' } } }));
       expect(callsOf('probeEnjoymentScale')).toHaveLength(2);
       await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
     });
@@ -4035,15 +4210,15 @@ describe('coach engine', () => {
       vi.spyOn(console, 'warn').mockImplementation(() => {});
     });
 
-    it('drops stars Decaid refuses, reports it, says once why, and never sends them again', async () => {
+    it('drops a rating Decaid refuses, reports it, says once why, and never sends it again', async () => {
       await throughShot();
       machine.shotRefusal = refusal(400);
-      await engine.rateShot('shot-1', 4);
+      await engine.rateShot('shot-1', 'better');
       await vi.waitFor(() => expect(refusals()).toHaveLength(1));
       expect(refusals()[0]).toEqual({
         kind: 'notice',
         tone: 'warning',
-        text: 'Decaid would not save the stars for this shot: enjoyment must be between 0 and 10.',
+        text: 'Decaid would not save the rating for this shot: enjoyment must be between 0 and 10.',
       });
       expect(drift()).toContainEqual(['PUT /api/v1/shots/{id}', 'annotations: refused (HTTP 400)']);
       expect(timers.delays()).toEqual([]);
@@ -4056,22 +4231,22 @@ describe('coach engine', () => {
     });
 
     it("says so in the shot's own bag when another bag is open by then, never in the bag on screen", async () => {
-      const said = 'Decaid would not save the stars for this shot: enjoyment must be between 0 and 10.';
+      const said = 'Decaid would not save the rating for this shot: enjoyment must be between 0 and 10.';
       const storedNotices = async (bag: Bag) =>
         ((await storage.conversations.get(bag.conversationId))?.uiMessages ?? [])
           .flatMap((m) => m.parts)
           .flatMap((part) => (part.kind === 'notice' ? [part.text] : []));
       await throughShot();
       const rated = engine.getState().activeBag!;
-      // Rated while Decaid is away: the stars wait in the outbox.
+      // Rated while Decaid is away: the rating waits in the outbox.
       machine.failShotUpdates = 1;
-      await engine.rateShot('shot-1', 4);
+      await engine.rateShot('shot-1', 'better');
       await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
       await engine.newBag();
       const open = engine.getState().activeBag!;
       expect(open.id).not.toBe(rated.id);
 
-      // Decaid is back and refuses the stars.
+      // Decaid is back and refuses the rating.
       machine.shotRefusal = refusal(400);
       decaidBack();
       await vi.waitFor(async () => expect(await storedNotices(rated)).toContain(said));
@@ -4122,14 +4297,14 @@ describe('coach engine', () => {
     it('keeps a write Decaid answered 409 or 503, says nothing, and sends it once Decaid takes it', async () => {
       await throughShot();
       machine.shotRefusal = refusal(409);
-      await engine.rateShot('shot-1', 4);
+      await engine.rateShot('shot-1', 'better');
       await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
       machine.shotRefusal = refusal(503);
       timers.fire();
       await vi.waitFor(() => expect(callsOf('updateShot (refused)')).toHaveLength(2));
       await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
       timers.fire();
-      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 8 }));
+      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 5 }));
       expect(refusals()).toEqual([]);
     });
 

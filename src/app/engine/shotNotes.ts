@@ -9,7 +9,7 @@
  */
 import { reportDrift } from '../../api/drift.ts';
 import { describeValue } from '../../api/frames.ts';
-import type { EnjoymentScale, ShotAnnotations } from '../../api/types.ts';
+import type { ShotAnnotations } from '../../api/types.ts';
 import { OTHER_OPTION } from '../../coach/contract.ts';
 import { redactKeyLike } from '../../storage/redact.ts';
 
@@ -43,11 +43,6 @@ export function cafaiNotesLine(taste: string, versionTitle: string): string {
   const cut = words.length > MAX_TASTE_CHARS;
   words = cut ? `${words.slice(0, MAX_TASTE_CHARS - 1).trimEnd()}…` : words.replace(/[.\s]+$/, '');
   return redactKeyLike(`Taste: ${words}${cut ? ' ' : '. '}${versionTitle} (CafAI)`);
-}
-
-/** 1-5 stars as Decaid's `enjoyment` on the scale it uses (D101): x2 out of 10, x20 out of 100. */
-export function enjoymentFromStars(stars: number, scale: EnjoymentScale): number {
-  return stars * (scale / 5);
 }
 
 /** The notes line CafAI wrote last time, from the record's extras. */

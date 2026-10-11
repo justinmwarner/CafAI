@@ -6,6 +6,7 @@ import {
   photoIntakeText,
   pickedIntakeText,
   shotCompletedBlock,
+  shotRatedBlock,
   summaryForModel,
   toolResult,
   unansweredToolUses,
@@ -249,6 +250,15 @@ describe('engine protocol', () => {
   it('formats the undo event', () => {
     expect(undoBlock({ from: 3, to: 2, title: 'Kiambu v2' }).text).toBe(
       '[event:undo]\n{"from":3,"to":2,"title":"Kiambu v2"}',
+    );
+  });
+
+  it("formats the barista's verdict on a shot, with what it was compared with (D126)", () => {
+    expect(shotRatedBlock({ shotId: 's2', verdict: 'much better', comparedWith: { kind: 'previous', shotId: 's1' } }).text).toBe(
+      '[event:shot_rated]\n{"shotId":"s2","verdict":"much better","comparedWith":{"kind":"previous","shotId":"s1"}}',
+    );
+    expect(shotRatedBlock({ shotId: 's1', verdict: 'worse', comparedWith: { kind: 'otherCoffee', shotId: 'r9', coffee: 'Red Brick' } }).text).toBe(
+      '[event:shot_rated]\n{"shotId":"s1","verdict":"worse","comparedWith":{"kind":"otherCoffee","shotId":"r9","coffee":"Red Brick"}}',
     );
   });
 

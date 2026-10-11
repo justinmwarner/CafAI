@@ -16,6 +16,9 @@
  * - Writes to Decaid that fail (a grinder setting, a shot's notes) wait in an
  *   outbox and go out again when Decaid is back (D64); a write Decaid refuses
  *   is dropped and the chat says so once (5.11).
+ * - A shot card asks how the shot compared with the one before it (D126):
+ *   the words stay on the card, Decaid's `enjoyment` gets a running score,
+ *   and the coach hears the verdict with the next turn it is sent.
  * - A bag whose details were saved is added to Decaid's bean library in the
  *   background, and every load names its batch (D102).
  * - A new bag opens with "Which coffee is it?": a batch from Decaid's bean
@@ -90,6 +93,9 @@ import type {
   CoachUiPart,
   NoticeProgress,
   SetAsideReason,
+  ShotBaseline,
+  ShotRating,
+  ShotVerdict,
   TemplateCardItem,
   VersionLoad,
 } from '../types.ts';
@@ -103,6 +109,7 @@ import {
   photoIntakeText,
   pickedIntakeText,
   shotCompletedBlock,
+  shotRatedBlock,
   summaryForModel,
   textBlock,
   toolResult,
@@ -112,15 +119,17 @@ import {
   type AdjustmentResultPayload,
   type TemplatePickedPayload,
 } from './protocol.ts';
+import { EXTRAS_KEY, cafaiNotesLine, isTasteQuestion, lastCafaiNotes, mergeNotes, tasteWords } from './shotNotes.ts';
 import {
-  EXTRAS_KEY,
-  cafaiNotesLine,
-  enjoymentFromStars,
-  isTasteQuestion,
-  lastCafaiNotes,
-  mergeNotes,
-  tasteWords,
-} from './shotNotes.ts';
+  baselineFor,
+  enjoymentFromScore,
+  fillBaselines,
+  isShotVerdict,
+  needsBaseline,
+  runningScore,
+  untoldRatings,
+  type CreditedShot,
+} from './shotRating.ts';
 import {
   NEW_BAG_PROMPT,
   appendText,
@@ -141,7 +150,7 @@ import {
   replaceParts,
   setAside,
   setDiffStatus,
-  setShotStars,
+  setShotRating,
   setVisualizerLink,
   shotPart,
   startingYieldText,
@@ -236,12 +245,21 @@ interface TasteNote {
   notes: string;
 }
 
+/**
+ * The barista's verdict as CafAI writes it to a shot record (D126): the
+ * running score as `enjoyment`, and the verdict and what it was compared
+ * with in extras.cafai.
+ */
+interface RatingNote extends ShotRating {
+  comparedWith: ShotBaseline;
+}
+
 /** Everything CafAI still has to say about one shot; a newer write carries the older one's fields. */
 interface ShotWrite {
   /** The bag whose chat has the shot: a write Decaid refuses is reported there, whichever bag is open by then. */
   bagId: string;
   taste?: TasteNote;
-  stars?: number;
+  rating?: RatingNote;
 }
 
 const DEFAULT_YIELD_G = 36;
@@ -511,7 +529,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   /**
    * Decaid answered the question with something that tells neither scale
    * (reported as drift where it was read): it is asked again after the next
-   * shot, not at every try of the waiting stars.
+   * shot, not at every try of the waiting rating.
    */
   let scaleUnclear = false;
   /** Bags being added to Decaid's bean library now, so a second save never adds a second batch. */
@@ -813,9 +831,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
 
   /**
    * Decaid's rating scale (D101), asked once per session before the first
-   * stars go out: 10 on current builds, 100 on 0.8.6 field builds. Null while
-   * Decaid could not be asked (the next try asks again) or after it answered
-   * something that tells neither (asked again after the next shot).
+   * rating goes out: 10 on current builds, 100 on 0.8.6 field builds. Null
+   * while Decaid could not be asked (the next try asks again) or after it
+   * answered something that tells neither (asked again after the next shot).
    */
   function ratingScale(): Promise<EnjoymentScale | null> {
     if (enjoymentScale !== null) return Promise.resolve(enjoymentScale);
@@ -837,9 +855,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   /**
    * One PUT /shots/{id} with everything CafAI still has to say about the shot.
    * Safe to repeat: Decaid merges extras key by key, and CafAI's notes line
-   * replaces its own previous line instead of piling up. The stars wait in the
-   * outbox until Decaid has said its rating scale; the taste goes on without
-   * them.
+   * replaces its own previous line instead of piling up. The rating waits in
+   * the outbox until Decaid has said its rating scale; the taste goes on
+   * without it.
    */
   async function writeShot(shotId: string): Promise<void> {
     const write = shotWrites.get(shotId);
@@ -857,10 +875,11 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       annotations.espressoNotes = mergeNotes(record.annotations?.espressoNotes, lastCafaiNotes(record.annotations), write.taste.notes);
       Object.assign(own, write.taste);
     }
-    const scale = write.stars === undefined ? null : await ratingScale();
-    if (write.stars !== undefined && scale !== null) {
-      annotations.enjoyment = enjoymentFromStars(write.stars, scale);
-      own.stars = write.stars;
+    const scale = write.rating === undefined ? null : await ratingScale();
+    if (write.rating !== undefined && scale !== null) {
+      annotations.enjoyment = enjoymentFromScore(write.rating.score, scale);
+      own.verdict = write.rating.verdict;
+      own.comparedWith = write.rating.comparedWith;
     }
     if (Object.keys(own).length > 0) {
       annotations.extras = { [EXTRAS_KEY]: own };
@@ -871,13 +890,13 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         if (writeFailure(error) !== 'landed') throw error;
       }
     }
-    // A newer write came in meanwhile: it carries everything, stars included.
+    // A newer write came in meanwhile: it carries everything, the rating included.
     if (shotWrites.get(shotId) !== write) return;
-    if (write.stars === undefined || scale !== null) {
+    if (write.rating === undefined || scale !== null) {
       shotWrites.delete(shotId);
       return;
     }
-    shotWrites.set(shotId, { bagId: write.bagId, stars: write.stars });
+    shotWrites.set(shotId, { bagId: write.bagId, rating: write.rating });
     throw new WriteLater('Decaid has not said which rating scale it uses yet.');
   }
 
@@ -899,7 +918,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       const shotId = key.slice(SHOT_WRITE.length);
       const write = shotWrites.get(shotId);
       shotWrites.delete(shotId);
-      const parts = [...(write?.taste ? ['the taste'] : []), ...(write?.stars !== undefined ? ['the stars'] : [])];
+      const parts = [...(write?.taste ? ['the taste'] : []), ...(write?.rating ? ['the rating'] : [])];
       what = `${parts.join(' and ') || 'the notes'} for this shot`;
       source = readFailed ? 'GET /api/v1/shots/{id}' : 'PUT /api/v1/shots/{id}';
       field = readFailed ? 'record' : 'annotations';
@@ -1332,6 +1351,16 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     return storage.iterations.listByBag(s.bag.id);
   }
 
+  /** Every shot CafAI credited to another bag, named by its bag: what a bag's first shot is compared with (D126). */
+  async function shotsOfOtherBags(bagId: string): Promise<CreditedShot[]> {
+    const names = new Map(state.bags.map((bag) => [bag.id, bag.name]));
+    return (await storage.iterations.listAll()).flatMap((iteration) => {
+      if (iteration.bagId === bagId || !iteration.shotId) return [];
+      const name = names.get(iteration.bagId) ?? iteration.bagName;
+      return [{ shotId: iteration.shotId, coffee: name && name !== NEW_BAG_NAME ? name : null, at: iteration.createdAt }];
+    });
+  }
+
   /**
    * Every batch of a linked bag's bean in Decaid's library, archived ones
    * too: DYE2's setups for an earlier batch of the same coffee (6.5). None
@@ -1577,8 +1606,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
 
   /**
    * Answer every tool call the model is waiting on (in tool_use order), then
-   * add `extra` blocks, append the user turn, and run the model. Cards left
-   * unanswered are set aside, and say why: `setAsideFor`.
+   * add the verdicts the coach has not heard (D126) and `extra` blocks,
+   * append the user turn, and run the model. Cards left unanswered are set
+   * aside, and say why: `setAsideFor`.
    */
   async function sendUser(
     s: Session,
@@ -1602,8 +1632,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     }
     s.pending = [];
     s.held = [];
-    const blocks: ContentBlock[] = [...results, ...extra];
-    if (blocks.length === 0) return;
+    if (results.length === 0 && extra.length === 0) return;
+    // A verdict comes after the shot's own event left, so it rides with the next turn.
+    const rated = untoldRatings(s.conversation.apiMessages, state.messages).map(shotRatedBlock);
+    const blocks: ContentBlock[] = [...results, ...rated, ...extra];
     s.conversation = {
       ...s.conversation,
       apiMessages: [...s.conversation.apiMessages, { role: 'user', content: blocks }],
@@ -1665,6 +1697,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     session = s;
     // A stored progress notice (an older build, a crash) describes work that is long over.
     state = { ...state, messages: withoutTransient(conversation.uiMessages), error: null };
+    // Cards from before CafAI compared shots say what they compare with too (D126).
+    if (state.messages.some((m) => m.parts.some(needsBaseline))) {
+      setMessages(fillBaselines(state.messages, await shotsOfOtherBags(bag.id)));
+    }
     lastFailed = null;
     await recoverPending(s);
     if (awaitingModel(s.conversation.apiMessages)) {
@@ -2070,6 +2106,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       await persistConversation(s);
       return;
     }
+    // A bag's first shot is compared with the last shot of another coffee (D126).
+    const firstShot = !state.messages.some((m) => m.parts.some((part) => part.kind === 'shot'));
+    const others = firstShot ? await shotsOfOtherBags(s.bag.id) : [];
     const at = nowIso();
     const iterationId = deps.newId('iter');
     await putIteration({
@@ -2088,6 +2127,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       updatedAt: at,
     });
     addMessage('system', [shotPart(record.id, summary)]);
+    setMessages(fillBaselines(state.messages, others));
     watchVisualizer(s, record.id, iterationId);
     if (!saysWhichRan) {
       addMessage('system', [noticePart('info', `Decaid's record did not say which profile ran; CafAI counted it for v${current.version}.`)]);
@@ -2585,16 +2625,20 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     );
   }
 
-  async function rateShot(shotId: string, stars: number): Promise<void> {
+  async function rateShot(shotId: string, verdict: ShotVerdict): Promise<void> {
     const s = session;
-    if (!s || !Number.isInteger(stars) || stars < 1 || stars > 5) return;
+    if (!s || !isShotVerdict(verdict)) return;
     const card = state.messages.flatMap((m) => m.parts).find((p) => p.kind === 'shot' && p.shotId === shotId);
-    if (!card || card.kind !== 'shot' || card.stars === stars) return;
-    // On the card, so it comes back with the transcript; to the coach, never.
-    setMessages(setShotStars(state.messages, shotId, stars));
+    // Stars given before D126 stay as they were.
+    if (!card || card.kind !== 'shot' || card.stars !== undefined || card.rating?.verdict === verdict) return;
+    const baseline = card.baseline ?? baselineFor(state.messages, shotId, await shotsOfOtherBags(s.bag.id));
+    const score = runningScore(state.messages, shotId, verdict);
+    if (!baseline || score === null) return;
+    // On the card, so it comes back with the transcript; the coach hears it with the next turn.
+    setMessages(setShotRating(state.messages, shotId, baseline, { verdict, score }));
     await persistConversation(s);
     emit();
-    void queueShotWrite(shotId, { bagId: s.bag.id, stars });
+    void queueShotWrite(shotId, { bagId: s.bag.id, rating: { verdict, score, comparedWith: baseline } });
   }
 
   async function sendText(text: string): Promise<void> {
@@ -2764,7 +2808,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     confirmChange: (requestId) => enqueue(() => confirmChange(requestId)),
     declineChange: (requestId) => enqueue(() => declineChange(requestId)),
     undo: () => enqueue(() => undo()),
-    rateShot: (shotId, stars) => enqueue(() => rateShot(shotId, stars)),
+    rateShot: (shotId, verdict) => enqueue(() => rateShot(shotId, verdict)),
     pickBean: (batchId) => enqueue(() => pickBean(batchId)),
     skipBeanPick: () => enqueue(() => skipBeanPick()),
     readBagPhoto: (photo) => enqueue(() => readBagPhoto(photo)),

@@ -118,6 +118,18 @@ All JSON payloads are compact `JSON.stringify` output.
    call with JSON `{"answered":false,"note":"The user typed a message instead."}`,
    then the user's text block.
 8. **Plain free text** otherwise: one text block.
+9. **Verdict** (D126): a text block `"[event:shot_rated]\n" + JSON` with JSON
+   `{"shotId":string,"verdict":"much worse"|"worse"|"about the same"|"better"|"much better","comparedWith":<baseline>}`,
+   `<baseline>` being `{"kind":"previous","shotId":string}` (the shot before
+   it in the bag's chat), `{"kind":"otherCoffee","shotId":string,"coffee":string|null}`
+   (a bag's first shot: the last shot of another bag) or `{"kind":"usual"}`
+   (the very first shot: the coffee the user usually enjoys). A verdict is
+   given on the shot card after the shot's own event has gone, so it never
+   makes a turn of its own: it rides in the next user turn the engine sends
+   (any of rules 1-8), after the tool_results and before everything else.
+   It is sent once; a changed verdict is sent again, and the newest one for
+   a shot counts. The engine finds what to send by comparing the cards with
+   the verdicts the transcript already holds.
 
 Auto tools (`save_bag_details`, `get_shot_summary`, `get_shot_series`,
 `get_phase_stats`, `compare_shots`, `get_bag_history`, `get_recent_setups`)

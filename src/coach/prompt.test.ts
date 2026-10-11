@@ -342,3 +342,18 @@ describe('buildSystemPrompt: the heuristics seam', () => {
     expect(strip(swapped)).toBe(strip(prompt));
   });
 });
+
+describe("buildSystemPrompt: the barista's verdict (D126)", () => {
+  it('documents the verdict event: the five words and what the shot was compared with', () => {
+    const line = loopOf(prompt)
+      .split('\n')
+      .find((l) => l.includes(EVENT.shotRated))!;
+    expect(line).toContain('"verdict":"much worse"|"worse"|"about the same"|"better"|"much better"');
+    expect(line).toContain('{"kind":"previous","shotId":...}|{"kind":"otherCoffee","shotId":...,"coffee":string|null}|{"kind":"usual"}');
+    expect(line).toContain('a newer one for the same shot replaces it');
+  });
+
+  it('puts the verdict above the numbers, never contradicted or explained', () => {
+    expect(loopOf(prompt)).toContain('Their verdict outranks the numbers: never contradict it or explain their taste to them');
+  });
+});

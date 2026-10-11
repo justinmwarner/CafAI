@@ -127,6 +127,7 @@ export function buildSystemPrompt(templates: readonly Template[], options: Syste
       `6. Undo. ${EVENT.undo} with {"from":...,"to":...,"title":...}: the machine is back on version "to".`,
       `7. ${EVENT.bagResumed}: the user came back to this bag; pick up where it left off.`,
       '8. When the user types instead of tapping, pending tool results say {"answered":false,"note":"The user typed a message instead."}; answer what they typed.',
+      `9. Verdict. ${EVENT.shotRated} with {"shotId":...,"verdict":"much worse"|"worse"|"about the same"|"better"|"much better","comparedWith":{"kind":"previous","shotId":...}|{"kind":"otherCoffee","shotId":...,"coffee":string|null}|{"kind":"usual"}}: how the user found that shot against their previous shot of this bag, their last shot of another coffee (a bag's first shot) or the coffee they usually enjoy (their first shot). It comes with whatever reaches you next (a tap, a message or the next shot), and a newer one for the same shot replaces it. Their verdict outranks the numbers: never contradict it or explain their taste to them; when the data seems to disagree, trust the verdict and use the data only to choose what to change next.`,
     ].join('\n'),
 
     catalog(templates),

@@ -5,7 +5,8 @@
 // the stats card away) -> templates -> v1 -> Stats brings the card back ->
 // scripted shot from Espresso in the top bar's machine row (it turns into
 // Stop, the Shot view takes the screen, the coach comes back with the card)
-// -> taste chip -> confirmed v2. Fails on any page error or console error.
+// -> Better under "Compared with ...?" (D126) -> taste chip -> confirmed v2.
+// Fails on any page error or console error.
 //
 // usage: npm run build:mock && node tools/chrome91/loop.mjs
 import http from 'node:http';
@@ -48,7 +49,10 @@ await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1.125, has
 const problems = [];
 page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 page.on('console', (m) => {
-  if (m.type() === 'error') problems.push(`console.error: ${m.text()}`);
+  // The rating-scale probe (D101) asks about a made-up shot, which a 0-10 Decaid
+  // refuses with 400 by design; the browser logs that refusal as an error.
+  const probe = m.text().startsWith('Failed to load resource') && (m.location()?.url ?? '').includes('cafai-probe');
+  if (m.type() === 'error' && !probe) problems.push(`console.error: ${m.text()}`);
 });
 
 const tid = (id) => `[data-testid="${id}"]`;
@@ -150,6 +154,11 @@ try {
   await step('the coach comes back with the shot card', async () => {
     await page.waitForSelector(tid('shot-card'), { timeout: 60000, visible: true });
     await page.waitForFunction(() => window.location.hash === '#/', { timeout: 15000 });
+  });
+  await step('say how it compared: Better, once the coach is done', async () => {
+    const better = `${tid('shot-rating')} [role="radio"]:nth-child(4)`;
+    await tapAt(better, 30000);
+    await page.waitForSelector(`${better}[aria-checked="true"]`, { timeout: 15000 });
   });
   await step('tap a taste chip', async () => tap('option-sour-sharp', 30000));
   await step('confirm the change', async () => {

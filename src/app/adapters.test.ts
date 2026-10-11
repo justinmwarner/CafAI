@@ -43,7 +43,9 @@ describe('createApiPort', () => {
       seen.push([id, patch]);
       return { id } as Awaited<ReturnType<typeof decaid.updateShot>>;
     };
-    const patch: ShotUpdateRequest = { annotations: { enjoyment: 8, extras: { cafai: { stars: 4 } } } };
+    const patch: ShotUpdateRequest = {
+      annotations: { enjoyment: 6, extras: { cafai: { verdict: 'better', comparedWith: { kind: 'previous', shotId: 'shot-0' } } } },
+    };
     await createApiPort(decaid).updateShot('shot-1', patch);
     expect(seen).toEqual([['shot-1', patch]]);
   });
