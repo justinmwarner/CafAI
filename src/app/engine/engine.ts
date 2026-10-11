@@ -53,7 +53,7 @@ import {
 import { todayOf, writtenDate, type FreezerDates } from '../../coach/roastAge.ts';
 import { reportDrift } from '../../api/drift.ts';
 import { describeValue } from '../../api/frames.ts';
-import { grinderRequest } from '../../api/grinders.ts';
+import { grinderRequest, NO_GRINDER_LIBRARY } from '../../api/grinders.ts';
 import { readDye2, visualizerIdFor, visualizerShotUrl, type Dye2Data } from '../../api/pluginData.ts';
 import { PLUGIN, type PluginDirectory } from '../../api/plugins.ts';
 import {
@@ -2580,7 +2580,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       linked = await api.addGrinder(request);
     } catch (error) {
       call.confirming = false;
-      setMessages(setGrinderOfferStatus(state.messages, requestId, 'pending', { error: describe(error) }));
+      const why = error instanceof GatewayError && error.status === 404 ? NO_GRINDER_LIBRARY : describe(error);
+      setMessages(setGrinderOfferStatus(state.messages, requestId, 'pending', { error: why }));
       state = { ...state, busy: false };
       await persistConversation(s);
       emit();

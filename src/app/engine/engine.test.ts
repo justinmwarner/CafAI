@@ -237,6 +237,8 @@ const machine = {
   library: [] as Array<{ id: string; model: string; burrs: string | null }>,
   /** How many more grinder adds fail as if Decaid were away. */
   failGrinderAdds: 0,
+  /** An older Decaid without the grinder library: its routes answer a plain 404. */
+  noGrinderLibrary: false,
   /** POST /profiles answers 400 for any parent (a Decaid without the template's bundled default). */
   parentMissing: false,
   /** POST /profiles answers with a record Decaid already had (the same content). */
@@ -335,6 +337,7 @@ function makeApi(calls: ApiCall[]): ApiPort {
   machine.grinderReads = [];
   machine.library = [];
   machine.failGrinderAdds = 0;
+  machine.noGrinderLibrary = false;
   machine.parentMissing = false;
   machine.dedupe = false;
   machine.createError = null;
@@ -415,6 +418,7 @@ function makeApi(calls: ApiCall[]): ApiPort {
     // As addOrFindGrinder does: the grinder with the same model, case aside, else a new one.
     addGrinder: async (request) => {
       calls.push({ method: 'addGrinder', args: [request] });
+      if (machine.noGrinderLibrary) throw new GatewayError(404, '/api/v1/grinders', 'Route not found', 'http');
       if (machine.failGrinderAdds > 0) {
         machine.failGrinderAdds -= 1;
         throw unreachable('/api/v1/grinders');
@@ -2612,6 +2616,13 @@ describe('coach engine', () => {
       await engine.addGrinder('t-grinder');
       expect(card()).toMatchObject({ status: 'added', error: null });
       expect(callsOf('addGrinder')).toHaveLength(2);
+    });
+
+    it('on a Decaid without the grinder library, the card says so instead of "Route not found"', async () => {
+      await throughOffer();
+      machine.noGrinderLibrary = true;
+      await engine.addGrinder('t-grinder');
+      expect(card()).toMatchObject({ status: 'pending', error: 'This Decaid has no grinder library to add to. Update Decaid, then try again.' });
     });
 
     it('Not now adds nothing and tells the coach; the card then answers nothing', async () => {

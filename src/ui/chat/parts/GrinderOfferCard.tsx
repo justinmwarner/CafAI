@@ -21,6 +21,9 @@ export interface GrinderOfferCardProps {
 /** A step as people write it: 0.5, 2, 0.25 (never 0.30000000000000004). */
 const step = (value: number) => String(Math.round(value * 1000) / 1000);
 
+/** Decaid's own words end without a full stop ("database is locked"): one sentence either way. */
+const sentence = (text: string) => (/[.!?]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`);
+
 /** A long list of settings, shortened: "1, 2, 3 … 40". */
 function settingsPreview(values: readonly string[]): string {
   return values.length <= 5 ? values.join(', ') : `${values.slice(0, 3).join(', ')} … ${values[values.length - 1]}`;
@@ -101,7 +104,7 @@ export function GrinderOfferCard({ part, disabled = false, onAdd, onDecline }: G
           </Typography>
           {part.error ? (
             <Typography variant="body2" role="alert" sx={{ color: 'error.main', mt: 0.75 }}>
-              Couldn&apos;t add it: {part.error} Try again, or tap Not now.
+              Couldn&apos;t add it: {sentence(part.error)} Try again, or tap Not now.
             </Typography>
           ) : null}
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1.5 }}>

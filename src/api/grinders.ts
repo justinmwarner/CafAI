@@ -102,6 +102,9 @@ export interface GrinderDraft {
 /** The longest text each field takes, as Settings' grinder fields do. */
 export const GRINDER_LIMITS = { model: 60, burrs: 60, setting: 20, settings: 100 } as const;
 
+/** Why nothing could be added: an older Decaid without the grinder library answers its routes with a plain 404. */
+export const NO_GRINDER_LIBRARY = 'This Decaid has no grinder library to add to. Update Decaid, then try again.';
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

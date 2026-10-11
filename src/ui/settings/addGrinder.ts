@@ -8,7 +8,14 @@
  * bundled with Decaid and loaded by default, is where grinders are edited
  * and deleted (its Grinders page). CafAI only adds one.
  */
-import { GRINDER_LIMITS, grinderRequest, type Grinder, type GrinderCreateRequest, type GrinderSettingType } from '../../api/grinders.ts';
+import {
+  GRINDER_LIMITS,
+  NO_GRINDER_LIBRARY,
+  grinderRequest,
+  type Grinder,
+  type GrinderCreateRequest,
+  type GrinderSettingType,
+} from '../../api/grinders.ts';
 import { PLUGIN } from '../../api/plugins.ts';
 import { GatewayError } from '../../api/types.ts';
 import { containsKeyLike } from '../../storage/redact.ts';
@@ -87,11 +94,9 @@ export function checkAddGrinder(form: AddGrinderForm): AddGrinderCheck {
   return request ? { ok: true, request } : { ok: false, field: 'model', message: NEEDS_MODEL };
 }
 
-export const NO_LIBRARY = 'This Decaid has no grinder library to add to. Update Decaid, then try again.';
-
 /** Why the grinder was not added, in a sentence: Decaid's own words when it refused it. */
 export function addGrinderError(error: unknown): string {
-  if (error instanceof GatewayError && error.status === 404) return NO_LIBRARY;
+  if (error instanceof GatewayError && error.status === 404) return NO_GRINDER_LIBRARY;
   const why = error instanceof Error && error.message ? error.message : String(error);
   return `Couldn't add the grinder: ${why}`;
 }

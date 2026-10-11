@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { Grinder } from '../../api/grinders.ts';
+import { NO_GRINDER_LIBRARY, type Grinder } from '../../api/grinders.ts';
 import { GatewayError } from '../../api/types.ts';
 import {
   KEY_REFUSED,
   NEEDS_MODEL,
   NEEDS_SETTINGS,
-  NO_LIBRARY,
   SETTING_TOO_LONG,
   STEP_HELP,
   TOO_MANY_SETTINGS,
@@ -98,7 +97,7 @@ describe('what Settings says', () => {
   });
 
   it('when the grinder could not be added: Decaid without a library, or Decaid’s own words', () => {
-    expect(addGrinderError(new GatewayError(404, '/api/v1/grinders', 'Route not found', 'http'))).toBe(NO_LIBRARY);
+    expect(addGrinderError(new GatewayError(404, '/api/v1/grinders', 'Route not found', 'http'))).toBe(NO_GRINDER_LIBRARY);
     expect(addGrinderError(new GatewayError(0, '/api/v1/grinders', 'Could not reach Decaid.', 'network'))).toBe(
       "Couldn't add the grinder: Could not reach Decaid.",
     );

@@ -36,10 +36,13 @@ describe('GrinderOfferCard (D125)', () => {
     expect(within(card).getByText(/without its step size the coach gives directions only/)).toBeInTheDocument();
   });
 
-  it('says why an Add failed, and offers both buttons again', () => {
-    const { card } = renderCard({ error: 'Could not reach Decaid.' });
+  it('says why an Add failed, as a sentence, and offers both buttons again', () => {
+    const { card, unmount } = renderCard({ error: 'Could not reach Decaid.' });
     expect(within(card).getByRole('alert')).toHaveTextContent("Couldn't add it: Could not reach Decaid. Try again, or tap Not now.");
     expect(within(card).getByTestId(TID.grinderOfferAdd)).toBeEnabled();
+    unmount();
+    renderCard({ error: 'database is locked' });
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't add it: database is locked. Try again, or tap Not now.");
   });
 
   it('blocks both buttons while the coach works and while the grinder is on its way', () => {
