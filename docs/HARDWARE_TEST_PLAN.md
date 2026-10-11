@@ -185,15 +185,18 @@ credits. Nothing to judge on the spot: send the files.
 
 ## 7. Feedback in Decaid and Visualizer (QUESTIONS #7, D61)
 
-1. After a shot, tap a taste option, then four stars on the shot card.
+1. After a bag's first shot, tap a taste option, then a word under
+   "Compared with ...?" on the shot card (D126).
 2. `/api/v1/shots/<id>`: `annotations.espressoNotes` has CafAI's line,
-   `annotations.enjoyment` is 8 (80 on a Decaid that keeps 0-100: section
-   12, step 1), and `annotations.extras.cafai` is there.
+   `annotations.enjoyment` is 5, the middle for a bag's first rated shot
+   (50 on a Decaid that keeps 0-100: section 12, step 1), and
+   `annotations.extras.cafai` is there, with the word (`verdict`) and what
+   the shot was compared with (`comparedWith`).
 3. Write a note of your own on a shot in Decaid, then answer the taste
    question for that shot in CafAI. Expected: your note stays and CafAI's
    line is added below it.
 4. If Visualizer is set up in Decaid: the shot there shows the notes and an
-   enjoyment of 80 (Decaid uploads about 5 s after the shot and pushes later
+   enjoyment of 50 (Decaid uploads about 5 s after the shot and pushes later
    edits).
 
 ## 8. Grind moves (QUESTIONS #8, D62)
@@ -293,13 +296,15 @@ this bag's, and the banner offers Retry to load the bag's version.
 
 ## 12. Decaid alignment: the rating scale, Connect, gateway mode, drink settings, Next step, Heating, the keyboard, the bag photo, Visualizer, DYE2 (D98, D101, D111-D122)
 
-1. **The rating scale (QUESTIONS #10, D101).** Before the first stars of a
-   session, CafAI asks the tablet's Decaid which rating scale it keeps.
-   After a shot, tap four stars on its card, then open `/api/v1/shots/<id>`:
-   `annotations.enjoyment` is 8 on a Decaid that keeps 0-10, and 80 on one
+1. **The rating scale (QUESTIONS #10, D101).** Before the first rating of
+   a session, CafAI asks the tablet's Decaid which rating scale it keeps.
+   Rate two shots of one bag (D126): the first with any word (a bag's first
+   rated shot is the middle, 5), the second **Much better**, then open
+   `/api/v1/shots/<the second id>`:
+   `annotations.enjoyment` is 7 on a Decaid that keeps 0-10, and 70 on one
    that keeps 0-100 (Decaid 0.8.6 field builds). Record which, with the
    Decaid version. Expected: no notice in the chat that starts "Decaid
-   would not save the stars" (that would mean the scale was read wrong), and
+   would not save the rating" (that would mean the scale was read wrong), and
    no "enjoyment probe" line in Settings > About (that would mean this
    Decaid answered in a way CafAI cannot read; copy the report).
 2. **Connect and the scale (D111).**
@@ -434,9 +439,10 @@ this bag's, and the banner offers Retry to load the bag's version.
    plugin loaded (`/api/v1/plugins`: `visualizer.reaplugin` with
    `"loaded": true`) and set up with your Visualizer account to upload
    shots. Pull a shot from CafAI. Expected: a few seconds after the shot's
-   card reaches the chat, **On Visualizer** under its curves, above the
-   stars (CafAI looks every 3 s for 30 s). Tap it: Decaid opens the page in
-   the system browser, and it is this shot (the same time and weight).
+   card reaches the chat, **On Visualizer** under its curves, above
+   "Compared with ...?" (CafAI looks every 3 s for 30 s). Tap it: Decaid
+   opens the page in the system browser, and it is this shot (the same time
+   and weight).
    History -> the bag -> that shot's row has the same link. Record how long
    after the card the link came, or that it never did, and then save
    `/api/v1/store/visualizer.reaplugin/lastUploadedShot` and
@@ -474,7 +480,7 @@ this bag's, and the banner offers Retry to load the bag's version.
 | 4 | 4 | Offline wording, then Loaded on reconnect | | |
 | 6 | 1 | Gentle and Sweet default id `1baa29…` | | |
 | 6 | 4 | 88 °C target in every sample | | |
-| 7 | 2-3 | Notes, enjoyment 8, your own note kept | | |
+| 7 | 2-3 | Notes, enjoyment 5, your own note kept | | |
 | 8 | 2 | Grind direction right for your grinder | | |
 | 9 | 1 | Progress, warning, Retry | | |
 | 10 | - | Profile line follows another skin | | |
@@ -486,7 +492,7 @@ this bag's, and the banner offers Retry to load the bag's version.
 | 11 | 6 | Appearance applies; Auto follows the tablet's dark mode? | | |
 | 11 | 7 | Bag picker list matches Light | | |
 | 11 | 8 | Phone layout over the network (optional) | | |
-| 12 | 1 | Four stars are 8 (0-10) or 80 (0-100); which one | | |
+| 12 | 1 | Much better after a 5 is 7 (0-10) or 70 (0-100); which one | | |
 | 12 | 2 | Connect DE1, Connect scale; the scale back after a wake without a tap? | | |
 | 12 | 3 | Gateway alert in Full; the button sets Tracking | | |
 | 12 | 4 | Drink settings reach Decaid and the machine; 300 ml becomes 255 | | |

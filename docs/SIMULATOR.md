@@ -221,7 +221,7 @@ It exercises:
 - Espresso that follows the profile on the simulated scale; it stops at the
   target weight only if the cup gets there first (Blooming Espresso v1 ran
   out of steps at 47 g of 50 g, stopReason "machineEnded").
-- Saved shots, with CafAI's taste notes and star rating written to them.
+- Saved shots, with CafAI's taste notes and rating written to them.
 - Decaid's grinder library and key-value store: real storage, empty at first.
   CafAI's backup lands in its `cafai` namespace and stays across Decaid
   restarts (`.\Decaid.exe --print-storage-paths` shows where).
