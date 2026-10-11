@@ -10,7 +10,7 @@ import { createFakeServices, type FakeServices } from '../testing/fakeServices.t
 import { TID } from '../testIds.ts';
 import { AppearanceSection } from './AppearanceSection.tsx';
 
-const TINT_NAMES = ['Crema', 'Matcha', 'Lagoon', 'Ocean', 'Plum', 'Cherry', 'Steel', 'Custom'];
+const TINT_NAMES = ['Crema', 'Matcha', 'Cold Brew', 'Blueberry', 'Plum', 'Cherry', 'Tamper', 'Custom'];
 
 function renderAppearance(appearance?: Appearance): FakeServices {
   const services = createFakeServices(
@@ -82,12 +82,12 @@ describe('AppearanceSection tint', () => {
   });
 
   it('Custom takes the hue the slider shows: the named tint until it is moved', async () => {
-    const services = renderAppearance({ mode: 'light', tint: 'ocean' });
-    const ocean = namedTint('ocean').hue;
-    expect(screen.getByRole('slider', { name: 'Custom hue' })).toHaveAttribute('aria-valuenow', String(ocean));
+    const services = renderAppearance({ mode: 'light', tint: 'blueberry' });
+    const blueberry = namedTint('blueberry').hue;
+    expect(screen.getByRole('slider', { name: 'Custom hue' })).toHaveAttribute('aria-valuenow', String(blueberry));
     await userEvent.click(tint('Custom'));
-    expect(services.appearance.get()).toEqual({ mode: 'light', tint: { hue: ocean } });
-    await waitFor(async () => expect(await saved(services)).toEqual({ mode: 'light', tint: { hue: ocean } }));
+    expect(services.appearance.get()).toEqual({ mode: 'light', tint: { hue: blueberry } });
+    await waitFor(async () => expect(await saved(services)).toEqual({ mode: 'light', tint: { hue: blueberry } }));
     expect(checkedTints()).toEqual(['Custom']);
   });
 

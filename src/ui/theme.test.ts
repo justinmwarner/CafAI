@@ -72,7 +72,7 @@ describe('theme', () => {
   });
 
   it('draws placeholders in the muted ink at full strength, not faded', () => {
-    const p = buildPalette('light', namedTint('steel'));
+    const p = buildPalette('light', namedTint('tamper'));
     const input = createCafaiTheme(p).components!.MuiInputBase!.styleOverrides!.input as Record<string, unknown>;
     expect(input['&::placeholder']).toEqual({ color: p.inkMuted, opacity: 1 });
   });

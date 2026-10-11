@@ -75,7 +75,7 @@ What was built (read for the expected behaviour, not the code):
    tint; the custom hue slider (drag and keyboard). Every screen follows at
    once, including the shot graph's grid and axes (its pressure and flow
    colours stay green and blue in every tint). Check legibility in light
-   Matcha, light Steel, dark Cherry and a custom hue near yellow: any text
+   Matcha, light Tamper, dark Cherry and a custom hue near yellow: any text
    hard to read, any control that disappears, anything still brown in a
    green look? Reload: the look stays, and the "Starting CafAI..." screen
    uses it too. Auto: emulate `prefers-color-scheme` dark and light.

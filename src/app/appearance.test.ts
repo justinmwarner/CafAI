@@ -107,7 +107,7 @@ describe('createAppearanceStore', () => {
     const repo = fakeSettingsRepo(makeSettings(), { hold: true });
     const store = createAppearanceStore(repo);
 
-    const saving = store.set({ mode: 'dark', tint: 'ocean' });
+    const saving = store.set({ mode: 'dark', tint: 'blueberry' });
     // The barista starts dragging the hue slider before that save lands.
     store.preview({ mode: 'dark', tint: { hue: 300 } });
     repo.releases[0]!();

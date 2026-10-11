@@ -20,7 +20,11 @@ describe('the tints', () => {
     expect(new Set(TINTS.map((t) => t.id)).size).toBe(TINTS.length);
     expect(DEFAULT_TINT_ID).toBe('crema');
     expect(TINTS[0]!.id).toBe('crema');
-    expect(TINTS.map((t) => t.name)).toEqual(['Crema', 'Matcha', 'Lagoon', 'Ocean', 'Plum', 'Cherry', 'Steel']);
+    expect(TINTS.map((t) => t.name)).toEqual(['Crema', 'Matcha', 'Cold Brew', 'Blueberry', 'Plum', 'Cherry', 'Tamper']);
+  });
+
+  it('are ids storage keeps: short lowercase words (src/storage/settings.ts)', () => {
+    for (const tint of TINTS) expect(tint.id).toMatch(/^[a-z][a-z0-9-]{0,31}$/);
   });
 
   it('look up by id', () => {

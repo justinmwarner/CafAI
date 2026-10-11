@@ -125,8 +125,9 @@ export type AppearanceMode = 'dark' | 'light' | 'auto';
 /**
  * How CafAI looks: a mode and a tint. The tint is a named tint's id (the list
  * lives with the palette, src/ui/palette.ts) or a hue from the custom slider.
- * Storage keeps any well-formed id; the UI reads one it does not know as the
- * default tint, so a tint a newer CafAI added survives a read by an older one.
+ * Storage keeps any well-formed id, and reads a renamed tint's old id as its
+ * new one (D123); the UI reads one it does not know as the default tint, so a
+ * tint a newer CafAI added survives a read by an older one.
  */
 export interface Appearance {
   mode: AppearanceMode;

@@ -88,12 +88,16 @@ const modeSx: SxProps<Theme> = (theme) => ({
 /**
  * One tint: a round swatch with its name under it, the whole cell one
  * button so a tap on the name picks it too. The colours arrive as CSS
- * variables, so all eight cells share one class however the hue moves.
+ * variables, so all eight cells share one class however the hue moves. A
+ * name that wraps on a narrow phone ("Cold Brew" at 320 px) grows down from
+ * the top, so the swatches of a row stay in line.
  */
 const swatchSx: SxProps<Theme> = (theme) => ({
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
+  justifyContent: 'flex-start',
+  textAlign: 'center',
   gap: '8px',
   minWidth: 0,
   py: '6px',

@@ -34,24 +34,37 @@ export interface Range {
   readonly max: number;
 }
 
-/** One field: its label (already named for its drink, e.g. "Steam temperature"), unit, range and step. */
+/**
+ * One field: its label (already named for its drink, e.g. "Steam temperature",
+ * the name a screen reader hears and a failed save says), the short label shown
+ * under the drink's own heading ("Temperature"), its unit as shown and as
+ * spoken, range and step.
+ */
 export interface DrinkFieldSpec {
   readonly key: string;
   readonly label: string;
+  readonly shortLabel: string;
   readonly unit: string;
+  readonly spokenUnit: string;
   readonly integer: boolean;
   readonly step: number;
   readonly range: Range;
   /**
    * Values below this mean the drink is off in Decaid (steam temperature
    * under 135 °C: Decaid writes 0, heater off, de1_controller.dart:575 at
-   * aab5f93). Shown read-only as "Off" with offNote under it, and never
-   * written by a blur or a stepper tap: turning steam on or off is not
-   * offered by this screen.
+   * aab5f93). Shown read-only as offText in place of the value, without
+   * buttons, and never written by a blur, a stepper tap or an arrow key:
+   * turning steam on or off is not offered by this screen.
    */
   readonly offBelow?: number;
-  readonly offNote?: string;
+  readonly offText?: string;
 }
+
+/** Each unit as the stepper shows it after the value, and as a screen reader says it. */
+const CELSIUS = { unit: '°C', spokenUnit: 'degrees Celsius' } as const;
+const SECONDS = { unit: 's', spokenUnit: 'seconds' } as const;
+const MILLILITRES = { unit: 'ml', spokenUnit: 'millilitres' } as const;
+const MILLILITRES_PER_SECOND = { unit: 'ml/s', spokenUnit: 'millilitres per second' } as const;
 
 function clamp(value: number, range: Range, integer: boolean): number {
   const bounded = Math.min(range.max, Math.max(range.min, value));
@@ -99,12 +112,13 @@ export function steamTemperatureField(model: string | null): DrinkFieldSpec {
   return {
     key: 'targetTemperature',
     label: 'Steam temperature',
-    unit: '°C',
+    shortLabel: 'Temperature',
+    ...CELSIUS,
     integer: true,
     step: 1,
     range: { min: 135, max: model === 'Bengle' ? 165 : 160 },
     offBelow: 135,
-    offNote: 'Steam is off in Decaid',
+    offText: 'Off in Decaid',
   };
 }
 
@@ -116,7 +130,8 @@ export function steamTemperatureField(model: string | null): DrinkFieldSpec {
 export const STEAM_DURATION: DrinkFieldSpec = {
   key: 'duration',
   label: 'Steam time',
-  unit: 's',
+  shortLabel: 'Time',
+  ...SECONDS,
   integer: true,
   step: 5,
   range: { min: 1, max: 120 },
@@ -129,7 +144,8 @@ export const STEAM_DURATION: DrinkFieldSpec = {
 export const STEAM_FLOW: DrinkFieldSpec = {
   key: 'flow',
   label: 'Steam flow',
-  unit: 'ml/s',
+  shortLabel: 'Flow',
+  ...MILLILITRES_PER_SECOND,
   integer: false,
   step: 0.1,
   range: { min: 0.1, max: 2.5 },
@@ -147,7 +163,8 @@ export function steamFields(model: string | null): readonly DrinkFieldSpec[] {
 export const HOT_WATER_TEMPERATURE: DrinkFieldSpec = {
   key: 'targetTemperature',
   label: 'Hot water temperature',
-  unit: '°C',
+  shortLabel: 'Temperature',
+  ...CELSIUS,
   integer: true,
   step: 1,
   range: { min: 1, max: 100 },
@@ -162,7 +179,8 @@ export const HOT_WATER_TEMPERATURE: DrinkFieldSpec = {
 export const HOT_WATER_VOLUME: DrinkFieldSpec = {
   key: 'volume',
   label: 'Hot water volume',
-  unit: 'ml',
+  shortLabel: 'Volume',
+  ...MILLILITRES,
   integer: true,
   step: 10,
   range: { min: 1, max: 255 },
@@ -175,7 +193,8 @@ export const HOT_WATER_VOLUME: DrinkFieldSpec = {
 export const HOT_WATER_DURATION: DrinkFieldSpec = {
   key: 'duration',
   label: 'Hot water time',
-  unit: 's',
+  shortLabel: 'Time',
+  ...SECONDS,
   integer: true,
   step: 5,
   range: { min: 1, max: 120 },
@@ -184,7 +203,8 @@ export const HOT_WATER_DURATION: DrinkFieldSpec = {
 export const HOT_WATER_FLOW: DrinkFieldSpec = {
   key: 'flow',
   label: 'Hot water flow',
-  unit: 'ml/s',
+  shortLabel: 'Flow',
+  ...MILLILITRES_PER_SECOND,
   integer: false,
   step: 0.5,
   range: { min: 0.1, max: 15 },
@@ -200,7 +220,8 @@ export const HOT_WATER_FIELDS: readonly DrinkFieldSpec[] = [HOT_WATER_TEMPERATUR
 export const RINSE_DURATION: DrinkFieldSpec = {
   key: 'duration',
   label: 'Flush time',
-  unit: 's',
+  shortLabel: 'Time',
+  ...SECONDS,
   integer: true,
   step: 1,
   range: { min: 1, max: 60 },
@@ -209,7 +230,8 @@ export const RINSE_DURATION: DrinkFieldSpec = {
 export const RINSE_TEMPERATURE: DrinkFieldSpec = {
   key: 'targetTemperature',
   label: 'Flush temperature',
-  unit: '°C',
+  shortLabel: 'Temperature',
+  ...CELSIUS,
   integer: true,
   step: 1,
   range: { min: 1, max: 100 },
@@ -218,13 +240,15 @@ export const RINSE_TEMPERATURE: DrinkFieldSpec = {
 export const RINSE_FLOW: DrinkFieldSpec = {
   key: 'flow',
   label: 'Flush flow',
-  unit: 'ml/s',
+  shortLabel: 'Flow',
+  ...MILLILITRES_PER_SECOND,
   integer: false,
   step: 0.5,
   range: { min: 0.1, max: 15 },
 };
 
-export const RINSE_FIELDS: readonly DrinkFieldSpec[] = [RINSE_DURATION, RINSE_TEMPERATURE, RINSE_FLOW];
+/** Temperature first, as steam and hot water have it (D124); Decaid's own flush screen leads with the time. */
+export const RINSE_FIELDS: readonly DrinkFieldSpec[] = [RINSE_TEMPERATURE, RINSE_DURATION, RINSE_FLOW];
 
 /**
  * Spec 6.6: never write a drink setting while a shot, steam, hot water or

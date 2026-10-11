@@ -26,9 +26,9 @@ describe('resolveTint', () => {
 
 describe('paletteFor', () => {
   it('builds the palette for the resolved mode and tint, once', () => {
-    const p = paletteFor({ mode: 'auto', tint: 'ocean' }, false);
-    expect(p).toEqual(buildPalette('light', namedTint('ocean')));
-    expect(paletteFor({ mode: 'light', tint: 'ocean' }, true)).toBe(p);
+    const p = paletteFor({ mode: 'auto', tint: 'blueberry' }, false);
+    expect(p).toEqual(buildPalette('light', namedTint('blueberry')));
+    expect(paletteFor({ mode: 'light', tint: 'blueberry' }, true)).toBe(p);
   });
 });
 

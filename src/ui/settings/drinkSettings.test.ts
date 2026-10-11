@@ -84,7 +84,7 @@ describe('steamTemperatureField', () => {
       expect(isDrinkOff(field, 135)).toBe(false);
       expect(isDrinkOff(field, 170)).toBe(false);
     }
-    expect(steamTemperatureField(null).offNote).toBe('Steam is off in Decaid');
+    expect(steamTemperatureField(null).offText).toBe('Off in Decaid');
   });
 
   it('no other field has an off value', () => {
@@ -141,8 +141,17 @@ describe('field lists', () => {
     expect(HOT_WATER_FIELDS.map((f) => f.label)).toEqual(['Hot water temperature', 'Hot water volume', 'Hot water time', 'Hot water flow']);
   });
 
-  it('orders flush as time, temperature, flow', () => {
-    expect(RINSE_FIELDS.map((f) => f.label)).toEqual(['Flush time', 'Flush temperature', 'Flush flow']);
+  it('orders flush as temperature, time, flow: temperature first, as steam and hot water have it (D124)', () => {
+    expect(RINSE_FIELDS.map((f) => f.label)).toEqual(['Flush temperature', 'Flush time', 'Flush flow']);
+  });
+
+  it("shows each field under its drink's heading by the end of its label, and says its unit in words", () => {
+    for (const field of [...steamFields(null), ...HOT_WATER_FIELDS, ...RINSE_FIELDS]) {
+      expect(field.label.toLowerCase().endsWith(` ${field.shortLabel.toLowerCase()}`), field.label).toBe(true);
+      expect(field.spokenUnit, field.label).toMatch(/^[A-Za-z ]+$/);
+    }
+    expect(steamFields(null).map((f) => `${f.unit} ${f.spokenUnit}`)).toEqual(['°C degrees Celsius', 's seconds', 'ml/s millilitres per second']);
+    expect(HOT_WATER_VOLUME.spokenUnit).toBe('millilitres');
   });
 
   it('marks temperature, time and volume fields as integers, and flow as not', () => {

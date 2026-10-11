@@ -128,7 +128,8 @@ test('Next step moves the shot on to its next step, at once and once per tap', a
 test("a steam change in Settings reaches Decaid's workflow alone, held to what the DE1 can take", async ({ page }) => {
   await openApp(page, '#/settings');
   const drinks = page.getByTestId(TID.drinkSettings);
-  const steamTime = drinks.getByLabel('Steam time (s)');
+  // Each setting's value is a spin button named for its drink (D124).
+  const steamTime = drinks.getByRole('spinbutton', { name: 'Steam time' });
   // Decaid's own values: the mock's workflow steams for 50 s.
   await expect(steamTime).toHaveValue('50');
   await expect(steamTime).toBeEnabled();
@@ -146,9 +147,19 @@ test("a steam change in Settings reaches Decaid's workflow alone, held to what t
   await expect(steamTime).toHaveValue('120');
   await expect.poll(async () => (await workflow(page)).steamSettings.duration).toBe(120);
 
+  // From the keyboard, Down is one step less, written at once too.
+  await steamTime.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(steamTime).toHaveValue('115');
+  await expect.poll(async () => (await workflow(page)).steamSettings.duration).toBe(115);
+
   // Each write carried steamSettings alone, with the changed field alone: never the profile, the other drinks or the context.
   const puts = (await decaidRequests(page)).filter((request) => request.method === 'PUT' && request.path === '/api/v1/workflow');
-  expect(puts.map((request) => request.body)).toEqual([{ steamSettings: { duration: 55 } }, { steamSettings: { duration: 120 } }]);
+  expect(puts.map((request) => request.body)).toEqual([
+    { steamSettings: { duration: 55 } },
+    { steamSettings: { duration: 120 } },
+    { steamSettings: { duration: 115 } },
+  ]);
   const after = await workflow(page);
-  expect(after).toEqual({ ...before, steamSettings: { ...before.steamSettings, duration: 120 } });
+  expect(after).toEqual({ ...before, steamSettings: { ...before.steamSettings, duration: 115 } });
 });
