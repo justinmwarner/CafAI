@@ -11,9 +11,9 @@ is bundled into the app.
 |---|---|
 | `PIN.json` | The pinned release and commit, the sha256 of both specs, the generator |
 | `spec/rest_v1.yml`, `spec/websocket_v1.yml` | Decaid's `assets/api/` specs at the pin, verbatim |
-| `generated/rest.ts`, `generated/ws.ts` | openapi-typescript output; `ws.ts` also has the channel map (`WsReceive`, `WsSend`). Never edited by hand |
-| `helpers.ts` | `Diff`, `Extra`, `EnumDrift`, `Exactly`, and accessors by path (`Res`, `Body`, `Statuses`, `PathParams`) |
-| `checks/*.ts` | The assertions: REST replies, REST bodies, WebSocket frames, enums, status codes |
+| `generated/rest.ts`, `generated/ws.ts` | openapi-typescript output; `ws.ts` also has `WsReceive`, the spec's own channel map cut to the channels CafAI opens. Never edited by hand |
+| `helpers.ts` | `Diff`, `Extra`, `EnumDrift`, `Exactly`, and accessors by path (`Res`, `Body`, `Statuses`, `PathParams`, `Query`) |
+| `checks/*.ts` | The assertions: REST replies, REST bodies and the query and path parameters CafAI sends, WebSocket frames, enums, status codes |
 | `drift.ts` | The exception registry: type fragments for the checks, runtime exceptions for ajv |
 | `schema.ts` | The specs as ajv validators (`loadSpecValidator()`), for the mock contract test and the tests against a real Decaid |
 
@@ -22,8 +22,51 @@ is bundled into the app.
 `node scripts/decaid-contract.mjs --check` (the specs match `PIN.json` and
 regenerate to the committed files). `mock/decaid/contract.test.ts` validates
 the fixtures, the mock's replies and frames, and the bodies CafAI sends with
-`schema.ts`. `npm run decaid:watch` (daily in `.github/workflows/decaid-watch.yml`)
-runs the same checks against Decaid's latest release and `main`.
+`schema.ts`.
+
+CafAI's types say only what CafAI reads (an index signature takes the
+rest), so the checks cover exactly that: a field CafAI never reads may
+change, or go, without failing anything.
+
+## The drift watch
+
+`npm run decaid:watch` (daily in `.github/workflows/decaid-watch.yml`) runs
+the same checks against Decaid's latest release and `main`: the contract
+typecheck against types generated from their specs, the mock contract test
+against their specs (it must pass at least one test: a `-t` filter that
+matches nothing runs none), and a diff of the specs. Anything that can break
+CafAI fails the watch even when the typecheck passes: in what CafAI calls,
+opens or reads, an operation or a channel removed, a parameter removed,
+renamed, retyped or newly required, a schema removed, a property removed or
+retyped. So does a channel CafAI opens that sends other frames than
+`CHANNELS` in `scripts/decaid-contract.mjs` lists; change `CHANNELS` and the
+`Opened` list in `checks/ws.ts` together (a test keeps them equal).
+
+The exit code, and what the workflow files, is the first that applies:
+
+| Exit | Meaning | Issue |
+|---|---|---|
+| 1 | a check failed | `decaid-drift`, "Decaid changed something CafAI reads": opened, or a comment on the open one; the run fails |
+| 2 | the watch could not look at everything (GitHub could not serve a version, or list the files changed since the pin) | `decaid-watch-blind`, "The Decaid drift watch could not look": opened, or a comment on the open one |
+| 4 | files CafAI depends on changed since the pin, and every check passes | `decaid-read`, "Decaid changed files CafAI depends on": opened, or the open one's body replaced (no notification) |
+| 0 | nothing CafAI depends on changed | none |
+| 3 | the watch itself broke | none; the run fails |
+
+The files are counted from the pin, so they add up until the pin moves: keep
+the `decaid-read` issue open until then, or the next run opens a new one.
+GitHub's compare lists at most 300 files.
+
+## What is not checked
+
+The plugins' own payloads are not Decaid's API, and nothing in the specs
+describes them: time-to-ready's frames (the spec's `PluginMessage` is any
+object; only the channel's address is checked), DYE2's `recent-favs` reply
+and its keys in Decaid's store (`autoFavourites`, `recipes`, `equipment`,
+`baskets`), and Visualizer's `lastUploadedShot` and `lastVisualizerId`. CafAI
+reads them leniently and reports what it does not expect as drift
+(`src/api/pluginData.ts`, `parseTimeToReadyFrame` in `src/api/telemetry.ts`),
+and `npm run test:decaid` reads them as CafAI does: time-to-ready's frames
+while Decaid has the plugin loaded, the rest whether or not they are there.
 
 ## Moving the pin
 
@@ -33,9 +76,12 @@ runs the same checks against Decaid's latest release and `main`.
 2. `npm run typecheck` and `npx vitest run mock/decaid/contract.test.ts scripts`.
 3. Work through what fails (below): fix `src/api/types.ts` where Decaid
    changed, delete exceptions Decaid fixed, record new ones with their reason.
+   A channel that now sends other frames: `CHANNELS` in
+   `scripts/decaid-contract.mjs`, after reading what changed.
 4. Update the Dart citations in `drift.ts` to the new commit where the cited
    files changed, and `docs/upstream/decaid-spec-fixes.md` if Decent fixed
    something.
+5. Read the files the `decaid-read` issue lists, then close it.
 
 The drift watch's report says in advance which exceptions turn stale and
 which checks fail.
@@ -65,6 +111,9 @@ CafAI sends must fit what Decaid documents). A failure names the field:
   side lacks.
 - A route, method or status that disappeared shows as `(source): not in the
   spec` or as a compile error on the path itself.
+- `{ unexpected: "connect: not declared by target" }` on a query check: the
+  spec no longer has a parameter CafAI sends (renamed, or gone). Decaid
+  ignores a parameter it does not know, so CafAI's would do nothing.
 
 A runtime problem from `schema.ts` reads `"measurements[3].machine.pressure: must be number"`:
 a field path in the payload and what the spec wanted.

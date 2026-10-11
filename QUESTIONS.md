@@ -61,15 +61,19 @@ questions you answered are in "Answered" at the end.
 9. **Can this repository go on GitHub?** It has no remote, so nothing that
    watches Decaid has ever run. Four workflows wait for it (D105):
    `ci.yml` (every push: typecheck with the Decaid contract, lint, tests,
-   build, zip, e2e); `decaid-watch.yml` (daily: opens a `decaid-drift`
-   issue when Decaid's newest release or `main` fails one of CafAI's
-   checks); `decaid-live.yml` (daily and before each release: Decaid's
-   Linux release headless with a simulated machine and scale, CafAI's
-   checks against it, and a browser check); and `release.yml` (publishes
-   only after that job, its own checks and e2e pass). Until then the same
-   checks run only by hand: `npm run decaid:watch`, and
-   `npm run test:decaid` against your Windows simulator (docs/SIMULATOR.md
-   section 6); `scripts/decaid-ci.sh` runs only on Linux. If it stays local, a Decaid release that breaks
+   build, zip, e2e); `decaid-watch.yml` (daily: an issue labelled
+   `decaid-drift` when Decaid's newest release or `main` fails one of
+   CafAI's checks or removes or retypes something CafAI uses,
+   `decaid-watch-blind` when it could not look at every version or its
+   changed files, and `decaid-read` when files CafAI depends on changed
+   but every check passes); `decaid-live.yml` (daily and before each
+   release: Decaid's Linux release headless with a simulated machine and
+   scale, CafAI's checks against it, and a browser check); and
+   `release.yml` (publishes only after that job, its own checks and e2e
+   pass). Until then the same checks run only by hand:
+   `npm run decaid:watch`, and `npm run test:decaid` against your Windows
+   simulator (docs/SIMULATOR.md section 6); `scripts/decaid-ci.sh` runs
+   only on Linux. If it stays local, a Decaid release that breaks
    CafAI is found on a tablet, by a user. What it needs: a repository (a
    private one spends Actions minutes on two daily jobs, each limited to 30
    minutes), the branches pushed, and Actions allowed to open issues and
@@ -100,25 +104,34 @@ questions you answered are in "Answered" at the end.
 12. **Are CafAI's ranges for steam, hot water and flush right?** Decaid's
     spec gives a range only for steam temperature, and Decaid writes these
     values to the DE1 unchecked, so CafAI's clamp is the only one (D114).
-    Where neither Decaid nor streamline gives a range, CafAI chose one:
+    What CafAI chose: every range takes in what Decaid's own screens set
+    (its steam, hot water and flush forms at v0.8.8), so nothing you set
+    there is refused here, but for a time or the volume at 0, which CafAI
+    never writes, and steam above 160 °C (165 on a Bengle). So steam flow
+    now goes to 2.5 ml/s and the flush's time to 60 s:
 
-    | Setting | CafAI's range | Step | Where it comes from |
-    |---|---|---|---|
-    | Steam temperature | 135-160 °C (165 on a Bengle) | 1 °C | Decaid's spec |
-    | Steam time | 1-120 s | 5 s | CafAI; the DE1 holds up to 255 |
-    | Steam flow | 0.1-2 ml/s | 0.1 ml/s | CafAI; Decaid's default is 0.8 |
-    | Hot water temperature | 1-100 °C | 1 °C | CafAI; water boils at 100 |
-    | Hot water volume | 1-255 ml | 10 ml | The DE1's one byte; streamline stops at 255 too |
-    | Hot water time | 1-120 s | 5 s | CafAI; the DE1 holds up to 255 |
-    | Hot water flow | 0.1-15 ml/s | 0.5 ml/s | CafAI; Decaid's default is 10 |
-    | Flush time | 1-30 s | 1 s | CafAI |
-    | Flush temperature | 1-100 °C | 1 °C | CafAI |
-    | Flush flow | 0.1-15 ml/s | 0.5 ml/s | CafAI; Decaid's default is 6 |
+    | Setting | CafAI's range | Step | Decaid's screen | Where CafAI's comes from |
+    |---|---|---|---|---|
+    | Steam temperature | 135-160 °C (165 on a Bengle) | 1 °C | 135-170 °C | Decaid's spec |
+    | Steam time | 1-120 s | 5 s | 0-120 s | CafAI, the same top as Decaid's screen; the DE1 holds up to 255 |
+    | Steam flow | 0.1-2.5 ml/s | 0.1 ml/s | 0.4-2.5 ml/s | Its top from Decaid's screen; Decaid's default is 0.8 |
+    | Hot water temperature | 1-100 °C | 1 °C | 50-95 °C | CafAI; water boils at 100 |
+    | Hot water volume | 1-255 ml | 10 ml | 0-250 ml | The DE1's one byte; streamline stops at 255 too |
+    | Hot water time | 1-120 s | 5 s | 0-60 s | CafAI; the DE1 holds up to 255 |
+    | Hot water flow | 0.1-15 ml/s | 0.5 ml/s | 1-8 ml/s | CafAI; Decaid's default is 10 |
+    | Flush time | 1-60 s | 1 s | 0-60 s | Decaid's screen |
+    | Flush temperature | 1-100 °C | 1 °C | 5-95 °C | CafAI |
+    | Flush flow | 0.1-15 ml/s | 0.5 ml/s | 1-8 ml/s | CafAI; Decaid's default is 6 |
 
-    A range too narrow refuses a value you want (you would set it in
-    Decaid's own screens, and CafAI leaves it alone unless you change that
-    field in CafAI); one too wide lets a typo through to the machine. Each
-    range is one line in `src/ui/settings/drinkSettings.ts`.
+    Still open: where CafAI's range is wider than Decaid's screen (the hot
+    water and flush temperatures, the hot water time and volume, every
+    flow), a typo within it reaches the machine; narrowing those to
+    Decaid's screens would refuse nothing Decaid lets you set. And steam
+    temperature: Decaid's screen goes to 170 °C, its spec to 160 (165 on a
+    Bengle). CafAI follows the spec, so a 170 set on Decaid's screen shows
+    here and is left alone unless you change it in CafAI. If a DE1 takes
+    up to 170 °C, as Decaid's screen suggests, CafAI's ceiling could match
+    it. Each range is one line in `src/ui/settings/drinkSettings.ts`.
 13. **Should the spec fixes go to Decent?** `docs/upstream/decaid-spec-fixes.md`
     is a draft issue, with a patch outline, listing where Decaid's specs
     disagree with its Dart code at v0.8.8, each with the Dart line. CafAI

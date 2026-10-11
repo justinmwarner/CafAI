@@ -1,12 +1,20 @@
 # Good morning: CafAI after your answers (2026-10-04)
 
-**Newest (2026-10-09):** the machine on demand, as you asked. Nothing but
-the chat on load; a live stats card in the chat that goes as you chat, with
-Stats to bring it back; Espresso, Steam, Flush and Hot water in the top bar,
-where the running one turns into Stop; the graph from Shot. It is merged
-into `main` with the UX rework under it (2026-10-07 and 08: tablet and phone
-layouts, the shot taking the screen, Figtree, a look of your own). Both
-sections come right after the status table.
+**Newest (2026-10-09 and 10):** Decaid alignment and update safety, on
+branch `feat/decaid-alignment`. CafAI now checks itself against Decaid's own
+API specs at the release you run (v0.8.8), watches Decaid's newest release
+and `main` for changes that would break it, reads every Decaid reply instead
+of trusting it, and fails safe, out loud, when Decaid sends something
+unexpected. It also uses more of Decaid: a new bag starts from Decaid's bean
+library or a photo of the bag, the coach reads DYE2's setups, shot cards
+link to Visualizer, and there are Connect, a heating countdown, Next step,
+steam, hot water and flush settings, and a switch to keep the API key in
+Decaid. A fresh-eyes review found 25 defects, all fixed, and everything
+passes, against Decaid 0.8.8 on your simulator too. It is committed on that
+branch, not merged into `main` (your call) and not pushed. Its section
+comes right after the status table. Before it, merged into `main`: the
+machine on demand (2026-10-08 and 09) and the UX rework (2026-10-07 and
+08), in the two sections after it.
 
 Your nine answers in QUESTIONS.md are all done. Each is an owner decision
 (D55-D63), and each that changed behaviour went through its own brief,
@@ -22,12 +30,181 @@ pushed.
 |---|---|
 | Typecheck (`npm run typecheck`) | pass |
 | Lint (`npm run lint`) | pass |
-| Unit tests (`npm test`) | **2330/2330** in 144 files on 2026-10-09 (2026-10-08: 2275 in 141; 2026-10-06: 2047 in 125; 2026-10-04: 1836 in 115; overnight: 1254 in 91) |
-| Playwright (`npm run e2e`) | **188 passed, 2 skipped** on 2026-10-09: 52 each at 962x602, 1280x800 and 1920x1200, and 16 each on a 390x844 phone upright and on its side (each phone skips a tablet-only check) (2026-10-08: 140; 2026-10-06: 114 on the three tablets) |
-| `npm run verify` (all of the above, build and release zip) | pass |
-| Real Chromium 91 (`npm run build:mock && npm run smoke:chrome91 && npm run smoke:chrome91:loop`) | pass: the app loads with no console or page errors, and the whole coach loop runs, waiting for the machine to confirm each load; the chat opens with the stats card, Stats brings it back, Espresso in the top bar turns into Stop and the Shot view takes the screen 0.2 s later, and the coach comes back with the card 3.5 s after that |
+| Unit tests (`npm test`) | **3014/3014** in 169 files on 2026-10-11 (2026-10-09: 2330 in 144; 2026-10-08: 2275 in 141; 2026-10-06: 2047 in 125; 2026-10-04: 1836 in 115; overnight: 1254 in 91) |
+| Playwright (`npm run e2e`) | **258 passed, 2 skipped** on 2026-10-11, on all five sizes (each phone skips a tablet-only check). Run with 5 workers (`npx playwright test --workers=5`): 8.8 minutes instead of about 25. Six failed in that run and passed alone: five checked a bean button's name the old way (the spec is fixed), one is a timing check that missed under the load (2026-10-09: 188; 2026-10-08: 140; 2026-10-06: 114 on the three tablets) |
+| `npm run verify` (all of the above, build and release zip) | every part passes on 2026-10-11, run side by side rather than as the one command (which runs e2e on one worker) |
+| Real Chromium 91 (`npm run build:mock && npm run smoke:chrome91 && npm run smoke:chrome91:loop`) | pass on 2026-10-11: the app loads with no console or page errors, and the whole coach loop runs, now through "Which coffee is it?" (Something else), waiting for the machine to confirm each load; the chat opens with the stats card, Stats brings it back, Espresso in the top bar turns into Stop and the Shot view takes the screen, and the coach comes back with the card |
+| Real Decaid (`npm run test:decaid` with writes and a simulated shot) | **36/36** on 2026-10-11 against Decaid 0.8.8+2900 (`aab5f938`, the pin) on your Windows simulator, including the new checks: Connect and a reconnect after a disconnect, Next step during the shot, the time-to-ready channel, DYE2's and Visualizer's data (2026-10-10: 31, then 32) |
+| CafAI served by Decaid (`npm run e2e:real`) | pass on 2026-10-11, the production build from Decaid's port 3000 |
+| Drift watch (`npm run decaid:watch`) | exit 4 on 2026-10-11: every check passes for v0.8.8 and Decaid's `main` (`af4e995`), whose spec changes are additions; files CafAI depends on changed on `main` (camera access for skins, the Visualizer plugin), so on GitHub it would open a `decaid-read` issue (D105) |
 | Live API test (`npm run test:live`) | skipped here (no key on this machine); its dry run against the scripted coach passes |
-| Fresh-eyes verifier | 2026-10-08, the UX rework: 2 major, 5 minor and 8 polish; 13 fixed, 1 kept by design, 1 open (below). Chat first: not run yet (its brief is `docs/briefs/verify-chat-first.md`). Earlier rounds: all fixed |
+| Fresh-eyes verifier | 2026-10-10, Decaid alignment: three reviewers (update safety; engine and storage; UI) found 25 defects, 7 of them important, each verified with a test or Decaid's source; all fixed (`197520d`, brief `docs/briefs/verify-decaid-alignment.md`). 2026-10-08, the UX rework: 2 major, 5 minor and 8 polish; 13 fixed, 1 kept by design, 1 open (below). Chat first: not run yet (its brief is `docs/briefs/verify-chat-first.md`). Earlier rounds: all fixed |
+
+## New: Decaid alignment and update safety (2026-10-09 and 10)
+
+Your ask: check CafAI against the patterns of the other skins for Decaid,
+leaning on Decent's own streamline; hook up what Decaid offers natively; and
+make sure Decaid updates do not break CafAI. The audit
+(`docs/audit/2026-10-09/`, five reports) found CafAI ahead of every skin it
+surveyed on engineering, but working from a view of Decaid read once and
+never checked again, with seven ways a Decaid change would break it without
+anyone noticing. You chose all eight update-safety layers and the features
+below. Spec: `docs/superpowers/specs/2026-10-09-decaid-alignment-design.md`;
+decisions D93-D122. Built on branch `feat/decaid-alignment`; nothing is
+pushed (this repository has no remote).
+
+**Update safety**
+
+- **Types from Decaid's own specs (D93, D94).** Decaid's REST and WebSocket
+  specs from v0.8.8 (`aab5f93`), the release you run, are in
+  `contract/decaid/` with TypeScript generated from them. `npm run
+  typecheck` checks CafAI's wire types against them (78 checks); where the
+  spec is wrong and CafAI follows Decaid's code, the exception is recorded
+  with the Dart line that proves it. A new mismatch fails, and so does an
+  exception Decaid has since fixed. `npm run decaid:update -- <tag>` moves
+  the pin.
+- **A drift watch (D105).** `npm run decaid:watch` asks whether Decaid's
+  latest release or its `main` would break CafAI: it runs the same checks
+  against their specs and lists the Decaid files CafAI depends on that
+  changed. Once the repository is on GitHub, a daily workflow runs it and
+  opens an issue when a check fails.
+- **The mock checked against the spec (D94).** The mock Decaid's fixtures,
+  replies and frames, and the bodies CafAI sends, are validated against the
+  pinned spec, so the mock and the client no longer only agree with each
+  other.
+- **Checks against a real Decaid (D104).** `npm run test:decaid` runs
+  CafAI's own client and parsers against a running Decaid and checks every
+  reply and frame against the spec. It only reads unless told otherwise, so
+  it is safe on your tablet; the writes and a simulated shot run only
+  against a simulator. `npm run e2e:real` opens CafAI from Decaid itself.
+- **Tolerant readers and the drift log (D95, D97, D107-D110).** Every Decaid
+  reply goes through a reader: extra fields pass, and a missing or mistyped
+  one is reported and handled, never turned into a silent 0, a crash or an
+  endless retry. A renamed reading shows a dash, a machine state CafAI does
+  not know gets Stop, a shot is found whatever Decaid calls its shot states,
+  an unreadable backup is never taken for an empty one, and a write Decaid
+  refuses is dropped with one notice.
+- **Version and plugin awareness (D96, D103).** CafAI knows the Decaid it
+  runs against and the one it was checked against, and uses time-to-ready,
+  Visualizer and DYE2 only while Decaid has them loaded.
+- **A fail-safe engine (D100, D101, D106).** After a Decaid update CafAI
+  keeps trying Decaid's backup while Decaid starts (for up to 10 minutes,
+  and again when the machine connects), then brings the bags back into the
+  chat. Stars go out on the rating scale your Decaid keeps (CafAI asks it:
+  0-10, or 0-100 on 0.8.6 builds). A slow load waits 35 s and counts only
+  what Decaid holds, and when Decaid cannot confirm a load or name the
+  profile that ran, the chat says what CafAI assumed.
+
+**Decaid features**
+
+- **The gateway alert (D98).** In gateway mode Full, Decaid leaves stopping
+  at the target weight to the skin, and CafAI does not stop shots. The
+  machine alert says so, with **Let Decaid stop shots**, which sets
+  Tracking.
+- **Connect (D111).** "Not connected" has **Connect DE1** and **Connect
+  scale**: one device at a time, the one Decaid prefers, or the only one
+  found when none is preferred; otherwise the alert says why it connected
+  none. A scale that dropped is looked for once by itself after a wake.
+- **Ready in about N min (D112).** While the machine heats, the stats card
+  says Heating (it used to say Ready while the group was cold) and, with the
+  time-to-ready plugin, "Ready in about 3 min".
+- **Next step (D113).** During a shot, one tap moves the profile on one
+  step.
+- **Steam, hot water and flush (D114).** In Settings, within what the DE1
+  can hold: the hot water volume stops at 255 ml, because 300 would run as
+  44 in the DE1's one byte.
+- **About (D96).** Settings > About shows the Decaid you run next to the one
+  CafAI was checked against, anything Decaid sent that CafAI did not expect
+  (with Copy report), and when CafAI last backed up to Decaid.
+- **The key switch (D99).** **Keep my API key in Decaid**, off by default,
+  so the key survives a Decaid update, which wipes the skin's browser
+  storage. The note under it says the cost: any device on your network can
+  read Decaid's store.
+- **The intake (D115-D122).** A new bag opens on "Which coffee is it?",
+  shown from its top: the coffees in Decaid's bean library, newest roast
+  first (one tap fills in and links the bag), **Photo of the bag** (the
+  coach's model reads the label once, into a card you correct and confirm;
+  CafAI keeps no copy), or **Something else** (describe it as before). The
+  coach hears the roast date and the coffee's age, frozen days left out,
+  and can read DYE2's setups for the coffee and its earlier roasts without
+  changing them. A shot Decaid's Visualizer plugin uploaded gets **On
+  Visualizer** on its card and in History.
+
+**Verified**
+
+- `npm run test:decaid` against Decaid 0.8.8+2900 (`aab5f938`, the pinned
+  release) on your Windows simulator, 2026-10-10: 31 of 31 checks passed,
+  with the writes and a simulated shot, in about a minute
+  (docs/SIMULATOR.md section 6). A 32nd, the bean card's read of every
+  batch (`GET /api/v1/bean-batches`), was added that evening and passes
+  too, with the bean and batch write check extended to it.
+- `npm run decaid:watch`: exit 0. Decaid's latest release is still v0.8.8,
+  the pin, and its `main` (`af4e995`) has only additive changes since:
+  `grinderBurrs` in the workflow (CafAI already clears it with the other
+  grinder fields) and `grinder` as a device type; a Visualizer plugin that
+  still writes the two keys CafAI reads; and camera access for skins,
+  per-skin consent for live camera and, on Android, a confirmation before
+  every photo taken through a file input like CafAI's (D122). The recorded
+  spec exceptions for `grinderBurrs` and the grinder type can go when the
+  pin moves.
+- `npm run e2e:real` against the simulator, with Decaid serving the
+  production build (`--skin-path`): passes. By hand, the same build from
+  Decaid's port 3000: it restored the bags of the 0.8.7 trial from Decaid's
+  backup and asked for the key again with the reason, and on a new bag
+  "Which coffee is it?" listed a batch added to the simulator's library
+  as "Roasted 1 Oct 2026", the day Decaid stored (zone-less) read as
+  written here at UTC-5. That bean was archived afterwards.
+
+**Not verified**
+
+- The Linux CI path: `scripts/decaid-ci.sh` (Decaid's Linux release,
+  headless) has never run, and neither has any of the four GitHub workflows
+  (`ci`, `decaid-watch`, `decaid-live`, `release`); they wait for the
+  repository to be on GitHub (QUESTIONS #9).
+- The bag photo on a real tablet: what Decaid 0.8.8's WebView offers when
+  CafAI asks for a photo, and the next Decaid's confirmation before every
+  photo (hardware plan section 12, step 8). No photo has gone to the real
+  Anthropic API either: `npm run test:live` does not send one, and the
+  tests use the scripted coach.
+- The Visualizer link with a real upload: only the mock's stand-in for the
+  plugin has written the keys CafAI reads (hardware plan section 12, step
+  9).
+- Everything else in hardware plan section 12 needs the DE1: the rating
+  scale, Connect, gateway mode, the drink settings, Next step, the
+  countdown, the keyboard, and a coffee DYE2 has seen.
+
+**Look at first:**
+
+1. `npm run dev:mock`, open `http://localhost:5173/?mockSpeed=20`, save any
+   key (`sk-ant-demo`), then Coach -> **New bag**: "Which coffee is it?"
+   with the mock's two coffees. Pick Red Brick and the coach goes straight
+   to the starting profiles; tap one, then Espresso, and a few seconds after
+   the shot's card lands, **On Visualizer** appears on it. On the next new
+   bag, tap **Photo of the bag** and pick any photo: the scripted coach
+   reads it as Kiambu AA from Square Mile, for you to correct and confirm.
+2. Settings > About: the Decaid lines and the backup's health. Open
+   `http://localhost:5173/?mockGateway=full` for the gateway alert and its
+   button.
+3. The five new questions in QUESTIONS.md (9-13): putting the repository on
+   GitHub, the rating scale on your tablet, the key in every browser, the
+   ranges for steam, hot water and flush, and whether the spec fixes go to
+   Decent.
+
+**Calls you may want to change:**
+
+1. Heating follows the machine's own state, and time-to-ready only adds the
+   minutes (D112); the spec let the plugin's status decide, which would have
+   shown Heating on a warm machine.
+2. Next step sits at the end of the coach's note under the graph, not
+   beside the step's name as the spec said (D113).
+3. The photo comes through a file input, never a live camera (D122). The
+   spec expected Decaid to ask for camera consent once per skin; on Android
+   the next Decaid asks before every photo taken that way. A live camera
+   would be asked about once per skin, but it needs a viewfinder in CafAI,
+   and a phone on the network cannot use one (its page is not a secure
+   context).
+4. The bean card shows at most 8 coffees, the newest roasts; an older one
+   needs a photo or a description (spec 6.1).
 
 ## New: chat first, the machine on demand (2026-10-08 and 09)
 
@@ -343,9 +520,10 @@ recorded, not chased.
   covers the first session; `npm run test:live` covers the API.
 - **Coffee knowledge is still the placeholder** heuristics block (now
   aligned with D-Flow's start ratio).
-- Not built: teaching mode, personas, bag photos, voice, other providers in
-  the UI, steam and hot-water editors, device-connect screens, a
-  screensaver, and the local coach (roadmap).
+- Not built: teaching mode, personas, voice, other providers in the UI,
+  device pairing screens beyond Connect, a screensaver, and the local coach
+  (roadmap). Bag photos, Connect, and the steam, hot water and flush
+  settings came with the Decaid alignment (above).
 - Writes waiting for Decaid live in memory only (D64).
 - The fresh-eyes check of chat first (its brief is ready). The two layout
   corners the UX check left open went with the machine column.

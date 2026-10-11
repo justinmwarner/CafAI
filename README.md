@@ -100,9 +100,13 @@ never change pump type, step order or count, sensors, or exit types.
   **Connect DE1** (and **Connect scale** when the scale is missing too);
   when only the scale dropped while the machine is awake, **Connect scale**.
   A Connect looks for devices without connecting them, then connects only
-  the one you asked for, Decaid's preferred one first, so the other is never
-  disturbed. After the machine wakes, CafAI also looks for a missing scale
-  once by itself. When Decaid's gateway mode is Full, Decaid leaves stopping
+  the one Decaid itself would: its preferred one, or the only one in range
+  when it has none. So the other device is never disturbed, and when the
+  choice is Decaid's to make (its preferred one is away but another is
+  there, it sees several, or it did not say which it uses), the alert says
+  so and sends you to Decaid's scan screen instead. After the machine
+  wakes, CafAI also looks once by itself for Decaid's preferred scale when
+  it is missing. When Decaid's gateway mode is Full, Decaid leaves stopping
   at the target weight to the skin, and CafAI does not stop shots, so they
   would run past it: the alert says so, and **Let Decaid stop shots** sets
   Decaid to Tracking. CafAI never changes Decaid's settings without that
@@ -140,8 +144,10 @@ never change pump type, step order or count, sensors, or exit types.
   flow; hot water temperature, volume, time and flow; flush time,
   temperature and flow), with steppers, within what the DE1 can hold (hot
   water at most 255 ml; steam 135-160 °C, 165 on a Bengle). A value goes to
-  Decaid only when you change it, and never while the machine runs. Steam
-  that is off in Decaid shows Off; turning it on or off stays in Decaid.
+  Decaid only when you change it, never while the machine runs, and never
+  without a DE1 connected; until Decaid answers, the fields show a dash.
+  Steam that is off in Decaid (below 135 °C) shows Off; turning it on or off
+  stays in Decaid.
 - **Settings > About**: CafAI's version, and the Decaid you run next to the
   one CafAI was checked against ("Decaid 0.9.0 (CafAI was verified with
   0.8.8)", with a note when yours is older); anything Decaid sent that
@@ -180,6 +186,7 @@ npm run typecheck && npm run lint && npm test
                       # typecheck includes the Decaid contract (contract/decaid/)
 npm run e2e           # Playwright against the mocks, on three tablets and a phone
                       # (962x602, 1280x800, 1920x1200; a 390x844 phone upright and on its side)
+                      # on port 4174; E2E_PORT=4175 npm run e2e runs beside another checkout's run
 npm run release:zip   # release/cafai-<version>.zip (with LICENSE, NOTICE and the font licences)
 npm run decaid:watch  # would Decaid's latest release or main break CafAI?
 npm run decaid:update -- v0.9.0   # move the pin to another Decaid release
@@ -189,23 +196,27 @@ npm run e2e:real      # CafAI opened from a running Decaid's port 3000
 
 **Against Decaid's API.** CafAI is checked against Decaid **v0.8.8**
 (`aab5f93`), the pin in `contract/decaid/PIN.json`. `npm run typecheck`
-compares CafAI's wire types with Decaid's own specs at that release (73
+compares CafAI's wire types with Decaid's own specs at that release (78
 checks), and every place where the spec is wrong and CafAI follows Decaid's
 code is a recorded exception with the Dart line that proves it.
 [contract/decaid/README.md](contract/decaid/README.md) says how to read a
 failing check and how to move the pin (`npm run decaid:update -- <tag>`).
 `npm run decaid:watch` runs the same checks against Decaid's latest release
-and its `main`, and lists the Decaid files CafAI depends on that changed
-since the pin (exit 0: nothing breaks; 1: a check fails; 2: GitHub could not
-be reached; 3: the watch broke; `--report <file>` saves the report;
-`GH_TOKEN` raises GitHub's rate limit). On GitHub,
-`.github/workflows/decaid-watch.yml` runs it daily and opens a
-`decaid-drift` issue when a check fails, and
-`.github/workflows/decaid-live.yml` starts Decaid's Linux release headless
-with a simulated machine and scale (`scripts/decaid-ci.sh`) and runs
-`test:decaid` and `e2e:real` against it, daily and before every release; a
-release also needs `npm run e2e`. This repository is not on GitHub yet, so
-those workflows have not run.
+and its `main`, diffs their specs against the pin's, and lists the Decaid
+files CafAI depends on that changed since the pin. Its exit code: 0,
+nothing CafAI depends on changed; 1, a check failed, or the spec diff
+removes or retypes something CafAI uses; 2, it could not look at every
+version or its changed files; 3, the watch itself broke; 4, every check
+passes but files CafAI depends on changed (a spec with only additions
+among them). `--report <file>` saves the report, and `GH_TOKEN` raises
+GitHub's rate limit. On GitHub, `.github/workflows/decaid-watch.yml` runs
+it daily and files each outcome as an issue (or updates the open one):
+labelled `decaid-drift` on 1, `decaid-watch-blind` on 2 and `decaid-read`
+on 4; the run fails on 1 and 3. `.github/workflows/decaid-live.yml` starts
+Decaid's Linux release headless with a simulated machine and scale
+(`scripts/decaid-ci.sh`) and runs `test:decaid` and `e2e:real` against it,
+daily and before every release; a release also needs `npm run e2e`. This
+repository is not on GitHub yet, so those workflows have not run.
 
 **Against the real Anthropic API (opt-in).** `npm test` never calls the API.
 To check CafAI's own client, prompt and tools against it (2-3 calls on the
@@ -257,8 +268,10 @@ a real Decaid (`npm run dev:sim` opens it). `?mockGateway=full` starts
 Decaid in gateway mode Full, `?mockEnjoyment=100` keeps ratings 0-100 like
 Decaid 0.8.6, `?mockSlowWorkflow=<ms>` delays the workflow PUT and
 `?mockSlowWorkflow=503` answers it 503 after 30 s without applying it, as
-Decaid v0.8.8 does, and `?mockPlugins=none` loads no plugin. The production
-build never contains the mocks or a service worker.
+Decaid v0.8.8 does, `?mockPlugins=none` loads no plugin, and `?mockDrift=1`
+sends the machine's group temperature as `groupTemp`, as a Decaid that
+renamed it would, so Settings > About lists what CafAI did not expect. The
+production build never contains the mocks or a service worker.
 
 **The demo.** `npm run demo` opens CafAI as it looks in use, on the mocks and
 on its own address (localhost:5175): two bags, every kind of card the coach
@@ -276,8 +289,8 @@ Chromium 91 through puppeteer 9), then `npm run build:mock`, and:
 - `npm run smoke:chrome91` loads the app and fails on any page or console
   error;
 - `npm run smoke:chrome91:loop` drives the whole coach loop (settings, new
-  bag, templates, v1, scripted shot, taste chip, confirmed v2) in that
-  engine.
+  bag with "Which coffee is it?" and Something else, templates, v1, scripted
+  shot, taste chip, confirmed v2) in that engine.
 
 Screenshots land in `tools/chrome91/out/`.
 
@@ -316,9 +329,10 @@ Decaid's API as CafAI is checked against it, in
   Decaid's backups include it, and any browser that opens CafAI without a
   key of its own (a phone, say) takes the copy. Turning the switch off
   deletes the copy, and so does **Forget key** (a key you save later is
-  copied again while the switch is on). If Decaid cannot be reached then,
-  Settings says Decaid still has its copy: turn the switch off once Decaid
-  is back.
+  copied again while the switch is on). If Decaid cannot be reached when you
+  forget the key or save a new one, CafAI deletes the copy (or copies the new
+  key) as soon as Decaid is back, and a forgotten key never comes back from a
+  copy.
 - Coach data (bags, versions, shot summaries, feedback) is stored in the
   skin's IndexedDB and mirrored to Decaid's key-value store (namespace
   `cafai`) so it survives a browser-storage reset. Export it any time as JSON
