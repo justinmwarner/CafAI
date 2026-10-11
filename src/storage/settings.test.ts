@@ -396,9 +396,36 @@ describe('appearance', () => {
     expect(applySettingsPatch(next, { grinderSetting: '14' }, MODEL).appearance).toEqual({ mode: 'light', tint: { hue: 120 } });
   });
 
+  it('reads a tint saved under its old name as the coffee one (D123), and leaves every other id alone', () => {
+    expect(normalizeAppearance({ mode: 'light', tint: 'lagoon' })).toEqual({ mode: 'light', tint: 'cold-brew' });
+    expect(normalizeAppearance({ mode: 'dark', tint: 'ocean' })).toEqual({ mode: 'dark', tint: 'blueberry' });
+    expect(normalizeAppearance({ mode: 'auto', tint: 'steel' })).toEqual({ mode: 'auto', tint: 'tamper' });
+    for (const id of ['crema', 'matcha', 'cold-brew', 'blueberry', 'plum', 'cherry', 'tamper', 'forest', 'constructor']) {
+      expect(normalizeAppearance({ mode: 'dark', tint: id }).tint, id).toBe(id);
+    }
+  });
+
+  it('a look stored, backed up or exported before the rename comes back under the new name', async () => {
+    const name = uniqueDbName();
+    const handle = createDbHandle((onLost) => openCafaiDb(name, onLost));
+    const db = () => handle.get();
+    const repos = createRepositories({ db, onWrite: () => undefined, defaultModel: MODEL });
+    await (await db()).put('settings', makeSettings({ appearance: { mode: 'light', tint: 'steel' } }), SETTINGS_KEY);
+    expect((await repos.settings.get()).appearance).toEqual({ mode: 'light', tint: 'tamper' });
+    // Written back under the new id at the next save.
+    await repos.settings.update({ grinderSetting: '14' });
+    expect(((await (await db()).get('settings', SETTINGS_KEY)) as Settings).appearance).toEqual({ mode: 'light', tint: 'tamper' });
+
+    const restored = exportFromMirror(
+      { settings: makeSettings({ appearance: { mode: 'dark', tint: 'ocean' } }) },
+      { appVersion: '1.2.3', defaultModel: MODEL, now: () => new Date(0) },
+    );
+    expect(restored?.settings.appearance).toEqual({ mode: 'dark', tint: 'blueberry' });
+  });
+
   it('takes an imported appearance only while this device still has the default', () => {
-    const incoming = { ...defaultSettings(MODEL), appearance: { mode: 'light' as const, tint: 'ocean' } };
-    expect(fillBlankSettings(defaultSettings(MODEL), incoming, MODEL).appearance).toEqual({ mode: 'light', tint: 'ocean' });
+    const incoming = { ...defaultSettings(MODEL), appearance: { mode: 'light' as const, tint: 'blueberry' } };
+    expect(fillBlankSettings(defaultSettings(MODEL), incoming, MODEL).appearance).toEqual({ mode: 'light', tint: 'blueberry' });
     const mine = { ...defaultSettings(MODEL), appearance: { mode: 'auto' as const, tint: 'plum' } };
     expect(fillBlankSettings(mine, incoming, MODEL).appearance).toEqual({ mode: 'auto', tint: 'plum' });
   });

@@ -275,10 +275,10 @@ describe('boot look: the first frame, before the bundle', () => {
   it('paints the look the app saved last, as the app writes it, in its own colour scheme', () => {
     const lightMatcha = bootColors(buildPalette('light', namedTint('matcha')));
     expect(boot({ savedColors: JSON.stringify(lightMatcha) }).look).toEqual(lookOf(lightMatcha, 'light'));
-    const darkOcean = bootColors(buildPalette('dark', namedTint('ocean')));
-    expect(boot({ savedColors: JSON.stringify(darkOcean) }).look).toEqual(lookOf(darkOcean, 'dark'));
-    const lightSteel = bootColors(buildPalette('light', namedTint('steel')));
-    expect(boot({ savedColors: JSON.stringify(lightSteel) }).look).toEqual(lookOf(lightSteel, 'light'));
+    const darkBlueberry = bootColors(buildPalette('dark', namedTint('blueberry')));
+    expect(boot({ savedColors: JSON.stringify(darkBlueberry) }).look).toEqual(lookOf(darkBlueberry, 'dark'));
+    const lightTamper = bootColors(buildPalette('light', namedTint('tamper')));
+    expect(boot({ savedColors: JSON.stringify(lightTamper) }).look).toEqual(lookOf(lightTamper, 'light'));
   });
 
   it('keeps the default when the saved colours are junk, incomplete or blocked, as main.tsx does', () => {

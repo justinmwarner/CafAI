@@ -62,9 +62,20 @@ function idOrNull(value: unknown): string | null {
 const MODES: readonly AppearanceMode[] = ['dark', 'light', 'auto'];
 /** A tint id is a short lowercase word; nothing else (a pasted key included) is ever kept. */
 const TINT_ID = /^[a-z][a-z0-9-]{0,31}$/;
+/**
+ * The tints renamed for coffee (D123, src/ui/palette.ts), by their old ids: a
+ * look saved, backed up or exported before the rename keeps its tint, and is
+ * written back under the new id at the next save. A Map, so an id such as
+ * "constructor" never finds anything on Object's prototype.
+ */
+const RENAMED_TINTS: ReadonlyMap<string, string> = new Map([
+  ['lagoon', 'cold-brew'],
+  ['ocean', 'blueberry'],
+  ['steel', 'tamper'],
+]);
 
 function normalizeTint(raw: unknown): Appearance['tint'] {
-  if (typeof raw === 'string' && TINT_ID.test(raw)) return raw;
+  if (typeof raw === 'string' && TINT_ID.test(raw)) return RENAMED_TINTS.get(raw) ?? raw;
   if (isRecord(raw) && typeof raw['hue'] === 'number' && Number.isFinite(raw['hue'])) {
     return { hue: ((Math.round(raw['hue']) % 360) + 360) % 360 };
   }
