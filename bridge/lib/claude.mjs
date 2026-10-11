@@ -28,20 +28,35 @@ export function envValue(env, name, platform = process.platform) {
   return key === undefined ? undefined : env[key];
 }
 
-function listDir(dir) {
-  try {
-    return readdirSync(dir);
-  } catch {
-    return [];
-  }
-}
+/**
+ * The file system as discovery reads it. Tests pass their own, so the Windows
+ * layouts are checked on any OS (CI runs on Linux).
+ */
+export const realDisk = {
+  listDir(dir) {
+    try {
+      return readdirSync(dir);
+    } catch {
+      return [];
+    }
+  },
+  isFile(file) {
+    try {
+      return statSync(file).isFile();
+    } catch {
+      return false;
+    }
+  },
+  read: (file) => readFileSync(file, 'utf8'),
+  realpath: (file) => realpathSync(file),
+};
 
 /**
  * Every place Claude Code may live, PATH first, then the usual install
  * folders, in the order a tie in version is broken. A LaunchAgent or a
  * Startup-folder start has a thin PATH, hence the fixed list.
  */
-export function candidatePaths({ env = process.env, platform = process.platform, home = osHomedir() } = {}) {
+export function candidatePaths({ env = process.env, platform = process.platform, home = osHomedir(), disk = realDisk } = {}) {
   const win = platform === 'win32';
   const p = win ? path.win32 : path.posix;
   const out = [];
@@ -59,7 +74,7 @@ export function candidatePaths({ env = process.env, platform = process.platform,
     out.push(p.join(profile, '.local', 'bin', 'claude.exe'));
     out.push(p.join(local, 'Microsoft', 'WinGet', 'Links', 'claude.exe'));
     const packages = p.join(local, 'Microsoft', 'WinGet', 'Packages');
-    for (const entry of listDir(packages)) {
+    for (const entry of disk.listDir(packages)) {
       if (entry.startsWith('Anthropic.ClaudeCode')) out.push(p.join(packages, entry, 'claude.exe'));
     }
     out.push(p.join(roaming, 'npm', 'claude.cmd'));
@@ -68,7 +83,7 @@ export function candidatePaths({ env = process.env, platform = process.platform,
     out.push(p.join(profile, 'scoop', 'shims', 'claude.exe'));
     out.push(p.join(programData, 'chocolatey', 'bin', 'claude.exe'));
     out.push(p.join(profile, '.bun', 'bin', 'claude.exe'));
-    out.push(...desktopAppCopies(p.join(roaming, 'Claude', 'claude-code'), 'claude.exe', p));
+    out.push(...desktopAppCopies(p.join(roaming, 'Claude', 'claude-code'), 'claude.exe', p, disk));
   } else {
     out.push(p.join(home, '.local', 'bin', 'claude'));
     out.push(p.join(home, '.claude', 'local', 'claude'));
@@ -79,9 +94,9 @@ export function candidatePaths({ env = process.env, platform = process.platform,
     out.push(p.join(home, '.bun', 'bin', 'claude'));
     out.push(p.join(home, '.volta', 'bin', 'claude'));
     const nvm = p.join(home, '.nvm', 'versions', 'node');
-    for (const version of listDir(nvm).sort().reverse()) out.push(p.join(nvm, version, 'bin', 'claude'));
+    for (const version of disk.listDir(nvm).sort().reverse()) out.push(p.join(nvm, version, 'bin', 'claude'));
     const appSupport = platform === 'darwin' ? p.join(home, 'Library', 'Application Support') : p.join(home, '.config');
-    out.push(...desktopAppCopies(p.join(appSupport, 'Claude', 'claude-code'), 'claude', p));
+    out.push(...desktopAppCopies(p.join(appSupport, 'Claude', 'claude-code'), 'claude', p, disk));
   }
   const seen = new Set();
   return out.filter((file) => {
@@ -97,11 +112,11 @@ export function candidatePaths({ env = process.env, platform = process.platform,
  * `<app data>/Claude/claude-code/<version>/<build>/claude[.exe]`: someone with
  * only the app can use the bridge too.
  */
-function desktopAppCopies(root, name, p) {
+function desktopAppCopies(root, name, p, disk) {
   const out = [];
-  for (const version of listDir(root)) {
+  for (const version of disk.listDir(root)) {
     out.push(p.join(root, version, name));
-    for (const build of listDir(p.join(root, version))) out.push(p.join(root, version, build, name));
+    for (const build of disk.listDir(p.join(root, version))) out.push(p.join(root, version, build, name));
   }
   return out;
 }
@@ -116,23 +131,15 @@ export function isDesktopApp(file) {
   return /[\\/]AnthropicClaude[\\/]/i.test(file) || /\.app[\\/]Contents[\\/]/i.test(file);
 }
 
-function isFile(file) {
-  try {
-    return statSync(file).isFile();
-  } catch {
-    return false;
-  }
-}
-
 /**
  * The target of an npm cmd-shim (`claude.cmd`): Node refuses to spawn a .cmd
  * without a shell, and a shell would have to quote JSON and paths through
  * cmd.exe. The shim names its script relative to its own folder (`%dp0%`).
  */
-export function shimTarget(shimFile, read = (f) => readFileSync(f, 'utf8')) {
+export function shimTarget(shimFile, disk = realDisk) {
   let text;
   try {
-    text = read(shimFile);
+    text = disk.read(shimFile);
   } catch {
     return null;
   }
@@ -142,10 +149,10 @@ export function shimTarget(shimFile, read = (f) => readFileSync(f, 'utf8')) {
     // The shim also names a node.exe beside itself, which it prefers when present.
     if (/(?:^|\\)node\.exe$/i.test(match[1])) continue;
     const target = path.win32.join(dir, match[1]);
-    if (isFile(target)) return target;
+    if (disk.isFile(target)) return target;
   }
   const fallback = path.win32.join(dir, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
-  return isFile(fallback) ? fallback : null;
+  return disk.isFile(fallback) ? fallback : null;
 }
 
 /**
@@ -153,11 +160,11 @@ export function shimTarget(shimFile, read = (f) => readFileSync(f, 'utf8')) {
  * resolved to what it wraps, anything else is spawned as is.
  * @returns {{ command: string, args: string[] } | null}
  */
-export function resolveSpawn(file, { platform = process.platform, execPath = process.execPath } = {}) {
+export function resolveSpawn(file, { platform = process.platform, execPath = process.execPath, disk = realDisk } = {}) {
   const lower = file.toLowerCase();
   if (/\.(?:js|cjs|mjs)$/.test(lower)) return { command: execPath, args: [file] };
   if (platform === 'win32' && /\.(?:cmd|bat)$/.test(lower)) {
-    const target = shimTarget(file);
+    const target = shimTarget(file, disk);
     if (!target) return null;
     return /\.exe$/i.test(target) ? { command: target, args: [] } : { command: execPath, args: [target] };
   }
@@ -165,7 +172,7 @@ export function resolveSpawn(file, { platform = process.platform, execPath = pro
     // npm's global `claude` is a symlink to cli.js with a `#!/usr/bin/env node`
     // line, which needs node on PATH; a LaunchAgent's PATH may not have it.
     try {
-      const real = realpathSync(file);
+      const real = disk.realpath(file);
       if (/\.(?:js|cjs|mjs)$/i.test(real)) return { command: execPath, args: [real] };
     } catch {
       // Spawn it as found.
@@ -220,20 +227,21 @@ export async function findClaude({
   home = osHomedir(),
   execPath = process.execPath,
   versionOf = claudeVersion,
+  disk = realDisk,
 } = {}) {
   const wanted = explicit ?? envValue(env, 'CAFAI_CLAUDE', platform) ?? null;
   if (wanted) {
     const file = path.resolve(wanted);
-    const spec = existsSync(file) && !isDesktopApp(file) ? resolveSpawn(file, { platform, execPath }) : null;
+    const spec = existsSync(file) && !isDesktopApp(file) ? resolveSpawn(file, { platform, execPath, disk }) : null;
     if (!spec) return { chosen: null, found: [{ path: file, version: null }] };
     const version = (await versionOf(spec, { env })) ?? 'unknown';
     return { chosen: { path: file, version, ...spec }, found: [{ path: file, version }] };
   }
 
-  const files = candidatePaths({ env, platform, home }).filter(isFile);
+  const files = candidatePaths({ env, platform, home, disk }).filter((file) => disk.isFile(file));
   const checked = await Promise.all(
     files.map(async (file) => {
-      const spec = resolveSpawn(file, { platform, execPath });
+      const spec = resolveSpawn(file, { platform, execPath, disk });
       const version = spec ? await versionOf(spec, { env }) : null;
       return { file, spec, version };
     }),
