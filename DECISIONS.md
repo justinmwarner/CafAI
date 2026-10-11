@@ -1247,9 +1247,10 @@ workflows has run.
   lint, unit tests and `npm run e2e` pass. Why: Decaid has no compatibility
   policy (D93), so the warning has to be CafAI's own: a release that breaks
   a check should be an issue the next morning, not a surprise on a user's
-  tablet. None of these workflows has run, as the repository has no remote
-  yet (QUESTIONS #9); until then `npm run decaid:watch` by hand is the same
-  check as the daily one.
+  tablet. The repository has been on GitHub since 2026-10-11 (QUESTIONS
+  #9); scheduled runs use `main`'s copy of these workflows and of the
+  watch, so this branch's exit codes and labels start once it is merged.
+  `npm run decaid:watch` by hand is the same check as the daily one.
 - **D106. A workflow PUT waits 35 s and counts only what Decaid holds.** A
   load's `PUT /api/v1/workflow` now has 35 s (it had 15): Decaid can hold it
   in its queue for 30 s before it answers 503 and skips it, and then waits
@@ -1648,6 +1649,53 @@ workflows has run.
   next Decaid. A live stream would ask for more than CafAI needs, and needs
   a secure context, which a phone on the network
   (`http://<tablet-ip>:3000`) is not.
+
+## The owner's list after the alignment (2026-10-11)
+
+The owner's notes of 2026-10-11: tint names, the drink settings, grinders,
+ratings in words, a coach that does not lead the barista's taste, and a
+repository ready for the public.
+
+- **D128. The repository is ready for the public: a README for people who
+  install CafAI, the files a public repository needs, and screenshots a
+  script retakes.** `README.md` is rewritten for a reader who has never
+  seen CafAI: what it is, a status note (every check passed against Decaid
+  0.8.8's simulator; never yet on a real machine), screenshots, what you
+  need (Decaid 0.8.8 or newer, a scale, an Anthropic API key or CafAI
+  Bridge), install from a GitHub release (`justinmwarner/CafAI`) or a zip,
+  first run, the phone, privacy, troubleshooting that quotes the app's own
+  messages, development, the GitHub settings the workflows need (no
+  secrets; the drift watch's labels `decaid-drift`, `decaid-watch-blind`
+  and `decaid-read`, which it creates itself; private vulnerability
+  reporting), and "Influences and thanks". That section says of each
+  project whether CafAI includes its code (Crema, decaid-mcp, Decaid's
+  profiles and `ProfileHash`), talks to it (Decaid, DYE2, Visualizer,
+  Claude) or learned from it (streamline.js, MSL, decaid-zen), with the
+  author, licence and address the project itself states. `NOTICE` now
+  credits decaid-mcp (`src/coach/summary/analysis.ts` and four test shots)
+  and the Decaid ports (`src/coach/profileId.ts`, `src/coach/profile.ts`,
+  `mock/decaid/profiles.ts`), and drops the MimojaCafe licence and "Tcl
+  lineage" it could not back (`docs/CREMA_PORT_PLAN.md` section 1.3). New:
+  `CONTRIBUTING.md`, `SECURITY.md` (GitHub's private vulnerability
+  reporting, no email address), `CHANGELOG.md`, `.github/ISSUE_TEMPLATE/`
+  (a bug form that asks for the CafAI and Decaid versions from Settings >
+  About, the device and screen size, and the drift report; a feature
+  request) and `.github/pull_request_template.md`. `package.json` gains
+  `homepage`, `repository` and `bugs`, and `.gitignore` keeps
+  `.claude/settings.local.json`, `.claude/worktrees/` and
+  `nimbalyst-local/` out. `npm run screenshots`
+  (`playwright.screenshots.config.ts`, `e2e/screenshots/readme.shots.ts`,
+  port 4176 or `SCREENSHOTS_PORT`) plays the demo with the page's clock,
+  time zone, locale and colour scheme pinned, on a 1280x800 tablet and a
+  390x844 phone, and writes six PNGs under 300 KB to `docs/images/`;
+  Chromium raster flags, the pointer parked on the top bar and the coach
+  scene ending at the thread's end make three runs in a row
+  byte-identical. Why: the owner asked for the repository to be ready for
+  consumption, with what influenced CafAI credited and setup written down.
+  A public reader needs the honest status, the attribution GPL code
+  carries, and a way to report problems that never puts a key in a public
+  issue, and the pictures must follow the UI without anyone retaking them
+  by hand.
 
 ### Claude on your computer (2026-10-11)
 

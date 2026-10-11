@@ -50,8 +50,8 @@ surveyed on engineering, but working from a view of Decaid read once and
 never checked again, with seven ways a Decaid change would break it without
 anyone noticing. You chose all eight update-safety layers and the features
 below. Spec: `docs/superpowers/specs/2026-10-09-decaid-alignment-design.md`;
-decisions D93-D122. Built on branch `feat/decaid-alignment`; nothing is
-pushed (this repository has no remote).
+decisions D93-D122. Built on branch `feat/decaid-alignment`, which is not
+pushed (`main` went on GitHub on 2026-10-11).
 
 **Update safety**
 
@@ -66,8 +66,8 @@ pushed (this repository has no remote).
 - **A drift watch (D105).** `npm run decaid:watch` asks whether Decaid's
   latest release or its `main` would break CafAI: it runs the same checks
   against their specs and lists the Decaid files CafAI depends on that
-  changed. Once the repository is on GitHub, a daily workflow runs it and
-  opens an issue when a check fails.
+  changed. On GitHub a daily workflow runs it and opens an issue when a
+  check fails (this branch's version once the branch is merged).
 - **The mock checked against the spec (D94).** The mock Decaid's fixtures,
   replies and frames, and the bodies CafAI sends, are validated against the
   pinned spec, so the mock and the client no longer only agree with each
