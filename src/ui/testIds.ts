@@ -72,6 +72,14 @@ export const TID = {
   diffReason: 'diff-reason',
   shotCard: 'shot-card',
   openShotGraph: 'open-shot-graph',
+  /** Taste words above the composer while the taste question is open (D127): the prompt that opens them, the panel, a group's tab and a word. */
+  tastePrompt: 'taste-prompt',
+  tasteWords: 'taste-words',
+  tasteGroup: (groupId: string) => `taste-group-${slug(groupId)}`,
+  tasteWord: (label: string) => `taste-word-${slug(label)}`,
+  /** Need help? beside the taste words, and the guidance it opens. */
+  tasteHelp: 'taste-help',
+  tasteHelpDialog: 'taste-help-dialog',
   errorBanner: 'error-banner',
   retryButton: 'retry-button',
 

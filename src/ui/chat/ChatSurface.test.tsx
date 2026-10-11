@@ -497,6 +497,73 @@ describe('ChatSurface: the stats card and the Stats prompt', () => {
     expect(onStats).toHaveBeenCalledTimes(1);
   });
 
+  describe('taste words and Need help? (D127)', () => {
+    it('sit beside Stats, between the thread and the composer, only while the taste question is open', () => {
+      const { rerender } = renderSurface({ messages: conversation('options'), onStats: vi.fn() });
+      const thread = screen.getByRole('log', { name: 'Conversation with the coach' });
+      const prompt = screen.getByTestId(TID.tastePrompt);
+      expect(thread.contains(prompt)).toBe(false);
+      expect(screen.getByTestId(TID.statsPrompt).compareDocumentPosition(prompt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(prompt.compareDocumentPosition(screen.getByTestId(TID.tasteHelp)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(screen.getByTestId(TID.tasteHelp).compareDocumentPosition(screen.getByTestId(TID.composerInput)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+      // Answered: gone, and Stats stays.
+      rerender({ messages: conversation('diff'), onStats: vi.fn() });
+      expect(screen.queryByTestId(TID.tastePrompt)).toBeNull();
+      expect(screen.queryByTestId(TID.tasteHelp)).toBeNull();
+      expect(screen.getByTestId(TID.statsPrompt)).toBeInTheDocument();
+      // Another question: not about the taste.
+      rerender({ messages: conversation('options-multi'), onStats: vi.fn() });
+      expect(screen.queryByTestId(TID.tastePrompt)).toBeNull();
+    });
+
+    it('show without a Stats prompt too', () => {
+      renderSurface({ messages: conversation('options') });
+      expect(screen.queryByTestId(TID.statsPrompt)).toBeNull();
+      expect(screen.getByTestId(TID.tastePrompt)).toBeInTheDocument();
+    });
+
+    it('put a tapped word into the composer and send nothing until Send', async () => {
+      const { handlers } = renderSurface({ messages: conversation('options'), onStats: vi.fn() });
+      const composer = screen.getByTestId(TID.composerInput);
+      await userEvent.click(screen.getByTestId(TID.tastePrompt));
+      await userEvent.click(screen.getByTestId(TID.tasteWord('sharp')));
+      await userEvent.click(screen.getByTestId(TID.tasteGroup('body')));
+      await userEvent.click(screen.getByTestId(TID.tasteWord('thin')));
+      expect(composer).toHaveValue('sharp, thin');
+      // The words only fill the draft: no message, no answer to the question.
+      expect(handlers.onSend).not.toHaveBeenCalled();
+      expect(handlers.onAnswerOptions).not.toHaveBeenCalled();
+      // A tap leaves the keyboard down on a phone: the composer does not take the focus.
+      expect(composer).not.toHaveFocus();
+
+      await userEvent.click(screen.getByTestId(TID.composerSend));
+      expect(handlers.onSend).toHaveBeenCalledWith('sharp, thin');
+    });
+
+    it('add to what the barista already typed, and keep it', async () => {
+      renderSurface({ messages: conversation('options') });
+      const composer = screen.getByTestId(TID.composerInput);
+      await userEvent.type(composer, 'Quite bright');
+      await userEvent.click(screen.getByTestId(TID.tastePrompt));
+      await userEvent.click(screen.getByTestId(TID.tasteGroup('finish')));
+      await userEvent.click(screen.getByTestId(TID.tasteWord('lingering')));
+      expect(composer).toHaveValue('Quite bright, lingering finish');
+      await userEvent.click(screen.getByTestId(TID.tasteWord('lingering')));
+      expect(composer).toHaveValue('Quite bright');
+    });
+
+    it('open how to taste from Need help?, and the draft stays', async () => {
+      renderSurface({ messages: conversation('options') });
+      await userEvent.type(screen.getByTestId(TID.composerInput), 'Half a thought');
+      await userEvent.click(screen.getByTestId(TID.tasteHelp));
+      expect(screen.getByRole('dialog', { name: 'How to taste' })).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Got it' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(screen.getByTestId(TID.composerInput)).toHaveValue('Half a thought');
+    });
+  });
+
   it('brings the card into view from Stats, even after the reader scrolled up', async () => {
     const messages = conversation('options');
     const { rerender } = renderSurface({ messages, onStats: vi.fn() });
