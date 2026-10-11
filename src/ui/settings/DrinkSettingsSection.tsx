@@ -224,6 +224,7 @@ interface DrinkFieldProps {
   saving: boolean;
   /** Why the last write of this field failed, until it is written again. */
   error: string | null;
+  /** Sends a value the user chose; nothing is sent while it cannot be written (the machine started, or went). */
   onCommit(value: number): void;
 }
 
@@ -238,45 +239,48 @@ interface DrinkFieldProps {
 function DrinkField({ spec, value, loaded, disabled, saving, error, onCommit }: DrinkFieldProps) {
   const inputId = useId();
   const noteId = useId();
-  const [draft, setDraft] = useState(value === null ? DASH : String(value));
-  useEffect(() => setDraft(value === null ? DASH : String(value)), [value]);
+  /** What is being typed, until it is sent or left; otherwise the field shows Decaid's value (or the one on its way). */
+  const [draft, setDraft] = useState<string | null>(null);
   const slow = useHeldFor(saving, SAVING_AFTER_MS);
 
   const off = value !== null && isDrinkOff(spec, value);
   const unknown = value === null;
   const note = error ?? (slow ? SAVING : unknown && loaded ? UNREADABLE : null);
 
+  /** Sends a value the user chose. The field then shows it on its way, or Decaid's own if it cannot be written now. */
+  const send = (next: number) => {
+    setDraft(null);
+    onCommit(next);
+  };
   const commit = (raw: string) => {
     if (value === null || off) return;
     const trimmed = raw.trim();
     // Nothing typed: never clamp or re-send a value nobody touched, even one outside this field's range.
     if (trimmed === String(value)) {
-      setDraft(String(value));
+      setDraft(null);
       return;
     }
     const parsed = trimmed === '' ? Number.NaN : Number(trimmed);
     const next = clampDrinkField(spec, Number.isFinite(parsed) ? parsed : value);
-    setDraft(String(next));
-    if (next !== value) onCommit(next);
+    if (next === value) setDraft(null);
+    else send(next);
   };
   /** One step from `from` (the value, or what was typed), written at once; nothing at the end it points to. */
   const nudge = (direction: 1 | -1, from: number | null = value) => {
     if (from === null || off) return;
     const next = nudgeDrinkField(spec, from, direction);
-    if (next === null) return;
-    setDraft(String(next));
-    onCommit(next);
+    if (next !== null) send(next);
   };
   /** Up and Down step from what is typed, so 57 then Up writes 58. */
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
     event.preventDefault();
-    const typed = draft.trim() === '' ? Number.NaN : Number(draft.trim());
+    const typed = draft === null || draft.trim() === '' ? Number.NaN : Number(draft.trim());
     nudge(event.key === 'ArrowUp' ? 1 : -1, Number.isFinite(typed) ? typed : value);
   };
 
   const offText = spec.offText ?? 'Off';
-  const shown = off ? offText : draft;
+  const shown = off ? offText : (draft ?? (value === null ? DASH : String(value)));
   // Only a value Decaid gave can be stepped: a dash between a minus and a plus would read as a third minus.
   const stepping = !off && !unknown;
   const button = (direction: 1 | -1) =>
@@ -304,7 +308,9 @@ function DrinkField({ spec, value, loaded, disabled, saving, error, onCommit }: 
         disabled={disabled || unknown || off}
         error={error !== null}
         onChange={(event) => setDraft(event.target.value)}
-        onBlur={(event) => commit(event.target.value)}
+        // Without a FormControl, MUI calls this with no event when the field is disabled while
+        // focused (the machine started): what was typed is offered, and refused, all the same.
+        onBlur={(event?: { target: { value: string } }) => commit(event ? event.target.value : shown)}
         startAdornment={
           <>
             {button(-1)}
@@ -451,9 +457,8 @@ export function DrinkSettingsSection() {
   /** Re-checked at the write, not just at render: the machine may have started, or gone, between the tap and the call. */
   const writable = () => connected && !blocksDrinkSettings(runningState);
 
-  const commit = async (drink: Drink, spec: DrinkFieldSpec, value: number) => {
-    if (!presets || !writable()) return;
-    const previous = (presets[drink.key] as Record<string, unknown>)[spec.key];
+  const write = async (current: Presets, drink: Drink, spec: DrinkFieldSpec, value: number) => {
+    const previous = (current[drink.key] as Record<string, unknown>)[spec.key];
     if (previous === value) return;
     const id = fieldId(drink.key, spec.key);
     setPresets((now) => now && withField(now, drink.key, spec.key, value));
@@ -471,6 +476,9 @@ export function DrinkSettingsSection() {
     } finally {
       setPending(({ [id]: count = 0, ...rest }) => (count > 1 ? { ...rest, [id]: count - 1 } : rest));
     }
+  };
+  const commit = (drink: Drink, spec: DrinkFieldSpec, value: number) => {
+    if (presets && writable()) void write(presets, drink, spec, value);
   };
 
   // One reason at a time: without a machine, what it runs says nothing.
@@ -512,7 +520,7 @@ export function DrinkSettingsSection() {
               disabled={disabled}
               pending={pending}
               failed={failed}
-              onCommit={(which, spec, value) => void commit(which, spec, value)}
+              onCommit={commit}
             />
           ))}
         </Box>
