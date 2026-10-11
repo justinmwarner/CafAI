@@ -68,7 +68,7 @@ export const TID = {
   undoButton: 'undo-button',
   /** Undo on the latest applied diff card (the header has undoButton). */
   diffUndo: 'diff-undo',
-  /** The Why / Expect block under a change card's decision. */
+  /** The Why / What it changes block under a change card's decision. */
   diffReason: 'diff-reason',
   shotCard: 'shot-card',
   openShotGraph: 'open-shot-graph',

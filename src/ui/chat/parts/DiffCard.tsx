@@ -209,7 +209,9 @@ export function DiffCard({ part, disabled = false, showUndo, onConfirm, onDeclin
       )}
 
       {/* The reasoning comes after the decision, so even the longest card the
-          coach may write keeps Confirm in view when it arrives (962x602). */}
+          coach may write keeps Confirm in view when it arrives (962x602).
+          "What it changes" is the machine's side; how the shot tastes is the
+          barista's to find, so the label promises nothing (D127). */}
       <Box data-testid={TID.diffReason} sx={{ mt: 1.25, pt: 1, borderTop: 1, borderColor: 'divider' }}>
         <Typography variant="body2">
           <Box component="span" sx={{ color: 'text.secondary' }}>
@@ -219,7 +221,7 @@ export function DiffCard({ part, disabled = false, showUndo, onConfirm, onDeclin
         </Typography>
         <Typography variant="body2" sx={{ mt: 0.5 }}>
           <Box component="span" sx={{ color: 'text.secondary' }}>
-            Expect:{' '}
+            What it changes:{' '}
           </Box>
           {part.expectedEffect}
         </Typography>
