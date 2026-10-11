@@ -120,9 +120,19 @@ export function createMemoryStorage(options: MemoryStorageOptions): MemoryStorag
       pull: async () => null,
       lastPushAt: null,
       lastError: null,
+      backupKnown: true,
+      subscribe: () => () => undefined,
     },
     keyBackup: {
       setOn: async () => {},
+      saveKey: async (key) => {
+        apiKey = key.trim() === '' ? null : key.trim();
+        return true;
+      },
+      forgetKey: async () => {
+        apiKey = null;
+        return true;
+      },
       restoreIfMissing: async () => false,
     },
     snapshot,

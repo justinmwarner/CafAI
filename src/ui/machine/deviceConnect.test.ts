@@ -115,6 +115,46 @@ describe('createDeviceConnect', () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
+  it('a dosing scale connected as auxiliary is not the brewing scale: the Connect says why it did not connect', async () => {
+    const decaid = manual();
+    const store = createDeviceConnect(decaid);
+    const tapped = store.connect('scale');
+    const dosing: DeviceEntry = { ...scale('connected'), id: 's-2', name: 'Acaia Pearl', connectionRole: 'auxiliary' };
+    decaid.answer([machine('connected'), dosing, scale('disconnected', false)]);
+    expect(await tapped).toBe(false);
+    expect(store.getState().failure).toEqual({
+      kind: 'scale',
+      text: 'Lunar is paired but not responding. Switch it on, or wake it if it has been idle.',
+    });
+  });
+
+  it("says why when the choice is Decaid's to make, in connectKind's words", async () => {
+    const decaid = manual();
+    const store = createDeviceConnect(decaid);
+    const tapped = store.connect('scale');
+    decaid.refuse(new GatewayError(0, '/api/v1/devices/connect', "Decaid sees more than one scale. Choose yours on Decaid's scan screen.", 'device_choice'));
+    expect(await tapped).toBe(false);
+    expect(store.getState().failure).toEqual({
+      kind: 'scale',
+      text: "Couldn't connect the scale. Decaid sees more than one scale. Choose yours on Decaid's scan screen.",
+    });
+  });
+
+  it('asks connectKind for the preferred device only when told to', async () => {
+    const decaid = manual();
+    const store = createDeviceConnect(decaid);
+    const tapped = store.connect('machine');
+    decaid.answer([machine('connected')]);
+    await tapped;
+    const revive = store.connect('scale', { quiet: true, preferredOnly: true });
+    decaid.answer([]);
+    await revive;
+    expect(decaid.connectKind.mock.calls).toEqual([
+      ['machine', { preferredOnly: false }],
+      ['scale', { preferredOnly: true }],
+    ]);
+  });
+
   it('is one store per Decaid client', () => {
     const decaid = createFakeDecaid();
     expect(deviceConnectFor(decaid)).toBe(deviceConnectFor(decaid));

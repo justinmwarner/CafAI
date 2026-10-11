@@ -112,10 +112,12 @@ describe('CoachScreen', () => {
     expect(screen.getByTestId(TID.statsCard)).toBeInTheDocument();
   });
 
-  it('says why it asks for the key again only after bags came back from Decaid without one (5.5)', () => {
-    const again = "Decaid was updated or this browser's storage was cleared. Your bags are back; paste your API key again.";
+  it("says the bags came from Decaid's backup only when they did and the key did not (5.5)", () => {
+    // True after a Decaid update or cleared storage, and on a phone's first visit alike: nothing here says which.
+    const again = "Your bags came from Decaid's backup. Paste your API key to go on.";
     renderCoach({ ...coachStateFor('diff'), hasApiKey: false, restoredFromBackup: true });
     expect(screen.getByText(again)).toBeInTheDocument();
+    expect(screen.queryByText(/storage was cleared|key again/)).toBeNull();
     expect(screen.getByText('Add your Anthropic API key to start coaching')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open Settings' })).toHaveAttribute('href', '#/settings');
     cleanup();

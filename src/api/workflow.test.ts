@@ -297,6 +297,14 @@ describe('createProfileVersion', () => {
     const { deduped } = await createProfileVersion(client, { profile: template.profile as ProfileJson });
     expect(deduped).toBe(false);
   });
+
+  it('a parent the reply did not give in a form CafAI reads is unknown, never a dedupe', async () => {
+    const profile = bloomingV1();
+    // As readProfileRecord leaves an unreadable parentId out (D95).
+    const unread = { createProfile: async () => ({ id: 'profile:7438cb7266f60558b48f', profile }) };
+    const { deduped } = await createProfileVersion(unread, { profile, parentId: 'profile:729d284747718d27c93a' });
+    expect(deduped).toBe(false);
+  });
 });
 
 describe('isShotRunning', () => {

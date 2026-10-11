@@ -16,6 +16,7 @@
  */
 import { reportDrift } from './drift.ts';
 import { isKnownMachineState } from './machineStates.ts';
+import { formatDecaidTimestamp, parseDecaidTimestamp } from './time.ts';
 import type {
   ConnectionError,
   DeviceEntry,
@@ -104,20 +105,27 @@ function unusable(source: string, field: string, value: unknown, expected: strin
 
 /**
  * ws/v1/machine/snapshot (and GET /api/v1/machine/state, named by `source`):
- * needs a timestamp and a state. A reading Decaid did not send as a number is
- * null, never 0, so a readout shows the dash and the graph leaves a gap.
+ * needs a state, which the controls go by (Stop above all). A reading Decaid
+ * did not send as a number is null, never 0, so a readout shows the dash and
+ * the graph leaves a gap. A timestamp CafAI cannot read is reported and the
+ * frame takes the time it arrived (`now`), so its state and readings, and the
+ * graph, still count.
  */
-export function parseMachineFrame(value: unknown, source = MACHINE_SNAPSHOT): MachineFrame | null {
+export function parseMachineFrame(value: unknown, source = MACHINE_SNAPSHOT, now: () => Date = () => new Date()): MachineFrame | null {
   if (!isObject(value)) return unusable(source, 'frame', value, 'object');
-  if (typeof value.timestamp !== 'string') return unusable(source, 'timestamp', value.timestamp, 'string');
   const state = value.state;
   if (!isObject(state)) return unusable(source, 'state', state, 'object');
   if (typeof state.state !== 'string') return unusable(source, 'state.state', state.state, 'string');
   // Kept all the same, so the controls offer Stop for it (D97).
   if (!isKnownMachineState(state.state)) reportDrift(source, `state: unknown value "${state.state}"`);
   if (typeof state.substate !== 'string') reportDrift(source, `state.substate: ${describeValue(state.substate, 'string')}`);
+  let timestamp = value.timestamp;
+  if (typeof timestamp !== 'string' || Number.isNaN(parseDecaidTimestamp(timestamp))) {
+    reportDrift(source, `timestamp: ${typeof timestamp === 'string' ? 'not a time' : describeValue(timestamp, 'string')}`);
+    timestamp = formatDecaidTimestamp(now());
+  }
   const frame = {
-    timestamp: value.timestamp,
+    timestamp,
     state: { state: state.state, substate: typeof state.substate === 'string' ? state.substate : '' },
   } as MachineFrame;
   for (const name of MACHINE_READINGS) {

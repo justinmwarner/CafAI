@@ -4,10 +4,18 @@ name: Decaid drift watch
 # main branch against the pinned specs (contract/decaid, spec 4.3).
 #
 # Two jobs, so the one that installs dependencies holds no write token: `watch`
-# runs the check with read access only and uploads the report; on a failed
-# check (exit 1), `issue` downloads it and opens an issue labelled
-# decaid-drift, or comments on the open one. GitHub out of reach (exit 2)
-# only warns; a broken watch (exit 3) fails the run without an issue.
+# runs the check with read access only and uploads the report; `issue`
+# downloads it and files it by the watch's exit code:
+#   1  a check failed: an issue labelled decaid-drift, or a comment on the
+#      open one; the run fails.
+#   2  the watch could not look at everything (GitHub could not serve a
+#      version, or list the files changed since the pin): an issue labelled
+#      decaid-watch-blind, or a comment on the open one, and a warning.
+#   4  files CafAI depends on changed and every check passes: a low-priority
+#      issue labelled decaid-read, or the open one's body replaced by the
+#      latest report (an edit, not a comment, so no daily notification).
+#   0  nothing CafAI depends on changed: no issue.
+#   3  the watch itself broke: the run fails, no issue.
 
 on:
   schedule:
@@ -54,17 +62,17 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-      - name: Warn when GitHub could not be reached
+      - name: Warn when the watch could not look at everything
         if: steps.watch.outputs.code == '2'
-        run: echo "::warning::The Decaid drift watch could not reach GitHub; it runs again tomorrow."
+        run: echo "::warning::The Decaid drift watch could not look at every Decaid version or its changed files; see the issue labelled decaid-watch-blind."
 
       - name: Fail the run when a check failed or the watch broke
-        if: steps.watch.outputs.code != '0' && steps.watch.outputs.code != '2'
+        if: steps.watch.outputs.code != '0' && steps.watch.outputs.code != '2' && steps.watch.outputs.code != '4'
         run: exit 1
 
   issue:
     needs: watch
-    if: ${{ !cancelled() && needs.watch.outputs.code == '1' }}
+    if: ${{ !cancelled() && (needs.watch.outputs.code == '1' || needs.watch.outputs.code == '2' || needs.watch.outputs.code == '4') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -72,17 +80,34 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_REPO: ${{ github.repository }}
+      CODE: ${{ needs.watch.outputs.code }}
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: decaid-drift-report
 
-      - name: Open or update the drift issue
+      - name: Open or update the issue for this outcome
         run: |
-          gh label create decaid-drift --color B60205 --description "A newer Decaid fails CafAI's contract checks" 2>/dev/null || true
-          number=$(gh issue list --label decaid-drift --state open --json number --jq '.[0].number')
-          if [ -n "$number" ]; then
-            gh issue comment "$number" --body-file issue.md
+          case "$CODE" in
+            1)
+              label=decaid-drift color=B60205 update=comment
+              description="A newer Decaid fails CafAI's contract checks"
+              title="Decaid changed something CafAI reads" ;;
+            2)
+              label=decaid-watch-blind color=FBCA04 update=comment
+              description="The Decaid drift watch could not look at every Decaid version"
+              title="The Decaid drift watch could not look" ;;
+            4)
+              label=decaid-read color=E4E9F2 update=edit
+              description="Decaid changed files CafAI depends on; every check passes"
+              title="Decaid changed files CafAI depends on" ;;
+          esac
+          gh label create "$label" --color "$color" --description "$description" 2>/dev/null || true
+          number=$(gh issue list --label "$label" --state open --json number --jq '.[0].number')
+          if [ -z "$number" ]; then
+            gh issue create --label "$label" --title "$title" --body-file issue.md
+          elif [ "$update" = edit ]; then
+            gh issue edit "$number" --body-file issue.md
           else
-            gh issue create --label decaid-drift --title "Decaid changed something CafAI reads" --body-file issue.md
+            gh issue comment "$number" --body-file issue.md
           fi

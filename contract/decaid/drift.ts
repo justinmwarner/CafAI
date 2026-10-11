@@ -63,14 +63,9 @@ export type ContextRead<P extends string = ''> =
   | NullIn<`${P}context.`, 'baristaName' | 'drinkerName' | 'extras' | 'finalBeverageType' | 'targetDoseWeight' | 'targetWaterVolume' | 'targetYield'>
   | AbsentOpt<`${P}context.`, 'grinderBurrs'>;
 
-/**
- * SPEC DRIFT: WorkflowRequest has no `id`, which Workflow.toJson always sends
- * (lib/src/models/data/workflow.dart:95).
- * SPEC GAP: and no `required`; toJson always sends the rest (workflow.dart:93-105).
- */
+/** SPEC GAP: WorkflowRequest has no `required`; Workflow.toJson always sends these (lib/src/models/data/workflow.dart:93-105). */
 export type WorkflowRead<P extends string = ''> =
-  | Absent<P, 'id'>
-  | Opt<P, 'name' | 'description' | 'profile' | 'steamSettings' | 'hotWaterData' | 'rinseData'>
+  | Opt<P, 'profile' | 'steamSettings' | 'hotWaterData' | 'rinseData'>
   | ProfileGap<`${P}profile.`>
   | ContextRead<P>;
 
@@ -97,8 +92,8 @@ export type ShotRead<P extends string = ''> =
   | MachineSnapshotGap<`${P}measurements[].machine.`>
   | WeightSnapshotGap<`${P}measurements[].scale.`>;
 
-/** SPEC GAP: ProfileRecord.toJson always sends parentId and metadata, maybe null (lib/src/models/data/profile_record.dart:136-148). */
-export type ProfileRecordRead<P extends string = ''> = Opt<P, 'parentId' | 'metadata'> | ProfileGap<`${P}profile.`>;
+/** The record's profile, as everywhere (CafAI reads a parentId it cannot read as unknown, so its type has it optional). */
+export type ProfileRecordRead<P extends string = ''> = ProfileGap<`${P}profile.`>;
 
 /** SPEC DRIFT: ProfileStep.exit and limiter are non-nullable $refs, but Dart sends and reads null (lib/src/models/data/profile.dart:249-259, 336-346). */
 export type StepsWrite<P extends string = ''> = NullIn<`${P}steps[].`, 'exit' | 'limiter'>;
@@ -111,8 +106,11 @@ export type MachineInfoRead = Opt<'', 'GHC' | 'model' | 'serialNumber' | 'versio
 /** SPEC GAP: the heartbeat reply has no `required`; Decaid always sends timeout (lib/src/services/webserver/presence_handler.dart:24-32). */
 export type HeartbeatRead = Opt<'', 'timeout'>;
 
-/** SPEC GAP: DeviceInventory has no `required`; the device list always sends the five (lib/src/services/webserver/devices_handler.dart:858-864). */
-export type DeviceListRead = Opt<'list[].', 'available' | 'id' | 'name' | 'state' | 'type'>;
+/**
+ * SPEC GAP: DeviceInventory has no `required`; the device list always sends the five (lib/src/services/webserver/devices_handler.dart:858-864).
+ * CafAI reads an `available` it cannot read as unknown, so its type has it optional.
+ */
+export type DeviceListRead = Opt<'list[].', 'id' | 'name' | 'state' | 'type'>;
 
 /** SPEC GAP: PluginManifest has no `required`; its toJson always sends id (lib/src/plugins/plugin_manifest.dart:314-327). */
 export type PluginListRead = Opt<'list[].', 'id'>;
@@ -156,8 +154,8 @@ export type ShotStateRead =
   | Opt<'decision.', 'data' | 'details' | 'kind' | 'reason'>;
 
 /**
- * SPEC GAP: the devices frame always sends connectionStatus and its five keys,
- * and every device's available (lib/src/services/webserver/devices_handler.dart:139-184, 858-864).
+ * SPEC GAP: the devices frame always sends connectionStatus and its five keys
+ * (lib/src/services/webserver/devices_handler.dart:139-184).
  * PARSED SHAPE: ConnectionError.toJson leaves out a null deviceId, deviceName,
  * suggestion and details (lib/src/controllers/connection_error.dart:53-63);
  * src/api/frames.ts reads absent as null, so CafAI's type is the parsed shape.
@@ -165,8 +163,7 @@ export type ShotStateRead =
 export type DevicesRead =
   | Opt<'', 'connectionStatus'>
   | Opt<'connectionStatus.', 'error' | 'foundMachines' | 'foundScales' | 'pendingAmbiguity' | 'phase'>
-  | Opt<'connectionStatus.error.', 'details' | 'deviceId' | 'deviceName' | 'suggestion'>
-  | Opt<'devices[].', 'available'>;
+  | Opt<'connectionStatus.error.', 'details' | 'deviceId' | 'deviceName' | 'suggestion'>;
 
 // ---- REST writes ------------------------------------------------------------------------------
 

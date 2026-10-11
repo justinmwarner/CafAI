@@ -978,9 +978,13 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
 
   function activityValues(name: MockActivity): { flow: number; pressure: number; mix: number } {
     const workflow = state.getWorkflow();
-    if (name === 'steam') return { flow: workflow.steamSettings.flow, pressure: 1.7, mix: 60 };
-    if (name === 'hotWater') return { flow: Math.min(workflow.hotWaterData.flow, 8), pressure: 0.4, mix: workflow.hotWaterData.targetTemperature };
-    return { flow: workflow.rinseData.flow, pressure: 0.6, mix: workflow.rinseData.targetTemperature };
+    // The mock's workflow always holds numbers (normalizeWorkflow); CafAI's type allows null for a field it could not read.
+    const steam = workflow.steamSettings;
+    const water = workflow.hotWaterData;
+    const rinse = workflow.rinseData;
+    if (name === 'steam') return { flow: steam.flow ?? 0.8, pressure: 1.7, mix: 60 };
+    if (name === 'hotWater') return { flow: Math.min(water.flow ?? 10, 8), pressure: 0.4, mix: water.targetTemperature ?? 75 };
+    return { flow: rinse.flow ?? 6, pressure: 0.6, mix: rinse.targetTemperature ?? 90 };
   }
 
   function activityTick(): void {

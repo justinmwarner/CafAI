@@ -3161,11 +3161,13 @@ describe('coach engine', () => {
         expect(notices().some((p) => p.text === ADDED)).toBe(false);
       });
 
-      it('reuses a batch without a roast date for a bag without one', async () => {
+      it('adds a batch for a bag without a roast date: an undated batch may be an earlier bag of the same coffee', async () => {
         machine.batches.push(batchOf('batch-28', '2026-09-28'), batchOf('batch-undated', null));
         await throughIntake();
-        await vi.waitFor(() => expect(bag()?.decaidBatchId).toBe('batch-undated'));
-        expect(callsOf('createBatch')).toEqual([]);
+        await vi.waitFor(() => expect(bag()?.decaidBatchId).toBe('batch-3'));
+        expect(callsOf('createBatch').map((c) => c.args)).toEqual([['bean-9', { roastLevel: 'light' }]]);
+        expect(notices().filter((p) => p.text === ADDED)).toHaveLength(1);
+        expect(notices().some((p) => p.text === "Already in Decaid's beans.")).toBe(false);
       });
 
       it('adds a batch when none has the same roast date', async () => {
@@ -3175,6 +3177,25 @@ describe('coach engine', () => {
         expect(callsOf('createBatch').map((c) => c.args)).toEqual([['bean-9', { roastDate: '2026-10-02', roastLevel: 'light' }]]);
         expect(notices().filter((p) => p.text === ADDED)).toHaveLength(1);
       });
+    });
+
+    it('gives a second bag of the same coffee a batch of its own when neither has a roast date', async () => {
+      await throughIntake();
+      await vi.waitFor(() => expect(bag()?.decaidBatchId).toBe('batch-1'));
+      const first = bag()!.id;
+      // The coffee bought again, described the same way.
+      await engine.newBag();
+      scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);
+      await engine.sendText('Kiambu AA again, light, washed');
+      expect(bag()!.id).not.toBe(first);
+      await vi.waitFor(() => expect(bag()?.decaidBatchId).toBe('batch-2'));
+      expect(bag()).toMatchObject({ decaidBeanId: 'bean-1' });
+      expect(callsOf('createBean')).toHaveLength(1);
+      expect(notices().map((p) => p.text)).toContain(ADDED);
+      expect(notices().some((p) => p.text === "Already in Decaid's beans.")).toBe(false);
+      scripts.push(() => [text('Loaded.')]);
+      await engine.pickTemplate('t-tpl', 'd-flow');
+      expect(callsOf('activateProfile').at(-1)!.args[1]).toMatchObject({ beanBatchId: 'batch-2' });
     });
 
     it('adds nothing for a bag without a name of its own: the placeholder "New bag" names no coffee', async () => {
@@ -3667,6 +3688,66 @@ describe('coach engine', () => {
       expect(payload.roast).toBe(roastToday('2026-09-24'));
       expect(payload.roast).toMatch(/^Roasted 2026-09-24 \(1[01] days ago\)$/);
     });
+
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    /** The day `ms` falls on, on this device's calendar. */
+    const dayOn = (ms: number) => {
+      const local = new Date(ms);
+      return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(local.getDate()).padStart(2, '0')}`;
+    };
+    /** The shot event's JSON in the latest user turn. */
+    const shotEvent = () => {
+      const event = lastUserTurn(requests).find((b) => b.type === 'text' && b.text.startsWith('[event:shot_completed]')) as { text: string };
+      return JSON.parse(event.text.split('\n')[1]!) as { roast: string | null; today: string };
+    };
+    async function pickedChelcheleThenShot(beforeShot: () => void) {
+      await openBag();
+      scripts.push(() => [text('Lovely.'), proposeTemplates]);
+      await engine.pickBean('batch-chel');
+      scripts.push(() => [text('Loaded.')]);
+      await engine.pickTemplate('t-tpl', 'd-flow');
+      beforeShot();
+      scripts.push(() => [text('Got it.'), askTaste]);
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' });
+      await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+    }
+
+    it('reads the batch again for the roast: a thaw recorded in Decaid after the pick counts', async () => {
+      stockLibrary();
+      const chel = machine.batches.find((batch) => batch.id === 'batch-chel')!;
+      delete chel.unfreezeDate;
+      await pickedChelcheleThenShot(() => {
+        // Picked while still frozen, thawed in Decaid that day; the shot comes ten days later.
+        chel.unfreezeDate = '2026-10-03T00:00:00.000';
+        nowMs += 10 * DAY_MS;
+      });
+      const { roast } = shotEvent();
+      expect(roast).toBe(roastToday('2026-09-03', { freezeDate: '2026-09-04', unfreezeDate: '2026-10-03' }));
+      expect(roast).not.toBe(roastToday('2026-09-03', { freezeDate: '2026-09-04', unfreezeDate: null }));
+      expect(callsOf('listAllBatches').at(-1)!.args).toEqual([{ includeArchived: true }]);
+    });
+
+    it('takes the freezer dates the card had while Decaid cannot be read', async () => {
+      stockLibrary();
+      await pickedChelcheleThenShot(() => {
+        machine.batches.find((batch) => batch.id === 'batch-chel')!.unfreezeDate = '2026-10-01T00:00:00.000';
+        machine.failBeanCalls = 1;
+      });
+      expect(machine.failBeanCalls).toBe(0);
+      expect(shotEvent().roast).toBe(roastToday('2026-09-03', { freezeDate: '2026-09-04', unfreezeDate: '2026-09-16' }));
+    });
+
+    it('tells the coach the day of each shot too, for a roast date said in words after intake', async () => {
+      await throughTemplatePick();
+      const intakeDay = dayOn(nowMs);
+      expect(intakeContext().today).toBe(intakeDay);
+      nowMs += 5 * DAY_MS;
+      scripts.push(() => [text('Got it.'), askTaste]);
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' });
+      await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+      expect(shotEvent().today).toBe(dayOn(nowMs));
+      expect(shotEvent().today).not.toBe(intakeDay);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -3972,6 +4053,34 @@ describe('coach engine', () => {
       expect(callsOf('updateShot (refused)')).toHaveLength(1);
       expect(callsOf('updateShot')).toEqual([]);
       expect(refusals()).toHaveLength(1);
+    });
+
+    it("says so in the shot's own bag when another bag is open by then, never in the bag on screen", async () => {
+      const said = 'Decaid would not save the stars for this shot: enjoyment must be between 0 and 10.';
+      const storedNotices = async (bag: Bag) =>
+        ((await storage.conversations.get(bag.conversationId))?.uiMessages ?? [])
+          .flatMap((m) => m.parts)
+          .flatMap((part) => (part.kind === 'notice' ? [part.text] : []));
+      await throughShot();
+      const rated = engine.getState().activeBag!;
+      // Rated while Decaid is away: the stars wait in the outbox.
+      machine.failShotUpdates = 1;
+      await engine.rateShot('shot-1', 4);
+      await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
+      await engine.newBag();
+      const open = engine.getState().activeBag!;
+      expect(open.id).not.toBe(rated.id);
+
+      // Decaid is back and refuses the stars.
+      machine.shotRefusal = refusal(400);
+      decaidBack();
+      await vi.waitFor(async () => expect(await storedNotices(rated)).toContain(said));
+      await drain();
+      expect(refusals()).toEqual([]);
+      expect(await storedNotices(open)).not.toContain(said);
+
+      await engine.selectBag(rated.id);
+      expect(refusals().map((p) => p.text)).toEqual([said]);
     });
 
     it('names the taste when Decaid refuses the notes', async () => {

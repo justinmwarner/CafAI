@@ -18,7 +18,7 @@
  * Ported from the type experiment (docs/audit/2026-10-09/typegen.md, section 3).
  */
 import type { components, paths } from '#decaid/rest';
-import type { components as wsComponents, WsReceive, WsSend } from '#decaid/ws';
+import type { components as wsComponents, WsReceive } from '#decaid/ws';
 
 // ---------------------------------------------------------------------------
 // The diff
@@ -124,7 +124,10 @@ export type Body<P extends keyof paths, M extends string> =
 /** The path parameters of method M on path P. */
 export type PathParams<P extends keyof paths, M extends string> =
   Op<P, M> extends { parameters: { path: infer X } } ? X : never;
+/** The query parameters of method M on path P; never when it has none, or is not in the spec. */
+export type Query<P extends keyof paths, M extends string> =
+  Op<P, M> extends { parameters: { query?: infer Q } } ? NonNullable<Q> : never;
 
 export type Rest = components['schemas'];
 export type Ws = wsComponents['schemas'];
-export type { WsReceive, WsSend, paths };
+export type { WsReceive, paths };

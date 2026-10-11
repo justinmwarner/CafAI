@@ -4,9 +4,10 @@
  * wakes, and the coach needs the weights. So when the machine leaves sleep
  * or the page comes back into view, and no scale is connected though one was
  * this session, CafAI looks for it once (deviceConnect.ts, quietly: a scale
- * it cannot find says nothing). At most every 30 s, and only while the
- * machine is awake and at rest: never during a shot, steam, hot water or
- * flush.
+ * it cannot find says nothing). Only Decaid's preferred scale: no one tapped
+ * anything, and connecting another would make it Decaid's preferred one
+ * (D98). At most every 30 s, and only while the machine is awake and at
+ * rest: never during a shot, steam, hot water or flush.
  *
  * It waits a few seconds first. Decaid watches for its preferred scale after
  * a wake and may well have it back by then, and a scan in the first seconds
@@ -47,7 +48,7 @@ export function useScaleRevive(): void {
       if (!scaleSeen || s.scaleConnected || !awakeAtRest(machineState(s))) return;
       if (Date.now() - lastLook < REVIVE_EVERY_MS || connector.getState().pending !== null) return;
       lastLook = Date.now();
-      void connector.connect('scale', { quiet: true });
+      void connector.connect('scale', { quiet: true, preferredOnly: true });
     };
     const soon = () => {
       if (timer !== null) clearTimeout(timer);

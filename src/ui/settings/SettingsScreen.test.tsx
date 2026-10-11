@@ -183,7 +183,6 @@ describe('SettingsScreen coach settings', () => {
       grinderId: null,
       activeBagId: 'bag-1',
       appearance: DEFAULT_APPEARANCE,
-      keepKeyInDecaid: false,
     });
     expect(methods(services)).toEqual(['refresh']);
     // The fields show what was saved; nothing was taken out, so nothing more is said.
@@ -231,7 +230,6 @@ describe('SettingsScreen keeps a pasted API key out of the settings (D37)', () =
       grinderSetting: null,
       grinderId: null,
       appearance: DEFAULT_APPEARANCE,
-      keepKeyInDecaid: false,
     });
     expect(methods(services)).toEqual(['refresh']);
     noKeyInAnyField();
@@ -325,7 +323,6 @@ describe('SettingsScreen grinder from Decaid', () => {
       grinderId: 'g-niche',
       activeBagId: 'bag-1',
       appearance: DEFAULT_APPEARANCE,
-      keepKeyInDecaid: false,
     });
     expect(methods(services)).toEqual(['refresh']);
     expect(services.decaid.calls.map((call) => call.method)).not.toContain('updateWorkflow');
@@ -606,51 +603,74 @@ describe('SettingsScreen key in Decaid (5.6, D99)', () => {
     await userEvent.click(toggle);
     expect(await screen.findByText('Could not reach Decaid: Decaid is not answering.')).toBeInTheDocument();
     expect(toggle).not.toBeChecked();
-    expect((await services.storage.settings.get()).keepKeyInDecaid).toBe(false);
+    // Nothing went through, so nothing was chosen: still unset, which reads as off.
+    expect((await services.storage.settings.get()).keepKeyInDecaid).toBeUndefined();
   });
 
   it('saving a new key copies it to Decaid while the choice is on', async () => {
     const services = renderSettings({ coach: { hasApiKey: false }, settings: withChoice(true) });
-    const setOn = vi.spyOn(services.storage.keyBackup, 'setOn');
+    const saveKey = vi.spyOn(services.storage.keyBackup, 'saveKey');
     await screen.findByTestId(TID.keyInDecaid);
 
     await userEvent.type(screen.getByTestId(TID.apiKeyInput), SECRET);
     await userEvent.click(screen.getByTestId(TID.apiKeySave));
     await waitFor(() => expect(services.storage.apiKey).toBe(SECRET));
-    expect(setOn).toHaveBeenCalledWith(true);
+    expect(saveKey).toHaveBeenCalledWith(SECRET, true);
     expect(screen.getByText('Key saved on this device.')).toBeInTheDocument();
   });
 
-  it('a save that cannot reach Decaid still keeps the key here, and says both', async () => {
-    const services = renderSettings({ coach: { hasApiKey: false }, settings: withChoice(true) });
-    vi.spyOn(services.storage.keyBackup, 'setOn').mockRejectedValue(new Error('Decaid is not answering.'));
+  it('saving a key while the choice is off keeps it on this device only', async () => {
+    const services = renderSettings({ coach: { hasApiKey: false }, settings: withChoice(false) });
+    const saveKey = vi.spyOn(services.storage.keyBackup, 'saveKey');
     await screen.findByTestId(TID.keyInDecaid);
 
     await userEvent.type(screen.getByTestId(TID.apiKeyInput), SECRET);
     await userEvent.click(screen.getByTestId(TID.apiKeySave));
     await waitFor(() => expect(services.storage.apiKey).toBe(SECRET));
-    expect(screen.getByText('Key saved on this device, but Decaid could not be updated: Decaid is not answering.')).toBeInTheDocument();
+    expect(saveKey).toHaveBeenCalledWith(SECRET, false);
+  });
+
+  it('a save that cannot reach Decaid still keeps the key here, and says the copy follows when Decaid is back', async () => {
+    const services = renderSettings({ coach: { hasApiKey: false }, settings: withChoice(true) });
+    vi.spyOn(services.storage.keyBackup, 'saveKey').mockImplementation(async (key) => {
+      services.storage.apiKey = key;
+      return false;
+    });
+    await screen.findByTestId(TID.keyInDecaid);
+
+    await userEvent.type(screen.getByTestId(TID.apiKeyInput), SECRET);
+    await userEvent.click(screen.getByTestId(TID.apiKeySave));
+    await waitFor(() => expect(services.storage.apiKey).toBe(SECRET));
+    expect(
+      await screen.findByText("Key saved on this device. Decaid can't be reached right now, so CafAI will copy it there as soon as it can."),
+    ).toBeInTheDocument();
+    expect(document.body.innerHTML).not.toContain(SECRET);
   });
 
   it('forgetting the key while the choice is on deletes the copy, and leaves the choice on for the next key', async () => {
     const services = renderSettings({ settings: withChoice(true), key: SECRET });
-    const setOn = vi.spyOn(services.storage.keyBackup, 'setOn');
+    const forgetKey = vi.spyOn(services.storage.keyBackup, 'forgetKey');
     const toggle = await screen.findByTestId(TID.keyInDecaid);
     await waitFor(() => expect(toggle).toBeChecked());
 
     await userEvent.click(screen.getByTestId(TID.forgetKey));
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Forget key' }));
     await waitFor(() => expect(services.storage.apiKey).toBeNull());
-    expect(setOn).toHaveBeenCalledWith(false);
+    expect(forgetKey).toHaveBeenCalledWith(true);
     expect(screen.getByText('The key is gone from this device.')).toBeInTheDocument();
-    // Disabled (no key to back up), but still on: the next key saved here is copied again.
-    expect(screen.getByTestId(TID.keyInDecaid)).toBeDisabled();
+    // Still on, so the next key saved here is copied again; and it can still be turned off.
     expect(screen.getByTestId(TID.keyInDecaid)).toBeChecked();
+    expect(screen.getByTestId(TID.keyInDecaid)).toBeEnabled();
+    expect(screen.getByText(sentence)).toBeInTheDocument();
   });
 
-  it("forgetting the key when Decaid can't be reached keeps its copy there, says so, and keeps the switch on", async () => {
+  it("forgetting the key when Decaid can't be reached says its copy goes later, and the switch still turns off without a key", async () => {
     const services = renderSettings({ settings: withChoice(true), key: SECRET });
-    vi.spyOn(services.storage.keyBackup, 'setOn').mockRejectedValue(new Error('Decaid is not answering.'));
+    vi.spyOn(services.storage.keyBackup, 'forgetKey').mockImplementation(async () => {
+      services.storage.apiKey = null;
+      return false;
+    });
+    const setOn = vi.spyOn(services.storage.keyBackup, 'setOn');
     const toggle = await screen.findByTestId(TID.keyInDecaid);
     await waitFor(() => expect(toggle).toBeChecked());
 
@@ -658,10 +678,27 @@ describe('SettingsScreen key in Decaid (5.6, D99)', () => {
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Forget key' }));
     await waitFor(() => expect(services.storage.apiKey).toBeNull());
     expect(
-      screen.getByText(
-        'The key is gone from this device, but Decaid still has its copy; turn Keep my API key in Decaid off when Decaid is back.',
+      await screen.findByText(
+        "The key is gone from this device. Decaid can't be reached right now, so CafAI will delete its copy there as soon as it can.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByTestId(TID.keyInDecaid)).toBeChecked();
+    expect(screen.queryByText(/turn Keep my API key in Decaid off/)).toBeNull();
+
+    // No key here, but a choice that is on can be turned off: Decaid's copy goes, and the switch waits for a key.
+    expect(toggle).toBeChecked();
+    expect(toggle).toBeEnabled();
+    await userEvent.click(toggle);
+    await waitFor(() => expect(toggle).not.toBeChecked());
+    expect(setOn).toHaveBeenCalledWith(false);
+    expect((await services.storage.settings.get()).keepKeyInDecaid).toBe(false);
+    expect(toggle).toBeDisabled();
+    expect(screen.getByText('Add a key above before turning this on.')).toBeInTheDocument();
+  });
+
+  it("keeps MUI's switch size, with the label row around it as the 48 px touch target", async () => {
+    renderSettings();
+    const toggle = await screen.findByTestId(TID.keyInDecaid);
+    expect(getComputedStyle(toggle.closest('label')!).minHeight).toBe('48px');
+    expect(getComputedStyle(toggle.closest('.MuiSwitch-root')!).padding).toBe('12px');
   });
 });

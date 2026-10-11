@@ -7,7 +7,7 @@
  * same id it would get on a real gateway (verified against the bundled
  * templates and the example record).
  */
-import type { ProfileRecord, WireProfile } from '../../src/api/types.ts';
+import type { WireProfile } from '../../src/api/types.ts';
 import type { ProfileStep } from '../../src/coach/types.ts';
 import { argumentError, enumNameError, formatException, plainException, typeError } from './errors.ts';
 import { isPlainObject, stableDartJson, type JsonObject } from './json.ts';
@@ -187,18 +187,36 @@ export function compoundHash(id: string, metadata: string): string {
   return sha256Hex(`${id}:${metadata}`);
 }
 
+/**
+ * A profile record as Decaid keeps and sends it, every field
+ * (profile_record.dart): CafAI's own ProfileRecord type is only what CafAI
+ * reads. A type, not an interface, so it is assignable to that one.
+ */
+export type DecaidProfileRecord = {
+  id: string;
+  profile: WireProfile;
+  metadataHash: string;
+  compoundHash: string;
+  parentId: string | null;
+  visibility: 'visible' | 'hidden' | 'deleted' | (string & {});
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+  metadata: Record<string, unknown> | null;
+};
+
 /** ProfileRecord.create / copyWith: hashes recomputed from the profile. */
 export function buildProfileRecord(
   profile: WireProfile,
   fields: {
     parentId?: string | null;
-    visibility?: ProfileRecord['visibility'];
+    visibility?: DecaidProfileRecord['visibility'];
     isDefault?: boolean;
     createdAt: string;
     updatedAt?: string;
     metadata?: Record<string, unknown> | null;
   },
-): ProfileRecord {
+): DecaidProfileRecord {
   const id = profileHash(profile);
   const meta = metadataHash(profile);
   return {

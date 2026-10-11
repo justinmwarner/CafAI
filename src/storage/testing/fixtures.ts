@@ -24,7 +24,6 @@ export function makeSettings(overrides: Partial<Settings> = {}): Settings {
     grinderId: null,
     activeBagId: null,
     appearance: DEFAULT_APPEARANCE,
-    keepKeyInDecaid: false,
     ...overrides,
   };
 }

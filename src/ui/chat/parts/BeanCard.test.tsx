@@ -51,13 +51,26 @@ describe('BeanCard (6.1)', () => {
     expect(screen.getByTestId(TID.beanSomethingElse)).toHaveTextContent('Something else');
   });
 
-  it('names the coffee in each Use this, for a screen reader that lists the buttons alone', () => {
+  it('names the coffee and its roast in each Use this, for a screen reader that lists the buttons alone', () => {
     renderCard();
     expect(screen.getAllByRole('button', { name: /^Use this/ }).map((button) => button.getAttribute('aria-label'))).toEqual([
-      'Use this: Red Brick',
-      'Use this: Ethiopia Chelchele',
+      'Use this: Red Brick, roasted 24 Sep 2026',
+      'Use this: Ethiopia Chelchele, roasted 3 Sep 2026',
     ]);
-    expect(screen.getByRole('button', { name: 'Use this: Ethiopia Chelchele' })).toHaveAttribute('data-testid', TID.beanOption);
+    expect(screen.getByRole('button', { name: 'Use this: Ethiopia Chelchele, roasted 3 Sep 2026' })).toHaveAttribute('data-testid', TID.beanOption);
+  });
+
+  it('tells two batches of one coffee apart by their roast date, and names a batch without one by the coffee alone', () => {
+    const red = BEAN_OPTIONS[0]!;
+    renderCard({ options: [{ ...red, batchId: 'batch-red-new', roastDate: '2026-10-01' }, red, { ...red, batchId: 'batch-red-undated', roastDate: null }] });
+    const buttons = screen.getAllByTestId(TID.beanOption);
+    expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Use this: Red Brick, roasted 1 Oct 2026',
+      'Use this: Red Brick, roasted 24 Sep 2026',
+      'Use this: Red Brick',
+    ]);
+    // What a sighted barista reads stays the same.
+    expect(buttons.map((button) => button.textContent)).toEqual(['Use this', 'Use this', 'Use this']);
   });
 
   it('lists the batches as plain rows inside the one card: no outlined card within it', () => {

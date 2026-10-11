@@ -17,6 +17,7 @@ import {
 } from './frames.ts';
 
 const drift = () => driftLog.list().map(({ source, problem }) => ({ source, problem }));
+const problems = () => driftLog.list().map((entry) => entry.problem);
 
 beforeEach(() => {
   driftLog.clear();
@@ -77,7 +78,7 @@ describe('tolerant parsers', () => {
   });
 
   it('reject malformed frames instead of throwing', () => {
-    const junk: unknown[] = [null, undefined, 42, 'text', [], {}, { state: 'idle' }, { timestamp: 5, state: { state: 'idle' } }];
+    const junk: unknown[] = [null, undefined, 42, 'text', [], {}, { state: 'idle' }, { timestamp: '2026-10-03T08:15:02.725113', state: { substate: 'idle' } }];
     for (const value of junk) {
       expect(parseMachineFrame(value)).toBeNull();
       expect(parseDevicesFrame(value)).toBeNull();
@@ -147,13 +148,27 @@ describe('what a frame lacks is drift (D95)', () => {
     expect([...KNOWN_SHOT_STATES].sort()).toEqual(['finished', 'idle', 'pouring', 'preheating', 'stopping']);
   });
 
-  it('a machine frame CafAI cannot use is dropped and reported', () => {
-    expect(parseMachineFrame({ ...fixtures.machineSnapshotWs(), timestamp: 1727600034216 })).toBeNull();
+  it('a machine frame without a state CafAI can read is dropped and reported', () => {
     expect(parseMachineFrame({ ...fixtures.machineSnapshotWs(), state: 'idle' })).toBeNull();
+    expect(parseMachineFrame({ ...fixtures.machineSnapshotWs(), state: { substate: 'idle' } })).toBeNull();
     expect(drift()).toEqual([
-      { source: 'ws/v1/machine/snapshot', problem: 'timestamp: expected string, got number' },
       { source: 'ws/v1/machine/snapshot', problem: 'state: expected object, got string' },
+      { source: 'ws/v1/machine/snapshot', problem: 'state.state: missing' },
     ]);
+  });
+
+  it('a timestamp CafAI cannot read is reported, and the frame keeps its state and readings at the time it arrived', () => {
+    const arrived = new Date(2026, 9, 10, 8, 0, 1, 500);
+    const sent = fixtures.machineSnapshotWs();
+    const espresso = { ...sent, state: { state: 'espresso', substate: 'pouring' } };
+    for (const timestamp of [1727600034216, undefined, 'yesterday']) {
+      const frame = parseMachineFrame({ ...espresso, timestamp }, 'ws/v1/machine/snapshot', () => arrived);
+      // The controls go by the state: Stop stays during a shot.
+      expect(frame?.state).toEqual({ state: 'espresso', substate: 'pouring' });
+      expect(frame?.pressure).toBe(sent.pressure);
+      expect(frame?.timestamp).toBe('2026-10-10T08:00:01.500000');
+    }
+    expect(problems()).toEqual(['timestamp: expected string, got number', 'timestamp: missing', 'timestamp: not a time']);
   });
 
   it('names the route it was given, for the REST seed', () => {

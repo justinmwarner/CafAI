@@ -12,10 +12,10 @@ import { buildStartingProfile, buildVersionProfile, getTemplate, profileId, star
 import type { ProfileJson, Template } from '../../coach/types.ts';
 import { deviceConnections, type DeviceConnections } from '../frames.ts';
 import { loadProfileOnMachine } from '../machineProfile.ts';
-import type { WorkflowContext } from '../types.ts';
+import type { DeviceEntry, WorkflowContext } from '../types.ts';
 import { activateProfile, createProfileVersion, findProfileMismatch } from '../workflow.ts';
 import { describeDecaid, openDecaid, type LiveDecaid } from './env.ts';
-import { contextDifference, contextNotKept, createUndoList, restoreContext, simulatorProblem } from './harness.ts';
+import { contextDifference, contextNotKept, createUndoList, restoreContext, simulatorProblem, waitUntil } from './harness.ts';
 
 /** A namespace of the suite's own, never CafAI's `cafai`. */
 const KV_NAMESPACE = 'cafai-contract-test';
@@ -35,6 +35,10 @@ const TAG = { versionId: 'cafai-contract-test', bagId: 'cafai-contract-test' };
  * suite's own, the same one every run, and hiding it hides nothing else.
  */
 const TEST_TARGET_G = 41.5;
+/** From a disconnect to Decaid answering that the machine is not connected. */
+const DISCONNECT_MS = 15_000;
+/** Decaid gives a connect up to 60 s on Linux (connection_manager.dart:587-591 at aab5f93). */
+const RECONNECT_MS = 60_000;
 
 function blooming(): Template {
   const template = getTemplate(TEMPLATE_ID);
@@ -186,4 +190,59 @@ describeDecaid('write', ({ url }) => {
     expect((await client.getSettings()).gatewayMode, 'after restoring').toBe(before);
     expect(live.problems()).toEqual([]);
   });
+
+  it('a scan that connects nothing, a connect of a device already connected, and Connect leaving it be (D111)', async () => {
+    const client = live.client;
+    const before = await client.getDevices();
+    const machine = before.find((device) => device.type === 'machine' && device.state === 'connected');
+    if (!machine) assert.fail('The simulated machine is not connected.');
+    // CafAI's scan is discovery only (connect=false): it lists what it found and connects nothing.
+    expect((await client.scanDevices()).map((device) => device.id), 'the scan lists the machine').toContain(machine.id);
+    expect(connectedIds(await client.getDevices()), 'connected after the scan').toEqual(connectedIds(before));
+    // Decaid answers a connect of a device it has connected already, and leaves it connected.
+    await client.connectDevice(machine.id);
+    expect(connectedIds(await client.getDevices()), 'connected after connecting the connected machine').toEqual(connectedIds(before));
+    // CafAI's own Connect, reading Decaid's preferred devices, leaves connected devices as they are.
+    for (const kind of ['machine', 'scale'] as const) {
+      expect(connectedIds(await client.connectKind(kind)), `connected after Connect ${kind}`).toEqual(connectedIds(before));
+    }
+    expect(live.problems()).toEqual([]);
+  });
+
+  // Last: it takes the machine away, and puts it back.
+  it("without a machine, CafAI reads Decaid's answer as not connected, in the words the machine alert shows", async () => {
+    const client = live.client;
+    const machine = (await client.getDevices()).find((device) => device.type === 'machine' && device.state === 'connected');
+    if (!machine) assert.fail('The simulated machine is not connected.');
+    const machineBack = undo.add('the machine connection', () => reconnect(machine.id));
+    const reply = await live.send('PUT', '/api/v1/devices/disconnect', { deviceId: machine.id });
+    expect(reply.status, 'PUT /api/v1/devices/disconnect').toBe(200);
+    const refused = await waitUntil(
+      () => client.getMachineState().then(() => null, (error: unknown) => error),
+      DISCONNECT_MS,
+      'Decaid to answer for a machine it has not got',
+    );
+    expect(refused).toMatchObject({ code: 'not_connected', message: 'The machine is not connected. Wake the DE1 and check it is paired with Decaid.' });
+    for (const call of [() => client.getMachineInfo(), () => client.getCapabilities()]) {
+      expect(await call().then(() => null, (error: unknown) => error)).toMatchObject({ code: 'not_connected' });
+    }
+    await machineBack();
+    expect(live.problems()).toEqual([]);
+  });
+
+  /** The connected devices' ids, sorted. */
+  function connectedIds(devices: readonly DeviceEntry[]): string[] {
+    return devices.filter((device) => device.state === 'connected').map((device) => device.id).sort();
+  }
+
+  /** The simulated machine connected again: by id, or else by the scan Decaid's own CI start uses (scripts/decaid-ci.sh). */
+  async function reconnect(machineId: string): Promise<void> {
+    const client = live.client;
+    const connected = async () => ((await client.getDevices()).some((device) => device.id === machineId && device.state === 'connected') ? true : null);
+    await client.connectDevice(machineId).catch(() => undefined);
+    const back = await waitUntil(connected, RECONNECT_MS / 3, 'the simulated machine to connect again').catch(() => null);
+    if (back) return;
+    await live.send('GET', '/api/v1/devices/scan?connect=true&quick=true');
+    await waitUntil(connected, RECONNECT_MS, 'the simulated machine to connect again after a scan');
+  }
 });

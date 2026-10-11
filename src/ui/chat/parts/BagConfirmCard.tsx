@@ -34,7 +34,13 @@ const LEVEL_LABELS: Record<(typeof ROAST_LEVELS)[number], string> = {
   dark: 'Dark',
 };
 
-const fieldSx = { '& .MuiInputBase-root': { minHeight: 48 } } as const;
+/**
+ * The card lives in the chat, where x-chat's ChatBox has every element inherit
+ * its border-box (whether that wins depends on which styles went in first):
+ * that took an input's paddings out of its own height and left the select no
+ * room for its text. Inputs keep MUI's content-box here.
+ */
+const fieldSx = { '& .MuiInputBase-root': { minHeight: 48 }, '& .MuiInputBase-input': { boxSizing: 'content-box' } } as const;
 /** A native select opens only from the select element itself, so it is the 48 px target. */
 const selectSx = { ...fieldSx, '& .MuiNativeSelect-select': { py: '12.5px' } } as const;
 

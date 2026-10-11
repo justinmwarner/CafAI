@@ -161,12 +161,14 @@ describe('buildSystemPrompt: content', () => {
     expect(intake).toMatch(/"roasted 3 days ago" counts back from today/);
   });
 
-  it('gives the roast with every shot, counted to the day of the shot (6.1)', () => {
+  it('gives the roast and the day with every shot, counted to the day of the shot (6.1)', () => {
     const shot = loopOf(prompt)
       .split('\n')
       .find((line) => line.startsWith('3. Shot completed.'))!;
-    expect(shot).toContain('"grinder":{the same fields as at intake},"roast":string|null,"summary":{aggregates and phases}}');
+    expect(shot).toContain('"grinder":{the same fields as at intake},"roast":string|null,"today":"YYYY-MM-DD","summary":{aggregates and phases}}');
     expect(shot).toMatch(/"roast" reads as at intake, counted to the day of the shot/);
+    // A date said in words days after intake counts from the latest day the coach was given.
+    expect(shot).toMatch(/"today" is the day of the shot: a roast date said in words after it counts from there/);
   });
 
   it('tells a connected machine that has not confirmed a version from one that is away (loadError)', () => {

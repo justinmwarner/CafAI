@@ -172,6 +172,24 @@ describe('createIdbStorage', () => {
     expect(await storage.secrets.getApiKey()).toBe(API_KEY);
   });
 
+  it('keeps what the key copy in Decaid is owed across a reload: a key forgotten while Decaid was away never comes back (D99)', async () => {
+    const kv = createMemoryKv();
+    const where = names();
+    const first = await open(kv, where);
+    await first.keyBackup.saveKey(API_KEY, false);
+    await first.keyBackup.setOn(true);
+    kv.failNext('delete', 1, away());
+    expect(await first.keyBackup.forgetKey(true)).toBe(false);
+    expect(kv.values(KEY_NAMESPACE)).toEqual({ [KEY_NAME]: API_KEY });
+    first.close();
+
+    // The next start: the delete goes out first, and nothing comes back.
+    const second = await open(kv, where);
+    expect(await second.keyBackup.restoreIfMissing()).toBe(false);
+    expect(kv.values(KEY_NAMESPACE)).toEqual({});
+    expect(await second.secrets.getApiKey()).toBeNull();
+  });
+
   it('says in plain words when the browser blocks storage', async () => {
     vi.stubGlobal('indexedDB', undefined);
     await expect(open(createMemoryKv())).rejects.toMatchObject({ name: 'StorageError', kind: 'unavailable' });

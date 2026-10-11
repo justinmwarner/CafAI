@@ -126,7 +126,8 @@ test("a coffee picked from Decaid's library fills the bag, and its loads name th
   const card = await openNewBag(page);
   // The mock's two coffees, newest roast first, each row's button naming its coffee.
   await expect(card.getByTestId(TID.beanOption)).toHaveCount(2);
-  await expect(card.getByTestId(TID.beanOption).first()).toHaveAccessibleName('Use this: Red Brick');
+  // The name says which roast too, since two batches of one bean share the coffee's name.
+  await expect(card.getByTestId(TID.beanOption).first()).toHaveAccessibleName(/^Use this: Red Brick, roasted \d{1,2} [A-Z][a-z]{2} \d{4}$/);
   await card.getByRole('button', { name: 'Use this: Ethiopia Chelchele' }).click();
 
   // The bag takes the coffee: the header names it, and the coach goes on to the starting profiles.

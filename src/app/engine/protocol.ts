@@ -129,6 +129,8 @@ export interface ShotCompletedPayload {
   grinder: GrinderPayload;
   /** The roast as at intake, its age counted to the day of the shot (6.1); null when the roast date is unknown. */
   roast: string | null;
+  /** The day of the shot where the user is, "YYYY-MM-DD": a roast date said in words after it counts from here, not from intake. */
+  today: string;
   summary: Omit<ShotSummary, 'series'>;
 }
 

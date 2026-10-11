@@ -20,8 +20,8 @@
  *   background, and every load names its batch (D102).
  * - A new bag opens with "Which coffee is it?": a batch from Decaid's bean
  *   library, a photo of the bag read by the coach's model, or the bag
- *   described in the chat (6.1, 6.8). The coach hears the roast date and the
- *   coffee's age at intake and with every shot.
+ *   described in the chat (6.1, 6.8). The coach hears the roast date, the
+ *   coffee's age and today's date at intake and with every shot.
  * - Decaid's plugins are optional (D103): the coach may read DYE2's setups,
  *   and a shot the Visualizer plugin uploaded gets a link to its page.
  * - v1 starts from the dose Decaid has at the pick (D57). Grind moves use the
@@ -238,6 +238,8 @@ interface TasteNote {
 
 /** Everything CafAI still has to say about one shot; a newer write carries the older one's fields. */
 interface ShotWrite {
+  /** The bag whose chat has the shot: a write Decaid refuses is reported there, whichever bag is open by then. */
+  bagId: string;
   taste?: TasteNote;
   stars?: number;
 }
@@ -875,15 +877,16 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       shotWrites.delete(shotId);
       return;
     }
-    shotWrites.set(shotId, { stars: write.stars });
+    shotWrites.set(shotId, { bagId: write.bagId, stars: write.stars });
     throw new WriteLater('Decaid has not said which rating scale it uses yet.');
   }
 
   /**
    * A write that cannot succeed was dropped rather than tried forever (5.11):
    * a refusal is reported as drift under the request Decaid refused, and the
-   * chat says once what was not saved. A failure in CafAI itself gets a plain
-   * sentence; its detail goes to the log Decaid keeps of the WebView.
+   * chat says once what was not saved: the shot's own bag's chat for a shot
+   * write, the chat on screen for the grinder. A failure in CafAI itself gets
+   * a plain sentence; its detail goes to the log Decaid keeps of the WebView.
    */
   function writeDropped(key: string, error: unknown): void {
     const readFailed = error instanceof RecordReadFailed;
@@ -891,6 +894,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     let what = 'the grinder for the next shots';
     let source = 'PUT /api/v1/workflow';
     let field = 'context';
+    let bagId: string | null = null;
     if (key.startsWith(SHOT_WRITE)) {
       const shotId = key.slice(SHOT_WRITE.length);
       const write = shotWrites.get(shotId);
@@ -899,6 +903,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       what = `${parts.join(' and ') || 'the notes'} for this shot`;
       source = readFailed ? 'GET /api/v1/shots/{id}' : 'PUT /api/v1/shots/{id}';
       field = readFailed ? 'record' : 'annotations';
+      bagId = write?.bagId ?? null;
     }
     const refused = cause instanceof GatewayError && cause.status >= 400 && cause.status < 500;
     let text: string;
@@ -909,13 +914,25 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       console.error(`CafAI could not save ${what}:`, describe(cause));
       text = `CafAI could not save ${what}.`;
     }
+    const notice = noticePart('warning', text);
     void enqueue(async () => {
       const s = session;
+      // The shot's bag is no longer on screen: the notice waits in its stored chat.
+      if (bagId !== null && s?.bag.id !== bagId) return noteInStoredChat(bagId, notice);
       if (!s) return;
-      addMessage('system', [noticePart('warning', text)]);
+      addMessage('system', [notice]);
       await persistConversation(s);
       emit();
     });
+  }
+
+  /** A notice for a bag that is not on screen, at the end of its stored chat, where it shows when the bag is opened. */
+  async function noteInStoredChat(bagId: string, part: CoachUiPart): Promise<void> {
+    const bag = await storage.bags.get(bagId);
+    const stored = bag ? await storage.conversations.get(bag.conversationId) : undefined;
+    if (!stored) return;
+    const at = nowIso();
+    await storage.conversations.put({ ...stored, uiMessages: [...stored.uiMessages, message(deps.newId('msg'), 'system', [part], at)], updatedAt: at });
   }
 
   /**
@@ -935,7 +952,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       text: text === null ? null : redactKeyLike(text),
       notes: cafaiNotesLine(words, version?.title ?? s.bag.name),
     };
-    void queueShotWrite(iteration.shotId, { taste });
+    void queueShotWrite(iteration.shotId, { bagId: s.bag.id, taste });
   }
 
   // -------------------------------------------------------------------------
@@ -945,10 +962,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   /**
    * After a bag's details were saved: add it to Decaid's bean library, reusing
    * the bean with the same roaster and name or adding one, then reusing that
-   * bean's unarchived batch with the bag's roast date (or, for a bag without
-   * one, a batch without one) or adding a batch, and keep both ids on the bag
-   * so every load names its batch. Not for a bag without a roaster (Decaid
-   * needs one) or a name of its own. In the background: nothing waits for it.
+   * bean's unarchived batch with the bag's roast date when both dates are
+   * known, or adding a batch, and keep both ids on the bag so every load names
+   * its batch. Not for a bag without a roaster (Decaid needs one) or a name of
+   * its own. In the background: nothing waits for it.
    * A failure (Decaid away, or a reply CafAI could not read, reported as
    * drift) leaves the bag unlinked for the next save to try again. CafAI never
    * edits or deletes a bean or a batch: a detail corrected later changes the
@@ -965,10 +982,13 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         const known = beans.find((b) => sameName(b.roaster, roaster) && sameName(b.name, name));
         const bean = known ?? (await api.createBean(beanRequest(bag, roaster, name)));
         // A bean already in the library may hold this very bag, as when its photo was taken instead of picking it.
+        // Only the roast date tells: an undated batch may be an earlier bag of the same coffee, so a bag
+        // without a date gets a batch of its own rather than another bag's shots and setups.
         const roastDate = bag.roastDate ?? null;
-        const same = known
-          ? (await api.listBatches(bean.id)).find((b) => b.archived !== true && writtenDate(b.roastDate) === roastDate)
-          : undefined;
+        const same =
+          known && roastDate !== null
+            ? (await api.listBatches(bean.id)).find((b) => b.archived !== true && writtenDate(b.roastDate) === roastDate)
+            : undefined;
         const batch = same ?? (await api.createBatch(bean.id, batchRequest(bag)));
         // In turn with the engine's actions, so the note never lands inside a reply.
         await enqueue(() => storeLink(bag.id, bean.id, batch.id, same ? ALREADY_IN_BEANS : ADDED_TO_BEANS));
@@ -1085,9 +1105,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   }
 
   /** The freezer dates of the batch picked on the bean card, as Decaid had them then (6.1). */
-  function freezerOf(s: Session): FreezerDates | null {
-    const batchId = s.bag.decaidBatchId ?? null;
-    if (batchId === null) return null;
+  function pickedFreezer(batchId: string): FreezerDates | null {
     for (const m of state.messages) {
       for (const part of m.parts) {
         if (part.kind !== 'beanPicker' || part.choice?.kind !== 'batch' || part.choice.batchId !== batchId) continue;
@@ -1098,9 +1116,31 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     return null;
   }
 
-  /** The roast as the coach reads it, the coffee's age counted to today (6.1). */
-  function roastFor(s: Session): string | null {
-    return coach.roastLine(s.bag.roastDate ?? null, clock.now(), freezerOf(s));
+  /**
+   * The freezer dates of the bag's batch (6.1), read again from Decaid's bean
+   * library, archived batches included: a batch frozen or thawed there after
+   * the pick says so only there. While Decaid cannot be read, or no longer
+   * lists the batch, as the bean card had them at the pick. Null for a bag
+   * not linked to a batch.
+   */
+  async function freezerOf(s: Session): Promise<FreezerDates | null> {
+    const batchId = s.bag.decaidBatchId ?? null;
+    if (batchId === null) return null;
+    try {
+      const batch = (await api.listAllBatches({ includeArchived: true })).find((b) => b.id === batchId);
+      if (batch) return { freezeDate: writtenDate(batch.freezeDate), unfreezeDate: writtenDate(batch.unfreezeDate) };
+    } catch {
+      // Decaid away, or a Decaid without the bean library: the card's row.
+    }
+    return pickedFreezer(batchId);
+  }
+
+  /** The roast as the coach reads it, the coffee's age counted to today (6.1); Decaid is read only when there is a roast date. */
+  async function roastFor(s: Session): Promise<string | null> {
+    const roastDate = s.bag.roastDate ?? null;
+    if (roastDate === null) return null;
+    const freezer = await freezerOf(s);
+    return coach.roastLine(roastDate, clock.now(), freezer);
   }
 
   /**
@@ -1112,12 +1152,13 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   async function startIntake(s: Session, words: string, bag: SaveBagDetails | null): Promise<void> {
     // A bag opened a moment ago: let its dose read finish.
     await s.numbers;
+    const roast = await roastFor(s);
     const blocks = intakeBlocks(words, {
       grinder: grinderForModel(),
       scaleConnected: telemetry.getState().scaleConnected,
       doseG: coach.knownDose(s.doseG),
       bag,
-      roast: roastFor(s),
+      roast,
       today: todayOf(clock.now()),
     });
     await sendUser(s, new Map(), UNANSWERED_TEXT, blocks, 'typed');
@@ -2051,6 +2092,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (!saysWhichRan) {
       addMessage('system', [noticePart('info', `Decaid's record did not say which profile ran; CafAI counted it for v${current.version}.`)]);
     }
+    // The card shows while the roast is worked out: its batch is read again from Decaid.
+    emit();
+    const roast = await roastFor(s);
     const template = coach.getTemplate(current.templateId);
     const block = shotCompletedBlock({
       shotRef: 'latest',
@@ -2061,10 +2105,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       doseG: summary.doseG ?? s.doseG,
       targetYieldG: summary.targetYieldG ?? s.targetYieldG,
       grinder: grinderForModel(),
-      roast: roastFor(s),
+      roast,
+      today: todayOf(clock.now()),
       summary: summaryForModel(summary),
     });
-    emit();
     await sendUser(s, new Map(), UNANSWERED_SHOT, [block], 'shot');
   }
 
@@ -2550,7 +2594,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     setMessages(setShotStars(state.messages, shotId, stars));
     await persistConversation(s);
     emit();
-    void queueShotWrite(shotId, { stars });
+    void queueShotWrite(shotId, { bagId: s.bag.id, stars });
   }
 
   async function sendText(text: string): Promise<void> {

@@ -42,6 +42,8 @@ export type _grinder = Assert<Exactly<Diff<Res<'/api/v1/grinders/{id}', 'get'>, 
 export type _beans = Assert<Exactly<Diff<{ list: Res<'/api/v1/beans', 'get'> }, { list: C.Bean[] }>, X.BeanRead<'list[].'>>>;
 export type _bean_create = Assert<Exactly<Diff<Res<'/api/v1/beans', 'post', 201>, C.Bean>, X.BeanRead>>;
 export type _batches = Assert<Exactly<Diff<{ list: Res<'/api/v1/beans/{beanId}/batches', 'get'> }, { list: C.BeanBatch[] }>, X.BatchRead<'list[].'>>>;
+/** client.ts listAllBatches: every batch in one read, for the bean card (6.1). */
+export type _all_batches = Assert<Exactly<Diff<{ list: Res<'/api/v1/bean-batches', 'get'> }, { list: C.BeanBatch[] }>, X.BatchRead<'list[].'>>>;
 export type _batch_create = Assert<Exactly<Diff<Res<'/api/v1/beans/{beanId}/batches', 'post', 201>, C.BeanBatch>, X.BatchRead>>;
 
 // ---- KV store and errors --------------------------------------------------------------------------

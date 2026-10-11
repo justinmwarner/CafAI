@@ -289,6 +289,11 @@ export class DecaidKvMirror implements KvMirror {
   private disposed = false;
   private error: string | null = null;
   private pushedAt: string | null = null;
+  /** Decaid held no record of a backup (no meta) when this page looked. */
+  private noBackup = false;
+  /** The look at Decaid's record of the last backup, while it runs (see subscribe). */
+  private recordRead: Promise<void> | null = null;
+  private readonly listeners = new Set<() => void>();
 
   constructor(options: KvMirrorOptions) {
     this.kv = options.kv;
@@ -306,9 +311,35 @@ export class DecaidKvMirror implements KvMirror {
     return this.error;
   }
 
-  /** When Decaid last confirmed holding the current data (ISO time), or null. */
+  /**
+   * When Decaid last confirmed holding the current data (ISO time); until this
+   * page pushes, when its copy was last completed, as Decaid's own record of
+   * it says (meta.updatedAt, read by subscribe). Null when none is known.
+   */
   get lastPushAt(): string | null {
     return this.pushedAt;
+  }
+
+  /** True once this page knows how the backup stands: a push ended, or Decaid's record of the last one was read. */
+  get backupKnown(): boolean {
+    return this.pushedAt !== null || this.error !== null || this.noBackup;
+  }
+
+  /**
+   * Calls `listener` whenever lastPushAt, lastError or backupKnown changes;
+   * returns the unsubscribe. While this page does not know how the backup
+   * stands, a subscriber (Settings > About) has Decaid's record of the last
+   * backup read, so a fresh page never says "not backed up" over a backup
+   * Decaid holds.
+   */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    if (!this.backupKnown && this.recordRead === null && !this.disposed) {
+      this.recordRead = this.readRecord().finally(() => {
+        this.recordRead = null;
+      });
+    }
+    return () => void this.listeners.delete(listener);
   }
 
   /**
@@ -413,6 +444,32 @@ export class DecaidKvMirror implements KvMirror {
     this.remoteRead = true;
   }
 
+  /**
+   * meta marks a complete push (pushOnce), so its updatedAt is when Decaid's
+   * copy was last completed, by an earlier page or another device. No meta is
+   * no backup; Decaid not answering, or a time CafAI cannot read, leaves it
+   * unknown for the next subscriber or push to find out.
+   */
+  private async readRecord(): Promise<void> {
+    let meta: unknown;
+    try {
+      meta = await this.kv.get<unknown>(KV_NAMESPACE, 'meta');
+    } catch {
+      return;
+    }
+    // A push that ended meanwhile knows better.
+    if (this.backupKnown) return;
+    const at = isRecord(meta) ? meta['updatedAt'] : undefined;
+    if (meta === null) this.noBackup = true;
+    else if (typeof at === 'string' && !Number.isNaN(Date.parse(at))) this.pushedAt = at;
+    else return;
+    this.notify();
+  }
+
+  private notify(): void {
+    for (const listener of [...this.listeners]) listener();
+  }
+
   private async pushOnce(): Promise<void> {
     // A push queued before dispose() would otherwise run against closed databases.
     if (this.disposed) return;
@@ -468,5 +525,6 @@ export class DecaidKvMirror implements KvMirror {
       this.error = redactSecret(`Could not back up to Decaid: ${describeError(error)}`, apiKey);
       this.scheduleRetry();
     }
+    this.notify();
   }
 }

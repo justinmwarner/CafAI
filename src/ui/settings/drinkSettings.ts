@@ -5,8 +5,15 @@
  * it does not, streamline's clamps (docs/audit/2026-10-09/streamline.md) and
  * the DE1's own wire limits (.ref/decaid, checked against aab5f93) fill the
  * gap; failing both, the range here is a practical ceiling so a mistyped
- * value is never sent as is. Integers match the spec's `type: integer`;
- * everything else is rounded to one decimal.
+ * value is never sent as is. Each range takes in what Decaid's own screens
+ * set (steam_form.dart, hot_water_form.dart, rinse_form.dart at aab5f93:
+ * steam 135-170 °C, 0-120 s, 0.4-2.5 ml/s; hot water 50-95 °C, 0-250 ml,
+ * 0-60 s, 1-8 ml/s; flush 5-95 °C, 0-60 s, 1-8 ml/s), but for a time or a
+ * volume of 0, which this screen never writes (steam time 0 is streamline's
+ * steam off), and steam temperature, which keeps the spec's narrower range.
+ * Integers match the spec's `type: integer`; everything else is rounded to
+ * one decimal. A stepper only ever moves a value the way it points: at or
+ * past the end of the range it sends nothing (nudgeDrinkField).
  *
  * Wire limits checked in .ref/decaid: a workflow PUT that changes
  * steamSettings or hotWaterData reaches the DE1 through
@@ -36,11 +43,13 @@ export interface DrinkFieldSpec {
   readonly step: number;
   readonly range: Range;
   /**
-   * The value Decaid uses to mean this drink is off (steam temperature 0).
-   * Shown read-only with offNote under it, and never written by a blur or a
-   * stepper tap: turning steam on or off is not offered by this screen.
+   * Values below this mean the drink is off in Decaid (steam temperature
+   * under 135 °C: Decaid writes 0, heater off, de1_controller.dart:575 at
+   * aab5f93). Shown read-only as "Off" with offNote under it, and never
+   * written by a blur or a stepper tap: turning steam on or off is not
+   * offered by this screen.
    */
-  readonly offValue?: number;
+  readonly offBelow?: number;
   readonly offNote?: string;
 }
 
@@ -55,15 +64,36 @@ export function clampDrinkField(spec: DrinkFieldSpec, value: number): number {
   return clamp(value, spec.range, spec.integer);
 }
 
+/** The drink is off in Decaid at this value (steam below 135 °C). */
+export function isDrinkOff(spec: DrinkFieldSpec, value: number): boolean {
+  return spec.offBelow !== undefined && value < spec.offBelow;
+}
+
+/**
+ * What a stepper tap writes: one step the way it points, clamped into the
+ * range, or null to send nothing. More at or above the range's top, or Less
+ * at or below its floor, sends nothing, so a value Decaid holds outside
+ * CafAI's range (another skin's, or steam time 0) never moves the wrong
+ * way; one beyond the far end comes back into the range.
+ */
+export function nudgeDrinkField(spec: DrinkFieldSpec, value: number, direction: 1 | -1): number | null {
+  if (!Number.isFinite(value)) return null;
+  if (direction === 1 ? value >= spec.range.max : value <= spec.range.min) return null;
+  const next = clamp(value + direction * spec.step, spec.range, spec.integer);
+  return next === value ? null : next;
+}
+
 /**
  * Steam temperature's enabled range is 135-160 C on a DE1 and 135-165 C on a
  * Bengle (rest_v1.yml SteamSettings.targetTemperature; confirmed by
  * streamline's steam heater rule); below it Decaid treats the heater as
- * disabled. CafAI reads the connected machine's model
- * (services.decaid.getMachineInfo()) to pick the right ceiling, and uses
- * the narrower DE1 range until the model is known (fails safe: it would
- * rather refuse a Bengle-only value than risk writing one to a DE1, where
- * it wraps a single byte above 255 anyway, let alone matters below it).
+ * disabled, so anything below 135 shows as Off. Decaid's own screen goes to
+ * 170; CafAI keeps the spec's supported range. CafAI reads the connected
+ * machine's model (services.decaid.getMachineInfo()) to pick the right
+ * ceiling, and uses the narrower DE1 range until the model is known (fails
+ * safe: it would rather refuse a Bengle-only value than risk writing one to
+ * a DE1, where it wraps a single byte above 255 anyway, let alone matters
+ * below it).
  */
 export function steamTemperatureField(model: string | null): DrinkFieldSpec {
   return {
@@ -73,7 +103,7 @@ export function steamTemperatureField(model: string | null): DrinkFieldSpec {
     integer: true,
     step: 1,
     range: { min: 135, max: model === 'Bengle' ? 165 : 160 },
-    offValue: 0,
+    offBelow: 135,
     offNote: 'Steam is off in Decaid',
   };
 }
@@ -91,14 +121,18 @@ export const STEAM_DURATION: DrinkFieldSpec = {
   step: 5,
   range: { min: 1, max: 120 },
 };
-/** No range in the spec or in streamline for steam flow; it goes to an MMR register (unified_de1.mmr.dart), not the byte-packed write. Decaid's own default is 0.8. */
+/**
+ * No range in the spec or in streamline for steam flow; it goes to an MMR
+ * register (unified_de1.mmr.dart), not the byte-packed write. Decaid's own
+ * screen goes to 2.5 (steam_form.dart:114-115); its default is 0.8.
+ */
 export const STEAM_FLOW: DrinkFieldSpec = {
   key: 'flow',
   label: 'Steam flow',
   unit: 'ml/s',
   integer: false,
   step: 0.1,
-  range: { min: 0.1, max: 2 },
+  range: { min: 0.1, max: 2.5 },
 };
 
 export function steamFields(model: string | null): readonly DrinkFieldSpec[] {
@@ -158,14 +192,18 @@ export const HOT_WATER_FLOW: DrinkFieldSpec = {
 
 export const HOT_WATER_FIELDS: readonly DrinkFieldSpec[] = [HOT_WATER_TEMPERATURE, HOT_WATER_VOLUME, HOT_WATER_DURATION, HOT_WATER_FLOW];
 
-/** No range in the spec or in streamline for flush duration; an MMR register (unified_de1.mmr.dart), not the byte-packed write. A flush runs a few seconds. */
+/**
+ * No range in the spec or in streamline for flush duration; an MMR register
+ * (unified_de1.mmr.dart), not the byte-packed write. A flush runs a few
+ * seconds; Decaid's own screen goes to 60 (rinse_form.dart:66-67).
+ */
 export const RINSE_DURATION: DrinkFieldSpec = {
   key: 'duration',
   label: 'Flush time',
   unit: 's',
   integer: true,
   step: 1,
-  range: { min: 1, max: 30 },
+  range: { min: 1, max: 60 },
 };
 /** No range in the spec or in streamline for flush temperature; an MMR register, not the byte-packed write. Bounded by water's own boiling point. */
 export const RINSE_TEMPERATURE: DrinkFieldSpec = {

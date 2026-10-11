@@ -1,8 +1,8 @@
 /**
  * A simulated shot through CafAI's own client and parsers (spec 4.4,
- * DECAID_SIM=1): espresso, the shotState sequence, the shot record read and
- * summarised by CafAI's summariser, notes and a rating written and read back,
- * then idle. Every reply and every frame of the shot is checked against the
+ * DECAID_SIM=1): espresso, Next step once mid-shot (D113), the shotState
+ * sequence, the shot record read and summarised by CafAI's summariser, notes
+ * and a rating written and read back, then idle. Every reply and every frame of the shot is checked against the
  * pinned spec and for drift. A simulator only (D104): it refuses to run unless
  * Decaid simulates the machine and no real machine is connected, because
  * espresso moves water. `npm test` never runs it.
@@ -24,6 +24,8 @@ const REPLAY_MS = 10_000;
 const SHOT_MS = 90_000;
 /** From finished to the record in Decaid's history. */
 const RECORD_MS = 15_000;
+/** From Next step to the machine on the next step. */
+const SKIP_MS = 10_000;
 const IDLE_MS = 15_000;
 const SHOT_STATE = '/ws/v1/machine/shotState';
 /** Listened to for the whole shot, then checked frame by frame. */
@@ -82,6 +84,29 @@ describeDecaid('shot', ({ url, require }) => {
     const startedAt = Date.now();
     await client.setMachineState('espresso');
     const started = await waitUntil(() => events().find((event) => event.state === 'preheating' || event.state === 'pouring'), SHOT_MS, 'shotState preheating or pouring');
+
+    // Next step (D113), as the Shot view offers it, in preinfusion or pouring: Decaid takes it, and the machine moves on a step.
+    const step = await waitUntil(
+      async () => {
+        const snapshot = await client.getMachineState();
+        const pulling = snapshot.state.state === 'espresso' && (snapshot.state.substate === 'preinfusion' || snapshot.state.substate === 'pouring');
+        return pulling && snapshot.profileFrame !== null ? snapshot.profileFrame : null;
+      },
+      SHOT_MS,
+      'the machine to pull the shot',
+    );
+    await client.setMachineState('skipStep');
+    const moved = await waitUntil(
+      async () => {
+        const snapshot = await client.getMachineState();
+        // On the profile's last step a skip has nowhere to go, and the shot ends instead.
+        return snapshot.state.state !== 'espresso' || (snapshot.profileFrame ?? step) > step ? snapshot : null;
+      },
+      SKIP_MS,
+      `the machine to move on from step ${step}`,
+    );
+    if (moved.state.state === 'espresso') expect(moved.profileFrame, 'the step after the skip').toBeGreaterThan(step);
+
     const left = Math.max(0, SHOT_MS - (Date.now() - startedAt));
     const finished = await waitUntil(() => events().find((event) => event.state === 'finished'), left, 'shotState finished');
     if (started.shotId !== null && finished.shotId !== null) expect(finished.shotId, 'one shot from start to finish').toBe(started.shotId);

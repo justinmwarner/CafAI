@@ -38,6 +38,15 @@ function details(option: BeanPickerOption): string {
   return [option.roaster, option.roastDate ? `Roasted ${formatDate(option.roastDate)}` : null].filter(Boolean).join(' · ');
 }
 
+/**
+ * Every row's button reads "Use this": its name says which coffee, for a
+ * screen reader that lists the buttons alone, and which roast, since two
+ * batches of one bean share the name.
+ */
+function pickLabel(option: BeanPickerOption): string {
+  return option.roastDate ? `Use this: ${option.name}, roasted ${formatDate(option.roastDate)}` : `Use this: ${option.name}`;
+}
+
 /** An answer given on the card, in the accent with a check, where its button was. */
 function Chosen({ label }: { label: string }) {
   return (
@@ -130,8 +139,6 @@ export function BeanCard({
             const picked = choice?.kind === 'batch' && choice.batchId === option.batchId;
             // Another answer, or set aside: the row stays, in the muted ink, never faded.
             const setAside = locked && !picked;
-            // Every row's button reads "Use this": its name says which coffee, for a screen reader that lists the buttons alone.
-            const pickLabel = `Use this: ${option.name}`;
             return (
               <Stack
                 key={option.batchId}
@@ -163,7 +170,7 @@ export function BeanCard({
                   <Button
                     variant={locked ? 'text' : 'contained'}
                     data-testid={TID.beanOption}
-                    aria-label={pickLabel}
+                    aria-label={pickLabel(option)}
                     disabled={blocked}
                     onClick={() => onPick(option.batchId)}
                     sx={{ minHeight: 48, flexShrink: 0, px: 2 }}

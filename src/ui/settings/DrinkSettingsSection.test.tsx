@@ -59,6 +59,67 @@ describe('DrinkSettingsSection loading', () => {
     renderWithServices(<DrinkSettingsSection />, services);
     expect(await screen.findByText("Could not read Decaid's drink settings: Decaid is offline")).toBeInTheDocument();
   });
+
+  it('shows a dash, never a made-up value, until Decaid answers', async () => {
+    const services = createFakeServices();
+    let answer: (workflow: Workflow) => void = () => {};
+    services.decaid.getWorkflow = () => new Promise<Workflow>((resolve) => (answer = resolve));
+    renderWithServices(<DrinkSettingsSection />, services);
+    expect(screen.getByText("Reading Decaid's drink settings…")).toBeInTheDocument();
+    for (const label of ['Steam temperature (°C)', 'Hot water volume (ml)', 'Flush flow (ml/s)']) {
+      expect(screen.getByLabelText(label)).toHaveValue('—');
+      expect(screen.getByLabelText(label)).toBeDisabled();
+    }
+    expect(screen.getByLabelText('More hot water volume')).toBeDisabled();
+    act(() => answer(SAMPLE_WORKFLOW));
+    await waitFor(() => expect(screen.getByLabelText('Hot water volume (ml)')).toHaveValue('50'));
+    expect(screen.queryByText("Reading Decaid's drink settings…")).toBeNull();
+  });
+
+  it('after a read that failed, the fields stay dashes and Retry reads again', async () => {
+    const services = createFakeServices();
+    let fail = true;
+    services.decaid.getWorkflow = async () => {
+      if (fail) throw new Error('Decaid is offline');
+      return SAMPLE_WORKFLOW;
+    };
+    renderWithServices(<DrinkSettingsSection />, services);
+    await screen.findByText("Could not read Decaid's drink settings: Decaid is offline");
+    expect(screen.getByLabelText('Steam time (s)')).toHaveValue('—');
+    fail = false;
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.getByLabelText('Steam time (s)')).toHaveValue('50'));
+    expect(screen.queryByText(/Could not read Decaid's drink settings/)).toBeNull();
+  });
+
+  it("a field Decaid sent that CafAI could not read is a dash with a note, never Decaid's default", async () => {
+    const { updateWorkflow } = renderDrink({ steamSettings: { targetTemperature: 150, duration: null, flow: null } });
+    await waitFor(() => expect(screen.getByLabelText('Steam flow (ml/s)')).toHaveValue('—'));
+    expect(screen.getByLabelText('Steam flow (ml/s)')).toBeDisabled();
+    expect(screen.getByLabelText('Steam time (s)')).toHaveValue('—');
+    expect(screen.getAllByText("CafAI could not read Decaid's value")).toHaveLength(2);
+    expect(screen.getByLabelText('More steam flow')).toBeDisabled();
+    expect(screen.getByLabelText('Steam temperature (°C)')).toHaveValue('150');
+    expect(screen.getByLabelText('More steam temperature')).toBeEnabled();
+    expect(updateWorkflow).not.toHaveBeenCalled();
+  });
+});
+
+describe('DrinkSettingsSection without a machine', () => {
+  it('shows the values, but disables every field and says why: Decaid refuses these writes without a DE1', async () => {
+    const { services, updateWorkflow } = renderDrink();
+    await screen.findByLabelText('Steam temperature (°C)');
+    act(() => services.telemetry.setState({ machineConnected: false }));
+    expect(screen.getByText('Connect the DE1 to change these.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Steam time (s)')).toHaveValue('50');
+    expect(screen.getByLabelText('Steam time (s)')).toBeDisabled();
+    expect(screen.getByLabelText('More steam time')).toBeDisabled();
+    expect(screen.getByLabelText('Less flush flow')).toBeDisabled();
+    expect(updateWorkflow).not.toHaveBeenCalled();
+    act(() => services.telemetry.setState({ machineConnected: true }));
+    expect(screen.queryByText('Connect the DE1 to change these.')).toBeNull();
+    expect(screen.getByLabelText('More steam time')).toBeEnabled();
+  });
 });
 
 describe('DrinkSettingsSection steam temperature range (the DE1 vs. the Bengle)', () => {
@@ -117,6 +178,13 @@ describe('DrinkSettingsSection steam off (D97, the spec allows 0)', () => {
     expect(screen.queryByLabelText('More steam temperature')).toBeNull();
   });
 
+  it('shows any steam temperature below 135 °C as Off, as Decaid treats it, so Less can never turn the heater on', async () => {
+    const { updateWorkflow } = renderDrink({ steamSettings: { targetTemperature: 120, duration: 50, flow: 0.8 } });
+    await waitFor(() => expect(screen.getByLabelText('Steam temperature (°C)')).toHaveValue('Off'));
+    expect(screen.queryByLabelText('Less steam temperature')).toBeNull();
+    expect(updateWorkflow).not.toHaveBeenCalled();
+  });
+
   it('never writes a value for steam temperature while it is off', async () => {
     const { updateWorkflow } = renderDrink(steamOff);
     await screen.findByLabelText('Steam temperature (°C)');
@@ -170,6 +238,33 @@ describe('DrinkSettingsSection edits', () => {
     await userEvent.click(less);
     expect(screen.getByLabelText('Steam flow (ml/s)')).toHaveValue('0.1');
     expect(updateWorkflow).not.toHaveBeenCalled();
+  });
+
+  it("a stepper never moves a value the wrong way: More at Decaid's own top sends nothing, Less at steam time 0 sends nothing", async () => {
+    const { updateWorkflow } = renderDrink({
+      steamSettings: { targetTemperature: 150, duration: 0, flow: 2.5 },
+      rinseData: { targetTemperature: 90, duration: 45, flow: 6 },
+    });
+    await userEvent.click(await screen.findByLabelText('More steam flow'));
+    await userEvent.click(screen.getByLabelText('Less steam time'));
+    expect(screen.getByLabelText('Steam flow (ml/s)')).toHaveValue('2.5');
+    expect(screen.getByLabelText('Steam time (s)')).toHaveValue('0');
+    expect(updateWorkflow).not.toHaveBeenCalled();
+    // A flush of 45 s, as Decaid's own screen sets, goes up by a second.
+    await userEvent.click(screen.getByLabelText('More flush time'));
+    await waitFor(() => expect(updateWorkflow).toHaveBeenCalledTimes(1));
+    expect(updateWorkflow.mock.calls[0]?.[0]).toEqual({ rinseData: { duration: 46 } });
+  });
+
+  it("after a write, a field Decaid's reply did not give in a form CafAI reads shows a dash, not a default", async () => {
+    const { services } = renderDrink();
+    services.decaid.updateWorkflow = vi.fn(async (patch: WorkflowPatch) => ({
+      ...SAMPLE_WORKFLOW,
+      steamSettings: { ...SAMPLE_WORKFLOW.steamSettings, ...patch.steamSettings, flow: null },
+    }));
+    await userEvent.click(await screen.findByLabelText('More steam time'));
+    await waitFor(() => expect(screen.getByLabelText('Steam flow (ml/s)')).toHaveValue('—'));
+    expect(screen.getByLabelText('Steam time (s)')).toHaveValue('55');
   });
 
   it('typing an unparseable value reverts to what is on screen, without writing', async () => {

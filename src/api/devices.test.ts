@@ -25,4 +25,18 @@ describe('describeFailedConnect', () => {
     const devices = [{ name: 'DE1', id: 'b', state: 'disconnected', type: 'machine', available: true }];
     expect(describeFailedConnect('machine', devices)).toMatch(/found but would not connect/);
   });
+
+  it('speaks of the brewing scale, never of a dosing scale connected as auxiliary', () => {
+    const devices = [
+      { name: 'Lunar', id: 's-2', state: 'connected', type: 'scale', available: true, connectionRole: 'auxiliary' },
+      { name: 'Decent Scale', id: 's-1', state: 'disconnected', type: 'scale', available: false },
+    ];
+    expect(describeFailedConnect('scale', devices)).toBe('Decent Scale is paired but not responding. Switch it on, or wake it if it has been idle.');
+    expect(describeFailedConnect('scale', devices.slice(0, 1))).toMatch(/^No scale found/);
+  });
+
+  it('a device without a name Decaid gave is the scale, or the machine', () => {
+    const devices = [{ name: '', id: 's-1', state: 'disconnected', type: 'scale', available: false }];
+    expect(describeFailedConnect('scale', devices)).toBe('The scale is paired but not responding. Switch it on, or wake it if it has been idle.');
+  });
 });

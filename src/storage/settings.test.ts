@@ -19,7 +19,7 @@ import { API_KEY, MODEL, makeSettings, uniqueDbName } from './testing/fixtures.t
 const PASTED_KEY = ['sk', 'ant', 'api03', 'nOtArEaLkEy0123456789', 'AbCdEfGhIjKlMnOpQrStUvWxYz_0123456789AA'].join('-');
 
 describe('defaultSettings', () => {
-  it('uses the default model and leaves everything else blank', () => {
+  it('uses the default model and leaves everything else blank, the key-copy choice unmade', () => {
     expect(defaultSettings(MODEL)).toEqual({
       model: MODEL,
       grinderName: null,
@@ -27,8 +27,8 @@ describe('defaultSettings', () => {
       grinderId: null,
       activeBagId: null,
       appearance: DEFAULT_APPEARANCE,
-      keepKeyInDecaid: false,
     });
+    expect(defaultSettings(MODEL)).not.toHaveProperty('keepKeyInDecaid');
   });
 });
 
@@ -45,7 +45,7 @@ describe('normalizeSettings', () => {
   });
 
   it('falls back field by field when a stored value has the wrong type', () => {
-    const raw = { model: 5, grinderName: 3, grinderSetting: '2.5', grinderId: 7, activeBagId: {} };
+    const raw = { model: 5, grinderName: 3, grinderSetting: '2.5', grinderId: 7, activeBagId: {}, keepKeyInDecaid: 'yes' };
     expect(normalizeSettings(raw, MODEL)).toEqual({
       model: MODEL,
       grinderName: null,
@@ -53,8 +53,15 @@ describe('normalizeSettings', () => {
       grinderId: null,
       activeBagId: null,
       appearance: DEFAULT_APPEARANCE,
-      keepKeyInDecaid: false,
     });
+  });
+
+  it('keeps the key-copy choice only as someone made it, never writing off as a default (D99)', () => {
+    expect(normalizeSettings(makeSettings({ keepKeyInDecaid: false }), MODEL)).toHaveProperty('keepKeyInDecaid', false);
+    expect(normalizeSettings(makeSettings({ keepKeyInDecaid: true }), MODEL)).toHaveProperty('keepKeyInDecaid', true);
+    expect(normalizeSettings(makeSettings(), MODEL)).not.toHaveProperty('keepKeyInDecaid');
+    expect(applySettingsPatch(makeSettings(), { activeBagId: 'bag_1' }, MODEL)).not.toHaveProperty('keepKeyInDecaid');
+    expect(applySettingsPatch(makeSettings(), { keepKeyInDecaid: false }, MODEL)).toHaveProperty('keepKeyInDecaid', false);
   });
 
   it('treats a blank model as the default model', () => {
@@ -62,7 +69,7 @@ describe('normalizeSettings', () => {
   });
 
   it('never carries fields outside Settings, such as an API key', () => {
-    const normalized = normalizeSettings({ ...makeSettings(), apiKey: API_KEY, theme: 'dark' }, MODEL);
+    const normalized = normalizeSettings({ ...makeSettings({ keepKeyInDecaid: true }), apiKey: API_KEY, theme: 'dark' }, MODEL);
     expect(Object.keys(normalized).sort()).toEqual([
       'activeBagId',
       'appearance',
@@ -77,7 +84,7 @@ describe('normalizeSettings', () => {
 
   it('reads settings saved before grinder links as not linked', () => {
     const older = { model: MODEL, grinderName: 'Niche Zero', grinderSetting: '14', activeBagId: 'bag_1' };
-    expect(normalizeSettings(older, MODEL)).toEqual({ ...older, grinderId: null, appearance: DEFAULT_APPEARANCE, keepKeyInDecaid: false });
+    expect(normalizeSettings(older, MODEL)).toEqual({ ...older, grinderId: null, appearance: DEFAULT_APPEARANCE });
   });
 
   it('keeps a linked grinder id, and reads an empty one as no link', () => {
@@ -295,6 +302,64 @@ describe('fillBlankSettings: a restore fills blanks and never overwrites local s
     expect(fillBlankSettings(linkedHere, incoming, MODEL)).toMatchObject({ grinderName: 'Lagom P64', grinderId: 'g-2' });
     const linkWithoutName = makeSettings({ grinderId: 'g-2' });
     expect(fillBlankSettings(linkWithoutName, incoming, MODEL)).toMatchObject({ grinderName: null, grinderId: 'g-2' });
+  });
+
+  it('keeps the key-copy choice made on this device, off as much as on, whatever comes in (D99)', () => {
+    const on = makeSettings({ keepKeyInDecaid: true });
+    const off = makeSettings({ keepKeyInDecaid: false });
+    expect(fillBlankSettings(off, on, MODEL)).toHaveProperty('keepKeyInDecaid', false);
+    expect(fillBlankSettings(on, off, MODEL)).toHaveProperty('keepKeyInDecaid', true);
+    expect(fillBlankSettings(on, makeSettings(), MODEL)).toHaveProperty('keepKeyInDecaid', true);
+  });
+
+  it('takes the incoming key-copy choice only on a device that never made one, as after its storage was lost', () => {
+    expect(fillBlankSettings(makeSettings(), makeSettings({ keepKeyInDecaid: true }), MODEL)).toHaveProperty('keepKeyInDecaid', true);
+    expect(fillBlankSettings(makeSettings(), makeSettings({ keepKeyInDecaid: false }), MODEL)).toHaveProperty('keepKeyInDecaid', false);
+    expect(fillBlankSettings(makeSettings(), makeSettings(), MODEL)).not.toHaveProperty('keepKeyInDecaid');
+  });
+});
+
+describe('the key-copy choice through an import (D99)', () => {
+  function setup() {
+    const handle = createDbHandle((onLost) => openCafaiDb(uniqueDbName(), onLost));
+    const db = () => handle.get();
+    const repos = createRepositories({ db, onWrite: () => undefined, defaultModel: MODEL });
+    const porter = createDataPorter({
+      db,
+      secrets: { getApiKey: async () => null },
+      mirror: { schedulePush: () => undefined },
+      appVersion: '1.2.3',
+      defaultModel: MODEL,
+      now: () => new Date('2026-10-04T09:30:00.000Z'),
+    });
+    return { repos, porter };
+  }
+  const exportWith = (settings: Settings): CafaiExport => ({
+    format: 'cafai-export',
+    schemaVersion: 1,
+    exportedAt: '2026-10-04T09:00:00.000Z',
+    appVersion: '1.2.3',
+    settings,
+    bags: [],
+    versions: [],
+    iterations: [],
+    conversations: [],
+  });
+
+  it('an import made while it was on never turns it back on after it was turned off here', async () => {
+    const { repos, porter } = setup();
+    await repos.settings.update({ keepKeyInDecaid: true });
+    const exported = (await porter.exportAll()).settings;
+    await repos.settings.update({ keepKeyInDecaid: false });
+    await porter.importAll(exportWith(exported), 'merge');
+    expect((await repos.settings.get()).keepKeyInDecaid).toBe(false);
+  });
+
+  it('a device that never chose takes it, even after other settings were saved there', async () => {
+    const { repos, porter } = setup();
+    await repos.settings.update({ activeBagId: 'bag_1', grinderName: 'Niche Zero' });
+    await porter.importAll(exportWith(makeSettings({ keepKeyInDecaid: true })), 'merge');
+    expect(await repos.settings.get()).toMatchObject({ keepKeyInDecaid: true, activeBagId: 'bag_1', grinderName: 'Niche Zero' });
   });
 });
 

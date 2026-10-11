@@ -123,12 +123,36 @@ describe('replies are read, not trusted', () => {
     ]);
   });
 
-  it('a list keeps what it can use, and an empty reply is still an empty list', async () => {
+  it('a list keeps what it can use, and an empty list is an empty list', async () => {
     const bean = { id: 'bean-1', roaster: 'Square Mile', name: 'Guji', archived: false };
     expect(await answering([bean, { name: 'no id' }]).listBeans()).toEqual([bean]);
-    expect(await answering(null).listBeans()).toEqual([]);
+    expect(await answering([]).listBeans()).toEqual([]);
     expect(await answering([{ id: 'p', loaded: true }, { loaded: true }]).listPlugins()).toEqual([{ id: 'p', loaded: true }]);
     await expect(answering({ plugins: [] }).listPlugins()).rejects.toMatchObject({ code: 'unexpected_reply' });
+  });
+
+  it('a list route that answers null fails the call and says so: never "Decaid has none", which could lead to a write', async () => {
+    const lists = [
+      (client: ReturnType<typeof answering>) => client.listBeans(),
+      (client: ReturnType<typeof answering>) => client.listBatches('bean-1'),
+      (client: ReturnType<typeof answering>) => client.listAllBatches(),
+      (client: ReturnType<typeof answering>) => client.listProfiles(),
+      (client: ReturnType<typeof answering>) => client.listPlugins(),
+      (client: ReturnType<typeof answering>) => client.getDevices(),
+      (client: ReturnType<typeof answering>) => client.scanDevices(),
+    ];
+    for (const list of lists) await expect(list(answering(null))).rejects.toMatchObject({ code: 'unexpected_reply' });
+    expect(drift()).toEqual(
+      [
+        'GET /api/v1/beans',
+        'GET /api/v1/beans/{id}/batches',
+        'GET /api/v1/bean-batches',
+        'GET /api/v1/profiles',
+        'GET /api/v1/plugins',
+        'GET /api/v1/devices',
+        'GET /api/v1/devices/scan',
+      ].map((source) => ({ source, problem: 'reply: expected array, got null' })),
+    );
   });
 
   it('reads the machine state like a snapshot frame: a missing reading is null, never 0 (5.8)', async () => {
@@ -140,7 +164,10 @@ describe('replies are read, not trusted', () => {
 
   it('reads every other reply it used to cast', async () => {
     expect((await answering({ ...fixtures.machineInfo(), GHC: undefined }).getMachineInfo()).GHC).toBe(false);
-    expect(await answering({ gatewayMode: 7 }).getSettings()).toEqual({});
+    expect(await answering({ gatewayMode: 7, preferredMachineId: null, preferredScaleId: null }).getSettings()).toEqual({
+      preferredMachineId: null,
+      preferredScaleId: null,
+    });
     expect((await answering({ ...fixtures.buildInfo(), fullVersion: null }).getInfo()).fullVersion).toBe('');
     await expect(answering({ ...fixtures.profileRecord(), id: undefined }).createProfile(fixtures.profileCreateRequest())).rejects.toMatchObject({
       code: 'unexpected_reply',
@@ -211,12 +238,13 @@ describe('updateSettings and listPlugins', () => {
     expect(settings).toEqual({ gatewayMode: 'tracking' });
   });
 
-  it('turns a null plugins body into an empty list', async () => {
+  it('a null plugins body fails the call: it is not "no plugins", and the directory keeps its last answer', async () => {
     const client = createDecaidClient({
       origin: 'http://localhost:8080',
       fetch: stubFetch(() => new Response('null', { status: 200 })),
     });
-    expect(await client.listPlugins()).toEqual([]);
+    await expect(client.listPlugins()).rejects.toMatchObject({ code: 'unexpected_reply' });
+    expect(drift()).toEqual([{ source: 'GET /api/v1/plugins', problem: 'reply: expected array, got null' }]);
   });
 });
 
@@ -336,7 +364,7 @@ function deviceClient(found: unknown[], answers: DecaidAnswers = {}) {
     fetch: stubFetch((url, init) => {
       calls.push({ method: init?.method ?? 'GET', url, ...(typeof init?.body === 'string' ? { body: init.body } : {}) });
       const path = new URL(url).pathname;
-      if (path === '/api/v1/settings') return answers.settings?.() ?? reply({ gatewayMode: 'tracking' });
+      if (path === '/api/v1/settings') return answers.settings?.() ?? reply({ gatewayMode: 'tracking', preferredMachineId: null, preferredScaleId: null });
       if (path === '/api/v1/devices/connect') return answers.connect?.() ?? reply({ outcome: 'connected', state: 'connected' });
       if (path === '/api/v1/devices') return reply(answers.devices ?? found);
       return answers.scan?.() ?? reply(found);
@@ -378,8 +406,11 @@ describe('connectKind', () => {
     expect(connects()).toEqual([{ method: 'PUT', url: 'http://localhost:8080/api/v1/devices/connect', body: '{"deviceId":"m-1"}' }]);
   });
 
-  it("prefers the device Decaid's settings name, when the scan found it", async () => {
-    const preferring = (settings: Record<string, unknown>) => ({ settings: () => reply({ gatewayMode: 'tracking', ...settings }) });
+  const preferring = (settings: Record<string, unknown>) => ({
+    settings: () => reply({ gatewayMode: 'tracking', preferredMachineId: null, preferredScaleId: null, ...settings }),
+  });
+
+  it("connects the device Decaid's settings prefer, when the scan found it", async () => {
     const machine = deviceClient([de1, otherDe1], preferring({ preferredMachineId: 'm-2' }));
     await machine.client.connectKind('machine');
     expect(machine.connects().map((call) => call.body)).toEqual(['{"deviceId":"m-2"}']);
@@ -387,20 +418,96 @@ describe('connectKind', () => {
     const scales = deviceClient([de1, { ...scale, state: 'discovered' }, lunar], preferring({ preferredScaleId: 's-2' }));
     await scales.client.connectKind('scale');
     expect(scales.connects().map((call) => call.body)).toEqual(['{"deviceId":"s-2"}']);
+  });
 
-    // Not found, or settings Decaid could not give: the first one found.
-    const missing = deviceClient([de1, otherDe1], preferring({ preferredMachineId: 'm-9' }));
-    await missing.client.connectKind('machine');
-    expect(missing.connects().map((call) => call.body)).toEqual(['{"deviceId":"m-1"}']);
-    const unread = deviceClient([de1, otherDe1], { settings: () => reply({ error: 'boom' }, 500) });
-    await unread.client.connectKind('machine');
-    expect(unread.connects().map((call) => call.body)).toEqual(['{"deviceId":"m-1"}']);
+  it("never connects another when Decaid's preferred device is away: Decaid would make it its preferred one (D98)", async () => {
+    const away = deviceClient([de1, { ...scale, state: 'discovered' }, { ...lunar, available: false }], preferring({ preferredScaleId: 's-2' }));
+    await expect(away.client.connectKind('scale')).rejects.toMatchObject({
+      code: 'device_choice',
+      message: "The scale Decaid uses is not in range. Switch it on, or choose another on Decaid's scan screen.",
+    });
+    expect(away.connects()).toHaveLength(0);
+    const machine = deviceClient([de1, otherDe1], preferring({ preferredMachineId: 'm-9' }));
+    await expect(machine.client.connectKind('machine')).rejects.toMatchObject({
+      code: 'device_choice',
+      message: expect.stringMatching(/^The machine Decaid uses is not in range/),
+    });
+    expect(machine.connects()).toHaveLength(0);
+  });
+
+  it('with none preferred, connects the only one there, and leaves a choice between several to Decaid', async () => {
+    const one = deviceClient([de1, scale]);
+    await one.client.connectKind('machine');
+    expect(one.connects().map((call) => call.body)).toEqual(['{"deviceId":"m-1"}']);
+    const several = deviceClient([de1, otherDe1]);
+    await expect(several.client.connectKind('machine')).rejects.toMatchObject({
+      code: 'device_choice',
+      message: "Decaid sees more than one machine. Choose yours on Decaid's scan screen.",
+    });
+    expect(several.connects()).toHaveLength(0);
+  });
+
+  it('connects nothing when Decaid did not say which device it prefers', async () => {
+    const unread = deviceClient([de1], { settings: () => reply({ error: 'boom' }, 500) });
+    await expect(unread.client.connectKind('machine')).rejects.toMatchObject({
+      code: 'device_choice',
+      message: "Decaid did not say which machine it uses. Choose yours on Decaid's scan screen.",
+    });
+    const renamed = deviceClient([de1], { settings: () => reply({ gatewayMode: 'tracking', preferredMachineDeviceId: 'm-1' }) });
+    await expect(renamed.client.connectKind('machine')).rejects.toMatchObject({ code: 'device_choice' });
+    expect([...unread.connects(), ...renamed.connects()]).toHaveLength(0);
+  });
+
+  it('preferredOnly (the revive no one tapped) connects the preferred device or nothing, and never says why', async () => {
+    const found = deviceClient([de1, { ...scale, state: 'discovered' }, lunar], preferring({ preferredScaleId: 's-1' }));
+    await found.client.connectKind('scale', { preferredOnly: true });
+    expect(found.connects().map((call) => call.body)).toEqual(['{"deviceId":"s-1"}']);
+    for (const settings of [{ preferredScaleId: 's-9' }, { preferredScaleId: null }]) {
+      const away = deviceClient([de1, lunar], preferring(settings));
+      await expect(away.client.connectKind('scale', { preferredOnly: true })).resolves.toEqual([de1, lunar]);
+      expect(away.connects()).toHaveLength(0);
+    }
+  });
+
+  it('an auxiliary (dosing) scale is never the brewing scale: neither connected nor taken for it', async () => {
+    const dosing = { ...lunar, state: 'connected', connectionRole: 'auxiliary' };
+    const brewingOff = { ...scale, state: 'disconnected', available: false };
+    const off = deviceClient([de1, dosing, brewingOff], preferring({ preferredScaleId: 's-1' }));
+    await off.client.connectKind('scale');
+    expect(off.connects(), 'the dosing scale is not the connected brewing scale').toHaveLength(0);
+    const on = deviceClient([de1, dosing, { ...brewingOff, state: 'discovered', available: true }], preferring({ preferredScaleId: 's-1' }));
+    await on.client.connectKind('scale');
+    expect(on.connects().map((call) => call.body)).toEqual(['{"deviceId":"s-1"}']);
   });
 
   it('leaves a device of that kind that is connected by now as it is', async () => {
     const { client, connects } = deviceClient([de1, scale, lunar]);
     await client.connectKind('scale');
     expect(connects()).toHaveLength(0);
+  });
+
+  it("waits for a connect longer than Decaid's own 60 s on Linux, so Decaid's answer comes first", async () => {
+    vi.useFakeTimers();
+    try {
+      let aborted = false;
+      const client = createDecaidClient({
+        origin: 'http://localhost:8080',
+        fetch: ((_url: string, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              aborted = true;
+              reject(new DOMException('aborted', 'AbortError'));
+            });
+          })) as unknown as typeof fetch,
+      });
+      const connect = client.connectDevice('m-1').catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(65_000);
+      expect(aborted, 'still waiting after 65 s').toBe(false);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(await connect).toMatchObject({ code: 'timeout' });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('never connects to a device Decaid remembers but cannot see, nor one it is connecting already', async () => {

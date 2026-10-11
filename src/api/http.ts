@@ -251,3 +251,13 @@ export async function requestValue<T>(transport: Transport, path: string, option
   }
   return data;
 }
+
+/**
+ * For routes that answer a list: the reply always goes through the reader,
+ * an empty or null one too, which reports it and fails the call. A reply
+ * CafAI could not read never reads as an empty list, "Decaid has none".
+ */
+export async function requestList<T>(transport: Transport, path: string, options: ReadOptions<T[]> & { read: Reader<T[]> }): Promise<T[]> {
+  const data = (await request<unknown>(transport, path, options)).data;
+  return options.read(data, sourceOf(path, options));
+}

@@ -8,6 +8,7 @@ import {
   contextDifference,
   contextNotKept,
   createUndoList,
+  openedChannels,
   recordExchanges,
   restoreContext,
   simulatorProblem,
@@ -32,6 +33,13 @@ describe('telemetryChannels', () => {
 
   it('has a parser for every one of them, so a new channel cannot go unchecked', () => {
     expect(telemetryChannels().filter((path) => FRAME_PARSERS[path] === undefined)).toEqual([]);
+  });
+
+  it("knows apart the channels CafAI opens only while Decaid has their plugin loaded, and has a parser for each", () => {
+    const { decaid, plugins } = openedChannels();
+    expect(plugins).toEqual(['/ws/v1/plugins/time-to-ready.reaplugin/timeToReady']);
+    expect(decaid).toEqual(telemetryChannels());
+    expect(plugins.filter((path) => FRAME_PARSERS[path] === undefined)).toEqual([]);
   });
 
   it('names a channel as the spec does', () => {

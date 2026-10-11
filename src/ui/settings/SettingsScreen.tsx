@@ -67,6 +67,11 @@ const selectSx = { ...fieldSx, '& .MuiNativeSelect-select': { py: '12.5px' } } a
 /** Backup-in-Decaid state while the choice is still being read, or while it is in flight. */
 type KeepState = boolean | 'loading';
 
+/** Saved while the choice is on, but the copy did not reach Decaid: src/storage/keyBackup.ts sends it when Decaid is back. */
+const KEY_SAVED_COPY_LATER = "Key saved on this device. Decaid can't be reached right now, so CafAI will copy it there as soon as it can.";
+/** Forgotten while the choice is on, but Decaid was out of reach: its copy is deleted when Decaid is back, and never restored meanwhile. */
+const KEY_GONE_DELETE_LATER = "The key is gone from this device. Decaid can't be reached right now, so CafAI will delete its copy there as soon as it can.";
+
 function ApiKeySection() {
   const { storage, coach } = useServices();
   const hasApiKeyInEngine = useCoach((s) => s.hasApiKey);
@@ -104,19 +109,12 @@ function ApiKeySection() {
     setBusy(true);
     setMessage(null);
     try {
-      await storage.secrets.setApiKey(key);
-      let text = 'Key saved on this device.';
-      if (keepInDecaid === true) {
-        try {
-          await storage.keyBackup.setOn(true);
-        } catch (backupError) {
-          text = `Key saved on this device, but Decaid could not be updated: ${errorText(backupError)}`;
-        }
-      }
+      // While the choice is on the copy in Decaid follows; one Decaid does not take now goes when it is back.
+      const copied = await storage.keyBackup.saveKey(key, keepInDecaid === true);
       setDraft('');
       setVisible(false);
       setSavedHere(true);
-      setMessage({ tone: 'success', text });
+      setMessage({ tone: 'success', text: copied ? 'Key saved on this device.' : KEY_SAVED_COPY_LATER });
       await coach.refresh();
     } catch (error) {
       setMessage({ tone: 'error', text: `Could not save the key: ${errorText(error)}` });
@@ -130,18 +128,11 @@ function ApiKeySection() {
     setBusy(true);
     setMessage(null);
     try {
-      await storage.secrets.forgetApiKey();
-      let text = 'The key is gone from this device.';
-      if (keepInDecaid === true) {
-        try {
-          await storage.keyBackup.setOn(false);
-        } catch {
-          // The choice stays on: Decaid may still have the key, so the switch must not claim otherwise.
-          text = "The key is gone from this device, but Decaid still has its copy; turn Keep my API key in Decaid off when Decaid is back.";
-        }
-      }
+      // Gone for good: a copy Decaid still holds never brings it back. While the choice is on that copy is
+      // deleted, now or once Decaid is back, and the choice stays on for the next key saved here.
+      const deleted = await storage.keyBackup.forgetKey(keepInDecaid === true);
       setSavedHere(false);
-      setMessage({ tone: 'success', text });
+      setMessage({ tone: 'success', text: deleted ? 'The key is gone from this device.' : KEY_GONE_DELETE_LATER });
       await coach.refresh();
     } catch (error) {
       setMessage({ tone: 'error', text: `Could not forget the key: ${errorText(error)}` });
@@ -251,16 +242,18 @@ function ApiKeySection() {
 const KEY_IN_DECAID_SENTENCE =
   "So you do not have to paste it again after a Decaid update. Any device on your network can read Decaid's store, and Decaid's backups include it.";
 
-/** A 38 px MUI Switch is under the 48 px touch target every other control here keeps; padding grows the whole hit area, track and thumb kept at their usual size. */
-const switchSx = { p: '17px' } as const;
+/** MUI's switch is 38 px tall: the label around it, which toggles it too, is the 48 px touch target. */
+const switchLabelSx = { minHeight: 48 } as const;
 
 /**
  * Settings > Coach's switch, D99: off by default. The checked state is
  * Settings.keepKeyInDecaid (lifted into ApiKeySection, which also needs it
  * to decide whether save() and forget() touch Decaid), never whether a
- * copy happens to exist there right now. Disabled with no key to back up;
- * a toggle that cannot reach Decaid reverts and says so, so the switch
- * never claims a state that is not real.
+ * copy happens to exist there right now. Off with no key, there is nothing
+ * to back up, so it waits for one; on, it can always be turned off, key or
+ * not (Forget may have left a copy that Decaid has not deleted yet). A
+ * toggle that cannot reach Decaid reverts and says so, so the switch never
+ * claims a state that is not real.
  */
 function KeyInDecaidSwitch({
   hasKey,
@@ -274,6 +267,7 @@ function KeyInDecaidSwitch({
   const { storage } = useServices();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const needsKey = !hasKey && keepInDecaid !== true;
 
   const toggle = async (checked: boolean) => {
     setBusy(true);
@@ -295,16 +289,16 @@ function KeyInDecaidSwitch({
         control={
           <Switch
             checked={keepInDecaid === true}
-            disabled={keepInDecaid === 'loading' || busy || !hasKey}
+            disabled={keepInDecaid === 'loading' || busy || needsKey}
             onChange={(event) => void toggle(event.target.checked)}
-            sx={switchSx}
             slotProps={{ input: { 'data-testid': TID.keyInDecaid } }}
           />
         }
         label="Keep my API key in Decaid"
+        sx={switchLabelSx}
       />
       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-        {hasKey ? KEY_IN_DECAID_SENTENCE : 'Add a key above before turning this on.'}
+        {needsKey ? 'Add a key above before turning this on.' : KEY_IN_DECAID_SENTENCE}
       </Typography>
       {error ? (
         <Typography variant="body2" sx={{ color: 'error.main' }}>

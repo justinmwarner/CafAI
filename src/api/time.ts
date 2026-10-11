@@ -65,3 +65,17 @@ export function parseDecaidTimestamp(text: string): number {
   }
   return epoch + subMs;
 }
+
+const pad = (value: number, width = 2) => String(value).padStart(width, '0');
+
+/**
+ * A moment as Decaid writes a local time ("2026-09-29T12:53:54.216000"):
+ * zone-less, on this device's clock, with microseconds. For a frame that
+ * came without a timestamp CafAI can read (frames.ts), so it takes the time
+ * it arrived; parseDecaidTimestamp reads it back to the same moment.
+ */
+export function formatDecaidTimestamp(date: Date): string {
+  const day = `${pad(date.getFullYear(), 4)}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}000`;
+  return `${day}T${time}`;
+}

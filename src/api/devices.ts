@@ -17,11 +17,13 @@ import type { DeviceEntry } from './types.ts';
  */
 export function describeFailedConnect(kind: 'machine' | 'scale', devices: readonly DeviceEntry[]): string {
   const noun = kind === 'machine' ? 'machine' : 'scale';
-  const known = devices.find((device) => device.type === kind);
+  // A dosing scale connected as auxiliary is never the one a Connect is for.
+  const known = devices.find((device) => device.type === kind && device.connectionRole !== 'auxiliary');
 
   if (!known) return `No ${noun} found. Check it is switched on and in Bluetooth range.`;
+  const name = known.name || `The ${noun}`;
   if (known.available === false) {
-    return `${known.name} is paired but not responding. Switch it on, or wake it if it has been idle.`;
+    return `${name} is paired but not responding. Switch it on, or wake it if it has been idle.`;
   }
-  return `${known.name} was found but would not connect. Try again, or reconnect it from Decaid.`;
+  return `${name} was found but would not connect. Try again, or reconnect it from Decaid.`;
 }

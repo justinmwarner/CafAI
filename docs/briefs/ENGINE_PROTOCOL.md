@@ -51,8 +51,12 @@ All JSON payloads are compact `JSON.stringify` output.
    the coach need not call `save_bag_details` then. `roast` is
    `"Roasted YYYY-MM-DD (<n> days ago)"` (`"(today)"` on the roast day), with
    `"; <m> days in the freezer not counted"` inside the brackets when the
-   picked batch spent days frozen (`freezeDate` to `unfreezeDate`, or to
-   today while not thawed), or null when the roast date is unknown. A roast,
+   bag's batch spent days frozen (`freezeDate` to `unfreezeDate`, or to
+   today while not thawed), or null when the roast date is unknown. The
+   freezer dates are read again for each turn that carries `roast`
+   (`GET /api/v1/bean-batches?includeArchived=true`), so a batch frozen or
+   thawed in Decaid after the pick counts; while Decaid cannot be read they
+   are the bean card's, as picked. A roast,
    freeze or thaw date is the day it is written with, whatever zone its
    timestamp carries. `today` is the date on the device's calendar, so the
    coach can turn "roasted 28 September" or "3 days ago" into a date; it is in
@@ -92,10 +96,12 @@ All JSON payloads are compact `JSON.stringify` output.
    without a parent.
 3. **Shot completed**: a text block
    `"[event:shot_completed]\n" + JSON` with JSON =
-   `{"shotRef":"latest","shotId":string,"version":number,"templateId":string,"levers":{"<leverId>":number,...},"doseG":number|null,"targetYieldG":number|null,"grinder":<grinder>,"roast":string|null,"summary":<ShotSummary without "series">}`.
+   `{"shotRef":"latest","shotId":string,"version":number,"templateId":string,"levers":{"<leverId>":number,...},"doseG":number|null,"targetYieldG":number|null,"grinder":<grinder>,"roast":string|null,"today":"YYYY-MM-DD","summary":<ShotSummary without "series">}`.
    `grinder` (fields as in rule 1) is what the user last saved (Settings or
    a confirmed grind move); it supersedes the intake context. `roast` reads
-   as in rule 1, the age counted to the day of the shot.
+   as in rule 1, the age counted to the day of the shot, and `today` is that
+   day on the device's calendar, so a roast date said in words after the
+   shot counts from it rather than from the intake.
    If UI tool calls are still pending, their tool_results come first in the
    same message (rule 7).
 4. **Feedback**: tool_result for `ask_user` with JSON

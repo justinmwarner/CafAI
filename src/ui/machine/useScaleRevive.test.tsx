@@ -160,6 +160,18 @@ describe('useScaleRevive', () => {
     expect(deviceConnectFor(services.decaid).getState()).toEqual({ pending: null, failure: null });
   });
 
+  it("asks for Decaid's preferred scale only: no one tapped, and another would become Decaid's preferred one (D98)", async () => {
+    const services = asleepScaleGone();
+    const asked: unknown[] = [];
+    services.decaid.connectKind = async (kind, options) => {
+      asked.push([kind, options]);
+      return [];
+    };
+    machineGoes(services, 'idle');
+    await wait(REVIVE_DELAY_MS);
+    expect(asked).toEqual([['scale', { preferredOnly: true }]]);
+  });
+
   it('stops with the shell', async () => {
     const services = asleepScaleGone();
     machineGoes(services, 'idle');

@@ -319,11 +319,23 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
       pull: async () => null,
       lastPushAt: null,
       lastError: null,
+      // Knows it holds no backup: About says "Not backed up yet".
+      backupKnown: true,
+      subscribe: () => () => undefined,
     },
     // The choice (Settings.keepKeyInDecaid) is what drives the switch; this fake's mechanics
-    // are a no-op by default so tests spy on setOn to see what SettingsScreen asked for.
+    // are a no-op by default (saving or forgetting changes the key here only, and Decaid always
+    // takes it) so tests spy on setOn, saveKey and forgetKey to see what SettingsScreen asked for.
     keyBackup: {
       setOn: async () => {},
+      saveKey: async (key) => {
+        await storage.secrets.setApiKey(key);
+        return true;
+      },
+      forgetKey: async () => {
+        await storage.secrets.forgetApiKey();
+        return true;
+      },
       restoreIfMissing: async () => false,
     },
   };

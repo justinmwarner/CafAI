@@ -34,7 +34,6 @@ export type _decision = Assert<
   Exactly<EnumDrift<NonNullable<NonNullable<Ws['ShotStateEvent']['decision']>['kind']>, C.ShotDecision['kind']>, never>
 >;
 
-export type _visibility = Assert<Exactly<EnumDrift<Rest['Visibility'], C.ProfileRecord['visibility']>, never>>;
 export type _gateway_mode = Assert<
   Exactly<EnumDrift<NonNullable<Rest['ReaSettings']['gatewayMode']>, Exclude<C.DecaidSettings['gatewayMode'], undefined>>, never>
 >;

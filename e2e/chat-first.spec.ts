@@ -265,7 +265,7 @@ test('a new bag opens on "Which coffee is it?" from its top, the newest roasts i
 
   // Up at once; its rows fill in when Decaid's batches are read, newest roast first, at most 8.
   await expect(beanCard.getByTestId(TID.beanOption)).toHaveCount(8);
-  await expect(beanCard.getByTestId(TID.beanOption).first()).toHaveAccessibleName(`Use this: ${names[0]}`);
+  await expect(beanCard.getByTestId(TID.beanOption).first()).toHaveAccessibleName(new RegExp(`^Use this: ${names[0]}, roasted \\d{1,2} [A-Z][a-z]{2} \\d{4}$`));
   // Shown from the card's top, while the stats card stays the newest row below (D91).
   await expectInChatView(page, beanCard.getByRole('heading', { name: 'Which coffee is it?' }), 'the bean card from its top');
   await expectInChatView(page, beanCard.getByTestId(TID.beanOption).first(), 'the newest roast');

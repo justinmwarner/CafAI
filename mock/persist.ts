@@ -41,7 +41,8 @@
  * come back with the restore time as createdAt/updatedAt (Decaid sets them),
  * and profiles are added or updated, never removed (the API has no hard delete).
  */
-import type { Bean, BeanBatch, ProfileRecord, ShotRecord, Workflow, WorkflowContext } from '../src/api/types.ts';
+import type { Bean, BeanBatch, ShotRecord, Workflow, WorkflowContext } from '../src/api/types.ts';
+import type { DecaidProfileRecord } from './decaid/profiles.ts';
 import { isPlainObject } from './decaid/json.ts';
 import type { MockDecaid, MockRequestLog } from './decaid/state.ts';
 
@@ -71,7 +72,7 @@ export interface MockStoreSnapshot {
   shots: ShotRecord[];
   workflow: Workflow;
   /** Every profile record that is not a bundled default: visible, hidden or deleted. */
-  profiles: ProfileRecord[];
+  profiles: DecaidProfileRecord[];
   /** Every bean and batch, archived included (D4/D10): the seeded two and any CafAI created. */
   beans: Bean[];
   batches: BeanBatch[];
@@ -146,11 +147,11 @@ export function restoreStore(state: MockDecaid, snapshot: MockStoreSnapshot): Re
 }
 
 /** Parents before their children, so every parentId exists when its child is created. */
-function parentsFirst(records: readonly ProfileRecord[]): ProfileRecord[] {
+function parentsFirst(records: readonly DecaidProfileRecord[]): DecaidProfileRecord[] {
   const byId = new Map(records.map((record) => [record.id, record]));
-  const ordered: ProfileRecord[] = [];
+  const ordered: DecaidProfileRecord[] = [];
   const placed = new Set<string>();
-  const place = (record: ProfileRecord, path: Set<string>) => {
+  const place = (record: DecaidProfileRecord, path: Set<string>) => {
     if (placed.has(record.id) || path.has(record.id)) return;
     path.add(record.id);
     const parent = record.parentId ? byId.get(record.parentId) : undefined;
@@ -162,9 +163,9 @@ function parentsFirst(records: readonly ProfileRecord[]): ProfileRecord[] {
   return ordered;
 }
 
-function restoreProfile(state: MockDecaid, record: ProfileRecord): void {
+function restoreProfile(state: MockDecaid, record: DecaidProfileRecord): void {
   const metadata = record.metadata ?? null;
-  let restored: ProfileRecord;
+  let restored: DecaidProfileRecord;
   try {
     restored = state.createProfile({ profile: record.profile, metadata, ...(record.parentId ? { parentId: record.parentId } : {}) });
   } catch (error) {

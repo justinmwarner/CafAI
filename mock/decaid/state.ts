@@ -20,7 +20,6 @@ import type {
   MachineSnapshot,
   PaginatedShots,
   PluginInfo,
-  ProfileRecord,
   ScaleWsFrame,
   ShotRecord,
   ShotRecordSummary,
@@ -49,7 +48,7 @@ import { createGrinderRecord, seedGrinders, sortGrinders, updateGrinderRecord, t
 import { deepMergeJson, isPlainObject, type JsonObject } from './json.ts';
 import { createMachineProfile, DEFAULT_UPLOAD_MS, idleTemperature } from './machine.ts';
 import { ALL_PLUGIN_IDS, listPluginInfos, PLUGIN_IDS } from './plugins.ts';
-import { buildProfileRecord, normalizeProfile, profileHash } from './profiles.ts';
+import { buildProfileRecord, normalizeProfile, profileHash, type DecaidProfileRecord } from './profiles.ts';
 import { normalizeWorkflow, validateWorkflowPatch } from './workflow.ts';
 
 export type MockChannel = 'machine' | 'scale' | 'devices' | 'shotState' | 'waterLevels' | 'shotSettings' | 'timeToReady';
@@ -228,15 +227,15 @@ export interface MockDecaid {
   dispose(): void;
 
   // Profiles
-  listProfiles(query: { visibility?: string | null; includeHidden?: string | boolean | null; parentId?: string | null }): ProfileRecord[];
-  getProfile(id: string): ProfileRecord;
-  createProfile(body: unknown): ProfileRecord;
-  updateProfile(id: string, body: unknown): ProfileRecord;
+  listProfiles(query: { visibility?: string | null; includeHidden?: string | boolean | null; parentId?: string | null }): DecaidProfileRecord[];
+  getProfile(id: string): DecaidProfileRecord;
+  createProfile(body: unknown): DecaidProfileRecord;
+  updateProfile(id: string, body: unknown): DecaidProfileRecord;
   deleteProfile(id: string): { success: true; message: string; id: string };
-  setProfileVisibility(id: string, body: unknown): ProfileRecord;
-  profileLineage(id: string): ProfileRecord[];
+  setProfileVisibility(id: string, body: unknown): DecaidProfileRecord;
+  profileLineage(id: string): DecaidProfileRecord[];
   defaultProfiles(): DefaultProfileDescriptor[];
-  restoreDefaultProfile(filename: string): ProfileRecord;
+  restoreDefaultProfile(filename: string): DecaidProfileRecord;
 
   // Shots
   listShots(params: URLSearchParams): PaginatedShots | ShotRecord[];
@@ -411,7 +410,14 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
     ? { timestamp: localNow(), weight: 0, weightFlow: 0, battery: 87, timerValue: null }
     : null;
   let connectionError: ConnectionError | null = null;
-  let settings: DecaidSettings = { ...DEFAULT_SETTINGS, ...options.settings };
+  // Decaid always sends the preferred ids, a string or null; its own devices are the ones it connected last.
+  let settings: DecaidSettings = {
+    ...DEFAULT_SETTINGS,
+    preferredMachineId: machineDevice.id,
+    preferredScaleId: scaleDevice.id,
+    preferredGrinderDeviceId: null,
+    ...options.settings,
+  };
   const enjoymentScale = options.enjoymentScale === 100 ? 100 : 10;
   const loadedPlugins = new Set(options.loadedPlugins ?? ALL_PLUGIN_IDS);
   const slowWorkflowMs = options.slowWorkflowMs !== undefined && Number.isFinite(options.slowWorkflowMs) ? Math.max(0, options.slowWorkflowMs) : null;
@@ -419,7 +425,7 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
 
   // ---- workflow, profiles, shots, kv ------------------------------------------------
   let workflow: Workflow = fixtures.workflowGet();
-  const profiles = new Map<string, ProfileRecord>();
+  const profiles = new Map<string, DecaidProfileRecord>();
   for (const source of TEMPLATE_SOURCES) {
     const record = buildProfileRecord(normalizeProfile(source.json), {
       isDefault: true,
@@ -536,13 +542,13 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
     if (!machineConnected) throw new MockHttpError(500, fixtures.errorMachineNotConnected() as Record<string, unknown>);
   }
 
-  function requireProfile(id: string): ProfileRecord {
+  function requireProfile(id: string): DecaidProfileRecord {
     const record = profiles.get(id);
     if (!record) throw new MockHttpError(404, { error: 'Profile not found', id });
     return record;
   }
 
-  function sortedProfiles(records: Iterable<ProfileRecord>): ProfileRecord[] {
+  function sortedProfiles(records: Iterable<DecaidProfileRecord>): DecaidProfileRecord[] {
     return [...records].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
   }
 
@@ -690,14 +696,17 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
       const json = isPlainObject(body) ? body : {};
       const deviceId = json.deviceId;
       if (typeof deviceId !== 'string' || !deviceId) throw badRequest({ error: 'Missing deviceId' });
+      // A device connected by id becomes Decaid's preferred one (connection_manager.dart:2249, 2492 at aab5f93).
       if (deviceId === machineDevice.id) {
         const outcome = machineConnected ? 'alreadyConnected' : 'connected';
         mock.setMachineConnected(true);
+        settings = { ...settings, preferredMachineId: deviceId };
         return { deviceId, operation: 'connect', outcome, state: 'connected', connectionError: null, error: null };
       }
       if (deviceId === scaleDevice.id) {
         const outcome = scaleConnected ? 'alreadyConnected' : 'connected';
         mock.setScaleConnected(true);
+        settings = { ...settings, preferredScaleId: deviceId };
         return { deviceId, operation: 'connect', outcome, state: 'connected', connectionError: null, error: null, connectionRole: 'primary' };
       }
       throw new MockHttpError(404, { error: 'Device not found' });
@@ -879,7 +888,7 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
         throw badRequest({ error: 'Invalid visibility value', message: 'Valid values: visible, hidden, deleted' });
       }
       const all = [...profiles.values()];
-      let selected: ProfileRecord[];
+      let selected: DecaidProfileRecord[];
       if (query.parentId) selected = all.filter((record) => record.parentId === query.parentId);
       else if (query.includeHidden === true || query.includeHidden === 'true') selected = all;
       else selected = all.filter((record) => record.visibility === (visibility ?? 'visible'));
@@ -974,7 +983,7 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
       if (!self) {
         throw new MockHttpError(500, { error: 'Internal server error', message: `Invalid argument(s): Profile not found: ${id}` });
       }
-      const lineage: ProfileRecord[] = [self];
+      const lineage: DecaidProfileRecord[] = [self];
       let current = self;
       while (current.parentId) {
         const parent = profiles.get(current.parentId);

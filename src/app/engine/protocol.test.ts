@@ -210,13 +210,16 @@ describe('engine protocol', () => {
       targetYieldG: 36,
       grinder: grinderPayload('Niche Zero', '13', null, false),
       roast: 'Roasted 2026-09-24 (9 days ago)',
+      today: '2026-10-03',
       summary: summaryForModel(summary),
     });
     expect(block.text.startsWith('[event:shot_completed]\n')).toBe(true);
     const payload = JSON.parse(block.text.split('\n')[1]!);
     expect(payload.levers.temp).toBe(88);
-    // The coffee's age on the day of the shot (6.1).
+    // The coffee's age on the day of the shot (6.1), and that day, for a roast date said in words after it.
     expect(payload.roast).toBe('Roasted 2026-09-24 (9 days ago)');
+    expect(payload.today).toBe('2026-10-03');
+    expect(block.text).toContain('"roast":"Roasted 2026-09-24 (9 days ago)","today":"2026-10-03","summary":');
     expect(payload.grinder).toEqual({ name: 'Niche Zero', setting: '13', settingType: null, step: null, values: null, linked: false });
     expect(payload.summary.series).toBeUndefined();
     expect(payload.summary.yieldG).toBe(36.4);
@@ -235,6 +238,7 @@ describe('engine protocol', () => {
       targetYieldG: 50,
       grinder: grinderPayload('Baratza Encore ESP', '5', ENCORE, true),
       roast: null,
+      today: '2026-10-03',
       summary: summaryForModel(summary),
     });
     expect(block.text).toContain(
