@@ -70,7 +70,7 @@ import { isShotRunning as shotInProgress } from '../../api/workflow.ts';
 import { redactKeyLike } from '../../storage/redact.ts';
 import type { GrinderInfo, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
 import type { BagPhoto, ExtractedBag } from '../../llm/extractBag.ts';
-import type { ContentBlock, Effort, PendingUiCall, RunnerTool, ToolResultBlock } from '../../llm/types.ts';
+import type { ContentBlock, Effort, PendingUiCall, RunnerTool, ToolResultBlock, ToolValidation } from '../../llm/types.ts';
 import type {
   AppliedChange,
   Bag,
@@ -201,6 +201,12 @@ interface PendingCall {
   recovered?: boolean;
   /** Confirm was tapped and the change is being applied: the phase no longer waits for it. */
   confirming?: boolean;
+}
+
+/** A coach tool as the runner sees it, and how a stored call of it is checked again after a reload. */
+interface EngineTool extends RunnerTool {
+  /** The checks of `validate`, without the wording of what the model wrote then (D127): its card already shows it. */
+  validateStored(input: unknown): ToolValidation;
 }
 
 interface Session {
@@ -1423,8 +1429,12 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     };
   }
 
-  /** Domain checks after the zod schema passed. Returns an error sentence or null. */
-  function domainError(name: ToolName, value: unknown): string | null {
+  /**
+   * Domain checks after the zod schema passed. Returns an error sentence or
+   * null. `fresh`: the model just wrote the call, so a proposal's wording is
+   * checked too (D127).
+   */
+  function domainError(name: ToolName, value: unknown, fresh: boolean): string | null {
     if (name === TOOL.proposeTemplates) {
       const ids = (value as ProposeTemplates).suggestions.map((s) => s.templateId);
       const unknown = ids.filter((id) => !coach.getTemplate(id));
@@ -1439,24 +1449,27 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       const context = s ? proposalContext(s) : null;
       if (!context) return 'No profile version is active yet. Propose templates first.';
       const result = coach.validateProposal(value as ProposeAdjustment, context);
-      return result.ok ? null : result.errors.join(' ');
+      if (!result.ok) return result.errors.join(' ');
+      return fresh ? coach.proposalWordingError(value as ProposeAdjustment) : null;
     }
     return null;
   }
 
-  const tools: RunnerTool[] = (Object.values(TOOL) as ToolName[]).map((name) => {
+  const tools: EngineTool[] = (Object.values(TOOL) as ToolName[]).map((name) => {
     const schema = TOOL_INPUTS[name];
     const zodValidate = llm.validator(schema);
     const auto = AUTO_TOOLS.includes(name);
-    const tool: RunnerTool = {
+    const check = (input: unknown, fresh: boolean): ToolValidation => {
+      const parsed = zodValidate(name === TOOL.saveBagDetails ? withRoastDate(input) : input);
+      if (!parsed.ok) return parsed;
+      const error = domainError(name, parsed.value, fresh);
+      return error ? { ok: false, error } : parsed;
+    };
+    const tool: EngineTool = {
       definition: llm.toolDefinition(name, coach.toolDescription(name), schema),
       kind: auto ? 'auto' : 'ui',
-      validate(input) {
-        const parsed = zodValidate(name === TOOL.saveBagDetails ? withRoastDate(input) : input);
-        if (!parsed.ok) return parsed;
-        const error = domainError(name, parsed.value);
-        return error ? { ok: false, error } : parsed;
-      },
+      validate: (input) => check(input, true),
+      validateStored: (input) => check(input, false),
     };
     if (auto) tool.execute = (value) => executeAuto(name, value);
     return tool;
@@ -1626,7 +1639,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         s.held.push(toolResult(use.id, `Unknown tool ${use.name}.`, true));
         continue;
       }
-      const validation = tool.validate(use.input);
+      const validation = tool.validateStored(use.input);
       if (!validation.ok) {
         s.held.push(toolResult(use.id, validation.error, true));
       } else if (tool.kind === 'auto' && tool.execute) {

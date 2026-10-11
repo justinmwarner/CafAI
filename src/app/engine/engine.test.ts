@@ -8,7 +8,7 @@ import { OTHER_OPTION, TOOL, type ProposeAdjustment } from '../../coach/contract
 import { DOSE_RULES, knownDose, REFERENCE_DOSE_G } from '../../coach/dose.ts';
 import { roastLine } from '../../coach/prompt.ts';
 import { createShotSource, runQueryTool } from '../../coach/queries.ts';
-import { validateProposal as validateWithCoach } from '../../coach/validator.ts';
+import { proposalWordingError, validateProposal as validateWithCoach } from '../../coach/validator.ts';
 import type { GrinderInfo, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
 import type { MachineProfileStatus } from '../../api/machineProfile.ts';
 import { driftLog } from '../../api/drift.ts';
@@ -174,6 +174,8 @@ const coach: CoachPort = {
     }
     return { ok: true, plan: plan(input, context.profile) };
   },
+  // The coach's own check (D127): a fresh expectedEffect that names a taste goes back to the model.
+  proposalWordingError,
   summarizeShot: () => summary,
   versionTitle: (name, n) => `${name} v${n}`,
   buildVersionProfile: (_t, base, title) => ({ ...base, title }),
@@ -655,7 +657,7 @@ const proposeTemp = toolUse('t-adj', TOOL.proposeAdjustment, {
   grind: null,
   summary: 'Raise brew temperature by 1 °C',
   rationale: 'Sour with a fast first drop.',
-  expectedEffect: 'Sweeter, less sharp.',
+  expectedEffect: 'More extraction at the same flow.',
   tips: ['Keep the dose the same.'],
 });
 
@@ -1007,6 +1009,50 @@ describe('coach engine', () => {
     expect(parsed(lastUserTurn(requests)[0])).toEqual({ selected: ['Bitter'], other: null });
   });
 
+  describe('expectedEffect is mechanics, never a taste (D127)', () => {
+    const proposal = (id: string, expectedEffect: string) =>
+      toolUse(id, TOOL.proposeAdjustment, { ...(proposeTemp as { input: Record<string, unknown> }).input, expectedEffect });
+
+    it('sends a fresh change that promises a taste back to the coach, and shows the one it writes instead', async () => {
+      await throughShot();
+      scripts.push(() => [proposal('t-adj', 'Sweeter, less sharp.')]);
+      scripts.push(() => [proposal('t-adj-2', 'More extraction at the same flow.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+
+      // The first went back as an error naming the word, inside the same run; the second is the card.
+      expect(lastUserTurn(requests)[0]).toMatchObject({
+        type: 'tool_result',
+        tool_use_id: 't-adj',
+        is_error: true,
+        content: expect.stringContaining('expectedEffect names a taste ("Sweeter")'),
+      });
+      const diffs = allParts().filter((p) => p.kind === 'diff');
+      expect(diffs).toEqual([expect.objectContaining({ requestId: 't-adj-2', status: 'pending', expectedEffect: 'More extraction at the same flow.' })]);
+      expect(engine.getState().phase).toBe('awaiting_confirmation');
+    });
+
+    it('keeps a stored change usable after a reload, whatever its wording: its card already shows it', async () => {
+      await throughProposal();
+      // The transcript of an older build, whose change promised a taste.
+      const stored = (await storage.conversations.get(engine.getState().activeBag!.conversationId))!;
+      const apiMessages = stored.apiMessages.map((m) => ({
+        ...m,
+        content: m.content.map((b) =>
+          b.type === 'tool_use' && b.id === 't-adj' ? { ...b, input: { ...(b.input as object), expectedEffect: 'Sweeter, less sharp.' } } : b,
+        ),
+      }));
+      await storage.conversations.put({ ...stored, apiMessages });
+      engine.dispose();
+      engine = build();
+      await engine.start();
+      expect(engine.getState().phase).toBe('awaiting_confirmation');
+
+      scripts.push(() => [text('Done.')]);
+      await engine.confirmChange('t-adj');
+      expect(engine.getState().activeVersion?.title).toBe('Kiambu AA v2');
+    });
+  });
+
   it('reloads bags on refresh, e.g. after an import', async () => {
     await throughTemplatePick();
     const imported = { ...engine.getState().activeBag!, id: 'bag-imported', name: 'Imported bag', conversationId: 'conv-imported' };
@@ -1081,7 +1127,7 @@ describe('coach engine', () => {
         grind: { direction: 'finer', amount: 1, setting: '13' },
         summary: 'Grind 1 step finer, to 13',
         rationale: 'It ran fast.',
-        expectedEffect: 'A slower, sweeter shot.',
+        expectedEffect: 'A slower shot that extracts a little more.',
         tips: [],
       }),
     ]);
@@ -1106,7 +1152,7 @@ describe('coach engine', () => {
         grind: { direction: 'coarser', amount: 1, setting: '15' },
         summary: 'Grind 1 step coarser, to 15',
         rationale: 'It ran slow.',
-        expectedEffect: 'A faster, brighter shot.',
+        expectedEffect: 'A faster shot that extracts a little less.',
         tips: [],
       }),
     ]);
@@ -1764,7 +1810,7 @@ describe('coach engine', () => {
           grind: { direction: 'finer', amount: 1, setting },
           summary: `Grind 1 step finer, to ${setting}`,
           rationale: 'It ran fast.',
-          expectedEffect: 'A slower, sweeter shot.',
+          expectedEffect: 'A slower shot that extracts a little more.',
           tips: [],
         }),
       ]);
@@ -2256,7 +2302,7 @@ describe('coach engine', () => {
         grind,
         summary: 'Grind 1 step finer',
         rationale: 'It ran fast.',
-        expectedEffect: 'A slower, sweeter shot.',
+        expectedEffect: 'A slower shot that extracts a little more.',
         tips: [],
       });
 
@@ -2790,7 +2836,7 @@ describe('coach engine', () => {
       grind: { direction: 'finer', amount: 1, setting: '13' },
       summary: 'Grind 1 step finer, to 13',
       rationale: 'It ran fast.',
-      expectedEffect: 'A slower, sweeter shot.',
+      expectedEffect: 'A slower shot that extracts a little more.',
       tips: [],
     });
 
