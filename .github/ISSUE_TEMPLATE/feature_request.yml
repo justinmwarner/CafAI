@@ -1,0 +1,26 @@
+name: Feature request
+description: An idea for the coach, the skin, or how CafAI works with Decaid.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do?
+      description: The situation at the machine, and what gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How could CafAI help?
+      description: What you would like to see or tap. A sketch or a screenshot of another app is welcome.
+  - type: textarea
+    id: now
+    attributes:
+      label: What you do instead today
+  - type: input
+    id: setup
+    attributes:
+      label: Your setup (optional)
+      description: Machine, scale, grinder, Decaid version, and a tablet or a phone.
+      placeholder: DE1Pro, Decent Scale, Niche Zero, Decaid 0.8.8, Decent tablet

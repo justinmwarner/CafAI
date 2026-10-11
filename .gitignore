@@ -10,6 +10,7 @@ release/
 coverage/
 test-results/
 test-results-real/
+test-results-screenshots/
 playwright-report/
 blob-report/
 playwright/.cache/
@@ -19,6 +20,11 @@ tools/chrome91/out/
 # reference clones (read-only research inputs, not part of CafAI)
 /crema/
 /.ref/
+
+# local tool and agent state, never shared
+/.claude/settings.local.json
+/.claude/worktrees/
+/nimbalyst-local/
 
 # editor / OS
 .DS_Store
