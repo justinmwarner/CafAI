@@ -4,6 +4,14 @@
   "version": "0.1.0",
   "description": "CafAI: a chat-first AI dial-in coach skin for Decaid (Decent Espresso).",
   "license": "GPL-3.0-only",
+  "homepage": "https://github.com/justinmwarner/CafAI#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/justinmwarner/CafAI.git"
+  },
+  "bugs": {
+    "url": "https://github.com/justinmwarner/CafAI/issues"
+  },
   "type": "module",
   "engines": {
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
@@ -31,6 +39,7 @@
     "release:zip": "node scripts/release-zip.mjs",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build && npm run release:zip && npm run e2e",
     "smoke:chrome91:loop": "node tools/chrome91/loop.mjs",
+    "screenshots": "playwright test --config playwright.screenshots.config.ts",
     "bridge": "node bridge/cafai-bridge.mjs"
   },
   "dependencies": {

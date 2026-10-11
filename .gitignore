@@ -10,6 +10,7 @@ release/
 coverage/
 test-results/
 test-results-real/
+test-results-screenshots/
 playwright-report/
 blob-report/
 playwright/.cache/

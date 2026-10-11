@@ -1,0 +1,112 @@
+import { statSync } from 'node:fs';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+import { TID } from '../../src/ui/testIds.ts';
+import { goTo, isPhone, pullShot } from '../helpers.ts';
+
+/**
+ * The README's screenshots (`npm run screenshots`, playwright.screenshots.config.ts).
+ *
+ * Each scene opens the demo (?demo=1, docs/DEMO.md): CafAI already in use on
+ * the mock Decaid and the scripted coach, a dial-in of Kiambu AA at v4 with
+ * one open "How did it taste?". The demo's story is fixed and its times count
+ * back from the page's clock, which is pinned here; the mock has no
+ * randomness; the config pins the locale, time zone and colour scheme. So a
+ * run takes the same pictures until the UI itself changes.
+ *
+ * Tablet (1280x800) and phone (390x844 at DPR 2) scenes write
+ * docs/images/<project>-<scene>.png, each kept under MAX_BYTES so the
+ * repository stays small.
+ */
+
+const OUT_DIR = 'docs/images';
+/** A fixed morning for the page's clock: the demo's dial-in started about a day before it. */
+const NOW = new Date('2026-10-10T08:30:00Z');
+const MAX_BYTES = 300 * 1024;
+/** Plays the scripted shot (about a minute of Blooming Espresso) in about 6 s; its data keeps real time. */
+const SHOT_SPEED = 10;
+
+/** Open the demo on the coach, with the page's clock pinned before anything runs. */
+async function openDemo(page: Page, mockSpeed = 25): Promise<void> {
+  await page.clock.install({ time: NOW });
+  await page.goto(`./?demo=1&mockSpeed=${mockSpeed}#/`);
+  await expect(page.getByTestId(TID.appReady)).toBeVisible();
+  await expect(page.getByTestId(TID.activeVersion)).toContainText('Kiambu AA v4');
+  await coachIdle(page);
+}
+
+/** The coach is idle: no reply streaming, nothing about to land in the chat. */
+async function coachIdle(page: Page): Promise<void> {
+  await expect(page.getByTestId(TID.chat)).not.toHaveAttribute('data-busy');
+}
+
+/** Scroll the chat so this message starts at the top of the view, as a reader scrolling up would. */
+async function scrollToTop(target: Locator): Promise<void> {
+  await expect(target).toBeAttached();
+  await target.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+}
+
+/** Write docs/images/<project>-<name>.png once fonts are in and motion is stopped, and check its size. */
+async function snap(page: Page, name: string): Promise<void> {
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+  });
+  // Let a scroll, a route change or the graph's canvas settle before the picture.
+  await page.waitForTimeout(500);
+  const path = `${OUT_DIR}/${test.info().project.name}-${name}.png`;
+  await page.screenshot({ path, animations: 'disabled', caret: 'hide' });
+  const bytes = statSync(path).size;
+  expect(bytes, `${path} is ${Math.round(bytes / 1024)} KB; keep README images under ${MAX_BYTES / 1024} KB`).toBeLessThan(MAX_BYTES);
+}
+
+test('coach: the last shot, the coach on it and the open taste question', async ({ page }) => {
+  await openDemo(page);
+  await expect(page.getByRole('radiogroup', { name: 'How did it taste?' }).last()).toBeVisible();
+  await scrollToTop(page.getByTestId(TID.shotCard).last());
+  await snap(page, 'coach');
+});
+
+test('change: one change at a time, confirmed, with Undo', async ({ page }) => {
+  test.skip(isPhone(page), 'The README shows the change card on the tablet only.');
+  await openDemo(page);
+  const applied = page.locator(`[data-testid="${TID.diffCard}"][data-status="applied"]`).filter({ hasText: 'Saved as Kiambu AA v4' });
+  await expect(applied.getByTestId(TID.diffUndo)).toBeAttached();
+  await scrollToTop(applied);
+  await snap(page, 'change');
+});
+
+test('shot: a shot just pulled, on the big graph', async ({ page }) => {
+  await openDemo(page, SHOT_SPEED);
+  const cards = page.getByTestId(TID.shotCard);
+  const before = await cards.count();
+  await pullShot(page);
+  // The shot takes the screen by itself; once its card is in the chat the coach is back.
+  await expect(cards).toHaveCount(before + 1, { timeout: 90_000 });
+  await expect(page.getByTestId(TID.chat)).toBeVisible();
+  await coachIdle(page);
+  await cards.last().getByTestId(TID.openShotGraph).click();
+  await expect(page).toHaveURL(/#\/shot$/);
+  const view = page.getByTestId(TID.shotView);
+  await expect(view).toContainText('Last shot');
+  await expect(view.getByTestId(TID.liveGraph).locator('canvas').first()).toBeVisible();
+  await snap(page, 'shot');
+});
+
+test('history: every version of the bag with its shots', async ({ page }) => {
+  test.skip(isPhone(page), 'The README shows History on the tablet only.');
+  await openDemo(page);
+  await goTo(page, 'history');
+  await page.locator('[data-testid^="history-bag-"]').filter({ hasText: 'Kiambu AA' }).click();
+  await expect(page.getByTestId(TID.historyVersion(4))).toBeVisible();
+  await snap(page, 'history');
+});
+
+test('settings: a look of your own, Light in Matcha', async ({ page }) => {
+  test.skip(isPhone(page), 'The README shows Settings on the tablet only.');
+  await openDemo(page);
+  await goTo(page, 'settings');
+  await expect(page.getByRole('region', { name: 'Appearance' })).toBeVisible();
+  await page.getByTestId(TID.appearanceMode('light')).click();
+  await page.getByTestId(TID.tintSwatch('matcha')).click();
+  await expect(page.getByTestId(TID.tintSwatch('matcha'))).toHaveAttribute('aria-checked', 'true');
+  await snap(page, 'settings');
+});

@@ -29,6 +29,7 @@
     "vitest.decaid.config.ts",
     "vitest.bridge.config.ts",
     "playwright.config.ts",
-    "playwright.real.config.ts"
+    "playwright.real.config.ts",
+    "playwright.screenshots.config.ts"
   ]
 }
