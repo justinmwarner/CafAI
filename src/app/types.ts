@@ -8,7 +8,7 @@
  */
 import type { DecaidClient, Heartbeat, HostEnvironment, TelemetryStore } from '../api/types.ts';
 import type { PluginDirectory } from '../api/plugins.ts';
-import type { Confidence, RoastLevel, SaveBagDetails } from '../coach/contract.ts';
+import type { Confidence, OfferGrinder, RoastLevel, SaveBagDetails } from '../coach/contract.ts';
 import type { ShotSummary } from '../coach/types.ts';
 import type { BagPhoto } from '../llm/extractBag.ts';
 import type { ModelInfo } from '../llm/types.ts';
@@ -81,6 +81,14 @@ export type BeanChoice = { kind: 'batch'; batchId: string } | { kind: 'photo' } 
 
 /** `expired`: the conversation moved on (the user typed instead of tapping). */
 export type DiffStatus = 'pending' | 'applying' | 'applied' | 'declined' | 'failed' | 'undone' | 'expired';
+
+/**
+ * The coach's offer to add a grinder to Decaid's library (D125): `pending`
+ * until a tap (and again after an Add that failed), `adding` while CafAI
+ * writes it, `added` or `existing` (Decaid had it, so CafAI linked that one)
+ * once CafAI uses it, `declined` (Not now), `expired` (set aside unanswered).
+ */
+export type GrinderOfferStatus = 'pending' | 'adding' | 'added' | 'existing' | 'declined' | 'expired';
 
 /**
  * Why the engine set a card aside unanswered: the barista typed in the chat,
@@ -181,6 +189,20 @@ export type CoachUiPart =
       confirmed: boolean;
       /** The user typed in the chat instead: the details were not saved. */
       expired?: boolean;
+      setAsideReason?: SetAsideReason;
+    }
+  | {
+      kind: 'grinderOffer';
+      /** The offer_grinder tool_use id; the engine uses it to resolve the tap. */
+      requestId: string;
+      /** The grinder as the coach heard it from the barista: what Add sends to Decaid's library. */
+      grinder: OfferGrinder;
+      status: GrinderOfferStatus;
+      /** Why the last Add failed: the card stays open to tap again. Null otherwise. */
+      error: string | null;
+      /** The grinder CafAI linked, as Decaid's library names it ("Niche Zero (63 mm conical)"); set once added or found. */
+      linkedName?: string;
+      /** Why the card was set aside (status `expired`). */
       setAsideReason?: SetAsideReason;
     }
   | {
@@ -299,6 +321,14 @@ export interface CoachController {
   readBagPhoto(photo: BagPhoto): Promise<void>;
   /** The photo's details as the barista confirmed them: saved like save_bag_details, then the coach's intake. */
   confirmBag(details: SaveBagDetails): Promise<void>;
+  /**
+   * The coach's grinder card (D125): add the grinder to Decaid's grinder
+   * library, or take the one Decaid already has, link it as Settings does,
+   * and tell the coach. Nothing is added without this tap.
+   */
+  addGrinder(requestId: string): Promise<void>;
+  /** The grinder card's Not now: nothing is added, and the coach hears so. */
+  declineGrinder(requestId: string): Promise<void>;
   /** Re-send the last failed request. */
   retry(): Promise<void>;
   dismissError(): void;

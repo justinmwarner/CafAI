@@ -6,6 +6,7 @@
  * root (src/app/createServices.ts) adapts the real modules to them.
  */
 import type { ZodType } from 'zod';
+import type { GrinderCreateRequest } from '../../api/grinders.ts';
 import type { MachineProfileStatus } from '../../api/machineProfile.ts';
 import type { Dye2Data, PluginReads } from '../../api/pluginData.ts';
 import type {
@@ -168,6 +169,14 @@ export interface ApiPort extends PluginReads {
    * throws when Decaid cannot be read.
    */
   getGrinder(id: string): Promise<GrinderInfo | null>;
+  /**
+   * The grinder a request describes, in Decaid's grinder library (D125): the
+   * one Decaid already has (the same model, read afresh), or one POST
+   * /grinders adds (`added`), with how its dial moves. Throws when Decaid
+   * cannot be read or refuses it. CafAI only adds grinders: it never edits
+   * or deletes one, so the port has no way to.
+   */
+  addGrinder(request: GrinderCreateRequest): Promise<{ id: string; model: string; burrs: string | null; info: GrinderInfo; added: boolean }>;
   /**
    * GET /beans: the beans in Decaid's bean library that are not archived
    * (D102). Throws when Decaid cannot be read. CafAI only reads the library

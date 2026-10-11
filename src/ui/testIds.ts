@@ -105,6 +105,10 @@ export const TID = {
   addGrinderSubmit: 'add-grinder-submit',
   addGrinderNote: 'add-grinder-note',
   editGrindersInDye2: 'edit-grinders-dye2',
+  // The coach's offer to add a grinder to Decaid's library (D125)
+  grinderOffer: 'grinder-offer',
+  grinderOfferAdd: 'grinder-offer-add',
+  grinderOfferDecline: 'grinder-offer-decline',
 
   // Decaid alignment: bean library, gateway mode, connect, plugins, key backup, drift
   beanCard: 'bean-card',

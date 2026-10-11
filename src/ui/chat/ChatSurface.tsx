@@ -48,6 +48,7 @@ import { RichText } from './RichText.tsx';
 import { BagConfirmCard } from './parts/BagConfirmCard.tsx';
 import { BeanCard } from './parts/BeanCard.tsx';
 import { DiffCard } from './parts/DiffCard.tsx';
+import { GrinderOfferCard } from './parts/GrinderOfferCard.tsx';
 import { Notice } from './parts/Notice.tsx';
 import { OptionChips } from './parts/OptionChips.tsx';
 import { ShotCard } from './parts/ShotCard.tsx';
@@ -80,6 +81,10 @@ export interface ChatSurfaceProps {
   onBagPhoto?(photo: BagPhoto): void;
   /** The details read from the photo, as the barista confirmed them. */
   onConfirmBag?(details: SaveBagDetails): void;
+  /** Add on the coach's grinder card (D125). */
+  onAddGrinder?(requestId: string): void;
+  /** The grinder card's Not now. */
+  onDeclineGrinder?(requestId: string): void;
   /** Opens the shot route (#/shot) from graphShotId's card. Without it no card shows Graph. */
   onOpenGraph?(): void;
   /** Show the live stats card after the newest message (statsCard.ts decides when). */
@@ -202,6 +207,8 @@ interface PartActions {
   skipBeanPick(): void;
   bagPhoto(photo: BagPhoto): void;
   confirmBag(details: SaveBagDetails): void;
+  addGrinder(requestId: string): void;
+  declineGrinder(requestId: string): void;
 }
 
 interface PartsContextValue {
@@ -331,6 +338,20 @@ function BagConfirmView({ data }: { data: unknown }) {
   );
 }
 
+function GrinderOfferView({ data }: { data: unknown }) {
+  const { busy, actions } = usePartsContext();
+  const part = cardOf(data, 'grinderOffer');
+  if (!part) return null;
+  return (
+    <GrinderOfferCard
+      part={part}
+      disabled={busy}
+      onAdd={() => actions.addGrinder(part.requestId)}
+      onDecline={() => actions.declineGrinder(part.requestId)}
+    />
+  );
+}
+
 function NoticeView({ data }: { data: unknown }) {
   const part = cardOf(data, 'notice');
   return part ? <Notice tone={part.tone} text={part.text} progress={part.progress} /> : null;
@@ -370,6 +391,7 @@ const PART_RENDERERS: ChatPartRendererMap = {
   [`${DATA_PREFIX}notice`]: ({ part }: DataRendererProps) => <NoticeView data={part.data} />,
   [`${DATA_PREFIX}beanPicker`]: ({ part }: DataRendererProps) => <BeanPickerView data={part.data} />,
   [`${DATA_PREFIX}bagConfirm`]: ({ part }: DataRendererProps) => <BagConfirmView data={part.data} />,
+  [`${DATA_PREFIX}grinderOffer`]: ({ part }: DataRendererProps) => <GrinderOfferView data={part.data} />,
   [THINKING_TYPE]: () => <ThinkingView />,
   [STATS_TYPE]: () => <StatsCard />,
 };
@@ -616,6 +638,8 @@ export function ChatSurface(props: ChatSurfaceProps) {
       skipBeanPick: act(() => propsRef.current.onSkipBeanPick?.()),
       bagPhoto: act((photo: BagPhoto) => propsRef.current.onBagPhoto?.(photo)),
       confirmBag: act((details: SaveBagDetails) => propsRef.current.onConfirmBag?.(details)),
+      addGrinder: act((requestId: string) => propsRef.current.onAddGrinder?.(requestId)),
+      declineGrinder: act((requestId: string) => propsRef.current.onDeclineGrinder?.(requestId)),
     };
   }, []);
 

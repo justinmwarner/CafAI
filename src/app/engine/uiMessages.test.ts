@@ -6,6 +6,7 @@ import {
   beanPickerPart,
   diffPart,
   filledBeanCard,
+  grinderOfferPart,
   isLoadingBeanCard,
   isOpenBagConfirm,
   isOpenBeanCard,
@@ -18,6 +19,7 @@ import {
   removeMessage,
   replaceParts,
   setAside,
+  setGrinderOfferStatus,
   setShotStars,
   setVisualizerLink,
   shotPart,
@@ -65,7 +67,7 @@ describe('cards', () => {
     expect(setAside(question, 'typed')).toEqual({ ...question, expired: true, setAsideReason: 'typed' });
     const cards = templatesPart('tu-tpl', []);
     expect(setAside(cards, 'shot')).toEqual({ ...cards, expired: true, setAsideReason: 'shot' });
-    const pending = diffPart(change);
+    const pending = diffPart(change) as Extract<CoachUiPart, { kind: 'diff' }>;
     expect(setAside(pending, 'undo')).toEqual({ ...pending, status: 'expired', setAsideReason: 'undo' });
     const applied = { ...pending, status: 'applied' as const };
     expect(setAside(applied, 'other')).toBe(applied);
@@ -91,6 +93,23 @@ describe('cards', () => {
     const confirmed = { ...confirm, confirmed: true };
     expect(isOpenBagConfirm(confirmed)).toBe(false);
     expect(setAside(confirmed, 'typed')).toBe(confirmed);
+  });
+
+  it("opens the coach's grinder card waiting for a tap, records each answer, and sets it aside only while it waits (D125)", () => {
+    const grinder = { model: 'Mazzer Philos', burrs: null, settingType: null, smallStep: null, bigStep: null, values: null };
+    const offer = grinderOfferPart('tu-grinder', grinder) as Extract<CoachUiPart, { kind: 'grinderOffer' }>;
+    expect(offer).toEqual({ kind: 'grinderOffer', requestId: 'tu-grinder', grinder, status: 'pending', error: null });
+    const failed = { ...offer, error: 'Could not reach Decaid.' };
+    expect(setAside(failed, 'typed')).toEqual({ ...offer, status: 'expired', error: null, setAsideReason: 'typed' });
+    const added = { ...offer, status: 'added' as const };
+    expect(setAside(added, 'shot')).toBe(added);
+
+    const messages: CoachUiMessage[] = [message('m1', 'assistant', [offer], at)];
+    const failedNow = setGrinderOfferStatus(messages, 'tu-grinder', 'pending', { error: 'Could not reach Decaid.' });
+    expect(failedNow[0]!.parts[0]).toMatchObject({ status: 'pending', error: 'Could not reach Decaid.' });
+    const linked = setGrinderOfferStatus(failedNow, 'tu-grinder', 'existing', { linkedName: 'Niche Zero (63 mm conical)' });
+    expect(linked[0]!.parts[0]).toEqual({ ...offer, status: 'existing', error: null, linkedName: 'Niche Zero (63 mm conical)' });
+    expect(setGrinderOfferStatus(messages, 'tu-other', 'declined')).toEqual(messages);
   });
 
   it("puts the bean card up before Decaid's batches are read, open, then fills it, answered or not (6.1)", () => {

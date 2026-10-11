@@ -178,6 +178,15 @@ export type AdjustmentResultPayload =
   | { applied: false; error: string };
 
 /**
+ * The offer_grinder result (D125): the grinder CafAI linked, as the model
+ * hears a grinder (`alreadyInDecaid` when Decaid had it, so nothing was
+ * added), or that the user chose Not now.
+ */
+export type GrinderOfferResultPayload =
+  | { added: true; alreadyInDecaid: boolean; grinder: GrinderPayload }
+  | { added: false; reason: string };
+
+/**
  * Tool calls the model is still waiting on: the tool_use blocks of a
  * transcript that ends with an assistant turn. (After a run stops on UI tools
  * the transcript ends there until the user answers.)

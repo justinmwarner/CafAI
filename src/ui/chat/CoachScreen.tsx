@@ -372,6 +372,8 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
           onSkipBeanPick={() => fire(coach.skipBeanPick())}
           onBagPhoto={(photo) => fire(coach.readBagPhoto(photo))}
           onConfirmBag={(details) => fire(coach.confirmBag(details))}
+          onAddGrinder={(requestId) => fire(coach.addGrinder(requestId))}
+          onDeclineGrinder={(requestId) => fire(coach.declineGrinder(requestId))}
           onOpenGraph={() => navigate({ name: 'shot' })}
           statsCard={statsShown}
           onStats={showStats}

@@ -227,6 +227,13 @@ describe('buildSystemPrompt: content', () => {
     expect(manual).toMatch(/linked but step and values are null.*give the direction and the amount only, with setting null/);
   });
 
+  it('offers once to add a grinder the user names that is not linked, which CafAI asks about on a card (D125)', () => {
+    const manual = prompt.slice(prompt.indexOf('# Manual variables'), prompt.indexOf('# Reading a shot'));
+    expect(manual).toMatch(/names the grinder they use and the grinder in \[context\] is not linked, or is a different one, call offer_grinder once/);
+    expect(manual).toMatch(/CafAI asks them on a card before adding it to Decaid's grinder library/);
+    expect(manual).toMatch(/after \{"added":false\} do not offer it again/);
+  });
+
   it('names exactly the attached tools and claims nothing else', () => {
     for (const name of Object.values(TOOL)) expect(prompt).toContain(name);
     // Crema told the model it had web search when no tool was attached.

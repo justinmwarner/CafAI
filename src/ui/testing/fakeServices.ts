@@ -391,6 +391,8 @@ export function createFakeCoach(initial: Partial<CoachState> = {}): FakeCoach {
     skipBeanPick: record('skipBeanPick'),
     readBagPhoto: record('readBagPhoto'),
     confirmBag: record('confirmBag'),
+    addGrinder: record('addGrinder'),
+    declineGrinder: record('declineGrinder'),
     retry: record('retry'),
     dismissError: () => void calls.push({ method: 'dismissError', args: [] }),
     refresh: record('refresh'),

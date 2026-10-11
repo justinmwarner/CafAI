@@ -4,7 +4,7 @@ import { createCoachEngine, type CoachEngine, type EngineDeps, type PageVisibili
 import type { OutboxTimers } from './outbox.ts';
 import type { ApiPort, ChangePlan, CoachPort, LlmPort, ProposalContext } from './ports.ts';
 import { message, NEW_BAG_PROMPT, progressNoticePart } from './uiMessages.ts';
-import { OTHER_OPTION, TOOL, type ProposeAdjustment } from '../../coach/contract.ts';
+import { OTHER_OPTION, TOOL, type OfferGrinder, type ProposeAdjustment } from '../../coach/contract.ts';
 import { DOSE_RULES, knownDose, REFERENCE_DOSE_G } from '../../coach/dose.ts';
 import { roastLine } from '../../coach/prompt.ts';
 import { createShotSource, runQueryTool } from '../../coach/queries.ts';
@@ -233,6 +233,10 @@ const machine = {
   heldGrinderReads: [] as Array<() => void>,
   /** Every grinder read so far, so a test can wait until the engine has its answer. */
   grinderReads: [] as Array<Promise<unknown>>,
+  /** The grinders an add finds by model (D125); their dials are in `grinders`. */
+  library: [] as Array<{ id: string; model: string; burrs: string | null }>,
+  /** How many more grinder adds fail as if Decaid were away. */
+  failGrinderAdds: 0,
   /** POST /profiles answers 400 for any parent (a Decaid without the template's bundled default). */
   parentMissing: false,
   /** POST /profiles answers with a record Decaid already had (the same content). */
@@ -329,6 +333,8 @@ function makeApi(calls: ApiCall[]): ApiPort {
   machine.holdGrinderReads = false;
   machine.heldGrinderReads = [];
   machine.grinderReads = [];
+  machine.library = [];
+  machine.failGrinderAdds = 0;
   machine.parentMissing = false;
   machine.dedupe = false;
   machine.createError = null;
@@ -405,6 +411,28 @@ function makeApi(calls: ApiCall[]): ApiPort {
         throw new GatewayError(200, '/api/v1/shots/cafai-probe', "Decaid sent a reply CafAI doesn't recognise.", 'unexpected_reply');
       }
       return machine.enjoymentScale;
+    },
+    // As addOrFindGrinder does: the grinder with the same model, case aside, else a new one.
+    addGrinder: async (request) => {
+      calls.push({ method: 'addGrinder', args: [request] });
+      if (machine.failGrinderAdds > 0) {
+        machine.failGrinderAdds -= 1;
+        throw unreachable('/api/v1/grinders');
+      }
+      const known = machine.library.find((entry) => entry.model.toLowerCase() === request.model.toLowerCase());
+      if (known) return { ...known, info: machine.grinders.get(known.id)!, added: false };
+      const added = { id: `g-added-${machine.library.length + 1}`, model: request.model, burrs: request.burrs ?? null };
+      const preset = request.settingType === 'preset';
+      const info: GrinderInfo = {
+        model: request.model,
+        settingType: preset ? 'preset' : 'numeric',
+        smallStep: preset ? null : (request.settingSmallStep ?? null),
+        bigStep: preset ? null : (request.settingBigStep ?? null),
+        values: preset ? (request.settingValues ?? null) : null,
+      };
+      machine.library.push(added);
+      machine.grinders.set(added.id, info);
+      return { ...added, info, added: true };
     },
     getGrinder: (id) => {
       calls.push({ method: 'getGrinder', args: [id] });
@@ -2496,6 +2524,125 @@ describe('coach engine', () => {
       expect(callsOf('getGrinder')).toHaveLength(2);
       await throughTemplateCards();
       expect(intakeGrinder()).toMatchObject({ step: 1 });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // D125: the coach offers to add the barista's grinder to Decaid's library
+  // -------------------------------------------------------------------------
+
+  describe("the coach's grinder card (D125)", () => {
+    const offer = (fields: Partial<OfferGrinder> = {}) =>
+      toolUse('t-grinder', TOOL.offerGrinder, {
+        model: 'Mazzer Philos',
+        burrs: '64 mm flat',
+        settingType: 'numeric',
+        smallStep: 0.5,
+        bigStep: null,
+        values: null,
+        ...fields,
+      });
+    const card = () => allParts().find((p): p is Extract<CoachUiPart, { kind: 'grinderOffer' }> => p.kind === 'grinderOffer');
+
+    /** A grinder typed in Settings, a template picked, then the barista names the grinder and the coach offers it. */
+    async function throughOffer(fields: Partial<OfferGrinder> = {}) {
+      await storage.settings.update({ grinderName: 'Mazzer Philos', grinderSetting: '12' });
+      await engine.refresh();
+      await throughTemplatePick();
+      scripts.push(() => [text("Decaid's grinder library does not have it yet."), offer(fields)]);
+      await engine.sendText('My grinder is a Mazzer Philos with 64 mm flat burrs, in steps of 0.5.');
+    }
+
+    it('shows the card, and adds nothing before a tap', async () => {
+      await throughOffer();
+      expect(card()).toMatchObject({
+        requestId: 't-grinder',
+        status: 'pending',
+        error: null,
+        grinder: { model: 'Mazzer Philos', burrs: '64 mm flat', settingType: 'numeric', smallStep: 0.5 },
+      });
+      expect(callsOf('addGrinder')).toEqual([]);
+      expect((await storage.settings.get()).grinderId ?? null).toBeNull();
+      expect(engine.getState().phase).toBe('awaiting_shot');
+    });
+
+    it("Add puts it in Decaid's library, links it as Settings does, writes it to the workflow and gives the coach its dial", async () => {
+      await throughOffer();
+      scripts.push(() => [text('Added. Pull a shot.')]);
+      await engine.addGrinder('t-grinder');
+      expect(callsOf('addGrinder').map((c) => c.args[0])).toEqual([
+        { model: 'Mazzer Philos', burrs: '64 mm flat', settingType: 'numeric', settingSmallStep: 0.5 },
+      ]);
+      expect(await storage.settings.get()).toMatchObject({ grinderId: 'g-added-1', grinderName: 'Mazzer Philos', grinderSetting: '12' });
+      expect(callsOf('updateWorkflow').at(-1)!.args[0]).toEqual({
+        context: { grinderId: 'g-added-1', grinderModel: 'Mazzer Philos', grinderSetting: '12', grinderBurrs: null },
+      });
+      expect(card()).toMatchObject({ status: 'added', error: null, linkedName: 'Mazzer Philos (64 mm flat)' });
+      expect(parsed(lastUserTurn(requests)[0])).toEqual({
+        added: true,
+        alreadyInDecaid: false,
+        grinder: { name: 'Mazzer Philos', setting: '12', settingType: 'numeric', step: 0.5, values: null, linked: true },
+      });
+      expect(engine.getState()).toMatchObject({ busy: false, phase: 'awaiting_shot' });
+    });
+
+    it('links the grinder Decaid already has instead of adding it twice, and says so', async () => {
+      machine.library.push({ id: 'g-niche', model: 'Niche Zero', burrs: '63 mm conical' });
+      machine.grinders.set('g-niche', NICHE);
+      await throughOffer({ model: 'niche zero', burrs: null, settingType: null, smallStep: null });
+      scripts.push(() => [text('Linked.')]);
+      await engine.addGrinder('t-grinder');
+      expect(machine.library).toHaveLength(1);
+      expect(card()).toMatchObject({ status: 'existing', linkedName: 'Niche Zero (63 mm conical)' });
+      expect(await storage.settings.get()).toMatchObject({ grinderId: 'g-niche', grinderName: 'Niche Zero' });
+      expect(parsed(lastUserTurn(requests)[0])).toMatchObject({ added: true, alreadyInDecaid: true, grinder: { name: 'Niche Zero', step: 0.5, linked: true } });
+    });
+
+    it('a failed Add says why and keeps the card open while the coach waits; a second tap adds it', async () => {
+      await throughOffer();
+      const asked = requests.length;
+      machine.failGrinderAdds = 1;
+      await engine.addGrinder('t-grinder');
+      expect(card()).toMatchObject({ status: 'pending', error: 'Decaid is not reachable.' });
+      expect(requests).toHaveLength(asked);
+      expect((await storage.settings.get()).grinderId ?? null).toBeNull();
+      expect(engine.getState().busy).toBe(false);
+
+      scripts.push(() => [text('Added.')]);
+      await engine.addGrinder('t-grinder');
+      expect(card()).toMatchObject({ status: 'added', error: null });
+      expect(callsOf('addGrinder')).toHaveLength(2);
+    });
+
+    it('Not now adds nothing and tells the coach; the card then answers nothing', async () => {
+      await throughOffer();
+      scripts.push(() => [text('No problem.')]);
+      await engine.declineGrinder('t-grinder');
+      expect(card()).toMatchObject({ status: 'declined' });
+      expect(parsed(lastUserTurn(requests)[0])).toEqual({ added: false, reason: 'The user chose not to add it.' });
+      await engine.addGrinder('t-grinder');
+      expect(callsOf('addGrinder')).toEqual([]);
+    });
+
+    it('typing instead sets the card aside, and nothing is added', async () => {
+      await throughOffer();
+      scripts.push(() => [text('Sure.')]);
+      await engine.sendText('Actually, never mind.');
+      expect(card()).toMatchObject({ status: 'expired', setAsideReason: 'typed' });
+      expect(parsed(lastUserTurn(requests)[0])).toEqual({ answered: false, note: 'The user typed a message instead.' });
+      await engine.addGrinder('t-grinder');
+      expect(callsOf('addGrinder')).toEqual([]);
+    });
+
+    it('still answers after a reload', async () => {
+      await throughOffer();
+      engine.dispose();
+      engine = build();
+      await engine.start();
+      expect(card()).toMatchObject({ status: 'pending' });
+      scripts.push(() => [text('Added.')]);
+      await engine.addGrinder('t-grinder');
+      expect(card()).toMatchObject({ status: 'added' });
     });
   });
 

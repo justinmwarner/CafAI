@@ -26,7 +26,9 @@
  *   and a shot the Visualizer plugin uploaded gets a link to its page.
  * - v1 starts from the dose Decaid has at the pick (D57). Grind moves use the
  *   steps of the grinder linked from Decaid's library (D62), read in the
- *   background so a slow or failed read never holds anything up.
+ *   background so a slow or failed read never holds anything up. A grinder
+ *   the barista names that is not linked can be added to the library from
+ *   the coach's card, only on their tap (D125).
  * - Engine actions are serialized, so a shot that finishes mid-reply is
  *   handled after the reply, never interleaved with it.
  * - Everything is persisted as it happens (the WebView may be unloaded after
@@ -42,6 +44,7 @@ import {
   TOOL_INPUTS,
   toRoastLevel,
   type AskUser,
+  type OfferGrinder,
   type ProposeAdjustment,
   type ProposeTemplates,
   type SaveBagDetails,
@@ -50,6 +53,7 @@ import {
 import { todayOf, writtenDate, type FreezerDates } from '../../coach/roastAge.ts';
 import { reportDrift } from '../../api/drift.ts';
 import { describeValue } from '../../api/frames.ts';
+import { grinderRequest } from '../../api/grinders.ts';
 import { readDye2, visualizerIdFor, visualizerShotUrl, type Dye2Data } from '../../api/pluginData.ts';
 import { PLUGIN, type PluginDirectory } from '../../api/plugins.ts';
 import {
@@ -110,6 +114,7 @@ import {
   undoBlock,
   awaitingModel,
   type AdjustmentResultPayload,
+  type GrinderOfferResultPayload,
   type TemplatePickedPayload,
 } from './protocol.ts';
 import {
@@ -129,6 +134,7 @@ import {
   diffPart,
   filledBeanCard,
   finishStreaming,
+  grinderOfferPart,
   isLoadingBeanCard,
   isOpenBagConfirm,
   isOpenBeanCard,
@@ -141,6 +147,7 @@ import {
   replaceParts,
   setAside,
   setDiffStatus,
+  setGrinderOfferStatus,
   setShotStars,
   setVisualizerLink,
   shotPart,
@@ -1520,6 +1527,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       s.pending.push({ id: call.id, name, input, plan });
       const iteration = await latestPendingIteration(s);
       if (iteration) await putIteration({ ...iteration, proposal: input });
+    } else if (name === TOOL.offerGrinder) {
+      // A card the barista answers: nothing reaches Decaid's grinder library before Add (D125).
+      addMessage('assistant', [grinderOfferPart(call.id, call.input as OfferGrinder)]);
+      s.pending.push({ id: call.id, name, input: call.input });
     }
   }
 
@@ -2540,6 +2551,68 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     await sendUser(s, new Map([[call.id, toolResult(call.id, payload)]]), { answered: false, note: 'Not answered.' }, [], 'other');
   }
 
+  /**
+   * Add on the coach's grinder card (D125): the grinder the coach heard goes
+   * into Decaid's grinder library, or the one Decaid already has is taken
+   * (never a second entry), and it is linked as Settings links one: its id,
+   * its model as the name, the dial's setting kept. The next shots carry it
+   * in Decaid's workflow (D54), and the coach hears its dial. A failure says
+   * why on the card, which stays open to tap again; the coach waits.
+   */
+  async function addGrinder(requestId: string): Promise<void> {
+    const s = session;
+    if (!s) return;
+    const call = requireCall(s, requestId, TOOL.offerGrinder);
+    if (!call || call.confirming) return;
+    const request = grinderRequest(call.input as OfferGrinder);
+    if (!request) {
+      // Only a model that was all key text cleans down to nothing: it never goes to Decaid (D69).
+      setMessages(setGrinderOfferStatus(state.messages, requestId, 'pending', { error: 'That name looked like an API key.' }));
+      emit();
+      return;
+    }
+    call.confirming = true;
+    setMessages(setGrinderOfferStatus(state.messages, requestId, 'adding'));
+    state = { ...state, busy: true };
+    emit();
+    let linked: Awaited<ReturnType<ApiPort['addGrinder']>>;
+    try {
+      linked = await api.addGrinder(request);
+    } catch (error) {
+      call.confirming = false;
+      setMessages(setGrinderOfferStatus(state.messages, requestId, 'pending', { error: describe(error) }));
+      state = { ...state, busy: false };
+      await persistConversation(s);
+      emit();
+      return;
+    }
+    const model = linked.model.trim();
+    settings = await storage.settings.update({ grinderId: linked.id, grinderName: model || null });
+    // Its dial as Decaid just answered it; a read still on its way is older.
+    grinderReads += 1;
+    linkedGrinder = { id: linked.id, info: linked.info };
+    const burrs = linked.burrs?.trim();
+    const linkedName = burrs ? `${model || 'Unnamed grinder'} (${burrs})` : model || 'Unnamed grinder';
+    setMessages(setGrinderOfferStatus(state.messages, requestId, linked.added ? 'added' : 'existing', { linkedName }));
+    state = { ...state, busy: false };
+    emit();
+    await sendGrinder();
+    const payload: GrinderOfferResultPayload = { added: true, alreadyInDecaid: !linked.added, grinder: grinderForModel() };
+    await sendUser(s, new Map([[call.id, toolResult(call.id, payload)]]), { answered: false, note: 'Not answered.' }, [], 'other');
+  }
+
+  /** Not now on the grinder card: nothing is added, and the coach hears so. */
+  async function declineGrinder(requestId: string): Promise<void> {
+    const s = session;
+    if (!s) return;
+    const call = requireCall(s, requestId, TOOL.offerGrinder);
+    if (!call || call.confirming) return;
+    setMessages(setGrinderOfferStatus(state.messages, requestId, 'declined'));
+    emit();
+    const payload: GrinderOfferResultPayload = { added: false, reason: 'The user chose not to add it.' };
+    await sendUser(s, new Map([[call.id, toolResult(call.id, payload)]]), { answered: false, note: 'Not answered.' }, [], 'other');
+  }
+
   async function undo(): Promise<void> {
     const s = session;
     if (!s || !canUndo(s)) return;
@@ -2769,6 +2842,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     skipBeanPick: () => enqueue(() => skipBeanPick()),
     readBagPhoto: (photo) => enqueue(() => readBagPhoto(photo)),
     confirmBag: (details) => enqueue(() => confirmBag(details)),
+    addGrinder: (requestId) => enqueue(() => addGrinder(requestId)),
+    declineGrinder: (requestId) => enqueue(() => declineGrinder(requestId)),
     retry: () =>
       enqueue(async () => {
         const task = lastFailed;

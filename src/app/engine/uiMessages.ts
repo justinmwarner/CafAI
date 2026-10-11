@@ -7,12 +7,13 @@ import type {
   CoachUiMessage,
   CoachUiPart,
   DiffStatus,
+  GrinderOfferStatus,
   NoticeProgress,
   SetAsideReason,
   TemplateCardItem,
   UiRole,
 } from '../types.ts';
-import type { SaveBagDetails } from '../../coach/contract.ts';
+import type { OfferGrinder, SaveBagDetails } from '../../coach/contract.ts';
 import type { ShotSummary } from '../../coach/types.ts';
 
 export const NEW_BAG_PROMPT =
@@ -76,6 +77,25 @@ export function bagConfirmPart(details: SaveBagDetails): CoachUiPart {
   return { kind: 'bagConfirm', details, confirmed: false };
 }
 
+/** The coach's offer to add a grinder to Decaid's library (D125), waiting for Add or Not now. */
+export function grinderOfferPart(requestId: string, grinder: OfferGrinder): CoachUiPart {
+  return { kind: 'grinderOffer', requestId, grinder, status: 'pending', error: null };
+}
+
+/** A grinder card's state after a tap; `linkedName` once CafAI added or found the grinder. */
+export function setGrinderOfferStatus(
+  messages: readonly CoachUiMessage[],
+  requestId: string,
+  status: GrinderOfferStatus,
+  fields: { error?: string | null; linkedName?: string } = {},
+): CoachUiMessage[] {
+  return updatePart(messages, byRequestId(requestId), (part) =>
+    part.kind === 'grinderOffer'
+      ? { ...part, status, error: fields.error ?? null, ...(fields.linkedName !== undefined ? { linkedName: fields.linkedName } : {}) }
+      : part,
+  );
+}
+
 /** The bean card while it waits for an answer. */
 export function isOpenBeanCard(part: CoachUiPart): boolean {
   return part.kind === 'beanPicker' && part.choice === null && !part.expired;
@@ -94,6 +114,7 @@ export function isOpenBagConfirm(part: CoachUiPart): boolean {
 export function setAside(part: CoachUiPart, reason: SetAsideReason): CoachUiPart {
   if (part.kind === 'templates' || part.kind === 'options') return { ...part, expired: true, setAsideReason: reason };
   if (part.kind === 'diff' && part.status === 'pending') return { ...part, status: 'expired', setAsideReason: reason };
+  if (part.kind === 'grinderOffer' && part.status === 'pending') return { ...part, status: 'expired', error: null, setAsideReason: reason };
   if ((part.kind === 'beanPicker' || part.kind === 'bagConfirm') && (isOpenBeanCard(part) || isOpenBagConfirm(part))) {
     return { ...part, expired: true, setAsideReason: reason };
   }

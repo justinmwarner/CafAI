@@ -35,6 +35,15 @@ describe('COACH_TOOL_SPECS', () => {
     expect(COACH_TOOL_SPECS.get_shot_summary.description).toMatch(/"latest", "previous"/);
   });
 
+  it('offers a grinder once, on a card of its own, with what the user said and nothing guessed (D125)', () => {
+    const { description } = COACH_TOOL_SPECS.offer_grinder;
+    expect(description).toMatch(/Call it once, with no other card in the reply/);
+    expect(description).toMatch(/only as they said them, else null; never guess/);
+    expect(description).toMatch(/nothing is added without the tap/);
+    expect(description).toMatch(/\{"added":true,"alreadyInDecaid":true\|false,"grinder":\{as in the context\}\}/);
+    expect(description).toMatch(/\{"added":false\}/);
+  });
+
   it('asks save_bag_details for the roast date as YYYY-MM-DD, null when the bag does not say (6.1)', () => {
     const { description } = COACH_TOOL_SPECS.save_bag_details;
     expect(description).toMatch(/roast date \(YYYY-MM-DD\)/);

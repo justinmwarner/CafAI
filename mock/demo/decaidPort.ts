@@ -8,7 +8,7 @@
  * way CafAI's adapter reduces it (src/app/adapters.ts).
  */
 import { activateProfile, createProfileVersion } from '../../src/api/workflow.ts';
-import { parseGrinder } from '../../src/api/grinders.ts';
+import { findSameGrinder, parseGrinder } from '../../src/api/grinders.ts';
 import type { ProfileCreateRequest, WorkflowPatch } from '../../src/api/types.ts';
 import { grinderInfo } from '../../src/app/adapters.ts';
 import type { ApiPort } from '../../src/app/engine/ports.ts';
@@ -43,6 +43,16 @@ export function mockDecaidPort(state: MockDecaid): ApiPort {
       }
       const grinder = parseGrinder(record);
       return grinder ? grinderInfo(grinder) : null;
+    },
+    // As addOrFindGrinder does: the grinder the mock already has, else a new one.
+    async addGrinder(request) {
+      const same = findSameGrinder(
+        state.listGrinders().flatMap((record) => parseGrinder(record) ?? []),
+        request,
+      );
+      const grinder = same ?? parseGrinder(state.createGrinder(request));
+      if (!grinder) throw new Error('The mock stored a grinder CafAI cannot read.');
+      return { id: grinder.id, model: grinder.model, burrs: grinder.burrs ?? null, info: grinderInfo(grinder), added: same === null };
     },
     // The mock validates enjoyment 0-10, as current Decaid builds do.
     probeEnjoymentScale: async () => 10,
