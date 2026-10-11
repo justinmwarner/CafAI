@@ -1239,6 +1239,11 @@ describe('setup', () => {
     expect(deps.spawn.mock.calls[0][1]).toEqual([deps.script, 'serve', '--window', '05:00-10:00', '--keep-awake', '--config-dir', path.resolve(dir)]);
     expect(loadConfig(dir).setup).toEqual({ mode: 'schedule', window: '05:00-10:00', weekdays: false, keepAwake: true, wake: true, host: '0.0.0.0', port: 8877, at: MONDAY_6AM.toISOString() });
     const text = stdout();
+    // A scripted setup still says what it took.
+    expect(text).toContain('2. Where CafAI runs\n  On a tablet or phone on this network.\n');
+    expect(text).toContain(
+      '3. When the bridge runs\n  Every morning on a schedule: every day, 05:00-10:00, keeping this computer awake, waking it from sleep at the start.\n',
+    );
     expect(text).toContain('  Not checked (add --firewall, or run: node bridge/cafai-bridge.mjs firewall).');
     expect(text).toContain('Done. The bridge starts every day at 05:00 and stops at 10:00.\nIt is running now, until 10:00.\nTo change this: npm run bridge -- setup\n');
     // Not a terminal: the code stays out of the output.

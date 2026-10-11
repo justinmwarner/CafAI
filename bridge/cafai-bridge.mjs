@@ -1496,6 +1496,16 @@ async function setupAnswers(options, deps, ask, previous, say) {
       : 0;
     host = choice === 1 ? '127.0.0.1' : DEFAULT_HOST;
   }
+  // Without questions, say what was taken, so a scripted setup reads like an asked one.
+  if (!ask) {
+    say(
+      onlyLocal(host)
+        ? '  Only on this computer (Decaid runs here).'
+        : host === DEFAULT_HOST
+          ? '  On a tablet or phone on this network.'
+          : `  On this network, listening on ${host}.`,
+    );
+  }
 
   say();
   say('3. When the bridge runs');
@@ -1541,6 +1551,14 @@ async function setupAnswers(options, deps, ask, previous, say) {
     answers.keepAwake = ask
       ? await askYesNo(ask, 'Keep this computer awake while the bridge runs? (all day, while you are signed in)', options.keepAwake ?? same.keepAwake ?? false)
       : Boolean(options.keepAwake);
+  }
+  if (!ask) {
+    const awake = answers.keepAwake ? ', keeping this computer awake' : '';
+    if (mode === 'schedule') {
+      const wake = answers.wake ? ', waking it from sleep at the start' : '';
+      say(`  Every morning on a schedule: ${describeWindow(parseWindow(answers.window, { weekdays: answers.weekdays }))}${awake}${wake}.`);
+    } else if (mode === 'always') say(`  Always, from sign-in${awake}.`);
+    else say('  Only when you start it.');
   }
   return answers;
 }
