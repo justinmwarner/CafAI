@@ -1031,6 +1031,23 @@ describe('coach engine', () => {
       expect(engine.getState().phase).toBe('awaiting_confirmation');
     });
 
+    it('names a wrong number and a taste in one correction, so one retry fixes both', async () => {
+      await throughShot();
+      const both = toolUse('t-adj', TOOL.proposeAdjustment, {
+        ...(proposeTemp as { input: Record<string, unknown> }).input,
+        value: 93,
+        expectedEffect: 'A rounder cup.',
+      });
+      scripts.push(() => [both]);
+      scripts.push(() => [proposal('t-adj-2', 'More extraction at the same flow.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      const correction = lastUserTurn(requests)[0] as Extract<ContentBlock, { type: 'tool_result' }>;
+      expect(correction).toMatchObject({ tool_use_id: 't-adj', is_error: true });
+      expect(correction.content).toContain('temp: at most 2.0 °C per step.');
+      expect(correction.content).toContain('expectedEffect names a taste ("rounder")');
+      expect(allParts().filter((p) => p.kind === 'diff')).toEqual([expect.objectContaining({ requestId: 't-adj-2' })]);
+    });
+
     it('keeps a stored change usable after a reload, whatever its wording: its card already shows it', async () => {
       await throughProposal();
       // The transcript of an older build, whose change promised a taste.

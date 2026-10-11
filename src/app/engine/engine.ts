@@ -1449,8 +1449,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       const context = s ? proposalContext(s) : null;
       if (!context) return 'No profile version is active yet. Propose templates first.';
       const result = coach.validateProposal(value as ProposeAdjustment, context);
-      if (!result.ok) return result.errors.join(' ');
-      return fresh ? coach.proposalWordingError(value as ProposeAdjustment) : null;
+      // Both at once, so one retry fixes the numbers and the words.
+      const wording = fresh ? coach.proposalWordingError(value as ProposeAdjustment) : null;
+      const errors = [...(result.ok ? [] : result.errors), ...(wording ? [wording] : [])];
+      return errors.length > 0 ? errors.join(' ') : null;
     }
     return null;
   }
