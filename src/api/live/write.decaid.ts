@@ -11,6 +11,7 @@ import { afterAll, assert, beforeAll, beforeEach, expect, it } from 'vitest';
 import { buildStartingProfile, buildVersionProfile, getTemplate, profileId, startingYield } from '../../coach/index.ts';
 import type { ProfileJson, Template } from '../../coach/types.ts';
 import { deviceConnections, type DeviceConnections } from '../frames.ts';
+import { createGrinder, getGrinder, grinderRequest, listGrinders, type GrinderDraft } from '../grinders.ts';
 import { loadProfileOnMachine } from '../machineProfile.ts';
 import type { DeviceEntry, WorkflowContext } from '../types.ts';
 import { activateProfile, createProfileVersion, findProfileMismatch } from '../workflow.ts';
@@ -173,6 +174,33 @@ describeDecaid('write', ({ url }) => {
     expect((await client.listAllBatches()).map((item) => item.id), 'every batch after archiving').not.toContain(batch.id);
     expect((await client.listAllBatches({ includeArchived: true })).map((item) => item.id), 'with the archived ones').toContain(batch.id);
     expect((await client.listBeans()).map((item) => item.id), 'beans after archiving').not.toContain(bean.id);
+    expect(live.problems()).toEqual([]);
+  });
+
+  it('a grinder CafAI adds, each kind of dial, is listed and read back as sent, then deleted', async () => {
+    const drafts: GrinderDraft[] = [
+      { model: TITLE, burrs: '64 mm flat', settingType: 'numeric', smallStep: 0.5, bigStep: 2, values: null },
+      { model: TITLE, burrs: '40 mm conical', settingType: 'preset', smallStep: null, bigStep: null, values: ['1', '2', '3'] },
+    ];
+    for (const draft of drafts) {
+      const request = grinderRequest(draft);
+      if (!request) assert.fail('grinderRequest made nothing of the test grinder.');
+      const added = await createGrinder(live.client, request, { fetch: live.fetch });
+      const path = `/api/v1/grinders/${encodeURIComponent(added.id)}`;
+      // Settings and the coach only add grinders; the suite deletes its own, as nothing else would.
+      const deleteNow = undo.add(`the test grinder (${draft.settingType})`, async () => {
+        const reply = await live.send('DELETE', path);
+        if (reply.status !== 200) throw new Error(`DELETE ${path} answered HTTP ${reply.status}.`);
+      });
+      expect(added, 'the grinder Decaid stored').toMatchObject({ ...request, archived: false });
+      const listed = (await listGrinders(live.client, { fetch: live.fetch })).find((grinder) => grinder.id === added.id);
+      expect(listed, 'in the list every skin reads').toEqual(added);
+      expect(await getGrinder(live.client, added.id, { fetch: live.fetch }), 'read by its id').toEqual(added);
+
+      await deleteNow();
+      expect((await listGrinders(live.client, { fetch: live.fetch, includeArchived: true })).map((g) => g.id), 'after deleting').not.toContain(added.id);
+      expect(await getGrinder(live.client, added.id, { fetch: live.fetch }), 'read by its id after deleting').toBeNull();
+    }
     expect(live.problems()).toEqual([]);
   });
 

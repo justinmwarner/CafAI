@@ -1,5 +1,7 @@
 /**
- * Decaid's grinder library: GET /api/v1/grinders and /api/v1/grinders/{id}.
+ * Decaid's grinder library: GET /api/v1/grinders and /api/v1/grinders/{id},
+ * and POST /api/v1/grinders to add one (Settings' Add a grinder, and the
+ * coach's offer the barista confirms).
  *
  * Decaid stores what a grinder's dial can do (a45961b: grinders_handler.dart,
  * models/data/grinder.dart): a numeric dial with a small and a big step, or a
@@ -10,12 +12,16 @@
  * DYE2 plugin) write the same table, and an older Decaid may lack fields, so
  * unknown fields are ignored, a malformed optional field is dropped, and only
  * a record without an id or a model is skipped: one odd grinder must never
- * hide the rest.
+ * hide the rest. What CafAI did not expect is reported as drift where the
+ * reply enters CafAI (readers.ts, D95), and a list reply that is not a list,
+ * null included, fails the call: only `[]` means Decaid has none.
  *
  * These calls sit beside the DecaidClient contract, not in it (other code
  * implements that interface); they only need the client's httpOrigin.
  */
-import { DEFAULT_TIMEOUT_MS, request, requestJson, type Transport } from './http.ts';
+import { containsKeyLike, redactKeyLike } from '../storage/redact.ts';
+import { DEFAULT_TIMEOUT_MS, request, requestList, requestValue, type Transport } from './http.ts';
+import { readGrinderRecord, readGrinderRecords, unexpectedReply } from './readers.ts';
 import type { DecaidClient } from './types.ts';
 
 /** Decaid reads "values" as preset and anything it does not know as numeric. */
@@ -67,6 +73,35 @@ export interface ListGrindersOptions extends GrinderRequestOptions {
   includeArchived?: boolean;
 }
 
+/**
+ * What CafAI sends to add a grinder (POST /api/v1/grinders). Decaid needs
+ * only the model; a field nobody gave is left out, so Decaid keeps its own
+ * default for it (a numeric dial without steps).
+ */
+export interface GrinderCreateRequest {
+  model: string;
+  burrs?: string;
+  settingType?: GrinderSettingType;
+  /** A preset grinder's settings, finest first, as the grinder shows them. */
+  settingValues?: string[];
+  settingSmallStep?: number;
+  settingBigStep?: number;
+}
+
+/** A grinder as the barista described it, in Settings or to the coach: null for what they did not say. */
+export interface GrinderDraft {
+  model: string;
+  burrs: string | null;
+  settingType: GrinderSettingType | null;
+  smallStep: number | null;
+  bigStep: number | null;
+  /** A preset grinder's settings, finest first. */
+  values: readonly string[] | null;
+}
+
+/** The longest text each field takes, as Settings' grinder fields do. */
+export const GRINDER_LIMITS = { model: 60, burrs: 60, setting: 20, settings: 100 } as const;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -109,27 +144,115 @@ export function parseGrinder(value: unknown): Grinder | null {
   return grinder;
 }
 
+/** A grinder reply, checked where it enters CafAI (readers.ts reports what it lacks), then read as Decaid reads it. */
+function readGrinder(data: unknown, source: string): Grinder {
+  const grinder = parseGrinder(readGrinderRecord(data, source));
+  if (grinder === null) throw unexpectedReply(source);
+  return grinder;
+}
+
+function readGrinders(data: unknown, source: string): Grinder[] {
+  return readGrinderRecords(data, source).flatMap((record) => parseGrinder(record) ?? []);
+}
+
 /**
  * Decaid's grinders, most recently edited first (Decaid's order). Throws a
  * GatewayError when Decaid cannot be read, including an older Decaid without
- * the grinder library (plain-text 404).
+ * the grinder library (plain-text 404), and `unexpected_reply` for a reply
+ * that is not a list (null included), reported as drift: a reply CafAI could
+ * not read never reads as "Decaid has none".
  */
 export async function listGrinders(source: GrinderSource, options: ListGrindersOptions = {}): Promise<Grinder[]> {
   const path = options.includeArchived ? '/api/v1/grinders?includeArchived=true' : '/api/v1/grinders';
-  const body = await requestJson<unknown>(transportFor(source, options), path);
-  if (!Array.isArray(body)) return [];
-  const grinders = body.map(parseGrinder).filter((grinder): grinder is Grinder => grinder !== null);
+  const grinders = await requestList(transportFor(source, options), path, { read: readGrinders });
   // Decaid filters archived grinders itself; this only guards against one that slipped through.
   return options.includeArchived ? grinders : grinders.filter((grinder) => !grinder.archived);
 }
 
 /**
  * One grinder, or null when Decaid has none with that id (it was deleted) or
- * sent a record CafAI cannot read. Other failures throw a GatewayError.
+ * sent a record CafAI cannot read (reported as drift). Other failures throw a
+ * GatewayError.
  */
 export async function getGrinder(source: GrinderSource, id: string, options: GrinderRequestOptions = {}): Promise<Grinder | null> {
   const reply = await request<unknown>(transportFor(source, options), `/api/v1/grinders/${encodeURIComponent(id)}`, { allowStatus: [404] });
-  return reply.status === 404 ? null : parseGrinder(reply.data);
+  if (reply.status === 404) return null;
+  try {
+    return readGrinder(reply.data, 'GET /api/v1/grinders/{id}');
+  } catch {
+    return null; // Unreadable, and reported: the coach gives directions only, as for a grinder Decaid lost.
+  }
+}
+
+/**
+ * Add a grinder to Decaid's library, so Decaid and every skin list it, and
+ * answer it as Decaid stored it. Throws a GatewayError when Decaid refuses
+ * it or cannot be reached (an older Decaid without the library answers a
+ * plain 404), and `unexpected_reply` for a reply CafAI cannot read, reported
+ * as drift. Never retried: the first attempt may have added it.
+ */
+export function createGrinder(source: GrinderSource, body: GrinderCreateRequest, options: GrinderRequestOptions = {}): Promise<Grinder> {
+  return requestValue(transportFor(source, options), '/api/v1/grinders', { method: 'POST', body, read: readGrinder });
+}
+
+/** Trimmed, one space between words, never a key (D69), at most `max` characters; null when nothing is left. */
+function cleanText(text: string | null, max: number): string | null {
+  if (text === null) return null;
+  const words = (containsKeyLike(text) ? redactKeyLike(text, ' ') : text).replace(/\s+/g, ' ').trim();
+  return words.slice(0, max).trim() || null;
+}
+
+const isStep = (value: number | null): value is number => value !== null && Number.isFinite(value) && value > 0;
+
+/**
+ * What CafAI sends to add the grinder a barista described: its text cleaned
+ * (cleanText), a step only when it can move a dial (more than 0), a preset's
+ * settings in order without blanks or repeats. What nobody said is left out,
+ * and the dial's kind is sent only when it is known (said, or plain from the
+ * steps or the settings). Null when no model is left to name it.
+ */
+export function grinderRequest(draft: GrinderDraft): GrinderCreateRequest | null {
+  const model = cleanText(draft.model, GRINDER_LIMITS.model);
+  if (model === null) return null;
+  const request: GrinderCreateRequest = { model };
+  const burrs = cleanText(draft.burrs, GRINDER_LIMITS.burrs);
+  if (burrs !== null) request.burrs = burrs;
+  const values = [
+    ...new Set((draft.values ?? []).flatMap((value) => cleanText(value, GRINDER_LIMITS.setting) ?? [])),
+  ].slice(0, GRINDER_LIMITS.settings);
+  const smallStep = isStep(draft.smallStep) ? draft.smallStep : null;
+  const bigStep = isStep(draft.bigStep) ? draft.bigStep : null;
+  const kind = draft.settingType ?? (values.length > 0 ? 'preset' : smallStep !== null || bigStep !== null ? 'numeric' : null);
+  if (kind === 'preset') {
+    request.settingType = 'preset';
+    if (values.length > 0) request.settingValues = values;
+  } else if (kind === 'numeric') {
+    request.settingType = 'numeric';
+    if (smallStep !== null) request.settingSmallStep = smallStep;
+    if (bigStep !== null) request.settingBigStep = bigStep;
+  }
+  return request;
+}
+
+/** Case, extra spaces and missing text aside, the same words. */
+const sameText = (a: string | null | undefined, b: string | null | undefined) =>
+  (a ?? '').replace(/\s+/g, ' ').trim().toLowerCase() === (b ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+/**
+ * The grinder in Decaid's list that a request describes: not archived, the
+ * same model, and the same burrs when both say which. Adding it again would
+ * only put a second entry for one grinder in every skin's list.
+ */
+export function findSameGrinder(grinders: readonly Grinder[], request: Pick<GrinderCreateRequest, 'model' | 'burrs'>): Grinder | null {
+  const burrs = request.burrs?.trim() ?? '';
+  return (
+    grinders.find(
+      (grinder) =>
+        !grinder.archived &&
+        sameText(grinder.model, request.model) &&
+        (burrs === '' || !grinder.burrs?.trim() || sameText(grinder.burrs, burrs)),
+    ) ?? null
+  );
 }
 
 /**

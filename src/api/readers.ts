@@ -353,6 +353,30 @@ const BATCH: Rule = {
   required: ['id', 'beanId'],
 };
 
+const GRINDER: Rule = {
+  // Grinder.toJson leaves a null field out; settingType is checked as text, and parseGrinder
+  // (grinders.ts) then reads it, and a missing archived, as Decaid's Grinder.fromJson does.
+  shape: z.looseObject({
+    id,
+    model: text,
+    burrs: text.optional(),
+    burrSize: num.optional(),
+    burrType: text.optional(),
+    notes: text.optional(),
+    archived: flag,
+    settingType: text,
+    settingValues: z.array(text).optional(),
+    settingSmallStep: num.optional(),
+    settingBigStep: num.optional(),
+    rpmSmallStep: num.optional(),
+    rpmBigStep: num.optional(),
+    createdAt: text.optional(),
+    updatedAt: text.optional(),
+    extras: anyObject.optional(),
+  }),
+  required: ['id', 'model'],
+};
+
 // ---------------------------------------------------------------------------
 // Readers
 // ---------------------------------------------------------------------------
@@ -371,6 +395,9 @@ export const readBean: Reader<Bean> = recordReader(BEAN);
 export const readBeans: Reader<Bean[]> = listReader(BEAN);
 export const readBatch: Reader<BeanBatch> = recordReader(BATCH);
 export const readBatches: Reader<BeanBatch[]> = listReader(BATCH);
+/** Grinder records checked for what CafAI reads, as sent: parseGrinder (grinders.ts) reads each one on. */
+export const readGrinderRecord: Reader<Record<string, unknown>> = recordReader(GRINDER);
+export const readGrinderRecords: Reader<Record<string, unknown>[]> = listReader(GRINDER);
 
 export const readShotPage: Reader<PaginatedShots> = (data, source) => {
   const page = readRecord<PaginatedShots>(SHOT_PAGE, data, source);
