@@ -7,7 +7,7 @@
  * types this build does not know, as raw objects with all their fields. Only
  * deltas mutate a block (text, partial tool JSON, thinking, signature).
  */
-import { errorFromStreamError, unreadableReplyError } from './errors.ts';
+import { ANTHROPIC_WORDING, errorFromStreamError, unreadableReplyError, type ProviderWording } from './errors.ts';
 import { markUnparsedToolInput } from './toolInput.ts';
 import type { ContentBlock, LlmAssistantTurn, LlmStreamEvent, LlmUsage, ToolUseBlock } from './types.ts';
 
@@ -80,7 +80,8 @@ function toUsage(usage: Raw): LlmUsage {
   return out;
 }
 
-export function createTurnAssembler(): TurnAssembler {
+/** `wording` tells a broken stream or an `error` event in the server's terms (errors.ts). */
+export function createTurnAssembler(wording: ProviderWording = ANTHROPIC_WORDING): TurnAssembler {
   let id = '';
   let model = '';
   let stopReason: string | null = null;
@@ -90,7 +91,7 @@ export function createTurnAssembler(): TurnAssembler {
 
   function slotAt(index: unknown): Slot {
     const slot = typeof index === 'number' ? slots[index] : undefined;
-    if (!slot) throw unreadableReplyError();
+    if (!slot) throw unreadableReplyError(wording);
     return slot;
   }
 
@@ -124,7 +125,7 @@ export function createTurnAssembler(): TurnAssembler {
         case 'content_block_start': {
           const index = event.index;
           const block = event.content_block;
-          if (typeof index !== 'number' || !isRecord(block)) throw unreadableReplyError();
+          if (typeof index !== 'number' || !isRecord(block)) throw unreadableReplyError(wording);
           const copy: Raw = { ...block };
           slots[index] = { block: copy, json: 'input' in copy ? '' : null };
           return copy.type === 'tool_use' ? [{ type: 'tool_use_start', index, id: str(copy.id), name: str(copy.name) }] : [];
@@ -173,7 +174,7 @@ export function createTurnAssembler(): TurnAssembler {
           return [{ type: 'message_done', turn: buildTurn() }];
 
         case 'error':
-          throw errorFromStreamError(event);
+          throw errorFromStreamError(event, wording);
 
         default:
           // `ping`, and event types added after this build.

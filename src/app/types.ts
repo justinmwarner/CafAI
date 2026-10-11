@@ -12,6 +12,7 @@ import type { Confidence, RoastLevel, SaveBagDetails } from '../coach/contract.t
 import type { ShotSummary } from '../coach/types.ts';
 import type { BagPhoto } from '../llm/extractBag.ts';
 import type { ModelInfo } from '../llm/types.ts';
+import type { CoachSourceStore } from '../storage/coachSource.ts';
 import type { Bag, ProfileVersion, Storage } from '../storage/types.ts';
 import type { AppearanceStore } from './appearance.ts';
 
@@ -29,6 +30,12 @@ export interface Services {
   plugins: PluginDirectory;
   /** How CafAI looks: the appearance setting as live state. */
   appearance: AppearanceStore;
+  /**
+   * Where the coach runs: Anthropic, or CafAI Bridge on the user's computer
+   * (src/app/coachAccess.ts). Optional: fakes and previews leave it out, and
+   * Settings then offers only the API key.
+   */
+  coachSource?: CoachSourceStore;
 }
 
 export type UiRole = 'user' | 'assistant' | 'system';

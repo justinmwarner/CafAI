@@ -119,7 +119,7 @@ export default defineConfig(({ mode }) => ({
     // `// @vitest-environment jsdom` docblock (jsdom start-up is slow).
     environment: 'node',
     setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.test.{ts,tsx}', 'mock/**/*.test.{ts,tsx}', 'scripts/**/*.test.{ts,mjs}'],
+    include: ['src/**/*.test.{ts,tsx}', 'mock/**/*.test.{ts,tsx}', 'scripts/**/*.test.{ts,mjs}', 'bridge/**/*.test.mjs'],
     restoreMocks: true,
     testTimeout: 15000,
   },

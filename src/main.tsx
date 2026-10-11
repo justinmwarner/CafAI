@@ -77,6 +77,7 @@ async function startMocks(): Promise<void> {
   const [
     { mockPlanFromUrl, demoIgnoredNote },
     { anthropicHandlers },
+    { bridgeHandlers },
     { startCoachOnlyMock },
     { startMockWorker },
     { startMockPersistence },
@@ -84,6 +85,7 @@ async function startMocks(): Promise<void> {
   ] = await Promise.all([
     import('../mock/plan.ts'),
     import('../mock/anthropic/handlers.ts'),
+    import('../mock/anthropic/bridge.ts'),
     import('../mock/coachOnly.ts'),
     import('../mock/browser.ts'),
     import('../mock/persist.ts'),
@@ -91,7 +93,9 @@ async function startMocks(): Promise<void> {
   ]);
   const plan = mockPlanFromUrl(window.location.search);
   // Spread: the demo's timing and voice options, empty outside the demo.
-  const coach = anthropicHandlers({ speed: plan.coachSpeed, ...plan.coachOptions });
+  const coachOptions = { speed: plan.coachSpeed, ...plan.coachOptions };
+  // The same scripted coach behind CafAI Bridge on this computer (127.0.0.1:8877), for "Claude on my computer".
+  const coach = [...anthropicHandlers(coachOptions), ...bridgeHandlers(coachOptions)];
   if (!plan.decaid) {
     const note = demoIgnoredNote(window.location.search);
     if (note) console.info(note);

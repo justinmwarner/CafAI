@@ -12,6 +12,10 @@
  * working now that the skin is a web page. The key is read from the secret
  * store, put on this one request header, and never logged or echoed.
  *
+ * CafAI Bridge (the coach on the user's own computer) speaks the same API, so
+ * the same provider talks to it: the bridge's address as `baseUrl`, its
+ * pairing code as the key, and its own wording (src/app/coachAccess.ts).
+ *
  * Chromium 91 constraints shape the code: the body is read with
  * `getReader()` (no async iteration of streams), timeouts use AbortController
  * + setTimeout (no `AbortSignal.timeout`) and the caller's signal is merged by
@@ -20,13 +24,16 @@
 import { createTurnAssembler } from './assemble.ts';
 import {
   abortedError,
+  ANTHROPIC_WORDING,
   errorFromHttp,
+  hideSecret,
   networkError,
   noApiKeyError,
   parseRetryAfter,
   streamDroppedError,
   timeoutError,
   unreadableReplyError,
+  type ProviderWording,
 } from './errors.ts';
 import { modelInfo, supportsRefusalFallbacks } from './models.ts';
 import { createSseParser, type SseEvent } from './sse.ts';
@@ -68,6 +75,10 @@ export interface AnthropicProviderOptions {
   maxRetries?: number;
   /** First retry delay, doubled each retry; `retry-after` wins when sent. Default 1000 ms. */
   retryBaseMs?: number;
+  /** The sentences failures are told in (errors.ts). Default ANTHROPIC_WORDING. */
+  wording?: ProviderWording;
+  /** Whether a retryable failure before anything streamed is tried again. Default: always. */
+  shouldRetry?: (error: LlmError, context: RetryContext) => boolean;
 }
 
 export interface AnthropicHttpRequest {
@@ -166,22 +177,33 @@ function sleep(ms: number, signal: AbortSignal | undefined): Promise<void> {
   });
 }
 
-function parseEventData(event: SseEvent): unknown {
+function parseEventData(event: SseEvent, wording: ProviderWording): unknown {
   try {
     return JSON.parse(event.data);
   } catch {
-    if (KNOWN_EVENTS.includes(event.event)) throw unreadableReplyError();
+    if (KNOWN_EVENTS.includes(event.event)) throw unreadableReplyError(wording);
     return null;
   }
 }
 
-/** Belt and braces: whatever a server echoed back, the key never reaches the UI. */
+/**
+ * Belt and braces: whatever a server echoed back, the key never reaches the
+ * UI, CafAI Bridge's code as ABCDEFGH or ABCD-EFGH included (hideSecret).
+ */
 function scrubKey(error: LlmError, apiKey: string): LlmError {
-  if (!error.message.includes(apiKey)) return error;
-  return new LlmError(error.kind, error.message.split(apiKey).join('[key]'), error.status, error.retryable);
+  const message = hideSecret(error.message, apiKey);
+  return message === error.message ? error : new LlmError(error.kind, message, error.status, error.retryable);
 }
 
-interface AttemptState {
+/** How a failed attempt went, for AnthropicProviderOptions.shouldRetry. */
+export interface RetryContext {
+  /** The server had answered 200 with an event stream. */
+  streamOpened: boolean;
+  /** No byte came within the first-byte or idle time. */
+  timedOut: boolean;
+}
+
+interface AttemptState extends RetryContext {
   yielded: boolean;
   retryAfterMs: number | null;
 }
@@ -191,6 +213,7 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): LlmP
   const idleMs = options.timeouts?.idleMs ?? DEFAULT_IDLE_MS;
   const maxRetries = options.maxRetries ?? 2;
   const retryBaseMs = options.retryBaseMs ?? DEFAULT_RETRY_BASE_MS;
+  const wording = options.wording ?? ANTHROPIC_WORDING;
   // Resolved per call: test servers and service workers may swap fetch after startup.
   const doFetch = (url: string, init: RequestInit) =>
     options.fetch ? options.fetch(url, init) : globalThis.fetch(url, init);
@@ -225,7 +248,7 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): LlmP
         );
       } catch (cause) {
         // In a browser a CORS rejection looks the same as being offline.
-        throw controller.signal.aborted ? cause : networkError();
+        throw controller.signal.aborted ? cause : networkError(wording);
       }
 
       if (!response.ok) {
@@ -236,27 +259,28 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): LlmP
         } catch (cause) {
           if (controller.signal.aborted) throw cause;
         }
-        throw errorFromHttp(response.status, text);
+        throw errorFromHttp(response.status, text, wording);
       }
       if (!(response.headers.get('content-type') ?? '').includes('text/event-stream') || !response.body) {
-        throw unreadableReplyError();
+        throw unreadableReplyError(wording);
       }
+      state.streamOpened = true;
 
       reader = response.body.getReader();
       const parser = createSseParser();
-      const assembler = createTurnAssembler();
+      const assembler = createTurnAssembler(wording);
       for (;;) {
         let chunk: ReadableStreamReadResult<Uint8Array>;
         try {
           chunk = await raceAbort(reader.read(), controller.signal);
         } catch (cause) {
-          throw controller.signal.aborted ? cause : streamDroppedError();
+          throw controller.signal.aborted ? cause : streamDroppedError(wording);
         }
         // The idle clock measures the network, not how long the caller takes per event.
         disarm();
         const sseEvents = chunk.done ? parser.end() : parser.push(chunk.value);
         for (const sse of sseEvents) {
-          for (const event of assembler.push(parseEventData(sse))) {
+          for (const event of assembler.push(parseEventData(sse, wording))) {
             // One chunk can hold the rest of the reply: honour an abort between events.
             if (controller.signal.aborted) throw new Error('aborted');
             state.yielded = true;
@@ -264,13 +288,16 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): LlmP
           }
           if (assembler.finished) return;
         }
-        if (chunk.done) throw streamDroppedError();
+        if (chunk.done) throw streamDroppedError(wording);
         arm('idle', idleMs);
       }
     } catch (cause) {
       if (controller.signal.aborted) {
         if (callerSignal?.aborted) throw abortedError();
-        if (timedOut !== null) throw timeoutError(timedOut);
+        if (timedOut !== null) {
+          state.timedOut = true;
+          throw timeoutError(timedOut, wording);
+        }
       }
       throw cause;
     } finally {
@@ -284,11 +311,11 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): LlmP
     const signal = request.signal;
     if (signal?.aborted) throw abortedError();
     const apiKey = ((await options.getApiKey()) ?? '').trim();
-    if (apiKey === '') throw noApiKeyError();
+    if (apiKey === '') throw noApiKeyError(wording);
     const http = buildAnthropicRequest(request, apiKey, options.baseUrl);
 
     for (let retry = 0; ; retry++) {
-      const state: AttemptState = { yielded: false, retryAfterMs: null };
+      const state: AttemptState = { yielded: false, retryAfterMs: null, streamOpened: false, timedOut: false };
       try {
         yield* attempt(http, signal, state);
         return;
@@ -297,6 +324,7 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): LlmP
         const error = scrubKey(cause, apiKey);
         // Never retry once the caller has seen part of a turn: it would show twice.
         if (state.yielded || !error.retryable || retry >= maxRetries || signal?.aborted) throw error;
+        if (options.shouldRetry && !options.shouldRetry(error, { streamOpened: state.streamOpened, timedOut: state.timedOut })) throw error;
         await sleep(backoffMs(retry, retryBaseMs, state.retryAfterMs), signal);
       }
     }

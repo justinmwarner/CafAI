@@ -115,4 +115,14 @@ export const TID = {
   driftReport: 'drift-report',
   copyDriftReport: 'copy-drift-report',
   backupHealth: 'backup-health',
+
+  // Where the coach runs: Anthropic or CafAI Bridge on the user's computer
+  coachSourceAnthropic: 'coach-source-anthropic',
+  coachSourceComputer: 'coach-source-computer',
+  computerAddress: 'computer-address',
+  computerCode: 'computer-code',
+  computerSave: 'computer-save',
+  computerTest: 'computer-test',
+  computerFind: 'computer-find',
+  computerStatus: 'computer-status',
 } as const;

@@ -2,9 +2,10 @@
 
 Ranked by the cost of a wrong guess (most expensive first). Each says what
 CafAI assumes now and what would change if the guess is wrong. Questions 1-8
-came out of the morning session of 2026-10-04, and 9-13 out of the Decaid
-alignment of 2026-10-09 (ranked the same way, in their own section); the
-questions you answered are in "Answered" at the end.
+came out of the morning session of 2026-10-04, 9-13 out of the Decaid
+alignment of 2026-10-09, and 14-16 out of Claude on your computer of
+2026-10-11 (each ranked the same way, in its own section); the questions
+you answered are in "Answered" at the end.
 
 1. **Does Decaid's barrier behave on a real DE1 the way its source says?**
    CafAI now waits for `POST /api/v1/machine/profile` after every load and
@@ -144,6 +145,28 @@ questions you answered are in "Answered" at the end.
     `aab5f93`), so a skin that sends 300 ml gets 44 ml. Say if you want it
     added.
 
+## From Claude on your computer (2026-10-11)
+
+14. **Which Claude Code should the bridge use on your PC?** It uses the
+    newest it finds (D134): today the Claude desktop app's own copy, 2.1.295.
+    Your `claude` on PATH is WinGet's 2.1.126, which hangs on every request,
+    and the native install in `~/.local/bin` is 2.1.251, which refuses Opus
+    5.5 (it needs 2.1.280). If you would rather the bridge used your own
+    install, run `claude update` (and `winget uninstall Anthropic.ClaudeCode`
+    for the stale one), or start the bridge with `--claude <path>`. Nothing
+    was updated or removed for you.
+15. **Is this for you only, or will CafAI ship with it?** The bridge is built
+    and documented for one person's own use with their own plan (D130):
+    Claude Code's terms do not restrict that, but they do bar offering a
+    plan's sign-in to other people. If CafAI goes public with the bridge,
+    the README's note stays as it is; anything hosted for others would need
+    API keys.
+16. **Is a Node program on the computer all right, or do you want an app?**
+    Today the bridge runs from CafAI's folder (`npm run bridge`, Node 18+),
+    with `install` to start it at login. Someone who installs CafAI from a
+    release zip has no such folder; a single download or a small app with a
+    tray icon is on the roadmap.
+
 ## Answered
 
 1. **Does a shot pulled right after "Confirm" run the new profile?**
@@ -181,6 +204,9 @@ questions you answered are in "Answered" at the end.
    be checked first. `ANTHROPIC_API_KEY=... npm run test:live` checks the
    default (and, with `LIVE_ALL_MODELS=1`, every picker id) against the real
    API. Commits: 6904582 (roadmap), 60cb646 (live test).
+   *Built since (2026-10-11):* the coach can run on your own Claude Code and
+   plan, on a Mac or a Windows PC, through CafAI Bridge (D130-D137; README,
+   "Claude on your computer").
 
 3. **Are the lever bounds and the starting yields right for your coffee?**
    Bounds come from Decaid's bundled profiles and the research table (e.g.

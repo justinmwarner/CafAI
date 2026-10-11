@@ -24,12 +24,14 @@
     "test:watch": "vitest",
     "test:live": "vitest run --config vitest.live.config.ts",
     "test:decaid": "vitest run --config vitest.decaid.config.ts",
+    "test:bridge-live": "vitest run --config vitest.bridge.config.ts",
     "e2e": "playwright test",
     "e2e:real": "playwright test --config playwright.real.config.ts",
     "smoke:chrome91": "node tools/chrome91/smoke.mjs --dist ../../dist-mock --wait \"document.querySelector('[data-testid=app-ready]')\" --hash \"?mockSpeed=25#/\" --name app",
     "release:zip": "node scripts/release-zip.mjs",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build && npm run release:zip && npm run e2e",
-    "smoke:chrome91:loop": "node tools/chrome91/loop.mjs"
+    "smoke:chrome91:loop": "node tools/chrome91/loop.mjs",
+    "bridge": "node bridge/cafai-bridge.mjs"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
