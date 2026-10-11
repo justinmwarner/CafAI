@@ -93,7 +93,7 @@ export const ProposeTemplatesInput = z.object({
       z.object({
         templateId: z.string().min(1),
         confidence: z.enum(CONFIDENCE),
-        /** One or two sentences: why this template suits this bag. */
+        /** One or two sentences: why this template suits this bag (what it does with such a coffee, never how the cup will taste). */
         reason: z.string().min(1).max(240),
       }),
     )
@@ -136,9 +136,13 @@ export const ProposeAdjustmentInput = z.object({
     .nullable(),
   /** One line, imperative: "Raise brew temperature by 1 °C". */
   summary: z.string().min(1).max(120),
-  /** Why, citing the shot data and the taste feedback. */
+  /** Why, citing the shot data and the taste feedback in the user's own words. */
   rationale: z.string().min(1).max(400),
-  /** What the next shot should taste or look like if this works. */
+  /**
+   * What the change does at the machine (flow, time, pressure, extraction),
+   * never how the shot will taste: the taste is the barista's to find (D127).
+   * "A slower pour, a few seconds longer, extracting a little more."
+   */
   expectedEffect: z.string().min(1).max(200),
   /** Non-variable reminders, e.g. "keep the same dose and puck prep". */
   tips: z.array(z.string().min(1).max(160)).max(3),

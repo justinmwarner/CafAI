@@ -11,6 +11,7 @@
  *
  * The live stats card (D91) is one more row at the end, on screen only: it
  * is never one of `messages`, so it is never stored or sent to the coach.
+ * So are the taste words above the composer (D127): they only fill the draft.
  */
 import {
   createContext,
@@ -31,18 +32,20 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import SpeedRounded from '@mui/icons-material/SpeedRounded';
 import { ChatBox, type ChatBoxFeatures, type ChatBoxSlotProps, type ChatBoxSlots } from '@mui/x-chat';
-import type {
-  ChatAdapter,
-  ChatLocaleText,
-  ChatMessage,
-  ChatMessagePart,
-  ChatPartRendererMap,
-  ChatPartRendererProps,
+import {
+  useChatComposer,
+  type ChatAdapter,
+  type ChatLocaleText,
+  type ChatMessage,
+  type ChatMessagePart,
+  type ChatPartRendererMap,
+  type ChatPartRendererProps,
 } from '@mui/x-chat/headless';
 import type { CoachUiMessage, CoachUiPart, ShotVerdict } from '../../app/types.ts';
 import type { SaveBagDetails } from '../../coach/contract.ts';
 import type { BagPhoto } from '../../llm/extractBag.ts';
 import { StatsCard } from '../machine/StatsCard.tsx';
+import { useLayout } from '../shell/layout.ts';
 import { TID } from '../testIds.ts';
 import { RichText } from './RichText.tsx';
 import { BagConfirmCard } from './parts/BagConfirmCard.tsx';
@@ -53,6 +56,9 @@ import { OptionChips } from './parts/OptionChips.tsx';
 import { ShotCard } from './parts/ShotCard.tsx';
 import { TemplateCards } from './parts/TemplateCards.tsx';
 import { createFollowNewest, type FollowNewest, type NewestMessage } from './followNewest.ts';
+import { promptChipSx } from './promptChip.ts';
+import { TastePrompts } from './TasteWords.tsx';
+import { tasteQuestionOpen } from './tasteWords.ts';
 
 export interface ChatSurfaceProps {
   messages: readonly CoachUiMessage[];
@@ -212,6 +218,10 @@ interface PartsContextValue {
   graphShotId: string | null;
   /** Whether a graph handler was given at all (ShotView still gates on graphShotId matching). */
   hasOpenGraph: boolean;
+  /** Whether a Stats handler was given: without one the prompt row has no Stats. */
+  hasStats: boolean;
+  /** The taste question waits for its answer: the prompt row offers Taste words and Need help? (D127). */
+  tasteOpen: boolean;
   actions: PartActions;
 }
 
@@ -385,29 +395,16 @@ function authorKey(message: ChatMessage): string {
 // The prompt row
 // ---------------------------------------------------------------------------
 
-/**
- * The Stats chip as drawn: 40 px, the surface colour inside a line, the
- * accent icon; a band above and below makes it the full 48 px touch target.
- */
-const statsChipSx = {
-  position: 'relative',
-  height: 40,
-  minHeight: 40,
-  borderRadius: '20px',
-  bgcolor: 'background.paper',
-  borderColor: 'divider',
-  fontWeight: 600,
-  // A tap leaves :hover behind on a touch screen: the chip keeps its colour.
-  '&.MuiChip-clickable:hover': { bgcolor: 'background.paper' },
-  '& .MuiChip-icon': { color: 'primary.main', fontSize: 18, ml: '10px' },
-  '& .MuiChip-label': { pr: '13px' },
-  // From inside the 1 px border: 5 px out each way makes 48.
-  '&::after': { content: '""', position: 'absolute', top: -5, right: 0, bottom: -5, left: 0 },
-} as const;
+/** The Stats chip as drawn: a prompt chip (promptChip.ts) with the accent icon, one of the few marks of CafAI itself. */
+const statsChipSx = { ...promptChipSx, '& .MuiChip-icon': { color: 'primary.main', fontSize: 18, ml: '10px' } } as const;
 
-/** The composer's lane: at most 760 px, centred, never closer than 8 px to the pane's sides. */
+/**
+ * The composer's lane: at most 760 px, centred, never closer than 8 px to the
+ * pane's sides. It wraps, so the open taste words take a line of their own.
+ */
 const promptRowSx = {
   display: 'flex',
+  flexWrap: 'wrap',
   flexShrink: 0,
   gap: 1,
   mx: 'max(8px, calc((100% - 760px) / 2))',
@@ -416,24 +413,42 @@ const promptRowSx = {
 } as const;
 
 /**
- * The prompts above the composer: Stats alone (D91), on every chat. A tap
- * posts the stats card at the end of the thread; nothing is sent, and the
- * composer's draft stays as it is.
+ * A phone on its side is too short for the open taste words and the composer
+ * together: there the row gives way and scrolls, and the composer stays whole.
+ * 5 px on top keeps the chips' touch bands inside the row.
+ */
+const shortPromptRowSx = { ...promptRowSx, flexShrink: 1, minHeight: 0, overflowY: 'auto', pt: '5px' } as const;
+
+/**
+ * The prompts above the composer: Stats (D91), on every chat, and while the
+ * taste question is open Taste words and Need help? (D127). A tap on Stats
+ * posts the stats card at the end of the thread; a taste word goes into the
+ * draft. Nothing is sent, and the composer's draft is never lost.
  */
 function PromptRow() {
-  const { actions } = usePartsContext();
+  const { actions, hasStats, tasteOpen } = usePartsContext();
+  const short = useLayout().nav === 'rail';
   return (
-    <Box sx={promptRowSx}>
-      <Chip
-        variant="outlined"
-        icon={<SpeedRounded />}
-        label="Stats"
-        data-testid={TID.statsPrompt}
-        onClick={actions.askStats}
-        sx={statsChipSx}
-      />
+    <Box sx={short ? shortPromptRowSx : promptRowSx}>
+      {hasStats ? (
+        <Chip
+          variant="outlined"
+          icon={<SpeedRounded />}
+          label="Stats"
+          data-testid={TID.statsPrompt}
+          onClick={actions.askStats}
+          sx={statsChipSx}
+        />
+      ) : null}
+      {tasteOpen ? <TasteRow /> : null}
     </Box>
   );
+}
+
+/** The taste prompts with x-chat's draft: mounted only while the taste question is open, so only then does a keystroke reach it. */
+function TasteRow() {
+  const composer = useChatComposer();
+  return <TastePrompts draft={composer.value} onDraft={composer.setValue} />;
 }
 
 /** An empty thread shows nothing of x-chat's own: a chat opens with the coach's first words, or the stats card. */
@@ -526,6 +541,7 @@ const SLOTS: ChatBoxSlots = {
 
 /** x-chat draws the suggestions slot only while it has suggestions; PromptRow never hands them to the composer. */
 const PROMPTS = ['Stats'];
+const PROMPTS_WITH_TASTE = ['Stats', 'Taste words', 'Need help?'];
 
 const LOCALE_TEXT: Partial<ChatLocaleText> = {
   messageAuthorUserLabel: 'You',
@@ -622,9 +638,10 @@ export function ChatSurface(props: ChatSurfaceProps) {
   }, []);
 
   const latestAppliedDiff = useMemo(() => latestAppliedDiffId(messages), [messages]);
+  const tasteOpen = useMemo(() => tasteQuestionOpen(messages), [messages]);
   const partsContext = useMemo<PartsContextValue>(
-    () => ({ busy, canUndo, latestAppliedDiff, graphShotId, hasOpenGraph, actions }),
-    [busy, canUndo, latestAppliedDiff, graphShotId, hasOpenGraph, actions],
+    () => ({ busy, canUndo, latestAppliedDiff, graphShotId, hasOpenGraph, hasStats, tasteOpen, actions }),
+    [busy, canUndo, latestAppliedDiff, graphShotId, hasOpenGraph, hasStats, tasteOpen, actions],
   );
 
   const chatMessages = useMemo(() => toChatMessages(messages, busy, statsCard), [messages, busy, statsCard]);
@@ -713,7 +730,7 @@ export function ChatSurface(props: ChatSurfaceProps) {
           features={FEATURES}
           slots={SLOTS}
           slotProps={slotProps}
-          suggestions={hasStats ? PROMPTS : undefined}
+          suggestions={tasteOpen ? PROMPTS_WITH_TASTE : hasStats ? PROMPTS : undefined}
           localeText={LOCALE_TEXT}
           sx={{ height: '100%', bgcolor: 'transparent' }}
         />

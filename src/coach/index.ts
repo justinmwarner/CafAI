@@ -39,6 +39,7 @@ export {
   checkStructure,
   DOSE_RULES,
   GRIND_MAX_STEPS,
+  proposalWordingError,
   validateProposal,
   validateTemplateSuggestions,
   type ChangePlan,

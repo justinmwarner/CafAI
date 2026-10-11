@@ -10,6 +10,7 @@ import { getTemplate, TEMPLATES } from './templates/index.ts';
 import type { GrinderInfo, ProfileJson, Template } from './types.ts';
 import {
   checkStructure,
+  proposalWordingError,
   validateProposal,
   validateTemplateSuggestions,
   type ChangePlan,
@@ -40,7 +41,7 @@ const proposal = (over: Partial<ProposeAdjustment>): ProposeAdjustment => ({
   grind: null,
   summary: 'Make one change',
   rationale: 'The shot ran fast and tasted sour.',
-  expectedEffect: 'Sweeter and rounder.',
+  expectedEffect: 'More extraction at the same flow.',
   tips: [],
   ...over,
 });
@@ -694,5 +695,55 @@ describe('validateTemplateSuggestions', () => {
     expect(result.ok).toBe(false);
     expect(result.errors.join(' ')).toMatch(/"adaptive".*blooming-espresso, d-flow, londonium/);
     expect(result.errors.join(' ')).toMatch(/"d-flow" appears more than once/);
+  });
+});
+
+describe('proposalWordingError: expectedEffect is mechanics, never a taste (D127)', () => {
+  const wording = (expectedEffect: string) => proposalWordingError({ expectedEffect });
+
+  it('passes what a change does at the machine, words with a sense there included', () => {
+    for (const text of [
+      'A slower pour, a few seconds longer, extracting a little more.',
+      'More extraction at the same flow and time.',
+      'Hotter water extracts more in the same time; the flow stays about the same.',
+      'A smoother pressure curve and a sharper rise to the peak.',
+      'A less sharp pressure rise, and a flatter pour after the bloom.',
+      'A drier puck and a lighter tamp.',
+      'A shorter, stronger shot: less water through the same coffee.',
+      'A heavier dose: more coffee for the same water, so the flow slows.',
+      'Higher, steadier pressure in the pour.',
+      'The shot finishes sooner, with 36 g in the cup.',
+      'Nothing changes: the next shot runs the same recipe.',
+      'Taste it against this shot.',
+    ]) {
+      expect(wording(text), text).toBeNull();
+    }
+  });
+
+  it('sends back a flavour, a feel in the mouth or a taste foretold, naming the words', () => {
+    const cases: Array<[string, string]> = [
+      ['Sweeter, less sharp.', 'Sweeter'],
+      ['Less sharpness and more sweetness.', 'sharpness'],
+      ['A rounder cup with gentler acidity.', 'rounder'],
+      ['More body and intensity.', 'body'],
+      ['A softer, cleaner finish with less bitterness.', 'cleaner finish'],
+      ['The same balanced, sweet cup, shot after shot.', 'balanced'],
+      ['A lighter, clearer cup that is easier to drink.', 'clearer cup'],
+      ['The same good cup again.', 'good cup'],
+      ['Higher, steadier pressure in the pour and a fuller cup.', 'fuller cup'],
+      ['A full-bodied shot.', 'bodied'],
+      ['Less sharp.', 'Less sharp'],
+      ['It should taste brighter.', 'should taste'],
+      ['It will probably taste different.', 'will probably taste'],
+      ["It'll taste less sour.", "'ll taste"],
+      ['Tastes more like chocolate.', 'Tastes more'],
+      ['More caramel-like and syrupy.', 'caramel'],
+    ];
+    for (const [text, words] of cases) {
+      const error = wording(text);
+      expect(error, text).toContain(`expectedEffect names a taste ("${words}")`);
+      expect(error).toMatch(/Say only what the change does at the machine \(flow, time, pressure, temperature, extraction\)/);
+      expect(error).toMatch(/how the next shot tastes is for the barista to find, and their own words belong in rationale/);
+    }
   });
 });

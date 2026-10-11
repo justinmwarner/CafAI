@@ -80,6 +80,12 @@ export interface CoachPort {
   toolDescription(name: ToolName): string;
   readLeverValues(template: Template, profile: ProfileJson): LeverValues;
   validateProposal(input: ProposeAdjustment, context: ProposalContext): ProposalValidation;
+  /**
+   * A sentence for the model when a proposal it just wrote promises a taste
+   * in expectedEffect (D127), else null. Never asked of a stored proposal:
+   * its card already shows its words.
+   */
+  proposalWordingError(input: ProposeAdjustment): string | null;
   summarizeShot(record: ShotRecord): ShotSummary;
   versionTitle(bagName: string, version: number): string;
   buildVersionProfile(template: Template, base: ProfileJson, title: string, bagName: string): ProfileJson;

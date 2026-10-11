@@ -15,6 +15,9 @@
  * One variable per iteration: a template lever (a new profile version), the
  * grind or the dose (manual steps, no new version), or `none` to lock in a
  * good shot.
+ *
+ * One check reads words, not numbers: an expectedEffect that names a taste
+ * goes back to the model too (proposalWordingError, D127).
  */
 import type { AdjustmentVariable, ProposeAdjustment, ProposeTemplates } from './contract.ts';
 import { describeLeverChange, describeManualChange, describeManualSteps, formatLeverValue } from './diff.ts';
@@ -445,6 +448,115 @@ export function validateTemplateSuggestions(input: ProposeTemplates): { ok: bool
     seen.add(suggestion.templateId);
   }
   return { ok: errors.length === 0, errors };
+}
+
+// ---------------------------------------------------------------------------
+// expectedEffect is mechanics, never a taste (D127)
+// ---------------------------------------------------------------------------
+
+/**
+ * Words that only ever describe how a cup tastes or feels in the mouth, so
+ * none can say what a change does at the machine. Words with a sense there
+ * too are left to the prompt: "a smoother pressure curve", "a sharper rise",
+ * "a drier puck", "a flatter pour" and "a lighter tamp" pass.
+ */
+const TASTE_ONLY_WORDS = [
+  'acidic',
+  'acidity',
+  'aftertaste',
+  'astringency',
+  'astringent',
+  'balanced',
+  'berry',
+  'berries',
+  'bitter',
+  'bitterness',
+  'bodied',
+  'body',
+  'bright',
+  'brighter',
+  'brightness',
+  'burnt',
+  'caramel',
+  'chocolate',
+  'chocolatey',
+  'chocolaty',
+  'citrus',
+  'clarity',
+  'cocoa',
+  'creamier',
+  'creamy',
+  'crisp',
+  'delicious',
+  'flavor',
+  'flavors',
+  'flavour',
+  'flavours',
+  'floral',
+  'fruit',
+  'fruitier',
+  'fruits',
+  'fruity',
+  'harsh',
+  'harsher',
+  'harshness',
+  'juicier',
+  'juicy',
+  'mouthfeel',
+  'muted',
+  'nutty',
+  'rich',
+  'richer',
+  'richness',
+  'rounder',
+  'sharpness',
+  'sour',
+  'sourer',
+  'sourness',
+  'sweet',
+  'sweeter',
+  'sweetness',
+  'syrupy',
+  'tangy',
+  'tart',
+  'tartness',
+  'tasty',
+  'watery',
+];
+
+const TASTE_ONLY = new RegExp(`\\b(?:${TASTE_ONLY_WORDS.join('|')})\\b`, 'i');
+
+/** A taste foretold: "should taste", "will make it taste", "it'll taste", "tastes like", "tastes more". */
+const TASTE_FORETOLD =
+  /\b(?:should|will|would|could|might|may|ought\s+to|going\s+to)\s+(?:\w+\s+){0,2}?tast(?:e|es|ing)\b|['’]ll\s+tastes?\b|\btastes?\s+(?:like|of|more|less|better|worse)\b/i;
+
+/**
+ * The cup or its finish described, or judged: "a lighter cup", "a cleaner
+ * finish", "the same good cup", "easier to drink", "less sharp" (but not "a
+ * less sharp pressure rise"). "36 g in the cup" passes.
+ */
+const CUP_DESCRIBED =
+  /\b(?:lighter|clearer|cleaner|fuller|heavier|stronger|weaker|softer|smoother|gentler|thicker|thinner|denser|drier|longer|shorter|good|better|great|nice|perfect|worse|bad)\s+(?:cup|finish|aftertaste)\b|\b(?:easier|easy)\s+to\s+drink\b|\b(?:less|more)\s+sharp\b(?!\s+(?:pressure|rise|peak|ramp|spike|drop|jump|climb|onset))/i;
+
+/**
+ * The correction for a propose_adjustment whose expectedEffect promises a
+ * taste, or null when it keeps to the machine. expectedEffect says what the
+ * change does (flow, time, pressure, extraction); how the next shot tastes is
+ * the barista's to find. The engine checks only what the model just wrote: a
+ * stored proposal keeps the words its card already shows.
+ */
+export function proposalWordingError(input: Pick<ProposeAdjustment, 'expectedEffect'>): string | null {
+  const text = input.expectedEffect;
+  // The first in reading order, so the sentence names what the model wrote first.
+  const found = [TASTE_FORETOLD, CUP_DESCRIBED, TASTE_ONLY]
+    .map((pattern) => pattern.exec(text))
+    .filter((match) => match !== null)
+    .sort((a, b) => a.index - b.index)[0];
+  if (!found) return null;
+  return (
+    `expectedEffect names a taste ("${found[0]}"). Say only what the change does at the machine (flow, time, pressure, ` +
+    'temperature, extraction); how the next shot tastes is for the barista to find, and their own words belong in rationale.'
+  );
 }
 
 // ---------------------------------------------------------------------------

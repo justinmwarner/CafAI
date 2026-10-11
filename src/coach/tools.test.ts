@@ -35,6 +35,15 @@ describe('COACH_TOOL_SPECS', () => {
     expect(COACH_TOOL_SPECS.get_shot_summary.description).toMatch(/"latest", "previous"/);
   });
 
+  it('keeps taste out of what the coach promises: mechanics in expectedEffect and template reasons, neutral taste options (D127)', () => {
+    const adjust = COACH_TOOL_SPECS.propose_adjustment.description;
+    expect(adjust).toMatch(/rationale cites the shot data and the user's own taste words/);
+    expect(adjust).toMatch(/expectedEffect says only what the change does at the machine \(flow, time, pressure, extraction\), never how the shot will taste/);
+    expect(adjust).not.toMatch(/should taste/);
+    expect(COACH_TOOL_SPECS.propose_templates.description).toMatch(/what the profile does with a coffee like it \(soak, pressure, flow\), never how the cup will taste/);
+    expect(COACH_TOOL_SPECS.ask_user.description).toMatch(/neutral options that cover the range, never a guess from the numbers/);
+  });
+
   it('asks save_bag_details for the roast date as YYYY-MM-DD, null when the bag does not say (6.1)', () => {
     const { description } = COACH_TOOL_SPECS.save_bag_details;
     expect(description).toMatch(/roast date \(YYYY-MM-DD\)/);

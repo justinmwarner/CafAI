@@ -310,12 +310,13 @@ const YIELD_RANGE: Record<string, { min: number; max: number }> = Object.fromEnt
 
 const TASTE_OPTIONS = ['Sour / sharp', 'Bitter / harsh', 'Balanced, sweet', 'Weak / watery'];
 
+/** What each profile does with a coffee, never how the cup will taste (D127). */
 const TEMPLATE_REASONS: Record<(typeof TEMPLATE_IDS)[number], string> = {
-  'blooming-espresso': 'A bloom pause suits light, dense beans and brings out their sweetness.',
-  'd-flow': 'A gentle soak, then a steady pour. Forgiving and balanced for most roasts.',
-  londonium: 'A lever-style pressure decline keeps darker roasts smooth and rich.',
-  allonge: 'A long, fast shot that makes very light roasts sweet and fruity.',
-  'gentle-and-sweet': 'A low 6 bar peak and a slow decline: easy, low in acidity, good with milk.',
+  'blooming-espresso': 'A bloom pause lets light, dense beans soak evenly before the pour.',
+  'd-flow': 'A gentle soak, then a steady pour. Forgiving for most roasts.',
+  londonium: 'A lever-style pressure decline, gentle on darker roasts that extract readily.',
+  allonge: 'A long, fast shot that puts more water through very light roasts.',
+  'gentle-and-sweet': 'A low 6 bar peak and a slow decline: gentle pressure all the way.',
 };
 
 const ORIGINS = [

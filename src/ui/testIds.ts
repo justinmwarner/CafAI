@@ -68,12 +68,20 @@ export const TID = {
   undoButton: 'undo-button',
   /** Undo on the latest applied diff card (the header has undoButton). */
   diffUndo: 'diff-undo',
-  /** The Why / Expect block under a change card's decision. */
+  /** The Why / What it changes block under a change card's decision. */
   diffReason: 'diff-reason',
   shotCard: 'shot-card',
   /** "Compared with ...?" on a shot card: the five words, a radio group (D126). */
   shotRating: 'shot-rating',
   openShotGraph: 'open-shot-graph',
+  /** Taste words above the composer while the taste question is open (D127): the prompt that opens them, the panel, a group's tab and a word. */
+  tastePrompt: 'taste-prompt',
+  tasteWords: 'taste-words',
+  tasteGroup: (groupId: string) => `taste-group-${slug(groupId)}`,
+  tasteWord: (label: string) => `taste-word-${slug(label)}`,
+  /** Need help? beside the taste words, and the guidance it opens. */
+  tasteHelp: 'taste-help',
+  tasteHelpDialog: 'taste-help-dialog',
   errorBanner: 'error-banner',
   retryButton: 'retry-button',
 

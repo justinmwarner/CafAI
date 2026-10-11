@@ -161,8 +161,8 @@ function tasteQuestion(): NonNullable<CoachTurn['tools']> {
 
 const santosIntake: CoachTurn = {
   text:
-    'A natural Brazil at a medium-dark roast is sweet and heavy, so it wants gentle pressure. ' +
-    '**Gentle and Sweet** keeps the peak low and eases off, which keeps the chocolate smooth instead of bitter.',
+    'A natural Brazil at a medium-dark roast gives itself up easily, so it wants gentle pressure. ' +
+    '**Gentle and Sweet** keeps the peak low and eases off as the shot goes.',
   tools: [
     {
       name: TOOL.saveBagDetails,
@@ -182,12 +182,12 @@ const santosIntake: CoachTurn = {
           {
             templateId: 'gentle-and-sweet',
             confidence: 'high',
-            reason: 'A low 6 bar peak and a slow decline keep a medium-dark natural smooth, sweet and low in bitterness.',
+            reason: 'A low 6 bar peak and a slow decline go easy on a medium-dark natural, which extracts readily.',
           },
           {
             templateId: 'londonium',
             confidence: 'medium',
-            reason: 'A lever-style decline that builds more body and chocolate, with a little more intensity.',
+            reason: 'A lever-style decline from a higher peak: more pressure early, then easing off.',
           },
           {
             templateId: 'd-flow',
@@ -235,7 +235,9 @@ const santosShot = (messages: readonly LlmMessage[]): CoachTurn => {
 const santosKeep = (messages: readonly LlmMessage[]): CoachTurn => {
   const { version, grinder } = shot(messages);
   return {
-    text: `Balanced and sweet is exactly what this coffee should give. The small dip did no harm, so I would keep **v${num(version)}** as it is.`,
+    text:
+      `You found it balanced and sweet, and that is what counts, so I would keep **v${num(version)}** as it is. ` +
+      'Watch the small pressure dip on the next shot: if it grows, we look at your puck prep.',
     tools: [
       {
         name: TOOL.proposeAdjustment,
@@ -245,8 +247,8 @@ const santosKeep = (messages: readonly LlmMessage[]): CoachTurn => {
           value: null,
           grind: null,
           summary: `Keep v${num(version)} as it is`,
-          rationale: 'It tasted balanced and sweet, so this recipe is dialled in. The small pressure dip after the peak did no harm in the cup.',
-          expectedEffect: 'The same balanced, sweet cup, shot after shot.',
+          rationale: 'You found it balanced and sweet, so keep this recipe. The small pressure dip after the peak is one to watch, not to change.',
+          expectedEffect: 'Nothing changes: the same recipe, shot after shot.',
           tips: [grinder.setting ? `Keep the grinder at ${grinder.setting} and the same dose.` : 'Keep the same grind and dose.'],
         },
       },
@@ -260,12 +262,12 @@ const santosKept = (messages: readonly LlmMessage[]): CoachTurn => ({
 
 const kiambuIntake: CoachTurn = {
   text: [
-    'A washed Kenyan at a light roast is dense and bright, so it needs a full, even extraction to turn that acidity sweet.',
+    'A washed Kenyan at a light roast is dense and slow to give itself up, so it needs a full, even soak before the pour.',
     '',
     '**Blooming Espresso** is my first choice:',
     '- a 4 ml/s fill wets the whole puck',
     '- a 30 s bloom with the pump off lets it soak evenly',
-    '- a steady 2.2 ml/s pour then pulls out the sweetness',
+    '- a steady 2.2 ml/s pour then extracts it evenly',
   ].join('\n'),
   tools: [
     {
@@ -286,17 +288,17 @@ const kiambuIntake: CoachTurn = {
           {
             templateId: 'blooming-espresso',
             confidence: 'high',
-            reason: 'The bloom lets a dense, light washed coffee soak evenly, so the acidity tastes bright and sweet rather than sharp.',
+            reason: 'The bloom lets a dense, light washed coffee soak evenly before the pour, so it extracts evenly.',
           },
           {
             templateId: 'allonge',
             confidence: 'medium',
-            reason: 'A long, fast shot that makes very light washed coffees sweet and fruity, if you enjoy a lighter cup.',
+            reason: 'A long, fast shot that puts more water through a very light washed coffee, for a longer drink.',
           },
           {
             templateId: 'd-flow',
             confidence: 'low',
-            reason: 'A gentle soak and a steady pour: forgiving, but it may leave a light Kenyan a little sour.',
+            reason: 'A gentle soak and a steady pour: forgiving, but it may under-extract a dense, light Kenyan.',
           },
         ],
       },
@@ -324,9 +326,9 @@ const hotter = (messages: readonly LlmMessage[]): CoachTurn => {
   const peak = Math.max(...series.values.filter((value): value is number => value !== null));
   return {
     text:
-      'Sour on a light washed coffee usually means it is under-extracted. ' +
+      'You found it sour, which on a light washed coffee usually means it is under-extracted. ' +
       `The pressure rose steadily to ${one(peak)} bar through the pour, so the puck held up and heat is the lever to pull. ` +
-      "Let's go **1 °C hotter** and keep everything else the same.",
+      "Let's go **1 °C hotter** and keep everything else the same, then you tell me what changed.",
     tools: [
       {
         name: TOOL.proposeAdjustment,
@@ -337,8 +339,8 @@ const hotter = (messages: readonly LlmMessage[]): CoachTurn => {
           grind: null,
           summary: 'Raise the brew temperature by 1 °C',
           rationale:
-            'Sour and sharp on a light washed Kenyan points to under-extraction. A degree more heat extracts more sweetness without changing the flow.',
-          expectedEffect: 'Less sharpness and more sweetness in the next cup.',
+            'You found it sour and sharp, which on a light washed Kenyan points to under-extraction. A degree more heat extracts more without changing the flow.',
+          expectedEffect: 'Hotter water extracts more in the same time; the flow stays the same.',
           tips: ['Keep the same dose, grind and puck prep.'],
         },
       },
@@ -394,7 +396,7 @@ const grindFiner = (messages: readonly LlmMessage[]): CoachTurn => {
           summary: `Grind one step finer, to ${finer}`,
           rationale:
             'Pinholes and wet patches mean the water found weak spots in the puck. A finer grind adds resistance, so the pour builds pressure evenly.',
-          expectedEffect: 'Higher, steadier pressure in the pour and a fuller cup.',
+          expectedEffect: 'Higher, steadier pressure in the pour, and a slightly slower shot.',
           tips: ['Break up clumps and level the bed before you tamp.'],
         },
       },
@@ -412,13 +414,13 @@ const betterShot = (messages: readonly LlmMessage[]): CoachTurn => {
   const { summary } = shot(messages);
   return {
     text:
-      `Much better: ${one(summary.durationS)} s, ${one(summary.yieldG)} g, and the pressure climbed to ${one(summary.peakPressureBar)} bar by the end of the pour. ` +
-      'The finer grind held the puck together this time.',
+      `This one held together: ${one(summary.durationS)} s, ${one(summary.yieldG)} g, and the pressure climbed to ${one(summary.peakPressureBar)} bar by the end of the pour. ` +
+      'The finer grind kept the puck even this time.',
     tools: tasteQuestion(),
   };
 };
 
-/** "Sweeter, but a little thin": a slower pour for body (the flow lever, at most 0.4 ml/s a step). */
+/** "Sweeter, but a little thin": a slower pour, more contact time (the flow lever, at most 0.4 ml/s a step). */
 const slowerPour = (messages: readonly LlmMessage[], text: string): CoachTurn => {
   const flow = lever(messages, 'flow');
   const to = Math.round((flow - 0.4) * 10) / 10;
@@ -433,8 +435,8 @@ const slowerPour = (messages: readonly LlmMessage[], text: string): CoachTurn =>
           value: to,
           grind: null,
           summary: `Slow the extraction flow to ${one(to)} ml/s`,
-          rationale: 'It tasted sweeter but thin. A slower pour after the bloom gives the water more contact time, which builds body.',
-          expectedEffect: 'A rounder, heavier body with the same sweetness.',
+          rationale: 'You found it sweeter but thin. A slower pour after the bloom gives the water more contact time in the coffee.',
+          expectedEffect: 'A slower pour after the bloom: more contact time, and a shot a few seconds longer.',
           tips: ['Keep the 14.5 grind and the same dose.'],
         },
       },
@@ -445,12 +447,12 @@ const slowerPour = (messages: readonly LlmMessage[], text: string): CoachTurn =>
 const thin = (messages: readonly LlmMessage[]) =>
   slowerPour(
     messages,
-    'Sweeter means the extraction is coming right; thin means the cup needs more body. ' +
-      "A slower pour gives the water more contact time, so let's take the extraction flow from {from} to **{to} ml/s**.",
+    'Sweeter but thin, in your words. A slower pour gives the water more contact time in the coffee, ' +
+      "so let's take the extraction flow from {from} to **{to} ml/s** and see what you notice.",
   );
 
 const keepV2 = (messages: readonly LlmMessage[]): CoachTurn => ({
-  text: `No problem, we stay on v${num(shot(messages).version)}. If the body still feels thin, the slower pour is there whenever you want it.`,
+  text: `No problem, we stay on v${num(shot(messages).version)}. If it still feels thin to you, the slower pour is there whenever you want it.`,
 });
 
 const offerAgain = (messages: readonly LlmMessage[]) =>
@@ -486,8 +488,8 @@ const halfway = (messages: readonly LlmMessage[]): CoachTurn => {
           value: to,
           grind: null,
           summary: `Slow the extraction flow to ${one(to)} ml/s`,
-          rationale: 'A smaller step: a little more contact time for body, while the shot stays close to the one you liked.',
-          expectedEffect: `A bit more body than v${num(shot(messages).version)}, with the same sweetness.`,
+          rationale: 'A smaller step: a little more contact time, while the shot stays close to the one you liked.',
+          expectedEffect: `A little more contact time than v${num(shot(messages).version)}, and a shot only slightly slower.`,
           tips: ['Keep the 14.5 grind and the same dose.'],
         },
       },
@@ -498,7 +500,7 @@ const halfway = (messages: readonly LlmMessage[]): CoachTurn => {
 const halfwayLoaded = (messages: readonly LlmMessage[]): CoachTurn => {
   const applied = result<Extract<AdjustmentResultPayload, { applied: true }>>(messages, TOOL.proposeAdjustment);
   return {
-    text: `v${num(applied.version)} is on the machine at ${one(proposal(messages).value)} ml/s. Pull a shot and tell me how the body compares.`,
+    text: `v${num(applied.version)} is on the machine at ${one(proposal(messages).value)} ml/s. Pull a shot and tell me how it compares.`,
   };
 };
 
