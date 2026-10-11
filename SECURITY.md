@@ -50,6 +50,13 @@ is the first).
   Decaid's backups include it. Turning the switch off, or **Forget key**,
   deletes the copy. Leave it off on a network you do not trust.
 
+**Your data in Decaid**
+
+- CafAI backs up bags, versions, shot summaries, feedback, each bag's chat
+  and the settings to Decaid's key-value store (namespace `cafai`), so they
+  survive a Decaid update. Like everything in Decaid's store, any device on
+  your network can read it. It never holds the API key or the bridge's code.
+
 **CafAI Bridge** (`bridge/`, Claude on your own computer)
 
 - It listens on your network over plain HTTP. Every route except `/health`
@@ -59,10 +66,13 @@ is the first).
   or an export) and never written to the bridge's log.
 - Its MCP endpoint answers only `127.0.0.1`, and it can be stopped over HTTP
   only from its own computer.
-- It never reads, stores or forwards your Claude sign-in. Coach runs use none
-  of your Claude Code settings, hooks, plugins, skills, CLAUDE.md files or
-  built-in tools, and its log holds times, sizes and model names, never what
-  you or the coach wrote.
+- It never reads, stores or forwards your Claude credentials (it asks Claude
+  Code only whether you are signed in, and with which plan). Coach runs use
+  none of your Claude Code settings, hooks, plugins, skills, CLAUDE.md files
+  or built-in tools. Its log holds times, message counts, durations, model
+  names and its own events (the address of a device that sent a wrong code,
+  Claude Code's version and error output), never what you or the coach
+  wrote and never the code.
 - Run it only on a network you trust: anyone who can watch that network can
   read the code on its way to the bridge.
 
