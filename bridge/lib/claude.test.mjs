@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,32 +19,59 @@ import {
 const FAKE = fileURLToPath(new URL('../test/fake-claude.mjs', import.meta.url));
 const scratch = () => mkdtempSync(path.join(tmpdir(), 'cafai-bridge-claude-'));
 
+/**
+ * A Windows disk in memory, so the Windows layouts are checked on any OS (CI
+ * runs on Linux): `files` maps a path to its text; folders are implied by the
+ * files under them; names compare without case, as on NTFS.
+ */
+function windowsDisk(files) {
+  const entries = Object.entries(files).map(([file, text]) => [file.toLowerCase(), { file, text }]);
+  const byLower = new Map(entries);
+  return {
+    listDir(dir) {
+      const prefix = `${dir.toLowerCase().replace(/\\+$/, '')}\\`;
+      const names = new Set();
+      for (const [lower, { file }] of entries) if (lower.startsWith(prefix)) names.add(file.slice(prefix.length).split('\\')[0]);
+      return [...names];
+    },
+    isFile: (file) => byLower.has(file.toLowerCase()),
+    read(file) {
+      const hit = byLower.get(file.toLowerCase());
+      if (!hit) throw Object.assign(new Error(`ENOENT: ${file}`), { code: 'ENOENT' });
+      return hit.text;
+    },
+    realpath: (file) => file,
+  };
+}
+
+const HOME = 'C:\\Users\\me';
+const WIN_ENV = { USERPROFILE: HOME, LOCALAPPDATA: `${HOME}\\AppData\\Local`, APPDATA: `${HOME}\\AppData\\Roaming`, ProgramData: 'C:\\ProgramData' };
+
 describe('candidatePaths', () => {
   it('looks on PATH first, then where the Windows installers put it', () => {
-    const local = scratch();
-    mkdirSync(path.join(local, 'Microsoft', 'WinGet', 'Packages', 'Anthropic.ClaudeCode_Microsoft.Winget.Source_8wekyb3d8bbwe'), { recursive: true });
+    const winget = `${HOME}\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Anthropic.ClaudeCode_Microsoft.Winget.Source_8wekyb3d8bbwe\\claude.exe`;
     const paths = candidatePaths({
       platform: 'win32',
-      home: 'C:\\Users\\me',
-      env: { Path: 'C:\\Tools;"C:\\Program Files\\x"', USERPROFILE: 'C:\\Users\\me', LOCALAPPDATA: local, APPDATA: 'C:\\Users\\me\\AppData\\Roaming' },
+      home: HOME,
+      env: { ...WIN_ENV, Path: 'C:\\Tools;"C:\\Program Files\\x"' },
+      disk: windowsDisk({ [winget]: '' }),
     });
     expect(paths.slice(0, 3)).toEqual(['C:\\Tools\\claude.exe', 'C:\\Tools\\claude.cmd', 'C:\\Tools\\claude.bat']);
     expect(paths).toContain('C:\\Program Files\\x\\claude.exe');
-    expect(paths).toContain('C:\\Users\\me\\.local\\bin\\claude.exe');
-    expect(paths).toContain(path.win32.join(local, 'Microsoft', 'WinGet', 'Packages', 'Anthropic.ClaudeCode_Microsoft.Winget.Source_8wekyb3d8bbwe', 'claude.exe'));
-    expect(paths).toContain('C:\\Users\\me\\AppData\\Roaming\\npm\\claude.cmd');
+    expect(paths).toContain(`${HOME}\\.local\\bin\\claude.exe`);
+    expect(paths).toContain(winget);
+    expect(paths).toContain(`${HOME}\\AppData\\Roaming\\npm\\claude.cmd`);
   });
 
   it("finds the Claude desktop app's own Claude Code, never the app itself", () => {
-    const roaming = scratch();
-    const build = path.join(roaming, 'Claude', 'claude-code', '2.1.295', 'd2e29494ec83');
-    mkdirSync(build, { recursive: true });
+    const copy = `${HOME}\\AppData\\Roaming\\Claude\\claude-code\\2.1.295\\d2e29494ec83\\claude.exe`;
     const paths = candidatePaths({
       platform: 'win32',
-      home: 'C:\\Users\\me',
-      env: { Path: 'C:\\Users\\me\\AppData\\Local\\AnthropicClaude', USERPROFILE: 'C:\\Users\\me', APPDATA: roaming, LOCALAPPDATA: scratch() },
+      home: HOME,
+      env: { ...WIN_ENV, Path: `${HOME}\\AppData\\Local\\AnthropicClaude` },
+      disk: windowsDisk({ [copy]: '', [`${HOME}\\AppData\\Local\\AnthropicClaude\\claude.exe`]: '' }),
     });
-    expect(paths).toContain(path.win32.join(build, 'claude.exe'));
+    expect(paths).toContain(copy);
     expect(paths.some((file) => file.includes('AnthropicClaude'))).toBe(false);
     const mac = candidatePaths({ platform: 'darwin', home: '/Users/me', env: { PATH: '/Applications/Claude.app/Contents/MacOS' } });
     expect(mac.some((file) => file.includes('Claude.app'))).toBe(false);
@@ -65,19 +92,18 @@ describe('resolveSpawn', () => {
   });
 
   it("resolves an npm shim to the script it wraps, not to its node.exe", () => {
-    const dir = scratch();
-    const cli = path.join(dir, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
-    mkdirSync(path.dirname(cli), { recursive: true });
-    writeFileSync(cli, '');
-    writeFileSync(path.join(dir, 'node.exe'), '');
-    const shim = path.join(dir, 'claude.cmd');
-    writeFileSync(
-      shim,
-      '@ECHO off\r\nIF EXIST "%dp0%\\node.exe" (\r\n  SET "_prog=%dp0%\\node.exe"\r\n)\r\nendLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\@anthropic-ai\\claude-code\\cli.js" %*\r\n',
-    );
-    expect(shimTarget(shim)).toBe(cli);
-    expect(resolveSpawn(shim, { platform: 'win32', execPath: 'node.exe' })).toEqual({ command: 'node.exe', args: [cli] });
-    expect(shimTarget(path.join(dir, 'missing.cmd'))).toBeNull();
+    const npm = `${HOME}\\AppData\\Roaming\\npm`;
+    const shim = `${npm}\\claude.cmd`;
+    const cli = `${npm}\\node_modules\\@anthropic-ai\\claude-code\\cli.js`;
+    const disk = windowsDisk({
+      [shim]:
+        '@ECHO off\r\nIF EXIST "%dp0%\\node.exe" (\r\n  SET "_prog=%dp0%\\node.exe"\r\n)\r\nendLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\@anthropic-ai\\claude-code\\cli.js" %*\r\n',
+      [cli]: '',
+      [`${npm}\\node.exe`]: '',
+    });
+    expect(shimTarget(shim, disk)).toBe(cli);
+    expect(resolveSpawn(shim, { platform: 'win32', execPath: 'node.exe', disk })).toEqual({ command: 'node.exe', args: [cli] });
+    expect(shimTarget(`${npm}\\missing.cmd`, disk)).toBeNull();
   });
 });
 
@@ -93,22 +119,21 @@ describe('versions', () => {
 
 describe('findClaude', () => {
   it('picks the newest install, whatever PATH puts first', async () => {
-    const dir = scratch();
-    const old = path.join(dir, 'old', 'claude.exe');
-    const fresh = path.join(dir, 'fresh', 'claude.exe');
-    for (const file of [old, fresh]) {
-      mkdirSync(path.dirname(file), { recursive: true });
-      writeFileSync(file, '');
-    }
+    const old = 'C:\\old\\claude.exe';
+    const fresh = 'C:\\fresh\\claude.exe';
     const versions = { [old]: '2.1.126', [fresh]: '2.1.251' };
     const result = await findClaude({
       platform: 'win32',
-      home: dir,
-      env: { Path: `${path.dirname(old)};${path.dirname(fresh)}`, USERPROFILE: dir, LOCALAPPDATA: dir, APPDATA: dir },
+      home: HOME,
+      env: { ...WIN_ENV, Path: 'C:\\old;C:\\fresh' },
+      disk: windowsDisk({ [old]: '', [fresh]: '' }),
       versionOf: async (spec) => versions[spec.command] ?? null,
     });
     expect(result.chosen).toMatchObject({ path: fresh, version: '2.1.251', command: fresh, args: [] });
-    expect(result.found).toEqual(expect.arrayContaining([{ path: old, version: '2.1.126' }, { path: fresh, version: '2.1.251' }]));
+    expect(result.found).toEqual([
+      { path: old, version: '2.1.126' },
+      { path: fresh, version: '2.1.251' },
+    ]);
   });
 
   it('takes an explicit path and asks it its version', async () => {
@@ -117,9 +142,8 @@ describe('findClaude', () => {
   });
 
   it('reports nothing found', async () => {
-    const dir = scratch();
-    const result = await findClaude({ platform: 'win32', home: dir, env: { Path: dir, USERPROFILE: dir, LOCALAPPDATA: dir, APPDATA: dir, ProgramData: dir } });
-    expect(result.chosen).toBeNull();
+    const result = await findClaude({ platform: 'win32', home: HOME, env: { ...WIN_ENV, Path: 'C:\\Tools' }, disk: windowsDisk({}) });
+    expect(result).toEqual({ chosen: null, found: [] });
   });
 });
 
