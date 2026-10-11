@@ -12,6 +12,7 @@
  * The shot stays in Decaid's history, with the suite's notes on it.
  */
 import { afterAll, assert, beforeAll, beforeEach, expect, it } from 'vitest';
+import { MIDDLE_SCORE, SCORE_STEP, enjoymentFromScore } from '../../app/engine/shotRating.ts';
 import { summarizeShot } from '../../coach/index.ts';
 import { deviceConnections, parseShotStateFrame } from '../frames.ts';
 import { GatewayError, type ShotStateEvent } from '../types.ts';
@@ -139,7 +140,8 @@ describeDecaid('shot', ({ url, require }) => {
     if (id === null) return require ? assert.fail(NO_SHOT) : skip(NO_SHOT);
     const scale = await live.client.probeEnjoymentScale();
     if (scale === null) assert.fail('The rating-scale probe got no answer CafAI understands.');
-    const enjoyment = scale === 100 ? 80 : 8;
+    // A running score as CafAI writes one (D126): "much better" than a bag's first rated shot, 7 of 10 or 70 of 100.
+    const enjoyment = enjoymentFromScore(MIDDLE_SCORE + 2 * SCORE_STEP, scale);
     await live.client.updateShot(id, { annotations: { espressoNotes: NOTES, enjoyment } });
     const annotations = (await live.client.getShot(id)).annotations;
     expect(annotations?.espressoNotes, 'espressoNotes').toBe(NOTES);

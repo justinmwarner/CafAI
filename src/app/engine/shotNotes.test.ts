@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { driftLog } from '../../api/drift.ts';
-import { cafaiNotesLine, enjoymentFromStars, isTasteQuestion, lastCafaiNotes, mergeNotes, tasteWords } from './shotNotes.ts';
+import { cafaiNotesLine, isTasteQuestion, lastCafaiNotes, mergeNotes, tasteWords } from './shotNotes.ts';
 
 describe('isTasteQuestion', () => {
   it('is true when the question mentions taste, in any case', () => {
@@ -98,17 +98,10 @@ describe('mergeNotes', () => {
   });
 });
 
-describe("the stars on Decaid's rating scale (D101)", () => {
-  it('writes stars x 2 out of 10 and x 20 out of 100', () => {
-    expect([1, 4, 5].map((stars) => enjoymentFromStars(stars, 10))).toEqual([2, 8, 10]);
-    expect([1, 4, 5].map((stars) => enjoymentFromStars(stars, 100))).toEqual([20, 80, 100]);
-  });
-});
-
 describe('lastCafaiNotes', () => {
   it("reads the line CafAI wrote from the record's extras", () => {
     expect(lastCafaiNotes({ extras: { cafai: { notes: 'Taste: Sour. X v1 (CafAI)' } } })).toBe('Taste: Sour. X v1 (CafAI)');
-    expect(lastCafaiNotes({ extras: { cafai: { stars: 4 } } })).toBeNull();
+    expect(lastCafaiNotes({ extras: { cafai: { verdict: 'better' } } })).toBeNull();
     expect(lastCafaiNotes({ extras: { other: true } })).toBeNull();
     expect(lastCafaiNotes(undefined)).toBeNull();
   });

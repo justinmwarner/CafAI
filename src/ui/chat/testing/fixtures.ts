@@ -306,6 +306,8 @@ export type ConversationStage =
   | 'shot'
   | 'options'
   | 'rated'
+  /** The shot card as a chat stored before D126 has it: rated with stars, nothing to compare. */
+  | 'starred'
   | 'options-multi'
   | 'diff'
   | 'applying'
@@ -354,17 +356,21 @@ export function conversation(stage: ConversationStage): CoachUiMessage[] {
   }
   out.push(
     msg('assistant', [
-      {
-        kind: 'shot',
-        shotId: 'shot-1',
-        summary: sampleSummary({ channelingFlags: ['pressure_dip_after_peak'] }),
-        ...(stage === 'rated' ? { stars: 4 } : {}),
-      },
+      stage === 'starred'
+        ? { kind: 'shot', shotId: 'shot-1', summary: sampleSummary({ channelingFlags: ['pressure_dip_after_peak'] }), stars: 4 }
+        : {
+            kind: 'shot',
+            shotId: 'shot-1',
+            summary: sampleSummary({ channelingFlags: ['pressure_dip_after_peak'] }),
+            // The bag's first shot: compared with the last shot of the other bag (D126).
+            baseline: { kind: 'otherCoffee', shotId: 'shot-santos-1', coffee: SANTOS.name },
+            ...(stage === 'rated' ? { rating: { verdict: 'better' as const, score: 5 } } : {}),
+          },
     ]),
   );
   out.push(msg('assistant', [text('Got it: 27.8 s, 36.4 g out.')]));
   if (stage === 'shot') return out;
-  const asking = stage === 'options' || stage === 'options-multi' || stage === 'rated';
+  const asking = stage === 'options' || stage === 'options-multi' || stage === 'rated' || stage === 'starred';
   out.push(
     msg('assistant', [
       {
@@ -426,7 +432,7 @@ export function coachStateFor(stage: ConversationStage, overrides: Partial<Coach
           ? 'choosing_template'
           : stage === 'diff'
             ? 'awaiting_confirmation'
-            : stage === 'options' || stage === 'options-multi' || stage === 'rated'
+            : stage === 'options' || stage === 'options-multi' || stage === 'rated' || stage === 'starred'
               ? 'awaiting_feedback'
               : 'awaiting_shot',
     messages: conversation(stage),

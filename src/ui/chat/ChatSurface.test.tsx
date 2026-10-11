@@ -305,22 +305,25 @@ describe('ChatSurface', () => {
     expect(screen.getByText(/<img src=x onerror="alert\(1\)">/)).toBeInTheDocument();
   });
 
-  it('reports a star rating with the shot id, and blocks it while busy', async () => {
+  it('reports a verdict with the shot id, and blocks it while busy (D126)', async () => {
     const { handlers, rerender } = renderSurface({ messages: conversation('options') });
     const card = screen.getByTestId(TID.shotCard);
-    await userEvent.click(within(card).getByRole('radio', { name: 'Rate 4 out of 5' }));
-    expect(handlers.onRateShot).toHaveBeenCalledWith('shot-1', 4);
+    await userEvent.click(within(card).getByRole('radio', { name: 'Better' }));
+    expect(handlers.onRateShot).toHaveBeenCalledWith('shot-1', 'better');
     rerender({ messages: conversation('options'), busy: true });
-    expect(within(screen.getByTestId(TID.shotCard)).getByRole('radio', { name: 'Rate 4 out of 5' })).toBeDisabled();
+    expect(within(screen.getByTestId(TID.shotCard)).getByRole('radio', { name: 'Better' })).toBeDisabled();
   });
 
-  it('shows the stars a shot was given', () => {
-    const rated = conversation('options').map((m) => ({
-      ...m,
-      parts: m.parts.map((p) => (p.kind === 'shot' ? { ...p, stars: 4 } : p)),
-    }));
-    renderSurface({ messages: rated });
-    expect(screen.getByRole('radio', { name: 'Rate 4 out of 5' })).toHaveAttribute('aria-checked', 'true');
+  it('shows the verdict a shot was given, under the question naming what it was compared with', () => {
+    renderSurface({ messages: conversation('rated') });
+    expect(screen.getByRole('radiogroup', { name: 'Compared with your last shot of Brazil Santos?' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Better' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('says the stars of a shot rated before shots were compared', () => {
+    renderSurface({ messages: conversation('starred') });
+    expect(within(screen.getByTestId(TID.shotCard)).getByText('You rated it 4 of 5 stars.')).toBeInTheDocument();
+    expect(screen.queryByTestId(TID.shotRating)).toBeNull();
   });
 
   it('shows Graph only on the card matching graphShotId, and opens it from there', async () => {

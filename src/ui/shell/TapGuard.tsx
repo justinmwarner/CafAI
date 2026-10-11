@@ -3,7 +3,7 @@
  * `until` (useShotFocus sets it 350 ms ahead) a transparent sheet over the
  * pane that switched takes every tap and does nothing with it, so a tap meant
  * for the screen that was there cannot land on the one that just appeared
- * (a taste chip, a star, Steam).
+ * (a taste chip, a rating word, Steam).
  *
  * It covers that pane and nothing else: the top bar, where the machine row
  * and its Stop are, never stops taking taps, on a tablet or a phone. The

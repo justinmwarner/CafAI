@@ -39,7 +39,7 @@ import type {
   ChatPartRendererMap,
   ChatPartRendererProps,
 } from '@mui/x-chat/headless';
-import type { CoachUiMessage, CoachUiPart } from '../../app/types.ts';
+import type { CoachUiMessage, CoachUiPart, ShotVerdict } from '../../app/types.ts';
 import type { SaveBagDetails } from '../../coach/contract.ts';
 import type { BagPhoto } from '../../llm/extractBag.ts';
 import { StatsCard } from '../machine/StatsCard.tsx';
@@ -70,8 +70,8 @@ export interface ChatSurfaceProps {
   onConfirm(requestId: string): void;
   onDecline(requestId: string): void;
   onUndo(): void;
-  /** A star tapped on a shot card (1-5). */
-  onRateShot(shotId: string, stars: number): void;
+  /** A word tapped under "Compared with ...?" on a shot card (D126). */
+  onRateShot(shotId: string, verdict: ShotVerdict): void;
   /** A batch of Decaid's bean library picked on "Which coffee is it?" (6.1). */
   onPickBean?(batchId: string): void;
   /** The bean card's Something else. */
@@ -194,7 +194,7 @@ interface PartActions {
   confirm(requestId: string): void;
   decline(requestId: string): void;
   undo(): void;
-  rateShot(shotId: string, stars: number): void;
+  rateShot(shotId: string, verdict: ShotVerdict): void;
   openGraph(): void;
   /** The Stats prompt (it lives in x-chat's slot above the composer, so it reaches ChatSurface through here too). */
   askStats(): void;
@@ -287,9 +287,11 @@ function ShotView({ data }: { data: unknown }) {
   return (
     <ShotCard
       summary={part.summary}
+      baseline={part.baseline ?? null}
+      verdict={part.rating?.verdict ?? null}
       stars={part.stars ?? null}
       disabled={busy}
-      onRate={(stars) => actions.rateShot(part.shotId, stars)}
+      onRate={(verdict) => actions.rateShot(part.shotId, verdict)}
       onOpenGraph={showGraph ? actions.openGraph : undefined}
       visualizerUrl={part.visualizerUrl ?? null}
     />
@@ -604,7 +606,7 @@ export function ChatSurface(props: ChatSurfaceProps) {
       decline: act((requestId: string) => propsRef.current.onDecline(requestId)),
       undo: act(() => propsRef.current.onUndo()),
       // A rating is often given on an older card: the view stays where the barista is reading.
-      rateShot: (shotId: string, stars: number) => propsRef.current.onRateShot(shotId, stars),
+      rateShot: (shotId: string, verdict: ShotVerdict) => propsRef.current.onRateShot(shotId, verdict),
       // Navigation, not a chat append: no need to follow the thread for it either.
       openGraph: () => propsRef.current.onOpenGraph?.(),
       // No message and no coach call: the card is screen-only (statsCard.ts).

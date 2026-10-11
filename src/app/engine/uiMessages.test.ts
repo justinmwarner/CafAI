@@ -18,7 +18,7 @@ import {
   removeMessage,
   replaceParts,
   setAside,
-  setShotStars,
+  setShotRating,
   setVisualizerLink,
   shotPart,
   startingYieldText,
@@ -156,11 +156,12 @@ describe('message updates', () => {
     expect(removeMessage(messages, 'm-2').map((m) => m.id)).toEqual(['m-1']);
   });
 
-  it("puts a rating on a shot's card", () => {
-    const result = setShotStars(messages, 'shot-1', 4);
-    expect(result[0]!.parts[0]).toEqual({ kind: 'shot', shotId: 'shot-1', summary, stars: 4 });
+  it("puts the verdict and what it was compared with on a shot's card (D126)", () => {
+    const baseline = { kind: 'previous', shotId: 'shot-0' } as const;
+    const result = setShotRating(messages, 'shot-1', baseline, { verdict: 'better', score: 6 });
+    expect(result[0]!.parts[0]).toEqual({ kind: 'shot', shotId: 'shot-1', summary, baseline, rating: { verdict: 'better', score: 6 } });
     expect(result[1]).toBe(messages[1]);
-    expect(setShotStars(messages, 'shot-unknown', 4)).toEqual(messages);
+    expect(setShotRating(messages, 'shot-unknown', baseline, { verdict: 'better', score: 6 })).toEqual(messages);
   });
 
   it("puts the Visualizer link on a shot's card (6.4)", () => {

@@ -320,10 +320,10 @@ describe('CoachScreen', () => {
     ]);
   });
 
-  it('passes a star rating to the controller', async () => {
+  it('passes a verdict to the controller (D126)', async () => {
     const services = renderCoach(coachStateFor('options'));
-    await userEvent.click(screen.getByRole('radio', { name: 'Rate 5 out of 5' }));
-    expect(services.coach.calls).toEqual([{ method: 'rateShot', args: ['shot-1', 5] }]);
+    await userEvent.click(screen.getByRole('radio', { name: 'Much better' }));
+    expect(services.coach.calls).toEqual([{ method: 'rateShot', args: ['shot-1', 'muchBetter'] }]);
   });
 
   it('shows Graph on the finished shot card, and opens the shot route from it', async () => {
@@ -412,8 +412,11 @@ describe('CoachScreen', () => {
     it('stays where it is while the newest message only changes inside', () => {
       const state = coachStateFor('options');
       const services = renderCoach(state);
-      // A star rating updates the shot card in place: nothing new landed.
-      const rated = state.messages!.map((m) => ({ ...m, parts: m.parts.map((p) => (p.kind === 'shot' ? { ...p, stars: 4 } : p)) }));
+      // A verdict updates the shot card in place: nothing new landed.
+      const rated = state.messages!.map((m) => ({
+        ...m,
+        parts: m.parts.map((p) => (p.kind === 'shot' ? { ...p, rating: { verdict: 'better' as const, score: 5 } } : p)),
+      }));
       act(() => services.coach.setState({ messages: rated }));
       expectCardLast();
     });

@@ -195,6 +195,8 @@ export const EVENT = {
   /** App context attached to the first user turn of a bag (grinder, scale). */
   context: '[context]',
   shotCompleted: '[event:shot_completed]',
+  /** The barista's verdict on a shot against the one it was compared with (D126), with the next user turn. */
+  shotRated: '[event:shot_rated]',
   undo: '[event:undo]',
   bagResumed: '[event:bag_resumed]',
 } as const;

@@ -71,6 +71,8 @@ export const TID = {
   /** The Why / Expect block under a change card's decision. */
   diffReason: 'diff-reason',
   shotCard: 'shot-card',
+  /** "Compared with ...?" on a shot card: the five words, a radio group (D126). */
+  shotRating: 'shot-rating',
   openShotGraph: 'open-shot-graph',
   errorBanner: 'error-banner',
   retryButton: 'retry-button',

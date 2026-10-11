@@ -150,11 +150,25 @@ describe('the coverage list (D76)', () => {
     expect(parts('notice').every((part) => part.progress === undefined)).toBe(true);
   });
 
-  it('has shot cards with a graph, with stars and without, and one with a channeling warning', () => {
+  it('has shot cards with a graph, each saying what it is compared with, rated and not, and one with a channeling warning', () => {
     const cards = parts('shot');
     expect(cards).toHaveLength(5);
     expect(cards.every((card) => card.summary.series.tS.length > 20 && card.summary.series.pressure.some((p) => p !== null && p > 1))).toBe(true);
-    expect(cards.map((card) => card.stars ?? null)).toEqual([5, 2, 3, 4, null]);
+    expect(cards.map((card) => card.baseline)).toEqual([
+      { kind: 'usual' },
+      { kind: 'otherCoffee', shotId: SHOTS.santos.id, coffee: 'Santos' },
+      { kind: 'previous', shotId: SHOTS.kiambu1.id },
+      { kind: 'previous', shotId: SHOTS.kiambu2.id },
+      { kind: 'previous', shotId: SHOTS.kiambu3.id },
+    ]);
+    expect(cards.map((card) => card.rating ?? null)).toEqual([
+      { verdict: 'better', score: 5 },
+      { verdict: 'muchWorse', score: 5 },
+      { verdict: 'better', score: 6 },
+      { verdict: 'better', score: 7 },
+      null,
+    ]);
+    expect(cards.some((card) => card.stars !== undefined)).toBe(false);
     const flagged = cards.filter((card) => card.summary.channelingFlags.length > 0);
     expect(flagged.map((card) => card.shotId)).toEqual([SHOTS.santos.id]);
     expect(flagged[0]!.summary.channelingFlags).toContain('pressure_dip_after_peak');
@@ -374,19 +388,29 @@ describe('the mock Decaid after the story', () => {
     expect(shotRecord(SHOTS.stray.id).workflow.profile.title).toBe('D-Flow / default');
   });
 
-  it('carries what CafAI wrote on each shot (D61): the taste line, extras.cafai, and enjoyment when rated', () => {
+  it('carries what CafAI wrote on each shot (D61, D126): the taste line, extras.cafai, and the running score when rated', () => {
     const kiambu1 = shotRecord(SHOTS.kiambu1.id);
     expect(kiambu1.annotations).toMatchObject({
       espressoNotes: 'Taste: Sour / sharp. Kiambu AA v1 (CafAI)',
-      enjoyment: 4,
-      extras: { [EXTRAS_KEY]: { stars: 2, selected: ['Sour / sharp'], text: null, version: 1 } },
+      enjoyment: 5,
+      extras: {
+        [EXTRAS_KEY]: {
+          verdict: 'muchWorse',
+          comparedWith: { kind: 'otherCoffee', shotId: SHOTS.santos.id, coffee: 'Santos' },
+          selected: ['Sour / sharp'],
+          text: null,
+          version: 1,
+        },
+      },
     });
     expect(shotRecord(SHOTS.kiambu3.id).annotations).toMatchObject({
       espressoNotes: 'Taste: Sweeter, but a little thin. Kiambu AA v2 (CafAI)',
-      enjoyment: 8,
-      extras: { [EXTRAS_KEY]: { stars: 4, selected: ['Other'], text: 'Sweeter, but a little thin' } },
+      enjoyment: 7,
+      extras: {
+        [EXTRAS_KEY]: { verdict: 'better', comparedWith: { kind: 'previous', shotId: SHOTS.kiambu2.id }, selected: ['Other'], text: 'Sweeter, but a little thin' },
+      },
     });
-    expect(shotRecord(SHOTS.santos.id).annotations).toMatchObject({ enjoyment: 10, espressoNotes: 'Taste: Balanced, sweet. Santos v1 (CafAI)' });
+    expect(shotRecord(SHOTS.santos.id).annotations).toMatchObject({ enjoyment: 5, espressoNotes: 'Taste: Balanced, sweet. Santos v1 (CafAI)' });
     // Not rated and not answered yet: only what Decaid wrote itself.
     expect(Object.keys(shotRecord(SHOTS.kiambu4.id).annotations ?? {}).sort()).toEqual(['actualDoseWeight', 'actualYield']);
   });

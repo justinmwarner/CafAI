@@ -9,6 +9,8 @@ import type {
   DiffStatus,
   NoticeProgress,
   SetAsideReason,
+  ShotBaseline,
+  ShotRating,
   TemplateCardItem,
   UiRole,
 } from '../types.ts';
@@ -100,6 +102,7 @@ export function setAside(part: CoachUiPart, reason: SetAsideReason): CoachUiPart
   return part;
 }
 
+/** A finished shot's card; what it is compared with comes once it is in the chat (shotRating.ts fillBaselines). */
 export function shotPart(shotId: string, summary: ShotSummary): CoachUiPart {
   return { kind: 'shot', shotId, summary };
 }
@@ -175,12 +178,12 @@ export function removeMessage(messages: readonly CoachUiMessage[], messageId: st
   return messages.filter((m) => m.id !== messageId);
 }
 
-/** The barista's star rating on a shot's card. */
-export function setShotStars(messages: readonly CoachUiMessage[], shotId: string, stars: number): CoachUiMessage[] {
+/** The barista's verdict on a shot's card, with what it was compared with (D126). */
+export function setShotRating(messages: readonly CoachUiMessage[], shotId: string, baseline: ShotBaseline, rating: ShotRating): CoachUiMessage[] {
   return updatePart(
     messages,
     (part) => part.kind === 'shot' && part.shotId === shotId,
-    (part) => (part.kind === 'shot' ? { ...part, stars } : part),
+    (part) => (part.kind === 'shot' ? { ...part, baseline, rating } : part),
   );
 }
 
