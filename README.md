@@ -23,7 +23,10 @@ own: dark, light or following the device, in one of seven tints or any hue.
   page with a way back to Decaid if CafAI cannot start at all), and in a
   phone's browser on the same network (the phone layout)
 - Bring your own Anthropic API key; it stays on the device you enter it on,
-  unless you choose to keep a copy in Decaid (see Privacy)
+  unless you choose to keep a copy in Decaid (see Privacy). Or let the coach
+  answer through your own Claude Pro or Max plan, with CafAI Bridge on your
+  Mac or Windows PC: no API key, nothing billed per call (see Claude on your
+  computer)
 
 ## How the coach works
 
@@ -156,7 +159,8 @@ From a GitHub release:
    Release**, and enter this repository (`owner/name`). Decaid picks the
    release's `.zip` asset.
 2. Select **CafAI** as the skin.
-3. In CafAI, open **Settings** and paste your Anthropic API key.
+3. In CafAI, open **Settings** and paste your Anthropic API key, or set up
+   Claude on your computer (below).
 
 From a zip you built yourself: run `npm run release:zip`, then use **Skins ->
 + -> ZIP file**, or `POST /api/v1/webui/skins/install/url` with
@@ -165,6 +169,36 @@ From a zip you built yourself: run `npm run release:zip`, then use **Skins ->
 To leave CafAI, tap **Exit** (top right). Inside Decaid it returns to the
 dashboard, where the Skins page switches skins; in a browser it opens Decaid's
 settings page.
+
+## Claude on your computer (no API key)
+
+The coach can answer through your own Claude plan instead of an API key:
+CafAI Bridge, a small program in [`bridge/`](bridge/README.md), runs on
+your Mac or Windows PC and passes the coach's turns to the Claude Code
+you have signed in there. Nothing is billed per call; the turns count
+against your plan's usage limits.
+
+You need Claude Code signed in with a Claude Pro or Max plan (install it
+and run `claude` once, then `/login`; the copy the Claude desktop app keeps
+works too) and Node 18 or newer.
+
+1. On the computer, in CafAI's folder: `npm run bridge`. It prints the
+   addresses to use and a pairing code, for example `192.168.1.20` and
+   `K7QM-2XWD`.
+2. In CafAI, **Settings > Where the coach runs > Claude on my computer**:
+   type the address (`127.0.0.1` when Decaid runs on that same computer) and
+   the code, **Save**, then **Test**.
+3. To have it start with the computer: `npm run bridge -- install` (Windows
+   and macOS). `npm run bridge -- doctor` checks Claude Code, its sign-in
+   and a real turn.
+
+The first time it listens, Windows Defender Firewall (or macOS's firewall)
+asks whether Node.js may accept connections: allow it on private networks,
+or the tablet cannot reach it. Claude Code must be new enough for the
+model picked in Settings (Opus 5.5 needs 2.1.280): **Test** says so, and
+`claude update` fixes it. The bridge is for your own use with your own
+plan; [bridge/README.md](bridge/README.md) has the details and
+troubleshooting.
 
 ## Develop
 
@@ -341,7 +375,14 @@ Decaid's API as CafAI is checked against it, in
   shot's record in Decaid (notes and enjoyment), which Decaid may upload to
   Visualizer if you set that up. Notes you wrote yourself are never
   overwritten.
-- Calls go straight from the tablet to `api.anthropic.com`.
+- With an API key, calls go straight from the tablet to `api.anthropic.com`.
+- With Claude on my computer, calls go from the tablet to CafAI Bridge on
+  your computer, over your network in plain HTTP with the pairing code
+  (kept on the device like the API key, never in Decaid or an export), and
+  from there to Anthropic through your own Claude Code. The bridge keeps
+  nothing you or the coach said: its log has times, sizes and model names
+  only. It never reads or stores your Claude sign-in, and it turns off
+  Claude Code's tools, hooks, plugins and your CLAUDE.md for coach turns.
 - The report in Settings > About names Decaid's routes and fields and what
   was wrong with them, never your notes, your coffee or the key.
 

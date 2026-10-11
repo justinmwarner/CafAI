@@ -1518,3 +1518,134 @@ workflows has run.
   next Decaid. A live stream would ask for more than CafAI needs, and needs
   a secure context, which a phone on the network
   (`http://<tablet-ip>:3000`) is not.
+
+### Claude on your computer (2026-10-11)
+
+D123-D129 are left to the work running beside this one; these start at
+D130. Design and experiments:
+docs/superpowers/specs/2026-10-11-local-claude-design.md.
+
+- **D130. The coach can answer through the owner's own Claude Code and
+  Claude plan, via CafAI Bridge (D56, QUESTIONS #2).** `bridge/` is a
+  zero-dependency Node program for a Mac, a Windows PC or Linux that speaks
+  the Anthropic Messages API on the network and answers it with the `claude`
+  command the owner installed and signed in to (Claude Code's headless `-p`
+  mode). CafAI talks to it with its own Anthropic provider and a different
+  base URL, so streaming, the runner, retries and timeouts are the ones the
+  API path uses. The bridge never reads, stores or forwards Claude
+  credentials and never calls Anthropic's API itself: Claude Code does,
+  unmodified, signed in through Anthropic's own flow. Why: Crema's server
+  was Mac only (it looked for `claude` in three Mac folders and started from
+  a LaunchAgent) and text only (one flattened prompt, no streaming, tools or
+  images), which CafAI's coach cannot use. Claude Code's legal page (read
+  2026-10-11) bars developers from collecting or intermediating Claude.ai
+  credentials, and does not restrict a user signing in to the unmodified
+  Claude Code with their own plan; running that binary, and nothing else,
+  keeps the bridge on the right side of it. It is for the owner's own use
+  with their own plan, as the bridge's README says; the plan's usage limits
+  apply.
+- **D131. One live Claude Code process per conversation; tool calls are
+  held; anything else is replayed.** The bridge keeps each conversation in
+  one `claude -p` process in stream-json mode (stdin open). CafAI's tools
+  reach it as an MCP server the bridge serves on 127.0.0.1 (a secret per
+  run). When the model calls one, the HTTP reply ends with `stop_reason:
+  tool_use` and the MCP call is held until CafAI's next request brings the
+  `tool_result`, matched by the tool-use id Claude Code puts in the call;
+  the same process then carries on. A request continues a process only
+  when its history equals, message by message (fingerprints of text, tool
+  ids and results, image hashes), what that process holds. Any other
+  request starts a process whose first message replays the earlier turns as
+  a transcript. Text that comes with tool results (typed while a card was
+  open, a shot that finished) rides along in the last result. At most three
+  processes live; an idle or held one closes after 30 minutes, and one for a
+  request without tools (the bag photo) as soon as it has answered. A reply
+  that breaks off and starts again, a message that never streamed, or 180 s
+  without a stream event ends the process with an error, so CafAI never
+  shows a reply twice or waits forever; its next request replays. Why: Claude
+  Code takes earlier turns only from its own sessions (an `assistant` line
+  on stdin is ignored), so a live process is the only way the model keeps
+  its own tool calls, thinking and prompt cache across CafAI's stateless
+  requests, and a transcript is the only way back after the bridge
+  restarts. A held call answered as a plain JSON reply died after about six
+  minutes; an SSE answer with a comment every 10 s held for seven and
+  delivered, which covers a barista pulling a shot before tapping.
+- **D132. The bridge drops thinking blocks and the tool prefix.** Thinking
+  blocks never reach CafAI (the remaining blocks are renumbered), tool names
+  lose Claude Code's `mcp__cafai__`, and the `caller` field goes. Why: their
+  signatures belong to the plan's organisation, so a transcript replayed
+  later to the API under a Console key could be refused, and CafAI never
+  shows them. CafAI's transcript stays in the API's own shapes either way.
+- **D133. A pairing code guards the bridge.** The bridge makes an 8-character
+  code at first start (40 bits; `ABCD-EFGH`), and every route but `/health`
+  wants it (CafAI sends it where an API key goes). Five wrong codes from one
+  address in ten minutes lock that address out for a minute, doubling up to
+  fifteen. CORS is open (`*`, Chrome's private-network preflight answered),
+  the MCP endpoint answers only 127.0.0.1, and stopping the bridge over HTTP
+  is allowed only from its own computer. The code is shown in a terminal and
+  by `code`, never written to the log (a log gets attached to bug reports).
+  Why: the bridge spends the owner's
+  plan and listens on the network; Crema's server took any request, and with
+  CORS open any web page could have used it. A code CafAI types once costs
+  little; guessing 40 bits at five tries a minute is hopeless.
+- **D134. The newest Claude Code wins, and coach runs see nothing of the
+  owner's setup.** The bridge looks on PATH and in every usual install folder
+  on Windows, macOS and Linux, including the copy the Claude desktop app
+  keeps up to date, asks each its version and uses the newest; `--claude`
+  overrides. It never runs the desktop app's own executable (also called
+  `claude.exe` on Windows), which `--version` would open. Coach runs use
+  `--setting-sources ""`, `--tools ""`, `--strict-mcp-config`,
+  `--disable-slash-commands`, `--no-session-persistence`, `--permission-mode
+  dontAsk` and the coach's prompt from a file, in an empty working folder;
+  inherited Claude Code session variables and `ANTHROPIC_API_KEY` are taken
+  out of their environment. Why: on this PC WinGet's Claude Code 2.1.126 comes
+  first on PATH and hangs on every request, the native install (2.1.251)
+  refuses CafAI's default model (Opus 5.5 needs 2.1.280), and the desktop
+  app's copy (2.1.295) coaches fine. The owner's hooks, plugins, CLAUDE.md
+  and skills would otherwise ride into every coaching turn, and an API key
+  in the environment would make Claude Code bill it instead of the plan.
+- **D135. Where the coach runs is a setting of this device.** Settings has
+  **Where the coach runs**, above the API key: **Anthropic API key** (the
+  default, unchanged) or **Claude on my computer**, with the computer's
+  address (`http://` and port 8877 added, an IPv4 address stored without
+  leading zeros) and the bridge's code (a password field, like the key).
+  Both live in their own IndexedDB database, `cafai-coach-source`: never in
+  Decaid's backup, never in an export. **Find** tries `127.0.0.1` (Decaid on
+  the same computer). **Test** asks the bridge's `/v1/status` with a probe
+  turn on the model chosen in Settings and shows one line ("Connected.
+  Claude Code 2.1.295, signed in with Claude Max. 26% of the 5-hour limit
+  used.") or the bridge's own sentences. While the coach runs on the
+  computer, the API key section says it is not used, the model picker says
+  its prices do not apply, and the chat's key card asks for the bridge's
+  code. The coach and the bag photo go to the bridge through the same
+  Anthropic client with its own wording: the bridge's sentences are shown
+  as sent, with no "Anthropic rejected" in front. On that path CafAI asks
+  again only when the bridge cannot be reached or is busy (503), before
+  anything streamed, and waits 30 s for the first byte (the bridge pings at
+  once). The engine is untouched: its "has a key" check now asks for what
+  the chosen source needs. Mock mode answers `http://127.0.0.1:8877` with
+  the scripted coach, so `npm run dev:sim` reaches a real bridge on this
+  computer by its network address. Why: the tablet decides where its coach
+  runs; the address and code are worth nothing on another device, and the
+  code is the only thing between the network and the plan. A plan limit,
+  a lockout or a Claude Code that did not answer will not change in two
+  seconds, and each retry would start Claude Code again (a 90 s no-answer
+  became about four and a half minutes with the API's retries).
+- **D136. The bridge is run with `npm run bridge`, and starts at login on
+  Windows and macOS.** `serve` (the default) shows the addresses to type
+  into CafAI and the code; `start` runs it hidden in the background with a
+  log (rolled over at 5 MB), `stop` asks it to shut down over loopback
+  (`/v1/shutdown`, a kill only when that fails and the pid file names a
+  live bridge on that port), `status` and `doctor` (every Claude Code found,
+  the sign-in, one real turn, the port, firewall hints) say what is wrong;
+  `code --new` renews the code. `install` starts it at sign-in without admin
+  rights: on Windows a shortcut in the Startup folder that runs `start`
+  minimized (PowerShell makes it, every path passed in environment
+  variables; a Run registry value if that fails), on macOS a LaunchAgent
+  (`KeepAlive` only after a crash, so `stop` sticks); on Linux it prints a
+  systemd user unit. The flags given to `install` go into what it starts.
+  Why: a coach on the computer is only useful if the computer answers
+  without anyone opening a terminal each morning; the Startup folder needs
+  no admin and no deprecated VBScript, and the window flash at sign-in is
+  the price of a plain console program. Tried on this PC: start, status,
+  stop and doctor against the real Claude Code, and install and uninstall
+  into a scratch Startup folder; not tried: macOS.
