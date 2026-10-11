@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '../chat/testing/setup.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { CoachState } from '../../app/types.ts';
 import { applySettingsPatch, DEFAULT_APPEARANCE, normalizeSettings } from '../../storage/settings.ts';
@@ -523,6 +523,132 @@ describe('SettingsScreen grinder from Decaid', () => {
     await userEvent.click(screen.getByTestId(TID.settingsSave));
     await screen.findByText(KEY_TAKEN_OUT);
     expect(column.scrollTop).toBe(560 + 120 + 16 - 538);
+  });
+});
+
+describe('SettingsScreen Add a grinder (D125)', () => {
+  const typed: Settings = { model: 'claude-opus-5-5', grinderName: 'DF64', grinderSetting: '14', activeBagId: 'bag-1' };
+  const ADDED = {
+    id: 'g-new',
+    model: 'DF64',
+    burrs: 'SSP MP',
+    archived: false,
+    settingType: 'numeric',
+    settingSmallStep: 0.5,
+    createdAt: '2026-10-11T09:00:00.000000',
+    updatedAt: '2026-10-11T09:00:00.000000',
+  };
+  const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  /** Decaid's library as the reads find it, and the bodies posted to it. */
+  let library: unknown[] = [];
+  let postReply: () => Response = () => json(ADDED, 201);
+  const posted: unknown[] = [];
+
+  beforeEach(() => {
+    library = [];
+    postReply = () => json(ADDED, 201);
+    posted.length = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        fetched.push(url);
+        if (!url.endsWith('/api/v1/grinders')) return new Response('Route not found', { status: 404 });
+        if (init?.method === 'POST') {
+          posted.push(JSON.parse(String(init.body)));
+          return postReply();
+        }
+        return grinderReply();
+      }),
+    );
+    grinderReply = () => json(library);
+  });
+
+  const addButton = () => screen.findByTestId(TID.addGrinder);
+
+  it("adds the grinder to Decaid's library, picks it and says so; Save links it", async () => {
+    const services = renderSettings({ settings: typed });
+    expect(await screen.findByText(LIBRARY_HINT)).toBeInTheDocument();
+    await userEvent.click(await addButton());
+    const dialog = await screen.findByRole('dialog', { name: 'Add a grinder to Decaid' });
+    // It starts from the name typed in Settings.
+    expect(within(dialog).getByTestId(TID.addGrinderModel)).toHaveValue('DF64');
+    await userEvent.type(within(dialog).getByTestId(TID.addGrinderBurrs), 'SSP MP');
+    await userEvent.type(within(dialog).getByTestId(TID.addGrinderSmallStep), '0,5');
+    await userEvent.click(within(dialog).getByTestId(TID.addGrinderSubmit));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(posted).toEqual([{ model: 'DF64', burrs: 'SSP MP', settingType: 'numeric', settingSmallStep: 0.5 }]);
+    expect(screen.getByLabelText('Grinder from Decaid')).toHaveValue('g-new');
+    expect(screen.getByText('Decaid lists steps of 0.5 for this grinder.')).toBeInTheDocument();
+    expect(screen.getByTestId(TID.addGrinderNote)).toHaveTextContent("Added DF64 (SSP MP) to Decaid's grinders. Save settings to use it.");
+    expect(methods(services), 'nothing is saved before Save').toEqual([]);
+
+    await userEvent.click(screen.getByTestId(TID.settingsSave));
+    await screen.findByText('Settings saved.');
+    expect(await services.storage.settings.get()).toMatchObject({ grinderId: 'g-new', grinderName: 'DF64', grinderSetting: '14' });
+    expect(screen.queryByTestId(TID.addGrinderNote)).toBeNull();
+  });
+
+  it('picks the grinder Decaid already has, read afresh, instead of adding it twice', async () => {
+    renderSettings({ settings: typed });
+    await userEvent.click(await addButton());
+    // Another skin added it while Settings was open.
+    library = GRINDERS;
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.clear(within(dialog).getByTestId(TID.addGrinderModel));
+    await userEvent.type(within(dialog).getByTestId(TID.addGrinderModel), 'niche zero');
+    await userEvent.click(within(dialog).getByTestId(TID.addGrinderSubmit));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(posted).toEqual([]);
+    expect(screen.getByLabelText('Grinder from Decaid')).toHaveValue('g-niche');
+    expect(screen.getByTestId(TID.addGrinderNote)).toHaveTextContent('Decaid already has Niche Zero (63 mm conical), so CafAI picked it.');
+  });
+
+  it("says what to fix and Decaid's refusal in the dialog, and Cancel changes nothing", async () => {
+    const services = renderSettings({ settings: { ...typed, grinderName: null } });
+    await userEvent.click(await addButton());
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByTestId(TID.addGrinderSubmit));
+    expect(within(dialog).getByText('Name the grinder, like Niche Zero.')).toBeInTheDocument();
+    await userEvent.type(within(dialog).getByTestId(TID.addGrinderModel), 'Kinu M47');
+    await userEvent.selectOptions(within(dialog).getByTestId(TID.addGrinderDial), 'preset');
+    await userEvent.click(within(dialog).getByTestId(TID.addGrinderSubmit));
+    expect(within(dialog).getByText("List the grinder's settings, finest first, with commas between them.")).toBeInTheDocument();
+    await userEvent.type(within(dialog).getByTestId(TID.addGrinderSettings), '1, 2, 3');
+    postReply = () => json({ error: 'Exception: database is locked' }, 400);
+    await userEvent.click(within(dialog).getByTestId(TID.addGrinderSubmit));
+    expect(await within(dialog).findByText("Couldn't add the grinder: database is locked")).toBeInTheDocument();
+    expect(posted).toEqual([{ model: 'Kinu M47', settingType: 'preset', settingValues: ['1', '2', '3'] }]);
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.queryByLabelText('Grinder from Decaid')).toBeNull();
+    expect(screen.queryByTestId(TID.addGrinderNote)).toBeNull();
+    expect(methods(services)).toEqual([]);
+  });
+
+  for (const [why, reply] of [
+    ['Decaid cannot be reached', () => Promise.reject(new TypeError('Failed to fetch'))],
+    ['Decaid sent a list CafAI cannot read', () => Promise.resolve(json(null))],
+    ['Decaid is too old to have a grinder library', () => Promise.resolve(new Response('Route not found', { status: 404 }))],
+  ] as const) {
+    it(`offers no Add when ${why}`, async () => {
+      grinderReply = reply;
+      renderSettings({ settings: typed });
+      expect(await screen.findByText(LIBRARY_HINT)).toBeInTheDocument();
+      expect(screen.queryByTestId(TID.addGrinder)).toBeNull();
+    });
+  }
+
+  it("links to DYE2's Grinders page only while Decaid runs DYE2", async () => {
+    const services = renderSettings({ settings: typed });
+    await addButton();
+    expect(screen.queryByTestId(TID.editGrindersInDye2)).toBeNull();
+    act(() => services.plugins.setLoaded(['dye2.reaplugin']));
+    expect(screen.getByTestId(TID.editGrindersInDye2)).toHaveAttribute('href', 'http://localhost:8080/api/v1/plugins/dye2.reaplugin/grinders');
+    act(() => services.plugins.setLoaded([]));
+    expect(screen.queryByTestId(TID.editGrindersInDye2)).toBeNull();
   });
 });
 

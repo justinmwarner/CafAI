@@ -33,11 +33,17 @@ export { createHeartbeat, type HeartbeatOptions } from './heartbeat.ts';
 export { activateProfile, createProfileVersion, findProfileMismatch, isShotRunning } from './workflow.ts';
 export { describeFailedConnect } from './devices.ts';
 export {
+  addOrFindGrinder,
+  createGrinder,
+  findSameGrinder,
   getGrinder,
+  grinderRequest,
   grinderSteps,
   listGrinders,
   parseGrinder,
   type Grinder,
+  type GrinderCreateRequest,
+  type GrinderDraft,
   type GrinderRequestOptions,
   type GrinderSettingType,
   type GrinderSource,

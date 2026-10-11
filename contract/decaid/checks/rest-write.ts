@@ -7,6 +7,7 @@
 import type { Assert, Body, Diff, Exactly, Extra, PathParams, Query, W } from '../helpers.ts';
 import type * as X from '../drift.ts';
 import type * as C from '../../../src/api/types.ts';
+import type { GrinderCreateRequest } from '../../../src/api/grinders.ts';
 import type { ProfileJson } from '../../../src/coach/types.ts';
 
 /** Everything wrong with sending From as To. */
@@ -32,6 +33,8 @@ export type _settings = Assert<
 >;
 export type _bean = Assert<Exactly<Sent<C.BeanCreateRequest, Body<'/api/v1/beans', 'post'>>, never>>;
 export type _batch = Assert<Exactly<Sent<C.BatchCreateRequest, Body<'/api/v1/beans/{beanId}/batches', 'post'>>, never>>;
+/** grinders.ts createGrinder: Settings' Add a grinder, and the coach's offer the barista confirms. */
+export type _grinder_create = Assert<Exactly<Sent<GrinderCreateRequest, Body<'/api/v1/grinders', 'post'>>, never>>;
 
 // ---- Query parameters: a renamed one would be ignored, as Decaid ignores what it does not know ----------
 /** client.ts scanDevices: connect=false keeps the scan from connecting every device it finds (D111). */

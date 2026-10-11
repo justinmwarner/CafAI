@@ -112,6 +112,13 @@ All JSON payloads are compact `JSON.stringify` output.
    `onMachine` is also null when no profile changed: grind, dose, none)
    or `{"applied":false,"reason":"The user declined."}`
    or `{"applied":false,"error":"<upload error sentence>"}`.
+5b. **Grinder offer** (D125): tool_result for `offer_grinder` with JSON
+   `{"added":true,"alreadyInDecaid":boolean,"grinder":<grinder>}` once the
+   user tapped Add and CafAI linked the grinder (added to Decaid's grinder
+   library, or the one Decaid already had: `alreadyInDecaid`), `grinder` as
+   in rule 1 and linked from then on, or
+   `{"added":false,"reason":"The user chose not to add it."}` for Not now.
+   A failed Add sends nothing: the card says why and waits for another tap.
 6. **Undo**: text `"[event:undo]\n" + JSON` with JSON
    `{"from":number,"to":number,"title":"<Bag> v<to>"}`.
 7. **Free text while UI calls are pending**: a tool_result for each pending

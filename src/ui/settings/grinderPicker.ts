@@ -14,7 +14,7 @@ import type { Settings } from '../../storage/types.ts';
 /** The picker's value for "Not in Decaid's list" (a grinder id is never empty). */
 export const NOT_LISTED = '';
 
-export const LIBRARY_HINT = "Add your grinder to Decaid's grinder library (for example with the DYE2 plugin) and CafAI will use its step size.";
+export const LIBRARY_HINT = "Add your grinder to Decaid's grinder library and CafAI will use its step size.";
 export const NO_STEP_LINE = 'Decaid has no step size for this grinder, so the coach gives directions only.';
 export const MISSING_LINE = 'Decaid no longer lists this grinder, so the coach gives directions only.';
 export const UNREACHABLE_LINE = "Decaid can't be reached right now, so CafAI can't show this grinder's steps.";
@@ -22,18 +22,38 @@ export const UNREACHABLE_LINE = "Decaid can't be reached right now, so CafAI can
 /**
  * Decaid's grinders as far as Settings knows them. `ready` means Decaid
  * answered, and its list may be empty (no grinders yet, or a Decaid without
- * the library); `unavailable` means the list cannot be read right now.
+ * the library, `noLibrary`); `unavailable` means the list cannot be read
+ * right now.
  */
-export type GrinderLibrary = { status: 'loading' } | { status: 'ready'; grinders: Grinder[] } | { status: 'unavailable' };
+export type GrinderLibrary =
+  | { status: 'loading' }
+  | { status: 'ready'; grinders: Grinder[]; noLibrary?: boolean }
+  | { status: 'unavailable' };
 
 /**
  * What a failed read of Decaid's list means. A Decaid without the grinder
  * library answers 404: it lists nothing, as the engine reads it too (a link
- * then gives directions only). Anything else may pass, so a link is not
- * called lost on its account.
+ * then gives directions only), and nothing can be added to it. Anything else
+ * may pass, so a link is not called lost on its account.
  */
 export function libraryAfterError(error: unknown): GrinderLibrary {
-  return error instanceof GatewayError && error.status === 404 ? { status: 'ready', grinders: [] } : { status: 'unavailable' };
+  return error instanceof GatewayError && error.status === 404 ? { status: 'ready', grinders: [], noLibrary: true } : { status: 'unavailable' };
+}
+
+/** A grinder can be added while Decaid answered with its library. */
+export function canAddGrinder(library: GrinderLibrary): boolean {
+  return library.status === 'ready' && library.noLibrary !== true;
+}
+
+/**
+ * The list with a grinder CafAI just added to Decaid, first (Decaid lists
+ * the newest edit first), or one it found there, in its place as Decaid now
+ * has it.
+ */
+export function withGrinder(library: GrinderLibrary, grinder: Grinder): GrinderLibrary {
+  const grinders = library.status === 'ready' ? library.grinders : [];
+  const at = grinders.findIndex((known) => known.id === grinder.id);
+  return { status: 'ready', grinders: at < 0 ? [grinder, ...grinders] : grinders.map((known, index) => (index === at ? grinder : known)) };
 }
 
 export interface GrinderForm {

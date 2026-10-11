@@ -6,7 +6,7 @@ import {
   createProfileVersion,
   type DecaidClient,
 } from '../api/index.ts';
-import { getGrinder, grinderSteps, type Grinder } from '../api/grinders.ts';
+import { addOrFindGrinder, getGrinder, grinderSteps, type Grinder } from '../api/grinders.ts';
 import { loadProfileOnMachine } from '../api/machineProfile.ts';
 import {
   COACH_TOOL_SPECS,
@@ -139,6 +139,10 @@ export function createApiPort(decaid: DecaidClient): ApiPort {
     async getGrinder(id) {
       const grinder = await getGrinder(decaid, id);
       return grinder ? grinderInfo(grinder) : null;
+    },
+    async addGrinder(request) {
+      const { grinder, added } = await addOrFindGrinder(decaid, request);
+      return { id: grinder.id, model: grinder.model, burrs: grinder.burrs ?? null, info: grinderInfo(grinder), added };
     },
     listBeans: () => decaid.listBeans(),
     listBatches: (beanId) => decaid.listBatches(beanId),

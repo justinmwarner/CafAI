@@ -278,7 +278,9 @@ What each switch adds:
   even after a failure: a heartbeat, a key in the `cafai-contract-test`
   namespace, the rating-scale probe, a workflow round trip (the original
   workflow goes back), a test profile (hidden afterwards), a bean and a batch
-  (archived), gateway mode (restored), a scan that connects nothing, a
+  (archived), a grinder with a numbered dial and one with a list of settings,
+  as Settings' Add a grinder and the coach's card add them (read back, then
+  deleted), gateway mode (restored), a scan that connects nothing, a
   connect of the machine Decaid already has connected, and CafAI's Connect
   for the machine and the scale, which must leave connected devices as they
   are. The last write check disconnects the simulated machine, checks that
@@ -324,5 +326,6 @@ minute, most of it the simulated shot), and the read-only checks with
 `localhost` as above. `npm run e2e:real` passed with Decaid serving the
 production build (`--skin-path`). On 2026-10-11 all 36 passed (22 reads,
 9 writes, 5 shot) with the checks for Connect, Next step, time-to-ready and
-the plugins' data added, and `npm run e2e:real` again. Not tried:
-`scripts/decaid-ci.sh` (Linux).*
+the plugins' data added, and `npm run e2e:real` again. Later that day the
+grinder write check passed when run on its own (`-t "grinder CafAI adds"`),
+and the 22 reads again. Not tried: `scripts/decaid-ci.sh` (Linux).*

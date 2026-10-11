@@ -84,6 +84,38 @@ describe('createApiPort', () => {
     await expect(createApiPort(createFakeDecaid()).getGrinder('g-niche')).rejects.toThrow();
   });
 
+  it("adds a grinder to Decaid's library, or takes the one Decaid has, reduced to its dial: GET and POST only (D125)", async () => {
+    const seen: string[] = [];
+    const library: unknown[] = [{ id: 'g-niche', model: 'Niche Zero', archived: false, settingType: 'numeric', settingSmallStep: 0.5 }];
+    const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      seen.push(`${method} ${new URL(url).pathname}`);
+      if (method === 'POST') {
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return new Response(JSON.stringify({ id: 'g-new', archived: false, ...body }), { status: 201 });
+      }
+      return new Response(JSON.stringify(library), { status: 200 });
+    });
+    // The grinder calls sit beside the client and use the global fetch, as getGrinder does.
+    vi.stubGlobal('fetch', fetch);
+    const port = createApiPort(createFakeDecaid());
+    await expect(port.addGrinder({ model: 'niche zero' })).resolves.toEqual({
+      id: 'g-niche',
+      model: 'Niche Zero',
+      burrs: null,
+      info: { model: 'Niche Zero', settingType: 'numeric', smallStep: 0.5, bigStep: null, values: null },
+      added: false,
+    });
+    await expect(port.addGrinder({ model: 'Baratza Encore', settingType: 'preset', settingValues: ['1', '2'] })).resolves.toEqual({
+      id: 'g-new',
+      model: 'Baratza Encore',
+      burrs: null,
+      info: { model: 'Baratza Encore', settingType: 'preset', smallStep: null, bigStep: null, values: ['1', '2'] },
+      added: true,
+    });
+    expect(seen).toEqual(['GET /api/v1/grinders', 'GET /api/v1/grinders', 'POST /api/v1/grinders']);
+  });
+
   it("only reads Decaid's bean library and adds to it: GET and POST, never PUT or DELETE (D102)", async () => {
     const seen: string[] = [];
     const fetch = vi.fn(async (url: string, init?: RequestInit) => {

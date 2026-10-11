@@ -27,6 +27,11 @@ export const COACH_TOOL_SPECS: Record<ToolName, { description: string; kind: 'ui
     kind: 'ui',
     description: `Propose the next change: ONE variable. "profile" moves one lever of the current template: lever ids and bounds from the template catalog, value is the new absolute value. "grind" is a move at the grinder: direction, amount in the grinder's own dial steps (more than 0, at most ${GRIND_MAX_STEPS}) and/or the absolute setting as written on the grinder. "dose" is the new dose in grams (${DOSE_RULES.min}-${DOSE_RULES.max} g, at most ${DOSE_RULES.maxDelta} g per change). "none" keeps everything, to lock in a good shot. Fields the variable does not use are null. summary is one imperative line; rationale cites the shot data and the user's own taste words; expectedEffect says only what the change does at the machine (flow, time, pressure, extraction), never how the shot will taste; tips holds up to 3 reminders that change nothing. The user sees a before/after diff and confirms; a value outside the bounds comes back as an error to fix.`,
   },
+  [TOOL.offerGrinder]: {
+    kind: 'ui',
+    description:
+      'Offer to add the user\'s grinder to Decaid\'s grinder library, where CafAI reads its dial steps. Call it once, with no other card in the reply, when the user names the grinder they use and the context\'s grinder is not linked or is another one. model: the make and model as they said it (e.g. "Mazzer Philos"). burrs, settingType ("numeric": a numbered dial; "preset": a list of settings), smallStep and bigStep (a numbered dial\'s steps) and values (a preset grinder\'s settings, finest first): only as they said them, else null; never guess. The user taps Add or Not now on a card: nothing is added without the tap, and a grinder Decaid already has is linked, not added twice. The result is {"added":true,"alreadyInDecaid":true|false,"grinder":{as in the context}}, linked from then on, or {"added":false}; wait for it.',
+  },
   [TOOL.getShotSummary]: {
     kind: 'auto',
     description: `Aggregates of one shot: dose, yield, ratio, time to first drop, preinfusion end, peak pressure, mean pour flow (pump and scale), temperature, resistance trend, channeling flags, stop reason, and the phases (preheat, then each profile step by name). Times are seconds from shot start, preheat included. ${SHOT_REF}`,
