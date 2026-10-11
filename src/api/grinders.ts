@@ -234,6 +234,23 @@ export function grinderRequest(draft: GrinderDraft): GrinderCreateRequest | null
   return request;
 }
 
+/**
+ * The grinder a request describes, in Decaid's library: the one already
+ * there (findSameGrinder, on a fresh read), or one CafAI adds. Decaid itself
+ * takes duplicates, so a second tap, or a grinder another skin added a
+ * moment ago, never becomes a second entry. Throws as listGrinders and
+ * createGrinder do.
+ */
+export async function addOrFindGrinder(
+  source: GrinderSource,
+  body: GrinderCreateRequest,
+  options: GrinderRequestOptions = {},
+): Promise<{ grinder: Grinder; added: boolean }> {
+  const same = findSameGrinder(await listGrinders(source, options), body);
+  if (same) return { grinder: same, added: false };
+  return { grinder: await createGrinder(source, body, options), added: true };
+}
+
 /** Case, extra spaces and missing text aside, the same words. */
 const sameText = (a: string | null | undefined, b: string | null | undefined) =>
   (a ?? '').replace(/\s+/g, ' ').trim().toLowerCase() === (b ?? '').replace(/\s+/g, ' ').trim().toLowerCase();

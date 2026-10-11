@@ -3,6 +3,7 @@ import { createMockServer } from '../../mock/node.ts';
 import { createDecaidClient } from './client.ts';
 import { driftLog } from './drift.ts';
 import {
+  addOrFindGrinder,
   createGrinder,
   findSameGrinder,
   getGrinder,
@@ -209,6 +210,27 @@ describe('createGrinder', () => {
       { source: 'POST /api/v1/grinders', problem: 'reply: empty' },
       { source: 'POST /api/v1/grinders', problem: 'id: missing' },
     ]);
+  });
+});
+
+describe('addOrFindGrinder', () => {
+  it('reuses the grinder Decaid already has, read fresh, and posts nothing', async () => {
+    const { client, fetch, seen } = stub(() => reply([ENCORE, NICHE]));
+    expect(await addOrFindGrinder(client, { model: 'niche zero' }, { fetch })).toEqual({ grinder: NICHE, added: false });
+    expect(seen.map((s) => s.init?.method)).toEqual(['GET']);
+  });
+
+  it('adds one when Decaid has none like it', async () => {
+    const added = { ...NICHE, id: 'g-new', model: 'Mazzer Philos' };
+    const { client, fetch, seen } = stub((_url, init) => (init?.method === 'POST' ? reply(added, 201) : reply([NICHE])));
+    expect(await addOrFindGrinder(client, { model: 'Mazzer Philos' }, { fetch })).toEqual({ grinder: parseGrinder(added), added: true });
+    expect(seen.map((s) => s.init?.method)).toEqual(['GET', 'POST']);
+  });
+
+  it('adds nothing when the list cannot be read: a list it could not read is not "none like it"', async () => {
+    const { client, fetch, seen } = stub(() => reply(null));
+    await expect(addOrFindGrinder(client, { model: 'Mazzer Philos' }, { fetch })).rejects.toMatchObject({ code: 'unexpected_reply' });
+    expect(seen.map((s) => s.init?.method)).toEqual(['GET']);
   });
 });
 

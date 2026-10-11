@@ -94,6 +94,17 @@ export const TID = {
   grinderName: 'grinder-name',
   grinderSetting: 'grinder-setting',
   settingsSave: 'settings-save',
+  // Add a grinder to Decaid's library (D125), and DYE2's page to edit them
+  addGrinder: 'add-grinder',
+  addGrinderModel: 'add-grinder-model',
+  addGrinderBurrs: 'add-grinder-burrs',
+  addGrinderDial: 'add-grinder-dial',
+  addGrinderSmallStep: 'add-grinder-small-step',
+  addGrinderBigStep: 'add-grinder-big-step',
+  addGrinderSettings: 'add-grinder-settings',
+  addGrinderSubmit: 'add-grinder-submit',
+  addGrinderNote: 'add-grinder-note',
+  editGrindersInDye2: 'edit-grinders-dye2',
 
   // Decaid alignment: bean library, gateway mode, connect, plugins, key backup, drift
   beanCard: 'bean-card',
