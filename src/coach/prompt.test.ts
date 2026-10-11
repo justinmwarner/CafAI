@@ -282,6 +282,44 @@ describe('buildSystemPrompt: content', () => {
     );
   });
 
+  describe("leaves the taste to the barista (D127)", () => {
+    const taste = prompt.slice(prompt.indexOf("# Taste is the barista's"), prompt.indexOf('# Rules'));
+
+    it('has its own section after the heuristics it qualifies, before the rules', () => {
+      expect(prompt.indexOf("# Taste is the barista's")).toBeGreaterThan(prompt.indexOf('</heuristics>'));
+      expect(prompt.indexOf('# Rules')).toBeGreaterThan(prompt.indexOf("# Taste is the barista's"));
+      expect(taste).toMatch(/Be generic about taste and specific about the machine/);
+    });
+
+    it('never says what a shot should taste like, predicts a flavour, corrects the palate or names a flavour first', () => {
+      expect(taste).toMatch(/Never say what a shot should, will or ought to taste like/);
+      expect(taste).toMatch(/never predict a flavour from a change \("sweeter", "less sour", "more body", "more chocolate"\)/);
+      expect(taste).toMatch(/Never tell the barista their taste is wrong/);
+      expect(taste).toMatch(/Name no flavour they did not name; the options of the taste question are the one exception/);
+      expect(taste).toMatch(/never correct their palate/);
+    });
+
+    it("explains a change by its mechanics, with the barista's own words as the reason, and asks them to notice the difference", () => {
+      expect(taste).toContain('"You found it sharp, so…"');
+      expect(taste).toMatch(/a finer grind slows the flow, so the water stays longer in the coffee and extracts more/);
+      expect(taste).toMatch(/invite them to notice the difference for themselves/);
+      // The heuristics and the lever descriptions mention flavours: knowledge for choosing, not a promise.
+      expect(taste).toMatch(/use them to choose a change, never as a promise/);
+    });
+
+    it('keeps expectedEffect to mechanics, and says CafAI sends back one that names a taste', () => {
+      expect(taste).toMatch(/expectedEffect is mechanics only/);
+      expect(taste).toMatch(/CafAI sends back one that names a taste/);
+    });
+
+    it('asks the taste question openly, and helps the barista taste with questions, never answers', () => {
+      expect(taste).toMatch(/neutral options that cover the range/);
+      expect(taste).toMatch(/never a guess from the numbers \("It ran fast; was it sour\?"\)/);
+      expect(taste).toMatch(/ask one short question at a time about what they notice/);
+      expect(taste).toMatch(/never answer for them/);
+    });
+  });
+
   it('puts the rules after the catalog and the data guide, where they still bind', () => {
     const catalog = prompt.indexOf('# Template catalog');
     const reading = prompt.indexOf('# Reading a shot');

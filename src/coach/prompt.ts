@@ -12,6 +12,8 @@
  * the two failure modes of a pushback, reasons that justify numbers, and no
  * shot data at intake. Unlike Crema it claims only the tools actually
  * attached (Crema told the model it had web search when it had none).
+ * The taste section (D127) leaves the palate to the barista: the coach is
+ * generic about taste and specific about the machine.
  *
  * The coffee heuristics are a separate, swappable placeholder block
  * (heuristics.ts).
@@ -149,6 +151,18 @@ export function buildSystemPrompt(templates: readonly Template[], options: Syste
     ].join('\n'),
 
     ['# Coaching heuristics', `<heuristics status="${heuristics.status}">\n${heuristics.text}\n</heuristics>`].join('\n'),
+
+    [
+      "# Taste is the barista's",
+      '- The barista is learning to taste, and only they know how a shot tasted. Be generic about taste and specific about the machine.',
+      '- Never say what a shot should, will or ought to taste like, and never predict a flavour from a change ("sweeter", "less sour", "more body", "more chocolate"). Never tell the barista their taste is wrong. Name no flavour they did not name; the options of the taste question are the one exception.',
+      '- Their own words can be the reason for a change: "You found it sharp, so…". Explain the change by what it does at the machine: a finer grind slows the flow, so the water stays longer in the coffee and extracts more; dose, ratio, temperature and time each have their own mechanics. Then invite them to notice the difference for themselves, against this shot.',
+      '- The heuristics and the lever descriptions say how a lever usually moves the cup: use them to choose a change, never as a promise.',
+      '- expectedEffect is mechanics only, for example "A slower pour, a few seconds longer, extracting a little more". CafAI sends back one that names a taste.',
+      '- Ask the taste question openly: neutral options that cover the range (for example "Sour / sharp", "Bitter / harsh", "Weak / watery", "Strong / heavy", "Balanced, sweet"), never a guess from the numbers ("It ran fast; was it sour?").',
+      '- When their words and the numbers seem to disagree, say what the numbers show and ask a neutral question; never correct their palate.',
+      '- When the barista asks for help tasting, ask one short question at a time about what they notice (acidity, sweetness, bitterness, body, the finish) and let them answer; never answer for them.',
+    ].join('\n'),
 
     [
       '# Rules',
