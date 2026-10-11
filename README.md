@@ -27,11 +27,22 @@ own: dark, light or following the device, in one of seven tints or any hue.
 
 ## How the coach works
 
-1. **New bag.** CafAI asks for origin, roast, process and tasting notes.
-   Once the coach has saved them, CafAI adds the coffee to Decaid's bean
-   library (reusing a bean with the same roaster and name), and every load
-   names the bag's batch, name and roaster in Decaid, so its shots carry
-   them.
+1. **New bag.** The chat opens on "Which coffee is it?": the coffees in
+   Decaid's bean library, newest roast first, then **Photo of the bag** and
+   **Something else**. Pick one and CafAI fills in the bag (name, roaster,
+   origin, process, notes, roast level and roast date) and links it to that
+   batch. Take a photo and the coach's model reads the label into a card
+   you correct and confirm. Or tap Something else, or just type, and
+   describe the coffee: origin, roast, process, tasting notes, the roast
+   date if the bag has one. A bag the coach saved or a photo you confirmed
+   is added to Decaid's bean library (reusing a bean with the same roaster
+   and name, and its batch with the same roast date), and every load names
+   the bag's batch, name and roaster in Decaid, so its shots carry them.
+   The coach knows how old the coffee is; for a coffee picked from the
+   library, days its batch spent in a freezer do not count. When Decaid's
+   DYE2 plugin recorded setups for this
+   coffee, or an earlier roast of it, the coach can read them (it never
+   changes them) and start from what you did before.
 2. **Templates.** The coach suggests 2-5 starting profiles with a rough
    confidence. Templates are real Decent profiles (Blooming Espresso,
    D-Flow, Londonium, Rao Allongé, Gentle and Sweet) that declare which
@@ -47,7 +58,9 @@ own: dark, light or following the device, in one of seven tints or any hue.
    rate the shot with stars if you like. Both go to the shot's record in
    Decaid, so they show there and in Visualizer. The stars go out on the
    rating scale your Decaid keeps (0-10, or 0-100 on older builds): CafAI
-   asks it.
+   asks it. When Decaid's Visualizer plugin has uploaded the shot, its card
+   links to the shot's page (**On Visualizer**), and History keeps the
+   link.
 6. **One change.** The coach proposes the next version or a manual step such
    as grind, changing one variable at a time. You see a plain-language diff
    and confirm it before anything is uploaded. Undo returns to the previous
@@ -99,6 +112,20 @@ never change pump type, step order or count, sensors, or exit types.
   about 3 min" at the end of that line.
 - **Next step.** During a shot whose profile has another step, the Shot view
   has **Next step** under the graph: one tap moves the shot on one step.
+- **Which coffee is it?** A new bag's chat opens on this card, shown from
+  its top: up to 8 coffees from Decaid's bean library (newest roast first,
+  each with its roaster, its roast date and **Use this**), then **Photo of
+  the bag** and **Something else**. The card is there at once ("Looking in
+  Decaid's beans…") and the coffees fill in; the photo and Something else
+  work meanwhile, and without Decaid. Typing in the chat instead closes it.
+  The photo opens the camera or the device's picker (what a Decent tablet
+  offers depends on the Decaid version: docs/HARDWARE_TEST_PLAN.md section
+  12), and what the coach's model reads on the label lands in **Check the
+  bag's details**, every field editable, with **Confirm**.
+- **On Visualizer.** With Decaid's Visualizer plugin loaded and set up, a
+  shot's card links to the shot's page on visualizer.coffee once the plugin
+  has uploaded it (CafAI looks for 30 s after the card lands), and
+  History's shot rows keep the link. Decaid opens it in the system browser.
 - **Settings > Appearance**: Dark, Light or Auto (follows the device), and a
   tint: Crema, Matcha, Lagoon, Ocean, Plum, Cherry, Steel, or any hue from the
   slider. Every colour comes from the tint (in OKLCH, written out as plain
@@ -219,7 +246,12 @@ set: it only reads, so it is safe on a tablet. Never add `DECAID_WRITE` or
 **Mock mode** (`npm run dev:mock`, `npm run build:mock`) starts MSW before
 the app: a stateful Decaid (REST + WebSockets, a scripted shot that follows
 the active profile and stops at the target yield) and a scripted Claude that
-follows `docs/briefs/ENGINE_PROTOCOL.md`. `?mockSpeed=20` speeds the shot up.
+follows `docs/briefs/ENGINE_PROTOCOL.md`. The mock's bean library holds two
+coffees, Red Brick (roasted 9 days ago) and Ethiopia Chelchele (30 days ago,
+12 of them in the freezer); DYE2 has setups for the first; every plugin is
+loaded; and the Visualizer plugin "uploads" each shot a few seconds after it
+is saved. The scripted Claude reads any bag photo as Kiambu AA from Square
+Mile. `?mockSpeed=20` speeds the shot up.
 `?mockDecaid=0` starts only the scripted Claude, so every Decaid call goes to
 a real Decaid (`npm run dev:sim` opens it). `?mockGateway=full` starts
 Decaid in gateway mode Full, `?mockEnjoyment=100` keeps ratings 0-100 like
@@ -253,9 +285,9 @@ Screenshots land in `tools/chrome91/out/`.
 
 | Path | What |
 |---|---|
-| `src/api` | Decaid REST client, WebSocket telemetry, KV, heartbeat, host/exit; the readers that check each reply, and the drift log |
-| `src/coach` | Pure logic: templates and levers, bounded validator, profile hashing, shot summarizer and query tools, prompt |
-| `src/llm` | `LlmProvider` interface, streaming Anthropic client (fetch + SSE), tool-loop runner |
+| `src/api` | Decaid REST client, WebSocket telemetry, KV, heartbeat, host/exit; the readers that check each reply, and the drift log; what Decaid's plugins leave (DYE2's setups, Visualizer's last upload) |
+| `src/coach` | Pure logic: templates and levers, bounded validator, profile hashing, shot summarizer and query tools, roast age, prompt |
+| `src/llm` | `LlmProvider` interface, streaming Anthropic client (fetch + SSE), tool-loop runner, the one request that reads a bag photo |
 | `src/storage` | IndexedDB repositories, local-only key store, export/import, mirror to Decaid's KV store |
 | `src/app` | The coach engine, services, app composition |
 | `src/ui` | Shell, machine row, stats card and alert, live graph, chat surface, history and settings |
@@ -291,11 +323,20 @@ Decaid's API as CafAI is checked against it, in
   skin's IndexedDB and mirrored to Decaid's key-value store (namespace
   `cafai`) so it survives a browser-storage reset. Export it any time as JSON
   from History.
-- When the coach saves a bag's details, CafAI adds the coffee to Decaid's
-  bean library (a bean and a batch; it never edits or deletes one), and
-  every profile load writes the bag's name, roaster and batch into Decaid's
-  workflow, so Decaid keeps them in each shot's record, which is what
-  Visualizer gets if you upload there.
+- A photo of a bag goes to Anthropic once, in a request of its own, to read
+  the bag's details. CafAI keeps no copy (not on the device, not in Decaid,
+  not in the chat or an export), the request is not written to Anthropic's
+  prompt cache, and the details read from it are saved only once you
+  confirm them.
+- When the coach saves a bag's details, or you confirm a photo's, CafAI
+  adds the coffee to Decaid's bean library (a bean and a batch, or the ones
+  already there; it never edits or deletes one); a coffee you pick from the
+  library is linked as it is. Every profile load writes the bag's name,
+  roaster and batch into Decaid's workflow, so Decaid keeps them in each
+  shot's record, which is what Visualizer gets if you upload there.
+- The coach may read the setups Decaid's DYE2 plugin recorded for the
+  coffee (grind, dose, profile), which then go to Anthropic with the rest
+  of the conversation. CafAI never writes DYE2's data.
 - Your taste answer and star rating for a shot are also written to that
   shot's record in Decaid (notes and enjoyment), which Decaid may upload to
   Visualizer if you set that up. Notes you wrote yourself are never

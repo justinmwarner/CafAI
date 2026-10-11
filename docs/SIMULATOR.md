@@ -304,5 +304,9 @@ both are connected; `bash scripts/decaid-ci.sh stop` stops it.
 `.github/workflows/decaid-live.yml` runs that, all three checks and the
 browser check daily and before every release.
 
-*Not tried: written on 2026-10-09 with the checks, which have not yet run
-against a real Decaid.*
+*Tried (Decaid 0.8.8+2900, commit aab5f938, the release CafAI is pinned
+to, on 2026-10-10): every check passed with `DECAID_WRITE=1 DECAID_SIM=1`
+(31 then, 32 with the read of every batch added that evening; about a
+minute, most of it the simulated shot), and the read-only checks with
+`localhost` as above. `npm run e2e:real` passed with Decaid serving the
+production build (`--skin-path`). Not tried: `scripts/decaid-ci.sh` (Linux).*

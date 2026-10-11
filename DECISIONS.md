@@ -894,11 +894,11 @@ docs/superpowers/specs/2026-10-09-decaid-alignment-design.md; plan:
 docs/superpowers/plans/2026-10-09-decaid-alignment.md. Built on branch
 feat/decaid-alignment in waves, one agent per area: wave 0 (292615e), wave 1
 (the readers 487f115, the mock bd4f0fd, the contract f9862f3, the real-Decaid
-tests 120ae40) and wave 2 (the machine 1358c82, the engine 7c4e2eb, Settings
-fc21cd1). D93 to D104 are the spec's decisions; D105 onward were settled while
-building. The intake features (the bean card, the bag photo, the coach's DYE2
-tool and the Visualizer link) are being built; D102 and D103 gain them when
-they land. The repository has no git remote, so none of the new GitHub
+tests 120ae40), wave 2 (the machine 1358c82, the engine 7c4e2eb, Settings
+fc21cd1) and wave 3, the intake (the bean card, the bag photo, the coach's
+DYE2 tool and the Visualizer link: D115 to D122, with D102 and D103 brought
+up to date). D93 to D104 are the spec's decisions; D105 onward were settled
+while building. The repository has no git remote, so none of the new GitHub
 workflows has run.
 
 - **D93. The pin is Decaid v0.8.8 (`aab5f93`).** CafAI is checked against
@@ -1071,39 +1071,52 @@ workflows has run.
   number into every rated shot in Decaid and Visualizer, refused (80 on a
   0-10 build) or ten times too low (8 on 0-100); a made-up id changes
   nothing on either.
-- **D102. Bags link to Decaid's bean library.** As built so far: `Bag` has
-  `decaidBeanId`, `decaidBatchId` and `roastDate`, all `null` until set
-  (the storage schema, the mirror, export and import accept bags without
-  them). After the coach saves a bag's details, CafAI looks in
+- **D102. Bags link to Decaid's bean library.** `Bag` has `decaidBeanId`,
+  `decaidBatchId` and `roastDate`, all `null` until set (the storage
+  schema, the mirror, export and import accept bags without them). A bag
+  picked on the card "Which coffee is it?" is linked to its batch at once
+  (D115). Any other bag is linked once its details are saved, by the coach
+  or from a bag photo's confirm card (D120): CafAI looks in
   `GET /api/v1/beans` for a bean with the same roaster and name, ignoring
-  case, and reuses it or adds one, then adds a batch for the bag, keeps
-  both ids on it and says "Added to Decaid's beans." (`linkBag` in
-  `src/app/engine/engine.ts`). A bag without a roaster or a name of its own
-  is not added, and a failure leaves it unlinked for the next save to try.
-  CafAI only adds beans and batches: it never edits or deletes one, so a
-  detail corrected later changes the bag only. Every load writes the bag's
-  batch (`beanBatchId`, null when unlinked), name (`coffeeName`) and
-  roaster (`coffeeRoaster`) into the workflow context, where it used to
-  clear them, and clears `grinderBurrs` with the other grinder fields (spec
-  5.2). Why: Decaid keeps the workflow with each shot, and its shot filters
-  and DYE2's history find the coffee there (decaid.md section 1.3, others.md
-  section 4.4). Decaid merges the context field by field, so another
-  skin's batch, the last coffee's roaster or a stale `grinderBurrs` (new
-  since `a45961b`) would stick to this coffee's shots (decaid.md section
-  4.3). Never editing keeps CafAI off beans the user keeps in Decaid or
-  DYE2. Being built, and added here when they land: the card that picks a
-  bag from the library, and the bag photo.
+  case, and reuses it or adds one. On a bean it reused, it takes the
+  unarchived batch with the bag's roast date (for a bag without one, a
+  batch without one) when there is one, else it adds a batch for the bag.
+  It keeps both ids on the bag and says "Added to Decaid's beans.", or
+  "Already in Decaid's beans." when it reused both and added nothing
+  (`linkBag` in `src/app/engine/engine.ts`). A bag without a roaster or a
+  name of its own is not added, and a failure leaves it unlinked for the
+  next save to try. CafAI only adds beans and batches: it never edits or
+  deletes one, so a detail corrected later changes the bag only. Every load
+  writes the bag's batch (`beanBatchId`, null when unlinked), name
+  (`coffeeName`) and roaster (`coffeeRoaster`) into the workflow context,
+  where it used to clear them, and clears `grinderBurrs` with the other
+  grinder fields (spec 5.2). Why: Decaid keeps the workflow with each shot,
+  and its shot filters and DYE2's history find the coffee there (decaid.md
+  section 1.3, others.md section 4.4). Decaid merges the context field by
+  field, so another skin's batch, the last coffee's roaster or a stale
+  `grinderBurrs` (new since `a45961b`) would stick to this coffee's shots
+  (decaid.md section 4.3). Never editing keeps CafAI off beans the user
+  keeps in Decaid or DYE2. Taking the batch with the same roast date keeps
+  one bag one batch when the barista photographs or describes a coffee that
+  is already in the library instead of picking it.
 - **D103. Decaid's plugins are optional.** `src/api/plugins.ts` reads
   `GET /api/v1/plugins` at start and when the page comes back into view. A
   plugin counts only while Decaid lists it `loaded`; a failed read keeps the
   last answer, and before the first answer every plugin counts as absent.
-  As built so far, one feature uses one: the stats card's countdown follows
-  `time-to-ready.reaplugin`'s channel only while it is loaded (D112), and
-  without it Heating shows with no minutes. Being built, and added here
-  when they land: the Visualizer link on shot cards and the coach's tool
-  that reads DYE2. Why: plugins are the user's to install, load and unload
-  in Decaid's settings, and a tablet may not have a given one loaded; CafAI
-  must work the same without them.
+  Three features use one each. The stats card's countdown follows
+  `time-to-ready.reaplugin`'s channel only while it is loaded (D112);
+  without it Heating shows with no minutes. The shot card's **On
+  Visualizer** looks for `visualizer.reaplugin`'s upload only while it is
+  loaded (D121). The coach's `get_recent_setups` asks DYE2's own endpoint
+  while `dye2.reaplugin` is loaded, otherwise reads the copy DYE2 keeps in
+  Decaid's store, and answers `{"available": false}` when neither has
+  anything (D119). What a plugin leaves is its own payload, not Decaid's
+  API, so CafAI reads it leniently (`src/api/pluginData.ts`): a shape it
+  does not expect is reported as drift and read as nothing. CafAI never
+  writes a plugin's data. Why: plugins are the user's to install, load and
+  unload in Decaid's settings, and a tablet may not have a given one
+  loaded; CafAI must work the same without them. DYE2's keys have one
+  writer, DYE2 (its KV_CONTRACT.md).
 - **D104. Real-Decaid tests are read-only on a tablet.**
   `npm run test:decaid` (`vitest.decaid.config.ts`,
   `src/api/live/*.decaid.ts`) runs CafAI's own client and parsers against
@@ -1122,7 +1135,10 @@ workflows has run.
   `npm run e2e:real` (`playwright.real.config.ts`) opens CafAI from
   Decaid's port 3000 and checks it is ready, connected and showing a live
   group temperature. docs/SIMULATOR.md section 6 has the steps for the
-  owner's Windows simulator. Why: a write against a tablet changes a real
+  owner's Windows simulator; there, on 2026-10-10, every check passed
+  against Decaid 0.8.8+2900 (`aab5f938`, the pin) with the writes and the
+  simulated shot (31, then 32 with the read of every batch), and so did
+  `npm run e2e:real`. Why: a write against a tablet changes a real
   machine's workflow, profile library and bean library, while the reads
   alone show whether a Decaid sends what CafAI expects.
 - **D105. A daily watch, a real Decaid in CI, and a release gate.**
@@ -1309,3 +1325,196 @@ workflows has run.
   machine (streamline.md section 4.1: validate and clamp at the skin
   boundary), and writing only what changed keeps CafAI from undoing values
   another skin set.
+- **D115. "Which coffee is it?" comes first.** A new bag's chat opens with
+  this card above the coach's question about the bag
+  (`src/ui/chat/parts/BeanCard.tsx`, the `beanPicker` part in
+  `src/app/types.ts`). It offers the coffees in Decaid's bean library: the
+  unarchived batches of unarchived beans, newest roast date first (batches
+  without one after them, the newest added first), at most 8, each row the
+  bean's name, its roaster and the roast date, with **Use this**. CafAI
+  reads them in two requests whatever the size of the library:
+  `GET /api/v1/beans`, and `GET /api/v1/bean-batches`, which answers every
+  bean's batches at once (the spec read each bean's batches, one request
+  per bean). The card is up at once and says "Looking in Decaid's beans…"
+  while they are read; the rows fill in after. **Photo of the bag** (D120)
+  and **Something else** work from the start: while the rows load, and
+  when Decaid is away or its library is empty (no rows then). A pick fills
+  the bag from the batch and its bean (the name, cut to 40 characters; the
+  roaster; the country and region as the origin; the process; the notes;
+  the roast level when it is one of CafAI's five, whatever its case; the
+  roast date) and links both ids before anything else, so a later save adds
+  no second batch (D102). Then the coach's intake starts with "The user
+  picked <name> by <roaster> from Decaid's bean library: <details>." and
+  the same details in the context block's `bag`, so the coach goes to the
+  starting profiles without saving them again. Something else closes the
+  card, and the coach's question under it waits for the bag described in
+  words, as before. A message typed in the chat closes an open card too
+  ("Set aside: you described the bag in the chat."): the barista answered
+  in words. The stored chat keeps the card's rows with everything a pick
+  fills in, so the card works after a reload and while Decaid is away; one
+  still loading when the page reloads reads its rows again when the bag
+  opens. Why: the coffee is often in the library already (Decaid's screens
+  and DYE2 add it), and one tap gives the coach the bean, the roaster, the
+  roast date and the days it spent frozen, which a barista rarely types.
+  One request per bean would hold the card up on a large library. And the
+  card never waits for Decaid: a bag can always be photographed or
+  described.
+- **D116. A new bag's chat opens at the card's top.** The chat follows its
+  newest row, which on a new bag is the coach's question under "Which
+  coffee is it?", or the stats card under both the first time the chat
+  shows in a session (D91). Followed to its end, the thread would open with
+  the card's title and its newest roasts above the view on a 962x602
+  tablet, where eight rows do not fit. So a new bag's chat opens at the
+  card's top and stays there while the rows under it grow (the card's own
+  rows arriving, the stats card's numbers), until something newer lands,
+  the barista acts (taps a card or sends a message) or scrolls to the end;
+  then it follows as before (`showStart` in `src/ui/chat/followNewest.ts`,
+  `ChatSurface.tsx`). "Newer" is told by the thread's newest row as CafAI
+  hands it to x-chat, not by the rows on screen: x-chat draws a new thread
+  a moment after it gets it, so at first the rows on screen are the old
+  bag's. A barista who scrolls the card while it is held is reading it, so
+  the thread stops following until they act or reach the end. D91 stands:
+  when the stats card shows, it is still the newest row, below the card.
+  Why: the card is the question to answer first, so its title and the
+  newest roasts are what the barista should see, and nothing should pull
+  the card away from under a reading finger.
+- **D117. Roast dates are days, read as written; frozen days do not
+  count.** A batch's roast date, and its freeze and thaw dates, are read as
+  the day they are written with (`YYYY-MM-DD`), whatever zone their
+  timestamp carries (`writtenDate` in `src/coach/roastAge.ts`). Only a
+  moment, such as when DYE2 captured a setup, moves to the device's
+  calendar (`localDay`). The coffee's age is the days from its roast to
+  today, less the days its batch spent in a freezer: from `freezeDate` to
+  `unfreezeDate`, or to today while it has not been thawed, never before
+  the roast or after today. The coach reads it as `roast` at intake and
+  with every shot, counted to that day: "Roasted 2026-10-01 (9 days ago)",
+  "Roasted 2026-09-10 (18 days ago; 12 days in the freezer not counted)",
+  "(today)" on the roast day, and the date alone when it is after today.
+  The freezer dates come from the batch picked on the card; a bag the coach
+  saved or a photo filled has its roast date only. Why: the same day
+  reaches CafAI in three forms. Decaid keeps a plain date as a local
+  timestamp without a zone and gives back one it was sent in UTC as UTC,
+  and DYE2 writes roast dates with `toISOString()`. Read on the local
+  calendar, a UTC midnight is the day before anywhere west of Greenwich, so
+  every coffee would be a day older there. A roast date names a day, not a
+  moment. Frozen coffee barely ages, so a bag roasted 30 days ago that
+  spent 12 in the freezer drinks like an 18-day-old one, and the coach
+  should hear it that way.
+- **D118. Today goes in the intake turn; a correction resends every
+  detail.** `save_bag_details` takes `roastDate` (`YYYY-MM-DD` or null)
+  with the other details, so a roast date said in the chat is saved and
+  goes into the batch CafAI adds for the bag (D102). To turn "roasted 28
+  September" or "3 days ago" into a date the coach needs today's date, and
+  it gets it in the intake turn's context block (`today`, on the device's
+  calendar), with `roast` and, for a picked or confirmed bag, `bag`. The
+  system prompt holds no dates. Each `save_bag_details` call replaces every
+  detail, so the tool's description tells the coach, when it corrects one,
+  to send all the others as saved (its earlier call, or the intake's
+  `bag`). A call stored before `roastDate` existed reads as a roast date
+  nobody knows. Why: a date said in words counts from the day it was said,
+  and the intake turn keeps that day beside the words however long the bag
+  takes to dial in. In the system prompt it would be the day of each
+  request, and it would change the prompt with the date: the system prompt
+  opens every request's cached prefix and stays byte-identical across turns
+  and bags (docs/briefs/ENGINE_PROTOCOL.md), so the cache would miss for
+  the whole prefix, the transcript included, each time the day turned. A
+  correction that sent only the corrected detail would blank the rest: the
+  roaster, the origin and the notes would go from the bag and from the
+  coach's later turns.
+- **D119. The coach reads DYE2's setups and never writes them.**
+  `get_recent_setups` is an auto tool with no input
+  (`src/coach/queries.ts`, `src/api/pluginData.ts`): the setups DYE2
+  recorded for this bag's coffee, at most 10, each with its `kind`
+  (`recent`, one DYE2 saw used lately; `favourite` or `recipe`, one the
+  user saved), `sameBatch` (true for the bag's batch, false for an earlier
+  batch of the same bean, null when unknown), the profile title, grind
+  setting, dose, yield, rpm, basket and the day DYE2 captured it, plus the
+  equipment and basket names DYE2 knows. A linked bag matches its batch and
+  its bean's earlier batches, archived ones too
+  (`GET /api/v1/bean-batches?includeArchived=true`); an unlinked one
+  matches on its name and roaster, a roaster missing on either side not
+  counting against it. While DYE2 is loaded, the recent setups come fresh
+  from its `recent-favs` endpoint, which works them out from the shot
+  history; otherwise, or when that fails, from the copy DYE2 keeps in
+  Decaid's store (`autoFavourites`), where the saved favourites, the
+  recipes, the equipment and the baskets always are. A key that does not
+  hold a list reads as empty, with drift. Without DYE2 (not loaded, and
+  none of its keys holding anything) the answer is `{"available": false}`;
+  a Decaid that cannot be read is a tool error in plain words. The
+  description tells the coach to call it at intake for a coffee from the
+  library or one brewed before, and, for a bag described in words, after
+  `save_bag_details`, as there is no name to match before. Why: what the
+  barista already did with this coffee, or with an earlier roast of it (the
+  profile, the grind, the dose), is the best start the coach can have. A
+  recent setup is only one DYE2 saw used, which says nothing about how it
+  tasted, so the coach is told which kind each is. DYE2 is the only writer
+  of its keys (D103).
+- **D120. A bag photo is sent once, and CafAI keeps no copy.** **Photo of
+  the bag** opens the camera or the picker through a file input (D122).
+  CafAI draws the photo at most 1568 px on its longest side, as JPEG at 0.85
+  (`src/ui/chat/bagPhoto.ts`), and sends it once, in a request of its own,
+  to the coach's model chosen in Settings, asking for the bag's details as
+  JSON, each null when the bag does not show it (`src/llm/extractBag.ts`):
+  no tools, no system prompt, low effort, no retry by the client, and no
+  `cache_control`, so nothing is written to the prompt cache. The answer is
+  read leniently (text cut to what a bag detail holds, the roast level
+  matched to CafAI's five, the roast date read as written, D117) and fills
+  **Check the bag's details** (`BagConfirmCard.tsx`), where every field can
+  be changed and the name is required. Confirm saves the details as
+  `save_bag_details` would and starts the coach's intake with "The user
+  confirmed these details read from a photo of the bag: …"; a bag already
+  in the library reuses its bean, and the batch with the same roast date
+  (D102). A message typed in the chat instead sets the card aside, with
+  nothing saved. The photo is never stored, mirrored, logged or kept in the
+  transcript: no field of the bag, the iteration or the chat holds it.
+  Without an API key the chat says "Add your API key in Settings first.",
+  and a photo that cannot be read leaves the card open and says why. Why: a
+  label is quicker to photograph than to type on a tablet. At 1568 px the
+  print stays legible and the request small: current Claude models read
+  images up to 2576 px, at up to three times the image tokens, which a
+  label does not need, and older ones scale anything over 1568 px down
+  themselves. A cache write is billed at 1.25 times the input, and this
+  request never repeats. A photo has no reason to outlive the details read
+  from it, and the confirm card is there because a model can misread a
+  label.
+- **D121. A shot the Visualizer plugin uploaded links to its page.** While
+  `visualizer.reaplugin` is loaded (D103), after a shot's card reaches the
+  chat CafAI reads the plugin's `lastUploadedShot` from Decaid's store
+  every 3 s for 30 s (`watchVisualizer` in `src/app/engine/engine.ts`).
+  When it names this shot, CafAI reads `lastVisualizerId`, which the plugin
+  writes with it, and the card gets **On Visualizer**, a plain link to
+  `https://visualizer.coffee/shots/<id>` that Decaid opens in the system
+  browser. The link is kept on the iteration (`visualizerUrl`, optional, so
+  older records and exports still import), so History's shot row has it
+  too, and it reaches the bag's stored chat even when another bag is open
+  by then. Only a Visualizer shot page is ever linked, whatever an imported
+  record holds. A look Decaid does not answer is a look missed, and after
+  30 s without a match there is no link. Why: the plugin uploads the shot
+  by itself, about 5 s after Decaid saves it, and the taste and stars CafAI
+  writes reach it there (D61), so the shot's page belongs one tap from its
+  card. The plugin keeps only its last upload, so the look must come soon
+  after the shot; every 3 s for 30 s is streamline's rule.
+- **D122. The camera is a file input, never getUserMedia.** The photo comes
+  through `<input type="file" accept="image/*" capture="environment">`,
+  and ESLint bans `navigator.mediaDevices` and `getUserMedia` ("Camera
+  access needs Decaid's per-skin consent; CafAI uses <input type=file
+  capture>."). What Decaid does with the input depends on its version.
+  Decaid 0.8.8, the pin, has no handler of its own: the WebView plugin's
+  own file chooser takes the input, and whether it offers the camera on a
+  tablet is not verified (docs/HARDWARE_TEST_PLAN.md section 12, step 8).
+  Decaid's `main` (`af4e995`, after 0.8.8: `npm run decaid:watch` listed
+  its camera files on 2026-10-10, and docs/audit/2026-10-09/decaid.md
+  sections 2.5 and 2.6 read them) brings, for its next release, per-skin
+  consent for the live camera through `getUserMedia` (Android, iOS and
+  macOS: Ask, Allow or Deny, kept per skin) and, on Android, a file
+  chooser of its own that asks for a native confirmation before every
+  capture from an input of exactly CafAI's shape (images only, with
+  `capture`), whatever the stored camera answer; its dialog reads 'Allow
+  "CafAI" to receive images from your camera?', and a video capture is
+  refused. Both need the skin installed and served from its own port, so a
+  skin served with `--skin-path` gets no camera. Why: one still photo is
+  all the intake needs, and a file input takes it the same way in a phone's
+  browser, in Decaid 0.8.8 (if its chooser offers the camera) and in the
+  next Decaid. A live stream would ask for more than CafAI needs, and needs
+  a secure context, which a phone on the network
+  (`http://<tablet-ip>:3000`) is not.

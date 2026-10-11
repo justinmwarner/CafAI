@@ -51,9 +51,8 @@ replayed unchanged (D24, D25, `docs/briefs/ENGINE_PROTOCOL.md`).
 
 ## Smaller items carried from MORNING.md
 
-- Teaching mode, personas, cross-user learning, bag photos (an `image`
-  content block exists in the LLM types), voice.
-- Steam and hot-water parameter editors, device-connect screens (the client
-  has `connectKind()`), a screensaver.
-- Linking Decaid's bean and batch entities (only coffee name and roaster
-  travel today).
+- Teaching mode, personas, cross-user learning, voice. (Bag photos came
+  with the Decaid alignment, 2026-10-10: D120.)
+- A screensaver. (Steam, hot water and flush settings, Connect for a
+  dropped machine or scale, and the link to Decaid's bean and batch
+  entities came with the Decaid alignment: D114, D111, D102.)

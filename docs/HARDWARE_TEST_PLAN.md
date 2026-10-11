@@ -4,8 +4,9 @@ Everything in CafAI so far was verified against mocks built from Decaid's
 source; nothing has touched a real machine. This checklist is for the first
 session on a DE1 with Decaid. It covers what the owner's answers leave open
 (QUESTIONS #1, #4 and #9), every check an answer deferred to the machine
-(#3, #7, #8), and what the Decaid alignment of 2026-10-09 added (section 12,
-QUESTIONS #10). Allow 90-120 minutes and about 12 shots.
+(#3, #7, #8), and what the Decaid alignment of 2026-10-09 and 10 added, the
+bag photo, the Visualizer link and DYE2 included (section 12, QUESTIONS #10).
+Allow 2 to 2.5 hours and about 14 shots.
 
 For each step, write what you saw in the results table at the end (pass,
 fail, or a note). The saved JSON files and log excerpts matter as much as the
@@ -100,7 +101,9 @@ ticks: they decide the next changes.
 
 ## 3. The first version, and the wait for the machine (QUESTIONS #1, D55, D57)
 
-1. Coach -> **New bag** -> describe the coffee -> tap a template.
+1. Coach -> **New bag**. The chat opens on "Which coffee is it?": tap
+   **Something else** and describe the coffee (picking it from Decaid's
+   bean library is section 12, step 10) -> tap a template.
 2. Expected: "Loading <Bean> v1 on the machine…", then "Loaded <Bean> v1 on
    the machine.". Record the time between the two (a stopwatch is fine) and,
    in the log watcher, the time from the first "encoding step" line to
@@ -288,7 +291,7 @@ this bag's, and the banner offers Retry to load the bag's version.
    tablet: the phone's Coach tab shows the live strip, and its Shot tab the
    running time.
 
-## 12. Decaid alignment: the rating scale, Connect, gateway mode, drink settings, Next step, Heating, the keyboard, the camera (D98, D101, D111-D114)
+## 12. Decaid alignment: the rating scale, Connect, gateway mode, drink settings, Next step, Heating, the keyboard, the bag photo, Visualizer, DYE2 (D98, D101, D111-D122)
 
 1. **The rating scale (QUESTIONS #10, D101).** Before the first stars of a
    session, CafAI asks the tablet's Decaid which rating scale it keeps.
@@ -385,17 +388,76 @@ this bag's, and the banner offers Retry to load the bag's version.
    CafAI does not lift its layout for the keyboard, and streamline does (it
    lifts its whole canvas by the focused field's overlap with the keyboard,
    read from `visualViewport`, b10fabe); that would be the fix.
-8. **Camera consent for the bag photo.** This needs the bag photo, which
-   comes with the next build; until then, skip it. Install CafAI from its
-   zip, as section 0 says: Decaid ties camera consent to an installed skin,
-   and gives none to one served from `--skin-path`. Start a new bag and
-   take a photo of the bag. Expected: Decaid asks for your consent before
-   the camera opens. Record the prompt's words, and whether Decaid asks
-   again for the next photo (its source says each photo taken through a
-   file input needs its own confirmation, whatever the stored camera answer
-   is). Answer Deny once and record what CafAI shows. Decaid gives up on its
-   live-camera prompt after 30 s, which counts as no answer; that answer can
-   be changed later in Decaid's skin selector (Ask, Allow or Deny).
+8. **The bag photo (D120, D122).** Record the Decaid version first: what
+   the camera does depends on it.
+   1. **On Decaid 0.8.8** (the release CafAI is pinned to): Coach -> **New
+      bag** -> **Photo of the bag** on "Which coffee is it?". Decaid 0.8.8
+      leaves the file input to its WebView's own file chooser, and nobody
+      has seen what that offers on a tablet. Record what opens: the camera
+      at once, a chooser that offers the camera and files, or files only
+      (then pick a photo of a bag taken earlier with the tablet's camera
+      app, if it has one).
+   2. Cancel it (Back, or the chooser's cancel). Expected: back on the
+      card, nothing new in the chat, and the card still answers: Photo of
+      the bag, Something else and the coffees' **Use this** all work.
+   3. Take or pick a photo of a real bag, label up, in good light.
+      Expected: "Reading the bag…" with a moving bar, then **Check the
+      bag's details** with what the label says, and the card shows "Photo
+      of the bag" as its answer. Record what it got right and wrong (the
+      roast date above all: a best-before date there would be wrong) and
+      how long it took. Fix a field and tap **Confirm**. Expected: the
+      coach goes on to the starting profiles; if the bag has a roaster,
+      "Added to Decaid's beans." follows ("Already in Decaid's beans." for
+      a bag the library had with that roast date), and
+      `http://<tablet>:8080/api/v1/bean-batches` has the batch with the
+      roast date as printed.
+   4. Nothing of the photo stays: neither History -> **Export** -> Copy nor
+      `http://<tablet>:8080/api/v1/store/cafai?full=1` holds image data
+      (no long run of base64 letters, no `/9j/`, which is how a JPEG starts
+      in base64).
+   5. **On the first Decaid release after 0.8.8 with camera access for
+      skins** (Decaid's `main` has it at `af4e995`): install CafAI from its
+      zip, as section 0 says (Decaid gives no camera to a skin served with
+      `--skin-path`). Tap **Photo of the bag**. Expected: before the camera
+      opens, Decaid's own dialog, "Camera access", 'Allow "CafAI" to receive
+      images from your camera?', with Deny and Allow; after the first Allow,
+      Android may ask for the camera permission once. Tap **Allow**: the
+      camera opens, and the photo goes on as in step 3. On the next new bag,
+      tap Photo of the bag again: Decaid asks again (it confirms every photo
+      taken through a file input, whatever was answered before). Tap
+      **Deny**: no camera, and the card stays as it was, with nothing in the
+      chat (CafAI receives no file). Leaving the dialog alone for 30 s counts
+      as Deny. Record the dialog's words and both outcomes. (The Ask, Allow
+      or Deny choice in Decaid's skin selector is for live camera, which
+      CafAI never asks for.)
+9. **On Visualizer after a real upload (D121).** Needs Decaid's Visualizer
+   plugin loaded (`/api/v1/plugins`: `visualizer.reaplugin` with
+   `"loaded": true`) and set up with your Visualizer account to upload
+   shots. Pull a shot from CafAI. Expected: a few seconds after the shot's
+   card reaches the chat, **On Visualizer** under its curves, above the
+   stars (CafAI looks every 3 s for 30 s). Tap it: Decaid opens the page in
+   the system browser, and it is this shot (the same time and weight).
+   History -> the bag -> that shot's row has the same link. Record how long
+   after the card the link came, or that it never did, and then save
+   `/api/v1/store/visualizer.reaplugin/lastUploadedShot` and
+   `/api/v1/store/visualizer.reaplugin/lastVisualizerId`, which say what
+   the plugin last uploaded.
+10. **A coffee DYE2 has seen (D115-D119).** Needs DYE2 loaded and a coffee
+    in Decaid's bean library that DYE2 has recorded shots for (a bean with
+    a batch whose roast date is set; DYE2's own pages add both). Coach ->
+    **New bag**. Expected: "Which coffee is it?" shows from its top,
+    "Looking in Decaid's beans…" for a moment, then the library's newest
+    roasts (at most 8), each with its roaster and "Roasted <date>"; each
+    date is the one DYE2 shows, not a day earlier. Tap **Use this** on the
+    coffee DYE2 has seen. Expected: no question about the bag; the coach
+    says how old the coffee is (less the days frozen, if the batch records
+    them), goes to the starting profiles, and may mention what DYE2
+    recorded (the profile, grind or dose you used). If it does not, ask it
+    "What did I use for this coffee before?": it should answer from DYE2's
+    setups and say whether they were for this roast or an earlier one.
+    Record whether what it says matches DYE2's own record. After v1 loads,
+    `/api/v1/workflow` -> `context.beanBatchId` is that batch, and
+    `coffeeName` and `coffeeRoaster` are the bean's.
 
 ## Results
 
@@ -431,7 +493,10 @@ this bag's, and the banner offers Retry to load the bag's version.
 | 12 | 5 | Next step moves one step per tap, gone on the last step | | |
 | 12 | 6 | Heating after a wake, the countdown, then Ready | | |
 | 12 | 7 | Composer in view with the keyboard open | | |
-| 12 | 8 | Camera consent for the bag photo (next build) | | |
+| 12 | 8.1-8.4 | Decaid 0.8.8: what Photo of the bag opens; cancel keeps the card; the label read into the confirm card; nothing of the photo stored | | |
+| 12 | 8.5 | Next Decaid: its dialog before every photo; Allow opens the camera, Deny leaves the card as it was | | |
+| 12 | 9 | On Visualizer after a real upload; this shot's page; the same link in History | | |
+| 12 | 10 | A coffee DYE2 has seen: picked on the card, linked, its age and DYE2's setups used | | |
 
 Send back this table, the saved shot and profile JSON files, the `[CafAI]`
 lines from `/api/v1/webview/logs`, the output of `npm run test:decaid`, and,
