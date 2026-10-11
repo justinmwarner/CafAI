@@ -4,13 +4,19 @@
 import { describe, expect, it } from 'vitest';
 import { LlmError } from './types.ts';
 import {
+  ANTHROPIC_WORDING,
+  computerWording,
   describeHttpError,
   errorFromHttp,
   errorFromStreamError,
   extractErrorDetail,
+  hideSecret,
   networkError,
   noApiKeyError,
   parseRetryAfter,
+  streamDroppedError,
+  timeoutError,
+  unreadableReplyError,
 } from './errors.ts';
 
 const body = (type: string, message: string) => JSON.stringify({ type: 'error', error: { type, message } });
@@ -113,6 +119,93 @@ describe('fixed sentences', () => {
     // A phone calls Anthropic itself too: "this device", not the tablet.
     expect(error.message).toBe("Could not reach Anthropic. Check this device's internet connection.");
     expect(error.retryable).toBe(true);
+  });
+});
+
+describe('wording per provider', () => {
+  const ADDRESS = '192.168.1.20:8877';
+  const computer = computerWording(ADDRESS);
+
+  it("is Anthropic's by default, word for word as before", () => {
+    expect(timeoutError('first_byte').message).toBe('Anthropic took too long to answer. Try again.');
+    expect(timeoutError('idle').message).toBe('The reply from Anthropic stalled. Try again.');
+    expect(streamDroppedError().message).toBe('The connection to Anthropic dropped before the reply finished. Try again.');
+    expect(unreadableReplyError().message).toBe('Anthropic sent a reply CafAI could not read. Try again.');
+    expect(describeHttpError(401, body('authentication_error', 'invalid x-api-key'), ANTHROPIC_WORDING)).toBe(
+      'Anthropic did not accept your API key. Check it in Settings.',
+    );
+    // Anthropic's own sentences are for developers: only a bad request's reason is repeated, after ours.
+    expect(describeHttpError(429, body('rate_limit_error', 'Number of request tokens has exceeded your per-minute rate limit'))).toBe(
+      'Anthropic is rate limiting. Wait a moment and try again.',
+    );
+  });
+
+  it('names CafAI Bridge, its address and your computer, for the coach on the computer', () => {
+    expect(noApiKeyError(computer)).toMatchObject({ kind: 'no_api_key', message: 'Add the code CafAI Bridge shows on your computer in Settings.' });
+    expect(networkError(computer)).toMatchObject({
+      kind: 'network',
+      retryable: true,
+      message: 'Could not reach CafAI Bridge at 192.168.1.20:8877. Check it is running on your computer and that this device is on the same network.',
+    });
+    expect(timeoutError('first_byte', computer).message).toBe('Your computer took too long to answer. Try again.');
+    expect(timeoutError('idle', computer).message).toBe('The reply from your computer stalled. Try again.');
+    expect(streamDroppedError(computer).message).toBe('The connection to your computer dropped before the reply finished. Try again.');
+    expect(unreadableReplyError(computer).message).toBe(
+      'CafAI Bridge sent a reply CafAI could not read. Update CafAI Bridge and try again.',
+    );
+  });
+
+  it("shows the bridge's own sentence for any failed status, as it is, keeping the kind", () => {
+    const cases: Array<[number, string, LlmError['kind']]> = [
+      [400, 'invalid_request_error', 'bad_request'],
+      [401, 'authentication_error', 'auth'],
+      [403, 'permission_error', 'auth'],
+      [404, 'not_found_error', 'bad_request'],
+      [429, 'rate_limit_error', 'rate_limit'],
+      [500, 'api_error', 'server'],
+      [503, 'overloaded_error', 'overloaded'],
+    ];
+    for (const [status, type, kind] of cases) {
+      const sentence = `Claude Code on your computer says ${status}. Do this.`;
+      const error = errorFromHttp(status, body(type, sentence), computer);
+      expect(error, String(status)).toMatchObject({ kind, status, message: sentence });
+      // Never "Anthropic rejected the request:", nor any other prefix.
+      expect(describeHttpError(status, body(type, sentence), computer)).toBe(sentence);
+    }
+    const tooOld = 'Claude Code on your computer is too old for claude-opus-5-5 (it needs 2.1.280 or newer). Run claude update there, then try again.';
+    expect(errorFromStreamError({ type: 'error', error: { type: 'invalid_request_error', message: tooOld } }, computer)).toMatchObject({
+      kind: 'bad_request',
+      message: tooOld,
+    });
+  });
+
+  it('falls back to its own words when the bridge sent no sentence', () => {
+    expect(describeHttpError(401, '', computer)).toBe('CafAI Bridge did not accept the code. Check it in Settings.');
+    expect(describeHttpError(403, '<html>Forbidden</html>', computer)).toBe('CafAI Bridge did not accept the code. Check it in Settings.');
+    expect(describeHttpError(429, '', computer)).toBe('CafAI Bridge is rate limiting. Wait a moment and try again.');
+    expect(describeHttpError(529, '', computer)).toBe('Claude is overloaded right now. Try again in a minute.');
+    expect(describeHttpError(502, '<html>bad gateway</html>', computer)).toBe('CafAI Bridge ran into trouble on your computer. Try again shortly.');
+    expect(describeHttpError(400, '', computer)).toBe('CafAI Bridge rejected the request. Update CafAI Bridge and try again.');
+    expect(describeHttpError(404, 'Not Found', computer)).toBe('Could not find CafAI Bridge at 192.168.1.20:8877. Check the address in Settings.');
+    expect(describeHttpError(400, '{"detail":"no such route"}', computer)).toBe('CafAI Bridge rejected the request: no such route');
+    expect(describeHttpError(500, body('api_error', '   '), computer)).toBe('CafAI Bridge ran into trouble on your computer. Try again shortly.');
+    expect(errorFromStreamError({ nonsense: true }, computer)).toMatchObject({
+      kind: 'server',
+      message: 'CafAI Bridge ran into trouble on your computer. Try again shortly.',
+    });
+  });
+
+  it('keeps a long sentence from the bridge to a readable length', () => {
+    expect(describeHttpError(500, body('api_error', 'x'.repeat(1000)), computer)).toHaveLength(300);
+  });
+});
+
+describe('hideSecret', () => {
+  it('hides a secret in any case and through the dashes or spaces it may be written with', () => {
+    expect(hideSecret('Code ABCDEFGH, ABCD-EFGH, abcd efgh, a-b-c-d-e-f-g-h.', 'ABCD-EFGH')).toBe('Code [key], [key], [key], [key].');
+    expect(hideSecret('key sk-ant-api03-x.y+z here', 'sk-ant-api03-x.y+z')).toBe('key [key] here');
+    expect(hideSecret('nothing here', 'ABCDEFGH')).toBe('nothing here');
+    expect(hideSecret('nothing here', ' - ')).toBe('nothing here');
   });
 });
 

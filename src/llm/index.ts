@@ -4,15 +4,19 @@ export { describeIssues, toToolDefinition, zodValidator } from './schema.ts';
 export { createSseParser, type SseEvent, type SseParser } from './sse.ts';
 export {
   abortedError,
+  ANTHROPIC_WORDING,
+  computerWording,
   describeHttpError,
   errorFromHttp,
   errorFromStreamError,
   extractErrorDetail,
+  hideSecret,
   networkError,
   noApiKeyError,
   parseRetryAfter,
   refusalError,
   stuckError,
+  type ProviderWording,
 } from './errors.ts';
 export { createTurnAssembler, type TurnAssembler } from './assemble.ts';
 export {
@@ -26,6 +30,7 @@ export {
   createAnthropicProvider,
   type AnthropicHttpRequest,
   type AnthropicProviderOptions,
+  type RetryContext,
 } from './anthropic.ts';
 export { CUT_OFF_MESSAGE, DEFAULT_MAX_MODEL_CALLS, contentText, runConversation } from './runner.ts';
 export {

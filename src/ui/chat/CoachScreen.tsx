@@ -25,6 +25,7 @@ import { isShotRunning } from '../../api/workflow.ts';
 import { shotTraceFor } from '../machine/shotTrace.ts';
 import { StatsCard } from '../machine/StatsCard.tsx';
 import { navigate } from '../router.ts';
+import { coachErrorFor, useCoachRunsOnComputer } from '../settings/coachSourceView.ts';
 import { useLayout } from '../shell/layout.ts';
 import { TID } from '../testIds.ts';
 import { templateName } from '../history/historyModel.ts';
@@ -233,20 +234,23 @@ function EmptyState({ children }: { children: ReactNode }) {
 const KEY_AGAIN = "Decaid was updated or this browser's storage was cleared. Your bags are back; paste your API key again.";
 
 function ApiKeyCard({ settingsHref, restored }: { settingsHref: string; restored: boolean }) {
+  // Settings > Where the coach runs: on the user's computer the coach needs CafAI Bridge's code instead.
+  const onComputer = useCoachRunsOnComputer();
   return (
     <EmptyState>
       <KeyIcon sx={{ fontSize: 40, color: 'primary.main' }} />
       <Typography variant="h6" component="h2" sx={{ mt: 1 }}>
-        Add your Anthropic API key to start coaching
+        {onComputer ? 'Add the code CafAI Bridge shows on your computer to start coaching' : 'Add your Anthropic API key to start coaching'}
       </Typography>
-      {restored ? (
+      {restored && !onComputer ? (
         <Typography variant="body2" sx={{ mt: 1 }}>
           {KEY_AGAIN}
         </Typography>
       ) : null}
       <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
-        The key stays on this device unless you choose in Settings to keep a copy in Decaid. You pay Anthropic directly for
-        what the coach uses.
+        {onComputer
+          ? 'The coach runs on your computer with your Claude plan, so it needs no API key. The code stays on this device.'
+          : 'The key stays on this device unless you choose in Settings to keep a copy in Decaid. You pay Anthropic directly for what the coach uses.'}
       </Typography>
       <Button variant="contained" href={settingsHref} sx={{ mt: 2.5, minHeight: 48, px: 3 }}>
         Open Settings
@@ -294,6 +298,7 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
   const messages = useCoach((s) => s.messages);
   const busy = useCoach((s) => s.busy);
   const error = useCoach((s) => s.error);
+  const onComputer = useCoachRunsOnComputer();
   const canUndo = useCoach((s) => s.canUndo);
   // A shot belongs to the bag on screen: no switching while it is pulled.
   const shotRunning = useTelemetry(isShotRunning);
@@ -418,7 +423,7 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
           ) : null}
         </Stack>
       ) : null}
-      {error ? <ErrorBanner error={error} /> : null}
+      {error ? <ErrorBanner error={coachErrorFor(error, onComputer)} /> : null}
       {body}
     </Box>
   );

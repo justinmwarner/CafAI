@@ -15,6 +15,7 @@ import Typography from '@mui/material/Typography';
 import ForumRounded from '@mui/icons-material/ForumRounded';
 import { keyframes } from '@mui/material/styles';
 import { useCoach, useServices } from '../../app/services.tsx';
+import { useCoachRunsOnComputer } from '../settings/coachSourceView.ts';
 import { TID } from '../testIds.ts';
 import { useSharedLoadedProfile } from './LoadedProfileContext.tsx';
 import type { LoadedProfileState } from './useLoadedProfile.ts';
@@ -49,6 +50,8 @@ export interface CoachNoteProps {
 
 interface NoteFacts {
   hasApiKey: boolean;
+  /** The coach runs on the user's computer (Settings > Where the coach runs): it needs CafAI Bridge's code, not a key. */
+  onComputer?: boolean;
   /** A bag with an active version: a shot the coach can read as part of a dial-in. */
   coaching: boolean;
   versionTitle: string | null;
@@ -57,7 +60,8 @@ interface NoteFacts {
 }
 
 /** What the note says while a shot runs; the first that applies wins. */
-function liveNote({ hasApiKey, coaching, versionTitle, loaded }: NoteFacts): string {
+function liveNote({ hasApiKey, onComputer, coaching, versionTitle, loaded }: NoteFacts): string {
+  if (!hasApiKey && onComputer) return "Add CafAI Bridge's code in Settings, and I'll read your shots.";
   if (!hasApiKey) return "Add your API key in Settings, and I'll read your shots.";
   if (!coaching || versionTitle === null) {
     return "I'm not coaching this one. Pick a bag and a starting profile, and I'll read your shots.";
@@ -99,6 +103,7 @@ export function CoachNote({ awaitingOutcome }: CoachNoteProps) {
   const trace = useMemo(() => shotTraceFor(telemetry), [telemetry]);
   const live = useSyncExternalStore(trace.subscribe, () => trace.getState().phase === 'live');
   const hasApiKey = useCoach((s) => s.hasApiKey);
+  const onComputer = useCoachRunsOnComputer();
   const coaching = useCoach((s) => s.activeBag !== null && s.activeVersion !== null);
   const versionTitle = useCoach((s) => s.activeVersion?.title ?? null);
   const loaded = useSharedLoadedProfile();
@@ -158,7 +163,7 @@ export function CoachNote({ awaitingOutcome }: CoachNoteProps) {
             </Box>
           </>
         ) : (
-          liveNote({ hasApiKey, coaching, versionTitle, loaded })
+          liveNote({ hasApiKey, onComputer, coaching, versionTitle, loaded })
         )}
       </Typography>
     </Box>

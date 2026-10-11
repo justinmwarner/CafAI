@@ -14,6 +14,7 @@ import {
   createAnthropicProvider,
   type AnthropicProviderOptions,
 } from './anthropic.ts';
+import { computerWording } from './errors.ts';
 import { toToolDefinition } from './schema.ts';
 import {
   LlmError,
@@ -463,5 +464,144 @@ describe('createAnthropicProvider: abort and timeouts', () => {
     const error = await failure(collect(provider({ timeouts: { firstByteMs: 1000, idleMs: 40 } }).stream(request()), seen));
     expect(error.message).toMatch(/stalled/);
     expect(seen.map((e) => e.type)).toEqual(['message_start']);
+  });
+});
+
+// ---- CafAI Bridge: the same API on the user's computer, its own wording ------
+
+describe('createAnthropicProvider: CafAI Bridge wording', () => {
+  const BRIDGE = 'http://192.168.1.20:8877';
+  const BRIDGE_URL = `${BRIDGE}/v1/messages`;
+  const CODE = 'ABCDEFGH';
+  const bridge = (over: Partial<AnthropicProviderOptions> = {}) =>
+    provider({ baseUrl: BRIDGE, getApiKey: () => Promise.resolve(CODE), wording: computerWording('192.168.1.20:8877'), ...over });
+  const answer = (respond: () => Response | Promise<Response>) => server.use(http.post(BRIDGE_URL, respond));
+
+  it('streams the scripted turn from the bridge with the code as the key', async () => {
+    server.use(...anthropicHandlers({ speed: Infinity, baseUrl: BRIDGE }));
+    const seen: string[] = [];
+    server.use(
+      http.post(BRIDGE_URL, ({ request: req }) => {
+        seen.push(req.headers.get('x-api-key') ?? '');
+      }),
+    );
+    expect(doneTurn(await collect(bridge().stream(request()))).stopReason).toBe('tool_use');
+    expect(seen).toEqual([CODE]);
+  });
+
+  it('asks for the code, not a key', async () => {
+    const error = await failure(collect(bridge({ getApiKey: () => Promise.resolve(null) }).stream(request())));
+    expect(error).toMatchObject({ kind: 'no_api_key', message: 'Add the code CafAI Bridge shows on your computer in Settings.' });
+  });
+
+  it('names the address when the bridge cannot be reached', async () => {
+    answer(() => HttpResponse.error());
+    const error = await failure(collect(bridge({ maxRetries: 0 }).stream(request())));
+    expect(error.message).toBe(
+      'Could not reach CafAI Bridge at 192.168.1.20:8877. Check it is running on your computer and that this device is on the same network.',
+    );
+  });
+
+  it('says your computer took too long, or stalled, or dropped the reply', async () => {
+    answer(async () => {
+      await delay(500);
+      return HttpResponse.json({});
+    });
+    const slow = await failure(collect(bridge({ maxRetries: 0, timeouts: { firstByteMs: 40, idleMs: 1000 } }).stream(request())));
+    expect(slow.message).toBe('Your computer took too long to answer. Try again.');
+
+    server.resetHandlers();
+    answer(
+      () =>
+        new HttpResponse(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(sseFrame({ event: 'message_start', data: MESSAGE_START })));
+            },
+          }),
+          { headers: { 'content-type': 'text/event-stream' } },
+        ),
+    );
+    const stalled = await failure(collect(bridge({ timeouts: { firstByteMs: 1000, idleMs: 40 } }).stream(request())));
+    expect(stalled.message).toBe('The reply from your computer stalled. Try again.');
+
+    server.resetHandlers();
+    answer(() => sse(MESSAGE_START, { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }));
+    const dropped = await failure(collect(bridge().stream(request())));
+    expect(dropped.message).toBe('The connection to your computer dropped before the reply finished. Try again.');
+  });
+
+  it('asks for an update when the reply cannot be read', async () => {
+    const unreadable = 'CafAI Bridge sent a reply CafAI could not read. Update CafAI Bridge and try again.';
+    answer(() => HttpResponse.json({ type: 'message', content: [] }));
+    expect((await failure(collect(bridge().stream(request())))).message).toBe(unreadable);
+
+    server.resetHandlers();
+    answer(() => new HttpResponse('event: message_start\ndata: {not json\n\n', { headers: { 'content-type': 'text/event-stream' } }));
+    expect((await failure(collect(bridge().stream(request())))).message).toBe(unreadable);
+  });
+
+  it("shows the bridge's own sentence, from an error body or an error event, as it is", async () => {
+    const signedOut = 'Claude Code on your computer is not signed in. Open a terminal there, run claude and sign in with /login.';
+    answer(() => HttpResponse.json(errorBody('authentication_error', signedOut), { status: 401 }));
+    expect(await failure(collect(bridge().stream(request())))).toMatchObject({ kind: 'auth', message: signedOut });
+
+    server.resetHandlers();
+    const failed = 'Claude Code on your computer stopped: the model ran out of room. Try again.';
+    answer(() =>
+      sse(
+        MESSAGE_START,
+        { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+        { type: 'error', error: { type: 'invalid_request_error', message: failed } },
+      ),
+    );
+    expect(await failure(collect(bridge().stream(request())))).toMatchObject({ kind: 'bad_request', message: failed });
+  });
+
+  it('asks shouldRetry about each retryable failure, and how the attempt went', async () => {
+    const asked: Array<{ kind: string; status: number; streamOpened: boolean; timedOut: boolean }> = [];
+    const never = (error: LlmError, context: { streamOpened: boolean; timedOut: boolean }) => {
+      asked.push({ kind: error.kind, status: error.status, ...context });
+      return false;
+    };
+    let calls = 0;
+    answer(() => {
+      calls += 1;
+      return HttpResponse.json(errorBody('api_error', 'Every run is busy.'), { status: 503 });
+    });
+    await failure(collect(bridge({ shouldRetry: never }).stream(request())));
+    answer(() => {
+      calls += 1;
+      return sse({ type: 'ping' }, { type: 'error', error: { type: 'overloaded_error', message: 'Claude is overloaded.' } });
+    });
+    await failure(collect(bridge({ shouldRetry: never }).stream(request())));
+    answer(async () => {
+      calls += 1;
+      await delay(500);
+      return HttpResponse.json({});
+    });
+    await failure(collect(bridge({ shouldRetry: never, timeouts: { firstByteMs: 40, idleMs: 1000 } }).stream(request())));
+    // Not asked about what is never retried (a wrong code).
+    answer(() => {
+      calls += 1;
+      return HttpResponse.json(errorBody('authentication_error', 'No.'), { status: 401 });
+    });
+    await failure(collect(bridge({ shouldRetry: never }).stream(request())));
+
+    expect(calls).toBe(4);
+    expect(asked).toEqual([
+      { kind: 'server', status: 503, streamOpened: false, timedOut: false },
+      { kind: 'overloaded', status: 529, streamOpened: true, timedOut: false },
+      { kind: 'network', status: 0, streamOpened: false, timedOut: true },
+    ]);
+  });
+
+  it('never echoes the code, as sent or as shown', async () => {
+    for (const echoed of [CODE, 'ABCD-EFGH', 'abcd efgh']) {
+      server.resetHandlers();
+      answer(() => HttpResponse.json(errorBody('authentication_error', `Wrong code ${echoed}.`), { status: 401 }));
+      const error = await failure(collect(bridge().stream(request())));
+      expect(error.message).toBe('Wrong code [key].');
+    }
   });
 });

@@ -29,8 +29,10 @@ import {
   withOther,
 } from '../coach/index.ts';
 import type { GrinderInfo } from '../coach/types.ts';
-import { createAnthropicProvider, extractBag, resolveModel, runConversation, toToolDefinition, zodValidator } from '../llm/index.ts';
+import { extractBag, resolveModel, runConversation, toToolDefinition, zodValidator } from '../llm/index.ts';
+import { DEFAULT_COACH_SOURCE, type CoachSourceStore } from '../storage/coachSource.ts';
 import type { SecretStore } from '../storage/types.ts';
+import { createCoachProvider } from './coachAccess.ts';
 import type { ApiPort, CoachPort, LlmPort, ShotSource } from './engine/ports.ts';
 
 /** Shot reference fields in the query tools' inputs. */
@@ -87,13 +89,16 @@ export function createCoachPort(): CoachPort {
   };
 }
 
-export function createLlmPort(secrets: SecretStore): LlmPort {
-  const getApiKey = () => secrets.getApiKey();
+/** Without a saved choice the coach runs on Anthropic, as it always has. */
+const ON_ANTHROPIC: Pick<CoachSourceStore, 'get'> = { get: async () => ({ ...DEFAULT_COACH_SOURCE }) };
+
+/** `coachSource`: where the coach runs, Anthropic or CafAI Bridge, read at every request (coachAccess.ts). */
+export function createLlmPort(secrets: SecretStore, coachSource: Pick<CoachSourceStore, 'get'> = ON_ANTHROPIC): LlmPort {
   // A photo of the bag goes once (6.8): a failed request is not sent again
   // on its own; the barista takes another photo.
-  const photoReader = createAnthropicProvider({ getApiKey, maxRetries: 0 });
+  const photoReader = createCoachProvider({ secrets, coachSource, maxRetries: 0 });
   return {
-    provider: createAnthropicProvider({ getApiKey }),
+    provider: createCoachProvider({ secrets, coachSource }),
     run: (request) => runConversation({ ...request, model: resolveModel(request.model) }),
     toolDefinition: toToolDefinition,
     validator: zodValidator,

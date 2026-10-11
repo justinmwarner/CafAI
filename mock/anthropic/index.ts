@@ -1,4 +1,5 @@
 export { ANTHROPIC_API_ORIGIN, anthropicHandlers, resetAnthropicMock, type AnthropicMockOptions } from './handlers.ts';
+export { BRIDGE_MOCK_ORIGIN, bridgeHandlers, MOCK_BRIDGE_HEALTH, mockBridgeStatus } from './bridge.ts';
 export {
   BAG_PHOTO_ANSWER,
   createScenarioMemory,

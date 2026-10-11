@@ -34,6 +34,8 @@ import type { Settings } from '../../storage/types.ts';
 import { TID } from '../testIds.ts';
 import { AboutDecaid } from './AboutDecaid.tsx';
 import { AppearanceSection } from './AppearanceSection.tsx';
+import { CoachSourceSection } from './CoachSourceSection.tsx';
+import { useApiKeyView, useCoachRunsOnComputer } from './coachSourceView.ts';
 import { DrinkSettingsSection } from './DrinkSettingsSection.tsx';
 import { GrinderFields } from './GrinderFields.tsx';
 import { grinderPatch, libraryAfterError, NOT_LISTED, type GrinderForm, type GrinderLibrary } from './grinderPicker.ts';
@@ -70,9 +72,11 @@ type KeepState = boolean | 'loading';
 function ApiKeySection() {
   const { storage, coach } = useServices();
   const hasApiKeyInEngine = useCoach((s) => s.hasApiKey);
+  // On the computer the engine's "has a key" is the bridge's code: then the key store says (coachSourceView.ts).
+  const { onComputer, keySaved } = useApiKeyView(hasApiKeyInEngine);
   // What this screen just did wins until the engine has re-read the store.
   const [savedHere, setSavedHere] = useState<boolean | null>(null);
-  const hasKey = savedHere ?? hasApiKeyInEngine;
+  const hasKey = savedHere ?? keySaved;
   const [draft, setDraft] = useState('');
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -152,10 +156,15 @@ function ApiKeySection() {
 
   return (
     <Section title="Anthropic API key">
+      {onComputer ? (
+        <Alert severity="info" sx={{ mb: 1.5 }}>
+          Not used while the coach runs on your computer.
+        </Alert>
+      ) : null}
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
         {hasKey ? <CheckCircleIcon color="success" fontSize="small" /> : null}
         <Typography variant="body1" sx={{ fontWeight: 600 }} role="status">
-          {hasKey ? 'A key is saved on this device.' : 'No key saved yet. The coach needs one to work.'}
+          {hasKey ? 'A key is saved on this device.' : onComputer ? 'No key saved yet.' : 'No key saved yet. The coach needs one to work.'}
         </Typography>
       </Stack>
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }}>
@@ -349,6 +358,7 @@ const GRINDER_LIST_TIMEOUT_MS = 5000;
 
 function CoachSettingsSection({ column }: { column: RefObject<HTMLElement | null> }) {
   const { storage, coach, models, decaid } = useServices();
+  const onComputer = useCoachRunsOnComputer();
   const [form, setForm] = useState<Form | null>(null);
   const [saved, setSaved] = useState<SavedGrinder>({ grinderId: null, grinderName: null });
   const [library, setLibrary] = useState<GrinderLibrary>({ status: 'loading' });
@@ -467,6 +477,11 @@ function CoachSettingsSection({ column }: { column: RefObject<HTMLElement | null
             </option>
           ))}
         </TextField>
+        {onComputer ? (
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: -1 }}>
+            The prices do not apply while the coach runs on your computer: it uses your Claude plan.
+          </Typography>
+        ) : null}
         <GrinderFields
           form={form?.grinder ?? null}
           library={library}
@@ -543,6 +558,7 @@ export function SettingsScreen() {
           Settings
         </Typography>
         <AppearanceSection />
+        <CoachSourceSection />
         <ApiKeySection />
         <CoachSettingsSection column={column} />
         <DrinkSettingsSection />
