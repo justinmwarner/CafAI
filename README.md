@@ -156,8 +156,8 @@ never change pump type, step order or count, sensors, or exit types.
 From a GitHub release:
 
 1. On the tablet, open Decaid's dashboard -> **Skins** -> **+** -> **GitHub
-   Release**, and enter this repository (`owner/name`). Decaid picks the
-   release's `.zip` asset.
+   Release**, and enter `justinmwarner/CafAI`. Decaid picks the latest
+   release's `.zip` asset, and checks for a newer release every 12 hours.
 2. Select **CafAI** as the skin.
 3. In CafAI, open **Settings** and paste your Anthropic API key, or set up
    Claude on your computer (below).
@@ -228,6 +228,14 @@ npm run decaid:update -- v0.9.0   # move the pin to another Decaid release
 npm run test:decaid   # CafAI against a running Decaid (needs DECAID_URL; see below)
 npm run e2e:real      # CafAI opened from a running Decaid's port 3000
 ```
+
+**CI and releases.** CI (`.github/workflows/ci.yml`) runs on pull requests.
+Every version tag pushed on a commit of `main` is a release: `npm version
+patch` (it bumps `package.json`, commits and tags `v<version>`), then `git
+push --follow-tags`. The release workflow checks that the tag is on `main`
+and names `package.json`'s version, runs CafAI against the latest Decaid
+release, the whole check and the e2e suite, and only then publishes the zip
+as a GitHub Release, which Decaid installs and updates to.
 
 **Against Decaid's API.** CafAI is checked against Decaid **v0.8.8**
 (`aab5f93`), the pin in `contract/decaid/PIN.json`. `npm run typecheck`

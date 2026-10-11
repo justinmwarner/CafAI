@@ -1,8 +1,8 @@
 name: CI
 
+# Pull requests only (and by hand). A push to main runs nothing; a release
+# runs its own full check before it publishes (release.yml).
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 

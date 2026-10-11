@@ -1676,3 +1676,19 @@ docs/superpowers/specs/2026-10-11-local-claude-design.md.
   bridge, which outlived the task's own action (Ready, result 0), answered
   throughout, and stopped itself at the window's end with its keep-awake
   helper; not tried: a real 05:00 wake, a Mac.
+
+### On GitHub (2026-10-11)
+
+- **D138. CI runs on pull requests; every version tag on main is a
+  release.** The repository is public at github.com/justinmwarner/CafAI
+  (QUESTIONS #9). `ci.yml` runs on pull requests (and by hand), no longer
+  on every push to main; that supersedes "runs on every push" in D94. A
+  `v*` tag pushed on a commit of main runs `release.yml`: a first job
+  checks the tag is on main and names package.json's version, then
+  decaid-live (CafAI against the latest Decaid release), the whole check
+  and the e2e suite, then the zip is published as a GitHub Release.
+  `npm version patch && git push --follow-tags` makes one. Why: the owner
+  wants CI on pull requests and a release for every tagged push to main,
+  so the tablet's Decaid, which polls GitHub every 12 hours and keys
+  updates on the tag, always has the newest tagged build; a tag elsewhere
+  publishes nothing.
