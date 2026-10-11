@@ -80,7 +80,7 @@ export default defineConfig(
   },
   {
     // Tests, mocks and tooling run in Node or only in dev/mock builds.
-    files: ['**/*.test.{ts,tsx}', 'mock/**', 'e2e/**', 'scripts/**', 'tools/**', '*.config.{js,ts}'],
+    files: ['**/*.test.{ts,tsx}', 'mock/**', 'e2e/**', 'scripts/**', 'tools/**', 'bridge/**', '*.config.{js,ts}'],
     languageOptions: {
       globals: { ...globals.node, ...globals.browser },
     },
