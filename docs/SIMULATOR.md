@@ -175,7 +175,7 @@ npm run release:zip     # builds dist\ and release\cafai-<version>.zip
 - **Or serve the build folder** for one run, without installing it:
 
   ```powershell
-  .\Decaid.exe --skin-path E:\source\cafai\dist
+  .\Decaid.exe --skin-path <path-to-cafai>\dist
   ```
 
   Decaid serves the folder as it is, so after `npm run build` a reload shows
@@ -308,7 +308,7 @@ runs them.
 Decaid's port 3000 and checks that it is ready, with the machine connected
 and a group temperature showing. Decaid must serve this repository's build:
 `npm run build`, then start Decaid with
-`.\Decaid.exe --skin-path E:\source\cafai\dist` (part 4).
+`.\Decaid.exe --skin-path <path-to-cafai>\dist` (part 4).
 
 **On Linux, and in CI:** `bash scripts/decaid-ci.sh` downloads Decaid's Linux
 release (`DECAID_TAG`, the latest by default), starts it headless under xvfb
