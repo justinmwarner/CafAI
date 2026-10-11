@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { lanAddresses } from './net.mjs';
+import { isVirtualAdapter, isVpnAdapter, lanAddresses, vpnAdapters } from './net.mjs';
 
 const v4 = (address, internal = false) => ({ address, family: 'IPv4', internal, netmask: '255.255.255.0', mac: '00:00:00:00:00:00', cidr: null });
 
@@ -45,5 +45,27 @@ describe('lanAddresses', () => {
 
   it('copes with no interfaces', () => {
     expect(lanAddresses({})).toEqual([]);
+  });
+});
+
+describe('VPN adapters', () => {
+  it('tells VPN adapters by name, and VPNs and virtual machines from real networks', () => {
+    for (const name of ['ProtonVPN', 'NordLynx', 'Tailscale', 'wg0', 'utun3', 'OpenVPN Wintun', 'Mullvad']) expect(isVpnAdapter(name)).toBe(true);
+    for (const name of ['Ethernet', 'Wi-Fi', 'en0', 'wlan0']) expect(isVpnAdapter(name)).toBe(false);
+    expect(isVirtualAdapter('vEthernet (WSL)')).toBe(true);
+    expect(isVirtualAdapter('ProtonVPN')).toBe(true);
+    expect(isVirtualAdapter('Ethernet')).toBe(false);
+  });
+
+  it('lists the VPN adapters that are up (with an IPv4 address)', () => {
+    expect(
+      vpnAdapters({
+        ProtonVPN: [v4('10.2.0.2')],
+        Ethernet: [v4('192.168.1.90')],
+        utun3: [{ address: 'fe80::1', family: 'IPv6', internal: false }],
+        wg0: [v4('169.254.0.9')],
+      }),
+    ).toEqual(['ProtonVPN']);
+    expect(vpnAdapters({ Ethernet: [v4('192.168.1.90')] })).toEqual([]);
   });
 });

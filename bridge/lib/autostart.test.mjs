@@ -1,24 +1,36 @@
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   REG_DELETE_ARGS,
   REG_QUERY_ARGS,
   RUN_KEY,
   SHORTCUT_SCRIPT,
+  TASK_DELETE_ARGS,
+  TASK_QUERY_ARGS,
   autostartStatus,
   buildLaunchAgentPlist,
+  buildSystemdTimer,
   buildSystemdUnit,
+  buildTaskXml,
   installAutostart,
   macPaths,
+  parsePlistSchedule,
+  parseTaskXml,
+  pmsetWakeCommand,
   quoteSystemdArg,
   quoteWindowsArg,
   regAddArgs,
   runCommand,
   serviceSearchPath,
   shortcutCommand,
+  systemdTimerPath,
   systemdUnitPath,
+  taskCreateArgs,
   uninstallAutostart,
+  utf16WithBom,
   windowsCommandLine,
   windowsShortcutPath,
+  windowsUserId,
   xmlEscape,
 } from './autostart.mjs';
 
@@ -36,11 +48,28 @@ function memoryFs(files = {}) {
     writeFile: (file, text) => {
       store.set(file, text);
     },
+    read: (file) => {
+      if (!store.has(file)) throw new Error(`ENOENT ${file}`);
+      return String(store.get(file));
+    },
     remove: (file) => {
       store.delete(file);
     },
   };
 }
+
+/** A task's XML as built for `start --window 05:00-10:00 --keep-awake` (what schtasks /Query /XML gives back). */
+const taskXml = (overrides = {}) =>
+  buildTaskXml({
+    nodePath: 'C:\\Program Files\\nodejs\\node.exe',
+    script: 'E:\\source\\cafai\\bridge\\cafai-bridge.mjs',
+    flags: ['--window', '05:00-10:00', '--keep-awake'],
+    configDir: 'C:\\Users\\me\\AppData\\Roaming\\CafAI Bridge',
+    window: '05:00-10:00',
+    userId: 'PC\\me',
+    now: new Date(2026, 9, 11, 14, 3),
+    ...overrides,
+  });
 
 /** An exec that answers by command; every call is recorded. */
 function fakeExec(answer = () => ({ code: 0 })) {
@@ -121,7 +150,7 @@ describe('the Startup shortcut command', () => {
 });
 
 describe('autostart on Windows', () => {
-  it('makes the shortcut with PowerShell and clears an old Run value', async () => {
+  it('makes the shortcut with PowerShell and clears an old Run value and schedule', async () => {
     const fs = memoryFs();
     const exec = fakeExec((command, args, options) => {
       if (command === 'powershell.exe') fs.writeFile(options.env.CAFAI_LNK, 'shortcut');
@@ -132,6 +161,7 @@ describe('autostart on Windows', () => {
     expect(exec.mock.calls[0][0]).toBe('powershell.exe');
     expect(exec.mock.calls[0][2].env.APPDATA).toBe(WIN.env.APPDATA);
     expect(exec.mock.calls[1]).toEqual(['reg.exe', REG_DELETE_ARGS]);
+    expect(exec.mock.calls[2]).toEqual(['schtasks.exe', TASK_DELETE_ARGS]);
     expect(fs.dirs.has('C:\\Users\\me\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup')).toBe(true);
   });
 
@@ -152,28 +182,36 @@ describe('autostart on Windows', () => {
     expect(result.error).toMatch(/denied.*reg\.exe: denied/);
   });
 
-  it('removes the shortcut and the Run value', async () => {
+  it('removes the shortcut, the Run value and the scheduled task', async () => {
     const fs = memoryFs({ [LNK]: 'shortcut' });
     const exec = fakeExec();
     const result = await uninstallAutostart({ ...WIN, exec, fs });
-    expect(result.removed).toEqual(['shortcut', 'registry']);
+    expect(result.removed).toEqual(['shortcut', 'registry', 'task']);
     expect(fs.exists(LNK)).toBe(false);
     expect(exec).toHaveBeenCalledWith('reg.exe', REG_DELETE_ARGS);
+    expect(exec).toHaveBeenCalledWith('schtasks.exe', TASK_DELETE_ARGS);
   });
 
-  it('reports nothing removed when neither is there', async () => {
+  it('reports nothing removed when none is there', async () => {
     const result = await uninstallAutostart({ ...WIN, exec: fakeExec(() => ({ code: 1 })), fs: memoryFs() });
     expect(result.removed).toEqual([]);
   });
 
-  it('finds the shortcut, else the Run value', async () => {
-    expect(await autostartStatus({ ...WIN, exec: fakeExec(() => ({ code: 1 })), fs: memoryFs({ [LNK]: '' }) })).toEqual({
+  it('finds the task, else the shortcut, else the Run value', async () => {
+    const only = (wanted) => fakeExec((command) => ({ code: command === wanted ? 0 : 1, stdout: command === 'schtasks.exe' ? taskXml() : '' }));
+    expect(await autostartStatus({ ...WIN, exec: only('schtasks.exe'), fs: memoryFs({ [LNK]: '' }) })).toEqual({
+      installed: true,
+      method: 'task',
+      location: 'CafAI Bridge',
+      schedule: { window: '05:00-10:00', weekdays: false, keepAwake: true, wake: true, enabled: true },
+    });
+    expect(await autostartStatus({ ...WIN, exec: only('none'), fs: memoryFs({ [LNK]: '' }) })).toEqual({
       installed: true,
       method: 'shortcut',
       location: LNK,
     });
-    expect(await autostartStatus({ ...WIN, exec: fakeExec(() => ({ code: 0 })), fs: memoryFs() })).toMatchObject({ installed: true, method: 'registry' });
-    expect(await autostartStatus({ ...WIN, exec: fakeExec(() => ({ code: 1 })), fs: memoryFs() })).toMatchObject({ installed: false });
+    expect(await autostartStatus({ ...WIN, exec: only('reg.exe'), fs: memoryFs() })).toMatchObject({ installed: true, method: 'registry' });
+    expect(await autostartStatus({ ...WIN, exec: only('none'), fs: memoryFs() })).toMatchObject({ installed: false });
   });
 });
 
@@ -325,6 +363,219 @@ describe('autostart on Linux', () => {
     const saved = memoryFs({ '/home/me/.config/systemd/user/cafai-bridge.service': '' });
     expect((await autostartStatus({ ...LINUX, exec: fakeExec(), fs: saved })).installed).toBe(true);
     expect(await uninstallAutostart({ ...LINUX, exec: fakeExec(), fs: saved })).toMatchObject({ removed: [], saved: true });
+  });
+});
+
+describe('the Task Scheduler task (a schedule on Windows)', () => {
+  it('is exactly this XML for --window 05:00-10:00 --keep-awake', () => {
+    expect(taskXml()).toBe(
+      [
+        '<?xml version="1.0" encoding="UTF-16"?>',
+        '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">',
+        '  <RegistrationInfo>',
+        '    <Description>Starts CafAI Bridge every day at 05:00, and at sign-in; it runs only within 05:00-10:00.</Description>',
+        '  </RegistrationInfo>',
+        '  <Triggers>',
+        '    <CalendarTrigger>',
+        '      <StartBoundary>2026-10-11T05:00:00</StartBoundary>',
+        '      <Enabled>true</Enabled>',
+        '      <ScheduleByDay>',
+        '        <DaysInterval>1</DaysInterval>',
+        '      </ScheduleByDay>',
+        '    </CalendarTrigger>',
+        '    <LogonTrigger>',
+        '      <Enabled>true</Enabled>',
+        '      <UserId>PC\\me</UserId>',
+        '    </LogonTrigger>',
+        '  </Triggers>',
+        '  <Principals>',
+        '    <Principal id="Author">',
+        '      <UserId>PC\\me</UserId>',
+        '      <LogonType>InteractiveToken</LogonType>',
+        '      <RunLevel>LeastPrivilege</RunLevel>',
+        '    </Principal>',
+        '  </Principals>',
+        '  <Settings>',
+        '    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>',
+        '    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>',
+        '    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>',
+        '    <StartWhenAvailable>true</StartWhenAvailable>',
+        '    <AllowStartOnDemand>true</AllowStartOnDemand>',
+        '    <Enabled>true</Enabled>',
+        '    <WakeToRun>true</WakeToRun>',
+        '    <ExecutionTimeLimit>PT5M</ExecutionTimeLimit>',
+        '  </Settings>',
+        '  <Actions Context="Author">',
+        '    <Exec>',
+        '      <Command>C:\\Program Files\\nodejs\\node.exe</Command>',
+        '      <Arguments>E:\\source\\cafai\\bridge\\cafai-bridge.mjs start --window 05:00-10:00 --keep-awake</Arguments>',
+        '      <WorkingDirectory>C:\\Users\\me\\AppData\\Roaming\\CafAI Bridge</WorkingDirectory>',
+        '    </Exec>',
+        '  </Actions>',
+        '</Task>',
+        '',
+      ].join('\r\n'),
+    );
+  });
+
+  it('starts Monday to Friday with --weekdays, and does not wake the computer with --no-wake', () => {
+    const xml = taskXml({ weekdays: true, wake: false, flags: ['--window', '05:00-10:00', '--weekdays'] });
+    expect(xml).toContain(
+      [
+        '      <ScheduleByWeek>',
+        '        <DaysOfWeek>',
+        '          <Monday />',
+        '          <Tuesday />',
+        '          <Wednesday />',
+        '          <Thursday />',
+        '          <Friday />',
+        '        </DaysOfWeek>',
+        '        <WeeksInterval>1</WeeksInterval>',
+        '      </ScheduleByWeek>',
+      ].join('\r\n'),
+    );
+    expect(xml).not.toContain('ScheduleByDay');
+    expect(xml).toContain('<WakeToRun>false</WakeToRun>');
+    expect(xml).toContain('Starts CafAI Bridge Monday to Friday at 05:00');
+  });
+
+  it('XML-escapes the paths and the quoted command line', () => {
+    const xml = taskXml({ nodePath: 'C:\\Tools & Co\\node.exe', script: 'C:\\R&D Team\\cafai\\bridge\\cafai-bridge.mjs', configDir: 'C:\\Users\\<me>\\CafAI', userId: 'PC\\a&b' });
+    expect(xml).toContain('<Command>C:\\Tools &amp; Co\\node.exe</Command>');
+    expect(xml).toContain('<Arguments>&quot;C:\\R&amp;D Team\\cafai\\bridge\\cafai-bridge.mjs&quot; start --window 05:00-10:00 --keep-awake</Arguments>');
+    expect(xml).toContain('<WorkingDirectory>C:\\Users\\&lt;me&gt;\\CafAI</WorkingDirectory>');
+    expect(xml).toContain('<UserId>PC\\a&amp;b</UserId>');
+  });
+
+  it('reads the schedule back from a task, as schtasks /Query /XML prints it', () => {
+    expect(parseTaskXml(taskXml())).toEqual({ window: '05:00-10:00', weekdays: false, keepAwake: true, wake: true, enabled: true });
+    expect(parseTaskXml(taskXml({ wake: false, flags: ['--window', '22:00-02:00', '--weekdays'] }))).toEqual({
+      window: '22:00-02:00',
+      weekdays: true,
+      keepAwake: false,
+      wake: false,
+      enabled: true,
+    });
+    const disabled = taskXml().replace('    <Enabled>true</Enabled>\r\n    <WakeToRun>', '    <Enabled>false</Enabled>\r\n    <WakeToRun>');
+    expect(parseTaskXml(disabled).enabled).toBe(false);
+  });
+
+  it('is written as UTF-16LE with a byte order mark, and runs as USERDOMAIN\\USERNAME', () => {
+    const bytes = utf16WithBom('<a/>');
+    expect([...bytes]).toEqual([0xff, 0xfe, 0x3c, 0, 0x61, 0, 0x2f, 0, 0x3e, 0]);
+    expect(windowsUserId({ USERDOMAIN: 'PC', USERNAME: 'me' })).toBe('PC\\me');
+    expect(windowsUserId({ USERNAME: 'me' })).toBe('me');
+  });
+
+  it('creates the task with schtasks from that file, deletes the file, and replaces the shortcut and Run value', async () => {
+    const fs = memoryFs({ [LNK]: 'old shortcut' });
+    let written = null;
+    const exec = fakeExec((command, args) => {
+      if (command === 'schtasks.exe' && args[0] === '/Create') written = fs.store.get(args[4]);
+      return { code: 0 };
+    });
+    const now = new Date(2026, 9, 11, 14, 3);
+    const target = { ...WIN_TARGET, flags: ['--window', '05:00-10:00', '--keep-awake'], window: '05:00-10:00', wake: true };
+    const env = { ...WIN.env, USERDOMAIN: 'PC', USERNAME: 'me' };
+    const result = await installAutostart(target, { ...WIN, env, exec, fs, now: () => now });
+    expect(result).toEqual({ ok: true, method: 'task', location: 'CafAI Bridge', wake: true });
+    const file = path.win32.join(WIN_TARGET.configDir, 'cafai-bridge-task.xml');
+    expect(exec.mock.calls[0]).toEqual(['schtasks.exe', taskCreateArgs(file)]);
+    expect(taskCreateArgs(file)).toEqual(['/Create', '/TN', 'CafAI Bridge', '/XML', file, '/F']);
+    expect([...written.subarray(0, 2)]).toEqual([0xff, 0xfe]);
+    expect(written.subarray(2).toString('utf16le')).toBe(buildTaskXml({ ...target, userId: 'PC\\me', now }));
+    expect(fs.exists(file)).toBe(false);
+    expect(fs.exists(LNK)).toBe(false);
+    expect(exec).toHaveBeenCalledWith('reg.exe', REG_DELETE_ARGS);
+  });
+
+  it('reports what schtasks said when it fails, and leaves the shortcut alone', async () => {
+    const fs = memoryFs({ [LNK]: 'old shortcut' });
+    const exec = fakeExec(() => ({ code: 1, stderr: 'ERROR: Access is denied.\r\n' }));
+    const result = await installAutostart({ ...WIN_TARGET, window: '05:00-10:00' }, { ...WIN, exec, fs, now: () => new Date(2026, 9, 11) });
+    expect(result).toEqual({ ok: false, method: 'task', location: 'CafAI Bridge', error: 'ERROR: Access is denied.' });
+    expect(fs.exists(LNK)).toBe(true);
+    expect([...fs.store.keys()]).toEqual([LNK]);
+  });
+
+  it('asks schtasks for the task by name', () => {
+    expect(TASK_QUERY_ARGS).toEqual(['/Query', '/TN', 'CafAI Bridge', '/XML']);
+    expect(TASK_DELETE_ARGS).toEqual(['/Delete', '/TN', 'CafAI Bridge', '/F']);
+  });
+});
+
+describe('a schedule on macOS and Linux', () => {
+  const scheduled = { ...MAC_TARGET, flags: ['--window', '05:00-10:00', '--keep-awake'], window: '05:00-10:00', home: '/Users/me' };
+
+  it('adds a daily StartCalendarInterval to the LaunchAgent, which runs serve --window', () => {
+    const plist = buildLaunchAgentPlist(scheduled);
+    expect(plist).toContain(
+      ['  <key>StartCalendarInterval</key>', '  <dict>', '    <key>Hour</key>', '    <integer>5</integer>', '    <key>Minute</key>', '    <integer>0</integer>', '  </dict>'].join('\n'),
+    );
+    expect(plist).toContain('    <string>serve</string>\n    <string>--window</string>\n    <string>05:00-10:00</string>');
+    expect(plist).toMatch(/<key>KeepAlive<\/key>\s*<dict>\s*<key>SuccessfulExit<\/key>\s*<false\/>/);
+    expect(buildLaunchAgentPlist({ ...MAC_TARGET, home: '/Users/me' })).not.toContain('StartCalendarInterval');
+  });
+
+  it('starts Monday to Friday with five calendar entries, Weekday 1 to 5', () => {
+    const plist = buildLaunchAgentPlist({ ...scheduled, window: '06:30-09:00', weekdays: true });
+    const weekdays = [...plist.matchAll(/<key>Weekday<\/key>\s*<integer>(\d)<\/integer>\s*<key>Hour<\/key>\s*<integer>6<\/integer>\s*<key>Minute<\/key>\s*<integer>30<\/integer>/g)];
+    expect(weekdays.map((match) => match[1])).toEqual(['1', '2', '3', '4', '5']);
+    expect(plist).toMatch(/<key>StartCalendarInterval<\/key>\s*<array>/);
+  });
+
+  it('reads the schedule back from the LaunchAgent', async () => {
+    expect(parsePlistSchedule(buildLaunchAgentPlist(scheduled))).toEqual({ window: '05:00-10:00', weekdays: false, keepAwake: true });
+    expect(parsePlistSchedule(buildLaunchAgentPlist({ ...MAC_TARGET, home: '/Users/me' }))).toBeNull();
+    const fs = memoryFs({ [PLIST]: buildLaunchAgentPlist(scheduled) });
+    expect(await autostartStatus({ ...MAC, exec: fakeExec(), fs })).toEqual({
+      installed: true,
+      method: 'launchagent',
+      location: PLIST,
+      schedule: { window: '05:00-10:00', weekdays: false, keepAwake: true },
+    });
+  });
+
+  it('prints the pmset line for waking from sleep a minute before the start', () => {
+    expect(pmsetWakeCommand({ window: '05:00-10:00' })).toBe('sudo pmset repeat wakeorpoweron MTWRFSU 04:59:00');
+    expect(pmsetWakeCommand({ window: '05:00-10:00', weekdays: true })).toBe('sudo pmset repeat wakeorpoweron MTWRF 04:59:00');
+    // A minute before Monday 00:00 is Sunday 23:59.
+    expect(pmsetWakeCommand({ window: '00:00-04:00', weekdays: true })).toBe('sudo pmset repeat wakeorpoweron MTWRU 23:59:00');
+    expect(pmsetWakeCommand({ window: '00:00-04:00' })).toBe('sudo pmset repeat wakeorpoweron MTWRFSU 23:59:00');
+  });
+
+  it('builds a systemd timer: every day or Monday to Friday, and Persistent', () => {
+    expect(buildSystemdTimer({ window: '05:00-10:00' })).toBe(
+      [
+        '[Unit]',
+        'Description=Start CafAI Bridge every day at 05:00',
+        '',
+        '[Timer]',
+        'OnCalendar=*-*-* 05:00:00',
+        'Persistent=true',
+        '',
+        '[Install]',
+        'WantedBy=timers.target',
+        '',
+      ].join('\n'),
+    );
+    expect(buildSystemdTimer({ window: '05:00-10:00', weekdays: true })).toContain('OnCalendar=Mon..Fri *-*-* 05:00:00\n');
+  });
+
+  it('prints the service and the timer on Linux, and finds the timer once saved', async () => {
+    const target = { ...LINUX_TARGET, flags: ['--window', '05:00-10:00', '--weekdays'], window: '05:00-10:00', weekdays: true };
+    const result = await installAutostart(target, { ...LINUX, exec: fakeExec(), fs: memoryFs() });
+    expect(result.timerLocation).toBe('/home/me/.config/systemd/user/cafai-bridge.timer');
+    expect(systemdTimerPath({ env: {}, home: '/home/me' })).toBe(result.timerLocation);
+    expect(result.unit).toContain(' serve --window 05:00-10:00 --weekdays');
+    expect(result.timer).toContain('OnCalendar=Mon..Fri *-*-* 05:00:00');
+    const fs = memoryFs({ [result.location]: result.unit, [result.timerLocation]: result.timer });
+    expect(await autostartStatus({ ...LINUX, exec: fakeExec(), fs })).toEqual({
+      installed: true,
+      method: 'systemd',
+      location: result.timerLocation,
+      schedule: { window: '05:00-10:00', weekdays: true, keepAwake: false },
+    });
   });
 });
 

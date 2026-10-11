@@ -16,8 +16,10 @@ import {
   signInState,
   stamp,
 } from './cafai-bridge.mjs';
-import { windowsCommandLine } from './lib/autostart.mjs';
-import { formatCode, loadConfig, paths } from './lib/config.mjs';
+import { buildTaskXml, windowsCommandLine, xmlEscape } from './lib/autostart.mjs';
+import { KEEP_AWAKE_SCRIPT } from './lib/awake.mjs';
+import { formatCode, loadConfig, paths, saveConfig } from './lib/config.mjs';
+import { ELEVATE_SCRIPT, elevatedFirewallScript } from './lib/firewall.mjs';
 
 const HEALTH = { ok: true, app: 'cafai-bridge', version: '0.1.0', protocol: 1 };
 const PLAN = { loggedIn: true, authMethod: 'claude.ai', subscriptionType: 'max' };
@@ -61,10 +63,32 @@ function memoryFs(files = {}) {
     writeFile: (file, text) => {
       store.set(file, text);
     },
+    read: (file) => {
+      if (!store.has(file)) throw new Error(`ENOENT ${file}`);
+      return String(store.get(file));
+    },
     remove: (file) => {
       store.delete(file);
     },
   };
+}
+
+/** Questions answered from a list; the questions are recorded, and running out of answers fails the test. */
+function scriptedPrompt(...answers) {
+  const asked = [];
+  const prompt = {
+    asked,
+    closed: false,
+    ask: vi.fn(async (question) => {
+      asked.push(question);
+      if (answers.length === 0) throw new Error(`No answer left for: ${question}`);
+      return answers.shift();
+    }),
+    close: () => {
+      prompt.closed = true;
+    },
+  };
+  return prompt;
 }
 
 /** A fetch answering `METHOD host:port/path` from a table; anything else is refused like a closed port. */
@@ -100,8 +124,14 @@ function makeDeps(overrides = {}) {
     pid: 4321,
     uid: 501,
     isTTY: false,
+    stdinIsTTY: false,
     out: (text) => out.push(text),
     err: (text) => err.push(text),
+    prompt: () => {
+      throw new Error('setup asked a question in a test that gave no answers');
+    },
+    setTimer: vi.fn(() => 1),
+    clearTimer: vi.fn(),
     fetch: fakeFetch(),
     spawn: vi.fn(() => fakeChild()),
     exec: vi.fn(async () => ({ code: 1, stdout: '', stderr: '' })),
@@ -129,14 +159,21 @@ const codeShown = () => `Code:    ${formatCode(loadConfig(dir).code)}`;
 
 describe('parseArgs', () => {
   it('runs serve when no command is given', () => {
-    expect(parseArgs([])).toEqual({ command: 'serve', options: {} });
+    expect(parseArgs([])).toEqual({ command: 'serve', options: {}, bare: true });
+  });
+
+  it('calls a command line bare only without a command and with no option but --config-dir', () => {
+    expect(parseArgs(['--config-dir', 'cfg']).bare).toBe(true);
+    expect(parseArgs(['--port', '9000']).bare).toBe(false);
+    expect(parseArgs(['serve']).bare).toBe(false);
   });
 
   it('reads every flag, with a space or an equals sign', () => {
     const argv = ['start', '--port', '9000', '--host=192.168.1.20', '--claude', '/opt/claude', '--max-runs', '2', '--idle-minutes=5'];
-    argv.push('--allow-api-key', '--config-dir', 'cfg', '--no-start', '--no-probe', '--new');
+    argv.push('--allow-api-key', '--config-dir', 'cfg', '--no-start', '--no-probe', '--new', '--window', '5:00-10:00', '--weekdays', '--keep-awake', '--no-wake');
     expect(parseArgs(argv)).toEqual({
       command: 'start',
+      bare: false,
       options: {
         port: 9000,
         host: '192.168.1.20',
@@ -148,8 +185,40 @@ describe('parseArgs', () => {
         noStart: true,
         noProbe: true,
         new: true,
+        window: '05:00-10:00',
+        weekdays: true,
+        keepAwake: true,
+        wake: false,
       },
     });
+  });
+
+  it('reads the setup flags', () => {
+    expect(parseArgs(['setup', '--yes', '--schedule', '06:00-09:30', '--weekdays', '--no-keep-awake', '--firewall']).options).toEqual({
+      yes: true,
+      schedule: '06:00-09:30',
+      weekdays: true,
+      keepAwake: false,
+      firewall: true,
+    });
+    expect(parseArgs(['setup', '-y', '--always']).options).toEqual({ yes: true, mode: 'always' });
+    expect(parseArgs(['setup', '--yes', '--manual']).options).toEqual({ yes: true, mode: 'manual' });
+    expect(parseArgs(['firewall', '--yes']).options).toEqual({ yes: true });
+  });
+
+  it('refuses windows that are not two different times, and flags that do not go together', () => {
+    expect(parseArgs(['serve', '--window', '10:00-10:00']).error).toBe('--window needs a daily window of two different times, such as 05:00-10:00, not "10:00-10:00".');
+    expect(parseArgs(['serve', '--window', 'mornings']).error).toMatch(/^--window needs/);
+    expect(parseArgs(['serve', '--weekdays']).error).toBe('--weekdays goes with --window (for example --window 05:00-10:00 --weekdays).');
+    expect(parseArgs(['serve', '--keep-awake', '--no-keep-awake']).error).toBe('Use only one of --keep-awake and --no-keep-awake.');
+    expect(parseArgs(['setup', '--always', '--manual']).error).toBe('Use only one of --always and --manual.');
+    expect(parseArgs(['setup', '--always', '--schedule', '05:00-10:00']).error).toBe('Use only one of --schedule, --always and --manual.');
+    expect(parseArgs(['setup', '--manual', '--weekdays']).error).toBe('--weekdays goes with a schedule (--schedule 05:00-10:00).');
+    expect(parseArgs(['install', '--schedule', '05:00-10:00']).error).toBe('--schedule only works with setup.');
+    expect(parseArgs(['install', '--always']).error).toBe('--always only works with setup.');
+    expect(parseArgs(['start', '--firewall']).error).toBe('--firewall only works with setup.');
+    expect(parseArgs(['start', '--yes']).error).toBe('--yes only works with setup and firewall.');
+    expect(parseArgs(['setup', '--weekdays']).error).toBeUndefined();
   });
 
   it('reads the model for the doctor test turn, and refuses one that is not a model id', () => {
@@ -176,8 +245,13 @@ describe('parseArgs', () => {
     expect(parseArgs(['start', 'stop']).error).toBe('Unexpected "stop" after start.');
   });
 
-  it('hands the flags start and autostart pass on to serve, with absolute paths', () => {
-    expect(serveFlags({ port: 9000, host: '0.0.0.0', claude: 'rel/claude', maxRuns: 2, idleMinutes: 5, allowApiKey: true, configDir: 'cfg', noStart: true })).toEqual([
+  it('hands the flags start and autostart pass on to serve, the window first, with absolute paths', () => {
+    const options = { port: 9000, host: '0.0.0.0', claude: 'rel/claude', maxRuns: 2, idleMinutes: 5, allowApiKey: true, configDir: 'cfg', noStart: true };
+    expect(serveFlags({ ...options, window: '05:00-10:00', weekdays: true, keepAwake: true, wake: false, hideCode: true })).toEqual([
+      '--window',
+      '05:00-10:00',
+      '--weekdays',
+      '--keep-awake',
       '--port',
       '9000',
       '--host',
@@ -558,7 +632,7 @@ describe('status', () => {
     expect(text).toContain('  Address: 192.168.1.20\n');
     expect(text).toContain(codeShown());
     expect(text).toContain('Claude Code 2.1.251: /home/me/.local/bin/claude');
-    expect(text).toContain('Starts at sign-in: no (node bridge/cafai-bridge.mjs install starts it at sign-in)');
+    expect(text).toContain('Starts by itself: no (node bridge/cafai-bridge.mjs install starts it at sign-in; npm run bridge -- setup sets a schedule)');
     expect(text).toContain(`Log: ${paths(dir).logFile}\n`);
     expect(text).toContain(`Config folder: ${paths(dir).dir}\n`);
   });
@@ -568,7 +642,7 @@ describe('status', () => {
     expect(await main(['status', '--config-dir', dir], deps)).toBe(1);
     expect(stdout()).toContain('CafAI Bridge is not running. Start it with: node bridge/cafai-bridge.mjs start\n');
     expect(stdout()).toContain(codeShown());
-    expect(stdout()).toContain(`Starts at sign-in: yes, a shortcut in your Startup folder (${LNK})`);
+    expect(stdout()).toContain(`Starts at sign-in: yes, from a shortcut in your Startup folder (${LNK})`);
   });
 });
 
@@ -670,14 +744,14 @@ describe('uninstall', () => {
     const { deps, stdout } = makeDeps({ ...WIN, fs });
     expect(await main(['uninstall'], deps)).toBe(0);
     expect(fs.exists(LNK)).toBe(false);
-    expect(stdout()).toContain('CafAI Bridge will no longer start at sign-in (removed the Startup shortcut).');
+    expect(stdout()).toContain('CafAI Bridge will no longer start by itself (removed the Startup shortcut).');
     expect(stdout()).toContain('If it is running now, it keeps running until you stop it');
   });
 
   it('says when there was nothing to remove', async () => {
     const { deps, stdout } = makeDeps({ ...WIN });
     expect(await main(['uninstall'], deps)).toBe(0);
-    expect(stdout()).toContain('CafAI Bridge was not set to start at sign-in.');
+    expect(stdout()).toContain('CafAI Bridge was not set to start by itself.');
   });
 });
 
@@ -790,5 +864,566 @@ describe('firstOnPath', () => {
   it('follows PATH on macOS and Linux', () => {
     expect(firstOnPath({ platform: 'linux', env: { PATH: '/a:/b' }, exists: (file) => file === '/b/claude' })).toBe('/b/claude');
     expect(firstOnPath({ platform: 'darwin', env: {}, exists: () => true })).toBeNull();
+  });
+
+  it('finds other programs too', () => {
+    expect(firstOnPath({ platform: 'linux', env: { PATH: '/usr/bin' }, exists: (file) => file === '/usr/bin/systemd-inhibit', name: 'systemd-inhibit' })).toBe(
+      '/usr/bin/systemd-inhibit',
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Windows, keeping awake, schedules, the firewall, setup
+// ---------------------------------------------------------------------------
+
+// October 2026: the 11th is a Sunday (makeDeps' clock: 14:03), the 12th a Monday.
+const SUNDAY_AFTERNOON = new Date(2026, 9, 11, 14, 3, 22);
+const MONDAY_6AM = new Date(2026, 9, 12, 6, 0);
+const bridgeHandle = (overrides = {}) => ({ port: 8877, host: '0.0.0.0', claude: INSTALL, close: vi.fn(async () => {}), ...overrides });
+const TASK_ENV = { ...WIN.env, USERDOMAIN: 'PC', USERNAME: 'me' };
+
+/** A Windows exec: schtasks creates the task (its XML is kept), the rest answers per `answers`. */
+function windowsExec(fs, answers = {}) {
+  const exec = vi.fn(async (command, args, options) => {
+    if (command === 'schtasks.exe' && args[0] === '/Create') {
+      exec.taskXml = fs.store.get(args[4]).subarray(2).toString('utf16le');
+      return { code: 0, stdout: '', stderr: '' };
+    }
+    const answer = answers[command];
+    const result = typeof answer === 'function' ? answer(args, options) : answer;
+    return { code: 1, stdout: '', stderr: '', ...result };
+  });
+  return exec;
+}
+
+/** A bridge that answers /health once `spawn` has been called. */
+function startable(overrides = {}) {
+  let up = false;
+  return {
+    spawn: vi.fn(() => {
+      up = true;
+      return fakeChild();
+    }),
+    fetch: fakeFetch({ 'GET 127.0.0.1:8877/health': () => (up ? { body: HEALTH } : null) }),
+    ...overrides,
+  };
+}
+
+describe('serve and start with a window', () => {
+  it('serve outside its window prints one line and exits 0 without starting', async () => {
+    const { deps, stdout } = makeDeps();
+    expect(await main(['serve', '--window', '05:00-10:00', '--config-dir', dir], deps)).toBe(0);
+    expect(stdout()).toBe('Outside 05:00-10:00: not starting.\n');
+    expect(deps.startBridgeServer).not.toHaveBeenCalled();
+    const weekend = makeDeps({ now: () => new Date(2026, 9, 11, 6, 0) });
+    expect(await main(['serve', '--window', '05:00-10:00', '--weekdays', '--config-dir', dir], weekend.deps)).toBe(0);
+    expect(weekend.stdout()).toBe('Outside 05:00-10:00 (Monday to Friday): not starting.\n');
+  });
+
+  it('serve inside its window runs, says until when, and stops itself at the end, re-arming when the timer fires early', async () => {
+    let time = new Date(2026, 9, 11, 9, 58);
+    const timers = [];
+    const handle = bridgeHandle();
+    const setTimer = vi.fn((fn, ms) => {
+      timers.push({ fn, ms });
+      return timers.length;
+    });
+    const { deps, stdout } = makeDeps({ now: () => time, setTimer, startBridgeServer: vi.fn(async () => handle) });
+    expect(await main(['serve', '--window', '05:00-10:00', '--config-dir', dir], deps)).toBeNull();
+    expect(stdout()).toContain('Runs until 10:00 (window 05:00-10:00).');
+    expect(timers.at(-1).ms).toBe(60_000);
+    time = new Date(2026, 9, 11, 9, 59, 30);
+    timers.at(-1).fn();
+    expect(handle.close).not.toHaveBeenCalled();
+    expect(timers.at(-1).ms).toBe(30_000);
+    time = new Date(2026, 9, 11, 10, 0);
+    timers.at(-1).fn();
+    await vi.waitFor(() => expect(deps.exit).toHaveBeenCalledWith(0));
+    expect(handle.close).toHaveBeenCalledTimes(1);
+    expect(stdout()).toContain('The window 05:00-10:00 has ended.');
+    expect(existsSync(paths(dir).pidFile)).toBe(false);
+  });
+
+  it('start outside its window prints when it starts and exits 0 without starting', async () => {
+    const { deps, stdout } = makeDeps();
+    expect(await main(['start', '--window', '05:00-10:00', '--config-dir', dir], deps)).toBe(0);
+    expect(stdout()).toBe('Outside 05:00-10:00: not starting.\nIt starts tomorrow at 05:00.\n');
+    expect(deps.spawn).not.toHaveBeenCalled();
+  });
+
+  it('start inside its window starts serve with the same window and flags, so it stops itself', async () => {
+    const { deps, stdout } = makeDeps({ now: () => MONDAY_6AM, ...startable() });
+    expect(await main(['start', '--window', '05:00-10:00', '--keep-awake', '--config-dir', dir], deps)).toBe(0);
+    expect(deps.spawn.mock.calls[0][1]).toEqual([deps.script, 'serve', '--window', '05:00-10:00', '--keep-awake', '--config-dir', path.resolve(dir)]);
+    expect(stdout()).toContain('CafAI Bridge is running in the background on port 8877 (process 5555) until 10:00.');
+  });
+
+  it('takes a serve that said no because the window closed meanwhile as outside, not as a failure', async () => {
+    let calls = 0;
+    const now = () => (calls++ === 0 ? new Date(2026, 9, 12, 9, 59, 59) : new Date(2026, 9, 12, 10, 0, 1));
+    const child = fakeChild();
+    const { deps, stdout, stderr } = makeDeps({
+      now,
+      spawn: vi.fn(() => {
+        setImmediate(() => child.emit('exit', 0, null));
+        return child;
+      }),
+    });
+    expect(await main(['start', '--window', '05:00-10:00', '--config-dir', dir], deps)).toBe(0);
+    expect(stdout()).toBe('Outside 05:00-10:00: not starting.\n');
+    expect(stderr()).toBe('');
+  });
+});
+
+describe('keeping the computer awake', () => {
+  it('starts a helper with serve, says so, and ends it on shutdown', async () => {
+    const helper = fakeChild(7777);
+    helper.kill = vi.fn();
+    const spawn = vi.fn(() => helper);
+    const { deps, stdout } = makeDeps({ platform: 'darwin', spawn, startBridgeServer: vi.fn(async () => bridgeHandle()) });
+    await main(['serve', '--keep-awake', '--config-dir', dir], deps);
+    expect(spawn).toHaveBeenCalledWith('caffeinate', ['-i', '-w', '4321'], expect.objectContaining({ stdio: 'ignore', windowsHide: true }));
+    expect(helper.unref).toHaveBeenCalled();
+    expect(stdout()).toContain('Keeping this computer awake while the bridge runs (caffeinate).');
+    await deps.onSignal.mock.calls.find((call) => call[0] === 'SIGTERM')[1]();
+    expect(helper.kill).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives the Windows helper the bridge process id', async () => {
+    const helper = fakeChild(7777);
+    const spawn = vi.fn(() => helper);
+    const { deps } = makeDeps({ ...WIN, spawn, startBridgeServer: vi.fn(async () => bridgeHandle()) });
+    await main(['serve', '--keep-awake', '--config-dir', dir], deps);
+    const [command, args, options] = spawn.mock.calls[0];
+    expect(command).toBe('powershell.exe');
+    expect(args).toEqual(['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', KEEP_AWAKE_SCRIPT]);
+    expect(options.env).toMatchObject({ APPDATA: WIN.env.APPDATA, CAFAI_PID: '4321' });
+  });
+
+  it('uses systemd-inhibit on Linux when it is there, and says so when it is not', async () => {
+    const withIt = makeDeps({ env: { PATH: '/usr/bin' }, exists: (file) => file === '/usr/bin/systemd-inhibit', startBridgeServer: vi.fn(async () => bridgeHandle()) });
+    await main(['serve', '--keep-awake', '--config-dir', dir], withIt.deps);
+    expect(withIt.deps.spawn.mock.calls[0][0]).toBe('systemd-inhibit');
+    const without = makeDeps({ startBridgeServer: vi.fn(async () => bridgeHandle()) });
+    await main(['serve', '--keep-awake', '--config-dir', dir], without.deps);
+    expect(without.deps.spawn).not.toHaveBeenCalled();
+    expect(without.stdout()).toContain('Keeping this computer awake is not supported here (it needs systemd-inhibit).');
+  });
+});
+
+describe('install on a schedule', () => {
+  it('on Windows makes the task (replacing the shortcut), and starts the bridge now inside the window', async () => {
+    const fs = memoryFs({ [LNK]: 'old shortcut' });
+    const exec = windowsExec(fs, { 'reg.exe': { code: 0 } });
+    const { deps, stdout } = makeDeps({ ...WIN, env: TASK_ENV, fs, exec, now: () => MONDAY_6AM, ...startable() });
+    expect(await main(['install', '--window', '05:00-10:00', '--keep-awake', '--config-dir', dir], deps)).toBe(0);
+    const args = windowsCommandLine([deps.script, 'start', '--window', '05:00-10:00', '--keep-awake', '--config-dir', path.resolve(dir)]);
+    expect(exec.taskXml).toContain('<StartBoundary>2026-10-12T05:00:00</StartBoundary>');
+    expect(exec.taskXml).toContain('<WakeToRun>true</WakeToRun>');
+    expect(exec.taskXml).toContain(`<Arguments>${xmlEscape(args)}</Arguments>`);
+    expect(exec.taskXml).toContain(`<Command>${xmlEscape(WIN.execPath)}</Command>`);
+    expect(exec.taskXml).toContain('<UserId>PC\\me</UserId>');
+    expect(fs.exists(LNK)).toBe(false);
+    expect(stdout()).toContain(
+      'CafAI Bridge will start every day at 05:00 and stop at 10:00 (the Task Scheduler task "CafAI Bridge", which wakes the computer from sleep). ' +
+        'It also starts when you sign in within that window.',
+    );
+    expect(deps.spawn.mock.calls[0][1]).toEqual([deps.script, 'serve', '--window', '05:00-10:00', '--keep-awake', '--config-dir', path.resolve(dir)]);
+    expect(stdout()).toContain('until 10:00.');
+  });
+
+  it('outside the window says when it starts and shows the address; --no-wake leaves the computer asleep', async () => {
+    const fs = memoryFs();
+    const exec = windowsExec(fs);
+    const { deps, stdout } = makeDeps({ ...WIN, env: TASK_ENV, fs, exec, isTTY: true });
+    expect(await main(['install', '--window', '05:00-10:00', '--no-wake', '--config-dir', dir], deps)).toBe(0);
+    expect(exec.taskXml).toContain('<WakeToRun>false</WakeToRun>');
+    expect(stdout()).not.toContain('wakes the computer');
+    expect(stdout()).toContain('It is outside the window now; it starts tomorrow at 05:00.');
+    expect(stdout()).toContain('  Address: 192.168.1.20\n');
+    expect(stdout()).toContain(codeShown());
+    expect(deps.spawn).not.toHaveBeenCalled();
+  });
+
+  it('on macOS writes a LaunchAgent with a calendar start, prints the pmset line, and waits for launchd', async () => {
+    const fs = memoryFs();
+    const exec = vi.fn(async () => ({ code: 0, stdout: '', stderr: '' }));
+    const { deps, stdout } = makeDeps({ platform: 'darwin', home: '/Users/me', fs, exec, now: () => MONDAY_6AM, fetch: fakeFetch({ 'GET 127.0.0.1:8877/health': { body: HEALTH } }) });
+    expect(await main(['install', '--window', '05:00-10:00', '--weekdays', '--config-dir', dir], deps)).toBe(0);
+    const plist = fs.store.get('/Users/me/Library/LaunchAgents/com.cafai.bridge.plist');
+    expect(plist).toContain('<key>StartCalendarInterval</key>');
+    expect(plist).toContain('<string>serve</string>\n    <string>--window</string>\n    <string>05:00-10:00</string>\n    <string>--weekdays</string>');
+    expect(stdout()).toContain('  sudo pmset repeat wakeorpoweron MTWRF 04:59:00\n');
+    expect(stdout()).toContain('CafAI Bridge is running on port 8877 until 10:00.');
+    expect(deps.spawn).not.toHaveBeenCalled();
+  });
+
+  it('on Linux prints the service and the timer and installs nothing', async () => {
+    const { deps, stdout, stderr } = makeDeps();
+    expect(await main(['install', '--window', '05:00-10:00', '--config-dir', dir], deps)).toBe(0);
+    expect(stdout()).toMatch(/^# \/home\/me\/\.config\/systemd\/user\/cafai-bridge\.service\n\[Unit\]/);
+    expect(stdout()).toContain('# /home/me/.config/systemd/user/cafai-bridge.timer\n[Unit]');
+    expect(stdout()).toContain('OnCalendar=*-*-* 05:00:00');
+    expect(stderr()).toContain('systemctl --user enable --now cafai-bridge.timer');
+    expect(deps.spawn).not.toHaveBeenCalled();
+  });
+
+  it('install without a window removes the schedule', async () => {
+    const fs = memoryFs();
+    const exec = vi.fn(async (command, args, options) => {
+      if (command === 'powershell.exe') fs.writeFile(options.env.CAFAI_LNK, 'shortcut');
+      return { code: 0, stdout: '', stderr: '' };
+    });
+    const { deps } = makeDeps({ ...WIN, fs, exec });
+    expect(await main(['install', '--no-start', '--config-dir', dir], deps)).toBe(0);
+    expect(exec).toHaveBeenCalledWith('schtasks.exe', ['/Delete', '/TN', 'CafAI Bridge', '/F']);
+  });
+});
+
+describe('status and doctor with a schedule', () => {
+  const task = buildTaskXml({ nodePath: WIN.execPath, script: 'C:\\cafai\\bridge\\cafai-bridge.mjs', flags: ['--window', '05:00-10:00', '--keep-awake'], configDir: 'C:\\x', window: '05:00-10:00', userId: 'PC\\me', now: MONDAY_6AM });
+
+  it('status shows the schedule, that the task wakes the computer, and whether it should run now', async () => {
+    const exec = vi.fn(async (command) => (command === 'schtasks.exe' ? { code: 0, stdout: task, stderr: '' } : { code: 1, stdout: '', stderr: '' }));
+    const outside = makeDeps({ ...WIN, exec });
+    expect(await main(['status', '--config-dir', dir], outside.deps)).toBe(1);
+    expect(outside.stdout()).toContain('Starts by itself: on a schedule, from the Task Scheduler task "CafAI Bridge"\n');
+    expect(outside.stdout()).toContain('Schedule: every day, 05:00-10:00, keeping the computer awake; it also starts at sign-in within the window.\n');
+    expect(outside.stdout()).toContain('The task wakes the computer from sleep at the start time.\n');
+    expect(outside.stdout()).toContain('Right now: outside the window; it starts tomorrow at 05:00.\n');
+    const inside = makeDeps({ ...WIN, exec, now: () => MONDAY_6AM });
+    await main(['status', '--config-dir', dir], inside.deps);
+    expect(inside.stdout()).toContain('Right now: inside the window, so it should be running until 10:00.\n');
+  });
+
+  it('doctor checks the firewall on each real network, warns about a VPN, and shows the schedule', async () => {
+    const firewall = {
+      networks: [
+        { alias: 'Ethernet', name: 'Network 9', category: 'Public' },
+        { alias: 'ProtonVPN', name: 'ProtonVPN', category: 'Public' },
+      ],
+      rules: [{ name: 'Node.js JavaScript Runtime', action: 'Allow', profiles: 4 }],
+    };
+    const exec = vi.fn(async (command) => {
+      if (command === 'powershell.exe') return { code: 0, stdout: JSON.stringify(firewall), stderr: '' };
+      if (command === 'schtasks.exe') return { code: 0, stdout: task, stderr: '' };
+      return { code: 1, stdout: '', stderr: '' };
+    });
+    const networkInterfaces = () => ({
+      Ethernet: [{ address: '192.168.1.90', family: 'IPv4', internal: false }],
+      ProtonVPN: [{ address: '10.2.0.2', family: 'IPv4', internal: false }],
+    });
+    const findClaude = vi.fn(async () => ({ chosen: INSTALL, found: [INSTALL] }));
+    const { deps, stdout } = makeDeps({ ...WIN, exec, networkInterfaces, findClaude });
+    expect(await main(['doctor', '--no-probe', '--config-dir', dir], deps)).toBe(0);
+    const text = stdout();
+    expect(text).toContain('ok       Firewall: Ethernet ("Network 9"): Public; the firewall lets the bridge in.');
+    expect(text).not.toContain('Firewall: ProtonVPN');
+    expect(text).toContain('warning  A VPN is connected (ProtonVPN). Allow LAN connections in the VPN app');
+    expect(text).toContain('ok       Starts by itself: on a schedule, from the Task Scheduler task "CafAI Bridge"');
+    expect(text).toContain('  Right now: outside the window; it starts tomorrow at 05:00.');
+    expect(text).not.toContain('Windows Defender Firewall asks about Node.js');
+  });
+
+  it('doctor tells how to fix a network the firewall keeps out', async () => {
+    const firewall = { networks: [{ alias: 'Wi-Fi', name: 'Home', category: 'Private' }], rules: [] };
+    const exec = vi.fn(async (command) => (command === 'powershell.exe' ? { code: 0, stdout: JSON.stringify(firewall), stderr: '' } : { code: 1, stdout: '', stderr: '' }));
+    const { deps, stdout } = makeDeps({ ...WIN, exec });
+    await main(['doctor', '--no-probe', '--config-dir', dir], deps);
+    expect(stdout()).toContain('warning  Firewall: Wi-Fi ("Home"): Private; no firewall rule lets the bridge in. Fix it with: node bridge/cafai-bridge.mjs firewall');
+  });
+});
+
+describe('firewall', () => {
+  const home = { alias: 'Ethernet', name: 'Home', category: 'Private' };
+  const cafe = { alias: 'Wi-Fi', name: 'Cafe', category: 'Public' };
+  const answer = (networks, rules) => ({ code: 0, stdout: JSON.stringify({ networks, rules }), stderr: '' });
+  /** PowerShell: the elevated call (its script is kept) or the check, answered by `state()`. */
+  function firewallExec(state) {
+    const exec = vi.fn(async (command, args, options) => {
+      if (args.includes(ELEVATE_SCRIPT)) {
+        exec.elevated = Buffer.from(options.env.CAFAI_ELEVATED, 'base64').toString('utf16le');
+        return exec.elevateResult ?? { code: 0, stdout: '', stderr: '' };
+      }
+      return state();
+    });
+    return exec;
+  }
+
+  it('on macOS and Linux shows what to allow', async () => {
+    const { deps, stdout } = makeDeps({ platform: 'darwin' });
+    expect(await main(['firewall', '--config-dir', dir], deps)).toBe(0);
+    expect(stdout()).toContain('click Allow');
+  });
+
+  it('says so when the bridge can be reached', async () => {
+    const exec = firewallExec(() => answer([home], [{ name: 'Node.js JavaScript Runtime', action: 'Allow', profiles: 2 }]));
+    const { deps, stdout } = makeDeps({ ...WIN, exec });
+    expect(await main(['firewall', '--config-dir', dir], deps)).toBe(0);
+    expect(stdout()).toContain('  Ethernet ("Home"): Private; the firewall lets the bridge in.\n');
+    expect(stdout()).toContain('The firewall lets devices on your network reach the bridge.');
+    expect(exec.elevated).toBeUndefined();
+  });
+
+  it('with --yes adds the rule for Private networks in one elevated call, then checks again', async () => {
+    // The rule is there once the elevated script has run.
+    const exec = firewallExec(() => answer([home], exec.elevated ? [{ name: 'CafAI Bridge', action: 'Allow', profiles: 2 }] : []));
+    const { deps, stdout } = makeDeps({ ...WIN, exec });
+    expect(await main(['firewall', '--yes', '--config-dir', dir], deps)).toBe(0);
+    expect(exec.elevated).toBe(elevatedFirewallScript({ program: WIN.execPath, port: 8877, profiles: ['Private'] }));
+    expect(stdout()).toContain('Done: devices on your network can reach the bridge.');
+  });
+
+  it('asks about a Public network (default no) and the rule, and lets it in on Public networks only if agreed', async () => {
+    let checks = 0;
+    const exec = firewallExec(() => (checks++ === 0 ? answer([cafe], []) : answer([cafe], [{ name: 'CafAI Bridge', action: 'Allow', profiles: 6 }])));
+    const prompt = scriptedPrompt('', '', 'y');
+    const { deps, stdout } = makeDeps({ ...WIN, exec, isTTY: true, stdinIsTTY: true, prompt: () => prompt });
+    expect(await main(['firewall', '--config-dir', dir], deps)).toBe(0);
+    expect(prompt.asked).toEqual([
+      'Mark "Cafe" (Wi-Fi) as Private? [y/N] ',
+      'Add a firewall rule now? Windows will ask for permission. [Y/n] ',
+      'Let the bridge in on Public networks too? Only if that Public network is your own. [y/N] ',
+    ]);
+    expect(stdout()).toContain('Your network "Cafe" (Wi-Fi) is marked Public');
+    expect(stdout()).toContain('Private is for a network you trust');
+    expect(exec.elevated).toBe(elevatedFirewallScript({ program: WIN.execPath, port: 8877, profiles: ['Private', 'Public'] }));
+    expect(prompt.closed).toBe(true);
+  });
+
+  it('marks the network Private and adds the rule in the same elevated call', async () => {
+    let checks = 0;
+    const exec = firewallExec(() => (checks++ === 0 ? answer([cafe], []) : answer([{ ...cafe, category: 'Private' }], [{ name: 'CafAI Bridge', action: 'Allow', profiles: 2 }])));
+    const prompt = scriptedPrompt('y', '');
+    const { deps } = makeDeps({ ...WIN, exec, isTTY: true, stdinIsTTY: true, prompt: () => prompt });
+    expect(await main(['firewall', '--config-dir', dir], deps)).toBe(0);
+    expect(exec.elevated).toBe(elevatedFirewallScript({ program: WIN.execPath, port: 8877, profiles: ['Private'], markPrivate: ['Wi-Fi'] }));
+  });
+
+  it('says when Windows did not get permission', async () => {
+    const exec = firewallExec(() => answer([home], []));
+    exec.elevateResult = { code: 1, stdout: '', stderr: 'Start-Process : The operation was canceled by the user.' };
+    const { deps, stdout } = makeDeps({ ...WIN, exec });
+    expect(await main(['firewall', '--yes', '--config-dir', dir], deps)).toBe(1);
+    expect(stdout()).toContain('Windows did not get permission, so nothing changed.');
+  });
+
+  it('without a terminal or --yes only reports', async () => {
+    const exec = firewallExec(() => answer([home], []));
+    const { deps, stdout } = makeDeps({ ...WIN, exec });
+    expect(await main(['firewall', '--config-dir', dir], deps)).toBe(1);
+    expect(stdout()).toContain('No firewall rule lets the bridge in on "Home" (Ethernet) yet');
+    expect(stdout()).toContain('Nothing changed. Later: node bridge/cafai-bridge.mjs firewall');
+    expect(exec.elevated).toBeUndefined();
+  });
+});
+
+describe('setup', () => {
+  const claudeFound = { findClaude: vi.fn(async () => ({ chosen: INSTALL, found: [INSTALL] })) };
+
+  it('needs a terminal unless --yes', async () => {
+    const { deps, stderr } = makeDeps();
+    expect(await main(['setup', '--config-dir', dir], deps)).toBe(2);
+    expect(stderr()).toBe('setup asks a few questions, so it needs a terminal. Without questions: node bridge/cafai-bridge.mjs setup --yes (see help).\n');
+  });
+
+  it('--yes --schedule on Windows: installs the task, saves the answers, and starts the bridge inside the window', async () => {
+    const fs = memoryFs();
+    const exec = windowsExec(fs, { 'reg.exe': { code: 0 } });
+    const { deps, stdout } = makeDeps({ ...WIN, env: TASK_ENV, fs, exec, now: () => MONDAY_6AM, ...claudeFound, ...startable() });
+    expect(await main(['setup', '--yes', '--schedule', '05:00-10:00', '--no-probe', '--config-dir', dir], deps)).toBe(0);
+    expect(deps.probeClaude).not.toHaveBeenCalled();
+    expect(exec.taskXml).toContain(`<Arguments>${xmlEscape(windowsCommandLine([deps.script, 'start', '--window', '05:00-10:00', '--keep-awake', '--config-dir', path.resolve(dir)]))}</Arguments>`);
+    expect(exec.taskXml).toContain('<WakeToRun>true</WakeToRun>');
+    expect(deps.spawn.mock.calls[0][1]).toEqual([deps.script, 'serve', '--window', '05:00-10:00', '--keep-awake', '--config-dir', path.resolve(dir)]);
+    expect(loadConfig(dir).setup).toEqual({ mode: 'schedule', window: '05:00-10:00', weekdays: false, keepAwake: true, wake: true, host: '0.0.0.0', port: 8877, at: MONDAY_6AM.toISOString() });
+    const text = stdout();
+    expect(text).toContain('  Not checked (add --firewall, or run: node bridge/cafai-bridge.mjs firewall).');
+    expect(text).toContain('Done. The bridge starts every day at 05:00 and stops at 10:00.\nIt is running now, until 10:00.\nTo change this: npm run bridge -- setup\n');
+    // Not a terminal: the code stays out of the output.
+    expect(text).not.toContain(formatCode(loadConfig(dir).code));
+    expect(text).toContain('Code:    not written to the log');
+  });
+
+  it('--yes takes --weekdays, --no-keep-awake, --no-wake, --host and --port, and starts nothing outside the window', async () => {
+    const fs = memoryFs();
+    const exec = windowsExec(fs);
+    const { deps, stdout } = makeDeps({ ...WIN, env: TASK_ENV, fs, exec, ...claudeFound });
+    const argv = ['setup', '--yes', '--schedule', '05:00-10:00', '--weekdays', '--no-keep-awake', '--no-wake', '--host', '192.168.1.20', '--port', '9000', '--no-probe'];
+    expect(await main([...argv, '--config-dir', dir], deps)).toBe(0);
+    expect(exec.taskXml).toContain('<ScheduleByWeek>');
+    expect(exec.taskXml).toContain('<WakeToRun>false</WakeToRun>');
+    const args = windowsCommandLine([deps.script, 'start', '--window', '05:00-10:00', '--weekdays', '--port', '9000', '--host', '192.168.1.20', '--config-dir', path.resolve(dir)]);
+    expect(exec.taskXml).toContain(`<Arguments>${xmlEscape(args)}</Arguments>`);
+    expect(deps.spawn).not.toHaveBeenCalled();
+    expect(stdout()).toContain('Done. The bridge starts Monday to Friday at 05:00 and stops at 10:00.\nNext start: tomorrow at 05:00.\n');
+    expect(loadConfig(dir).setup).toMatchObject({ mode: 'schedule', weekdays: true, keepAwake: false, wake: false, host: '192.168.1.20', port: 9000 });
+  });
+
+  it('--yes --always installs the start at sign-in, removes a schedule, and starts the bridge', async () => {
+    const fs = memoryFs();
+    const exec = vi.fn(async (command, args, options) => {
+      if (command === 'powershell.exe') fs.writeFile(options.env.CAFAI_LNK, 'shortcut');
+      return { code: 0, stdout: '', stderr: '' };
+    });
+    const { deps, stdout } = makeDeps({ ...WIN, fs, exec, ...claudeFound, ...startable() });
+    expect(await main(['setup', '--yes', '--always', '--no-probe', '--config-dir', dir], deps)).toBe(0);
+    expect(fs.exists(LNK)).toBe(true);
+    expect(exec).toHaveBeenCalledWith('schtasks.exe', ['/Delete', '/TN', 'CafAI Bridge', '/F']);
+    expect(deps.spawn).toHaveBeenCalledTimes(1);
+    expect(stdout()).toContain('Done. The bridge starts whenever you sign in to this computer, and it is running now.');
+    expect(loadConfig(dir).setup).toMatchObject({ mode: 'always', window: null, keepAwake: false });
+  });
+
+  it('--yes --manual removes what started it by itself and shows the address', async () => {
+    const fs = memoryFs({ [LNK]: 'shortcut' });
+    const exec = vi.fn(async () => ({ code: 0, stdout: '', stderr: '' }));
+    const { deps, stdout } = makeDeps({ ...WIN, fs, exec, ...claudeFound });
+    expect(await main(['setup', '--yes', '--manual', '--no-probe', '--config-dir', dir], deps)).toBe(0);
+    expect(fs.exists(LNK)).toBe(false);
+    const text = stdout();
+    expect(text).toContain('  It no longer starts by itself: you start it when you want it.');
+    expect(text).toContain('  Address: 192.168.1.20\n');
+    expect(text).toContain('Done. Start the bridge when you want it: npm run bridge -- start (stop it with npm run bridge -- stop).');
+    expect(loadConfig(dir).setup.mode).toBe('manual');
+  });
+
+  it('--yes --firewall runs the firewall step, which reports a reachable bridge', async () => {
+    const firewall = { networks: [{ alias: 'Ethernet', name: 'Home', category: 'Private' }], rules: [{ name: 'Node.js JavaScript Runtime', action: 'Allow', profiles: 2 }] };
+    const exec = vi.fn(async (command) => (command === 'powershell.exe' ? { code: 0, stdout: JSON.stringify(firewall), stderr: '' } : { code: 0, stdout: '', stderr: '' }));
+    const { deps, stdout } = makeDeps({ ...WIN, fs: memoryFs(), exec, ...claudeFound });
+    expect(await main(['setup', '--yes', '--manual', '--firewall', '--no-probe', '--config-dir', dir], deps)).toBe(0);
+    expect(stdout()).toContain('4. Firewall\n  Ethernet ("Home"): Private; the firewall lets the bridge in.\nThe firewall lets devices on your network reach the bridge.\n');
+  });
+
+  it('asks everything, waits for Claude Code and its sign-in, and installs the schedule it was given', async () => {
+    const findClaude = vi.fn().mockResolvedValueOnce({ chosen: null, found: [] }).mockResolvedValue({ chosen: INSTALL, found: [INSTALL] });
+    const claudeAuthStatus = vi.fn().mockResolvedValueOnce({ loggedIn: false, authMethod: null, subscriptionType: null }).mockResolvedValue(PLAN);
+    const firewall = { networks: [{ alias: 'Ethernet', name: 'Home', category: 'Private' }], rules: [{ name: 'Node.js JavaScript Runtime', action: 'Allow', profiles: 2 }] };
+    const fs = memoryFs();
+    const exec = windowsExec(fs, { 'powershell.exe': { code: 0, stdout: JSON.stringify(firewall) } });
+    const prompt = scriptedPrompt('', '', 'y', '1', '', '06:00', '9:30', '2', 'n', 'n');
+    const { deps, stdout } = makeDeps({ ...WIN, env: TASK_ENV, fs, exec, findClaude, claudeAuthStatus, isTTY: true, stdinIsTTY: true, prompt: () => prompt });
+    expect(await main(['setup', '--config-dir', dir], deps)).toBe(0);
+    expect(prompt.asked).toEqual([
+      '  Press Enter to check again (q quits): ',
+      '  Open another terminal, run claude, sign in with /login, then press Enter (q quits): ',
+      '  Run one test turn now? It uses a little of your plan. [Y/n] ',
+      'Where does CafAI run?\n  1) on a tablet or phone on this network [default]\n  2) only on this computer\nChoose 1-2 [1]: ',
+      'When should the bridge run?\n  1) every morning on a schedule [default]\n  2) always, from sign-in\n  3) only when I start it\nChoose 1-3 [1]: ',
+      'Start at [05:00]: ',
+      'Stop at [10:00]: ',
+      'Which days?\n  1) every day [default]\n  2) Monday to Friday\nChoose 1-2 [1]: ',
+      'Keep this computer awake while the bridge runs? [Y/n] ',
+      'Wake this computer from sleep at the start time? [Y/n] ',
+    ]);
+    expect(deps.probeClaude).toHaveBeenCalledTimes(1);
+    expect(exec.taskXml).toContain('<StartBoundary>2026-10-11T06:00:00</StartBoundary>');
+    expect(exec.taskXml).toContain('<ScheduleByWeek>');
+    expect(exec.taskXml).toContain('<WakeToRun>false</WakeToRun>');
+    expect(exec.taskXml).toContain(`<Arguments>${xmlEscape(windowsCommandLine([deps.script, 'start', '--window', '06:00-09:30', '--weekdays', '--config-dir', path.resolve(dir)]))}</Arguments>`);
+    expect(loadConfig(dir).setup).toMatchObject({ mode: 'schedule', window: '06:00-09:30', weekdays: true, keepAwake: false, wake: false, host: '0.0.0.0', port: 8877 });
+    const text = stdout();
+    expect(text).toContain('Claude Code was not found on this computer. Install it from https://claude.com/claude-code');
+    expect(text).toContain('Claude Code is not signed in.');
+    expect(text).toContain('ok  Claude Code answered in 2.4 s.');
+    expect(text).toContain(codeShown());
+    expect(text).toContain('Done. The bridge starts Monday to Friday at 06:00 and stops at 09:30.\nNext start: tomorrow at 06:00.\n');
+    expect(prompt.closed).toBe(true);
+  });
+
+  it('asks again for a stop time equal to the start', async () => {
+    const prompt = scriptedPrompt('n', '', '', '10:00', '10:00', '', '', 'n', 'n');
+    const fs = memoryFs();
+    const exec = windowsExec(fs);
+    // 06:00 is outside 10:00-15:00, so nothing is started.
+    const { deps, stdout } = makeDeps({ ...WIN, env: TASK_ENV, fs, exec, ...claudeFound, now: () => MONDAY_6AM, isTTY: true, stdinIsTTY: true, prompt: () => prompt });
+    expect(await main(['setup', '--config-dir', dir], deps)).toBe(0);
+    expect(prompt.asked.slice(3, 6)).toEqual(['Start at [05:00]: ', 'Stop at [15:00]: ', 'Stop at [15:00]: ']);
+    expect(stdout()).toContain('The stop time has to differ from the start time.');
+    expect(loadConfig(dir).setup.window).toBe('10:00-15:00');
+  });
+
+  it('offers to quit when Claude Code is signed in with an API key, and then changes nothing', async () => {
+    const prompt = scriptedPrompt('');
+    const { deps, stdout } = makeDeps({
+      ...WIN,
+      ...claudeFound,
+      claudeAuthStatus: vi.fn(async () => ({ loggedIn: true, authMethod: 'api_key', subscriptionType: null })),
+      isTTY: true,
+      stdinIsTTY: true,
+      prompt: () => prompt,
+    });
+    expect(await main(['setup', '--config-dir', dir], deps)).toBe(0);
+    expect(prompt.asked).toEqual(['  Continue anyway? [y/N] ']);
+    expect(stdout()).toContain('Claude Code is signed in with an API key, so the coach would be billed to that key.');
+    expect(stdout()).toContain('Setup stopped. Run it again with: npm run bridge -- setup');
+    expect(loadConfig(dir).setup).toBeUndefined();
+    expect(deps.exec).not.toHaveBeenCalled();
+  });
+
+  it('quits on q without saving anything', async () => {
+    const prompt = scriptedPrompt('q');
+    const { deps, stdout } = makeDeps({ ...claudeFound, isTTY: true, stdinIsTTY: true, prompt: () => prompt });
+    expect(await main(['setup', '--config-dir', dir], deps)).toBe(0);
+    expect(stdout()).toContain('Setup stopped.');
+    expect(loadConfig(dir).setup).toBeUndefined();
+    expect(prompt.closed).toBe(true);
+  });
+
+  it('"only on this computer" listens on 127.0.0.1 and skips the firewall', async () => {
+    const prompt = scriptedPrompt('n', '2', '3');
+    const { deps, stdout } = makeDeps({ ...WIN, fs: memoryFs(), exec: vi.fn(async () => ({ code: 1, stdout: '', stderr: '' })), ...claudeFound, isTTY: true, stdinIsTTY: true, prompt: () => prompt });
+    expect(await main(['setup', '--config-dir', dir], deps)).toBe(0);
+    expect(stdout()).not.toContain('Firewall');
+    expect(stdout()).toContain('  Address: 127.0.0.1   (only from this computer)');
+    expect(loadConfig(dir).setup).toMatchObject({ mode: 'manual', host: '127.0.0.1' });
+  });
+
+  it('tells to allow LAN connections when a VPN is connected', async () => {
+    const networkInterfaces = () => ({ 'Wi-Fi': [{ address: '192.168.1.20', family: 'IPv4', internal: false }], NordLynx: [{ address: '10.5.0.2', family: 'IPv4', internal: false }] });
+    const { deps, stdout } = makeDeps({ platform: 'darwin', networkInterfaces, ...claudeFound });
+    expect(await main(['setup', '--yes', '--manual', '--no-probe', '--config-dir', dir], deps)).toBe(0);
+    expect(stdout()).toContain('A VPN is connected (NordLynx). Allow LAN connections in the VPN app');
+  });
+});
+
+describe('the first run', () => {
+  it('a bare npm run bridge in a terminal runs setup until it has been done', async () => {
+    const prompt = scriptedPrompt('n', '', '3');
+    const { deps, stdout } = makeDeps({ platform: 'darwin', ...{ findClaude: vi.fn(async () => ({ chosen: INSTALL, found: [INSTALL] })) }, isTTY: true, stdinIsTTY: true, prompt: () => prompt });
+    expect(await main(['--config-dir', dir], deps)).toBe(0);
+    expect(stdout().startsWith('Welcome to CafAI Bridge 0.1.0.')).toBe(true);
+    expect(deps.startBridgeServer).not.toHaveBeenCalled();
+    expect(loadConfig(dir).setup.mode).toBe('manual');
+  });
+
+  it('after setup, a bare run serves', async () => {
+    saveConfig(dir, { ...loadConfig(dir), setup: { mode: 'manual' } });
+    const { deps } = makeDeps({ isTTY: true, stdinIsTTY: true, startBridgeServer: vi.fn(async () => bridgeHandle()) });
+    expect(await main(['--config-dir', dir], deps)).toBeNull();
+    expect(deps.startBridgeServer).toHaveBeenCalledTimes(1);
+  });
+
+  it('without a terminal a bare run serves and never asks', async () => {
+    const { deps } = makeDeps({ isTTY: false, stdinIsTTY: true, startBridgeServer: vi.fn(async () => bridgeHandle()) });
+    expect(await main(['--config-dir', dir], deps)).toBeNull();
+    expect(deps.startBridgeServer).toHaveBeenCalledTimes(1);
+  });
+
+  it('a run with options is not bare: it serves even before setup', async () => {
+    const { deps } = makeDeps({ isTTY: true, stdinIsTTY: true, startBridgeServer: vi.fn(async () => bridgeHandle({ port: 9000 })) });
+    expect(await main(['--port', '9000', '--config-dir', dir], deps)).toBeNull();
+    expect(deps.startBridgeServer).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows setup and the schedule flags in the help', async () => {
+    const { deps, stdout } = makeDeps();
+    expect(await main(['setup', '--help'], deps)).toBe(0);
+    expect(stdout()).toContain('  setup       Set it up step by step');
+    expect(stdout()).toContain('setup --yes --schedule 05:00-10:00 [--weekdays]');
+    expect(stdout()).toContain('--window <from-to>');
+    expect(SUNDAY_AFTERNOON.getDay()).toBe(0);
   });
 });

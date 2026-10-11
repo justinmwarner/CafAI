@@ -3,29 +3,38 @@
 // Code, signed in with the owner's Claude Pro or Max plan, instead of a
 // metered Anthropic API key (docs/superpowers/specs/2026-10-11-local-claude-design.md).
 //
-// `serve` (the default) runs the bridge in this terminal and shows the address
-// and pairing code to type into CafAI; `start`, `stop` and `status` run it in
-// the background; `install` and `uninstall` start it at sign-in; `doctor`
-// checks Claude Code, its sign-in and one real turn; `code` shows or renews
-// the code. The server is lib/server.mjs; this file is the command line around
-// it. Every command gets what it touches (fetch, spawn, the server and Claude
-// Code helpers, output, the clock) in one `deps` object, so tests pass fakes.
+// `setup` walks through everything (the first `npm run bridge` in a terminal
+// runs it); `serve` (the default after setup) runs the bridge in this terminal
+// and shows the address and pairing code to type into CafAI; `start`, `stop`
+// and `status` run it in the background; `install` and `uninstall` start it by
+// itself, at sign-in or every morning in a window (--window 05:00-10:00);
+// `doctor` checks Claude Code, its sign-in and one real turn; `firewall` lets
+// the bridge through Windows Defender Firewall; `code` shows or renews the
+// code. The server is lib/server.mjs; this file is the command line around it.
+// Every command gets what it touches (fetch, spawn, the server and Claude Code
+// helpers, output, questions, the clock) in one `deps` object, so tests pass fakes.
 import { spawn } from 'node:child_process';
 import { closeSync, existsSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { autostartStatus, installAutostart, macPaths, nodeFs, runCommand, uninstallAutostart } from './lib/autostart.mjs';
+import { autostartStatus, installAutostart, macPaths, nodeFs, pmsetWakeCommand, runCommand, TASK_NAME, uninstallAutostart } from './lib/autostart.mjs';
+import { keepAwakeCommand } from './lib/awake.mjs';
 import { configDir, formatCode, generateCode, loadConfig, paths, saveConfig } from './lib/config.mjs';
-import { lanAddresses } from './lib/net.mjs';
+import { elevatedFirewallScript, firewallVerdict, readFirewall, runElevated } from './lib/firewall.mjs';
+import { lanAddresses, vpnAdapters } from './lib/net.mjs';
+import { askChoice, askTime, askYesNo, pressEnter, SetupQuit, terminalPrompt } from './lib/prompt.mjs';
+import { armWindowEnd, describeWhen, describeWindow, formatTime, inWindow, nextStart, parseTime, parseWindow } from './lib/window.mjs';
 
 export const VERSION = '0.1.0';
 export const DEFAULT_PORT = 8877;
 const DEFAULT_HOST = '0.0.0.0';
+const DEFAULT_WINDOW = '05:00-10:00';
 const CLAUDE_DOWNLOAD = 'https://claude.com/claude-code';
 const SCRIPT = fileURLToPath(import.meta.url);
 const CAFAI_SETTING = 'In CafAI: Settings > Where the coach runs > Claude on my computer';
+const SETUP_AGAIN = 'npm run bridge -- setup';
 const API_KEY_SIGN_IN = /api.?key|console/i;
 // The Claude desktop app's own copy: %APPDATA%\Claude\claude-code\<version>\..., ~/Library/Application Support/Claude/claude-code/...
 const DESKTOP_APP_CLAUDE_CODE = /[\\/]Claude[\\/]claude-code[\\/]/i;
@@ -34,12 +43,13 @@ const DESKTOP_APP_CLAUDE_CODE = /[\\/]Claude[\\/]claude-code[\\/]/i;
 // The command line
 // ---------------------------------------------------------------------------
 
-const COMMANDS = ['serve', 'start', 'stop', 'status', 'install', 'uninstall', 'doctor', 'code', 'help'];
+const COMMANDS = ['setup', 'serve', 'start', 'stop', 'status', 'install', 'uninstall', 'doctor', 'firewall', 'code', 'help'];
 
 const wholeNumber = (min, max) => (text) => (/^\d+$/.test(text) && Number(text) >= min && Number(text) <= max ? Number(text) : undefined);
 const nonEmpty = (text) => (text.trim() === '' ? undefined : text);
 // The model ids the server accepts too.
 const modelId = (text) => (/^[A-Za-z0-9][A-Za-z0-9._:[\]-]{0,99}$/.test(text) ? text : undefined);
+const windowText = (text) => parseWindow(text)?.text;
 
 /** Flags with a value: [option, parser (undefined = invalid), what a valid value is]. */
 const VALUE_FLAGS = {
@@ -50,27 +60,42 @@ const VALUE_FLAGS = {
   '--idle-minutes': ['idleMinutes', wholeNumber(1, 1440), 'a whole number of minutes from 1 to 1440'],
   '--config-dir': ['configDir', nonEmpty, 'a folder'],
   '--model': ['model', modelId, 'a model id such as claude-haiku-4-5'],
+  '--window': ['window', windowText, 'a daily window of two different times, such as 05:00-10:00'],
+  '--schedule': ['schedule', windowText, 'a daily window of two different times, such as 05:00-10:00'],
 };
 
+/** Flags without a value: [option, value]. */
 const SWITCHES = {
-  '--allow-api-key': 'allowApiKey',
-  '--no-start': 'noStart',
-  '--no-probe': 'noProbe',
-  '--new': 'new',
-  '--help': 'help',
-  '-h': 'help',
-  '--version': 'version',
+  '--allow-api-key': ['allowApiKey', true],
+  '--no-start': ['noStart', true],
+  '--no-probe': ['noProbe', true],
+  '--new': ['new', true],
+  '--weekdays': ['weekdays', true],
+  '--keep-awake': ['keepAwake', true],
+  '--no-keep-awake': ['keepAwake', false],
+  '--no-wake': ['wake', false],
+  '--yes': ['yes', true],
+  '-y': ['yes', true],
+  '--always': ['mode', 'always'],
+  '--manual': ['mode', 'manual'],
+  '--firewall': ['firewall', true],
+  '--help': ['help', true],
+  '-h': ['help', true],
+  '--version': ['version', true],
 };
 
 /**
- * Split the command line into the command and its options.
+ * Split the command line into the command and its options. `bare` is true
+ * when no command (and no option but --config-dir) was given: in a terminal,
+ * before the first setup, that runs setup instead of serve.
  * @param {string[]} argv  The arguments after the script.
- * @returns {{ command: string, options: Record<string, any>, error?: string }}
+ * @returns {{ command: string, options: Record<string, any>, bare: boolean, error?: string }}
  */
 export function parseArgs(argv) {
   const options = {};
+  const setBy = {};
   let command = null;
-  const fail = (error) => ({ command: 'help', options, error });
+  const fail = (error) => ({ command: 'help', options, bare: false, error });
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg.startsWith('-')) {
@@ -83,8 +108,12 @@ export function parseArgs(argv) {
         const parsed = flag[1](value);
         if (parsed === undefined) return fail(`${name} needs ${flag[2]}, not "${value}".`);
         options[flag[0]] = parsed;
+        setBy[flag[0]] = name;
       } else if (SWITCHES[name] && eq < 0) {
-        options[SWITCHES[name]] = true;
+        const [key, value] = SWITCHES[name];
+        if (key in options && options[key] !== value) return fail(`Use only one of ${setBy[key]} and ${name}.`);
+        options[key] = value;
+        setBy[key] = name;
       } else {
         return fail(`Unknown option ${arg}.`);
       }
@@ -95,9 +124,20 @@ export function parseArgs(argv) {
       return fail(`Unexpected "${arg}" after ${command}.`);
     }
   }
-  if (options.help) return { command: 'help', options };
-  if (options.version) return { command: 'version', options };
-  return { command: command ?? 'serve', options };
+  if (options.help) return { command: 'help', options, bare: false };
+  if (options.version) return { command: 'version', options, bare: false };
+  const chosen = command ?? 'serve';
+  for (const key of ['schedule', 'mode', 'firewall']) {
+    if (key in options && chosen !== 'setup') return fail(`${setBy[key]} only works with setup.`);
+  }
+  if (options.yes && chosen !== 'setup' && chosen !== 'firewall') return fail(`${setBy.yes} only works with setup and firewall.`);
+  if (chosen === 'setup') {
+    if (options.mode && (options.schedule || options.window)) return fail('Use only one of --schedule, --always and --manual.');
+    if (options.weekdays && options.mode) return fail('--weekdays goes with a schedule (--schedule 05:00-10:00).');
+  } else if (options.weekdays && !options.window) {
+    return fail('--weekdays goes with --window (for example --window 05:00-10:00 --weekdays).');
+  }
+  return { command: chosen, options, bare: command === null && Object.keys(options).every((key) => key === 'configDir') };
 }
 
 /** How to run this script from the current folder, for hints: "node bridge/cafai-bridge.mjs". */
@@ -114,34 +154,50 @@ export function helpText(deps) {
 and your Claude Pro or Max plan, so no API tokens are billed.
 
 Usage: ${self} [command] [options]
+       npm run bridge -- [command] [options]
+
+The first \`npm run bridge\` in a terminal runs setup; after that, no command means serve.
 
 Commands:
-  serve       Run the bridge here and show the address and code for CafAI (the default)
+  setup       Set it up step by step: Claude Code, where CafAI runs, when the bridge runs, the firewall
+  serve       Run the bridge here and show the address and code for CafAI
   start       Run it in the background
   stop        Stop it
-  status      Whether it is running, its addresses, code and log
-  install     Start it whenever you sign in to this computer, and start it now
-  uninstall   Stop starting it at sign-in
-  doctor      Check Claude Code, its sign-in, one real turn, the port and the firewall
+  status      Whether it is running, its addresses, code, schedule and log
+  install     Start it whenever you sign in; with --window, every morning on a schedule
+  uninstall   Stop starting it by itself (at sign-in or on a schedule)
+  doctor      Check Claude Code, its sign-in, one real turn, the port, the firewall and the schedule
+  firewall    Windows: check the firewall and let the bridge in (Windows asks for permission)
   code        Show the pairing code (--new makes a new one)
   help        Show this help
 
 Options:
-  --port <n>          Port to listen on (default ${DEFAULT_PORT})
-  --host <address>    Address to listen on (default ${DEFAULT_HOST}: every network of this computer)
-  --claude <path>     Use this Claude Code (default: the newest one found)
-  --max-runs <n>      Conversations kept running at once (default 3)
-  --idle-minutes <n>  Close a conversation after this many idle minutes (default 30)
-  --allow-api-key     Let coach runs use ANTHROPIC_API_KEY, billed to that key
-  --config-dir <dir>  Keep the code, the log and the work folder in <dir>
-  --no-start          install: do not start it now
-  --no-probe          doctor: skip the real turn
-  --model <id>        doctor: the model for the real turn (default claude-haiku-4-5)
-  --new               code: make a new code
-  --version           Show the version
+  --window <from-to>    Run only within this daily window, such as 05:00-10:00 (serve, start, install)
+  --weekdays            Only Monday to Friday (with --window)
+  --keep-awake          Keep the computer from sleeping while the bridge runs
+  --no-wake             install --window: do not wake the computer from sleep at the start (Windows)
+  --port <n>            Port to listen on (default ${DEFAULT_PORT})
+  --host <address>      Address to listen on (default ${DEFAULT_HOST}: every network of this computer)
+  --claude <path>       Use this Claude Code (default: the newest one found)
+  --max-runs <n>        Conversations kept running at once (default 3)
+  --idle-minutes <n>    Close a conversation after this many idle minutes (default 30)
+  --allow-api-key       Let coach runs use ANTHROPIC_API_KEY, billed to that key
+  --config-dir <dir>    Keep the code, the log and the work folder in <dir>
+  --no-start            install: do not start it now
+  --no-probe            doctor, setup: skip the real turn
+  --model <id>          doctor: the model for the real turn (default claude-haiku-4-5)
+  --new                 code: make a new code
+  --version             Show the version
 
-install remembers --port, --host, --claude, --max-runs, --idle-minutes,
---allow-api-key and --config-dir for every start at sign-in.
+Setup without questions (for scripts):
+  setup --yes --schedule 05:00-10:00 [--weekdays] [--keep-awake | --no-keep-awake] [--no-wake]
+        [--host <address>] [--port <n>] [--no-probe] [--firewall]
+  setup --yes --always [--keep-awake]
+  setup --yes --manual
+  firewall --yes        adds the firewall rule for Private networks if it is missing
+
+install remembers --window, --weekdays, --keep-awake, --port, --host, --claude, --max-runs,
+--idle-minutes, --allow-api-key and --config-dir for every start.
 `;
 }
 
@@ -198,8 +254,10 @@ export function defaultDeps() {
     pid: process.pid,
     uid: typeof process.getuid === 'function' ? process.getuid() : undefined,
     isTTY: Boolean(process.stdout.isTTY),
+    stdinIsTTY: Boolean(process.stdin.isTTY),
     out: (text) => process.stdout.write(text),
     err: (text) => process.stderr.write(text),
+    prompt: () => terminalPrompt(),
     fetch: (url, init) => fetch(url, init),
     spawn,
     exec: runCommand,
@@ -207,6 +265,9 @@ export function defaultDeps() {
     exists: existsSync,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     now: () => new Date(),
+    // The bridge's own handles keep the process alive; these timers must not.
+    setTimer: (fn, ms) => setTimeout(fn, ms).unref(),
+    clearTimer: (timer) => clearTimeout(timer),
     networkInterfaces: () => os.networkInterfaces(),
     isAlive,
     kill: (pid, signal) => process.kill(pid, signal),
@@ -229,6 +290,10 @@ function filesOf(options, deps) {
 function localHost(host) {
   if (!host || host === '0.0.0.0' || host === '::' || host === 'localhost') return '127.0.0.1';
   return host.includes(':') ? `[${host}]` : host;
+}
+
+function onlyLocal(host) {
+  return host === '127.0.0.1' || host === 'localhost' || host === '::1';
 }
 
 /** An environment variable, case-insensitive on Windows like the OS. */
@@ -345,11 +410,14 @@ function targetOf(options, files, deps) {
 }
 
 /**
- * The flags `start` and autostart hand on to `serve`. Paths become absolute:
- * an autostart runs from another folder.
+ * The flags `start` and autostart hand on to `serve`, the window first. Paths
+ * become absolute: an autostart runs from another folder.
  */
 export function serveFlags(options) {
   const flags = [];
+  if (options.window !== undefined) flags.push('--window', options.window);
+  if (options.weekdays) flags.push('--weekdays');
+  if (options.keepAwake) flags.push('--keep-awake');
   if (options.port !== undefined) flags.push('--port', String(options.port));
   if (options.host !== undefined) flags.push('--host', String(options.host));
   if (options.claude !== undefined) flags.push('--claude', path.resolve(options.claude));
@@ -358,6 +426,20 @@ export function serveFlags(options) {
   if (options.allowApiKey) flags.push('--allow-api-key');
   if (options.configDir !== undefined) flags.push('--config-dir', path.resolve(options.configDir));
   return flags;
+}
+
+/** The window given with --window (and --weekdays), or null. */
+function windowOf(options) {
+  return options.window ? parseWindow(options.window, { weekdays: Boolean(options.weekdays) }) : null;
+}
+
+function outsideLine(window) {
+  return `Outside ${window.text}${window.weekdays ? ' (Monday to Friday)' : ''}: not starting.`;
+}
+
+/** The code to print: setup run without a terminal (a script, a log) keeps it out of its output. */
+function codeFor(options, config) {
+  return options.hideCode ? null : config.code;
 }
 
 function fileSize(file) {
@@ -391,6 +473,40 @@ function rotateLog(file) {
   } catch {
     // No log yet, or it is in use: keep appending.
   }
+}
+
+/**
+ * The helper that keeps this computer awake while this process lives
+ * (--keep-awake), logged in one line. Returns `{ stop }`, or null.
+ */
+function startKeepAwake(deps, log) {
+  const hasSystemdInhibit =
+    deps.platform === 'linux' && Boolean(firstOnPath({ env: deps.env, platform: deps.platform, exists: deps.exists, name: 'systemd-inhibit' }));
+  const spec = keepAwakeCommand({ platform: deps.platform, pid: deps.pid, hasSystemdInhibit });
+  if (!spec) {
+    log('Keeping this computer awake is not supported here (it needs systemd-inhibit).');
+    return null;
+  }
+  let child;
+  try {
+    child = deps.spawn(spec.command, spec.args, { env: { ...deps.env, ...(spec.env ?? {}) }, stdio: 'ignore', windowsHide: true });
+  } catch (error) {
+    log(`Could not keep this computer awake: ${error?.message ?? error}`);
+    return null;
+  }
+  child.on('error', (error) => log(`Could not keep this computer awake: ${error?.message ?? error}`));
+  // It ends with this process anyway; it must not keep this process alive.
+  child.unref();
+  log(`Keeping this computer awake while the bridge runs (${spec.command}).`);
+  return {
+    stop: () => {
+      try {
+        child.kill();
+      } catch {
+        // Gone already.
+      }
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -505,6 +621,15 @@ function firewallHints(platform, port) {
   return [`Firewall: if one runs (ufw, firewalld), allow TCP port ${port} from your network, e.g. sudo ufw allow ${port}/tcp.`];
 }
 
+function vpnNote(deps) {
+  const vpns = vpnAdapters(deps.networkInterfaces());
+  if (vpns.length === 0) return null;
+  return (
+    `A VPN is connected (${vpns.join(', ')}). Allow LAN connections in the VPN app ` +
+    '("allow LAN" or "local network sharing"), or the tablet cannot reach the bridge.'
+  );
+}
+
 function compareVersions(a, b) {
   const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
   const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
@@ -521,11 +646,11 @@ function samePath(a, b, platform) {
 }
 
 /**
- * The `claude` a terminal runs: the first match on PATH (with PATHEXT's
- * extensions on Windows), or null.
- * @param {{ env: Record<string, string | undefined>, platform: string, exists: (file: string) => boolean }} where
+ * The program a terminal runs for `name` (default `claude`): the first match
+ * on PATH (with PATHEXT's extensions on Windows), or null.
+ * @param {{ env: Record<string, string | undefined>, platform: string, exists: (file: string) => boolean, name?: string }} where
  */
-export function firstOnPath({ env, platform, exists }) {
+export function firstOnPath({ env, platform, exists, name = 'claude' }) {
   const win = platform === 'win32';
   const p = win ? path.win32 : path.posix;
   const extensions = win ? (envGet(env, 'PATHEXT', platform) || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean) : [''];
@@ -533,11 +658,56 @@ export function firstOnPath({ env, platform, exists }) {
     const dir = raw.trim().replace(/^"|"$/g, '');
     if (dir === '') continue;
     for (const extension of extensions) {
-      const file = p.join(dir, `claude${extension.toLowerCase()}`);
+      const file = p.join(dir, `${name}${extension.toLowerCase()}`);
       if (exists(file)) return file;
     }
   }
   return null;
+}
+
+/** How the bridge starts by itself, for status. */
+function autostartText(auto, self) {
+  if (!auto.installed) return `Starts by itself: no (${self} install starts it at sign-in; ${SETUP_AGAIN} sets a schedule)`;
+  const where = {
+    task: `the Task Scheduler task "${TASK_NAME}"`,
+    shortcut: `a shortcut in your Startup folder (${auto.location})`,
+    registry: `your Run registry key (${auto.location})`,
+    launchagent: `a LaunchAgent (${auto.location})`,
+  }[auto.method] ?? `the systemd unit you saved (${auto.location})`;
+  if (auto.schedule?.window) return `Starts by itself: on a schedule, from ${where}`;
+  return `Starts at sign-in: yes, from ${where}`;
+}
+
+/**
+ * The schedule an autostart holds, and whether the bridge should be running
+ * now. `wake` is known for a Windows task only.
+ */
+function scheduleLines(auto, deps) {
+  const window = auto.schedule?.window ? parseWindow(auto.schedule.window, { weekdays: auto.schedule.weekdays }) : null;
+  if (!window) return [];
+  const now = deps.now();
+  const lines = [`Schedule: ${describeWindow(window)}${auto.schedule.keepAwake ? ', keeping the computer awake' : ''}; it also starts at sign-in within the window.`];
+  if (auto.method === 'task') {
+    lines.push(auto.schedule.wake ? 'The task wakes the computer from sleep at the start time.' : 'The task does not wake the computer; it runs when the computer is next awake.');
+    if (auto.schedule.enabled === false) lines.push('The task is disabled in Task Scheduler, so it does not run.');
+  }
+  lines.push(
+    inWindow(window, now)
+      ? `Right now: inside the window, so it should be running until ${formatTime(window.end)}.`
+      : `Right now: outside the window; it starts ${describeWhen(nextStart(window, now), now)}.`,
+  );
+  return lines;
+}
+
+/** One connected network as the firewall sees it, for people. */
+function networkLine(network) {
+  const label = network.name && network.name !== network.alias ? `${network.alias} ("${network.name}")` : network.alias;
+  const state = network.allowed
+    ? 'the firewall lets the bridge in'
+    : network.blockedBy.length > 0
+      ? `a firewall rule blocks Node.js ("${network.blockedBy[0]}")`
+      : 'no firewall rule lets the bridge in';
+  return `  ${label}: ${network.category}; ${state}.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -571,9 +741,10 @@ async function startFailure(error, { port, host }, deps) {
 }
 
 /**
- * Run the bridge in this process. Resolves with an exit code when it could
- * not start, or with null once it listens: it then runs until Ctrl+C, a
- * signal or `stop`, and exits from there.
+ * Run the bridge in this process. Resolves with an exit code when it does not
+ * start (outside its --window that is 0, so launchd leaves it be), or with
+ * null once it listens: it then runs until Ctrl+C, a signal, `stop` or the
+ * window's end, and exits from there.
  */
 export async function cmdServe(options, deps) {
   const files = filesOf(options, deps);
@@ -581,11 +752,19 @@ export async function cmdServe(options, deps) {
   const port = options.port ?? DEFAULT_PORT;
   const host = options.host ?? DEFAULT_HOST;
   const allowApiKey = Boolean(options.allowApiKey);
+  const window = windowOf(options);
   const log = (line) => deps.out(`${stamp(deps.now())} ${line}\n`);
   let handle = null;
   let closing = false;
+  let cancelEnd = null;
+  let awake = null;
 
-  // Ctrl+C or a signal (close the server here), or `stop` (the server has closed itself).
+  if (window && !inWindow(window, deps.now())) {
+    deps.out(`${outsideLine(window)}\n`);
+    return 0;
+  }
+
+  // Ctrl+C, a signal or the window's end (close the server here), or `stop` (the server has closed itself).
   const shutdown = async (serverClosed) => {
     if (closing) {
       // A second Ctrl+C: leave without waiting.
@@ -593,6 +772,8 @@ export async function cmdServe(options, deps) {
       return;
     }
     closing = true;
+    cancelEnd?.();
+    awake?.stop();
     if (!serverClosed && handle) {
       log('Stopping CafAI Bridge...');
       await withTimeout(handle.close(), 5000).catch(() => {});
@@ -626,6 +807,13 @@ export async function cmdServe(options, deps) {
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP', ...(deps.platform === 'win32' ? ['SIGBREAK'] : [])]) {
     deps.onSignal(signal, () => shutdown(false));
   }
+  if (options.keepAwake) awake = startKeepAwake(deps, log);
+  if (window) {
+    cancelEnd = armWindowEnd(window, deps, () => {
+      log(`The window ${window.text} has ended.`);
+      void shutdown(false);
+    });
+  }
 
   const auth = handle.claude
     ? await withTimeout(deps.claudeAuthStatus(handle.claude, { env: deps.env, allowApiKey }), 25_000).catch(() => null)
@@ -633,6 +821,7 @@ export async function cmdServe(options, deps) {
   const lan = lanAddresses(deps.networkInterfaces());
   // Started by `start` or at login, serve writes to the log: the code stays out of it.
   const banner = bannerLines({ install: handle.claude, auth, host: handle.host, port: handle.port, lan, code: deps.isTTY ? config.code : null, allowApiKey });
+  if (window && !closing) banner.push('', `Runs until ${formatTime(window.end)} (window ${window.text}${window.weekdays ? ', Monday to Friday' : ''}).`);
   deps.out(`${banner.join('\n')}\n\n${deps.isTTY ? 'Press Ctrl+C to stop.\n\n' : ''}`);
   return null;
 }
@@ -644,7 +833,16 @@ export async function cmdStart(options, deps) {
   const self = selfCommand(deps);
   const port = options.port ?? DEFAULT_PORT;
   const host = options.host ?? DEFAULT_HOST;
+  const window = windowOf(options);
   const lan = () => lanAddresses(deps.networkInterfaces());
+
+  if (window) {
+    const now = deps.now();
+    if (!inWindow(window, now)) {
+      deps.out(`${outsideLine(window)}\nIt starts ${describeWhen(nextStart(window, now), now)}.\n`);
+      return 0;
+    }
+  }
 
   // Already running here, or (no --port given) where the pid file says?
   const { recorded } = targetOf({}, files, deps);
@@ -659,7 +857,7 @@ export async function cmdStart(options, deps) {
     const running = candidates[found];
     const pid = recorded && (recorded.port ?? DEFAULT_PORT) === running.port ? recorded.pid : null;
     deps.out(`CafAI Bridge is already running on port ${running.port}${pid ? ` (process ${pid})` : ''}.\n\n`);
-    deps.out(`${connectLines({ host: running.host, port: running.port, lan: lan(), code: config.code }).join('\n')}\n`);
+    deps.out(`${connectLines({ host: running.host, port: running.port, lan: lan(), code: codeFor(options, config) }).join('\n')}\n`);
     return 0;
   }
   if (probes[0].state === 'timeout') {
@@ -697,13 +895,19 @@ export async function cmdStart(options, deps) {
 
   const up = await waitFor(deps, async () => (await probeHealth(deps, localHost(host), port)).state === 'bridge', () => ended !== null, 10_000);
   if (!up) {
+    // The window closed while it was starting: serve said no, as it should.
+    if (window && !inWindow(window, deps.now())) {
+      deps.out(`${outsideLine(window)}\n`);
+      return 0;
+    }
     deps.err(`CafAI Bridge did not start${ended ? `: it ${ended}` : ' within 10 seconds'}.\n`);
     const tail = logTail(files.logFile, offset);
     if (tail) deps.err(`The end of its log (${files.logFile}):\n${tail}\n`);
     return 1;
   }
-  deps.out(`CafAI Bridge is running in the background on port ${port} (process ${child.pid}).\n\n`);
-  deps.out(`${connectLines({ host, port, lan: lan(), code: config.code }).join('\n')}\n`);
+  const until = window ? ` until ${formatTime(window.end)}` : '';
+  deps.out(`CafAI Bridge is running in the background on port ${port} (process ${child.pid})${until}.\n\n`);
+  deps.out(`${connectLines({ host, port, lan: lan(), code: codeFor(options, config) }).join('\n')}\n`);
   const summary = await claudeSummary(deps, localHost(host), port, config.code);
   if (summary.length > 0) deps.out(`\n${summary.join('\n')}\n`);
   deps.out(`\nLog: ${files.logFile}\nStop it with: ${self} stop\n`);
@@ -784,15 +988,7 @@ export async function cmdStop(options, deps) {
   return 0;
 }
 
-function autostartText(auto, self) {
-  if (!auto.installed) return `no (${self} install starts it at sign-in)`;
-  if (auto.method === 'shortcut') return `yes, a shortcut in your Startup folder (${auto.location})`;
-  if (auto.method === 'registry') return `yes, from your Run registry key (${auto.location})`;
-  if (auto.method === 'launchagent') return `yes, a LaunchAgent (${auto.location})`;
-  return `yes, with the systemd unit you saved (${auto.location})`;
-}
-
-/** Whether a bridge runs, where to reach it, the code, autostart and the log. Exit 0 when running. */
+/** Whether a bridge runs, where to reach it, the code, autostart and its schedule, the log. Exit 0 when running. */
 export async function cmdStatus(options, deps) {
   const files = filesOf(options, deps);
   const config = loadConfig(files.dir);
@@ -817,8 +1013,8 @@ export async function cmdStatus(options, deps) {
     if (summary.length > 0) lines.push('', ...summary);
   }
   const auto = await autostartStatus(deps);
-  lines.push('', `Starts at sign-in: ${autostartText(auto, self)}`, `Log: ${files.logFile}`);
-  if (deps.platform === 'darwin' && auto.installed) lines.push(`Log when started at login: ${macPaths(deps).logFile}`);
+  lines.push('', autostartText(auto, self), ...scheduleLines(auto, deps), `Log: ${files.logFile}`);
+  if (deps.platform === 'darwin' && auto.installed) lines.push(`Log when started by launchd: ${macPaths(deps).logFile}`);
   lines.push(`Config folder: ${files.dir}`);
   deps.out(`${lines.join('\n')}\n`);
   return probe.state === 'bridge' ? 0 : 1;
@@ -846,11 +1042,18 @@ export async function cmdCode(options, deps) {
   return 0;
 }
 
-/** Start the bridge at sign-in, then (unless --no-start) now. */
+/**
+ * Start the bridge by itself: at sign-in, or with --window every morning on a
+ * schedule (which replaces the other). Then start it now, unless --no-start
+ * or (a schedule) it is outside the window.
+ */
 export async function cmdInstall(options, deps) {
   const files = filesOf(options, deps);
   const config = loadConfig(files.dir);
   const self = selfCommand(deps);
+  const window = windowOf(options);
+  const port = options.port ?? DEFAULT_PORT;
+  const host = options.host ?? DEFAULT_HOST;
   let claudePath = null;
   if (deps.platform !== 'win32') {
     // Its folder goes on the service's PATH.
@@ -864,51 +1067,90 @@ export async function cmdInstall(options, deps) {
   const macLog = macPaths(deps).logFile;
   const macLogOffset = deps.platform === 'darwin' ? fileSize(macLog) : 0;
   const result = await installAutostart(
-    { nodePath: deps.execPath, script: deps.script, flags: serveFlags(options), configDir: files.dir, claudePath, load: !options.noStart },
+    {
+      nodePath: deps.execPath,
+      script: deps.script,
+      flags: serveFlags(options),
+      configDir: files.dir,
+      claudePath,
+      load: !options.noStart,
+      window: window?.text ?? null,
+      weekdays: Boolean(window?.weekdays),
+      wake: options.wake !== false,
+    },
     deps,
   );
 
   if (result.method === 'systemd') {
-    // The unit alone on stdout, so `install > <file>` saves it.
-    deps.err(
-      [
-        'On Linux nothing is installed: save this systemd user unit yourself.',
-        `Save it as ${result.location} (or run: ${self} install > ${result.location}), then run:`,
-        '  systemctl --user daemon-reload',
-        '  systemctl --user enable --now cafai-bridge',
-        `Until then, ${self} start runs it in the background.`,
-        '',
-      ].join('\n'),
-    );
-    deps.out(result.unit);
+    // The units alone on stdout, so `install > <file>` saves the one unit of an always-on bridge.
+    const steps = window
+      ? [
+          'On Linux nothing is installed: save these two systemd user units yourself:',
+          `the first as ${result.location}, the second as ${result.timerLocation}. Then run:`,
+          '  systemctl --user daemon-reload',
+          '  systemctl --user enable --now cafai-bridge.timer',
+        ]
+      : [
+          'On Linux nothing is installed: save this systemd user unit yourself.',
+          `Save it as ${result.location} (or run: ${self} install > ${result.location}), then run:`,
+          '  systemctl --user daemon-reload',
+          '  systemctl --user enable --now cafai-bridge',
+        ];
+    deps.err([...steps, `Until then, ${self} start runs it in the background.`, ''].join('\n'));
+    deps.out(window ? `# ${result.location}\n${result.unit}\n# ${result.timerLocation}\n${result.timer}` : result.unit);
     return 0;
   }
   if (!result.ok) {
-    deps.err(`Could not set CafAI Bridge to start at sign-in: ${result.error}\n`);
+    deps.err(`Could not set CafAI Bridge to start by itself: ${result.error}\n`);
     if (result.method === 'launchagent') deps.err(`The LaunchAgent is saved (${result.location}), so it should start at your next login.\n`);
     return 1;
   }
-  if (result.method === 'shortcut') {
+
+  const days = window?.weekdays ? 'Monday to Friday' : 'every day';
+  if (result.method === 'task') {
+    deps.out(
+      `CafAI Bridge will start ${days} at ${formatTime(window.start)} and stop at ${formatTime(window.end)} ` +
+        `(the Task Scheduler task "${TASK_NAME}"${result.wake ? ', which wakes the computer from sleep' : ''}). ` +
+        'It also starts when you sign in within that window.\n',
+    );
+  } else if (result.method === 'shortcut') {
     deps.out(`CafAI Bridge will start whenever you sign in to Windows (a shortcut in your Startup folder: ${result.location}).\n`);
   } else if (result.method === 'registry') {
     deps.out(
       'CafAI Bridge will start whenever you sign in to Windows (from your Run registry key: ' +
         `PowerShell could not make a Startup shortcut: ${result.reason}).\n`,
     );
+  } else if (window) {
+    deps.out(
+      `CafAI Bridge will start ${days} at ${formatTime(window.start)} and stop at ${formatTime(window.end)} ` +
+        `(LaunchAgent ${result.location}; its log: ${result.logFile}). It also starts when you log in within that window.\n`,
+    );
+    deps.out(
+      'macOS wakes the computer for it only with a wake schedule, which needs admin rights. To set one:\n' +
+        `  ${pmsetWakeCommand({ window: window.text, weekdays: window.weekdays })}\n`,
+    );
   } else {
     deps.out(`CafAI Bridge will start whenever you log in (LaunchAgent ${result.location}; its log: ${result.logFile}).\n`);
   }
   deps.out("If you move CafAI's folder or change Node, run install again.\n");
   if (options.noStart) {
-    deps.out(`It was not started now (--no-start). Start it with: ${self} start\n`);
+    deps.out(
+      deps.platform === 'darwin'
+        ? 'It was not loaded now (--no-start): launchd loads it at your next login.\n'
+        : `It was not started now (--no-start). Start it with: ${self} start\n`,
+    );
     return 0;
   }
   deps.out('\n');
+  const now = deps.now();
+  if (window && !inWindow(window, now)) {
+    deps.out(`It is outside the window now; it starts ${describeWhen(nextStart(window, now), now)}.\n\n`);
+    deps.out(`${connectLines({ host, port, lan: lanAddresses(deps.networkInterfaces()), code: codeFor(options, config) }).join('\n')}\n`);
+    return 0;
+  }
   if (deps.platform !== 'darwin') return cmdStart(options, deps);
 
   // launchd has started it already (RunAtLoad).
-  const port = options.port ?? DEFAULT_PORT;
-  const host = options.host ?? DEFAULT_HOST;
   const up = await waitFor(deps, async () => (await probeHealth(deps, localHost(host), port)).state === 'bridge', () => false, 10_000);
   if (!up) {
     deps.err('CafAI Bridge did not answer within 10 seconds.\n');
@@ -916,30 +1158,31 @@ export async function cmdInstall(options, deps) {
     if (tail) deps.err(`The end of its log (${macLog}):\n${tail}\n`);
     return 1;
   }
-  deps.out(`CafAI Bridge is running on port ${port}.\n\n`);
-  deps.out(`${connectLines({ host, port, lan: lanAddresses(deps.networkInterfaces()), code: config.code }).join('\n')}\n`);
+  deps.out(`CafAI Bridge is running on port ${port}${window ? ` until ${formatTime(window.end)}` : ''}.\n\n`);
+  deps.out(`${connectLines({ host, port, lan: lanAddresses(deps.networkInterfaces()), code: codeFor(options, config) }).join('\n')}\n`);
   return 0;
 }
 
-/** Stop starting the bridge at sign-in. */
+/** Stop starting the bridge by itself (at sign-in or on a schedule). */
 export async function cmdUninstall(options, deps) {
   const self = selfCommand(deps);
   const result = await uninstallAutostart(deps);
   if (result.method === 'systemd') {
     deps.out(
       result.saved
-        ? `On Linux the bridge installs nothing itself. To remove the unit you saved: systemctl --user disable --now cafai-bridge, then delete ${result.location}.\n`
+        ? 'On Linux the bridge installs nothing itself. To remove what you saved: ' +
+            `systemctl --user disable --now cafai-bridge.timer cafai-bridge, then delete ${result.location} and ${result.timerLocation}.\n`
         : 'On Linux the bridge installs nothing itself, so there is nothing to remove.\n',
     );
     return 0;
   }
   if (result.removed.length === 0) {
-    deps.out('CafAI Bridge was not set to start at sign-in.\n');
+    deps.out('CafAI Bridge was not set to start by itself.\n');
   } else if (result.method === 'launchagent') {
-    deps.out(`CafAI Bridge will no longer start at login (removed ${result.location}).\n`);
+    deps.out(`CafAI Bridge will no longer start by itself (removed ${result.location}).\n`);
   } else {
-    const what = result.removed.map((item) => (item === 'shortcut' ? 'the Startup shortcut' : 'the Run registry value')).join(' and ');
-    deps.out(`CafAI Bridge will no longer start at sign-in (removed ${what}).\n`);
+    const names = { shortcut: 'the Startup shortcut', registry: 'the Run registry value', task: `the scheduled task "${TASK_NAME}"` };
+    deps.out(`CafAI Bridge will no longer start by itself (removed ${result.removed.map((item) => names[item]).join(' and ')}).\n`);
   }
   deps.out(
     deps.platform === 'darwin' && result.unloaded
@@ -947,6 +1190,113 @@ export async function cmdUninstall(options, deps) {
       : `If it is running now, it keeps running until you stop it: ${self} stop\n`,
   );
   return 0;
+}
+
+/**
+ * The firewall step (Windows): show what the firewall does on each connected
+ * network, offer to mark a Public one Private, and add the CafAI Bridge rule
+ * where none lets the bridge in, both in one elevated call (Windows asks for
+ * permission). Without `ask`, nothing is asked: `fix` adds the rule for
+ * Private networks only. Resolves with `{ ok, reachable }`.
+ */
+async function firewallStep({ port, ask = null, fix = false }, deps) {
+  const say = (line = '') => deps.out(`${line}\n`);
+  const label = (network) => (network.name && network.name !== network.alias ? `"${network.name}" (${network.alias})` : `"${network.alias}"`);
+  const state = await readFirewall({ program: deps.execPath, port }, deps);
+  if (!state.ok) {
+    say(`Could not read the firewall settings: ${state.error}`);
+    for (const line of firewallHints('win32', port)) say(line);
+    return { ok: false, reachable: false };
+  }
+  const verdict = firewallVerdict(state);
+  if (verdict.networks.length === 0) {
+    say('No network is connected, so there is nothing to let in yet.');
+    return { ok: true, reachable: false };
+  }
+  for (const network of verdict.networks) say(networkLine(network));
+
+  const markPrivate = [];
+  const publicOnes = verdict.networks.filter((network) => network.profile === 'Public');
+  if (publicOnes.length > 0) {
+    say();
+    for (const network of publicOnes) {
+      say(`Your network ${label(network)} is marked Public: Windows treats it as a network you do not trust, like a coffee shop's Wi-Fi.`);
+    }
+    if (ask) {
+      say('Private is for a network you trust, such as your home: other devices on it may find and reach this computer.');
+      for (const network of publicOnes) if (await askYesNo(ask, `Mark ${label(network)} as Private?`, false)) markPrivate.push(network.alias);
+    } else {
+      say('To mark it Private: Settings > Network & internet > your network > Private network.');
+    }
+  }
+
+  const missing = firewallVerdict(state, { markPrivate }).networks.filter((network) => !network.allowed);
+  let addRule = false;
+  const profiles = ['Private'];
+  if (missing.length > 0) {
+    say();
+    say(`No firewall rule lets the bridge in on ${missing.map(label).join(' and ')} yet, so a tablet there cannot reach it.`);
+    for (const network of missing.filter((n) => n.blockedBy.length > 0)) {
+      say(`On ${network.profile} networks a rule blocks Node.js ("${network.blockedBy[0]}"); it wins over any rule allowing it, so marking the network Private is what helps there.`);
+    }
+    addRule = ask ? await askYesNo(ask, 'Add a firewall rule now? Windows will ask for permission.', true) : fix;
+    if (addRule && missing.some((network) => network.profile === 'Public') && ask) {
+      if (await askYesNo(ask, 'Let the bridge in on Public networks too? Only if that Public network is your own.', false)) profiles.push('Public');
+    }
+    if (missing.some((network) => network.profile === 'Domain')) profiles.push('Domain');
+  }
+  if (!addRule && markPrivate.length === 0) {
+    if (missing.length === 0) say('The firewall lets devices on your network reach the bridge.');
+    else say(`Nothing changed. Later: ${selfCommand(deps)} firewall`);
+    return { ok: true, reachable: missing.length === 0 };
+  }
+
+  say('Asking Windows for permission (a Windows prompt opens)...');
+  const run = await runElevated(elevatedFirewallScript({ program: addRule ? deps.execPath : null, port, profiles, markPrivate }), deps);
+  if (!run.ok) {
+    say(run.cancelled ? 'Windows did not get permission, so nothing changed.' : `That did not work: ${run.error}`);
+    return { ok: false, reachable: false };
+  }
+  const again = await readFirewall({ program: deps.execPath, port }, deps);
+  if (!again.ok) {
+    say(`Done, but the firewall could not be read again: ${again.error}`);
+    return { ok: true, reachable: false };
+  }
+  const after = firewallVerdict(again);
+  for (const network of after.networks) say(networkLine(network));
+  say(after.reachable ? 'Done: devices on your network can reach the bridge.' : 'Done, but a network above still does not let the bridge in.');
+  return { ok: true, reachable: after.reachable };
+}
+
+/** Windows: check the firewall, and let the bridge in. Exit 0 when devices on the network can reach it. */
+export async function cmdFirewall(options, deps) {
+  const files = filesOf(options, deps);
+  const config = loadConfig(files.dir);
+  const port = options.port ?? config.setup?.port ?? DEFAULT_PORT;
+  const host = options.host ?? config.setup?.host ?? DEFAULT_HOST;
+  if (deps.platform !== 'win32') {
+    for (const line of firewallHints(deps.platform, port)) deps.out(`${line}\n`);
+    return 0;
+  }
+  if (onlyLocal(host)) {
+    deps.out('The bridge listens on this computer only (127.0.0.1), so the firewall does not matter.\n');
+    return 0;
+  }
+  const prompt = !options.yes && deps.isTTY && deps.stdinIsTTY ? deps.prompt() : null;
+  try {
+    const result = await firewallStep({ port, ask: prompt?.ask ?? null, fix: Boolean(options.yes) }, deps);
+    const note = vpnNote(deps);
+    if (note) deps.out(`\n${note}\n`);
+    return result.ok && result.reachable ? 0 : 1;
+  } catch (error) {
+    if (error instanceof SetupQuit) {
+      deps.out('Stopped; nothing changed.\n');
+      return 0;
+    }
+    throw error;
+  } finally {
+    prompt?.close();
+  }
 }
 
 /** Check everything the bridge needs. Exit 0 when nothing is a problem (warnings are fine). */
@@ -1045,7 +1395,31 @@ export async function cmdDoctor(options, deps) {
   const lan = lanAddresses(deps.networkInterfaces());
   if (lan.length > 0) ok(`This computer's address on the network: ${lan.join(', ')}.`);
   else warn('This computer has no network address: connect it to your Wi-Fi or network (127.0.0.1 works only for Decaid on this computer).');
-  for (const line of firewallHints(deps.platform, port)) say(`  ${line}`);
+  const vpn = vpnNote(deps);
+  if (vpn && !onlyLocal(host)) warn(vpn);
+  const firewall = deps.platform === 'win32' && !onlyLocal(host) ? await readFirewall({ program: deps.execPath, port }, deps) : null;
+  if (firewall?.ok) {
+    const verdict = firewallVerdict(firewall);
+    for (const network of verdict.networks) {
+      const line = networkLine(network).trim();
+      if (network.allowed) ok(`Firewall: ${line}`);
+      else warn(`Firewall: ${line} Fix it with: ${selfCommand(deps)} firewall`);
+    }
+    if (verdict.networks.length === 0) warn('Firewall: no network is connected.');
+  } else if (onlyLocal(host)) {
+    say('  (The firewall does not matter: the bridge listens on this computer only.)');
+  } else {
+    for (const line of firewallHints(deps.platform, port)) say(`  ${line}`);
+  }
+
+  say();
+  say('Starting by itself');
+  const auto = await autostartStatus(deps);
+  if (!auto.installed) say(`  Only when you start it (${SETUP_AGAIN} sets a schedule or a start at sign-in).`);
+  else {
+    ok(autostartText(auto, selfCommand(deps)));
+    for (const line of scheduleLines(auto, deps)) say(`  ${line}`);
+  }
 
   say();
   say(`Config folder: ${files.dir}`);
@@ -1058,17 +1432,245 @@ export async function cmdDoctor(options, deps) {
   return 1;
 }
 
-const RUN = { serve: cmdServe, start: cmdStart, stop: cmdStop, status: cmdStatus, install: cmdInstall, uninstall: cmdUninstall, doctor: cmdDoctor, code: cmdCode };
+// ---------------------------------------------------------------------------
+// setup: the guided path
+// ---------------------------------------------------------------------------
+
+/** Step a: Claude Code found and signed in, and (if wanted) one test turn. */
+async function setupClaude(options, deps, ask, files, say) {
+  const allowApiKey = Boolean(options.allowApiKey);
+  for (;;) {
+    const { chosen } = await deps.findClaude({ explicit: options.claude ?? null, env: deps.env, platform: deps.platform, home: deps.home });
+    if (!chosen) {
+      say(`  Claude Code was not found on this computer. Install it from ${CLAUDE_DOWNLOAD}, or the Claude desktop app, which brings its own.`);
+      if (!ask) {
+        say('  Going on: the bridge finds Claude Code once it is installed.');
+        return;
+      }
+      await pressEnter(ask, '  Press Enter to check again (q quits): ');
+      continue;
+    }
+    say(`  ok  Claude Code ${versionText(chosen.version)}: ${chosen.path}`);
+    const auth = await deps.claudeAuthStatus(chosen, { env: deps.env, allowApiKey }).catch(() => null);
+    if (auth && !auth.loggedIn) {
+      say('  Claude Code is not signed in.');
+      if (!ask) {
+        say('  Going on: sign in later (run claude, then /login).');
+        return;
+      }
+      await pressEnter(ask, '  Open another terminal, run claude, sign in with /login, then press Enter (q quits): ');
+      continue;
+    }
+    if (API_KEY_SIGN_IN.test(auth?.authMethod ?? '')) {
+      say('  Claude Code is signed in with an API key, so the coach would be billed to that key.');
+      say('  To use your Claude plan instead: run claude, then /login with your Claude account.');
+      if (ask && !(await askYesNo(ask, '  Continue anyway?', false))) throw new SetupQuit();
+      // No test turn: it would be billed to the key.
+      return;
+    }
+    say(`  ${auth ? 'ok  ' : ''}${signInState(auth).text}`);
+    const test = ask ? await askYesNo(ask, '  Run one test turn now? It uses a little of your plan.', true) : !options.noProbe;
+    if (test) {
+      say('  Asking Claude Code for one tiny real turn...');
+      const result = await deps
+        .probeClaude(chosen, { env: deps.env, workDir: files.workDir, allowApiKey })
+        .catch((error) => ({ ok: false, error: error?.message ?? String(error) }));
+      if (result.ok) say(`  ok  Claude Code answered in ${(result.ms / 1000).toFixed(1)} s.`);
+      else say(`  The test turn failed: ${result.error}\n  The coach needs that fixed (${selfCommand(deps)} doctor helps); setup goes on.`);
+    }
+    return;
+  }
+}
+
+/** The answers, from questions or (with --yes) from the flags and defaults. */
+async function setupAnswers(options, deps, ask, previous, say) {
+  const win = deps.platform === 'win32';
+
+  say();
+  say('2. Where CafAI runs');
+  let host = options.host ?? null;
+  if (!host) {
+    // Without questions (--yes) the defaults hold, not the last setup's answers.
+    const choice = ask
+      ? await askChoice(ask, 'Where does CafAI run?', ['on a tablet or phone on this network', 'only on this computer'], previous.host === '127.0.0.1' ? 1 : 0)
+      : 0;
+    host = choice === 1 ? '127.0.0.1' : DEFAULT_HOST;
+  }
+
+  say();
+  say('3. When the bridge runs');
+  const modes = ['schedule', 'always', 'manual'];
+  const given = options.mode ?? (options.schedule || options.window ? 'schedule' : null);
+  const mode = ask
+    ? modes[
+        await askChoice(
+          ask,
+          'When should the bridge run?',
+          ['every morning on a schedule', 'always, from sign-in', 'only when I start it'],
+          modes.indexOf(given ?? previous.mode ?? 'schedule'),
+        )
+      ]
+    : (given ?? 'schedule');
+  const same = previous.mode === mode ? previous : {};
+  const answers = { host, mode, window: null, weekdays: false, keepAwake: false, wake: false };
+  if (mode === 'schedule') {
+    const fallback = parseWindow(options.schedule ?? options.window ?? same.window ?? DEFAULT_WINDOW) ?? parseWindow(DEFAULT_WINDOW);
+    let start = formatTime(fallback.start);
+    let stop = formatTime(fallback.end);
+    if (ask) {
+      start = await askTime(ask, 'Start at', start);
+      // A stop equal to the start is no window: suggest five hours later instead.
+      const later = formatTime((parseTime(start) + 300) % 1440);
+      let suggestion = stop === start ? later : stop;
+      for (;;) {
+        stop = await askTime(ask, 'Stop at', suggestion);
+        if (stop !== start) break;
+        say('The stop time has to differ from the start time.');
+        suggestion = later;
+      }
+      answers.weekdays = (await askChoice(ask, 'Which days?', ['every day', 'Monday to Friday'], (options.weekdays ?? same.weekdays) ? 1 : 0)) === 1;
+      answers.keepAwake = await askYesNo(ask, 'Keep this computer awake while the bridge runs?', options.keepAwake ?? same.keepAwake ?? true);
+      if (win) answers.wake = await askYesNo(ask, 'Wake this computer from sleep at the start time?', options.wake ?? same.wake ?? true);
+    } else {
+      answers.weekdays = Boolean(options.weekdays);
+      answers.keepAwake = options.keepAwake ?? true;
+      answers.wake = win && options.wake !== false;
+    }
+    answers.window = parseWindow(`${start}-${stop}`, { weekdays: answers.weekdays }).text;
+  } else if (mode === 'always') {
+    answers.keepAwake = ask
+      ? await askYesNo(ask, 'Keep this computer awake while the bridge runs? (all day, while you are signed in)', options.keepAwake ?? same.keepAwake ?? false)
+      : Boolean(options.keepAwake);
+  }
+  return answers;
+}
+
+/**
+ * The guided setup: Claude Code, where CafAI runs, when the bridge runs, the
+ * firewall; then it installs what was chosen, saves the answers and starts
+ * the bridge if it should run now. With --yes nothing is asked.
+ */
+export async function cmdSetup(options, deps, { firstRun = false } = {}) {
+  const files = filesOf(options, deps);
+  const config = loadConfig(files.dir);
+  if (!options.yes && !(deps.isTTY && deps.stdinIsTTY)) {
+    deps.err(`setup asks a few questions, so it needs a terminal. Without questions: ${selfCommand(deps)} setup --yes (see help).\n`);
+    return 2;
+  }
+  const prompt = options.yes ? null : deps.prompt();
+  const ask = prompt?.ask ?? null;
+  const say = (line = '') => deps.out(`${line}\n`);
+  try {
+    say(firstRun ? `Welcome to CafAI Bridge ${VERSION}. A few questions set it up; you can change the answers later.` : `CafAI Bridge ${VERSION} setup`);
+    if (ask) say('Press Enter to take the answer in [brackets], or type q to quit.');
+    say();
+    say('1. Claude Code');
+    await setupClaude(options, deps, ask, files, say);
+    const answers = await setupAnswers(options, deps, ask, config.setup ?? {}, say);
+    const port = options.port ?? config.setup?.port ?? DEFAULT_PORT;
+
+    if (!onlyLocal(answers.host)) {
+      say();
+      say('4. Firewall');
+      if (deps.platform === 'win32') {
+        if (ask || options.firewall) await firewallStep({ port, ask, fix: Boolean(options.firewall) }, deps);
+        else say(`  Not checked (add --firewall, or run: ${selfCommand(deps)} firewall).`);
+      } else {
+        for (const line of firewallHints(deps.platform, port)) say(`  ${line}`);
+      }
+      const note = vpnNote(deps);
+      if (note) say(`  ${note}`);
+    }
+
+    say();
+    say('5. Setting it up');
+    const common = {
+      configDir: options.configDir,
+      claude: options.claude,
+      maxRuns: options.maxRuns,
+      idleMinutes: options.idleMinutes,
+      allowApiKey: options.allowApiKey,
+      host: answers.host === DEFAULT_HOST ? undefined : answers.host,
+      port: port === DEFAULT_PORT ? undefined : port,
+      keepAwake: answers.keepAwake || undefined,
+      hideCode: !deps.isTTY,
+    };
+    let code = 0;
+    if (answers.mode === 'schedule') {
+      code = await cmdInstall({ ...common, window: answers.window, weekdays: answers.weekdays || undefined, wake: answers.wake }, deps);
+    } else if (answers.mode === 'always') {
+      code = await cmdInstall(common, deps);
+    } else {
+      const removed = await uninstallAutostart(deps);
+      if (removed.removed?.length > 0) say('  It no longer starts by itself: you start it when you want it.');
+      say(`${connectLines({ host: answers.host, port, lan: lanAddresses(deps.networkInterfaces()), code: codeFor(common, config) }).join('\n')}`);
+    }
+    if (code !== 0) {
+      say(`\nSetup did not finish. Fix the problem above, then run it again: ${SETUP_AGAIN}`);
+      return code;
+    }
+
+    const now = deps.now();
+    saveConfig(files.dir, {
+      ...loadConfig(files.dir),
+      setup: { mode: answers.mode, window: answers.window, weekdays: answers.weekdays, keepAwake: answers.keepAwake, wake: answers.wake, host: answers.host, port, at: now.toISOString() },
+    });
+    say();
+    // Linux: the units were printed for the user to save; nothing runs by itself yet.
+    const printedOnly = deps.platform !== 'win32' && deps.platform !== 'darwin';
+    if (answers.mode === 'schedule') {
+      const window = parseWindow(answers.window, { weekdays: answers.weekdays });
+      const when = `${answers.weekdays ? 'Monday to Friday' : 'every day'} at ${formatTime(window.start)} and stops at ${formatTime(window.end)}`;
+      if (printedOnly) say(`Done here. Once you save and enable the units above, the bridge starts ${when}.`);
+      else {
+        say(`Done. The bridge starts ${when}.`);
+        say(inWindow(window, now) ? `It is running now, until ${formatTime(window.end)}.` : `Next start: ${describeWhen(nextStart(window, now), now)}.`);
+      }
+    } else if (answers.mode === 'always') {
+      say(
+        printedOnly
+          ? 'Done here. Once you save and enable the unit above, the bridge starts whenever you log in.'
+          : 'Done. The bridge starts whenever you sign in to this computer, and it is running now.',
+      );
+    } else {
+      say('Done. Start the bridge when you want it: npm run bridge -- start (stop it with npm run bridge -- stop).');
+    }
+    say(`To change this: ${SETUP_AGAIN}`);
+    return 0;
+  } catch (error) {
+    if (error instanceof SetupQuit) {
+      say(`\nSetup stopped. Run it again with: ${SETUP_AGAIN}`);
+      return 0;
+    }
+    throw error;
+  } finally {
+    prompt?.close();
+  }
+}
+
+const RUN = {
+  setup: cmdSetup,
+  serve: cmdServe,
+  start: cmdStart,
+  stop: cmdStop,
+  status: cmdStatus,
+  install: cmdInstall,
+  uninstall: cmdUninstall,
+  doctor: cmdDoctor,
+  firewall: cmdFirewall,
+  code: cmdCode,
+};
 
 /**
  * Run one command line. Resolves with the exit code, or with null while the
- * bridge keeps running in this process (`serve`).
+ * bridge keeps running in this process (`serve`). A bare `npm run bridge` in
+ * a terminal runs setup until setup has been done once.
  * @param {string[]} argv
  * @param {ReturnType<typeof defaultDeps>} [deps]
  * @returns {Promise<number | null>}
  */
 export async function main(argv, deps = defaultDeps()) {
-  const { command, options, error } = parseArgs(argv);
+  const { command, options, bare, error } = parseArgs(argv);
   if (error) {
     deps.err(`${error}\n\n${helpText(deps)}`);
     return 2;
@@ -1082,6 +1684,9 @@ export async function main(argv, deps = defaultDeps()) {
     return 0;
   }
   try {
+    if (bare && deps.isTTY && deps.stdinIsTTY && !loadConfig(filesOf(options, deps).dir).setup) {
+      return await cmdSetup(options, deps, { firstRun: true });
+    }
     return await RUN[command](options, deps);
   } catch (failure) {
     deps.err(`CafAI Bridge: ${failure?.message ?? failure}\n`);
