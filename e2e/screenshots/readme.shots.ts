@@ -1,5 +1,5 @@
 import { statSync } from 'node:fs';
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { TID } from '../../src/ui/testIds.ts';
 import { goTo, isPhone, pullShot } from '../helpers.ts';
 
@@ -39,12 +39,6 @@ async function coachIdle(page: Page): Promise<void> {
   await expect(page.getByTestId(TID.chat)).not.toHaveAttribute('data-busy');
 }
 
-/** Scroll the chat so this message starts at the top of the view, as a reader scrolling up would. */
-async function scrollToTop(target: Locator): Promise<void> {
-  await expect(target).toBeAttached();
-  await target.evaluate((el) => el.scrollIntoView({ block: 'start' }));
-}
-
 /** Write docs/images/<project>-<name>.png once fonts are in and motion is stopped, and check its size. */
 async function snap(page: Page, name: string): Promise<void> {
   await page.evaluate(async () => {
@@ -58,20 +52,17 @@ async function snap(page: Page, name: string): Promise<void> {
   expect(bytes, `${path} is ${Math.round(bytes / 1024)} KB; keep README images under ${MAX_BYTES / 1024} KB`).toBeLessThan(MAX_BYTES);
 }
 
-test('coach: the last shot, the coach on it and the open taste question', async ({ page }) => {
+test('coach: a taste answered, and the one change the coach proposes', async ({ page }) => {
   await openDemo(page);
-  await expect(page.getByRole('radiogroup', { name: 'How did it taste?' }).last()).toBeVisible();
-  await scrollToTop(page.getByTestId(TID.shotCard).last());
+  const changes = page.getByTestId(TID.diffCard);
+  const before = await changes.count();
+  // The demo's open question; the scripted coach answers "Sour / sharp" with v5, 1 °C hotter (docs/DEMO.md).
+  await page.getByRole('radiogroup', { name: 'How did it taste?' }).last().getByTestId(TID.optionChip('Sour / sharp')).click();
+  await expect(changes).toHaveCount(before + 1, { timeout: 30_000 });
+  await expect(changes.last()).toContainText('Kiambu AA v5');
+  await expect(changes.last().getByTestId(TID.diffConfirm)).toBeVisible();
+  await coachIdle(page);
   await snap(page, 'coach');
-});
-
-test('change: one change at a time, confirmed, with Undo', async ({ page }) => {
-  test.skip(isPhone(page), 'The README shows the change card on the tablet only.');
-  await openDemo(page);
-  const applied = page.locator(`[data-testid="${TID.diffCard}"][data-status="applied"]`).filter({ hasText: 'Saved as Kiambu AA v4' });
-  await expect(applied.getByTestId(TID.diffUndo)).toBeAttached();
-  await scrollToTop(applied);
-  await snap(page, 'change');
 });
 
 test('shot: a shot just pulled, on the big graph', async ({ page }) => {
