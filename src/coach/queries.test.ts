@@ -183,7 +183,7 @@ describe('getBagHistory', () => {
       grind: null,
       summary: 'Raise brew temperature by 1 °C',
       rationale: 'Sour.',
-      expectedEffect: 'Sweeter.',
+      expectedEffect: 'More extraction.',
       tips: [],
     },
     change: null,

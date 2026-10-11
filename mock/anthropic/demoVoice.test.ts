@@ -1,11 +1,18 @@
 // The demo voice (D76) against the terse test voice, branch by branch of the
 // script: fuller text, the same decisions, and nothing the request does not say.
 import { describe, expect, it } from 'vitest';
-import { ProposeAdjustmentInput, TOOL, TOOL_INPUTS, type ProposeAdjustment, type ToolName } from '../../src/coach/contract.ts';
+import {
+  ProposeAdjustmentInput,
+  TOOL,
+  TOOL_INPUTS,
+  type ProposeAdjustment,
+  type ProposeTemplates,
+  type ToolName,
+} from '../../src/coach/contract.ts';
 import { applyLever } from '../../src/coach/levers.ts';
 import { pourTime } from '../../src/coach/summary/pourClock.ts';
 import { TEMPLATES } from '../../src/coach/templates/index.ts';
-import { validateProposal } from '../../src/coach/validator.ts';
+import { proposalWordingError, validateProposal } from '../../src/coach/validator.ts';
 import { createScenarioMemory, respond, type ScenarioResponse } from './scenario.ts';
 
 type Block = Record<string, unknown>;
@@ -115,6 +122,17 @@ function compare(messages: Message[]) {
   }
   // The chat renders paragraphs, lists, bold, em and code: never links or HTML.
   expect(demo.text).not.toMatch(/<[a-z/]|\]\(|https?:/i);
+  // Both voices leave the taste to the barista (D127): what a change or a
+  // profile does at the machine, never a taste the app would send back.
+  for (const tool of [...terse.tools, ...demo.tools]) {
+    if (tool.name === TOOL.proposeAdjustment) {
+      const { expectedEffect } = tool.input as ProposeAdjustment;
+      expect(proposalWordingError({ expectedEffect }), expectedEffect).toBeNull();
+    }
+    if (tool.name === TOOL.proposeTemplates) {
+      for (const { reason } of (tool.input as ProposeTemplates).suggestions) expect(proposalWordingError({ expectedEffect: reason }), reason).toBeNull();
+    }
+  }
   // Deterministic: the same request, the same words.
   expect(reply(messages, 'demo')).toEqual(demo);
   return { terse, demo, proposal };
@@ -266,7 +284,7 @@ describe('the demo voice, branch by branch', () => {
     expect(sour).toMatch(/Sour on a light roast usually means \*\*under-extraction\*\*/);
     expect(compare([...base, answer(['Bitter / harsh'])]).demo.text).toMatch(/over-extraction/);
     expect(compare([...base, answer(['Weak / watery'])]).demo.text).toMatch(/dilute/);
-    expect(compare([...base, answer(['Balanced, sweet'])]).demo.text).toMatch(/what we're after/);
+    expect(compare([...base, answer(['Balanced, sweet'])]).demo.text).toMatch(/You found it balanced and sweet: that's a recipe worth keeping/);
     expect(compare([...base, answer(['Other'], 'Too strong')]).demo.text).toMatch(/concentrated/);
     expect(compare([...base, answer(['Other'], 'Sweeter, but a little thin')]).demo.text).toMatch(/pressure curve/);
   });

@@ -177,8 +177,8 @@ export const KIAMBU_ITERATIONS: IterationRecord[] = [
       value: 93,
       grind: null,
       summary: 'Raise brew temperature by 1 °C',
-      rationale: 'Sour with a fast flow: more heat extracts more sweetness.',
-      expectedEffect: 'Less sharp, rounder acidity.',
+      rationale: 'Sour with a fast flow: more heat extracts more.',
+      expectedEffect: 'More extraction at the same flow.',
       tips: [],
     },
     change: KIAMBU_VERSIONS[1]?.change ?? null,
@@ -193,8 +193,8 @@ export const KIAMBU_ITERATIONS: IterationRecord[] = [
       value: 38,
       grind: null,
       summary: 'Pull a slightly longer shot',
-      rationale: 'Thin body at a 1:2 ratio; a little more yield adds extraction.',
-      expectedEffect: 'More body and sweetness.',
+      rationale: 'Weak and watery at a 1:2 ratio; a little more yield adds extraction.',
+      expectedEffect: 'A longer shot: more water through the coffee, and more extraction.',
       tips: [],
     },
     change: KIAMBU_VERSIONS[2]?.change ?? null,
@@ -332,7 +332,7 @@ export function conversation(stage: ConversationStage): CoachUiMessage[] {
   out.push(msg('user', [text('Kiambu AA from Square Mile, washed, light roast.\nBlackcurrant, grapefruit, brown sugar.')]));
   out.push(
     msg('assistant', [
-      text('Lovely. A **bright, light** Kenyan. Here is where I would start:'),
+      text('Lovely. A **washed, light** Kenyan. Here is where I would start:'),
       {
         kind: 'templates',
         requestId: 'tu-templates',
@@ -388,7 +388,7 @@ export function conversation(stage: ConversationStage): CoachUiMessage[] {
   out.push(
     msg('assistant', [
       text(
-        'The shot ran fast and the cup was sharp. One change for the next shot:\n- keep the dose at 18 g\n- keep your puck prep the same',
+        'You found it sharp, and the shot ran fast. One change for the next shot:\n- keep the dose at 18 g\n- keep your puck prep the same',
       ),
       {
         kind: 'diff',
@@ -396,8 +396,8 @@ export function conversation(stage: ConversationStage): CoachUiMessage[] {
         summary: 'Raise brew temperature by 1 °C',
         lines: ['Brew temperature: 92.0 °C -> 93.0 °C (every step +1.0 °C)'],
         manualSteps: [],
-        rationale: 'Sour and a fast 27.8 s shot: a little more heat pulls more sweetness from a light roast.',
-        expectedEffect: 'Less sharp, rounder acidity, a touch more sweetness.',
+        rationale: 'You found it sour, and the shot ran fast at 27.8 s: a little more heat extracts more from a light roast.',
+        expectedEffect: 'Hotter water extracts more in the same time; the flow stays about the same.',
         versionLabel: 'Kiambu AA v2',
         status,
         error: stage === 'failed' ? 'Decaid did not answer. Check that this device is on the same network.' : null,

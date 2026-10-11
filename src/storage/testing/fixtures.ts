@@ -164,7 +164,7 @@ export function makeIteration(overrides: Partial<IterationRecord> = {}): Iterati
       grind: null,
       summary: 'Raise brew temperature by 1 °C',
       rationale: 'Sour cup and a fast pour: more heat extracts more.',
-      expectedEffect: 'Less sourness, a rounder finish.',
+      expectedEffect: 'More extraction at the same flow and time.',
       tips: ['Keep the same dose and puck prep.'],
     },
     change: null,
