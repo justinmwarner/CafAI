@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import type { CafaiMockWindow } from '../mock/browser.ts';
+import type { MockRequestLog } from '../mock/decaid/state.ts';
 import { TID } from '../src/ui/testIds.ts';
 
 /**
@@ -137,6 +138,15 @@ export async function everythingDecaidSaw(page: Page): Promise<string> {
     if (!state) throw new Error('The mock Decaid is not running.');
     const shots = state.getShotIds().map((id) => state.getShot(id));
     return JSON.stringify({ requests: state.requests, kv: state.kvAll('cafai'), shots, workflow: state.getWorkflow() });
+  });
+}
+
+/** The requests the mock Decaid received (its last 500), oldest first: method, path, query and parsed body. */
+export async function decaidRequests(page: Page): Promise<MockRequestLog[]> {
+  return page.evaluate(() => {
+    const state = (window as CafaiMockWindow).__CAFAI_MOCK__?.state;
+    if (!state) throw new Error('The mock Decaid is not running.');
+    return state.requests;
   });
 }
 

@@ -43,4 +43,5 @@ export { createShotSimulation, FRAME_MS, type ShotSimulationInput, type SimFrame
 export { normalizeProfile, profileHash, metadataHash, compoundHash } from './profiles.ts';
 export { DEFAULT_UPLOAD_MS, sameProfile } from './machine.ts';
 export { MOCK_GRINDER_IDS, seedGrinders, type GrinderRecord } from './grinders.ts';
+export { DRIFT_RENAMED_READING, sentMachineFrame, type RenamedReading } from './drift.ts';
 export { mockOptionsFromUrl } from './urlOptions.ts';

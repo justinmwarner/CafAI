@@ -2,10 +2,11 @@ import { defineConfig, devices } from '@playwright/test';
 
 // End-to-end tests run against a mock-mode production build (MSW handlers for
 // Decaid's REST/WS API and a scripted Anthropic stream), never real hardware.
-const PORT = 4174;
+// E2E_PORT moves the preview server, so two checkouts can run the suite at once.
+const PORT = Number(process.env.E2E_PORT ?? 4174);
 
 /** The specs that run in the phone projects; the rest are about the tablet layout. */
-const PHONE_SPECS = /(phone-baseline|shot-focus|appearance|chat-first)\.spec\.ts/;
+const PHONE_SPECS = /(phone-baseline|shot-focus|appearance|chat-first|decaid-features|decaid-safety)\.spec\.ts/;
 /** Phone-only: the tablets have their own baseline (baseline.spec.ts). */
 const PHONE_ONLY = /phone-baseline\.spec\.ts/;
 /**

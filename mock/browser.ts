@@ -32,6 +32,10 @@
  *   ?mockSlowWorkflow=N     the workflow PUT answers after N ms; =503 answers
  *                           503 after 30 s without applying the change, as a
  *                           request that timed out in Decaid's queue does
+ *   ?mockDrift=1            machine frames (the socket and GET /machine/state)
+ *                           carry groupTemperature as groupTemp, as from a
+ *                           Decaid that renamed it, so CafAI's drift log and
+ *                           Settings > About have something to show (D96)
  *
  * Read in src/main.tsx, also once at start:
  *   ?mockDecaid=0           this mock does not start at all: only the scripted

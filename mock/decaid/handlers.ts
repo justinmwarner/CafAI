@@ -17,6 +17,7 @@
 import { http, HttpResponse, type HttpHandler } from 'msw';
 import type { MachineStateName } from '../../src/api/types.ts';
 import { fixtures } from '../fixtures/index.ts';
+import { sentMachineFrame } from './drift.ts';
 import { MockHttpError } from './errors.ts';
 import { isPlainObject } from './json.ts';
 import { PLUGIN_IDS } from './plugins.ts';
@@ -186,7 +187,7 @@ export function decaidHttpHandlers(state: MockDecaid, player: ShotPlayer): HttpH
     route('get', '/machine/info', () => json(state.getMachineInfo())),
     route('get', '/machine/state', () => {
       requireMachine();
-      return json(state.getMachineSnapshot());
+      return json(sentMachineFrame(state.getMachineSnapshot(), state.renamedReading));
     }),
     route('put', '/machine/state/:newState', async ({ params }) => {
       requireMachine();

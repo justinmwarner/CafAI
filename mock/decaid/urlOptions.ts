@@ -9,6 +9,7 @@
  * still sets the upload time.
  */
 import { demoRequested } from '../plan.ts';
+import { DRIFT_RENAMED_READING } from './drift.ts';
 import type { CreateDecaidMockOptions } from './index.ts';
 
 /** How long the machine takes a new profile in the demo, in wall-clock ms. */
@@ -40,5 +41,6 @@ export function mockOptionsFromUrl(search: string): CreateDecaidMockOptions {
     const slowWorkflowMs = Number(slowWorkflowText);
     if (slowWorkflowText !== '' && Number.isFinite(slowWorkflowMs) && slowWorkflowMs >= 0) options.slowWorkflowMs = slowWorkflowMs;
   }
+  if (params.get('mockDrift') === '1') options.renamedReading = { ...DRIFT_RENAMED_READING };
   return options;
 }

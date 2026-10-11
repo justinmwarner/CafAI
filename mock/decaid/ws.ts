@@ -7,9 +7,13 @@
  * devices state, the latest shot state (idle between shots), water levels
  * and shot settings. Machine channels stay open and silent while the machine
  * is away, like Decaid. Clients are tracked per channel here rather than with
- * MSW's cross-tab client manager, so frames never leak between tabs.
+ * MSW's cross-tab client manager, so frames never leak between tabs. A
+ * machine reading the mock renames (?mockDrift=1, drift.ts) goes out under
+ * its new name, replay included.
  */
 import { ws, type WebSocketHandler } from 'msw';
+import type { MachineSnapshot } from '../../src/api/types.ts';
+import { sentMachineFrame } from './drift.ts';
 import { DECAID_ORIGIN_PATTERN } from './handlers.ts';
 import { MockHttpError } from './errors.ts';
 import type { MockChannel, MockDecaid } from './state.ts';
@@ -27,6 +31,11 @@ export const WS_CHANNEL_PATHS: Readonly<Record<MockChannel, string>> = {
 interface ClientLike {
   send(data: string): void;
   close(code?: number, reason?: string): void;
+}
+
+/** A frame as the channel sends it: a machine frame with any renamed reading under its new name (drift.ts). */
+function sent(state: MockDecaid, channel: MockChannel, frame: unknown): unknown {
+  return channel === 'machine' ? sentMachineFrame(frame as MachineSnapshot, state.renamedReading) : frame;
 }
 
 function replay(state: MockDecaid, channel: MockChannel): unknown[] {
@@ -89,7 +98,7 @@ export function decaidWsHandlers(state: MockDecaid): WebSocketHandler[] {
   const handlers: WebSocketHandler[] = [];
   for (const channel of Object.keys(WS_CHANNEL_PATHS) as MockChannel[]) {
     state.on(channel, (frame) => {
-      const text = JSON.stringify(frame);
+      const text = JSON.stringify(sent(state, channel, frame));
       for (const client of [...clients[channel]]) client.send(text);
     });
 
@@ -104,7 +113,7 @@ export function decaidWsHandlers(state: MockDecaid): WebSocketHandler[] {
         if (channel === 'devices') {
           client.addEventListener('message', (event) => handleDevicesCommand(state, client, event.data));
         }
-        for (const frame of replay(state, channel)) client.send(JSON.stringify(frame));
+        for (const frame of replay(state, channel)) client.send(JSON.stringify(sent(state, channel, frame)));
       }),
     );
   }

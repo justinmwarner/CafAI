@@ -80,6 +80,11 @@ describe('mockOptionsFromUrl', () => {
     for (const bad of ['-1', 'slow', '']) expect(mockOptionsFromUrl(`?mockSlowWorkflow=${bad}`), bad).toEqual({});
   });
 
+  it('?mockDrift=1 renames the group temperature in the machine frames, as a Decaid that renamed it would', () => {
+    expect(mockOptionsFromUrl('?mockDrift=1')).toEqual({ renamedReading: { from: 'groupTemperature', to: 'groupTemp' } });
+    for (const other of ['0', 'true', '']) expect(mockOptionsFromUrl(`?mockDrift=${other}`), other).toEqual({});
+  });
+
   it('combines the new switches with the existing ones', () => {
     expect(mockOptionsFromUrl('?mockGateway=full&mockEnjoyment=100&mockPlugins=none&mockSlowWorkflow=503')).toEqual({
       settings: { gatewayMode: 'full' },

@@ -42,6 +42,7 @@ import gentle from '../../src/coach/templates/source/Gentle_and_sweet1.json';
 import { fixtures } from '../fixtures/index.ts';
 import { createBatchRecord, createBeanRecord, foreignKeyError, seedBeans, updateBatchRecord, updateBeanRecord } from './beans.ts';
 import { createDataClock, formatLocalTimestamp, formatUtcTimestamp, type DataClock } from './clock.ts';
+import type { RenamedReading } from './drift.ts';
 import { seedDye2Baskets, seedDye2Equipment, seedDye2Recipes, seedDye2RecentFavourites } from './dye2.ts';
 import { DartError, MockHttpError } from './errors.ts';
 import { createGrinderRecord, seedGrinders, sortGrinders, updateGrinderRecord, type GrinderRecord } from './grinders.ts';
@@ -93,6 +94,11 @@ export interface MockDecaidOptions {
   slowWorkflowMs?: number;
   /** PUT /api/v1/workflow answers 503 after 30 s, never applying the change (Decaid's queue timeout, aab5f93, decaid#634). Overrides slowWorkflowMs. */
   slowWorkflowTimeout?: boolean;
+  /**
+   * A machine reading that goes out under another name, as from a Decaid that
+   * renamed it (drift.ts; ?mockDrift=1). Default: none.
+   */
+  renamedReading?: RenamedReading;
   /** Wall clock in epoch ms (default Date.now). */
   now?: () => number;
 }
@@ -148,6 +154,8 @@ export interface MockDecaid {
   getMachineSnapshot(): MachineSnapshot;
   /** Store and broadcast a machine frame (silent while the machine is away). */
   setMachineSnapshot(snapshot: MachineSnapshot): void;
+  /** The reading machine frames carry under another name, read by the socket and GET /machine/state (drift.ts). */
+  readonly renamedReading: RenamedReading | null;
   getMachineInfo(): MachineInfo;
   getShotSettings(): ShotSettings;
   setShotSettings(settings: ShotSettings): void;
@@ -604,6 +612,7 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
       snapshot = clone(next);
       if (machineConnected) emit('machine', snapshot);
     },
+    renamedReading: options.renamedReading ? Object.freeze({ ...options.renamedReading }) : null,
     getMachineInfo() {
       requireMachine();
       return clone(machineInfo);
