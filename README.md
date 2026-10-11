@@ -86,8 +86,9 @@ From the built-in demo (`npm run demo`, no machine needed);
     Max plan on a Mac or Windows PC (Linux works too), Node 18 or newer, and
     this repository on that computer. See
     [Claude on your computer](#claude-on-your-computer-no-api-key).
-- **Your grinder in Decaid's grinder library** (optional): grind moves then
-  come with the new setting worked out on its own steps.
+- **Your grinder in Decaid's grinder library** (optional; CafAI can add it
+  there): grind moves then come with the new setting worked out on its own
+  steps.
 
 ## Install
 
@@ -136,7 +137,8 @@ settings page.
    (gateway mode Full), the alert says so, and **Let Decaid stop shots** sets
    it to Tracking. CafAI never changes Decaid's settings without that tap.
 4. **Your grinder** (optional): link it in **Settings > Coach**, from
-   Decaid's grinder library.
+   Decaid's grinder library, or add it there with **Add a grinder** when
+   the library does not have it.
 5. **A bag.** On the coach, "Which coffee is it?" lists the coffees in
    Decaid's bean library. Pick one, photograph the bag, or describe it; pick
    one of the starting profiles; pull a shot.
@@ -178,20 +180,32 @@ no API key ([docs/DEMO.md](docs/DEMO.md)).
 4. **Shot.** Pull a shot. CafAI reads the shot from Decaid, summarizes it
    (aggregates plus a 1-per-second series) and gives the coach named query
    tools to look closer (no code execution).
-5. **Feedback.** Tap how it tasted (the last option is always "Other"), and
-   rate the shot with stars if you like. Both go to the shot's record in
-   Decaid, so they show there and in Visualizer. The stars go out on the
-   rating scale your Decaid keeps (0-10, or 0-100 on older builds): CafAI
-   asks it. When Decaid's Visualizer plugin has uploaded the shot, its card
-   links to the shot's page (**On Visualizer**), and History keeps the
-   link. A taste, stars or grinder setting Decaid did not take is tried
-   again every 30 s until it goes through (a reload drops what waits); one
-   Decaid refuses is dropped, and the chat says so once.
+5. **Feedback.** Tap how it tasted (the last option is always "Other"), or
+   say it in your own words. The coach never tells you what a shot should
+   taste like; while it asks how the shot tasted, **Taste words** above the
+   composer offers neutral words for the acidity, sweetness, bitterness,
+   body and finish (a tap puts one in your message, a second takes it out;
+   nothing is sent until you send), and **Need help?** explains how to
+   taste. If you like, also say how the shot compared with your previous
+   one: Much worse, Worse, About the same, Better or Much better (a bag's
+   first shot is compared with your last shot of another coffee). The
+   coach hears your words, and both go to the shot's record in Decaid, so
+   they show there and in Visualizer; the comparison becomes a running
+   score in `enjoyment`, on the rating scale your Decaid keeps (0-10, or
+   0-100 on older builds): CafAI asks it. When Decaid's Visualizer plugin
+   has uploaded the shot, its card links to the shot's page (**On
+   Visualizer**), and History keeps the link. A taste, rating or grinder
+   setting Decaid did not take is tried again every 30 s until it goes
+   through (a reload drops what waits); one Decaid refuses is dropped, and
+   the chat says so once.
 6. **One change.** The coach proposes the next version or a manual step such
-   as grind, changing one variable at a time. You see a plain-language diff
-   and confirm it before anything is uploaded. Undo returns to the previous
-   version. Link your grinder from Decaid's grinder library in **Settings >
-   Coach** and grind moves come with the new setting worked out on its own
+   as grind, changing one variable at a time, and explains it by what it
+   does at the machine, with your own words as the reason. You see a
+   plain-language diff and confirm it before anything is uploaded. Undo
+   returns to the previous version. Link your grinder from Decaid's grinder
+   library in **Settings > Coach** (add it there if the library lacks it,
+   or tap **Add to Decaid** on the coach's card when you name it in the
+   chat) and grind moves come with the new setting worked out on its own
    steps.
 
 The model can only move declared template levers within their bounds; it can
@@ -267,11 +281,12 @@ with **Retry**; it never loads anything on the machine by itself.
   their shots; **Export** writes it all as JSON and **Import** merges a file
   back.
 - **Settings > Appearance**: Dark, Light or Auto (follows the device), and a
-  tint: Crema, Matcha, Lagoon, Ocean, Plum, Cherry, Steel, or any hue from the
-  slider. Every colour comes from the tint (in OKLCH, written out as plain
-  hex for Chromium 91) and every pair of palette colours the screens use is
-  tested for WCAG AA contrast at every hue; the shot graph keeps Decent's colours
-  (pressure green, flow blue). The look is saved with the other settings.
+  tint named for coffee: Crema, Matcha, Cold Brew, Blueberry, Plum, Cherry,
+  Tamper, or any hue from the slider. Every colour comes from the tint (in
+  OKLCH, written out as plain hex for Chromium 91) and every pair of
+  palette colours the screens use is tested for WCAG AA contrast at every
+  hue; the shot graph keeps Decent's colours (pressure green, flow blue).
+  The look is saved with the other settings.
   [DESIGN.md](DESIGN.md) describes the visual system.
 - **Settings > Where the coach runs**: **Anthropic API key** (the default)
   or **Claude on my computer** (CafAI Bridge's address and code, with
@@ -281,16 +296,23 @@ with **Retry**; it never loads anything on the machine by itself.
   into the chat or another field is taken out, with a note.
 - **Settings > Coach**: the model (Opus 5.5 by default, Opus 5, Sonnet 5,
   Haiku 4.5 or Fable 5.1, each with its price per million tokens) and your
-  grinder, from Decaid's grinder library.
+  grinder, from Decaid's grinder library. **Add a grinder** adds one the
+  library lacks (its burrs and its dial: a numbered dial with its steps, or
+  a list of settings, finest first) and picks it; **Edit grinders in
+  DYE2**, while Decaid runs its DYE2 plugin, opens DYE2's Grinders page,
+  where grinders are edited and deleted (Decaid's own app has no such
+  screen).
 - **Settings > Steam, hot water and flush**: the presets Decaid keeps for
-  the machine row's Steam, Hot water and Flush (steam temperature, time and
-  flow; hot water temperature, volume, time and flow; flush time,
-  temperature and flow), with steppers, within what the DE1 can hold (hot
-  water at most 255 ml; steam 135-160 °C, 165 on a Bengle). A value goes to
-  Decaid only when you change it, never while the machine runs, and never
-  without a DE1 connected; until Decaid answers, the fields show a dash.
-  Steam that is off in Decaid (below 135 °C) shows Off; turning it on or off
-  stays in Decaid.
+  the machine row's Steam, Hot water and Flush, grouped by drink (steam
+  temperature, time and flow; hot water temperature, volume, time and flow;
+  flush temperature, time and flow): side by side on a tablet, one row per
+  setting on a phone. Each has a stepper (Up and Down on a keyboard too),
+  within what the DE1 can hold (hot water at most 255 ml; steam 135-160 °C,
+  165 on a Bengle). A value goes to Decaid only when you change it, never
+  while the machine runs, and never without a DE1 connected; until Decaid
+  answers, the fields show a dash, and a write that fails says why under
+  its setting. Steam that is off in Decaid (below 135 °C) reads "Off in
+  Decaid"; turning it on or off stays in Decaid.
 - **Settings > About**: CafAI's version, and the Decaid you run next to the
   one CafAI was checked against ("Decaid 0.9.0 (CafAI was verified with
   0.8.8)", with a note when yours is older); anything Decaid sent that
@@ -383,12 +405,19 @@ troubleshooting.
   shot's record,
   which is what Visualizer gets if you upload there. v1 and every version
   you confirm are also added to Decaid's profile library.
+- A grinder you add in Settings (**Add a grinder**), or on the coach's card
+  after you name it in the chat, goes into Decaid's grinder library, where
+  Decaid and your other skins list it. Nothing is added without your tap;
+  CafAI takes a grinder already there with the same model rather than add
+  it twice, and never edits or deletes one (DYE2's Grinders page does
+  that).
 - The coach may read the setups Decaid's DYE2 plugin recorded for the
   coffee (profile, grind, dose, yield, rpm, basket and date, and DYE2's
   equipment and basket names), which then go to Anthropic with the rest of
   the conversation. CafAI never writes DYE2's data.
-- Your taste answer and star rating for a shot are also written to that
-  shot's record in Decaid (notes and enjoyment), which Decaid may upload to
+- Your taste answer for a shot, and how it compared with the shot before,
+  are also written to that shot's record in Decaid (notes, a running score
+  as enjoyment, and CafAI's own extras), which Decaid may upload to
   Visualizer if you set that up. Notes you wrote yourself are never
   overwritten.
 - With an API key, calls go straight from the tablet to `api.anthropic.com`.
@@ -764,11 +793,11 @@ from it: code, a running conversation, or lessons.
 - **[DYE2](https://github.com/decentespresso/dye2)** ("Describe Your
   Espresso"), a plugin for Decaid published by Decent Espresso: beans, roast
   batches, grinders and equipment, a shot dashboard, auto-favourites and
-  recipes. The coach reads the setups DYE2 recorded (D119); CafAI never
-  writes DYE2's data.
+  recipes. The coach reads the setups DYE2 recorded (D119), and Settings
+  opens DYE2's Grinders page (D125); CafAI never writes DYE2's data.
 - **[Visualizer](https://visualizer.coffee)** by Miha Rekar: a shot
   Decaid's Visualizer plugin uploaded gets an **On Visualizer** link, and
-  CafAI's taste notes and stars travel there with the shot.
+  CafAI's taste notes and ratings travel there with the shot.
 - **Claude**, by Anthropic: the coach, through the Anthropic API or, with
   CafAI Bridge, the Claude Code you signed in to.
 

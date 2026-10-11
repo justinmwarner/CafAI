@@ -3,9 +3,10 @@
 Ranked by the cost of a wrong guess (most expensive first). Each says what
 CafAI assumes now and what would change if the guess is wrong. Questions 1-8
 came out of the morning session of 2026-10-04, 9-13 out of the Decaid
-alignment of 2026-10-09, and 14-16 out of Claude on your computer of
-2026-10-11 (each ranked the same way, in its own section); the questions
-you answered are in "Answered" at the end.
+alignment of 2026-10-09, 14-16 out of Claude on your computer of
+2026-10-11, and 17 out of your list of 2026-10-11 (each ranked the same
+way, in its own section); the questions you answered are in "Answered" at
+the end.
 
 1. **Does Decaid's barrier behave on a real DE1 the way its source says?**
    CafAI now waits for `POST /api/v1/machine/profile` after every load and
@@ -34,11 +35,14 @@ you answered are in "Answered" at the end.
    not the stop, and a yield change does nothing (the scripted coach now
    moves the grinder instead). Hardware plan: note the yield of the first
    Blooming v1 shot.
-4. **Enjoyment only from your stars (D61).** CafAI writes the taste to
-   Decaid's notes for every answered shot, but `enjoyment` only when you tap
-   stars on the shot card; it never derives a number from the taste options.
-   If you would rather have every shot scored, the choices are a required
-   rating or a mapping from the taste (which would invent data).
+4. **Enjoyment only from your rating (D61, D126).** CafAI writes the taste
+   to Decaid's notes for every answered shot, but `enjoyment` only when you
+   say how the shot compared with the one before (Much worse to Much
+   better), as a running score: a bag's first rated shot is 5 of 10 and each
+   later one moves a step per word from the shot it was compared with. It
+   never derives a number from the taste options. If you would rather have
+   every shot scored, the choices are a required rating or a mapping from
+   the taste (which would invent data).
 5. **Should CafAI also check each shot's targets against the version?**
    Decaid's records keep per-step targets (pressure, flow, temperature).
    Comparing them with the version would catch a shot that ran something
@@ -51,7 +55,7 @@ you answered are in "Answered" at the end.
    cold start takes longer would flash that page.
 7. **Writes waiting for Decaid live in memory only (D64).** A reload drops a
    grinder setting or shot notes Decaid has not taken yet. The next profile
-   load writes the grinder anyway; a shot's notes and stars stay in CafAI's
+   load writes the grinder anyway; a shot's notes and rating stay in CafAI's
    own records but would be missing in Decaid.
 8. **A dose changed in Decaid in the middle of a bag** is read again only
    when a bag opens and at a template pick; until then a yield change is
@@ -86,17 +90,17 @@ you answered are in "Answered" at the end.
    release (D138). Scheduled workflows run from `main`, so this branch's
    watch, exit codes and labels start once it is merged.
 10. **Which rating scale does your tablet's Decaid use?** CafAI no longer
-    assumes 0-10. Once per session, before the first stars go out, it asks
-    Decaid with a made-up shot id (D101): a 400 that mentions enjoyment
-    means 0-10 (four stars are 8), a 404 means 0-100 (four stars are 80, as
-    Decaid 0.8.6 field builds keep it). That reading comes from Decaid's
-    source and decaid-mcp's probe and is tested against the mock both
-    ways; no real Decaid has answered it yet. If your tablet answers
-    differently, four stars go out as 80 to a 0-10 Decaid (refused; the
-    chat says so once) or as 8 to a 0-100 one (ten times too low, in Decaid
-    and Visualizer). An answer that tells neither leaves the stars waiting
-    in memory, so a reload drops them (as in #7). The hardware session
-    checks it (docs/HARDWARE_TEST_PLAN.md section 12, step 1).
+    assumes 0-10. Once per session, before the first rating goes out, it
+    asks Decaid with a made-up shot id (D101): a 400 that mentions
+    enjoyment means 0-10 (a running score of 7 goes out as 7), a 404 means
+    0-100 (as 70, as Decaid 0.8.6 field builds keep it; D126). That reading
+    comes from Decaid's source and decaid-mcp's probe and is tested against
+    the mock both ways; no real Decaid has answered it yet. If your tablet
+    answers differently, a 7 goes out as 70 to a 0-10 Decaid (refused; the
+    chat says so once) or as 7 to a 0-100 one (ten times too low, in Decaid
+    and Visualizer). An answer that tells neither leaves the rating waiting
+    in memory, so a reload drops it (as in #7). The hardware session checks
+    it (docs/HARDWARE_TEST_PLAN.md section 12, step 1).
 11. **With the key kept in Decaid, should every browser take it?** When
     Keep my API key in Decaid is on, a browser that opens CafAI without a
     key of its own takes Decaid's copy at start (D99). That is what brings
@@ -171,6 +175,13 @@ you answered are in "Answered" at the end.
     with `install` to start it at login. Someone who installs CafAI from a
     release zip has no such folder; a single download or a small app with a
     tray icon is on the roadmap.
+
+## From the owner's list (2026-10-11)
+
+17. **D126's running score.** A bag's first rated shot is 5 of 10 whatever
+    the word, and a changed word moves only its own shot's number. If you
+    would rather the first shot's word counted (Much worse than Red Brick =
+    3), or later shots followed a changed one, each is a small change.
 
 ## Answered
 
@@ -276,9 +287,9 @@ you answered are in "Answered" at the end.
    A: Yes, let's do that!
 
    Done (D61): the taste goes into the shot's notes (your own notes are
-   kept) and `extras.cafai`, and an optional star rating on the shot card
-   goes into `enjoyment`; failed writes are retried. Open follow-up: question
-   4 above. Commit: 947b3e0.
+   kept) and `extras.cafai`, and an optional rating on the shot card (stars
+   until D126, words since) goes into `enjoyment`; failed writes are
+   retried. Open follow-up: question 4 above. Commit: 947b3e0.
 
 8. **Grind as a variable.** Grind moves are suggested in dial steps on the
    grinder's own scale, never clamped to a typed range (Crema's lesson). Should

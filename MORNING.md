@@ -1,8 +1,16 @@
 # Good morning: CafAI after your answers (2026-10-04)
 
-**Newest (2026-10-09 and 10):** Decaid alignment and update safety, on
-branch `feat/decaid-alignment`. CafAI now checks itself against Decaid's own
-API specs at the release you run (v0.8.8), watches Decaid's newest release
+**Newest (2026-10-11):** your list after the alignment, on branch
+`feat/decaid-alignment` (D123-D128): tints named for coffee, the drink
+settings laid out by drink, grinders added from Settings or the chat,
+ratings in words instead of stars, a coach that leaves the taste to you,
+and a repository ready for the public. Its section comes right after the
+status table. The repository is public on GitHub since you pushed `main`
+and the tag `v0.1.0` on 2026-10-11; this branch is not pushed.
+
+**Before that (2026-10-09 and 10):** Decaid alignment and update safety, on
+the same branch. CafAI now checks itself against Decaid's own API specs at
+the release you run (v0.8.8), watches Decaid's newest release
 and `main` for changes that would break it, reads every Decaid reply instead
 of trusting it, and fails safe, out loud, when Decaid sends something
 unexpected. It also uses more of Decaid: a new bag starts from Decaid's bean
@@ -10,11 +18,11 @@ library or a photo of the bag, the coach reads DYE2's setups, shot cards
 link to Visualizer, and there are Connect, a heating countdown, Next step,
 steam, hot water and flush settings, and a switch to keep the API key in
 Decaid. A fresh-eyes review found 25 defects, all fixed, and everything
-passes, against Decaid 0.8.8 on your simulator too. It is committed on that
-branch, not merged into `main` (your call) and not pushed. Its section
-comes right after the status table. Before it, merged into `main`: the
-machine on demand (2026-10-08 and 09) and the UX rework (2026-10-07 and
-08), in the two sections after it.
+passes, against Decaid 0.8.8 on your simulator too. All of it but the
+review's fixes (and the last e2e specs) reached `main`, and so v0.1.0;
+those are on this branch only. Its section follows this round's. Before
+it, merged into `main`: the machine on demand (2026-10-08 and 09) and the
+UX rework (2026-10-07 and 08), in the two sections after it.
 
 Your nine answers in QUESTIONS.md are all done. Each is an owner decision
 (D55-D63), and each that changed behaviour went through its own brief,
@@ -39,6 +47,61 @@ pushed.
 | Drift watch (`npm run decaid:watch`) | exit 4 on 2026-10-11: every check passes for v0.8.8 and Decaid's `main` (`af4e995`), whose spec changes are additions; files CafAI depends on changed on `main` (camera access for skins, the Visualizer plugin), so on GitHub it would open a `decaid-read` issue (D105) |
 | Live API test (`npm run test:live`) | skipped here (no key on this machine); its dry run against the scripted coach passes |
 | Fresh-eyes verifier | 2026-10-10, Decaid alignment: three reviewers (update safety; engine and storage; UI) found 25 defects, 7 of them important, each verified with a test or Decaid's source; all fixed (`197520d`, brief `docs/briefs/verify-decaid-alignment.md`). 2026-10-08, the UX rework: 2 major, 5 minor and 8 polish; 13 fixed, 1 kept by design, 1 open (below). Chat first: not run yet (its brief is `docs/briefs/verify-chat-first.md`). Earlier rounds: all fixed |
+
+## New: your list after the alignment (2026-10-11)
+
+Your notes of 2026-10-11, one agent each, merged on
+`feat/decaid-alignment` and written up together (D123-D128). The
+repository is public at <https://github.com/justinmwarner/CafAI>: you
+pushed `main` and the tag `v0.1.0` on 2026-10-11. This branch, with the
+review's 25 fixes and this round, is not pushed.
+
+- **Tints named for coffee (D123).** Lagoon, Ocean and Steel are now Cold
+  Brew, Blueberry (a little bluer-violet) and Tamper; a look saved under an
+  old name keeps its tint.
+- **Steam, hot water and flush, cleaned up (D124).** Grouped by drink as
+  the machine row draws them, one outlined stepper per setting with its
+  unit beside the value, Up and Down on a keyboard, "Saving…" and any
+  failure under the setting itself, and nothing moves when the machine
+  starts. Before and after: `.verify/settings-ui/`.
+- **Grinders (D125).** Settings > Add a grinder adds one to Decaid's
+  library and picks it; the coach offers the same on a card when you name a
+  grinder it doesn't know; Edit grinders in DYE2 opens DYE2's page.
+  Decaid's own app has no grinder screen, and no skin can open one of
+  Decaid's screens. Screens: `.verify/grinder/`.
+- **Ratings in words (D126).** The shot card asks how the shot compared
+  with your previous one (Much worse to Much better; a bag's first shot
+  against your last shot of another coffee). The words stay on the card and
+  reach the coach, which is told your verdict outranks the numbers; Decaid
+  gets a running score in `enjoyment` (a bag's first rated shot 5 of 10, a
+  step per word after that). Old stars stay as they were. Screens:
+  `.verify/ratings/`.
+- **The coach leaves the taste to you (D127).** It never says what a shot
+  should taste like or predicts a flavour: it explains a change by what it
+  does at the machine, with your own words as the reason, and a proposal
+  whose last line (now "What it changes", no longer "Expect") names a taste
+  goes back to it to rewrite. While it asks how a shot tasted, **Taste
+  words** above the composer offers neutral words for acidity, sweetness,
+  bitterness, body and the finish, and **Need help?** says how to taste.
+  Screens: `.verify/taste/`.
+- **Ready for the public (D128).** A README for people who install CafAI
+  (an honest status, screenshots, setup, troubleshooting, and credits for
+  what CafAI took from others), NOTICE crediting decaid-mcp and Decaid's
+  ports, CONTRIBUTING, SECURITY (GitHub's private reporting, no email
+  address), a changelog, issue forms, and `npm run screenshots` to retake
+  the README's pictures. The pictures were taken before this round's
+  merges, so they still show the old tint names and "Expect"; run it again
+  after the merges.
+
+**Look at first:** `npm run demo`: the shot cards rated in words, and on
+the open question **Taste words** and **Need help?** above the composer;
+tap an answer and the change card ends with "What it changes:". Then
+Settings: the tints by their new names, and Steam, hot water and flush by
+drink.
+
+**Calls you may want to change:** a bag's first rated shot scores 5 of 10
+whatever the word, and a changed word moves only its own shot's number
+(QUESTIONS #17).
 
 ## New: Decaid alignment and update safety (2026-10-09 and 10)
 
@@ -90,7 +153,7 @@ pushed (`main` went on GitHub on 2026-10-11).
 - **A fail-safe engine (D100, D101, D106).** After a Decaid update CafAI
   keeps trying Decaid's backup while Decaid starts (for up to 10 minutes,
   and again when the machine connects), then brings the bags back into the
-  chat. Stars go out on the rating scale your Decaid keeps (CafAI asks it:
+  chat. Ratings go out on the rating scale your Decaid keeps (CafAI asks it:
   0-10, or 0-100 on 0.8.6 builds). A slow load waits 35 s and counts only
   what Decaid holds, and when Decaid cannot confirm a load or name the
   profile that ran, the chat says what CafAI assumed.
@@ -290,10 +353,10 @@ Machine tab; the rest stands as described here.
   that keep their width while they count, and calmer tonal buttons.
 - **A look of your own (D80, D82).** Settings > Appearance: Dark, Light or
   Auto (follows the device), and a tint: Crema (the brown, still the
-  default), Matcha (your green), Lagoon, Ocean, Plum, Cherry, Steel, or any
-  hue from the slider. Every colour comes from one palette, and every pair
-  the screens draw from it is tested for WCAG AA contrast at every hue in
-  both modes. The shot graph keeps Decent's colours (pressure green, flow
+  default), Matcha (your green), Cold Brew, Blueberry, Plum, Cherry, Tamper
+  (renamed for coffee, D123), or any hue from the slider. Every colour
+  comes from one palette, and every pair the screens draw from it is tested
+  for WCAG AA contrast at every hue in both modes. The shot graph keeps Decent's colours (pressure green, flow
   blue). The look is saved with your settings (Decaid's copy and the export
   too), and the start screens use it from the first frame.
 - **Docs:** [DESIGN.md](DESIGN.md) (the visual system),
@@ -367,7 +430,7 @@ it stopped.
     every kind of card and notice the coach can show:
     - template cards;
     - "Loading…" and "Loaded" notices;
-    - shot cards with graphs and stars;
+    - shot cards with graphs, rated in words against the shot before;
     - answered taste chips;
     - change cards: applied, made by hand, declined and undone.
 
@@ -443,8 +506,9 @@ it stopped.
    the key comes back from Decaid's backup (D60).
 7. **Feedback to Decaid's shot record.** The taste answer goes into the
    shot's notes (your own notes are kept; CafAI only swaps its own line) and
-   `extras.cafai`. An optional five-star rating on the shot card goes into
-   `enjoyment`. Failed writes are retried (D61). *My reading:* enjoyment
+   `extras.cafai`. An optional rating in words on the shot card (how the
+   shot compared with the one before, D126) goes into `enjoyment` as a
+   running score. Failed writes are retried (D61). *My reading:* enjoyment
    only when you rate the shot, never derived from the taste (question 4
    below).
 8. **Grind and Decaid's grinders.** Settings links a grinder from Decaid's
@@ -521,9 +585,10 @@ recorded, not chased.
 - **Coffee knowledge is still the placeholder** heuristics block (now
   aligned with D-Flow's start ratio).
 - Not built: teaching mode, personas, voice, other providers in the UI,
-  device pairing screens beyond Connect, a screensaver, and the local coach
-  (roadmap). Bag photos, Connect, and the steam, hot water and flush
-  settings came with the Decaid alignment (above).
+  device pairing screens beyond Connect, and a screensaver (roadmap). Bag
+  photos, Connect, and the steam, hot water and flush settings came with
+  the Decaid alignment (above), and the local coach with CafAI Bridge
+  (D130-D137).
 - Writes waiting for Decaid live in memory only (D64).
 - The fresh-eyes check of chat first (its brief is ready). The two layout
   corners the UX check left open went with the machine column.
@@ -538,8 +603,9 @@ recorded, not chased.
 3. **Are the new starting yields what you want?** At 18 g: Blooming 50 g
    (Decent ships 60), Londonium 36 (42), the Allongé 90 (135). One number per
    template if not (D57).
-4. **Enjoyment only from your stars?** Every answered shot gets notes;
-   `enjoyment` only when you rate it (D61).
+4. **Enjoyment only from your rating?** Every answered shot gets notes;
+   `enjoyment` only when you say how it compared with the shot before (D61,
+   D126).
 5. **Should CafAI also check each shot's targets against the version?**
    Decide after the hardware session's saved shots (D55 option 2).
 
@@ -579,5 +645,6 @@ npm run dev:mock
 Settings -> any key (for example `sk-ant-demo`) -> pick "Niche Zero" under
 Grinder from Decaid, setting 15 -> Coach -> New bag -> "Kiambu AA, light
 roast, washed" -> tap a template (watch "Loading … on the machine…") ->
-Espresso -> rate it and tap "Sour / sharp" -> Confirm -> History.
-`?mockUploadMs=3000` makes the machine load slow enough to watch.
+Espresso -> tap a word under "Compared with ...?" and "Sour / sharp" ->
+Confirm -> History. `?mockUploadMs=3000` makes the machine load slow
+enough to watch.
