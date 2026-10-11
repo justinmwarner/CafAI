@@ -270,6 +270,24 @@ describe('ChatSurface', () => {
     });
   });
 
+  it("shows the coach's grinder card and passes Add and Not now on with its request (D125)", async () => {
+    const onAddGrinder = vi.fn();
+    const onDeclineGrinder = vi.fn();
+    const grinder = { model: 'Mazzer Philos', burrs: null, settingType: null, smallStep: null, bigStep: null, values: null };
+    const offer: CoachUiMessage = {
+      id: 'm-grinder',
+      role: 'assistant',
+      parts: [{ kind: 'grinderOffer', requestId: 't-grinder', grinder, status: 'pending', error: null }],
+      createdAt: '2026-10-03T08:00:00.000Z',
+    };
+    renderSurface({ messages: [offer], onAddGrinder, onDeclineGrinder });
+    const card = screen.getByTestId(TID.grinderOffer);
+    await userEvent.click(within(card).getByTestId(TID.grinderOfferAdd));
+    expect(onAddGrinder).toHaveBeenCalledWith('t-grinder');
+    await userEvent.click(within(card).getByTestId(TID.grinderOfferDecline));
+    expect(onDeclineGrinder).toHaveBeenCalledWith('t-grinder');
+  });
+
   it("shows On Visualizer on a shot's card once it has the link (6.4)", () => {
     const url = 'https://visualizer.coffee/shots/viz-1';
     renderSurface({ messages: [{ ...shotMessage('m-shot', 'shot-1'), parts: [{ kind: 'shot', shotId: 'shot-1', summary: sampleSummary(), visualizerUrl: url }] }] });
