@@ -15,7 +15,11 @@
  * A reply is read, not trusted (D95): a call that passes a reader
  * (readers.ts) gets back what the reader made of the reply, and the reader
  * reports to the drift log what Decaid sent that CafAI did not expect.
+ *
+ * Every exchange, a retry too, goes into the traffic log (D139) as it went:
+ * the request, then the reply with its status and time, or what became of it.
  */
+import { recordExchange } from '../traffic/recorder.ts';
 import { reportDrift } from './drift.ts';
 import { GatewayError, type DecaidErrorBody } from './types.ts';
 
@@ -174,16 +178,20 @@ async function exchange(
     timedOut = true;
     controller.abort();
   }, deadline);
+  const traffic = recordExchange('rest', `${method} ${path}`, { headers, body: bodyText });
 
   try {
     const url = `${transport.origin}${path}`;
     const response = transport.fetch ? await transport.fetch(url, init) : await globalThis.fetch(url, init);
     const text = await response.text();
+    traffic.reply(response.status, { headers: response.headers, body: text });
     return { status: response.status, headers: response.headers, text };
   } catch (cause) {
     if (timedOut || (cause as Error | null)?.name === 'AbortError') {
+      traffic.fail('timeout');
       throw new GatewayError(0, path, 'Decaid did not answer in time. Check that it is running, then try again.', 'timeout');
     }
+    traffic.fail('network error');
     throw new GatewayError(
       0,
       path,

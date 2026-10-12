@@ -20,7 +20,13 @@
  * `getReader()` (no async iteration of streams), timeouts use AbortController
  * + setTimeout (no `AbortSignal.timeout`) and the caller's signal is merged by
  * hand (no `AbortSignal.any`).
+ *
+ * Every attempt goes into the traffic log (D139): the request (the key's
+ * header by name only), then the reply: for a stream, the turn as assembled,
+ * with its stop reason and usage, and the stream's events as they came,
+ * capped; otherwise the error body, or what became of the request.
  */
+import { createStreamCapture, recordExchange, trafficName } from '../traffic/recorder.ts';
 import { createTurnAssembler } from './assemble.ts';
 import {
   abortedError,
@@ -237,6 +243,9 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): LlmP
     const onCallerAbort = () => controller.abort();
     callerSignal?.addEventListener('abort', onCallerAbort);
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    // The redactor takes the key's header by name only, and its value out of the reply too.
+    const traffic = recordExchange('coach', trafficName('POST', http.url), { headers: http.headers, body: http.body });
+    const events = createStreamCapture();
 
     try {
       arm('first_byte', firstByteMs);
@@ -259,9 +268,11 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): LlmP
         } catch (cause) {
           if (controller.signal.aborted) throw cause;
         }
+        traffic.reply(response.status, { headers: response.headers, body: text });
         throw errorFromHttp(response.status, text, wording);
       }
       if (!(response.headers.get('content-type') ?? '').includes('text/event-stream') || !response.body) {
+        traffic.reply(response.status, { headers: response.headers, outcome: 'not an event stream', failed: true });
         throw unreadableReplyError(wording);
       }
       state.streamOpened = true;
@@ -278,11 +289,23 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): LlmP
         }
         // The idle clock measures the network, not how long the caller takes per event.
         disarm();
+        if (!chunk.done) events.bytes(chunk.value.byteLength);
         const sseEvents = chunk.done ? parser.end() : parser.push(chunk.value);
         for (const sse of sseEvents) {
+          events.event(sse.event, sse.data);
           for (const event of assembler.push(parseEventData(sse, wording))) {
             // One chunk can hold the rest of the reply: honour an abort between events.
             if (controller.signal.aborted) throw new Error('aborted');
+            if (event.type === 'message_done') {
+              const { id, model, stopReason, usage, content } = event.turn;
+              traffic.reply(response.status, {
+                headers: response.headers,
+                body: JSON.stringify({ id, model, stopReason, usage, content }),
+                raw: events.text(),
+                outcome: stopReason,
+                size: events.size,
+              });
+            }
             state.yielded = true;
             yield event;
           }
@@ -293,14 +316,22 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): LlmP
       }
     } catch (cause) {
       if (controller.signal.aborted) {
-        if (callerSignal?.aborted) throw abortedError();
+        if (callerSignal?.aborted) {
+          traffic.fail('cancelled', { raw: events.text() });
+          throw abortedError();
+        }
         if (timedOut !== null) {
           state.timedOut = true;
+          traffic.fail(timedOut === 'first_byte' ? 'timeout: no first byte' : 'timeout: the stream stopped', { raw: events.text() });
           throw timeoutError(timedOut, wording);
         }
       }
+      const kind = cause instanceof LlmError ? cause.kind.replace(/_/g, ' ') : 'failed';
+      traffic.fail(kind === 'network' ? 'network error' : kind, { body: cause instanceof Error ? cause.message : '', raw: events.text() });
       throw cause;
     } finally {
+      // The caller stopped reading before the turn was done (a reply already kept wins).
+      traffic.fail('cancelled', { raw: events.text() });
       disarm();
       callerSignal?.removeEventListener('abort', onCallerAbort);
       reader?.cancel().catch(() => undefined);

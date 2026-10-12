@@ -3,6 +3,7 @@ import { fixtures } from '../../mock/fixtures/index.ts';
 import { driftLog } from './drift.ts';
 import { createTelemetryStore, type TelemetryStoreOptions } from './telemetry.ts';
 import { createFakeWebSocket, type FakeWebSocketFactory } from './testing/fakeWebSocket.ts';
+import { trafficLog } from '../traffic/recorder.ts';
 import type {
   ConnectionError,
   DecaidClient,
@@ -844,5 +845,60 @@ describe('time-to-ready (6.3)', () => {
     await vi.advanceTimersByTimeAsync(60_000);
     h.visibility.fire();
     expect(opened()).toBe(before);
+  });
+});
+
+describe('the traffic log (D139)', () => {
+  beforeEach(() => trafficLog.clear());
+
+  it('keeps each socket opening, its frames, and how it closed or failed', () => {
+    const h = harness();
+    h.store.start();
+    const devices = h.ws.latest(PATHS.devices);
+    devices.open();
+    devices.message(devicesFrame('connected'));
+    devices.drop(1006);
+    h.ws.latest(PATHS.scale).open().fail();
+    const named = (what: string) => trafficLog.list().filter((entry) => entry.what === what);
+    expect(named('ws/v1/devices').map((entry) => [entry.direction, entry.channel, entry.status, entry.failed])).toEqual([
+      ['sent', 'socket', 'connect', false],
+      ['received', 'socket', 'open', false],
+      ['received', 'socket', 'frame', false],
+      ['received', 'socket', 'closed 1006', true],
+    ]);
+    expect(JSON.parse(named('ws/v1/devices')[2]!.body)).toEqual(devicesFrame('connected'));
+    expect(named('ws/v1/scale/snapshot').map((entry) => entry.status)).toEqual(['connect', 'open', 'error']);
+    h.store.stop();
+  });
+
+  it("keeps a streaming channel's frames once a second, counting the rest, and an event channel's every new frame", () => {
+    const h = harness();
+    h.store.start();
+    h.open();
+    for (let i = 0; i < 10; i += 1) {
+      h.ws.latest(PATHS.machine).message(machineFrame('idle', 'idle', `2026-10-03T08:00:0${i}.000000`));
+      h.ws.latest(PATHS.shotState).message(shotEvent(i < 5 ? 'idle' : 'preheating'));
+      vi.advanceTimersByTime(250);
+    }
+    const frames = (what: string) => trafficLog.list().filter((entry) => entry.what === what && entry.frame);
+    // Frames every 250 ms for 2.5 s: kept at 0, 1 and 2 s, the others counted.
+    expect(frames('ws/v1/machine/snapshot').map((entry) => entry.more)).toEqual([3, 3, 1]);
+    // The same frame again within the second is counted; a new one is kept at once (preheating at 1.25 s).
+    expect(frames('ws/v1/machine/shotState').map((entry) => [JSON.parse(entry.body).state, entry.more])).toEqual([
+      ['idle', 3],
+      ['idle', 0],
+      ['preheating', 3],
+      ['preheating', 0],
+    ]);
+    h.store.stop();
+  });
+
+  it('says when CafAI closes a socket itself', () => {
+    const h = harness();
+    h.store.start();
+    h.open();
+    h.store.stop();
+    const closed = trafficLog.list().filter((entry) => entry.direction === 'sent' && entry.status === 'close');
+    expect(closed.map((entry) => entry.what).sort()).toEqual(Object.values(PATHS).map((path) => path.slice(1)).sort());
   });
 });

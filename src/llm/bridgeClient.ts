@@ -7,7 +7,11 @@
  *
  * Chromium 91: the time limit is AbortController + setTimeout (no
  * AbortSignal.timeout), and replies are read whole with text().
+ *
+ * Both go into the traffic log (D139), the pairing code's header by name
+ * only, and its value taken out of the reply too.
  */
+import { recordExchange, trafficName } from '../traffic/recorder.ts';
 import { computerWording, hideSecret, parseRetryAfter } from './errors.ts';
 
 export const BRIDGE_APP = 'cafai-bridge';
@@ -152,12 +156,16 @@ async function fetchText(url: string, headers: Record<string, string>, timeoutMs
     timedOut = true;
     controller.abort();
   }, timeoutMs);
+  const traffic = recordExchange('coach', trafficName('GET', url), { headers });
   try {
     const init: RequestInit = { method: 'GET', headers, signal: controller.signal };
     // Resolved per call, as the provider does: test servers and service workers may swap fetch.
     const response = await untilAborted(doFetch ? doFetch(url, init) : globalThis.fetch(url, init), controller.signal);
-    return { response, body: await untilAborted(response.text(), controller.signal) };
+    const body = await untilAborted(response.text(), controller.signal);
+    traffic.reply(response.status, { headers: response.headers, body });
+    return { response, body };
   } catch {
+    traffic.fail(timedOut ? 'timeout' : 'network error');
     // In a browser a CORS rejection looks the same as nothing listening.
     return timedOut ? 'timeout' : 'unreachable';
   } finally {

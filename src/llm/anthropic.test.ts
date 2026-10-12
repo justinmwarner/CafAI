@@ -3,10 +3,12 @@
 // Copyright (C) 2026 Yarden (yarneo). Modified for CafAI: Vitest + MSW; streaming SSE, tools, retries, timeouts, abort.
 import { delay, http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { anthropicHandlers, resetAnthropicMock } from '../../mock/anthropic/handlers.ts';
 import { sseFrame } from '../../mock/anthropic/sse.ts';
 import { TOOL_INPUTS } from '../coach/contract.ts';
+import { trafficLog } from '../traffic/recorder.ts';
+import { KEY_MARKER } from '../traffic/redact.ts';
 import {
   anthropicEndpoint,
   backoffMs,
@@ -603,5 +605,89 @@ describe('createAnthropicProvider: CafAI Bridge wording', () => {
       const error = await failure(collect(bridge().stream(request())));
       expect(error.message).toBe('Wrong code [key].');
     }
+  });
+
+  it('never lets the code into the traffic log, sent or echoed (D139)', async () => {
+    trafficLog.clear();
+    answer(() => HttpResponse.json(errorBody('authentication_error', 'Wrong code ABCD-EFGH.'), { status: 401 }));
+    await failure(collect(bridge().stream(request())));
+    const [sent, received] = trafficLog.list();
+    expect(sent).toMatchObject({ channel: 'coach', what: 'POST 192.168.1.20:8877/v1/messages' });
+    expect(sent!.headers).toContain(`x-api-key: ${KEY_MARKER}`);
+    expect(received).toMatchObject({ status: '401', failed: true });
+    expect(received!.body).toContain(`Wrong code ${KEY_MARKER}.`);
+    const everything = JSON.stringify(trafficLog.list());
+    expect(everything).not.toContain(CODE);
+    expect(everything).not.toContain('ABCD-EFGH');
+  });
+});
+
+// ---- the traffic log --------------------------------------------------------
+
+describe('createAnthropicProvider: the traffic log (D139)', () => {
+  beforeEach(() => trafficLog.clear());
+
+  it('keeps the request without the key, and the turn as assembled with its stop reason, usage and events', async () => {
+    await collect(provider().stream(request()));
+    const [sent, received] = trafficLog.list();
+    expect(sent).toMatchObject({ direction: 'sent', channel: 'coach', what: 'POST api.anthropic.com/v1/messages', status: '' });
+    expect(sent!.headers).toContain(`x-api-key: ${KEY_MARKER}`);
+    expect(sent!.headers).toContain('anthropic-version: 2023-06-01');
+    expect(JSON.parse(sent!.body)).toMatchObject({ model: 'claude-opus-5-5', stream: true, system: 'You are an espresso coach.' });
+    expect(received).toMatchObject({ direction: 'received', channel: 'coach', status: '200 tool_use', failed: false });
+    const reply = JSON.parse(received!.body) as LlmAssistantTurn;
+    expect(reply.stopReason).toBe('tool_use');
+    expect(reply.usage.inputTokens).toBeGreaterThan(0);
+    expect(reply.content.map((block) => block.type)).toEqual(['thinking', 'text', 'tool_use', 'tool_use']);
+    expect(received!.raw).toContain('event: message_start\ndata: {');
+    expect(received!.raw).toContain('event: message_stop');
+    expect(received!.size).toBeGreaterThan(received!.raw.length / 2);
+    expect(received!.durationMs).toBeGreaterThanOrEqual(0);
+    expect(JSON.stringify(trafficLog.list())).not.toContain(KEY);
+  });
+
+  it('keeps an error reply, and each try as its own exchange', async () => {
+    countRequests((call) => (call === 1 ? HttpResponse.json(errorBody('overloaded_error', 'Overloaded'), { status: 529 }) : undefined));
+    await collect(provider().stream(request()));
+    expect(trafficLog.list().map((entry) => `${entry.direction} ${entry.status}`)).toEqual([
+      'sent ',
+      'received 529',
+      'sent ',
+      'received 200 tool_use',
+    ]);
+    expect(trafficLog.list()[1]!.body).toContain('overloaded_error');
+  });
+
+  it('says how a request with no reply ended: no network, cancelled, a stream that broke', async () => {
+    countRequests(() => HttpResponse.error());
+    await failure(collect(provider({ maxRetries: 0 }).stream(request())));
+    server.resetHandlers();
+    server.use(...anthropicHandlers({ speed: 1, firstEventDelayMs: 0, eventDelayMs: 20 }));
+    const controller = new AbortController();
+    const run = collect(provider().stream(request({ signal: controller.signal })));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    controller.abort();
+    await failure(run);
+    server.resetHandlers();
+    countRequests(() => sse(MESSAGE_START, { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } }));
+    await failure(collect(provider({ maxRetries: 0 }).stream(request())));
+    const received = trafficLog.list().filter((entry) => entry.direction === 'received');
+    expect(received.map((entry) => [entry.status, entry.failed])).toEqual([
+      ['network error', true],
+      ['cancelled', true],
+      ['overloaded', true],
+    ]);
+    expect(received[1]!.raw).toContain('event: message_start');
+    expect(received[2]!.raw).toContain('event: error');
+  });
+
+  it('keeps a photo of the bag as its size', async () => {
+    countRequests(() => HttpResponse.json(errorBody('invalid_request_error', 'No.'), { status: 400 }));
+    const photo = { type: 'image' as const, source: { type: 'base64' as const, media_type: 'image/jpeg' as const, data: `/9j/${'A'.repeat(8188)}` } };
+    await failure(collect(provider({ maxRetries: 0 }).stream(request({ messages: [{ role: 'user', content: [photo] }] }))));
+    const sent = trafficLog.list()[0]!;
+    expect(sent.body).toContain('"data":"[image, 6 KB]"');
+    expect(sent.body).not.toContain('AAAAAAAA');
+    expect(sent.size).toBeGreaterThan(8000);
   });
 });
