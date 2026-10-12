@@ -29,7 +29,7 @@ logic; see [Influences and thanks](#influences-and-thanks).
   Bridge on your Mac or Windows PC: no API key, nothing billed per call (see
   [Claude on your computer](#claude-on-your-computer-no-api-key))
 
-**Status.** CafAI 0.1.0 is new. It is checked against Decaid's own API specs
+**Status.** CafAI 0.1.1 is new. It is checked against Decaid's own API specs
 and has passed every check against Decaid 0.8.8 running its simulated
 machine and scale (2026-10-10), but it has not yet been used on a real
 Decent machine: [docs/HARDWARE_TEST_PLAN.md](docs/HARDWARE_TEST_PLAN.md) is

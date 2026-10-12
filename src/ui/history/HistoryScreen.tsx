@@ -4,7 +4,7 @@
  * storage directly and re-reads whenever the coach commits something.
  * Export and import of all data live here too.
  */
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -349,10 +349,12 @@ interface ExportResult {
 function ExportDialog({ result, onClose }: { result: ExportResult; onClose(): void }) {
   const [copied, setCopied] = useState<boolean | null>(null);
   const [downloaded, setDownloaded] = useState(result.downloaded);
+  // Copy's fallback over plain http puts its text area here: one outside the dialog loses the focus to its trap.
+  const content = useRef<HTMLDivElement>(null);
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="md">
       <DialogTitle>Your CafAI data</DialogTitle>
-      <DialogContent>
+      <DialogContent ref={content}>
         <Typography variant="body2" sx={{ mb: 1.5 }}>
           {downloaded
             ? `Saved as ${result.fileName}. If no file appeared, copy the text below and keep it somewhere safe.`
@@ -395,7 +397,7 @@ function ExportDialog({ result, onClose }: { result: ExportResult; onClose(): vo
         </Button>
         <Button
           startIcon={<ContentCopyIcon />}
-          onClick={() => void copyText(result.json).then(setCopied)}
+          onClick={() => void copyText(result.json, content.current ?? undefined).then(setCopied)}
           sx={{ minHeight: 48 }}
         >
           Copy

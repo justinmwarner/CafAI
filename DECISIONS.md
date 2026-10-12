@@ -1668,10 +1668,11 @@ workflows has run.
 
 ## The owner's list after the alignment (2026-10-11)
 
-The owner's notes of 2026-10-11 (D123-D128, D139): tint names, the drink
-settings, grinders, ratings in words, a coach that does not lead the
-barista's taste, a repository ready for the public, and a log of what
-CafAI sends and gets.
+The owner's notes of 2026-10-11 (D123-D128, D139, D140): tint names, the
+drink settings, grinders, ratings in words, a coach that does not lead the
+barista's taste, a repository ready for the public, a log of what CafAI
+sends and gets, and the coach's credentials following its choice. Released
+as 0.1.1.
 
 - **D123. The tints are named for coffee.** Settings > Appearance offers
   Crema, Matcha, Cold Brew, Blueberry, Plum, Cherry and Tamper
@@ -2019,6 +2020,23 @@ CafAI sends and gets.
   trap took focus from a text area outside it, and still said "Copied";
   header values and a secret split across stream events went unredacted;
   and a rate limit's "tokens" header took its count out of the body.
+  History's export dialog had the same Copy fault; its fallback text area
+  now sits inside that dialog too.
+- **D140. The API key and the bridge's address and code take turns with
+  where the coach runs.** Settings shows the **Anthropic API key** section
+  only while **Where the coach runs** is on Anthropic; with **Claude on my
+  computer** it is gone, and the bridge's Address and Code show under the
+  choice instead, as they did before (`useShowsApiKey` in
+  `src/ui/settings/coachSourceView.ts`, `src/ui/settings/SettingsScreen.tsx`).
+  Neither shows until the saved choice has been read, so the wrong fields
+  never flash up while Settings opens; without the store (the fakes and
+  previews) the coach runs on Anthropic and the key shows. Switching keeps
+  what was saved for the other one: a key saved before is there again,
+  saved, when the choice goes back. The note "Not used while the coach runs
+  on your computer." is gone with the section it sat in. Why: the owner
+  asked that the extra field, the `sk-` key or the address and code, flip
+  with the radio; two sets of credentials on one screen made it unclear
+  which one the coach was using.
 
 ### Claude on your computer (2026-10-11)
 
