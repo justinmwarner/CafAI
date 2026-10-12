@@ -270,6 +270,28 @@ describe('the key never enters the log', () => {
   });
 });
 
+describe('a log that fails', () => {
+  it('never throws into what it watches', () => {
+    const { log } = harness();
+    const broken = {
+      ...log,
+      add: () => {
+        throw new Error('broken');
+      },
+      frame: () => {
+        throw new Error('broken');
+      },
+    };
+    expect(() => {
+      const exchange = recordExchange('rest', 'GET /api/v1/info', {}, broken);
+      exchange.reply(200, { body: '{}' });
+      exchange.fail('timeout');
+      recordSocket('ws/v1/devices', 'received', 'open', false, broken);
+      recordFrame('ws/v1/devices', '{}', false, broken);
+    }).not.toThrow();
+  });
+});
+
 describe('sockets', () => {
   it('records socket events and frames into the log it is given', () => {
     const { log } = harness();

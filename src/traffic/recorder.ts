@@ -311,6 +311,19 @@ export function createTrafficLog(options: TrafficLogOptions = {}): TrafficLog {
 /** The app-wide log. A module singleton, like the drift log (src/api/drift.ts): the choke points record into it. */
 export const trafficLog: TrafficLog = createTrafficLog();
 
+/**
+ * The log never breaks what it watches: the helpers below run inside REST
+ * calls, socket handlers and the coach's stream, so a recording that fails
+ * is dropped, never thrown into them.
+ */
+function quietly(record: () => void): void {
+  try {
+    record();
+  } catch {
+    // Dropped: one entry less in the log.
+  }
+}
+
 export interface ReplyOptions {
   headers?: HeaderSource;
   body?: string;
@@ -343,13 +356,16 @@ export function recordExchange(
   log: TrafficLog = trafficLog,
 ): TrafficExchange {
   const started = log.now();
-  const { secrets } = redactHeaders(request.headers);
-  log.add({ direction: 'sent', channel, what, headers: request.headers, body: request.body });
+  let secrets: string[] = [];
+  quietly(() => {
+    secrets = redactHeaders(request.headers).secrets;
+    log.add({ direction: 'sent', channel, what, headers: request.headers, body: request.body });
+  });
   let done = false;
   const finish = (input: Omit<TrafficInput, 'direction' | 'channel' | 'what'>) => {
     if (done) return;
     done = true;
-    log.add({ ...input, direction: 'received', channel, what, durationMs: log.now() - started, secrets });
+    quietly(() => log.add({ ...input, direction: 'received', channel, what, durationMs: log.now() - started, secrets }));
   };
   return {
     reply(status, options = {}) {
@@ -374,13 +390,15 @@ export function recordExchange(
  * its first frame.
  */
 export function recordSocket(what: string, direction: TrafficDirection, status: string, failed = false, log: TrafficLog = trafficLog): void {
-  if (direction === 'received' && status === 'open') log.resetFrames(what);
-  log.add({ direction, channel: 'socket', what, status, failed });
+  quietly(() => {
+    if (direction === 'received' && status === 'open') log.resetFrames(what);
+    log.add({ direction, channel: 'socket', what, status, failed });
+  });
 }
 
 /** A frame received on a socket. */
 export function recordFrame(what: string, data: string, streaming: boolean, log: TrafficLog = trafficLog): void {
-  log.frame(what, data, streaming);
+  quietly(() => log.frame(what, data, streaming));
 }
 
 /**
