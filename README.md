@@ -444,12 +444,13 @@ troubleshooting.
   folder, so your hooks, plugins and CLAUDE.md stay out of them.
 - The report in Settings > About names Decaid's routes and fields and what
   was wrong with them, never your notes, your coffee or the key.
-- Settings > Log keeps the last 1000 exchanges with Decaid and the coach
-  in the page's memory only: never stored, never sent anywhere until you
-  tap Share, Email or Copy, gone when the page reloads. It holds what you
-  and the coach wrote, so share it only with someone you trust. It never
-  holds the API key or the pairing code (only that an `x-api-key` header
-  went), the key's copy in Decaid, or a bag photo (only its size).
+- Settings > Log keeps the last 1000 entries (requests, replies, frames)
+  of CafAI's traffic with Decaid and the coach in the page's memory only:
+  never stored, never sent anywhere until you tap Share, Email or Copy,
+  gone when the page reloads. It holds what you and the coach wrote, so
+  share it only with someone you trust. It never holds the API key or the
+  pairing code (only that an `x-api-key` header went), the key's copy in
+  Decaid, or a bag photo (only its size).
 
 [SECURITY.md](SECURITY.md) says how to report a security problem privately.
 
