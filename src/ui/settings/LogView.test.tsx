@@ -7,7 +7,7 @@ import { recordExchange, recordFrame, recordSocket, trafficLog } from '../../tra
 import { renderWithServices } from '../chat/testing/render.tsx';
 import { TID } from '../testIds.ts';
 import { closeLogView, openLogView } from './logShare.ts';
-import { DETAIL_CHARS, LogView } from './LogView.tsx';
+import { DETAIL_CHARS, LogView, moreNote } from './LogView.tsx';
 
 /** A made-up key, built at run time so no key-shaped literal sits in the source. */
 const KEY = ['sk', 'ant', 'api03', 'LoGvIeWtEsT0123456789', 'AbCdEfGhIjKlMnOpQrStUvWxYz_0123456789AA'].join('-');
@@ -82,6 +82,15 @@ describe('LogView', () => {
     expect(detail).toHaveTextContent(/↓ REST GET \/api\/v1\/workflow · 200 · \d+ ms · 36 B/);
     await userEvent.click(row);
     expect(screen.queryByTestId(TID.logDetail)).toBeNull();
+  });
+
+  it('says how many frames after a kept one were counted', async () => {
+    seed();
+    openLogView();
+    renderWithServices(<LogView />);
+    await userEvent.click(screen.getByTestId(TID.logEntry(trafficLog.list().find((entry) => entry.frame)!.id)));
+    expect(screen.getByTestId(TID.logDetail)).toHaveTextContent('(the frame after it on this channel was counted, not kept)');
+    expect(moreNote(4)).toBe('the 4 frames after it on this channel were counted, not kept');
   });
 
   it("shows a coach request's headers by name only, and its stream events", async () => {

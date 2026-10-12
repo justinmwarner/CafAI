@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodedSize, isKeyStoreCall, KEY_MARKER, redactHeaders, redactText, replaceBase64 } from './redact.ts';
+import { decodedSize, isKeyStoreCall, KEY_COPY_MARKER, KEY_MARKER, keyStoreBody, redactHeaders, redactText, replaceBase64 } from './redact.ts';
 
 /** A made-up key, built at run time so no key-shaped literal sits in the source. */
 const KEY = ['sk', 'ant', 'api03', 'TrAfFiCLoGtEsT0123456789', 'AbCdEfGhIjKlMnOpQrStUvWxYz_0123456789AA'].join('-');
@@ -79,6 +79,15 @@ describe('replaceBase64', () => {
 
   it('runs inside redactText', () => {
     expect(redactText(`"${jpeg}"`)).toBe('"[image, 3 KB]"');
+  });
+});
+
+describe('keyStoreBody', () => {
+  it("keeps no body of the key's copy but one with no room for a key", () => {
+    expect(keyStoreBody(JSON.stringify(KEY))).toBe(KEY_COPY_MARKER);
+    expect(keyStoreBody('"plain-key"')).toBe(KEY_COPY_MARKER);
+    expect(keyStoreBody('{"anthropic":"x"}')).toBe(KEY_COPY_MARKER);
+    for (const keyless of ['null', '{}', '[]', '""', '', ' null\n']) expect(keyStoreBody(keyless)).toBe(keyless);
   });
 });
 

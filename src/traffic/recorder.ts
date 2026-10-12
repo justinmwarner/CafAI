@@ -28,7 +28,7 @@
  * Everything goes through redact.ts on the way in: the API key and the
  * bridge's pairing code never enter the buffer.
  */
-import { isKeyStoreCall, KEY_COPY_MARKER, redactHeaders, redactText, type HeaderSource } from './redact.ts';
+import { isKeyStoreCall, keyStoreBody, redactHeaders, redactText, type HeaderSource } from './redact.ts';
 
 export type TrafficChannel = 'rest' | 'socket' | 'coach';
 export type TrafficDirection = 'sent' | 'received';
@@ -220,8 +220,9 @@ export function createTrafficLog(options: TrafficLogOptions = {}): TrafficLog {
     const secrets = [...(input.secrets ?? []), ...headers.secrets];
     const what = redactText(input.what, secrets);
     const original = input.body ?? '';
-    // The key's copy in Decaid is the key itself, whatever it looks like (D99): no body there is kept.
-    const body = isKeyStoreCall(what) ? (original === '' ? '' : KEY_COPY_MARKER) : cutText(redactText(original, secrets), maxBodyChars);
+    // The key's copy in Decaid is the key itself, whatever it looks like (D99): no body there is kept
+    // but one with no room for a key ("null": no copy).
+    const body = isKeyStoreCall(what) ? keyStoreBody(original) : cutText(redactText(original, secrets), maxBodyChars);
     return {
       id: nextId++,
       at: now(),

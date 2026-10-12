@@ -264,9 +264,9 @@ describe('the key never enters the log', () => {
     expect(everything).not.toContain(CODE);
     expect(everything).not.toContain('K7QM-2XWP');
     expect(everything).toContain(`x-api-key: ${KEY_MARKER}`);
-    // Nothing said to or by the key's copy is kept, not even Decaid's "{}".
+    // Nothing said to or by the key's copy is kept, but a body with no room for a key (Decaid's "{}").
     const copies = log.list().filter((entry) => entry.what.includes('cafai-key'));
-    expect(copies.map((entry) => entry.body)).toEqual([KEY_COPY_MARKER, KEY_COPY_MARKER, '', KEY_COPY_MARKER]);
+    expect(copies.map((entry) => entry.body)).toEqual([KEY_COPY_MARKER, '{}', '', KEY_COPY_MARKER]);
   });
 });
 

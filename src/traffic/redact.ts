@@ -12,7 +12,8 @@
  *   - anything shaped like an Anthropic API key (sk-ant-…), anywhere: a
  *     body, a URL, a status;
  *   - the body of any call to the key's own namespace in Decaid's store
- *     (D99), whatever the key looks like;
+ *     (D99), whatever the key looks like (one with no room for a key stays:
+ *     Decaid's null says it has no copy);
  *   - image data (the bag photo) and other long base64 runs, kept as their
  *     size: "[image, 412 KB]".
  */
@@ -109,4 +110,12 @@ export function redactText(text: string, secrets: readonly string[] = []): strin
 /** Whether a call ("POST /api/v1/store/cafai-key/anthropic") is to the key's copy in Decaid. */
 export function isKeyStoreCall(what: string): boolean {
   return KEY_STORE_PATH.test(what);
+}
+
+/** A body with no room for a key: Decaid's null for no copy, its {} for a write, an empty list or string. */
+const KEYLESS_BODY = /^\s*(?:null|\{\}|\[\]|"")?\s*$/;
+
+/** A body of a call to the key's copy in Decaid as the log keeps it: the marker, unless it cannot hold a key. */
+export function keyStoreBody(body: string): string {
+  return KEYLESS_BODY.test(body) ? body : KEY_COPY_MARKER;
 }

@@ -48,6 +48,11 @@ const MONO = 'ui-monospace, "Roboto Mono", "Droid Sans Mono", Menlo, Consolas, m
 
 const DIRECTION_WORD = { sent: 'sent', received: 'received' } as const;
 
+/** "the 4 frames after it on this channel were counted, not kept". */
+export function moreNote(more: number): string {
+  return more === 1 ? 'the frame after it on this channel was counted, not kept' : `the ${more} frames after it on this channel were counted, not kept`;
+}
+
 /** Entries in `live` newer than the newest one `held` has. */
 function newerThan(live: readonly TrafficEntry[], held: readonly TrafficEntry[]): number {
   const newest = held[held.length - 1]?.id ?? 0;
@@ -65,7 +70,7 @@ function LogDetail({ entry }: { entry: TrafficEntry }) {
     <div className="detail" data-testid={TID.logDetail}>
       <div className="facts">
         {entryLine(entry)}
-        {entry.more > 0 ? ` (the ${entry.more} frames after it on this channel were counted, not kept)` : ''}
+        {entry.more > 0 ? ` (${moreNote(entry.more)})` : ''}
       </div>
       {entry.headers ? <pre className="headers">{entry.headers}</pre> : null}
       {entry.body ? <pre>{show(body)}</pre> : <div className="quiet">No body.</div>}
