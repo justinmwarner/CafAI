@@ -30,8 +30,8 @@ export interface OutboxTimers {
 }
 
 /**
- * Thrown by a write that cannot go out yet although nothing failed (the stars
- * wait until Decaid says which rating scale it uses, D101): it waits and runs
+ * Thrown by a write that cannot go out yet although nothing failed (a rating
+ * waits until Decaid says which rating scale it uses, D101, D126): it waits and runs
  * again on the next flush.
  */
 export class WriteLater extends Error {

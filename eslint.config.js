@@ -28,6 +28,7 @@ export default defineConfig(
     ignores: [
       'dist/**',
       'dist-mock/**',
+      'dist-screenshots/**',
       '.verify/**',
       // Git worktrees of agents working beside this tree: another checkout, linted there.
       '.claude/worktrees/**',

@@ -165,8 +165,9 @@ const segmentSx: SxProps<Theme> = (theme) => ({
 
 /**
  * "Compared with your previous shot?" (D126): five words from much worse to
- * much better, a radio group. The arrow keys move the answer (right and up
- * towards better); only the chosen word, or About the same before there is
+ * much better, a radio group. The arrow keys move the answer as in any radio
+ * group: right and down to the next word (towards better), left and up to
+ * the previous one (towards worse); only the chosen word, or About the same before there is
  * one, takes Tab focus. Each word is a 48 px target.
  */
 function ComparisonRating({
@@ -191,7 +192,7 @@ function ComparisonRating({
   };
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (disabled) return;
-    const step = event.key === 'ArrowRight' || event.key === 'ArrowUp' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowDown' ? -1 : 0;
+    const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0;
     if (step === 0) return;
     event.preventDefault();
     const next = Math.min(SHOT_VERDICTS.length - 1, Math.max(0, (current < 0 ? MIDDLE : current) + step));
@@ -292,8 +293,8 @@ export function ShotCard({
         </Stack>
       ) : null}
       <VisualizerLink url={visualizerUrl} />
-      {!onRate ? null : stars !== null && verdict === null ? (
-        // Rated before shots were compared: the stars stay as given (D126).
+      {!onRate ? null : stars !== null ? (
+        // Rated before shots were compared: the stars stay as given, words or not, as rating does (D126).
         <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
           You rated it {stars} of 5 stars.
         </Typography>

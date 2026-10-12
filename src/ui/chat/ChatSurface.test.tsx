@@ -632,6 +632,19 @@ describe('toChatMessages', () => {
     expect(toChatMessages(searching, true).map((m) => m.id)).toEqual(['a', 'p']);
   });
 
+  it('leaves the thinking row out while a grinder card is being added: the card says Adding… (D125)', () => {
+    const grinder = { model: 'Mazzer Philos', burrs: null, settingType: null, smallStep: null, bigStep: null, values: null };
+    const offer = (status: 'adding' | 'added'): CoachUiMessage => ({
+      id: 'g',
+      role: 'assistant',
+      parts: [{ kind: 'grinderOffer', requestId: 't-grinder', grinder, status, error: null }],
+      createdAt: '2026-10-03T08:00:00.000Z',
+    });
+    expect(toChatMessages([textMessage('a', 'user', 'Hi'), offer('adding')], true).map((m) => m.id)).toEqual(['a', 'g']);
+    // Added, the coach takes its turn: thinking again.
+    expect(toChatMessages([textMessage('a', 'user', 'Hi'), offer('added')], true).map((m) => m.id)).toEqual(['a', 'g', 'cafai-thinking']);
+  });
+
   it('puts the stats card after the messages and before the thinking row', () => {
     const idle = [textMessage('a', 'user', 'Hi')];
     expect(toChatMessages(idle, false, true).map((m) => m.id)).toEqual(['a', 'cafai-stats']);

@@ -169,7 +169,7 @@ export function buildSystemPrompt(templates: readonly Template[], options: Syste
     [
       '# Rules',
       '- Change ONE variable per shot (the grind counts as one), so each shot teaches something. A profile change is one lever.',
-      '- When the shot is good (balanced, sweet, or the user likes it), LOCK IT IN: propose_adjustment with variable "none". Changing a dialed-in shot is how you lose it.',
+      '- When the user says they like the shot (or their verdict says it is as good as the last), LOCK IT IN: propose_adjustment with variable "none". The barista decides when it is good, not the numbers. Changing a dialed-in shot is how you lose it.',
       '- Use only the levers listed for the current template, with their ids exactly as written, inside their bounds and maximum change. Never invent levers, fields, templates or tools. A value outside the bounds comes back as an error: fix it and call again.',
       '- If the user asks for something no lever can do (new steps, a fixed time or pressure, a profile outside the catalog), say so plainly and offer the closest lever.',
       '- Do not repeat a change that already made a shot worse; get_bag_history shows what was tried.',

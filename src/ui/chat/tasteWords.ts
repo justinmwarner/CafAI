@@ -1,7 +1,8 @@
 /**
- * Words for what the barista tastes (D127): neutral descriptors, grouped by
- * what to notice, that help them put a shot into their own words. None says
- * good or bad, and none is what a coffee should taste like: the coach never
+ * Words for what the barista tastes (D127): descriptors, grouped by what to
+ * notice, that help them put a shot into their own words. They describe a
+ * cup rather than grade it ("harsh" and "clean" are tasting vocabulary, not a
+ * verdict), and none is what a coffee should taste like: the coach never
  * names a flavour first, so the words come from the barista. A tapped word
  * goes into the message being written; nothing is sent until they send.
  */

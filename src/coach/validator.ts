@@ -455,10 +455,11 @@ export function validateTemplateSuggestions(input: ProposeTemplates): { ok: bool
 // ---------------------------------------------------------------------------
 
 /**
- * Words that only ever describe how a cup tastes or feels in the mouth, so
- * none can say what a change does at the machine. Words with a sense there
- * too are left to the prompt: "a smoother pressure curve", "a sharper rise",
- * "a drier puck", "a flatter pour" and "a lighter tamp" pass.
+ * Words that describe how a cup tastes or feels in the mouth, so none can say
+ * what a change does at the machine. A few entries carry their own guard
+ * ("puck depth", "a complex profile" pass). Words with a common sense at the
+ * machine are left to the prompt: "a smoother pressure curve", "a sharper
+ * rise", "a drier puck", "a flatter pour" and "a lighter tamp" pass.
  */
 const TASTE_ONLY_WORDS = [
   'acidic',
@@ -477,6 +478,7 @@ const TASTE_ONLY_WORDS = [
   'brighter',
   'brightness',
   'burnt',
+  'buttery',
   'caramel',
   'chocolate',
   'chocolatey',
@@ -484,10 +486,16 @@ const TASTE_ONLY_WORDS = [
   'citrus',
   'clarity',
   'cocoa',
+  'complex(?!\\s+(?:profiles?|steps?|shapes?|recipes?)\\b)',
+  'complexity',
   'creamier',
   'creamy',
   'crisp',
   'delicious',
+  '(?<!(?:puck|basket|bed|tamp|headspace)\\s)depth',
+  'drinkable',
+  'earthy',
+  'enjoyable',
   'flavor',
   'flavors',
   'flavour',
@@ -500,16 +508,30 @@ const TASTE_ONLY_WORDS = [
   'harsh',
   'harsher',
   'harshness',
+  'intensity',
+  'jammy',
   'juicier',
   'juicy',
+  'malty',
+  'mellow',
+  'mellower',
   'mouthfeel',
   'muted',
+  'nicer',
   'nutty',
+  'palate',
+  'pleasant',
+  'pleasanter',
+  'pleasing',
   'rich',
   'richer',
   'richness',
-  'rounder',
+  // "A forgiving all-rounder" is a profile, not a cup.
+  '(?<!all-)rounder',
   'sharpness',
+  'silkier',
+  'silky',
+  'smoky',
   'sour',
   'sourer',
   'sourness',
@@ -520,42 +542,115 @@ const TASTE_ONLY_WORDS = [
   'tangy',
   'tart',
   'tartness',
+  'tastier',
+  'tastiest',
   'tasty',
+  'toffee',
+  'unpleasant',
+  'vanilla',
+  'velvety',
   'watery',
 ];
 
-const TASTE_ONLY = new RegExp(`\\b(?:${TASTE_ONLY_WORDS.join('|')})\\b`, 'i');
+/**
+ * What a change does at the machine. A taste word right before one names the
+ * machine, not the cup: "the sweet spot", "a balanced extraction", "a harsh
+ * pressure spike", "a shorter finish time".
+ */
+const MACHINE_NOUN =
+  '(?:spot|extraction|pressure|flow|spike|curve|time|ramp|peak|puck|shot\\s+time|rise|drop|decline|pour|temperature|yield|ratio|dose|grind|rate|step|bloom|soak|preinfusion|weight|limit|setting)s?';
 
-/** A taste foretold: "should taste", "will make it taste", "it'll taste", "tastes like", "tastes more". */
-const TASTE_FORETOLD =
-  /\b(?:should|will|would|could|might|may|ought\s+to|going\s+to)\s+(?:\w+\s+){0,2}?tast(?:e|es|ing)\b|['’]ll\s+tastes?\b|\btastes?\s+(?:like|of|more|less|better|worse)\b/i;
+const TASTE_ONLY = new RegExp(`\\b(?:${TASTE_ONLY_WORDS.join('|')})\\b(?!\\s+${MACHINE_NOUN}\\b)`, 'i');
+
+/**
+ * A taste foretold: "should taste", "will make it taste", "it'll taste" (and
+ * "you'll taste the difference", a promise too), "tastes like", "tastes more",
+ * "the taste should improve", "a better taste", "better-tasting".
+ */
+const TASTE_FORETOLD = new RegExp(
+  [
+    "\\b(?:should|will|would|could|might|may|ought\\s+to|going\\s+to)\\s+(?:\\w+\\s+){0,2}?tast(?:e|es|ing)\\b",
+    "['’]ll\\s+tastes?\\b",
+    '\\btastes?\\s+(?:like|of|more|less|better|worse)\\b',
+    '\\btastes?\\s+(?:should|will|would|could|might|may|ought\\s+to|is\\s+going\\s+to|improves?|gets?)\\b',
+    '\\b(?:better|best|worse|worst|good|great|nice|nicer|bad|fine|lovely)[-\\s]+tast(?:e|es|ing)\\b',
+  ].join('|'),
+  'i',
+);
 
 /**
  * The cup or its finish described, or judged: "a lighter cup", "a cleaner
  * finish", "the same good cup", "easier to drink", "less sharp" (but not "a
- * less sharp pressure rise"). "36 g in the cup" passes.
+ * less sharp pressure rise"), "less bite", "notes of honey". "36 g in the cup"
+ * and "a shorter finish time" pass.
  */
-const CUP_DESCRIBED =
-  /\b(?:lighter|clearer|cleaner|fuller|heavier|stronger|weaker|softer|smoother|gentler|thicker|thinner|denser|drier|longer|shorter|good|better|great|nice|perfect|worse|bad)\s+(?:cup|finish|aftertaste)\b|\b(?:easier|easy)\s+to\s+drink\b|\b(?:less|more)\s+sharp\b(?!\s+(?:pressure|rise|peak|ramp|spike|drop|jump|climb|onset))/i;
+const CUP_DESCRIBED = new RegExp(
+  [
+    `\\b(?:lighter|clearer|cleaner|fuller|heavier|stronger|weaker|softer|smoother|gentler|thicker|thinner|denser|drier|longer|shorter|good|better|great|nice|perfect|worse|bad)\\s+(?:cup|finish|aftertaste)\\b(?!\\s+${MACHINE_NOUN}\\b)`,
+    '\\b(?:easier|easy|harder|hard|nice|nicer)\\s+to\\s+drink\\b',
+    '\\b(?:less|more)\\s+sharp\\b(?!\\s+(?:pressure|rise|peak|ramp|spike|drop|jump|climb|onset))',
+    '\\b(?:less|more|no)\\s+(?:edge|bite|punch|zing)\\b',
+    '\\bnotes?\\s+of\\b',
+    // "the sweet spot" passes; a sweet extraction is a cup.
+    '\\bsweet(?:er)?\\s+extractions?\\b',
+  ].join('|'),
+  'i',
+);
 
-/**
- * The correction for a propose_adjustment whose expectedEffect promises a
- * taste, or null when it keeps to the machine. expectedEffect says what the
- * change does (flow, time, pressure, extraction); how the next shot tastes is
- * the barista's to find. The engine checks only what the model just wrote: a
- * stored proposal keeps the words its card already shows.
- */
-export function proposalWordingError(input: Pick<ProposeAdjustment, 'expectedEffect'>): string | null {
-  const text = input.expectedEffect;
-  // The first in reading order, so the sentence names what the model wrote first.
+/** A template's own name, which may carry a taste word: "Gentle and Sweet" names a profile, not a cup. */
+const TASTE_NAMED_TEMPLATES = /\bgentle(?:\s+and\s+|\s*&\s*|-and-)sweet\b/gi;
+
+/** The taste words a text names first in reading order, or null when it keeps to the machine. */
+function tasteNamed(text: string): string | null {
+  const plainText = text.replace(TASTE_NAMED_TEMPLATES, 'the profile');
   const found = [TASTE_FORETOLD, CUP_DESCRIBED, TASTE_ONLY]
-    .map((pattern) => pattern.exec(text))
+    .map((pattern) => pattern.exec(plainText))
     .filter((match) => match !== null)
     .sort((a, b) => a.index - b.index)[0];
-  if (!found) return null;
+  return found ? found[0] : null;
+}
+
+/** The words of a propose_adjustment the card shows as CafAI's (not rationale, which may quote the barista). */
+export type AdjustmentWording = Pick<ProposeAdjustment, 'expectedEffect'> & Partial<Pick<ProposeAdjustment, 'summary' | 'tips'>>;
+
+/**
+ * The correction for a proposal whose words promise a taste, or null when they
+ * keep to the machine. A propose_adjustment's expectedEffect, summary and tips
+ * say what the change does (flow, time, pressure, extraction); a
+ * propose_templates reason says what the profile does and which coffees it
+ * suits. How the next shot tastes is the barista's to find, so rationale (the
+ * barista's own words) is not read. The engine checks only what the model just
+ * wrote: a stored proposal keeps the words its card already shows.
+ */
+export function proposalWordingError(input: AdjustmentWording | Pick<ProposeTemplates, 'suggestions'>): string | null {
+  if ('suggestions' in input) {
+    const named = input.suggestions.flatMap(({ templateId, reason }) => {
+      const words = tasteNamed(reason);
+      return words === null ? [] : [`The reason for ${templateId} names a taste ("${words}").`];
+    });
+    if (named.length === 0) return null;
+    return (
+      `${named.join(' ')} Call propose_templates again with reasons that say only what each profile does at the machine ` +
+      '(soak, pressure, flow, temperature, extraction) and which coffees it suits; how its shots taste is for the barista to find.'
+    );
+  }
+  const fields: Array<[string, string]> = [
+    ['expectedEffect', input.expectedEffect],
+    ...(input.summary === undefined ? [] : [['summary', input.summary] as [string, string]]),
+    ...(input.tips ?? []).map((tip): [string, string] => ['A tip', tip]),
+  ];
+  const named = fields.flatMap(([field, text]) => {
+    const words = tasteNamed(text);
+    return words === null ? [] : [{ field, words }];
+  });
+  if (named.length === 0) return null;
+  const which = named.every((n) => n.field === 'expectedEffect')
+    ? 'an expectedEffect that says'
+    : 'a summary, expectedEffect and tips that say';
   return (
-    `expectedEffect names a taste ("${found[0]}"). Say only what the change does at the machine (flow, time, pressure, ` +
-    'temperature, extraction); how the next shot tastes is for the barista to find, and their own words belong in rationale.'
+    `${named.map(({ field, words }) => `${field} names a taste ("${words}").`).join(' ')} Call propose_adjustment again with ` +
+    `${which} only what the change does at the machine (flow, time, pressure, temperature, extraction); how the next ` +
+    'shot tastes is for the barista to find, and their own words belong in rationale.'
   );
 }
 

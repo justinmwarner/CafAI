@@ -51,7 +51,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `npm run build:mock && npx vite preview --mode mock --outDir dist-mock --port ${PORT} --strictPort --host 127.0.0.1`,
+    // Its own build folder: e2e's preview serves dist-mock, which a rebuild would empty mid-run.
+    command: `npx vite build --mode mock --outDir dist-screenshots && npx vite preview --mode mock --outDir dist-screenshots --port ${PORT} --strictPort --host 127.0.0.1`,
     url: `http://127.0.0.1:${PORT}/`,
     // Always today's code: a server left running from an older build would take stale pictures.
     reuseExistingServer: false,

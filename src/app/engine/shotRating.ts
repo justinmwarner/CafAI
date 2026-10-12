@@ -7,10 +7,11 @@
  * Visualizer still want a number, so each verdict also gets a running score
  * out of 10: a bag's first rated shot starts at the middle, and each later
  * one is the score of the shot it was compared with plus one step per word
- * (two for "much"), kept within 0-10. A shot nobody rated carries the score
- * before it, and stars given before D126 count as twice their number, as
- * they were written. A Decaid that rates out of 100 gets ten times the
- * score (D101), so Visualizer shows the same number from either.
+ * (two for "much"), kept within 1-10: de1app and Decaid's Visualizer plugin
+ * take an enjoyment of 0 as a shot nobody rated. A shot nobody rated carries
+ * the score before it, and stars given before D126 count as twice their
+ * number, as they were written. A Decaid that rates out of 100 gets ten times
+ * the score (D101), so Visualizer shows the same number from either.
  */
 import type { EnjoymentScale } from '../../api/types.ts';
 import { EVENT } from '../../coach/contract.ts';
@@ -22,8 +23,10 @@ type ShotPart = Extract<CoachUiPart, { kind: 'shot' }>;
 
 /** The running score of a bag's first rated shot, out of 10. */
 export const MIDDLE_SCORE = 5;
-/** The top of the running score; its bottom is 0. */
+/** The top of the running score. */
 export const TOP_SCORE = 10;
+/** The bottom of the running score: 0 would read as "not rated" in de1app and on Visualizer. */
+export const BOTTOM_SCORE = 1;
 /** How far one word moves the score, out of 10; "much" moves it twice as far. */
 export const SCORE_STEP = 1;
 
@@ -33,9 +36,12 @@ export function isShotVerdict(value: unknown): value is ShotVerdict {
   return typeof value === 'string' && (SHOT_VERDICTS as readonly string[]).includes(value);
 }
 
-/** The word on the card in lower case, as the coach hears it. */
-export function verdictWord(verdict: ShotVerdict): string {
-  return SHOT_VERDICT_WORDS[verdict].toLowerCase();
+/**
+ * The word on the card in lower case, as the coach hears it; null for a
+ * verdict this build does not know (a newer build's, or an edited import).
+ */
+export function verdictWord(verdict: string): string | null {
+  return isShotVerdict(verdict) ? SHOT_VERDICT_WORDS[verdict].toLowerCase() : null;
 }
 
 /** The shot cards of a chat in order, each with when it was posted. */
@@ -70,7 +76,7 @@ export function runningScore(messages: readonly CoachUiMessage[], shotId: string
     .map(scoreOf)
     .find((score): score is number => score !== null);
   if (before === undefined) return MIDDLE_SCORE;
-  return Math.min(TOP_SCORE, Math.max(0, before + SCORE_STEP * STEPS[verdict]));
+  return Math.min(TOP_SCORE, Math.max(BOTTOM_SCORE, before + SCORE_STEP * STEPS[verdict]));
 }
 
 /** A running score as Decaid's `enjoyment` on the scale it uses (D101): as it is out of 10, ten times it out of 100. */
@@ -148,7 +154,8 @@ function toldVerdict(text: string): { shotId: string; verdict: string } | null {
  * rated card whose verdict is not the last one the transcript told for its
  * shot. The transcript is the record of what the coach heard, so a verdict
  * is told once, a changed one is told again, and a reload before the next
- * turn loses neither.
+ * turn loses neither. A verdict this build does not know is not told: the
+ * stored chat takes any rating, and one unknown word must not stop the coach.
  */
 export function untoldRatings(apiMessages: readonly LlmMessage[], messages: readonly CoachUiMessage[]): ShotRatedPayload[] {
   const told = new Map<string, string>();
@@ -162,6 +169,7 @@ export function untoldRatings(apiMessages: readonly LlmMessage[], messages: read
   return shotCards(messages).flatMap(({ part }) => {
     if (!part.rating || !part.baseline) return [];
     const verdict = verdictWord(part.rating.verdict);
+    if (verdict === null) return [];
     return told.get(part.shotId) === verdict ? [] : [{ shotId: part.shotId, verdict, comparedWith: part.baseline }];
   });
 }

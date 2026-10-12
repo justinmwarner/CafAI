@@ -715,9 +715,94 @@ describe('proposalWordingError: expectedEffect is mechanics, never a taste (D127
       'The shot finishes sooner, with 36 g in the cup.',
       'Nothing changes: the next shot runs the same recipe.',
       'Taste it against this shot.',
+      // A taste word right before a machine noun names the machine.
+      'A finer grind moves the flow toward the sweet spot.',
+      'A more balanced extraction across the puck.',
+      'A lower peak avoids a harsh pressure spike.',
+      'A shorter finish time: the shot stops 2 g sooner.',
+      'Less puck depth in the basket, so more headspace.',
+      'The same complex profile with a longer soak.',
+      'A forgiving all-rounder, but it suits lighter roasts better than this one.',
+      // A template's name is a profile, not a cup.
+      'The same pressure curve as Gentle and Sweet, held 4 s longer.',
     ]) {
       expect(wording(text), text).toBeNull();
     }
+  });
+
+  it('sends back the common taste promises a model writes (review findings)', () => {
+    const cases: Array<[string, string]> = [
+      ['The taste should improve.', 'taste should'],
+      ['A tastier, smoother espresso.', 'tastier'],
+      ['Should give a nicer cup.', 'nicer'],
+      ['A better-tasting shot.', 'better-tasting'],
+      ['More depth and complexity.', 'depth'],
+      ['Mellower, with less bite.', 'Mellower'],
+      ['Less edge, more pleasant to drink.', 'Less edge'],
+      ['Notes of honey and toffee should come through.', 'Notes of'],
+      ['More intensity and a silkier texture.', 'intensity'],
+      ['An enjoyable, drinkable shot.', 'enjoyable'],
+      ['A more complex cup.', 'complex'],
+      ["You'll taste the difference.", "'ll taste"],
+      ['The taste will be cleaner.', 'taste will'],
+      ['A sweet, harsh-free shot with a sweet spot flow.', 'sweet'],
+      ['A good taste at last.', 'good taste'],
+    ];
+    for (const [text, words] of cases) {
+      const error = wording(text);
+      expect(error, text).toContain(`expectedEffect names a taste ("${words}")`);
+    }
+  });
+
+  it('reads the summary and tips too, but not the rationale (the barista may be quoted there)', () => {
+    const base = {
+      expectedEffect: 'A slower pour, a few seconds longer.',
+      summary: 'Grind one step finer',
+      tips: ['Keep the same dose, grind and puck prep.'],
+    };
+    expect(proposalWordingError(base)).toBeNull();
+    // rationale is not part of the input it reads, so quoting the barista is fine.
+    expect(proposalWordingError({ ...base, rationale: 'You found it sour and harsh.' } as typeof base)).toBeNull();
+
+    const summary = proposalWordingError({ ...base, summary: 'Grind finer for a sweeter shot' });
+    expect(summary).toContain('summary names a taste ("sweeter")');
+    expect(summary).toMatch(/Call propose_adjustment again with a summary, expectedEffect and tips that say only what the change does at the machine/);
+
+    const tip = proposalWordingError({ ...base, tips: ['Keep the same dose.', 'Expect notes of cocoa.'] });
+    expect(tip).toContain('A tip names a taste ("notes of")');
+    expect(tip).not.toContain('expectedEffect names');
+
+    const both = proposalWordingError({ ...base, expectedEffect: 'Tastier.', summary: 'Make it mellower' });
+    expect(both).toContain('expectedEffect names a taste ("Tastier"). summary names a taste ("mellower").');
+  });
+
+  it('sends back a propose_templates reason that promises a taste, naming the template', () => {
+    const suggestions = (bloom: string, dflow: string, lever: string) => ({
+      suggestions: [
+        { templateId: 'blooming-espresso', confidence: 'high' as const, reason: bloom },
+        { templateId: 'd-flow', confidence: 'high' as const, reason: dflow },
+        { templateId: 'londonium', confidence: 'high' as const, reason: lever },
+      ],
+    });
+    expect(
+      proposalWordingError(
+        suggestions(
+          'A bloom pause lets light, dense beans soak evenly before the pour.',
+          'A gentle soak, then a steady pour. Forgiving for most roasts.',
+          'Like Gentle and Sweet, a falling pressure that is gentle on darker roasts.',
+        ),
+      ),
+    ).toBeNull();
+
+    const error = proposalWordingError(
+      suggestions('High, sweet extraction for light roasts.', 'A forgiving all-rounder.', 'Big body and a syrupy texture.'),
+    );
+    expect(error).toContain('The reason for blooming-espresso names a taste ("sweet extraction").');
+    expect(error).toContain('The reason for londonium names a taste ("body").');
+    expect(error).not.toContain('d-flow');
+    expect(error).toMatch(
+      /Call propose_templates again with reasons that say only what each profile does at the machine \(soak, pressure, flow, temperature, extraction\) and which coffees it suits/,
+    );
   });
 
   it('sends back a flavour, a feel in the mouth or a taste foretold, naming the words', () => {
@@ -742,7 +827,10 @@ describe('proposalWordingError: expectedEffect is mechanics, never a taste (D127
     for (const [text, words] of cases) {
       const error = wording(text);
       expect(error, text).toContain(`expectedEffect names a taste ("${words}")`);
-      expect(error).toMatch(/Say only what the change does at the machine \(flow, time, pressure, temperature, extraction\)/);
+      // A call again, not an answer in chat.
+      expect(error).toMatch(
+        /Call propose_adjustment again with an expectedEffect that says only what the change does at the machine \(flow, time, pressure, temperature, extraction\)/,
+      );
       expect(error).toMatch(/how the next shot tastes is for the barista to find, and their own words belong in rationale/);
     }
   });

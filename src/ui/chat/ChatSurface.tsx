@@ -158,16 +158,22 @@ function showsProgress(message: CoachUiMessage): boolean {
   return message.parts.some((part) => part.kind === 'notice' && part.progress !== undefined);
 }
 
+/** A change card being applied, or a grinder card being added (its own "Adding…", D125). */
 function applyingChange(messages: readonly CoachUiMessage[]): boolean {
-  return messages.some((message) => message.parts.some((part) => part.kind === 'diff' && part.status === 'applying'));
+  return messages.some((message) =>
+    message.parts.some(
+      (part) => (part.kind === 'diff' && part.status === 'applying') || (part.kind === 'grinderOffer' && part.status === 'adding'),
+    ),
+  );
 }
 
 /**
  * x-chat messages for the thread, then the stats card when it shows, then a
  * "thinking" row while busy with nothing streaming yet. A progress notice
  * already says what CafAI is doing (loading a profile, looking for a shot),
- * and a change card that is being applied shows its own bar, so neither gets
- * a thinking row. Both are read from the real messages, never the card.
+ * and a change card that is being applied or a grinder card being added
+ * shows its own progress, so none gets a thinking row. All are read from the
+ * real messages, never the card.
  */
 export function toChatMessages(messages: readonly CoachUiMessage[], busy: boolean, statsCard = false): ChatMessage[] {
   const result = messages.map(toChatMessage);
