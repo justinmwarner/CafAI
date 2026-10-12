@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { decodedSize, isKeyStoreCall, KEY_COPY_MARKER, KEY_MARKER, keyStoreBody, redactHeaders, redactText, replaceBase64 } from './redact.ts';
+import {
+  decodedSize,
+  holdsSecret,
+  isKeyStoreCall,
+  isSecretHeader,
+  KEY_COPY_MARKER,
+  KEY_MARKER,
+  keyStoreBody,
+  redactHeaders,
+  redactText,
+  replaceBase64,
+} from './redact.ts';
 
 /** A made-up key, built at run time so no key-shaped literal sits in the source. */
 const KEY = ['sk', 'ant', 'api03', 'TrAfFiCLoGtEsT0123456789', 'AbCdEfGhIjKlMnOpQrStUvWxYz_0123456789AA'].join('-');
@@ -32,6 +43,28 @@ describe('redactHeaders', () => {
   it('is empty for no headers', () => {
     expect(redactHeaders(undefined)).toEqual({ text: '', secrets: [] });
   });
+
+  it('goes by whole parts of a name: a rate limit\'s token count is no secret, and its number stays in the body', () => {
+    expect(isSecretHeader('anthropic-ratelimit-tokens-remaining')).toBe(false);
+    expect(isSecretHeader('anthropic-ratelimit-input-tokens-limit')).toBe(false);
+    expect(isSecretHeader('anthropic-dangerous-direct-browser-access')).toBe(false);
+    expect(isSecretHeader('access-control-allow-headers')).toBe(false);
+    for (const name of ['x-api-key', 'authorization', 'proxy-authorization', 'cookie', 'set-cookie', 'x-auth-token', 'x-session-id']) {
+      expect(isSecretHeader(name), name).toBe(true);
+    }
+    const { text, secrets } = redactHeaders(new Headers({ 'anthropic-ratelimit-tokens-remaining': '40000000' }));
+    expect(text).toBe('anthropic-ratelimit-tokens-remaining: 40000000');
+    expect(secrets).toEqual([]);
+  });
+
+  it('reads name-value pairs, and values that are not strings', () => {
+    const pairs: Array<[string, string]> = [
+      ['x-api-key', KEY],
+      ['accept', 'text/event-stream'],
+    ];
+    expect(redactHeaders(pairs)).toEqual({ text: `x-api-key: ${KEY_MARKER}\naccept: text/event-stream`, secrets: [KEY] });
+    expect(redactHeaders({ 'content-length': 42 } as unknown as Record<string, string>).text).toBe('content-length: 42');
+  });
 });
 
 describe('redactText', () => {
@@ -48,6 +81,15 @@ describe('redactText', () => {
 
   it('does not look for a secret too short to tell from ordinary text', () => {
     expect(redactText('the 123 of it', ['123'])).toBe('the 123 of it');
+    expect(redactText('a 1234567 here', ['1234567'])).toBe('a 1234567 here');
+  });
+
+  it('says whether text holds a key or a secret, image data aside', () => {
+    expect(holdsSecret(`x ${KEY} y`)).toBe(true);
+    expect(holdsSecret('code k7qm-2xwp', [CODE])).toBe(true);
+    expect(holdsSecret('nothing here', [CODE])).toBe(false);
+    expect(holdsSecret(`"/9j/${'A'.repeat(2000)}"`)).toBe(false);
+    expect(holdsSecret('')).toBe(false);
   });
 
   it('leaves ordinary text alone', () => {
@@ -88,6 +130,12 @@ describe('keyStoreBody', () => {
     expect(keyStoreBody('"plain-key"')).toBe(KEY_COPY_MARKER);
     expect(keyStoreBody('{"anthropic":"x"}')).toBe(KEY_COPY_MARKER);
     for (const keyless of ['null', '{}', '[]', '""', '', ' null\n']) expect(keyStoreBody(keyless)).toBe(keyless);
+  });
+
+  it('decides at once, whatever the body', () => {
+    const started = Date.now();
+    expect(keyStoreBody(`${' '.repeat(50_000)}x`)).toBe(KEY_COPY_MARKER);
+    expect(Date.now() - started).toBeLessThan(200);
   });
 });
 

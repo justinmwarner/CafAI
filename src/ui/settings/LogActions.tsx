@@ -2,11 +2,12 @@
  * Share, Email and Copy for the traffic log (D139), in Settings > Log and in
  * the log view. Each takes every entry it is given (the whole log, or the
  * log as it stood when the view was paused), whatever the view's filter
- * shows, so whoever reads it sees the whole exchange. The text is built in
- * the tap itself, as the browser needs for sharing and for copying over
- * plain http; Email's link follows the entries, so it is ready to open.
+ * shows, so whoever reads it sees the whole exchange. Nothing is built until
+ * a tap, and then in the tap itself, as the browser needs for sharing and
+ * for copying over plain http: Email's link too, set on the link as it is
+ * followed.
  */
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
@@ -28,29 +29,43 @@ export const INSIDE_DECAID_NOTE = "Decaid's own window can't open email or anoth
 
 type Said = { ok: boolean; text: string };
 
-export function LogActions({ entries, leading, trailing }: { entries: readonly TrafficEntry[]; leading?: ReactNode; trailing?: ReactNode }) {
+export function LogActions({
+  entries,
+  leading,
+  trailing,
+}: {
+  /** The entries to send, read at the tap. */
+  entries: () => readonly TrafficEntry[];
+  leading?: ReactNode;
+  trailing?: ReactNode;
+}) {
   const { host } = useServices();
   const context = useLogContext();
   const [said, setSaid] = useState<Said | null>(null);
+  // Where Copy's fallback puts its text area: here, inside the log view's dialog when it is in one.
+  const root = useRef<HTMLDivElement>(null);
   const sharable = canShare();
   const emailable = !host.insideDecaid;
-  const now = context();
-  const href = emailable ? mailtoHref(logTitle(now.now), emailBody(entries, now)) : null;
 
   const share = () => {
     const at = context();
     setSaid(null);
-    void shareText(formatTrafficLog(entries, at), logTitle(at.now), logFileName(at.now)).then((outcome) => {
+    void shareText(formatTrafficLog(entries(), at), logTitle(at.now), logFileName(at.now)).then((outcome) => {
       if (outcome === 'failed') setSaid({ ok: false, text: SHARE_FAILED });
     });
   };
+  // The link is followed after the tap's handlers: the log as it is now goes in it.
+  const email = (event: MouseEvent<HTMLElement>) => {
+    const at = context();
+    event.currentTarget.setAttribute('href', mailtoHref(logTitle(at.now), emailBody(entries(), at)));
+  };
   const copy = () => {
     setSaid(null);
-    void copyText(formatTrafficLog(entries, context())).then((ok) => setSaid({ ok, text: ok ? COPIED : COPY_FAILED }));
+    void copyText(formatTrafficLog(entries(), context()), root.current ?? undefined).then((ok) => setSaid({ ok, text: ok ? COPIED : COPY_FAILED }));
   };
 
   return (
-    <Box>
+    <Box ref={root}>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
         {leading}
         {sharable ? (
@@ -58,8 +73,8 @@ export function LogActions({ entries, leading, trailing }: { entries: readonly T
             Share
           </Button>
         ) : null}
-        {href !== null ? (
-          <Button href={href} startIcon={<EmailOutlinedIcon />} data-testid={TID.logEmail}>
+        {emailable ? (
+          <Button href="mailto:" onClick={email} startIcon={<EmailOutlinedIcon />} data-testid={TID.logEmail}>
             Email
           </Button>
         ) : null}

@@ -20,8 +20,13 @@ interface Shared {
   files: Array<{ name: string; type: string; text: string }>;
 }
 
-/** A share sheet the test can read back: what was shared goes on window.__shared. */
-async function stubShare(page: Page): Promise<void> {
+/**
+ * A share sheet the test can read back (what was shared goes on
+ * window.__shared), and a mail app: a mailto: link is not followed, its
+ * address goes on window.__mailto. The listener is on window, so it hears
+ * the tap after CafAI's own handler has set the link.
+ */
+async function stubShareAndMail(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const shared: unknown[] = [];
     (window as unknown as { __shared: unknown[] }).__shared = shared;
@@ -33,7 +38,18 @@ async function stubShare(page: Page): Promise<void> {
         shared.push({ title: data.title, text: data.text, files });
       },
     });
+    window.addEventListener('click', (event) => {
+      const link = event.target instanceof Element ? event.target.closest('a[href^="mailto:"]') : null;
+      if (!link) return;
+      (window as unknown as { __mailto: string | null }).__mailto = link.getAttribute('href');
+      event.preventDefault();
+    });
   });
+}
+
+/** What the last mailto: link tapped was. */
+function lastMailto(page: Page): Promise<string> {
+  return page.evaluate(() => (window as unknown as { __mailto?: string | null }).__mailto ?? '');
 }
 
 function entries(view: Locator, text?: string | RegExp): Locator {
@@ -57,7 +73,7 @@ async function findEntry(view: Locator, text: RegExp): Promise<Locator> {
 test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
 
 test('Settings > Log holds what went to Decaid and the coach, without the key, and shares it', async ({ page }) => {
-  await stubShare(page);
+  await stubShareAndMail(page);
   await openApp(page);
   await saveApiKey(page, KEY);
   await expect(page.getByText('Key saved on this device.')).toBeVisible();
@@ -78,7 +94,9 @@ test('Settings > Log holds what went to Decaid and the coach, without the key, a
   const section = page.getByTestId(TID.logSection);
   await section.scrollIntoViewIfNeeded();
   await expect(section.getByTestId(TID.logSummary)).toHaveText(/^\d+ entries since \d\d:\d\d, [\d.]+ (B|KB|MB)$/);
-  const href = (await section.getByTestId(TID.logEmail).getAttribute('href')) ?? '';
+  await section.getByTestId(TID.logEmail).click();
+  await expect.poll(() => lastMailto(page)).toMatch(/^mailto:\?subject=/);
+  const href = await lastMailto(page);
   expect(href).toMatch(/^mailto:\?subject=CafAI%20log%2C%20\d{4}-\d\d-\d\d%20\d\d%3A\d\d&body=/);
   expect(href.length).toBeLessThanOrEqual(8000);
   const email = decodeURIComponent(href.slice(href.indexOf('&body=') + '&body='.length));
@@ -176,4 +194,37 @@ test('Pause holds the view still while the log keeps recording', async ({ page }
   expect(await entries(view).count()).toBe(held);
   await view.getByTestId(TID.logPause).click();
   await expect.poll(() => entries(view).count()).toBeGreaterThan(held);
+});
+
+test('Copy works where the page has no clipboard API (plain http on the network), in Settings and in the view', async ({ page }) => {
+  // A page over plain http has no navigator.clipboard: Copy selects and copies a text area. The test keeps
+  // the real clipboard to read it back.
+  await page.addInitScript(() => {
+    const real = navigator.clipboard;
+    const kept = window as unknown as { __clipboard: Clipboard };
+    kept.__clipboard = real;
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+  });
+  const clipboard = () => page.evaluate(() => (window as unknown as { __clipboard: Clipboard }).__clipboard.readText());
+  const stale = () => page.evaluate(() => (window as unknown as { __clipboard: Clipboard }).__clipboard.writeText('stale'));
+  await openApp(page, '#/settings');
+  const section = page.getByTestId(TID.logSection);
+  await section.scrollIntoViewIfNeeded();
+  await stale();
+  await section.getByTestId(TID.logCopy).click();
+  await expect(section.getByTestId(TID.logSaid)).toHaveText('Copied the whole log.');
+  expect(await clipboard()).toMatch(/^CafAI log, /);
+
+  // Inside the view's dialog, which keeps focus to itself: the copy still carries the log.
+  await stale();
+  await section.getByTestId(TID.logOpen).click();
+  const view = page.getByTestId(TID.logView);
+  await view.getByTestId(TID.logFilter('frames')).click();
+  await view.getByTestId(TID.logCopy).click();
+  await expect(view.getByTestId(TID.logSaid)).toHaveText('Copied the whole log.');
+  const copied = await clipboard();
+  expect(copied).toMatch(/^CafAI log, /);
+  // Every entry, whatever the filter shows.
+  expect(copied).toContain('REST GET /api/v1/workflow');
+  expect(copied).toContain('WS ws/v1/');
 });

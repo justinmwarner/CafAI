@@ -3,7 +3,7 @@
  * whole log under a header for Share and Copy; Email gets the newest entries
  * that fit in a mailto: link. Pure: the UI passes the clock and the device.
  */
-import type { TrafficChannel, TrafficDirection, TrafficEntry } from './recorder.ts';
+import { safeSlice, type TrafficChannel, type TrafficDirection, type TrafficEntry } from './recorder.ts';
 import { KEY_MARKER } from './redact.ts';
 
 export const CHANNEL_LABEL: Readonly<Record<TrafficChannel, string>> = { rest: 'REST', socket: 'WS', coach: 'Coach' };
@@ -80,12 +80,13 @@ export function entryLine(entry: TrafficEntry): string {
 
 /** The entry's line, then its headers, body and stream events, each as it was kept (bodies cut to `bodyChars`). */
 export function formatEntry(entry: TrafficEntry, bodyChars = Number.POSITIVE_INFINITY): string {
+  const shorten = (text: string) => (text.length > bodyChars ? `${safeSlice(text, bodyChars)} [… shortened]` : text);
   const lines = [entryLine(entry)];
   if (entry.headers) lines.push(entry.headers);
-  if (entry.body) lines.push(entry.body.length > bodyChars ? `${entry.body.slice(0, bodyChars)} [… shortened]` : entry.body);
+  if (entry.body) lines.push(shorten(entry.body));
   if (entry.raw) {
     lines.push('Stream events:');
-    lines.push(entry.raw.length > bodyChars ? `${entry.raw.slice(0, bodyChars)} [… shortened]` : entry.raw.trimEnd());
+    lines.push(shorten(entry.raw.trimEnd()));
   }
   return lines.join('\n');
 }
@@ -131,9 +132,17 @@ export function formatTrafficLog(entries: readonly TrafficEntry[], context: LogC
   return [logHeader(entries, context), ...entries.map((entry) => formatEntry(entry))].join('\n\n') + '\n';
 }
 
-/** How long `text` is once it is in a mailto: link (RFC 6068: CRLF line breaks, percent-encoded). */
+/** Half of a character written as two (a lone surrogate), which encodeURIComponent throws on. */
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+/** `text` as a mailto: link carries it (RFC 6068: CRLF line breaks, percent-encoded); never throws. */
+function encodeForMail(text: string): string {
+  return encodeURIComponent(text.replace(LONE_SURROGATE, '�').replace(/\n/g, '\r\n'));
+}
+
+/** How long `text` is once it is in a mailto: link. */
 function encodedLength(text: string): number {
-  return encodeURIComponent(text.replace(/\n/g, '\r\n')).length;
+  return encodeForMail(text).length;
 }
 
 /**
@@ -147,7 +156,7 @@ export function emailBody(entries: readonly TrafficEntry[], context: LogContext,
   const subject = logTitle(context.now);
   // The note's room is kept from the start, so it always fits.
   const noteRoom = 400;
-  let budget = maxChars - `mailto:?subject=${encodeURIComponent(subject)}&body=`.length - encodedLength(header) - noteRoom;
+  let budget = maxChars - `mailto:?subject=${encodeForMail(subject)}&body=`.length - encodedLength(header) - noteRoom;
   const kept: string[] = [];
   let shortened = false;
   for (let i = entries.length - 1; i >= 0; i -= 1) {
@@ -173,14 +182,20 @@ export function emailBody(entries: readonly TrafficEntry[], context: LogContext,
 
 /** The mailto: link Email opens: no address, the log's title as the subject. */
 export function mailtoHref(subject: string, body: string): string {
-  const encode = (text: string) => encodeURIComponent(text.replace(/\n/g, '\r\n'));
-  return `mailto:?subject=${encode(subject)}&body=${encode(body)}`;
+  return `mailto:?subject=${encodeForMail(subject)}&body=${encodeForMail(body)}`;
 }
 
-/** A body for the eye: JSON pretty-printed when it is JSON, anything else as it is. */
+/** A number JSON.parse cannot hold exactly (more than 15 digits): pretty-printing would change it. */
+const LONG_NUMBER = /(?:^|[^\d."\w])-?\d{16,}/;
+
+/**
+ * A body for the eye: JSON pretty-printed when it is JSON, anything else as
+ * it is, and as it is too when re-printing would change a number in it.
+ */
 export function prettyBody(body: string): string {
   const text = body.trim();
   if (!(text.startsWith('{') || text.startsWith('['))) return body;
+  if (LONG_NUMBER.test(text)) return body;
   try {
     return JSON.stringify(JSON.parse(text), null, 2);
   } catch {

@@ -3,9 +3,11 @@ import {
   createStreamCapture,
   createTrafficLog,
   cutText,
+  RAW_NOT_KEPT,
   recordExchange,
   recordFrame,
   recordSocket,
+  safeSlice,
   trafficName,
   utf8Length,
   type TrafficLogOptions,
@@ -267,6 +269,108 @@ describe('the key never enters the log', () => {
     // Nothing said to or by the key's copy is kept, but a body with no room for a key (Decaid's "{}").
     const copies = log.list().filter((entry) => entry.what.includes('cafai-key'));
     expect(copies.map((entry) => entry.body)).toEqual([KEY_COPY_MARKER, '{}', '', KEY_COPY_MARKER]);
+  });
+});
+
+describe('redaction beyond the headers', () => {
+  it('takes secrets and key shapes out of header values too (an echo in a reply header)', () => {
+    const { log } = harness();
+    recordExchange('coach', 'GET 192.168.1.20:8877/v1/status', { headers: { 'x-api-key': CODE } }, log).reply(200, {
+      headers: new Headers({ 'x-echo': `${KEY} and K7QM-2XWP`, 'content-type': 'application/json' }),
+      body: '{}',
+    });
+    const received = log.list()[1]!;
+    expect(received.headers).toBe(`content-type: application/json\nx-echo: ${KEY_MARKER} and ${KEY_MARKER}`);
+  });
+
+  it('looks for a remembered secret wherever it shows: a chat in a backup, a frame', () => {
+    const { log } = harness();
+    log.rememberSecret(PLAIN_KEY);
+    log.rememberSecret(CODE);
+    log.rememberSecret('short');
+    recordExchange('rest', 'POST /api/v1/store/cafai/conv.bag_1', { body: `{"text":"my code is k7qm-2xwp and ${PLAIN_KEY}"}` }, log).reply(200, { body: '{}' });
+    log.frame('ws/v1/devices', `{"name":"${CODE}"}`, false);
+    const everything = JSON.stringify(log.list());
+    expect(everything).not.toMatch(/k7qm-?2xwp/i);
+    expect(everything).not.toContain(PLAIN_KEY);
+    expect(log.list()[0]!.body).toBe(`{"text":"my code is ${KEY_MARKER} and ${KEY_MARKER}"}`);
+  });
+
+  it("keeps none of a stream's events when the reply, put together, holds a secret split across them", () => {
+    const { log } = harness();
+    const capture = createStreamCapture();
+    for (const piece of ['Your code is K7QM', '-2XWP, keep it.']) {
+      const data = JSON.stringify({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: piece } });
+      capture.event('content_block_delta', data);
+      capture.join(JSON.parse(data));
+    }
+    expect(capture.joined()).toBe('Your code is K7QM-2XWP, keep it.');
+    recordExchange('coach', 'POST 192.168.1.20:8877/v1/messages', { headers: { 'x-api-key': CODE } }, log).reply(200, {
+      body: '{"content":[{"type":"text","text":"Your code is K7QM-2XWP, keep it."}]}',
+      raw: capture.text(),
+      rawJoined: capture.joined(),
+    });
+    const received = log.list()[1]!;
+    expect(received.raw).toBe(RAW_NOT_KEPT);
+    expect(received.body).toContain(`Your code is ${KEY_MARKER}, keep it.`);
+    expect(JSON.stringify(log.list())).not.toContain('K7QM');
+  });
+
+  it('keeps the events of a reply that holds no secret', () => {
+    const { log } = harness();
+    recordExchange('coach', 'POST api.anthropic.com/v1/messages', { headers: { 'x-api-key': KEY } }, log).reply(200, {
+      body: '{}',
+      raw: 'event: ping\ndata: {}\n\n',
+      rawJoined: 'Lovely.',
+    });
+    expect(log.list()[1]!.raw).toBe('event: ping\ndata: {}\n\n');
+  });
+});
+
+describe('cutting', () => {
+  it('never cuts a character in two', () => {
+    expect(safeSlice('ab😀', 3)).toBe('ab');
+    expect(safeSlice('ab😀', 4)).toBe('ab😀');
+    expect(cutText(`${'x'.repeat(9)}😀tail`, 10)).toBe(`${'x'.repeat(9)}\n[cut here: 1 KB more]`);
+  });
+
+  it('redacts a secret across the cut, and only scans the start of a huge reply', () => {
+    const { log } = harness({ maxBodyChars: 100 });
+    // A key that starts before the cut and ends after it.
+    log.add(rest('GET /straddle', `${'a'.repeat(90)}${KEY}${'b'.repeat(50)}`));
+    expect(log.list()[0]!.body).toBe(`${'a'.repeat(90)}${KEY_MARKER.slice(0, 10)}\n[cut here: 1 KB more]`);
+    // Far past the cut a key is never looked at, and never kept.
+    const huge = `${'c'.repeat(50_000)}${KEY}`;
+    log.add(rest('GET /huge', huge));
+    const entry = log.list()[1]!;
+    expect(entry.body).toBe(`${'c'.repeat(100)}\n[cut here: ${Math.round((huge.length - 100) / 1024)} KB more]`);
+    expect(entry.size).toBe(huge.length);
+  });
+});
+
+describe('the clock', () => {
+  it('starts a new second when the clock is set back, and never makes a negative time', () => {
+    let time = 10_000;
+    const log = createTrafficLog({ now: () => time });
+    log.frame('ws/v1/machine/snapshot', '{"n":1}', true);
+    time = 5_000;
+    log.frame('ws/v1/machine/snapshot', '{"n":2}', true);
+    expect(log.list().map((entry) => entry.body)).toEqual(['{"n":1}', '{"n":2}']);
+    time = 20_000;
+    const exchange = recordExchange('rest', 'GET /api/v1/info', {}, log);
+    time = 19_000;
+    exchange.reply(200, { body: '{}' });
+    expect(log.list()[3]!.durationMs).toBe(0);
+  });
+});
+
+describe('stats', () => {
+  it('counts without copying the list', () => {
+    const { log, advance } = harness();
+    expect(log.stats()).toEqual({ count: 0, oldestAt: null, chars: 0, since: 1_000_000 });
+    advance(5000);
+    log.add(rest('GET /api/v1/info', '12345'));
+    expect(log.stats()).toEqual({ count: 1, oldestAt: 1_005_000, chars: 'GET /api/v1/info'.length + 5, since: 1_000_000 });
   });
 });
 

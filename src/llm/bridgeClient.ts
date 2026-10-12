@@ -11,7 +11,7 @@
  * Both go into the traffic log (D139), the pairing code's header by name
  * only, and its value taken out of the reply too.
  */
-import { recordExchange, trafficName } from '../traffic/recorder.ts';
+import { recordExchange, rememberSecret, trafficName } from '../traffic/recorder.ts';
 import { computerWording, hideSecret, parseRetryAfter } from './errors.ts';
 
 export const BRIDGE_APP = 'cafai-bridge';
@@ -193,6 +193,8 @@ function statusUrl(request: BridgeStatusRequest): string {
 }
 
 export async function getBridgeStatus(request: BridgeStatusRequest): Promise<BridgeStatusResult> {
+  // The code is looked for wherever it shows in the traffic log, the chat included (D139).
+  rememberSecret(request.code);
   const url = statusUrl(request);
   const reply = await fetchText(url, { 'x-api-key': request.code }, request.timeoutMs, request.fetch);
   if (reply === 'unreachable' || reply === 'timeout') return { ok: false, failure: { kind: reply } };

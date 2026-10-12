@@ -14,7 +14,8 @@
  * twice a second, shows 200 rows at a time, and a row renders only when its
  * entry changes.
  */
-import { memo, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { memo, useCallback, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react';
+import { flushSync } from 'react-dom';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
@@ -25,7 +26,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { CHANNEL_LABEL, DIRECTION_ARROW, entryLine, formatBytes, formatClock, prettyBody } from '../../traffic/format.ts';
-import { trafficLog, type TrafficEntry } from '../../traffic/recorder.ts';
+import { safeSlice, trafficLog, type TrafficEntry } from '../../traffic/recorder.ts';
 import { TID } from '../testIds.ts';
 import { LogActions } from './LogActions.tsx';
 import { closeLogView, useLogViewOpen } from './logShare.ts';
@@ -63,9 +64,15 @@ function newerThan(live: readonly TrafficEntry[], held: readonly TrafficEntry[])
 
 function LogDetail({ entry }: { entry: TrafficEntry }) {
   const [whole, setWhole] = useState(false);
+  const shown = useRef<HTMLPreElement>(null);
   const body = useMemo(() => prettyBody(entry.body), [entry.body]);
   const long = body.length > DETAIL_CHARS || entry.raw.length > DETAIL_CHARS;
-  const show = (text: string) => (whole || text.length <= DETAIL_CHARS ? text : `${text.slice(0, DETAIL_CHARS)}…`);
+  const show = (text: string) => (whole || text.length <= DETAIL_CHARS ? text : `${safeSlice(text, DETAIL_CHARS)}…`);
+  const showAll = () => {
+    // Show all goes away: focus moves to what it showed, not to the top of the dialog.
+    flushSync(() => setWhole(true));
+    shown.current?.focus();
+  };
   return (
     <div className="detail" data-testid={TID.logDetail}>
       <div className="facts">
@@ -73,16 +80,24 @@ function LogDetail({ entry }: { entry: TrafficEntry }) {
         {entry.more > 0 ? ` (${moreNote(entry.more)})` : ''}
       </div>
       {entry.headers ? <pre className="headers">{entry.headers}</pre> : null}
-      {entry.body ? <pre>{show(body)}</pre> : <div className="quiet">No body.</div>}
+      {entry.body ? (
+        <pre ref={shown} tabIndex={-1}>
+          {show(body)}
+        </pre>
+      ) : (
+        <div className="quiet">No body.</div>
+      )}
       {entry.raw ? (
         <>
           <div className="quiet">Stream events</div>
-          <pre>{show(entry.raw)}</pre>
+          <pre ref={entry.body ? undefined : shown} tabIndex={-1}>
+            {show(entry.raw)}
+          </pre>
         </>
       ) : null}
       {long && !whole ? (
         <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 1 }}>
-          <Button size="small" onClick={() => setWhole(true)} data-testid={TID.logShowAll}>
+          <Button size="small" onClick={showAll} data-testid={TID.logShowAll}>
             {`Show all ${formatBytes(body.length + entry.raw.length)}`}
           </Button>
           <span className="quiet">Share and Copy always have all of it.</span>
@@ -101,6 +116,7 @@ const LogRow = memo(function LogRow({ entry, open, onToggle }: { entry: TrafficE
         className="row"
         aria-expanded={open}
         onClick={() => onToggle(entry.id)}
+        data-id={entry.id}
         data-testid={TID.logEntry(entry.id)}
       >
         <span className="time">{formatClock(entry.at)}</span>
@@ -163,6 +179,9 @@ const listSx = {
     overflowWrap: 'anywhere',
     userSelect: 'text',
     WebkitUserSelect: 'text',
+    // Focus comes here after Show all; the ring only for a keyboard.
+    '&:focus': { outline: 'none' },
+    '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main' },
   },
   '& .headers': { color: 'text.secondary' },
   '& .quiet': { fontFamily: 'inherit', fontSize: 13, color: 'text.secondary', mb: 0.5 },
@@ -187,6 +206,7 @@ function LogViewContent() {
   }, [shown, matches]);
   const fresh = held ? newerThan(live, held) : 0;
   const list = useRef<HTMLDivElement>(null);
+  const chips = useRef<Array<HTMLDivElement | null>>([]);
   const toggle = useCallback((id: number) => {
     setExpanded((now) => {
       const next = new Set(now);
@@ -194,6 +214,40 @@ function LogViewContent() {
       return next;
     });
   }, []);
+  const choose = (index: number) => {
+    const option = FILTERS[index];
+    if (!option) return;
+    setFilter(option.id);
+    setLimit(PAGE);
+    // Another kind starts at its newest entry.
+    if (list.current) list.current.scrollTop = 0;
+  };
+  // A radio group: the arrows, Home and End move the choice and the focus; Tab leaves the group.
+  const chipKeys = (event: KeyboardEvent<HTMLDivElement>) => {
+    const at = FILTERS.findIndex((option) => option.id === filter);
+    const last = FILTERS.length - 1;
+    const next =
+      event.key === 'ArrowRight' || event.key === 'ArrowDown'
+        ? (at + 1) % FILTERS.length
+        : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
+          ? (at + last) % FILTERS.length
+          : event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? last
+              : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    choose(next);
+    chips.current[next]?.focus();
+  };
+  const showMore = () => {
+    // Show more may go away: focus moves to the first row it showed.
+    const first = rows[limit];
+    flushSync(() => setLimit(limit + PAGE));
+    if (first) list.current?.querySelector<HTMLElement>(`[data-id="${first.id}"]`)?.focus();
+  };
+  const readShown = () => shown;
 
   const count = `${shown.length} ${shown.length === 1 ? 'entry' : 'entries'}`;
   return (
@@ -223,31 +277,30 @@ function LogViewContent() {
         </IconButton>
       </Box>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', columnGap: 2, rowGap: 1, px: 2, py: 1 }}>
-        <Box role="radiogroup" aria-label="Show" sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-          {FILTERS.map((option) => {
+        <Box role="radiogroup" aria-label="Show" onKeyDown={chipKeys} sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          {FILTERS.map((option, index) => {
             const on = option.id === filter;
             return (
               <Chip
                 key={option.id}
+                ref={(chip: HTMLDivElement | null) => {
+                  chips.current[index] = chip;
+                }}
                 label={option.label}
                 role="radio"
                 aria-checked={on}
+                tabIndex={on ? 0 : -1}
                 clickable
                 color={on ? 'primary' : 'default'}
                 variant={on ? 'filled' : 'outlined'}
-                onClick={() => {
-                  setFilter(option.id);
-                  setLimit(PAGE);
-                  // Another kind starts at its newest entry.
-                  if (list.current) list.current.scrollTop = 0;
-                }}
+                onClick={() => choose(index)}
                 data-testid={TID.logFilter(option.id)}
               />
             );
           })}
         </Box>
         <LogActions
-          entries={shown}
+          entries={readShown}
           leading={
             <Button
               variant="tonal"
@@ -273,7 +326,7 @@ function LogViewContent() {
           </Box>
         )}
         {rows.length > limit ? (
-          <Button onClick={() => setLimit(limit + PAGE)} data-testid={TID.logMore} sx={{ mt: 1 }}>
+          <Button onClick={showMore} data-testid={TID.logMore} sx={{ mt: 1 }}>
             {`Show ${Math.min(PAGE, rows.length - limit)} more`}
           </Button>
         ) : null}

@@ -135,6 +135,16 @@ describe('emailBody', () => {
     expect(long).toContain('[… shortened]');
   });
 
+  it('never throws on an emoji where a body is shortened, nor on half of one', () => {
+    // An emoji across the 600th character: a plain slice would leave half of it, which encodeURIComponent throws on.
+    const body = `${'x'.repeat(599)}😀${'y'.repeat(100)}`;
+    const text = emailBody([entry({ body })], CONTEXT);
+    expect(text).toContain(`${'x'.repeat(599)} [… shortened]`);
+    expect(() => mailtoHref(logTitle(CONTEXT.now), text)).not.toThrow();
+    expect(() => mailtoHref('s', `lone ${'\uD83D'} half`)).not.toThrow();
+    expect(decodeURIComponent(mailtoHref('s', `a\uD83Db`).split('&body=')[1]!)).toBe('a�b');
+  });
+
   it('is encoded as RFC 6068 asks: CRLF line breaks, everything percent-encoded', () => {
     const href = mailtoHref('CafAI log, 2026-10-11 21:15', 'a & b\n↑');
     expect(href).toBe('mailto:?subject=CafAI%20log%2C%202026-10-11%2021%3A15&body=a%20%26%20b%0D%0A%E2%86%91');
@@ -146,6 +156,11 @@ describe('prettyBody', () => {
     expect(prettyBody('{"a":1,"b":[1,2]}')).toBe('{\n  "a": 1,\n  "b": [\n    1,\n    2\n  ]\n}');
     expect(prettyBody('Route not found')).toBe('Route not found');
     expect(prettyBody('{"cut":"x\n[cut here: 2 KB more]')).toBe('{"cut":"x\n[cut here: 2 KB more]');
+  });
+
+  it('leaves JSON as it is when re-printing would change a number in it', () => {
+    expect(prettyBody('{"id":12345678901234567890}')).toBe('{"id":12345678901234567890}');
+    expect(prettyBody('{"id":"12345678901234567890","t":1760212345678}')).toBe('{\n  "id": "12345678901234567890",\n  "t": 1760212345678\n}');
   });
 });
 

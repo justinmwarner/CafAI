@@ -7,7 +7,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { anthropicHandlers, resetAnthropicMock } from '../../mock/anthropic/handlers.ts';
 import { sseFrame } from '../../mock/anthropic/sse.ts';
 import { TOOL_INPUTS } from '../coach/contract.ts';
-import { trafficLog } from '../traffic/recorder.ts';
+import { RAW_NOT_KEPT, trafficLog } from '../traffic/recorder.ts';
 import { KEY_MARKER } from '../traffic/redact.ts';
 import {
   anthropicEndpoint,
@@ -605,6 +605,29 @@ describe('createAnthropicProvider: CafAI Bridge wording', () => {
       const error = await failure(collect(bridge().stream(request())));
       expect(error.message).toBe('Wrong code [key].');
     }
+  });
+
+  it('keeps no stream events of a reply that echoes the code across them (D139)', async () => {
+    trafficLog.clear();
+    const delta = (text: string) => ({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } });
+    answer(() =>
+      sse(
+        MESSAGE_START,
+        { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+        delta('Your code is AB'),
+        delta('CD-EF'),
+        delta('GH.'),
+        { type: 'content_block_stop', index: 0 },
+        { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 5 } },
+        { type: 'message_stop' },
+      ),
+    );
+    await collect(bridge().stream(request()));
+    const received = trafficLog.list()[1]!;
+    expect(received.status).toBe('200 end_turn');
+    expect(received.raw).toBe(RAW_NOT_KEPT);
+    expect(received.body).toContain(`Your code is ${KEY_MARKER}.`);
+    expect(JSON.stringify(trafficLog.list())).not.toMatch(/AB|CD-EF|GH\./);
   });
 
   it('never lets the code into the traffic log, sent or echoed (D139)', async () => {

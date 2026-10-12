@@ -26,7 +26,7 @@
  * with its stop reason and usage, and the stream's events as they came,
  * capped; otherwise the error body, or what became of the request.
  */
-import { createStreamCapture, recordExchange, trafficName } from '../traffic/recorder.ts';
+import { createStreamCapture, recordExchange, rememberSecret, trafficName } from '../traffic/recorder.ts';
 import { createTurnAssembler } from './assemble.ts';
 import {
   abortedError,
@@ -293,7 +293,9 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): LlmP
         const sseEvents = chunk.done ? parser.end() : parser.push(chunk.value);
         for (const sse of sseEvents) {
           events.event(sse.event, sse.data);
-          for (const event of assembler.push(parseEventData(sse, wording))) {
+          const parsed = parseEventData(sse, wording);
+          events.join(parsed);
+          for (const event of assembler.push(parsed)) {
             // One chunk can hold the rest of the reply: honour an abort between events.
             if (controller.signal.aborted) throw new Error('aborted');
             if (event.type === 'message_done') {
@@ -302,6 +304,7 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): LlmP
                 headers: response.headers,
                 body: JSON.stringify({ id, model, stopReason, usage, content }),
                 raw: events.text(),
+                rawJoined: events.joined(),
                 outcome: stopReason,
                 size: events.size,
               });
@@ -315,23 +318,25 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): LlmP
         arm('idle', idleMs);
       }
     } catch (cause) {
+      // What had come by then, with the events (dropped whole if a secret is split across them).
+      const sofar = () => ({ raw: events.text(), rawJoined: events.joined(), size: events.size > 0 ? events.size : null });
       if (controller.signal.aborted) {
         if (callerSignal?.aborted) {
-          traffic.fail('cancelled', { raw: events.text() });
+          traffic.fail('cancelled', sofar());
           throw abortedError();
         }
         if (timedOut !== null) {
           state.timedOut = true;
-          traffic.fail(timedOut === 'first_byte' ? 'timeout: no first byte' : 'timeout: the stream stopped', { raw: events.text() });
+          traffic.fail(timedOut === 'first_byte' ? 'timeout: no first byte' : 'timeout: the stream stopped', sofar());
           throw timeoutError(timedOut, wording);
         }
       }
       const kind = cause instanceof LlmError ? cause.kind.replace(/_/g, ' ') : 'failed';
-      traffic.fail(kind === 'network' ? 'network error' : kind, { body: cause instanceof Error ? cause.message : '', raw: events.text() });
+      traffic.fail(kind === 'network' ? 'network error' : kind, { ...sofar(), body: cause instanceof Error ? cause.message : '' });
       throw cause;
     } finally {
       // The caller stopped reading before the turn was done (a reply already kept wins).
-      traffic.fail('cancelled', { raw: events.text() });
+      traffic.fail('cancelled', { raw: events.text(), rawJoined: events.joined(), size: events.size > 0 ? events.size : null });
       disarm();
       callerSignal?.removeEventListener('abort', onCallerAbort);
       reader?.cancel().catch(() => undefined);
@@ -343,6 +348,8 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): LlmP
     if (signal?.aborted) throw abortedError();
     const apiKey = ((await options.getApiKey()) ?? '').trim();
     if (apiKey === '') throw noApiKeyError(wording);
+    // The key (or the bridge's code) is looked for wherever it shows in the traffic log, the chat included.
+    rememberSecret(apiKey);
     const http = buildAnthropicRequest(request, apiKey, options.baseUrl);
 
     for (let retry = 0; ; retry++) {

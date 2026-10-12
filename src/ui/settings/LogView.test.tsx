@@ -167,11 +167,82 @@ describe('LogView', () => {
     openLogView();
     renderWithServices(<LogView />);
     const view = screen.getByTestId(TID.logView);
-    expect(within(view).getByTestId(TID.logEmail).getAttribute('href')).toMatch(/^mailto:\?subject=CafAI%20log/);
+    const email = within(view).getByTestId(TID.logEmail);
+    const stay = (event: Event) => event.preventDefault();
+    window.addEventListener('click', stay);
+    try {
+      await userEvent.click(email);
+    } finally {
+      window.removeEventListener('click', stay);
+    }
+    expect(email.getAttribute('href')).toMatch(/^mailto:\?subject=CafAI%20log/);
     await userEvent.click(within(view).getByTestId(TID.logCopy));
     const writeText = (navigator.clipboard.writeText as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string;
     expect(writeText).toContain('Entries: 6 entries');
     expect(writeText).not.toContain(KEY);
+  });
+
+  it('copies through a text area inside the dialog where there is no clipboard API, so the dialog keeps its focus and the copy its text', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'test' });
+    seed();
+    let insideView = false;
+    const execCommand = vi.fn(() => {
+      const area = document.querySelector('textarea[readonly]');
+      insideView = Boolean(area && screen.getByTestId(TID.logView).contains(area));
+      return true;
+    });
+    Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true });
+    try {
+      openLogView();
+      renderWithServices(<LogView />);
+      await userEvent.click(within(screen.getByTestId(TID.logView)).getByTestId(TID.logCopy));
+      expect(execCommand).toHaveBeenCalledWith('copy');
+      expect(insideView).toBe(true);
+    } finally {
+      delete (document as unknown as Record<string, unknown>).execCommand;
+    }
+  });
+
+  it('moves between the filters with the arrow keys, Home and End, as a radio group does', async () => {
+    seed();
+    openLogView();
+    renderWithServices(<LogView />);
+    const chip = (filter: string) => screen.getByTestId(TID.logFilter(filter));
+    expect(chip('all')).toHaveAttribute('tabindex', '0');
+    expect(chip('coach')).toHaveAttribute('tabindex', '-1');
+    act(() => chip('all').focus());
+    await userEvent.keyboard('{ArrowRight}');
+    expect(chip('decaid')).toHaveAttribute('aria-checked', 'true');
+    expect(chip('decaid')).toHaveFocus();
+    expect(rows()).toHaveLength(2);
+    await userEvent.keyboard('{End}');
+    expect(chip('coach')).toHaveFocus();
+    expect(chip('coach')).toHaveAttribute('aria-checked', 'true');
+    await userEvent.keyboard('{ArrowRight}');
+    expect(chip('all')).toHaveFocus();
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(chip('coach')).toHaveFocus();
+    await userEvent.keyboard('{Home}');
+    expect(chip('all')).toHaveAttribute('aria-checked', 'true');
+    expect(chip('decaid')).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('keeps the focus where the reader is when Show all and Show more go away', async () => {
+    recordExchange('coach', 'POST api.anthropic.com/v1/messages', { body: JSON.stringify({ system: 'You are an espresso coach. '.repeat(800) }) });
+    for (let i = 0; i < 250; i += 1) recordExchange('rest', `GET /api/v1/shots/${i}`).reply(200, { body: '{}' });
+    openLogView();
+    renderWithServices(<LogView />);
+    expect(rows()).toHaveLength(200);
+    await userEvent.click(screen.getByTestId(TID.logMore));
+    expect(rows()).toHaveLength(400);
+    expect(document.activeElement).toBe(rows()[200]);
+    await userEvent.click(screen.getByTestId(TID.logMore));
+    expect(rows()).toHaveLength(501);
+    expect(screen.queryByTestId(TID.logMore)).toBeNull();
+    expect(document.activeElement).toBe(rows()[400]);
+    await userEvent.click(rows()[500]!);
+    await userEvent.click(screen.getByTestId(TID.logShowAll));
+    expect(document.activeElement).toBe(screen.getByTestId(TID.logDetail).querySelector('pre'));
   });
 
   it('closes', async () => {

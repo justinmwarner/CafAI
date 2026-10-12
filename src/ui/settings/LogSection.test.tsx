@@ -9,7 +9,7 @@ import { createFakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
 import { knownDecaidVersion, useDecaidVersion } from './decaidVersion.ts';
 import { COPIED, COPY_FAILED, INSIDE_DECAID_NOTE, SHARE_FAILED } from './LogActions.tsx';
-import { LOG_NOTE, LogSection, summaryText } from './LogSection.tsx';
+import { LOG_NOTE, LogSection, SUMMARY_EVERY_MS, summaryText } from './LogSection.tsx';
 import { closeLogView, useLogViewOpen } from './logShare.ts';
 
 /** A made-up key, built at run time so no key-shaped literal sits in the source. */
@@ -52,20 +52,36 @@ afterEach(() => {
 describe('summaryText', () => {
   it('counts the entries since the oldest, with their size, or says there are none', () => {
     const at = new Date(2026, 9, 11, 21, 4).getTime();
-    expect(summaryText([], at)).toBe('Nothing recorded since 21:04.');
-    seed();
-    expect(summaryText(trafficLog.list(), at)).toMatch(/^4 entries since \d\d:\d\d, \d+ B$/);
+    expect(summaryText({ count: 0, oldestAt: null, chars: 0, since: at })).toBe('Nothing recorded since 21:04.');
+    expect(summaryText({ count: 1, oldestAt: at, chars: 500, since: at })).toBe('1 entry since 21:04, 500 B');
+    expect(summaryText({ count: 214, oldestAt: at, chars: 1_258_291, since: at })).toBe('214 entries since 21:04, 1.2 MB');
   });
 });
 
 describe('LogSection', () => {
-  it('says how much the log holds and what it is', async () => {
+  it('says how much the log holds and what it is, read every 2 seconds, never on each entry', async () => {
+    vi.useFakeTimers();
+    try {
+      stubNavigator();
+      renderWithServices(<LogSection />);
+      expect(screen.getByTestId(TID.logSummary)).toHaveTextContent(/^Nothing recorded since \d\d:\d\d\.$/);
+      expect(screen.getByText(LOG_NOTE)).toBeInTheDocument();
+      act(() => seed());
+      act(() => void vi.advanceTimersByTime(SUMMARY_EVERY_MS - 1));
+      expect(screen.getByTestId(TID.logSummary)).toHaveTextContent(/^Nothing recorded/);
+      act(() => void vi.advanceTimersByTime(1));
+      expect(screen.getByTestId(TID.logSummary)).toHaveTextContent(/^4 entries since \d\d:\d\d, \d+ B$/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('never listens to the log itself', () => {
     stubNavigator();
+    const subscribe = vi.spyOn(trafficLog, 'subscribe');
     renderWithServices(<LogSection />);
-    expect(screen.getByTestId(TID.logSummary)).toHaveTextContent(/^Nothing recorded since \d\d:\d\d\.$/);
-    expect(screen.getByText(LOG_NOTE)).toBeInTheDocument();
     act(() => seed());
-    await waitFor(() => expect(screen.getByTestId(TID.logSummary)).toHaveTextContent(/^4 entries since/));
+    expect(subscribe).not.toHaveBeenCalled();
   });
 
   it('copies the whole log under its header, with the key nowhere', async () => {
@@ -142,11 +158,23 @@ describe('LogSection', () => {
     expect(await screen.findByText(SHARE_FAILED)).toBeInTheDocument();
   });
 
-  it('opens an email with the log in its body, dated in its subject', () => {
+  it('opens an email with the log in its body, dated in its subject, built at the tap', async () => {
     stubNavigator();
-    seed();
     renderWithServices(<LogSection />);
-    const href = screen.getByTestId(TID.logEmail).getAttribute('href') ?? '';
+    const link = screen.getByTestId(TID.logEmail);
+    expect(link.tagName).toBe('A');
+    expect(link).toHaveAttribute('href', 'mailto:');
+    // What came after the screen rendered goes in too.
+    seed();
+    // The test follows no link: what the tap set is read off the link.
+    const stay = (event: Event) => event.preventDefault();
+    window.addEventListener('click', stay);
+    try {
+      await userEvent.click(link);
+    } finally {
+      window.removeEventListener('click', stay);
+    }
+    const href = link.getAttribute('href') ?? '';
     expect(href.startsWith('mailto:?subject=CafAI%20log%2C%20')).toBe(true);
     const body = decodeURIComponent(href.slice(href.indexOf('&body=') + 6));
     expect(body).toContain('CafAI 0.1.0-test');
@@ -163,7 +191,7 @@ describe('LogSection', () => {
     expect(screen.getByText(INSIDE_DECAID_NOTE)).toBeInTheDocument();
   });
 
-  it('clears the log', async () => {
+  it('clears the log, and says so at once', async () => {
     stubNavigator();
     seed();
     renderWithServices(<LogSection />);
@@ -171,6 +199,31 @@ describe('LogSection', () => {
     await userEvent.click(screen.getByTestId(TID.logClear));
     expect(trafficLog.list()).toEqual([]);
     expect(screen.getByTestId(TID.logSummary)).toHaveTextContent(/^Nothing recorded since/);
+  });
+
+  it("copies through a text area beside its buttons where the page has no clipboard API (plain http)", async () => {
+    vi.stubGlobal('navigator', { userAgent: 'test' });
+    seed();
+    let selected = '';
+    let insideSection = false;
+    const execCommand = vi.fn(() => {
+      const area = document.querySelector<HTMLTextAreaElement>('textarea[readonly]');
+      selected = area?.value.slice(area.selectionStart, area.selectionEnd) ?? '';
+      insideSection = Boolean(area && screen.getByTestId(TID.logSection).contains(area));
+      return true;
+    });
+    Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true });
+    try {
+      renderWithServices(<LogSection />);
+      await userEvent.click(screen.getByTestId(TID.logCopy));
+      expect(execCommand).toHaveBeenCalledWith('copy');
+      expect(insideSection).toBe(true);
+      expect(selected).toMatch(/^CafAI log, /);
+      expect(selected).toContain('GET /api/v1/workflow');
+      expect(await screen.findByText(COPIED)).toBeInTheDocument();
+    } finally {
+      delete (document as unknown as Record<string, unknown>).execCommand;
+    }
   });
 
   it('opens the log view', async () => {
