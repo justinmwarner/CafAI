@@ -150,4 +150,23 @@ export const TID = {
   computerTest: 'computer-test',
   computerFind: 'computer-find',
   computerStatus: 'computer-status',
+
+  // Settings > Log and the log view (D139); Share, Email and Copy carry the same ids in both
+  logSection: 'log-section',
+  logSummary: 'log-summary',
+  logOpen: 'log-open',
+  logShare: 'log-share',
+  logEmail: 'log-email',
+  logCopy: 'log-copy',
+  logClear: 'log-clear',
+  logSaid: 'log-said',
+  logView: 'log-view',
+  logClose: 'log-close',
+  logFilter: (filter: string) => `log-filter-${filter}`,
+  logPause: 'log-pause',
+  logEntries: 'log-entries',
+  logEntry: (id: number) => `log-entry-${id}`,
+  logDetail: 'log-detail',
+  logShowAll: 'log-show-all',
+  logMore: 'log-more',
 } as const;
