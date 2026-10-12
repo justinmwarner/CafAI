@@ -84,6 +84,9 @@ describe('DrinkSettingsSection loading', () => {
     const volume = await findField('Hot water volume');
     expect(volume).toHaveAttribute('aria-valuenow', '50');
     expect(volume).toHaveAttribute('aria-valuetext', '50 millilitres');
+    // The field's range, so a screen reader can say where in it the value sits.
+    expect(field('Steam temperature')).toHaveAttribute('aria-valuemin', '135');
+    expect(field('Steam temperature')).toHaveAttribute('aria-valuemax', '160');
     expect(field('Steam temperature')).toHaveAttribute('aria-valuetext', '150 degrees Celsius');
     expect(field('Steam flow')).toHaveAttribute('aria-valuetext', '0.8 millilitres per second');
     const unit = within(screen.getByRole('group', { name: 'Hot water' })).getByText('ml');
@@ -392,6 +395,42 @@ describe('DrinkSettingsSection edits', () => {
     expect(field('Steam flow')).toHaveValue('0.9');
   });
 
+  it('two quick taps: a slow first save that fails after the second landed puts nothing back', async () => {
+    const { services } = renderDrink();
+    let failFirst: (reason: Error) => void = () => {};
+    let workflow: Workflow = SAMPLE_WORKFLOW;
+    let sent = 0;
+    services.decaid.updateWorkflow = vi.fn((patch: WorkflowPatch) => {
+      sent += 1;
+      if (sent === 1) return new Promise<Workflow>((_resolve, reject) => (failFirst = reject));
+      workflow = mergeWorkflow(workflow, patch);
+      return Promise.resolve(workflow);
+    });
+    const input = await findField('Steam time');
+    await userEvent.click(button('More steam time')!);
+    await userEvent.click(button('More steam time')!);
+    // The second save landed (steps of 5 s): Decaid holds 60.
+    await waitFor(() => expect(services.decaid.updateWorkflow).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(input).toHaveValue('60'));
+    await act(async () => failFirst(new Error('Decaid is busy')));
+    expect(input).toHaveValue('60');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('two quick taps that both fail put back the value Decaid held before the first', async () => {
+    const { services } = renderDrink();
+    const fails: Array<(reason: Error) => void> = [];
+    services.decaid.updateWorkflow = vi.fn(() => new Promise<Workflow>((_resolve, reject) => fails.push(reject)));
+    const input = await findField('Steam time');
+    await userEvent.click(button('More steam time')!);
+    await userEvent.click(button('More steam time')!);
+    expect(input).toHaveValue('60');
+    await act(async () => fails[1]!(new Error('Decaid is busy')));
+    await act(async () => fails[0]!(new Error('Decaid is busy')));
+    expect(input).toHaveValue('50');
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not save the steam time: Decaid is busy');
+  });
+
   it('a write still on its way after 0.4 s says "Saving…" under its field, until it lands', async () => {
     const { services } = renderDrink();
     let land: (workflow: Workflow) => void = () => {};
@@ -448,7 +487,7 @@ describe('DrinkSettingsSection while the machine runs', () => {
     expect(field('Steam temperature')).toBeEnabled();
   });
 
-  it('a write already in flight is dropped if the machine starts running before it commits', async () => {
+  it('a typed value not yet sent is never sent if the machine starts running before the field is left', async () => {
     const { services, updateWorkflow } = renderDrink();
     const input = await findField('Hot water volume');
     await userEvent.clear(input);

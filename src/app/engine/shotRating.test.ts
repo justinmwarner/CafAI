@@ -52,6 +52,7 @@ describe('the words', () => {
     expect([4, 'great', null, 'Better'].some(isShotVerdict)).toBe(false);
     expect(verdictWord('muchWorse')).toBe('much worse');
     expect(verdictWord('same')).toBe('about the same');
+    expect(verdictWord('perfect')).toBeNull();
   });
 });
 
@@ -82,9 +83,10 @@ describe('the running score (D126)', () => {
     expect(runningScore(edited, 's3', 'better')).toBe(7);
   });
 
-  it('stays within 0-10, and has no score for a shot not in the chat', () => {
+  it('stays within 1-10 (0 reads as "not rated" on Visualizer), and has no score for a shot not in the chat', () => {
     expect(runningScore(chat({ shotId: 's1', stars: 5 }, { shotId: 's2' }), 's2', 'muchBetter')).toBe(10);
-    expect(runningScore(chat({ shotId: 's1', rating: rated('worse', 1) }, { shotId: 's2' }), 's2', 'muchWorse')).toBe(0);
+    expect(runningScore(chat({ shotId: 's1', rating: rated('worse', 2) }, { shotId: 's2' }), 's2', 'muchWorse')).toBe(1);
+    expect(runningScore(chat({ shotId: 's1', rating: rated('worse', 1) }, { shotId: 's2' }), 's2', 'worse')).toBe(1);
     expect(runningScore(chat({ shotId: 's1' }), 'elsewhere', 'better')).toBeNull();
   });
 
@@ -168,5 +170,13 @@ describe('the verdicts the coach has not heard (D126)', () => {
       ...told('[event:shot_rated]\nnot json', '[event:shot_rated]\n{"shotId":7}', `I said ${block}`),
     ];
     expect(untoldRatings(notHeard, ratedChat).map((payload) => payload.shotId)).toEqual(['s1', 's2']);
+  });
+
+  it('pass over a verdict this build does not know (a newer build, an edited import) instead of throwing', () => {
+    const unknown = chat(
+      { shotId: 's1', baseline: { kind: 'usual' }, rating: { verdict: 'perfect', score: 5 } as unknown as ShotRating },
+      { shotId: 's2', baseline: previous('s1'), rating: rated('better', 6) },
+    );
+    expect(untoldRatings([], unknown)).toEqual([{ shotId: 's2', verdict: 'better', comparedWith: previous('s1') }]);
   });
 });

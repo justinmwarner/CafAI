@@ -247,9 +247,13 @@ describe('buildSystemPrompt: content', () => {
     expect(prompt).toMatch(/no lever can do/);
   });
 
-  it('locks in a good shot instead of tinkering', () => {
+  it('locks in a good shot instead of tinkering, when the barista says it is good (D127)', () => {
     expect(prompt).toMatch(/LOCK IT IN/);
     expect(prompt).toMatch(/variable "none"/);
+    expect(prompt).toMatch(/When the user says they like the shot \(or their verdict says it is as good as the last\), LOCK IT IN/);
+    expect(prompt).toMatch(/The barista decides when it is good, not the numbers/);
+    // No target cup: a good shot is the barista's call, not "balanced, sweet".
+    expect(prompt).not.toMatch(/shot is good \(balanced, sweet/);
   });
 
   it('names both failure modes when the user pushes back', () => {

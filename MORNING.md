@@ -38,15 +38,15 @@ pushed.
 |---|---|
 | Typecheck (`npm run typecheck`) | pass |
 | Lint (`npm run lint`) | pass |
-| Unit tests (`npm test`) | **3014/3014** in 169 files on 2026-10-11 (2026-10-09: 2330 in 144; 2026-10-08: 2275 in 141; 2026-10-06: 2047 in 125; 2026-10-04: 1836 in 115; overnight: 1254 in 91) |
-| Playwright (`npm run e2e`) | **258 passed, 2 skipped** on 2026-10-11, on all five sizes (each phone skips a tablet-only check). Run with 5 workers (`npx playwright test --workers=5`): 8.8 minutes instead of about 25. Six failed in that run and passed alone: five checked a bean button's name the old way (the spec is fixed), one is a timing check that missed under the load (2026-10-09: 188; 2026-10-08: 140; 2026-10-06: 114 on the three tablets) |
+| Unit tests (`npm test`) | **3576 passed, 1 skipped** in 192 files on 2026-10-11, after your list and `main`'s Decaid skill (earlier on 2026-10-11: 3014 in 169; 2026-10-09: 2330 in 144; 2026-10-08: 2275 in 141; 2026-10-06: 2047 in 125; 2026-10-04: 1836 in 115; overnight: 1254 in 91) |
+| Playwright (`npm run e2e`) | **271 passed, 2 skipped** on 2026-10-11 after your list, on all five sizes (each phone skips a tablet-only check), with 5 workers (`npx playwright test --workers=5`) in 7.4 minutes. One more failed in that run, the restore after lost storage on the 962x602 tablet, a timeout while `npm run screenshots` ran beside it; alone it passed on all three tablets. Earlier on 2026-10-11: 258 (2026-10-09: 188; 2026-10-08: 140; 2026-10-06: 114 on the three tablets) |
 | `npm run verify` (all of the above, build and release zip) | every part passes on 2026-10-11, run side by side rather than as the one command (which runs e2e on one worker) |
-| Real Chromium 91 (`npm run build:mock && npm run smoke:chrome91 && npm run smoke:chrome91:loop`) | pass on 2026-10-11: the app loads with no console or page errors, and the whole coach loop runs, now through "Which coffee is it?" (Something else), waiting for the machine to confirm each load; the chat opens with the stats card, Stats brings it back, Espresso in the top bar turns into Stop and the Shot view takes the screen, and the coach comes back with the card |
+| Real Chromium 91 (`npm run build:mock && npm run smoke:chrome91 && npm run smoke:chrome91:loop`) | pass on 2026-10-11, again after your list (the loop now rates the shot Better): the app loads with no console or page errors, and the whole coach loop runs, now through "Which coffee is it?" (Something else), waiting for the machine to confirm each load; the chat opens with the stats card, Stats brings it back, Espresso in the top bar turns into Stop and the Shot view takes the screen, and the coach comes back with the card |
 | Real Decaid (`npm run test:decaid` with writes and a simulated shot) | **36/36** on 2026-10-11 against Decaid 0.8.8+2900 (`aab5f938`, the pin) on your Windows simulator, including the new checks: Connect and a reconnect after a disconnect, Next step during the shot, the time-to-ready channel, DYE2's and Visualizer's data (2026-10-10: 31, then 32) |
 | CafAI served by Decaid (`npm run e2e:real`) | pass on 2026-10-11, the production build from Decaid's port 3000 |
 | Drift watch (`npm run decaid:watch`) | exit 4 on 2026-10-11: every check passes for v0.8.8 and Decaid's `main` (`af4e995`), whose spec changes are additions; files CafAI depends on changed on `main` (camera access for skins, the Visualizer plugin), so on GitHub it would open a `decaid-read` issue (D105) |
 | Live API test (`npm run test:live`) | skipped here (no key on this machine); its dry run against the scripted coach passes |
-| Fresh-eyes verifier | 2026-10-10, Decaid alignment: three reviewers (update safety; engine and storage; UI) found 25 defects, 7 of them important, each verified with a test or Decaid's source; all fixed (`197520d`, brief `docs/briefs/verify-decaid-alignment.md`). 2026-10-08, the UX rework: 2 major, 5 minor and 8 polish; 13 fixed, 1 kept by design, 1 open (below). Chat first: not run yet (its brief is `docs/briefs/verify-chat-first.md`). Earlier rounds: all fixed |
+| Fresh-eyes verifier | 2026-10-11, your list (D123-D128): one reviewer, no critical or high findings; 2 medium (an unknown verdict in a stored chat stopped the coach for that bag; the taste-wording guard missed common promises and read only `expectedEffect`) and 8 low, with nits; all fixed in `8720050` but the screenshot script's fake clock, which only its own pictures meet (they are made deterministic another way). 2026-10-10, Decaid alignment: three reviewers (update safety; engine and storage; UI) found 25 defects, 7 of them important, each verified with a test or Decaid's source; all fixed (`197520d`, brief `docs/briefs/verify-decaid-alignment.md`). 2026-10-08, the UX rework: 2 major, 5 minor and 8 polish; 13 fixed, 1 kept by design, 1 open (below). Chat first: not run yet (its brief is `docs/briefs/verify-chat-first.md`). Earlier rounds: all fixed |
 
 ## New: your list after the alignment (2026-10-11)
 
@@ -89,9 +89,8 @@ review's 25 fixes and this round, is not pushed.
   what CafAI took from others), NOTICE crediting decaid-mcp and Decaid's
   ports, CONTRIBUTING, SECURITY (GitHub's private reporting, no email
   address), a changelog, issue forms, and `npm run screenshots` to retake
-  the README's pictures. The pictures were taken before this round's
-  merges, so they still show the old tint names and "Expect"; run it again
-  after the merges.
+  the README's pictures, retaken after this round's merges (the new tint
+  names, "What it changes:").
 
 **Look at first:** `npm run demo`: the shot cards rated in words, and on
 the open question **Taste words** and **Need help?** above the composer;

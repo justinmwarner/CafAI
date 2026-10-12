@@ -1474,11 +1474,16 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (name === TOOL.proposeTemplates) {
       const ids = (value as ProposeTemplates).suggestions.map((s) => s.templateId);
       const unknown = ids.filter((id) => !coach.getTemplate(id));
-      if (unknown.length > 0) {
-        return `Unknown template id ${unknown.join(', ')}. Use only: ${coach.templates.map((t) => t.id).join(', ')}.`;
-      }
-      if (new Set(ids).size !== ids.length) return 'Suggest each template at most once.';
-      return null;
+      const idError =
+        unknown.length > 0
+          ? `Unknown template id ${unknown.join(', ')}. Use only: ${coach.templates.map((t) => t.id).join(', ')}.`
+          : new Set(ids).size !== ids.length
+            ? 'Suggest each template at most once.'
+            : null;
+      // Both at once, so one retry fixes the ids and the reasons (D127).
+      const wording = fresh ? coach.proposalWordingError(value as ProposeTemplates) : null;
+      const errors = [idError, wording].filter((e): e is string => e !== null);
+      return errors.length > 0 ? errors.join(' ') : null;
     }
     if (name === TOOL.proposeAdjustment) {
       const s = session;
@@ -1578,6 +1583,25 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     }
   }
 
+  /**
+   * The grinder card comes alone (D125): offered beside another card, the
+   * offer is answered with an error asking for it again once that card is
+   * answered, and only the other card shows; a second offer in one reply too.
+   */
+  function crowdedGrinderOffers(calls: readonly { id: string; name: string }[]): ToolResultBlock[] {
+    const offers = calls.filter((call) => call.name === TOOL.offerGrinder);
+    const alone = offers.length === calls.length;
+    return (alone ? offers.slice(1) : offers).map((call) =>
+      toolResult(
+        call.id,
+        alone
+          ? 'Offer one grinder at a time.'
+          : 'Not shown: offer_grinder comes with no other card in the reply. Once the user has answered the other card, call offer_grinder again, on its own.',
+        true,
+      ),
+    );
+  }
+
   async function runModel(): Promise<void> {
     const s = session;
     if (!s) return;
@@ -1618,8 +1642,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       });
       setMessages(finishStreaming(state.messages));
       s.pending = [];
-      s.held = result.heldResults;
-      for (const call of result.pendingUiCalls) await presentUiCall(s, call);
+      const crowded = crowdedGrinderOffers(result.pendingUiCalls);
+      s.held = [...result.heldResults, ...crowded];
+      const unshown = new Set(crowded.map((held) => held.tool_use_id));
+      for (const call of result.pendingUiCalls) if (!unshown.has(call.id)) await presentUiCall(s, call);
     } catch (error) {
       setMessages(finishStreaming(state.messages));
       setError(describe(error), runModel);
@@ -1699,6 +1725,11 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         s.pending.push({ id: use.id, name: use.name as ToolName, input: validation.value });
       }
     }
+    // As when the reply came: a grinder offer beside another card was never shown.
+    const crowded = crowdedGrinderOffers(s.pending);
+    const unshown = new Set(crowded.map((held) => held.tool_use_id));
+    s.pending = s.pending.filter((p) => !unshown.has(p.id));
+    s.held.push(...crowded);
   }
 
   async function openSession(bag: Bag): Promise<void> {
@@ -2610,7 +2641,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
    * Add on the coach's grinder card (D125): the grinder the coach heard goes
    * into Decaid's grinder library, or the one Decaid already has is taken
    * (never a second entry), and it is linked as Settings links one: its id,
-   * its model as the name, the dial's setting kept. The next shots carry it
+   * its model as the name, the dial's setting kept only when it was this
+   * grinder's (another grinder's number means nothing here). The next shots carry it
    * in Decaid's workflow (D54), and the coach hears its dial. A failure says
    * why on the card, which stays open to tap again; the coach waits.
    */
@@ -2643,7 +2675,15 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       return;
     }
     const model = linked.model.trim();
-    settings = await storage.settings.update({ grinderId: linked.id, grinderName: model || null });
+    // The setting belonged to the grinder linked before (by id), else the one named (by model).
+    const previousId = settings.grinderId ?? null;
+    const previousName = settings.grinderName?.trim().toLowerCase() || null;
+    const sameGrinder = previousId !== null ? previousId === linked.id : previousName === null || previousName === model.toLowerCase();
+    settings = await storage.settings.update({
+      grinderId: linked.id,
+      grinderName: model || null,
+      ...(sameGrinder ? {} : { grinderSetting: null }),
+    });
     // Its dial as Decaid just answered it; a read still on its way is older.
     grinderReads += 1;
     linkedGrinder = { id: linked.id, info: linked.info };

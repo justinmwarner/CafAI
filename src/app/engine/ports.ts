@@ -24,7 +24,7 @@ import type {
   WorkflowContext,
   WorkflowPatch,
 } from '../../api/types.ts';
-import type { ProposeAdjustment, ToolName } from '../../coach/contract.ts';
+import type { ProposeAdjustment, ProposeTemplates, ToolName } from '../../coach/contract.ts';
 import type { BagIdentity } from '../../coach/queries.ts';
 import type { FreezerDates } from '../../coach/roastAge.ts';
 import type { GrinderInfo, LeverValues, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
@@ -83,10 +83,11 @@ export interface CoachPort {
   validateProposal(input: ProposeAdjustment, context: ProposalContext): ProposalValidation;
   /**
    * A sentence for the model when a proposal it just wrote promises a taste
-   * in expectedEffect (D127), else null. Never asked of a stored proposal:
+   * (D127): a propose_adjustment's expectedEffect, summary or tips, or a
+   * propose_templates reason; else null. Never asked of a stored proposal:
    * its card already shows its words.
    */
-  proposalWordingError(input: ProposeAdjustment): string | null;
+  proposalWordingError(input: ProposeAdjustment | ProposeTemplates): string | null;
   summarizeShot(record: ShotRecord): ShotSummary;
   versionTitle(bagName: string, version: number): string;
   buildVersionProfile(template: Template, base: ProfileJson, title: string, bagName: string): ProfileJson;

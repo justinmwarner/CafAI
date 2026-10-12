@@ -1109,6 +1109,26 @@ describe('coach engine', () => {
       expect(allParts().filter((p) => p.kind === 'diff')).toEqual([expect.objectContaining({ requestId: 't-adj-2' })]);
     });
 
+    it('sends back a fresh template reason that promises a taste, and shows the cards it writes instead', async () => {
+      await engine.newBag();
+      const tasty = toolUse('t-tpl', TOOL.proposeTemplates, {
+        suggestions: [
+          { templateId: 'd-flow', confidence: 'high', reason: 'Fits a light washed Kenyan.' },
+          { templateId: 'londonium', confidence: 'low', reason: 'Big body and a syrupy texture.' },
+        ],
+      });
+      scripts.push(() => [saveBag, tasty]);
+      scripts.push(() => [toolUse('t-tpl-2', TOOL.proposeTemplates, (proposeTemplates as { input: unknown }).input)]);
+      await engine.sendText('Kiambu AA, light, washed');
+
+      const correction = lastUserTurn(requests).find((b) => b.type === 'tool_result' && b.tool_use_id === 't-tpl');
+      expect(correction).toMatchObject({ is_error: true, content: expect.stringContaining('The reason for londonium names a taste ("body").') });
+      expect((correction as { content: string }).content).toMatch(/Call propose_templates again with reasons that say only what each profile does/);
+      const cards = allParts().filter((p) => p.kind === 'templates');
+      expect(cards).toEqual([expect.objectContaining({ requestId: 't-tpl-2' })]);
+      expect(engine.getState().phase).toBe('choosing_template');
+    });
+
     it('keeps a stored change usable after a reload, whatever its wording: its card already shows it', async () => {
       await throughProposal();
       // The transcript of an older build, whose change promised a taste.
@@ -1492,8 +1512,8 @@ describe('coach engine', () => {
       toolUse('t-save-b', TOOL.saveBagDetails, { name: 'Sumatra', roaster: null, origin: null, roastLevel: 'medium', process: null, notes: null }),
       toolUse('t-tpl-b', TOOL.proposeTemplates, {
         suggestions: [
-          { templateId: 'd-flow', confidence: 'high', reason: 'Balanced.' },
-          { templateId: 'londonium', confidence: 'low', reason: 'Heavier.' },
+          { templateId: 'd-flow', confidence: 'high', reason: 'A long soak at a gentle pressure.' },
+          { templateId: 'londonium', confidence: 'low', reason: 'A lever-style pressure decline.' },
         ],
       }),
     ]);
@@ -2879,6 +2899,65 @@ describe('coach engine', () => {
       scripts.push(() => [text('Added.')]);
       await engine.addGrinder('t-grinder');
       expect(card()).toMatchObject({ status: 'added' });
+    });
+
+    it('a grinder other than the one the setting was for starts with no setting: the coach never moves from its number', async () => {
+      // Settings had 12 on a Mazzer Philos; the barista now names a Comandante.
+      await throughOffer({ model: 'Comandante C40', burrs: null, settingType: null, smallStep: null });
+      scripts.push(() => [text('Added.')]);
+      await engine.addGrinder('t-grinder');
+      expect(await storage.settings.get()).toMatchObject({ grinderId: 'g-added-1', grinderName: 'Comandante C40', grinderSetting: null });
+      expect(callsOf('updateWorkflow').at(-1)!.args[0]).toEqual({
+        context: { grinderId: 'g-added-1', grinderModel: 'Comandante C40', grinderSetting: null, grinderBurrs: null },
+      });
+      expect(parsed(lastUserTurn(requests)[0])).toMatchObject({ added: true, grinder: { name: 'Comandante C40', setting: null } });
+    });
+
+    describe('offered beside another card (it comes alone)', () => {
+      const crowdedResult = () =>
+        lastUserTurn(requests).find((block) => block.type === 'tool_result' && block.tool_use_id === 't-grinder');
+
+      async function throughCrowdedIntake() {
+        await engine.newBag();
+        scripts.push(() => [text('Here is where I would start.'), saveBag, proposeTemplates, offer()]);
+        await engine.sendText('Kiambu AA, light, washed. I grind on a Mazzer Philos.');
+      }
+
+      it('shows only the other card, and the coach hears to offer the grinder on its own once that card is answered', async () => {
+        await throughCrowdedIntake();
+        expect(card()).toBeUndefined();
+        expect(engine.getState().phase).toBe('choosing_template');
+        scripts.push(() => [text('Loaded. Pull a shot.')]);
+        await engine.pickTemplate('t-tpl', 'd-flow');
+        expect(machine.loaded.title).toContain('v1');
+        expect(crowdedResult()).toMatchObject({ is_error: true });
+        expect((crowdedResult() as { content: string }).content).toContain('call offer_grinder again, on its own');
+        expect(callsOf('addGrinder')).toEqual([]);
+      });
+
+      it('the same after a reload', async () => {
+        await throughCrowdedIntake();
+        engine.dispose();
+        engine = build();
+        await engine.start();
+        expect(card()).toBeUndefined();
+        scripts.push(() => [text('Loaded. Pull a shot.')]);
+        await engine.pickTemplate('t-tpl', 'd-flow');
+        expect(crowdedResult()).toMatchObject({ is_error: true });
+      });
+
+      it('two offers in one reply: the first shows, the second is answered with an error', async () => {
+        await throughTemplatePick();
+        scripts.push(() => [offer(), toolUse('t-grinder-2', TOOL.offerGrinder, { model: 'Niche Zero', burrs: null, settingType: null, smallStep: null, bigStep: null, values: null })]);
+        await engine.sendText('I have a Mazzer Philos and a Niche Zero.');
+        expect(allParts().filter((p) => p.kind === 'grinderOffer').map((p) => (p.kind === 'grinderOffer' ? p.requestId : null))).toEqual(['t-grinder']);
+        scripts.push(() => [text('Not now, then.')]);
+        await engine.declineGrinder('t-grinder');
+        expect(lastUserTurn(requests).find((b) => b.type === 'tool_result' && b.tool_use_id === 't-grinder-2')).toMatchObject({
+          is_error: true,
+          content: 'Offer one grinder at a time.',
+        });
+      });
     });
   });
 

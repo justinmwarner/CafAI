@@ -70,14 +70,20 @@ describe('ShotCard rating (D126)', () => {
     expect(onRate).toHaveBeenLastCalledWith('better');
     await userEvent.keyboard('{ArrowLeft}');
     expect(onRate).toHaveBeenLastCalledWith('worse');
+    // As in any radio group: down is the next word (towards better), up the previous one.
+    await userEvent.keyboard('{ArrowDown}');
+    expect(onRate).toHaveBeenLastCalledWith('better');
+    await userEvent.keyboard('{ArrowUp}');
+    expect(onRate).toHaveBeenLastCalledWith('worse');
 
     rerender(<ShotCard summary={sampleSummary()} verdict="muchBetter" onRate={onRate} />);
     expect(words().map((word) => word.tabIndex)).toEqual([-1, -1, -1, -1, 0]);
     words()[4]!.focus();
     onRate.mockClear();
-    await userEvent.keyboard('{ArrowUp}');
-    expect(onRate).not.toHaveBeenCalled();
     await userEvent.keyboard('{ArrowDown}');
+    await userEvent.keyboard('{ArrowRight}');
+    expect(onRate).not.toHaveBeenCalled();
+    await userEvent.keyboard('{ArrowUp}');
     expect(onRate).toHaveBeenLastCalledWith('better');
   });
 
@@ -92,6 +98,12 @@ describe('ShotCard rating (D126)', () => {
 
   it('says the stars a shot was given before shots were compared, and asks nothing more', () => {
     renderThemed(<ShotCard summary={sampleSummary()} stars={4} onRate={vi.fn()} />);
+    expect(screen.getByText('You rated it 4 of 5 stars.')).toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup')).toBeNull();
+  });
+
+  it('keeps to the stars when a card has words too, as rating it does (no taps that do nothing)', () => {
+    renderThemed(<ShotCard summary={sampleSummary()} stars={4} verdict="better" onRate={vi.fn()} />);
     expect(screen.getByText('You rated it 4 of 5 stars.')).toBeInTheDocument();
     expect(screen.queryByRole('radiogroup')).toBeNull();
   });

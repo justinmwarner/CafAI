@@ -43,6 +43,8 @@ Thumbs.db
 
 # mock-mode build used by e2e and the Chromium 91 smoke test
 dist-mock/
+# mock-mode build used by npm run screenshots
+dist-screenshots/
 
 # scratch clone used by the fresh-eyes verification run
 .verify/

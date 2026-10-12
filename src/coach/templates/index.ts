@@ -38,7 +38,7 @@ function temperatureLever(anchor: string, min: number, max: number, shape: strin
     max,
     granularity: 0.5,
     maxDelta: 2,
-    description: `Hotter extracts more: less sour, more bitter. Every step moves by the same amount, ${shape}.`,
+    description: `Hotter extracts more; cooler extracts less. Every step moves by the same amount, ${shape}.`,
   };
 }
 
@@ -62,7 +62,7 @@ function yieldLever(min: number, max: number, ratio: { min: number; max: number 
     workflowContextKey: 'targetYield',
     requiresScale: true,
     description:
-      'Where the shot stops (grams in the cup). More yield is a longer ratio: lighter, less intense and more extracted, so less sour. Less yield is stronger and heavier.',
+      'Where the shot stops (grams in the cup). More yield is a longer ratio: more water through the same coffee, more extracted and more dilute. Less yield is shorter and more concentrated.',
   };
 }
 
@@ -76,7 +76,7 @@ const blooming: Template = {
   style: 'Blooming',
   shape: 'Fill at 4 ml/s, 30 s bloom with the pump off, then a flat 2.2 ml/s pour',
   description:
-    "Scott Rao's blooming shot: wet the puck, let it rest with the pump off, then pour at a steady flow. High, sweet extraction for light and complex coffees, especially washed ones. Its pour stops 26 s after the bloom, so the cup tops out near the bloom's drip plus about 22.5 s x the flow (about 57 g at 2.2 ml/s); above that, more yield needs more flow.",
+    "Scott Rao's blooming shot: wet the puck, let it rest with the pump off, then pour at a steady flow. The rest saturates the puck so dense light roasts extract high and evenly, especially washed ones. Its pour stops 26 s after the bloom, so the cup tops out near the bloom's drip plus about 22.5 s x the flow (about 57 g at 2.2 ml/s); above that, more yield needs more flow.",
   roastFit: ['light', 'medium-light'],
   decaidDefaultId: 'profile:7438cb7266f60558b48f',
   source: source('Blooming_espresso.json'),
@@ -98,7 +98,7 @@ const blooming: Template = {
       granularity: 1,
       maxDelta: 5,
       description:
-        'How long the wet puck rests with the pump off. A longer bloom extracts more and sweetens light roasts; a shorter one tastes brighter.',
+        'How long the wet puck rests with the pump off. A longer bloom saturates it more evenly and extracts more; a shorter one extracts less.',
     },
     {
       id: 'piExit',
@@ -124,7 +124,7 @@ const blooming: Template = {
       granularity: 0.1,
       maxDelta: 0.4,
       description:
-        'Water flow after the bloom (the ramp and the flat pour together). Higher is a faster, lighter shot; lower gives more contact time and body.',
+        'Water flow after the bloom (the ramp and the flat pour together). Higher is a faster shot with less contact time; lower gives more contact time and extracts more.',
     },
   ],
   constraints: [],
@@ -171,7 +171,7 @@ const dflow: Template = {
       maxDelta: 2,
       requiresScale: true,
       description:
-        "Grams that drip into the cup before the pour starts. A longer soak extracts more and sweetens. Without a scale the soak's 60 s time limit decides instead.",
+        "Grams that drip into the cup before the pour starts. A longer soak saturates the puck more and extracts more. Without a scale the soak's 60 s time limit decides instead.",
     },
     {
       id: 'pourFlow',
@@ -197,7 +197,7 @@ const dflow: Template = {
       granularity: 0.5,
       maxDelta: 1,
       description:
-        'The pressure cap during the pour, which acts as the peak pressure. Higher lets a tight puck build more body; lower is gentler and less prone to channeling.',
+        'The pressure cap during the pour, which acts as the peak pressure. Higher lets a tight puck build more pressure and extract more; lower is gentler and less prone to channeling.',
     },
   ],
   constraints: [],
@@ -218,7 +218,7 @@ const londonium: Template = {
   style: 'Lever',
   shape: 'Fill, 12 s soak at 3 bar, a 9 bar peak, then a decline to 3 bar',
   description:
-    "Damian Brakel's Londinium R lever-machine style: a soak, a 9 bar peak, then a slowly falling pressure. Big body and a syrupy texture for medium to dark roasts; it forgives imperfect puck prep.",
+    "Damian Brakel's Londinium R lever-machine style: a soak, a 9 bar peak, then a slowly falling pressure that eases off as the puck erodes. Suits medium to dark roasts, which extract readily; it forgives imperfect puck prep.",
   roastFit: ['medium', 'medium-dark', 'dark'],
   decaidDefaultId: 'profile:729d284747718d27c93a',
   source: source('Londonium.json'),
@@ -253,7 +253,7 @@ const londonium: Template = {
       granularity: 0.5,
       maxDelta: 1,
       description:
-        "The lever's top pressure. Higher gives more body and intensity; lower (6-7 bar) is gentler and clearer.",
+        "The lever's top pressure. Higher pushes harder and extracts more; lower (6-7 bar) is gentler and channels less.",
     },
     {
       id: 'declineEnd',
@@ -266,7 +266,7 @@ const londonium: Template = {
       granularity: 0.5,
       maxDelta: 1,
       description:
-        'Where the pressure falls to at the end of the shot. Lower is gentler with a less bitter finish; higher keeps more strength.',
+        'Where the pressure falls to at the end of the shot. Lower eases off and extracts less late in the shot; higher keeps pushing and extracts more.',
     },
   ],
   constraints: [peakAboveDeclineEnd],
@@ -281,7 +281,7 @@ const allonge: Template = {
   style: 'Allongé',
   shape: 'One steady 4.5 ml/s pour capped at 8.6 bar, stopping at about 5x the dose',
   description:
-    "Scott Rao's allongé: a long, fast shot at a steady 4.5 ml/s through a coarse espresso grind, aiming for an 8-9 bar peak in 35-40 s. It stops at about 5x the dose (90 g for 18 g). A fruit bomb for very light, washed, high-grown coffees. Advanced: small grind or dose moves swing the pressure a lot.",
+    "Scott Rao's allongé: a long, fast shot at a steady 4.5 ml/s through a coarse espresso grind, aiming for an 8-9 bar peak in 35-40 s. It stops at about 5x the dose (90 g for 18 g). The fast, high flow pushes a lot of water through very light, washed, high-grown coffees that resist extraction. Advanced: small grind or dose moves swing the pressure a lot.",
   roastFit: ['light'],
   decaidDefaultId: 'profile:372f1be4c5e3641bbfe2',
   source: source('rao_allonge.json'),
@@ -305,7 +305,7 @@ const allonge: Template = {
       granularity: 0.1,
       maxDelta: 0.5,
       description:
-        'Pump flow after the first 2 s (the step names keep saying 4.5 ml/s). Lower gives more contact time and less pressure: stronger and sweeter. Higher is faster, with more pressure and a lighter cup.',
+        'Pump flow after the first 2 s (the step names keep saying 4.5 ml/s). Lower gives more contact time and less pressure, so it extracts more. Higher is faster, with more pressure and less contact time.',
     },
     {
       id: 'maxPressure',
@@ -330,7 +330,7 @@ const gentle: Template = {
   style: 'Low pressure',
   shape: 'Fast fill, rise to 6 bar and hold 13 s, then a slow decline to 4 bar',
   description:
-    "Decent's easiest espresso: a fast fill, a low 6 bar peak and a slow decline to 4 bar, with flow capped at 4 ml/s so a weak spot in the puck cannot gush. Low acidity and little channeling; for beginners, milk drinks, and medium to dark roasts.",
+    "Decent's easiest espresso: a fast fill, a low 6 bar peak and a slow decline to 4 bar, with flow capped at 4 ml/s so a weak spot in the puck cannot gush. The low pressure keeps extraction gentle and channeling rare; for beginners, milk drinks, and medium to dark roasts.",
   roastFit: ['medium', 'medium-dark', 'dark'],
   decaidDefaultId: 'profile:1baa29bd9d9dc6d47f2a',
   source: source('Gentle_and_sweet1.json'),
@@ -352,7 +352,7 @@ const gentle: Template = {
       granularity: 0.5,
       maxDelta: 1,
       description:
-        'The top pressure, held after the fill. Higher gives more body and intensity; lower is gentler and clearer and channels less.',
+        'The top pressure, held after the fill. Higher pushes harder and extracts more; lower is gentler and channels less.',
     },
     {
       id: 'declineEnd',
@@ -365,7 +365,7 @@ const gentle: Template = {
       granularity: 0.5,
       maxDelta: 1,
       description:
-        'Where the pressure falls to over the last 30 s. Lower is gentler with a softer, less bitter finish; higher keeps more strength.',
+        'Where the pressure falls to over the last 30 s. Lower eases off and extracts less late in the shot; higher keeps pushing and extracts more.',
     },
     {
       id: 'hold',
@@ -378,7 +378,7 @@ const gentle: Template = {
       granularity: 1,
       maxDelta: 4,
       description:
-        'Seconds the peak holds (after a 3 s rise) before the decline starts. Longer gives more body and strength; shorter reaches the gentle decline sooner, for a softer, sweeter cup.',
+        'Seconds the peak holds (after a 3 s rise) before the decline starts. Longer keeps the pressure up and extracts more; shorter reaches the gentle decline sooner and extracts less.',
     },
   ],
   constraints: [peakAboveDeclineEnd],

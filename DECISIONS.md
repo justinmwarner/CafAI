@@ -1717,7 +1717,11 @@ barista's taste, and a repository ready for the public.
   values stay in ink-muted; only the buttons fade. A write still on its
   way after 0.4 s says "Saving…" under its field; a failed one says why
   there, as an alert, the field outlined in the error colour and only that
-  field put back, so a write of another field that landed meanwhile stays.
+  field put back, so a write of another field that landed meanwhile stays;
+  each field numbers its writes, and a failure puts back what Decaid last
+  held only when it was that field's newest write, so a slow first tap
+  failing after a second one landed changes nothing. The spin buttons say
+  their range (`aria-valuemin`, `aria-valuemax`) as they say their value.
   A field disabled while it has focus (the machine started) shows Decaid's
   value again instead of what was typed. What each control writes, and its
   range, are D114's, unchanged. Why: the old section was ten equal fields
@@ -1750,12 +1754,18 @@ barista's taste, and a repository ready for the public.
   barista names a grinder that is not linked, the chat shows what the
   coach heard with **Add to Decaid** and **Not now**
   (`src/ui/chat/parts/GrinderOfferCard.tsx`). Only Add writes: CafAI then
-  links the grinder as Settings does (its id, its model as the name, the
-  setting kept), writes it to the workflow for the next shots (D54), and
-  gives the coach its dial (`addGrinder` in `src/app/engine/engine.ts`,
-  `docs/briefs/ENGINE_PROTOCOL.md` rule 5b). A failed Add says why on the
-  card and waits for another tap; typing instead sets the card aside, and
-  nothing is added. **Edit grinders in DYE2**, shown while Decaid runs
+  links the grinder as Settings does (its id, its model as the name, and
+  the setting only if it belonged to this grinder: the same id, or the
+  same model when none was linked; otherwise the setting is cleared, so
+  the coach never turns a new grinder from another's number), writes it to
+  the workflow for the next shots (D54), and gives the coach its dial
+  (`addGrinder` in `src/app/engine/engine.ts`,
+  `docs/briefs/ENGINE_PROTOCOL.md` rule 5b). The card comes alone: an
+  `offer_grinder` in the same reply as another card is not shown, and the
+  coach is told to offer it again once that card is answered (two offers
+  in one reply show the first). While Add runs, the card's "Adding…" is the
+  only progress shown. A failed Add says why on the card and waits for
+  another tap; typing instead sets the card aside, and nothing is added. **Edit grinders in DYE2**, shown while Decaid runs
   DYE2 (D103), opens DYE2's Grinders page: inside Decaid the WebView keeps
   `localhost:8080/api/v1/plugins/*` in place, as for the Decaid settings
   button, and the page's Done goes back. CafAI never edits or deletes a
@@ -1778,7 +1788,8 @@ barista's taste, and a repository ready for the public.
   same**, **Better** and **Much better** (`ComparisonRating` in
   `src/ui/chat/parts/ShotCard.tsx`). It is a radio group as the stars
   were: one Tab stop (About the same until there is an answer), the arrow
-  keys move the answer (right and up towards better), every word at least
+  keys move the answer as in any radio group (right and down to the next
+  word, towards Much better; left and up back), every word at least
   48 px tall on the Mode control's raised track, wrapping inside its
   segment on a phone; a later tap changes the answer. The question names
   what the shot is compared with (`baselineFor` in
@@ -1792,13 +1803,18 @@ barista's taste, and a repository ready for the public.
   card in the stored chat, so the export and Decaid's backup carry it, and
   `extras.cafai.verdict` and `extras.cafai.comparedWith` on Decaid's shot
   record. Stars already given stay as they were: such a card says "You
-  rated it 4 of 5 stars." and asks nothing. Decaid's `enjoyment` still gets
+  rated it 4 of 5 stars." and asks nothing, even when an older CafAI
+  starred a card this build had rated (the stars win, as a tap there does
+  nothing). Decaid's `enjoyment` still gets
   a number, for Decaid and Visualizer, as a running score out of 10: a
   bag's first rated shot is 5, and each later one is the score of the shot
   it was compared with (past shots nobody rated, of the latest rated one)
-  plus one step per word, -2 to +2, kept within 0-10; old stars count as
-  twice their number, as they were written. A Decaid that rates out of 100
-  gets ten times the score (a step of 10), so Visualizer shows the same
+  plus one step per word, -2 to +2, kept within 1-10 (de1app and Decaid's
+  Visualizer plugin read an enjoyment of 0 as a shot nobody rated); old
+  stars count as twice their number, as they were written. A verdict this
+  build does not know (a newer build's, an edited import) is never told to
+  the coach, so one unknown word cannot stop it. A Decaid that rates out of
+  100 gets ten times the score (a step of 10), so Visualizer shows the same
   number from either build. A changed answer rewrites its own shot's
   number only, as a changed star did. The score waits in the outbox until
   the scale is known and is dropped out loud when Decaid refuses it, as
@@ -1830,23 +1846,33 @@ barista's taste, and a repository ready for the public.
   options aside). Their own words can be the reason for a change ("You
   found it sharp, so…"), explained by its mechanics (a finer grind slows
   the flow, so the water stays longer and extracts more), and it invites
-  them to notice the difference against this shot. The heuristics and
-  lever descriptions stay as knowledge for choosing a change, never a
-  promise; the taste question offers neutral options, never a guess from
-  the numbers; when words and numbers disagree it asks; asked for help
-  tasting, it asks one question at a time and never answers for them. The
-  tool descriptions (`src/coach/tools.ts`) and schema comments
-  (`src/coach/contract.ts`) follow: `expectedEffect` and a template's
-  `reason` say what the profile does, never how the cup will taste.
-  `proposalWordingError` (`src/coach/validator.ts`) sends back an
-  `expectedEffect` with a word that only describes a cup (sweeter,
-  acidity, body…), a described or judged cup or finish ("a lighter cup",
-  "the same good cup", "less sharp") or a taste foretold ("should taste",
-  "it'll taste"); words with a sense at the machine pass ("a smoother
-  pressure curve", "a shorter, stronger shot"). The engine asks it of what
-  the model just wrote, beside the bounds errors, as an is_error result the
-  model fixes within the run; a proposal recovered after a reload keeps the
-  words its card already shows. The change card's last line reads "What it
+  them to notice the difference against this shot. The heuristics stay as
+  knowledge for choosing a change, never a promise, and the template and
+  lever descriptions the model reads say what each profile does at the
+  machine (soak, pressure, flow, extraction) and which coffees it suits,
+  with no cup to aim for; the barista decides when a shot is good (the
+  prompt's "lock it in" waits for them to say they like it, no longer for
+  a "balanced, sweet" shot); the taste question offers neutral options,
+  never a guess from the numbers; when words and numbers disagree it asks;
+  asked for help tasting, it asks one question at a time and never answers
+  for them. The tool descriptions (`src/coach/tools.ts`) and schema
+  comments (`src/coach/contract.ts`) follow: `expectedEffect` and a
+  template's `reason` say what the profile does, never how the cup will
+  taste. `proposalWordingError` (`src/coach/validator.ts`) reads everything
+  a fresh proposal shows as CafAI's own words: a change's `expectedEffect`,
+  `summary` and `tips` (never the `rationale`, which may quote the
+  barista), and every template `reason`. It sends back a word that only
+  describes a cup (sweeter, acidity, body, tastier, mellower, depth…), a
+  described or judged cup or finish ("a lighter cup", "better-tasting",
+  "less bite", "notes of…") or a taste foretold ("should taste", "the taste
+  should…", "it'll taste"); words with a sense at the machine pass ("a
+  smoother pressure curve", "a shorter, stronger shot"), as does a taste
+  word right before a machine noun ("the sweet spot", "a balanced
+  extraction", "a harsh pressure spike") and a profile's name ("Gentle and
+  Sweet"). The engine asks it of what the model just wrote, beside the
+  bounds and id errors, as an is_error result that tells the model to call
+  the tool again; a proposal recovered after a reload keeps the words its
+  card already shows. The change card's last line reads "What it
   changes:", no longer "Expect:" (amends D48). While the taste question is
   open, **Taste words** and **Need help?** join Stats above the composer
   (amends D91). Taste words opens neutral descriptors one group at a time
@@ -1897,7 +1923,9 @@ barista's taste, and a repository ready for the public.
   `.claude/settings.local.json`, `.claude/worktrees/` and
   `nimbalyst-local/` out. `npm run screenshots`
   (`playwright.screenshots.config.ts`, `e2e/screenshots/readme.shots.ts`,
-  port 4176 or `SCREENSHOTS_PORT`) plays the demo with the page's clock,
+  port 4176 or `SCREENSHOTS_PORT`, its own build in `dist-screenshots/` so
+  it never empties the `dist-mock/` an e2e run serves) plays the demo with
+  the page's clock,
   time zone, locale and colour scheme pinned, on a 1280x800 tablet and a
   390x844 phone, and writes six PNGs under 300 KB to `docs/images/`;
   Chromium raster flags, the pointer parked on the top bar and the coach

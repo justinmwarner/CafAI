@@ -29,7 +29,7 @@
  * can hold one for 30 s), and one that fails says why there, with the old
  * value back.
  */
-import { useEffect, useId, useState, type KeyboardEvent, type ReactElement } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactElement } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -332,6 +332,8 @@ function DrinkField({ spec, value, loaded, disabled, saving, error, onCommit }: 
             role: 'spinbutton',
             'aria-label': spec.label,
             'aria-valuenow': off || unknown ? undefined : value,
+            'aria-valuemin': off || unknown ? undefined : spec.range.min,
+            'aria-valuemax': off || unknown ? undefined : spec.range.max,
             'aria-valuetext': off ? offText : unknown ? 'Unknown' : `${value} ${spec.spokenUnit}`,
             'aria-describedby': note ? noteId : undefined,
             'aria-busy': saving || undefined,
@@ -418,6 +420,11 @@ export function DrinkSettingsSection() {
   /** Writes still on their way to Decaid, and why a field's last write failed, by fieldId. */
   const [pending, setPending] = useState<Readonly<Record<string, number>>>({});
   const [failed, setFailed] = useState<Readonly<Record<string, string>>>({});
+  /**
+   * By fieldId: the number of the field's newest save, its saves on their way,
+   * and its value as Decaid last held it, which a failed newest save goes back to.
+   */
+  const saves = useRef<Record<string, { newest: number; inFlight: number; settled: unknown }>>({});
 
   useEffect(() => {
     let live = true;
@@ -460,19 +467,29 @@ export function DrinkSettingsSection() {
     const previous = (current[drink.key] as Record<string, unknown>)[spec.key];
     if (previous === value) return;
     const id = fieldId(drink.key, spec.key);
+    const save = (saves.current[id] ??= { newest: 0, inFlight: 0, settled: previous });
+    // With none on its way, the value before this tap is the one Decaid holds.
+    if (save.inFlight === 0) save.settled = previous;
+    const number = ++save.newest;
+    save.inFlight += 1;
     setPresets((now) => now && withField(now, drink.key, spec.key, value));
     setFailed(({ [id]: _cleared, ...rest }) => rest);
     setPending((now) => ({ ...now, [id]: (now[id] ?? 0) + 1 }));
     try {
       const patch = { [drink.key]: { [spec.key]: value } } as WorkflowPatch;
       const updated = await decaid.updateWorkflow(patch);
+      save.settled = value;
       // Decaid's word on the whole drink, so a field its reply does not give in a readable form shows a dash.
       setPresets((now) => now && ({ ...now, [drink.key]: updated[drink.key] } as Presets));
     } catch (caught) {
-      // Only this field goes back: a write of another field that landed meanwhile stays.
-      setPresets((now) => now && withField(now, drink.key, spec.key, previous));
-      setFailed((now) => ({ ...now, [id]: `Could not save the ${spec.label.toLowerCase()}: ${errorText(caught)}` }));
+      // A newer save of this field was sent: its own answer decides what the field shows.
+      if (number === save.newest) {
+        // Only this field goes back, to what Decaid last held: a write of another field that landed meanwhile stays.
+        setPresets((now) => now && withField(now, drink.key, spec.key, save.settled));
+        setFailed((now) => ({ ...now, [id]: `Could not save the ${spec.label.toLowerCase()}: ${errorText(caught)}` }));
+      }
     } finally {
+      save.inFlight -= 1;
       setPending(({ [id]: count = 0, ...rest }) => (count > 1 ? { ...rest, [id]: count - 1 } : rest));
     }
   };
