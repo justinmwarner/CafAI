@@ -100,6 +100,13 @@ describe('formatTrafficLog', () => {
     expect(text.indexOf('↑ REST')).toBeLessThan(text.indexOf('↓ REST'));
   });
 
+  it('dates the end of a log that runs past midnight', () => {
+    const late = new Date(2026, 9, 11, 23, 59, 30).getTime();
+    const early = new Date(2026, 9, 12, 0, 0, 30).getTime();
+    const text = formatTrafficLog([entry({ at: late }), entry({ id: 2, at: early })], CONTEXT);
+    expect(text).toMatch(/Entries: 2 entries, 2026-10-11 23:59:30 to 2026-10-12 00:00:30 \(UTC/);
+  });
+
   it('says when Decaid did not say its version, and when there is nothing', () => {
     const text = formatTrafficLog([], { ...CONTEXT, decaidVersion: null });
     expect(text).toContain('Decaid version unknown at http://192.168.1.20:8080');

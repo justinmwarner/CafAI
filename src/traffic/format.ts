@@ -100,14 +100,21 @@ export function logFileName(now: Date): string {
   return `cafai-log-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}.txt`;
 }
 
+/** "2026-10-11 21:04:05", local. */
+function formatStamp(at: number): string {
+  return `${formatDateTime(new Date(at))}:${pad(new Date(at).getSeconds())}`;
+}
+
 /** The header every shared copy starts with: versions, device, time range, count, and that the key is never in it. */
 export function logHeader(entries: readonly TrafficEntry[], context: LogContext): string {
   const first = entries[0];
   const last = entries[entries.length - 1];
-  const range =
-    first && last
-      ? `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}, ${formatDateTime(new Date(first.at))}:${pad(new Date(first.at).getSeconds())} to ${formatClock(last.at)} (${utcOffset(new Date(last.at))}), oldest first`
-      : 'No entries.';
+  let range = 'No entries.';
+  if (first && last) {
+    // The end's date only when the log runs past midnight.
+    const end = new Date(first.at).toDateString() === new Date(last.at).toDateString() ? formatClock(last.at) : formatStamp(last.at);
+    range = `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}, ${formatStamp(first.at)} to ${end} (${utcOffset(new Date(last.at))}), oldest first`;
+  }
   return [
     logTitle(context.now),
     `CafAI ${context.appVersion}, Decaid ${context.decaidVersion ?? 'version unknown'} at ${context.decaidOrigin}`,
