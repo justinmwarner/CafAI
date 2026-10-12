@@ -3,6 +3,9 @@ import { createMockServer } from '../../mock/node.ts';
 import { driftLog } from './drift.ts';
 import { createKvClient } from './kv.ts';
 import { GatewayError } from './types.ts';
+import { KEY_NAME, KEY_NAMESPACE } from '../storage/keyBackup.ts';
+import { trafficLog } from '../traffic/recorder.ts';
+import { KEY_COPY_MARKER } from '../traffic/redact.ts';
 
 beforeEach(() => {
   driftLog.clear();
@@ -106,6 +109,23 @@ describe('KV client wire behaviour', () => {
   it('a failed write throws a GatewayError', async () => {
     const { kv } = stub(() => new Response('{"error":"Request body is too large"}', { status: 413 }));
     await expect(kv.set('cafai', 'k', 1)).rejects.toMatchObject({ status: 413, message: 'Request body is too large' });
+  });
+
+  it("never lets the key's copy (D99) into the traffic log, whatever the key looks like (D139)", async () => {
+    trafficLog.clear();
+    const key = 'plain-key-no-pattern-knows-0123';
+    const { kv } = stub((_url, init) => new Response(init?.method === 'POST' ? '{}' : JSON.stringify(key)));
+    await kv.set(KEY_NAMESPACE, KEY_NAME, key);
+    expect(await kv.get(KEY_NAMESPACE, KEY_NAME)).toBe(key);
+    const entries = trafficLog.list();
+    expect(entries.map((entry) => `${entry.direction} ${entry.what}`)).toEqual([
+      'sent POST /api/v1/store/cafai-key/anthropic',
+      'received POST /api/v1/store/cafai-key/anthropic',
+      'sent GET /api/v1/store/cafai-key/anthropic',
+      'received GET /api/v1/store/cafai-key/anthropic',
+    ]);
+    expect(JSON.stringify(entries)).not.toContain(key);
+    expect(entries[3]!.body).toBe(KEY_COPY_MARKER);
   });
 });
 

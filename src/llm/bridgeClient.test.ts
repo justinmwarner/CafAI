@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { trafficLog } from '../traffic/recorder.ts';
+import { KEY_MARKER } from '../traffic/redact.ts';
 import {
   bridgeFailureLine,
   bridgeStatusLine,
@@ -102,6 +104,24 @@ describe('getBridgeStatus', () => {
     const result = await getBridgeStatus({ ...request, fetch: status.fetch });
     expect(result.ok && result.status.problems).toEqual(['Code [key] is wrong.']);
     expect(result.ok && result.status.probe).toEqual({ ok: false, error: 'Code [key] is wrong.' });
+  });
+
+  it('goes into the traffic log without the code, sent or echoed, and says when nothing answered (D139)', async () => {
+    trafficLog.clear();
+    const { fetch } = fakeFetch(() => json(errorBody('authentication_error', 'Code ABCD-EFGH is wrong.'), 401));
+    await getBridgeStatus({ ...request, fetch });
+    const unreachable = fakeFetch(() => Promise.reject(new TypeError('Failed to fetch')));
+    await findBridge({ fetch: unreachable.fetch });
+    const entries = trafficLog.list();
+    expect(entries.map((entry) => `${entry.direction} ${entry.channel} ${entry.what} ${entry.status}`)).toEqual([
+      'sent coach GET 192.168.1.20:8877/v1/status?probe=1 ',
+      'received coach GET 192.168.1.20:8877/v1/status?probe=1 401',
+      'sent coach GET 127.0.0.1:8877/health ',
+      'received coach GET 127.0.0.1:8877/health network error',
+    ]);
+    expect(entries[0]!.headers).toBe(`x-api-key: ${KEY_MARKER}`);
+    expect(entries[1]!.body).toContain(`Code ${KEY_MARKER} is wrong.`);
+    expect(JSON.stringify(entries)).not.toMatch(/ABCD-?EFGH/i);
   });
 
   it('knows when something other than CafAI Bridge answered', async () => {

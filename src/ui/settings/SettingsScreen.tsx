@@ -40,8 +40,10 @@ import { addedNote, dye2GrindersUrl } from './addGrinder.ts';
 import { AppearanceSection } from './AppearanceSection.tsx';
 import { CoachSourceSection } from './CoachSourceSection.tsx';
 import { useApiKeyView, useCoachRunsOnComputer, useShowsApiKey } from './coachSourceView.ts';
+import { useDecaidVersion } from './decaidVersion.ts';
 import { DrinkSettingsSection } from './DrinkSettingsSection.tsx';
 import { GrinderFields } from './GrinderFields.tsx';
+import { LogSection } from './LogSection.tsx';
 import {
   canAddGrinder,
   grinderPatch,
@@ -545,23 +547,9 @@ function CoachSettingsSection({ column }: { column: RefObject<HTMLElement | null
 }
 
 function AboutSection() {
-  const { appVersion, host, decaid } = useServices();
-  const [decaidVersion, setDecaidVersion] = useState<string | null>(host.hostVersion);
-  useEffect(() => {
-    if (host.hostVersion) return;
-    let live = true;
-    decaid
-      .getInfo()
-      .then((info) => {
-        if (live) setDecaidVersion(info.fullVersion || info.version);
-      })
-      .catch(() => {
-        if (live) setDecaidVersion(null);
-      });
-    return () => {
-      live = false;
-    };
-  }, [decaid, host.hostVersion]);
+  const { appVersion } = useServices();
+  // The host's, or Decaid's answer to GET /api/v1/info each time About opens; the log's header reads it too.
+  const decaidVersion = useDecaidVersion();
   return (
     <Section title="About">
       <Typography variant="body2">CafAI {appVersion}</Typography>
@@ -587,6 +575,7 @@ export function SettingsScreen() {
         <CoachSettingsSection column={column} />
         <DrinkSettingsSection />
         <AboutSection />
+        <LogSection />
       </Stack>
     </Box>
   );

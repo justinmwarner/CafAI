@@ -35,6 +35,12 @@ workflow checks against it. Settings > About shows the version you run.
   machine row draws them: one stepper per setting with its unit beside the
   value, Up and Down from a keyboard, and "Saving…" or a failure under the
   setting itself.
+- Settings > Log shows what CafAI sends to and gets from Decaid (REST calls
+  and WebSocket frames) and the coach, raw: **Open log** lists it newest
+  first, full screen, with filters, **Pause** and each entry's headers and
+  body, and **Share**, **Email** and **Copy** send it with CafAI's and
+  Decaid's versions. The API key and the bridge's pairing code are never in
+  it.
 
 ### Decaid
 

@@ -6,6 +6,7 @@ import { AppShell } from '../ui/shell/AppShell.tsx';
 import { navigate, routeHref, useRoute, type Route } from '../ui/router.ts';
 import { CoachScreen } from '../ui/chat/CoachScreen.tsx';
 import { HistoryScreen } from '../ui/history/HistoryScreen.tsx';
+import { LogView } from '../ui/settings/LogView.tsx';
 import { SettingsScreen } from '../ui/settings/SettingsScreen.tsx';
 
 const ROUTE_KEY = 'cafai.route';
@@ -64,6 +65,8 @@ export function App({ services }: { services: Services }) {
     <ServicesProvider services={services}>
       <AppTheme>
         <Routed />
+        {/* Settings > Log's view (D139) is the app's: a shot that takes the screen under it to the Shot view leaves it open. */}
+        <LogView />
       </AppTheme>
     </ServicesProvider>
   );

@@ -25,7 +25,12 @@
  *     same reconnects; its socket is not one of `sockets`, which say whether
  *     Decaid itself can be reached. Only its estimate is kept, never its
  *     status, by streamline's rules (heating-countdown.js).
+ *   - Every socket opened here goes into the traffic log (D139): its
+ *     opening, closing and errors, and its frames, the streaming channels'
+ *     at most once a second (src/traffic/recorder.ts). CafAI sends nothing
+ *     on these sockets.
  */
+import { recordFrame, recordSocket } from '../traffic/recorder.ts';
 import { reportDrift } from './drift.ts';
 import {
   describeValue,
@@ -68,6 +73,10 @@ const CHANNEL_PATHS: Readonly<Record<Channel, string>> = {
 const CHANNELS = Object.keys(CHANNEL_PATHS) as Channel[];
 const TIME_TO_READY_PATH = '/ws/v1/plugins/time-to-ready.reaplugin/timeToReady';
 const pathOf = (channel: SlotChannel) => (channel === 'timeToReady' ? TIME_TO_READY_PATH : CHANNEL_PATHS[channel]);
+/** The channel as the traffic log names it: "ws/v1/machine/snapshot". */
+const trafficName = (channel: SlotChannel) => pathOf(channel).slice(1);
+/** The channels that send several frames a second: the traffic log keeps one a second of each. */
+const STREAMING: ReadonlySet<SlotChannel> = new Set<SlotChannel>(['machine', 'scale', 'timeToReady']);
 
 const TIME_TO_READY = 'ws/v1/plugins/time-to-ready.reaplugin/timeToReady';
 /** The statuses time-to-ready.reaplugin sends (plugin.js at aab5f93); any other is kept, and reported. */
@@ -465,10 +474,13 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
     if (!running || slot.socket || !wanted(slot)) return;
     clearRetry(slot);
     const Impl = options.WebSocketImpl ?? globalThis.WebSocket;
+    const name = trafficName(slot.channel);
+    recordSocket(name, 'sent', 'connect');
     let socket: WebSocket;
     try {
       socket = new Impl(`${origin}${pathOf(slot.channel)}`);
     } catch {
+      recordSocket(name, 'received', 'could not open', true);
       setSocket(slot.channel, 'closed');
       scheduleReconnect(slot);
       return;
@@ -477,6 +489,7 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
     setSocket(slot.channel, 'connecting');
     socket.onopen = () => {
       if (slot.socket !== socket) return;
+      recordSocket(name, 'received', 'open');
       slot.attempt = 0;
       slot.lastFrameAt = now();
       setSocket(slot.channel, 'open');
@@ -484,9 +497,11 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
     socket.onmessage = (event: MessageEvent) => {
       if (slot.socket !== socket) return;
       slot.lastFrameAt = now();
+      const data = String(event.data);
+      recordFrame(name, data, STREAMING.has(slot.channel));
       let value: unknown;
       try {
-        value = JSON.parse(String(event.data));
+        value = JSON.parse(data);
       } catch {
         return;
       }
@@ -496,8 +511,18 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
         // A frame we cannot use is dropped, never fatal.
       }
     };
-    socket.onclose = () => drop(slot, socket, true);
-    socket.onerror = () => drop(slot, socket, true);
+    socket.onclose = (event) => {
+      if (slot.socket === socket) {
+        // 1000 is a normal close; anything else (1006: the connection was lost) is not.
+        const code = event?.code;
+        recordSocket(name, 'received', code ? `closed ${code}${event.reason ? ` ${event.reason}` : ''}` : 'closed', code !== 1000);
+      }
+      drop(slot, socket, true);
+    };
+    socket.onerror = () => {
+      if (slot.socket === socket) recordSocket(name, 'received', 'error', true);
+      drop(slot, socket, true);
+    };
   }
 
   function checkMachineSilence(): void {
@@ -507,6 +532,7 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
     // Silence only counts while devices says the machine is there.
     const quietSince = Math.max(slot.lastFrameAt, machineConnectedSince);
     if (now() - quietSince < MACHINE_SILENCE_MS) return;
+    recordSocket(trafficName(slot.channel), 'sent', `close (silent ${Math.round(MACHINE_SILENCE_MS / 1000)} s)`);
     drop(slot, socket, false);
     connect(slot);
   }
@@ -531,7 +557,9 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
   function close(slot: Slot): void {
     clearRetry(slot);
     slot.attempt = 0;
-    if (slot.socket) drop(slot, slot.socket, false);
+    if (!slot.socket) return;
+    recordSocket(trafficName(slot.channel), 'sent', 'close');
+    drop(slot, slot.socket, false);
   }
 
   async function seedFromRest(id: number): Promise<void> {

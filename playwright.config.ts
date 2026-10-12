@@ -6,7 +6,7 @@ import { defineConfig, devices } from '@playwright/test';
 const PORT = Number(process.env.E2E_PORT ?? 4174);
 
 /** The specs that run in the phone projects; the rest are about the tablet layout. */
-const PHONE_SPECS = /(phone-baseline|shot-focus|appearance|chat-first|decaid-features|decaid-safety|decaid-intake|taste-words)\.spec\.ts/;
+const PHONE_SPECS = /(phone-baseline|shot-focus|appearance|chat-first|decaid-features|decaid-safety|decaid-intake|taste-words|traffic-log)\.spec\.ts/;
 /** Phone-only: the tablets have their own baseline (baseline.spec.ts). */
 const PHONE_ONLY = /phone-baseline\.spec\.ts/;
 /**

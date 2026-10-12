@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { driftLog } from './drift.ts';
 import { describeGatewayError, interpretGatewayError, requestJson, requestValue, type Transport } from './http.ts';
 import { GatewayError } from './types.ts';
+import { trafficLog } from '../traffic/recorder.ts';
 
 // ---- gateway error bodies (ported from profile.test.ts) ------------------------
 
@@ -313,5 +314,65 @@ describe('a reply read by a reader', () => {
       throw refusal;
     };
     await expect(requestValue(transport, '/api/v1/workflow', { read })).rejects.toBe(refusal);
+  });
+});
+
+// ---- the traffic log (D139) -------------------------------------------------------
+
+describe('the traffic log', () => {
+  beforeEach(() => trafficLog.clear());
+
+  it('keeps every exchange as it went: the request, then the reply with its status and time', async () => {
+    const { transport } = stubTransport(
+      () => new Response('{"profile":{"title":"v2"}}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+    await requestJson(transport, '/api/v1/workflow?x=1', { method: 'PUT', body: { context: { targetYield: 36 } } });
+    const [sent, received] = trafficLog.list();
+    expect(sent).toMatchObject({
+      direction: 'sent',
+      channel: 'rest',
+      what: 'PUT /api/v1/workflow?x=1',
+      headers: 'content-type: application/json',
+      body: '{"context":{"targetYield":36}}',
+      size: 30,
+    });
+    expect(received).toMatchObject({
+      direction: 'received',
+      what: 'PUT /api/v1/workflow?x=1',
+      status: '200',
+      body: '{"profile":{"title":"v2"}}',
+      failed: false,
+    });
+    expect(received!.headers).toContain('content-type: application/json');
+    expect(received!.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('keeps an error reply, and says when Decaid did not answer', async () => {
+    const failing = stubTransport(() => new Response('{"error":"DeviceNotConnectedException: machine not connected"}', { status: 500 }));
+    await requestJson(failing.transport, '/api/v1/machine/state').catch(() => undefined);
+    const unreachable: Transport = {
+      origin: 'http://localhost:8080',
+      timeoutMs: 8000,
+      fetch: (() => Promise.reject(new TypeError('Failed to fetch'))) as unknown as typeof fetch,
+    };
+    await requestJson(unreachable, '/api/v1/info').catch(() => undefined);
+    const received = trafficLog.list().filter((entry) => entry.direction === 'received');
+    expect(received.map((entry) => [entry.what, entry.status, entry.failed])).toEqual([
+      ['GET /api/v1/machine/state', '500', true],
+      ['GET /api/v1/info', 'network error', true],
+    ]);
+    expect(received[0]!.body).toContain('DeviceNotConnectedException');
+  });
+
+  it('keeps a GET that Decaid asked to retry as two exchanges', async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    const { transport } = stubTransport(() =>
+      ++calls === 1 ? new Response('busy', { status: 503, headers: { 'Retry-After': '0' } }) : new Response('{"a":1}'),
+    );
+    const run = requestJson(transport, '/api/v1/devices');
+    await vi.runAllTimersAsync();
+    await run;
+    expect(trafficLog.list().map((entry) => `${entry.direction} ${entry.status}`)).toEqual(['sent ', 'received 503', 'sent ', 'received 200']);
   });
 });
