@@ -44,12 +44,16 @@ is the first).
 - Settings > Log, which shows what CafAI sends to and gets from Decaid and
   the coach, never holds it. Everything is redacted on the way in
   (`src/traffic/redact.ts`): the `x-api-key` header (and any other header
-  named for a key, token, secret, password, auth, cookie or session) is
-  kept by name only, its value is taken out of the rest of that exchange
-  too, anything shaped like a key becomes `[key redacted]` in any body or
-  URL, and no body said to or by the key's copy in Decaid is kept. The log
-  lives in the page's memory only and leaves the device only when you tap
-  Share, Email or Copy; it does hold what you and the coach wrote.
+  with a key, token, secret, password, auth, cookie or session part in
+  its name) is kept by name only, and its value is taken out of the rest
+  of that exchange too, headers included; the key and the bridge's code
+  CafAI last used are looked for in everything, a chat that quotes one
+  included; anything shaped like a key becomes `[key redacted]` in any
+  body, URL or header; a coach reply whose stream events, put together,
+  hold a secret keeps none of them; and no body said to or by the key's
+  copy in Decaid is kept. The log lives in the page's memory only and
+  leaves the device only when you tap Share, Email or Copy; it does hold
+  what you and the coach wrote.
 - A key pasted into the chat, a bag's details or a typed answer is taken out
   before the coach, the transcript or Decaid see it, and exported or backed-up
   text replaces anything shaped like a key with `[redacted]`.

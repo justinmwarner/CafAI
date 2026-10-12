@@ -536,7 +536,7 @@ troubleshooting.
 
   Inside Decaid's own app only **Copy** works (Decaid opens no email link
   or share sheet for a skin): copy, leave Decaid, and paste. If the paste
-  comes up empty on a tablet, the log was too big for its clipboard:
+  comes up empty on a tablet, the log may be too big for its clipboard:
   **Clear**, do it again, then **Copy**. The log never holds the API key
   or the pairing code, but it does hold what you wrote in the chat.
 
