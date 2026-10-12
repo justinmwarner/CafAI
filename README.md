@@ -243,7 +243,10 @@ checks), and every place where the spec is wrong and CafAI follows Decaid's
 code is a recorded exception with the Dart line that proves it.
 [contract/decaid/README.md](contract/decaid/README.md) says how to read a
 failing check and how to move the pin (`npm run decaid:update -- <tag>`).
-`npm run decaid:watch` runs the same checks against Decaid's latest release
+Decaid's own agent skill and API notes come along at the same commit
+(`contract/decaid/skill/`, `contract/decaid/doc/`); coding agents read them
+through `.claude/skills/decaid-runtime/`, which translates them for a skin on
+Windows. `npm run decaid:watch` runs the same checks against Decaid's latest release
 and its `main`, diffs their specs against the pin's, and lists the Decaid
 files CafAI depends on that changed since the pin. Its exit code: 0,
 nothing CafAI depends on changed; 1, a check failed, or the spec diff
@@ -347,7 +350,8 @@ Screenshots land in `tools/chrome91/out/`.
 | `src/app` | The coach engine, services, app composition |
 | `src/ui` | Shell, machine row, stats card and alert, live graph, chat surface, history and settings |
 | `mock` | MSW mocks of Decaid and Claude, plus fixtures |
-| `contract/decaid` | Decaid's specs at the pinned release, the types generated from them, and the checks `npm run typecheck` runs, with the recorded spec errors |
+| `contract/decaid` | Decaid's specs at the pinned release, the types generated from them, and the checks `npm run typecheck` runs, with the recorded spec errors; Decaid's agent skill and API notes at the same release |
+| `.claude/skills` | Skills for coding agents: `decaid-runtime` drives a running Decaid from CafAI |
 | `e2e` | Playwright specs |
 | `e2e-real` | The Playwright check against a running Decaid (`npm run e2e:real`) |
 | `scripts` | The release zip, the Decaid contract and drift watch, and the headless Decaid for CI |

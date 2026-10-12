@@ -30,6 +30,14 @@ Decent Espresso profiles (https://github.com/decentespresso/decaid)
   profiles copied from Decaid's assets/defaultProfiles. See SOURCES.md in that
   folder for exact origins and licensing.
 
+Decaid's API specs and agent docs (https://github.com/decentespresso/decaid)
+  Copyright (C) 2025-2026 Decent Espresso. Licensed GPL-3.0-or-later.
+  contract/decaid/spec/ holds Decaid's assets/api specs, contract/decaid/skill/
+  its agent skill (.agents/skills/decent-app/) and contract/decaid/doc/ its
+  API notes (doc/AI_API_NOTES.md), verbatim at the commit in
+  contract/decaid/PIN.json. CafAI's checks and coding agents read them; none
+  of them is part of the app or its release zip.
+
 -------------------------------------------------------------------------------
 Libraries
 -------------------------------------------------------------------------------

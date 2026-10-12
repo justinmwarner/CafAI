@@ -20,6 +20,10 @@ tools/chrome91/out/
 /crema/
 /.ref/
 
+# Claude Code: this computer's settings and agent worktrees (.claude/skills/ is shared)
+/.claude/settings.local.json
+/.claude/worktrees/
+
 # editor / OS
 .DS_Store
 Thumbs.db

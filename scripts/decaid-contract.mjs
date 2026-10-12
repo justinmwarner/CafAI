@@ -8,6 +8,10 @@
 //                       regenerating them gives the committed files; exit 1
 //                       naming the stale files otherwise (part of typecheck)
 //
+// --update also copies Decaid's agent docs (AGENT_DOCS) at the same commit, and
+// --check holds them to PIN.json's hashes: the specs and the docs CafAI's
+// agents read always describe the same Decaid (D145).
+//
 // REST types come from openapi-typescript's Node API, never with --enum (it
 // emits TypeScript enums, which erasableSyntaxOnly forbids). The AsyncAPI file
 // is self-contained and written in OpenAPI 3.0's dialect (`nullable`), so its
@@ -20,7 +24,7 @@
 // (.gitattributes), and a CRLF copy is not a different contract.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import openapiTS, { astToString } from 'openapi-typescript';
@@ -40,6 +44,21 @@ export const FILES = {
   ws: 'contract/decaid/generated/ws.ts',
   version: 'src/api/decaidVersion.ts',
 };
+
+/** The folder PIN.json's paths are relative to. */
+const CONTRACT = 'contract/decaid/';
+
+/**
+ * Decaid's notes for agents, copied verbatim at the pin (D145): its agent skill
+ * for driving a running Decaid, and its API notes. Each Decaid path (a folder
+ * when it ends in /) with the path CafAI keeps it at. Nothing in the app reads
+ * them; .claude/skills/decaid-runtime/ tells CafAI's agents how to use them.
+ * The drift watch lists their changes since the pin (WATCH).
+ */
+export const AGENT_DOCS = [
+  { upstream: '.agents/skills/decent-app/', local: `${CONTRACT}skill/` },
+  { upstream: 'doc/AI_API_NOTES.md', local: `${CONTRACT}doc/AI_API_NOTES.md` },
+];
 
 const GENERATOR = `openapi-typescript@${JSON.parse(readFileSync(path.join(ROOT, 'node_modules/openapi-typescript/package.json'), 'utf8')).version}`;
 
@@ -175,7 +194,8 @@ export function versionModule(release, commit) {
   );
 }
 
-export function pinJson(release, commit, restText, wsText) {
+/** PIN.json; `docs` are the agent docs' texts by their paths in the repository. */
+export function pinJson(release, commit, restText, wsText, docs = {}) {
   const pin = {
     release,
     commit,
@@ -184,6 +204,11 @@ export function pinJson(release, commit, restText, wsText) {
       ws: { file: 'spec/websocket_v1.yml', sha256: sha256(wsText) },
     },
     generator: GENERATOR,
+    agentDocs: Object.fromEntries(
+      Object.keys(docs)
+        .sort()
+        .map((file) => [file.slice(CONTRACT.length), sha256(docs[file])]),
+    ),
   };
   return JSON.stringify(pin, null, 2) + '\n';
 }
@@ -202,6 +227,45 @@ const read = (base, file) => {
   return existsSync(full) ? lf(readFileSync(full, 'utf8')) : null;
 };
 
+/** Files an operating system leaves in a folder it shows (.gitignore has them too): never Decaid's. */
+const OS_FILES = new Set(['.DS_Store', 'Thumbs.db', 'desktop.ini']);
+
+/** The agent docs CafAI keeps under `base`, by their paths in the repository, sorted. */
+export function localAgentDocs(base = ROOT) {
+  const files = [];
+  const walk = (folder) => {
+    const full = path.join(base, ...folder.split('/'));
+    if (!existsSync(full)) return;
+    for (const entry of readdirSync(full, { withFileTypes: true })) {
+      if (entry.isDirectory()) walk(`${folder}${entry.name}/`);
+      else if (!OS_FILES.has(entry.name)) files.push(`${folder}${entry.name}`);
+    }
+  };
+  for (const { local } of AGENT_DOCS) {
+    if (local.endsWith('/')) walk(local);
+    else if (existsSync(path.join(base, ...local.split('/')))) files.push(local);
+  }
+  return files.sort();
+}
+
+/** The agent docs under `base` that differ from PIN.json's `hashes`, as "file: why". */
+function staleAgentDocs(base, hashes) {
+  const stale = [];
+  const pinned = Object.keys(hashes).map((file) => `${CONTRACT}${file}`);
+  for (const file of pinned) {
+    const text = read(base, file);
+    if (text === null) stale.push(`${file}: missing`);
+    else if (sha256(text) !== hashes[file.slice(CONTRACT.length)]) stale.push(`${file}: does not match PIN.json`);
+  }
+  const extra = localAgentDocs(base).filter((file) => !pinned.includes(file));
+  stale.push(...extra.map((file) => `${file}: not in PIN.json`));
+  for (const { local } of AGENT_DOCS) {
+    const covers = (file) => (local.endsWith('/') ? file.startsWith(local) : file === local);
+    if (!pinned.some(covers) && !extra.some(covers)) stale.push(`${local}: not in PIN.json (run npm run decaid:update -- <tag>)`);
+  }
+  return stale;
+}
+
 /** The stale files under `base` (a checkout's root), as "file: why"; [] when the contract is current. */
 export async function checkContract(base = ROOT) {
   const pinText = read(base, FILES.pin);
@@ -213,12 +277,13 @@ export async function checkContract(base = ROOT) {
   if (restText === null || sha256(restText) !== pin.specs.rest.sha256) stale.push(`${FILES.restSpec}: does not match PIN.json`);
   if (wsText === null || sha256(wsText) !== pin.specs.ws.sha256) stale.push(`${FILES.wsSpec}: does not match PIN.json`);
   if (pin.generator !== GENERATOR) stale.push(`${FILES.pin}: generated with ${pin.generator}, ${GENERATOR} is installed`);
-  if (stale.length > 0) return stale;
+  const docs = staleAgentDocs(base, pin.agentDocs ?? {});
+  if (stale.length > 0) return [...stale, ...docs];
   const expected = await generateAll({ release: pin.release, commit: pin.commit, restText, wsText });
   for (const [file, text] of Object.entries(expected)) {
     if (read(base, file) !== text) stale.push(`${file}: differs from what the pinned specs generate`);
   }
-  return stale;
+  return [...stale, ...docs];
 }
 
 /** A hung child process (tsc, vitest) is stopped after this long; a normal run takes well under a minute. */
@@ -286,6 +351,21 @@ export class SpecMissingError extends Error {
   }
 }
 
+/**
+ * An agent doc (AGENT_DOCS) Decaid's repository no longer has at a commit as
+ * CafAI keeps it: gone (404), not a folder, neither a file nor a folder, or
+ * not text. Decaid's change, not GitHub's trouble.
+ */
+export class AgentDocsMissingError extends Error {
+  constructor(file, sha, why = null) {
+    const at = String(sha).slice(0, 7);
+    super(why === null ? `Decaid no longer serves ${file} at ${at}` : `Decaid's ${file} at ${at} ${why}`);
+    this.name = 'AgentDocsMissingError';
+    this.file = file;
+    this.sha = sha;
+  }
+}
+
 const cache = new Map();
 
 /** GET api.github.com/<pathname> as JSON, once per run (unauthenticated calls are limited to 60 an hour). */
@@ -327,53 +407,113 @@ export async function resolveRef(ref) {
   return { sha: commit.sha, tag: tag ? ref : null };
 }
 
+/**
+ * A file at a commit, from raw.githubusercontent.com. A 404 is Decaid's
+ * answer, not GitHub's trouble: the file moved or is gone at that commit, and
+ * `missing()` makes the error that says so.
+ */
+async function raw(sha, file, { fetch: fetchImpl, missing }) {
+  let response;
+  try {
+    response = await fetchImpl(`https://raw.githubusercontent.com/${REPO}/${sha}/${file}`, { signal: AbortSignal.timeout(60_000) });
+  } catch (error) {
+    throw new GitHubError(`GitHub could not be reached (${error.message})`);
+  }
+  if (response.status === 404) throw missing();
+  if (!response.ok) throw new GitHubError(`GitHub answered ${response.status} for ${file} at ${sha}`, response.status);
+  return response;
+}
+
 /** Both specs' text at a commit. */
 export async function fetchSpecs(sha, { fetch: fetchImpl = globalThis.fetch } = {}) {
-  const get = async (file) => {
-    let response;
-    try {
-      response = await fetchImpl(`https://raw.githubusercontent.com/${REPO}/${sha}/${file}`, { signal: AbortSignal.timeout(60_000) });
-    } catch (error) {
-      throw new GitHubError(`GitHub could not be reached (${error.message})`);
-    }
-    // A 404 is Decaid's answer, not GitHub's trouble: the spec moved or is gone at that commit.
-    if (response.status === 404) throw new SpecMissingError(file, sha);
-    if (!response.ok) throw new GitHubError(`GitHub answered ${response.status} for ${file} at ${sha}`, response.status);
-    return response.text();
-  };
+  const get = async (file) => (await raw(sha, file, { fetch: fetchImpl, missing: () => new SpecMissingError(file, sha) })).text();
   return { restText: await get(UPSTREAM.rest), wsText: await get(UPSTREAM.ws) };
+}
+
+/**
+ * Decaid's agent docs (AGENT_DOCS) at a commit, by the paths CafAI keeps them
+ * at. GitHub's contents API lists a folder (`get`, as github()); each file's
+ * text comes from raw.githubusercontent.com.
+ */
+export async function fetchAgentDocs(sha, { get = github, fetch: fetchImpl = globalThis.fetch } = {}) {
+  const list = async (folder) => {
+    const entries = await get(`repos/${REPO}/contents/${folder.slice(0, -1)}?ref=${sha}`, { allow404: true });
+    if (entries === null) throw new AgentDocsMissingError(folder, sha);
+    if (!Array.isArray(entries)) throw new AgentDocsMissingError(folder, sha, 'is not a folder');
+    const files = [];
+    for (const entry of entries) {
+      if (entry.type === 'dir') files.push(...(await list(`${entry.path}/`)));
+      else if (entry.type === 'file') files.push(entry.path);
+      else throw new AgentDocsMissingError(entry.path, sha, `is a ${entry.type}, not a file or a folder`);
+    }
+    return files;
+  };
+  // Decoded strictly, BOM kept: what is written is Decaid's bytes, and anything else (an image) is refused.
+  const text = async (file) => {
+    const bytes = await (await raw(sha, file, { fetch: fetchImpl, missing: () => new AgentDocsMissingError(file, sha) })).arrayBuffer();
+    try {
+      return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+    } catch {
+      throw new AgentDocsMissingError(file, sha, 'is not UTF-8 text');
+    }
+  };
+  const sources = [];
+  for (const { upstream, local } of AGENT_DOCS) {
+    if (!upstream.endsWith('/')) sources.push([upstream, local]);
+    else for (const file of await list(upstream)) sources.push([file, `${local}${file.slice(upstream.length)}`]);
+  }
+  const texts = await Promise.all(sources.map(([file]) => text(file)));
+  return Object.fromEntries(sources.map(([, local], index) => [local, texts[index]]));
 }
 
 // ---------------------------------------------------------------------------
 // The commands
 // ---------------------------------------------------------------------------
 
-function write(file, text) {
-  const full = path.join(ROOT, ...file.split('/'));
-  mkdirSync(path.dirname(full), { recursive: true });
-  writeFileSync(full, text);
+/**
+ * Writes `outputs` (texts by path) under `base`, after deleting the agent docs
+ * `docs` no longer has: deleting first, a rename that only changes case keeps
+ * the file on a case-insensitive disk. Answers the paths changed and removed.
+ */
+export function writeOutputs(outputs, docs, base = ROOT) {
+  const removed = localAgentDocs(base).filter((file) => !(file in docs));
+  for (const file of removed) rmSync(path.join(base, ...file.split('/')));
+  const changed = Object.keys(outputs).filter((file) => read(base, file) !== lf(outputs[file]));
+  for (const file of changed) {
+    const full = path.join(base, ...file.split('/'));
+    mkdirSync(path.dirname(full), { recursive: true });
+    writeFileSync(full, outputs[file]);
+  }
+  return { changed, removed };
 }
 
 async function update(ref) {
   const { sha, tag } = await resolveRef(ref);
   const { restText, wsText } = await fetchSpecs(sha);
+  const docs = await fetchAgentDocs(sha);
   const before = read(ROOT, FILES.pin);
   const outputs = {
     [FILES.restSpec]: restText,
     [FILES.wsSpec]: wsText,
+    ...docs,
     ...(await generateAll({ release: tag, commit: sha, restText, wsText })),
-    [FILES.pin]: pinJson(tag, sha, restText, wsText),
+    [FILES.pin]: pinJson(tag, sha, restText, wsText, docs),
   };
-  const changed = Object.entries(outputs).filter(([file, text]) => read(ROOT, file) !== lf(text));
-  for (const [file, text] of changed) write(file, text);
+  const { changed, removed } = writeOutputs(outputs, docs);
   const previous = before ? JSON.parse(before) : null;
   console.log(
     `Pinned Decaid ${tag ?? '(no tag)'} at ${sha}` +
       (previous ? ` (was ${previous.release ?? '(no tag)'} at ${previous.commit})` : ''),
   );
-  console.log(changed.length ? `Changed: ${changed.map(([file]) => file).join(', ')}` : 'Nothing changed.');
-  if (changed.some(([file]) => file === FILES.restSpec || file === FILES.wsSpec)) {
+  console.log(changed.length ? `Changed: ${changed.join(', ')}` : 'Nothing changed.');
+  if (removed.length > 0) console.log(`Removed (Decaid no longer has them): ${removed.join(', ')}`);
+  if (changed.includes(FILES.restSpec) || changed.includes(FILES.wsSpec)) {
     console.log('The specs changed: run npm run typecheck and npx vitest run mock/decaid/contract.test.ts, then fix types.ts or drift.ts.');
+  }
+  if (removed.length > 0 || changed.some((file) => file in docs)) {
+    console.log(
+      "Decaid's agent docs changed: read the diff, and check that .claude/skills/decaid-runtime/SKILL.md still routes to them and translates them for CafAI.",
+    );
   }
 }
 
@@ -390,16 +530,25 @@ async function main(args) {
     return;
   }
   if (args[0] === '--update' && args[1]) {
+    // process.exit() after fetch() aborts Node 24 on Windows with a libuv
+    // assertion (see leave() in bridge/cafai-bridge.mjs): set the exit code,
+    // and let the event loop empty.
     try {
       await update(args[1]);
     } catch (error) {
       if (error instanceof SpecMissingError) {
         console.error(`${error.message}: the spec moved or was removed; nothing was changed.`);
-        process.exit(1);
+        process.exitCode = 1;
+        return;
+      }
+      if (error instanceof AgentDocsMissingError) {
+        console.error(`${error.message}: point AGENT_DOCS in scripts/decaid-contract.mjs at where Decaid keeps them now; nothing was changed.`);
+        process.exitCode = 1;
+        return;
       }
       if (!(error instanceof GitHubError)) throw error;
       console.error(error.message);
-      process.exit(2);
+      process.exitCode = 2;
     }
     return;
   }
