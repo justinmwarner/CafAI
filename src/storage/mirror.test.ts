@@ -54,7 +54,7 @@ function memorySource(seed: Partial<MirrorSnapshot> = {}) {
   return { state, source };
 }
 
-function makeMirror(kv: MemoryKv, source: MirrorSource, options: { debounceMs?: number; retryMs?: number } = {}) {
+function makeMirror(kv: MemoryKv, source: MirrorSource, options: { debounceMs?: number; retryMs?: number; now?: () => Date } = {}) {
   const mirror = new DecaidKvMirror({ kv, source, appVersion: '1.2.3', defaultModel: MODEL, now: () => NOW, ...options });
   mirrors.push(mirror);
   return mirror;
@@ -330,6 +330,111 @@ describe('gate: no push before the restore check', () => {
   });
 });
 
+describe("status: what Settings > About says of the backup (5.15)", () => {
+  /** meta as an earlier page (or device) left it: a complete push at `updatedAt`. */
+  const metaAt = (updatedAt: string) => ({ schemaVersion: 1, appVersion: '1.2.2', updatedAt, pages: { bags: 1, versions: 1, iterations: 1 }, skipped: [] });
+  /** Lets every pending promise (a read of Decaid's record of the backup) end. */
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it('tells its subscribers when a push lands and when one fails, until they leave', async () => {
+    const kv = createMemoryKv();
+    const { source, state } = memorySource(fullSnapshot());
+    const mirror = makeMirror(kv, source);
+    await mirror.pushNow();
+    const told = vi.fn(() => [mirror.lastPushAt, mirror.lastError]);
+    const leave = mirror.subscribe(told);
+
+    state.snapshot.settings = makeSettings({ grinderName: 'Lagom 01', activeBagId: 'bag_kiambu' });
+    kv.failNext('set', 1, new Error('Decaid is busy. Try again in a moment.'));
+    await mirror.pushNow();
+    expect(told).toHaveLastReturnedWith([NOW.toISOString(), 'Could not back up to Decaid: Decaid is busy. Try again in a moment.']);
+    await mirror.pushNow();
+    expect(told).toHaveLastReturnedWith([NOW.toISOString(), null]);
+
+    leave();
+    await mirror.pushNow();
+    expect(told).toHaveBeenCalledTimes(2);
+  });
+
+  it("a page that has not pushed takes the last backup's time from Decaid's record of it, read once for all its subscribers", async () => {
+    const kv = createMemoryKv({ cafai: { meta: metaAt('2026-10-03T08:00:00.000Z') } });
+    const mirror = makeMirror(kv, memorySource(fullSnapshot()).source);
+    // A fresh page knows nothing yet: neither a time nor that there is none.
+    expect(mirror.backupKnown).toBe(false);
+    expect(mirror.lastPushAt).toBeNull();
+
+    const first = vi.fn();
+    const second = vi.fn();
+    mirror.subscribe(first);
+    mirror.subscribe(second);
+    await settle();
+    expect(mirror.backupKnown).toBe(true);
+    expect(mirror.lastPushAt).toBe('2026-10-03T08:00:00.000Z');
+    expect(first).toHaveBeenCalled();
+    expect(second).toHaveBeenCalled();
+    expect(kv.calls).toEqual([{ method: 'get', namespace: 'cafai', key: 'meta' }]);
+  });
+
+  it('knows there is no backup when Decaid holds no record of one', async () => {
+    const kv = createMemoryKv({ 'dye2.reaplugin': { recipes: [] } });
+    const mirror = makeMirror(kv, memorySource().source);
+    mirror.subscribe(() => undefined);
+    await settle();
+    expect(mirror.backupKnown).toBe(true);
+    expect(mirror.lastPushAt).toBeNull();
+  });
+
+  it('stays unknown while Decaid does not answer or keeps a record it cannot read, and the next subscriber looks again', async () => {
+    const kv = createMemoryKv();
+    kv.failNext('get');
+    const mirror = makeMirror(kv, memorySource().source);
+    mirror.subscribe(() => undefined);
+    await settle();
+    expect(mirror.backupKnown).toBe(false);
+
+    await kv.set(KV_NAMESPACE, 'meta', { ...metaAt('2026-10-03T08:00:00.000Z'), updatedAt: 'yesterday' });
+    mirror.subscribe(() => undefined);
+    await settle();
+    expect(mirror.backupKnown).toBe(false);
+    expect(mirror.lastPushAt).toBeNull();
+
+    await kv.set(KV_NAMESPACE, 'meta', metaAt('2026-10-03T08:00:00.000Z'));
+    mirror.subscribe(() => undefined);
+    await settle();
+    expect(mirror.lastPushAt).toBe('2026-10-03T08:00:00.000Z');
+    expect(kv.calls.filter((call) => call.method === 'get')).toHaveLength(3);
+  });
+
+  it("goes by its own push: no read once it has pushed, and a record read meanwhile never replaces a newer push's time", async () => {
+    const kv = createMemoryKv();
+    const { source } = memorySource(fullSnapshot());
+    // An earlier page backed up the same data two days ago: a push now changes nothing, so meta keeps that time.
+    await makeMirror(kv, source, { now: () => new Date('2026-10-01T09:30:00.000Z') }).pushNow();
+
+    const pushed = makeMirror(kv, source);
+    await pushed.pushNow();
+    const calls = kv.calls.length;
+    pushed.subscribe(() => undefined);
+    await settle();
+    expect(kv.calls).toHaveLength(calls);
+    expect(pushed.lastPushAt).toBe(NOW.toISOString());
+
+    // The read is slow; the push lands first.
+    let answer: () => void = () => {};
+    const get = kv.get.bind(kv);
+    kv.get = async <T>(namespace: string, key: string) => {
+      await new Promise<void>((resolve) => (answer = resolve));
+      return get<T>(namespace, key);
+    };
+    const racing = makeMirror(kv, source);
+    racing.subscribe(() => undefined);
+    await racing.pushNow();
+    answer();
+    await settle();
+    expect(racing.lastPushAt).toBe(NOW.toISOString());
+  });
+});
+
 describe('the API key never reaches Decaid', () => {
   // Crema: "the settings mirror round-trips through Decaid storage"; it is one
   // key, and it never carries the API key.
@@ -441,7 +546,6 @@ describe('pull', () => {
       ...older,
       grinderId: null,
       appearance: DEFAULT_APPEARANCE,
-      keepKeyInDecaid: false,
     });
   });
 

@@ -88,10 +88,10 @@ describe('AppTheme', () => {
 
   it("in Auto, follows the device's dark-mode preference as it changes", () => {
     const device = stubPrefersDark(true);
-    const { shown } = renderAppTheme({ mode: 'auto', tint: 'ocean' });
-    expect(shown()).toBe(`dark ${buildPalette('dark', namedTint('ocean')).accent}`);
+    const { shown } = renderAppTheme({ mode: 'auto', tint: 'blueberry' });
+    expect(shown()).toBe(`dark ${buildPalette('dark', namedTint('blueberry')).accent}`);
 
     act(() => device.set(false));
-    expect(shown()).toBe(`light ${buildPalette('light', namedTint('ocean')).accent}`);
+    expect(shown()).toBe(`light ${buildPalette('light', namedTint('blueberry')).accent}`);
   });
 });

@@ -23,6 +23,7 @@ import type { Appearance, AppearanceMode, Settings } from './types.ts';
 /** Today's look. */
 export const DEFAULT_APPEARANCE: Appearance = { mode: 'dark', tint: 'crema' };
 
+/** Without keepKeyInDecaid: nobody has chosen on this device yet, which reads as off (D99). */
 export function defaultSettings(defaultModel: string): Settings {
   return {
     model: defaultModel,
@@ -31,7 +32,6 @@ export function defaultSettings(defaultModel: string): Settings {
     grinderId: null,
     activeBagId: null,
     appearance: DEFAULT_APPEARANCE,
-    keepKeyInDecaid: false,
   };
 }
 
@@ -41,10 +41,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function textOrNull(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
-}
-
-function boolOr(value: unknown, fallback: boolean): boolean {
-  return typeof value === 'boolean' ? value : fallback;
 }
 
 /**
@@ -66,9 +62,20 @@ function idOrNull(value: unknown): string | null {
 const MODES: readonly AppearanceMode[] = ['dark', 'light', 'auto'];
 /** A tint id is a short lowercase word; nothing else (a pasted key included) is ever kept. */
 const TINT_ID = /^[a-z][a-z0-9-]{0,31}$/;
+/**
+ * The tints renamed for coffee (D123, src/ui/palette.ts), by their old ids: a
+ * look saved, backed up or exported before the rename keeps its tint, and is
+ * written back under the new id at the next save. A Map, so an id such as
+ * "constructor" never finds anything on Object's prototype.
+ */
+const RENAMED_TINTS: ReadonlyMap<string, string> = new Map([
+  ['lagoon', 'cold-brew'],
+  ['ocean', 'blueberry'],
+  ['steel', 'tamper'],
+]);
 
 function normalizeTint(raw: unknown): Appearance['tint'] {
-  if (typeof raw === 'string' && TINT_ID.test(raw)) return raw;
+  if (typeof raw === 'string' && TINT_ID.test(raw)) return RENAMED_TINTS.get(raw) ?? raw;
   if (isRecord(raw) && typeof raw['hue'] === 'number' && Number.isFinite(raw['hue'])) {
     return { hue: ((Math.round(raw['hue']) % 360) + 360) % 360 };
   }
@@ -92,7 +99,7 @@ export function normalizeSettings(raw: unknown, defaultModel: string): Settings 
   if (!isRecord(raw)) return defaultSettings(defaultModel);
   // A key is never a model id: with it taken out, an empty model is the default.
   const model = withoutKeyLike(textOrNull(raw['model']));
-  return {
+  const settings: Settings = {
     model: model !== null && model.trim() !== '' ? model : defaultModel,
     grinderName: withoutKeyLike(textOrNull(raw['grinderName'])),
     grinderSetting: withoutKeyLike(textOrNull(raw['grinderSetting'])),
@@ -100,8 +107,10 @@ export function normalizeSettings(raw: unknown, defaultModel: string): Settings 
     grinderId: idOrNull(raw['grinderId']),
     activeBagId: textOrNull(raw['activeBagId']),
     appearance: normalizeAppearance(raw['appearance']),
-    keepKeyInDecaid: boolOr(raw['keepKeyInDecaid'], false),
   };
+  // Only a choice someone made: never written as a default, so a merge can tell "off" from "not chosen here".
+  if (typeof raw['keepKeyInDecaid'] === 'boolean') settings.keepKeyInDecaid = raw['keepKeyInDecaid'];
+  return settings;
 }
 
 const FIELDS: ReadonlyArray<keyof Settings> = [
@@ -138,12 +147,14 @@ function isBlank(value: string | null | undefined): boolean {
  * comes along only when this device names no grinder at all: a name typed
  * here is never paired with another grinder's link.
  * The appearance, like the model, is adopted only while it is still the default.
+ * The key's copy in Decaid (D99) is the user's choice wherever this device
+ * holds one, off as much as on; only a device that never chose takes it.
  */
 export function fillBlankSettings(local: Settings, incoming: Settings, defaultModel: string): Settings {
   const pick = (mine: string | null, theirs: string | null) => (isBlank(mine) && !isBlank(theirs) ? theirs : mine);
   const linkedHere = !isBlank(local.grinderId);
   const noGrinderHere = isBlank(local.grinderName) && !linkedHere;
-  return {
+  const merged: Settings = {
     model: local.model === defaultModel && incoming.model.trim() !== '' ? incoming.model : local.model,
     grinderName: linkedHere ? local.grinderName : pick(local.grinderName, incoming.grinderName),
     grinderSetting: pick(local.grinderSetting, incoming.grinderSetting),
@@ -153,8 +164,9 @@ export function fillBlankSettings(local: Settings, incoming: Settings, defaultMo
     appearance: sameAppearance(local.appearance ?? DEFAULT_APPEARANCE, DEFAULT_APPEARANCE)
       ? (incoming.appearance ?? DEFAULT_APPEARANCE)
       : (local.appearance ?? DEFAULT_APPEARANCE),
-    // Like the model: on here wins; still off here takes the imported choice (a copy in Decaid
-    // means it was on somewhere, and local storage may be the part that was lost).
-    keepKeyInDecaid: (local.keepKeyInDecaid ?? false) || (incoming.keepKeyInDecaid ?? false),
   };
+  // A device whose storage was lost has no choice of its own, and a copy in Decaid means it was on somewhere.
+  const keep = local.keepKeyInDecaid ?? incoming.keepKeyInDecaid;
+  if (keep !== undefined) merged.keepKeyInDecaid = keep;
+  return merged;
 }

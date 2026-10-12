@@ -68,10 +68,20 @@ export const TID = {
   undoButton: 'undo-button',
   /** Undo on the latest applied diff card (the header has undoButton). */
   diffUndo: 'diff-undo',
-  /** The Why / Expect block under a change card's decision. */
+  /** The Why / What it changes block under a change card's decision. */
   diffReason: 'diff-reason',
   shotCard: 'shot-card',
+  /** "Compared with ...?" on a shot card: the five words, a radio group (D126). */
+  shotRating: 'shot-rating',
   openShotGraph: 'open-shot-graph',
+  /** Taste words above the composer while the taste question is open (D127): the prompt that opens them, the panel, a group's tab and a word. */
+  tastePrompt: 'taste-prompt',
+  tasteWords: 'taste-words',
+  tasteGroup: (groupId: string) => `taste-group-${slug(groupId)}`,
+  tasteWord: (label: string) => `taste-word-${slug(label)}`,
+  /** Need help? beside the taste words, and the guidance it opens. */
+  tasteHelp: 'taste-help',
+  tasteHelpDialog: 'taste-help-dialog',
   errorBanner: 'error-banner',
   retryButton: 'retry-button',
 
@@ -94,6 +104,21 @@ export const TID = {
   grinderName: 'grinder-name',
   grinderSetting: 'grinder-setting',
   settingsSave: 'settings-save',
+  // Add a grinder to Decaid's library (D125), and DYE2's page to edit them
+  addGrinder: 'add-grinder',
+  addGrinderModel: 'add-grinder-model',
+  addGrinderBurrs: 'add-grinder-burrs',
+  addGrinderDial: 'add-grinder-dial',
+  addGrinderSmallStep: 'add-grinder-small-step',
+  addGrinderBigStep: 'add-grinder-big-step',
+  addGrinderSettings: 'add-grinder-settings',
+  addGrinderSubmit: 'add-grinder-submit',
+  addGrinderNote: 'add-grinder-note',
+  editGrindersInDye2: 'edit-grinders-dye2',
+  // The coach's offer to add a grinder to Decaid's library (D125)
+  grinderOffer: 'grinder-offer',
+  grinderOfferAdd: 'grinder-offer-add',
+  grinderOfferDecline: 'grinder-offer-decline',
 
   // Decaid alignment: bean library, gateway mode, connect, plugins, key backup, drift
   beanCard: 'bean-card',

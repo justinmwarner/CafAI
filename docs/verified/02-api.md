@@ -6,7 +6,7 @@
 
 | Repo | Commit |
 |---|---|
-| Decaid `E:\source\cafai\.ref\decaid` | `a45961b323831d2170b3e7f3fef7c72fdd341642` (HEAD verified with `git rev-parse`) |
+| Decaid `.ref\decaid` | `a45961b323831d2170b3e7f3fef7c72fdd341642` (HEAD verified with `git rev-parse`) |
 | streamline-js | `cb058cad8a08904889b817de944566dfe1dd8a9a` |
 | MSL | `965af5cb3f42fcc29e6f4aeb74defc0dd07f099f` |
 | decaid-zen | `ba6282fcc3fc3a160bbd1942b066f49b73afd380` |
@@ -17,7 +17,7 @@ The decaid-mcp fixtures in `test\fixtures\*.json` are real anonymised responses 
 
 ### Citation legend
 
-Paths without a prefix are relative to `E:\source\cafai\.ref\decaid\`.
+Paths without a prefix are relative to `.ref\decaid\`. `.ref\` and `crema\` are local reference clones at the repository's root, not committed.
 
 | Prefix | Expands to |
 |---|---|
@@ -27,11 +27,11 @@ Paths without a prefix are relative to `E:\source\cafai\.ref\decaid\`.
 | `data/` | `lib/src/models/data/` |
 | `ctl/` | `lib/src/controllers/` |
 | `dev/` | `lib/src/models/device/` |
-| `mcp:` | `E:\source\cafai\.ref\decaid-mcp\` |
-| `zen:` | `E:\source\cafai\.ref\decaid-zen\` |
-| `sjs:` | `E:\source\cafai\.ref\streamline-js\` |
-| `msl:` | `E:\source\cafai\.ref\MSL\` |
-| `crema:` | `E:\source\cafai\crema\web\src\` |
+| `mcp:` | `.ref\decaid-mcp\` |
+| `zen:` | `.ref\decaid-zen\` |
+| `sjs:` | `.ref\streamline-js\` |
+| `msl:` | `.ref\MSL\` |
+| `crema:` | `crema\web\src\` |
 
 Example payloads are in `examples/`; see `examples/_README.md`.
 

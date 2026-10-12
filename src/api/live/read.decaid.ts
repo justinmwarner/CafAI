@@ -12,9 +12,11 @@ import { beforeAll, beforeEach, expect, it } from 'vitest';
 import { profileId, summarizeShot } from '../../coach/index.ts';
 import { deviceConnections, parseMachineFrame, type DeviceConnections, type ParsedScaleFrame } from '../frames.ts';
 import { listGrinders } from '../grinders.ts';
+import { readDye2, visualizerIdFor, type PluginReads } from '../pluginData.ts';
+import { PLUGIN } from '../plugins.ts';
 import { GatewayError } from '../types.ts';
 import { describeDecaid, openDecaid, type LiveDecaid } from './env.ts';
-import { captureChannels, channelName, checkFrames, telemetryChannels, type ChannelWatch } from './harness.ts';
+import { captureChannels, channelName, checkFrames, openedChannels, telemetryChannels, waitUntil, type ChannelWatch } from './harness.ts';
 
 /** How long every channel is listened to. */
 const LISTEN_MS = 5000;
@@ -25,6 +27,10 @@ const WHILE_MACHINE = new Set(['/ws/v1/machine/snapshot', '/ws/v1/machine/waterL
 const SCALE = '/ws/v1/scale/snapshot';
 /** A bean id no Decaid has: its batches are an empty list. */
 const NO_BEAN = 'cafai-contract-test-no-bean';
+/** A shot id no Decaid has: Visualizer never uploaded it. */
+const NO_SHOT = 'cafai-contract-test-no-shot';
+/** Decaid loads its plugins in the background after it serves the skin (D103): how long a check waits for one. */
+const PLUGIN_WAIT_MS = 20_000;
 
 describeDecaid('read', ({ url }) => {
   let live: LiveDecaid;
@@ -119,6 +125,20 @@ describeDecaid('read', ({ url }) => {
     expect(live.problems()).toEqual([]);
   });
 
+  it("DYE2's setups and Visualizer's last upload, read as CafAI reads them (6.4, 6.5): absent is fine, a shape CafAI does not expect is not", async () => {
+    const plugins = await live.client.listPlugins();
+    const reads: PluginReads = {
+      readStore: (namespace, key) => live.client.kv.get(namespace, key),
+      getPluginEndpoint: (pluginId, endpoint) => live.client.getPluginEndpoint(pluginId, endpoint),
+    };
+    // DYE2's recent-favs endpoint while it is loaded, and its keys in Decaid's store either way.
+    const dye2 = await readDye2(reads, plugins.some((plugin) => plugin.id === PLUGIN.dye2 && plugin.loaded === true));
+    if (dye2) console.log(`DYE2: ${dye2.setups.length} setups, ${dye2.equipment.length} grinders, ${dye2.baskets.length} baskets`);
+    // lastUploadedShot names a shot this Decaid has, never this one; lastVisualizerId is read only for its own shot.
+    expect(await visualizerIdFor(reads, NO_SHOT)).toBeNull();
+    expect(live.problems()).toEqual([]);
+  });
+
   it('GET /api/v1/display (CafAI does not read it yet)', async () => {
     expect((await live.send('GET', '/api/v1/display')).status).toBe(200);
     expect(live.problems()).toEqual([]);
@@ -156,6 +176,31 @@ describeDecaid('read', ({ url }) => {
     } catch {
       return links;
     }
+  }
+
+  // The channels CafAI opens only while Decaid has their plugin loaded: time-to-ready's (D103, 6.3).
+  for (const path of openedChannels().plugins) {
+    const channel = channelName(path);
+    const plugin = /^\/ws\/v1\/plugins\/([^/]+)\//.exec(path)?.[1] ?? '';
+    it(`${channel}: frames CafAI’s parser takes, while Decaid has ${plugin} loaded (skipped otherwise)`, async ({ skip }) => {
+      const loaded = await waitUntil(
+        async () => ((await live.client.listPlugins()).some((item) => item.id === plugin && item.loaded === true) ? true : null),
+        PLUGIN_WAIT_MS,
+        `${plugin} to be loaded`,
+        1000,
+      ).catch(() => false);
+      if (!loaded) return skip(`${plugin} is not loaded in this Decaid`);
+      const awake = links.machine && (await live.client.getMachineState()).state.state !== 'sleeping';
+      const watch = (await captureChannels(live.client.wsOrigin, [path], LISTEN_MS)).get(path);
+      if (!watch) throw new Error(`${channel} was not listened to.`);
+      expect(watch.opened, `${channel} opened`).toBe(true);
+      expect(watch.ended, `${channel} stayed open`).toBeNull();
+      const { parsed, problems } = checkFrames(path, watch.frames, live.validator);
+      expect(problems, `${channel}: frames CafAI or the spec disagree with`).toEqual([]);
+      // The plugin answers every machine snapshot, twice a second, unless the machine sleeps (plugin.js:26-37 at aab5f93).
+      if (awake) expect(parsed.length, `${channel}: within 5 s, machine awake`).toBeGreaterThan(0);
+      expect(live.problems()).toEqual([]);
+    });
   }
 
   for (const path of channels) {

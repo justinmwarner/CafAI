@@ -270,6 +270,24 @@ describe('ChatSurface', () => {
     });
   });
 
+  it("shows the coach's grinder card and passes Add and Not now on with its request (D125)", async () => {
+    const onAddGrinder = vi.fn();
+    const onDeclineGrinder = vi.fn();
+    const grinder = { model: 'Mazzer Philos', burrs: null, settingType: null, smallStep: null, bigStep: null, values: null };
+    const offer: CoachUiMessage = {
+      id: 'm-grinder',
+      role: 'assistant',
+      parts: [{ kind: 'grinderOffer', requestId: 't-grinder', grinder, status: 'pending', error: null }],
+      createdAt: '2026-10-03T08:00:00.000Z',
+    };
+    renderSurface({ messages: [offer], onAddGrinder, onDeclineGrinder });
+    const card = screen.getByTestId(TID.grinderOffer);
+    await userEvent.click(within(card).getByTestId(TID.grinderOfferAdd));
+    expect(onAddGrinder).toHaveBeenCalledWith('t-grinder');
+    await userEvent.click(within(card).getByTestId(TID.grinderOfferDecline));
+    expect(onDeclineGrinder).toHaveBeenCalledWith('t-grinder');
+  });
+
   it("shows On Visualizer on a shot's card once it has the link (6.4)", () => {
     const url = 'https://visualizer.coffee/shots/viz-1';
     renderSurface({ messages: [{ ...shotMessage('m-shot', 'shot-1'), parts: [{ kind: 'shot', shotId: 'shot-1', summary: sampleSummary(), visualizerUrl: url }] }] });
@@ -305,22 +323,25 @@ describe('ChatSurface', () => {
     expect(screen.getByText(/<img src=x onerror="alert\(1\)">/)).toBeInTheDocument();
   });
 
-  it('reports a star rating with the shot id, and blocks it while busy', async () => {
+  it('reports a verdict with the shot id, and blocks it while busy (D126)', async () => {
     const { handlers, rerender } = renderSurface({ messages: conversation('options') });
     const card = screen.getByTestId(TID.shotCard);
-    await userEvent.click(within(card).getByRole('radio', { name: 'Rate 4 out of 5' }));
-    expect(handlers.onRateShot).toHaveBeenCalledWith('shot-1', 4);
+    await userEvent.click(within(card).getByRole('radio', { name: 'Better' }));
+    expect(handlers.onRateShot).toHaveBeenCalledWith('shot-1', 'better');
     rerender({ messages: conversation('options'), busy: true });
-    expect(within(screen.getByTestId(TID.shotCard)).getByRole('radio', { name: 'Rate 4 out of 5' })).toBeDisabled();
+    expect(within(screen.getByTestId(TID.shotCard)).getByRole('radio', { name: 'Better' })).toBeDisabled();
   });
 
-  it('shows the stars a shot was given', () => {
-    const rated = conversation('options').map((m) => ({
-      ...m,
-      parts: m.parts.map((p) => (p.kind === 'shot' ? { ...p, stars: 4 } : p)),
-    }));
-    renderSurface({ messages: rated });
-    expect(screen.getByRole('radio', { name: 'Rate 4 out of 5' })).toHaveAttribute('aria-checked', 'true');
+  it('shows the verdict a shot was given, under the question naming what it was compared with', () => {
+    renderSurface({ messages: conversation('rated') });
+    expect(screen.getByRole('radiogroup', { name: 'Compared with your last shot of Brazil Santos?' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Better' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('says the stars of a shot rated before shots were compared', () => {
+    renderSurface({ messages: conversation('starred') });
+    expect(within(screen.getByTestId(TID.shotCard)).getByText('You rated it 4 of 5 stars.')).toBeInTheDocument();
+    expect(screen.queryByTestId(TID.shotRating)).toBeNull();
   });
 
   it('shows Graph only on the card matching graphShotId, and opens it from there', async () => {
@@ -495,6 +516,73 @@ describe('ChatSurface: the stats card and the Stats prompt', () => {
     renderSurface({ messages: [textMessage('a', 'user', 'Kenya, washed')], busy: true, onStats });
     await userEvent.click(screen.getByTestId(TID.statsPrompt));
     expect(onStats).toHaveBeenCalledTimes(1);
+  });
+
+  describe('taste words and Need help? (D127)', () => {
+    it('sit beside Stats, between the thread and the composer, only while the taste question is open', () => {
+      const { rerender } = renderSurface({ messages: conversation('options'), onStats: vi.fn() });
+      const thread = screen.getByRole('log', { name: 'Conversation with the coach' });
+      const prompt = screen.getByTestId(TID.tastePrompt);
+      expect(thread.contains(prompt)).toBe(false);
+      expect(screen.getByTestId(TID.statsPrompt).compareDocumentPosition(prompt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(prompt.compareDocumentPosition(screen.getByTestId(TID.tasteHelp)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(screen.getByTestId(TID.tasteHelp).compareDocumentPosition(screen.getByTestId(TID.composerInput)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+      // Answered: gone, and Stats stays.
+      rerender({ messages: conversation('diff'), onStats: vi.fn() });
+      expect(screen.queryByTestId(TID.tastePrompt)).toBeNull();
+      expect(screen.queryByTestId(TID.tasteHelp)).toBeNull();
+      expect(screen.getByTestId(TID.statsPrompt)).toBeInTheDocument();
+      // Another question: not about the taste.
+      rerender({ messages: conversation('options-multi'), onStats: vi.fn() });
+      expect(screen.queryByTestId(TID.tastePrompt)).toBeNull();
+    });
+
+    it('show without a Stats prompt too', () => {
+      renderSurface({ messages: conversation('options') });
+      expect(screen.queryByTestId(TID.statsPrompt)).toBeNull();
+      expect(screen.getByTestId(TID.tastePrompt)).toBeInTheDocument();
+    });
+
+    it('put a tapped word into the composer and send nothing until Send', async () => {
+      const { handlers } = renderSurface({ messages: conversation('options'), onStats: vi.fn() });
+      const composer = screen.getByTestId(TID.composerInput);
+      await userEvent.click(screen.getByTestId(TID.tastePrompt));
+      await userEvent.click(screen.getByTestId(TID.tasteWord('sharp')));
+      await userEvent.click(screen.getByTestId(TID.tasteGroup('body')));
+      await userEvent.click(screen.getByTestId(TID.tasteWord('thin')));
+      expect(composer).toHaveValue('sharp, thin');
+      // The words only fill the draft: no message, no answer to the question.
+      expect(handlers.onSend).not.toHaveBeenCalled();
+      expect(handlers.onAnswerOptions).not.toHaveBeenCalled();
+      // A tap leaves the keyboard down on a phone: the composer does not take the focus.
+      expect(composer).not.toHaveFocus();
+
+      await userEvent.click(screen.getByTestId(TID.composerSend));
+      expect(handlers.onSend).toHaveBeenCalledWith('sharp, thin');
+    });
+
+    it('add to what the barista already typed, and keep it', async () => {
+      renderSurface({ messages: conversation('options') });
+      const composer = screen.getByTestId(TID.composerInput);
+      await userEvent.type(composer, 'Quite bright');
+      await userEvent.click(screen.getByTestId(TID.tastePrompt));
+      await userEvent.click(screen.getByTestId(TID.tasteGroup('finish')));
+      await userEvent.click(screen.getByTestId(TID.tasteWord('lingering')));
+      expect(composer).toHaveValue('Quite bright, lingering finish');
+      await userEvent.click(screen.getByTestId(TID.tasteWord('lingering')));
+      expect(composer).toHaveValue('Quite bright');
+    });
+
+    it('open how to taste from Need help?, and the draft stays', async () => {
+      renderSurface({ messages: conversation('options') });
+      await userEvent.type(screen.getByTestId(TID.composerInput), 'Half a thought');
+      await userEvent.click(screen.getByTestId(TID.tasteHelp));
+      expect(screen.getByRole('dialog', { name: 'How to taste' })).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Got it' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(screen.getByTestId(TID.composerInput)).toHaveValue('Half a thought');
+    });
   });
 
   it('brings the card into view from Stats, even after the reader scrolled up', async () => {

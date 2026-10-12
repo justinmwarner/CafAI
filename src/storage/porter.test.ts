@@ -267,7 +267,7 @@ describe('importAll replace', () => {
 
     const older = { model: MODEL, grinderName: 'DF64', grinderSetting: '2.5', activeBagId: null };
     await a.porter.importAll({ ...exportOf(), settings: older }, 'replace');
-    expect(await a.repos.settings.get()).toEqual({ ...older, grinderId: null, appearance: DEFAULT_APPEARANCE, keepKeyInDecaid: false });
+    expect(await a.repos.settings.get()).toEqual({ ...older, grinderId: null, appearance: DEFAULT_APPEARANCE });
   });
 
   it('returns the number of records imported and asks the mirror to push the new state', async () => {

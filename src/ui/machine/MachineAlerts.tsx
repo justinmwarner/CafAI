@@ -222,9 +222,11 @@ export function MachineAlerts() {
   } else if (unreachable) {
     problem = { severity: 'warning', text: "Can't reach Decaid. Trying again…" };
   } else if (away && heard) {
+    // Only the DE1's own failed Connect takes the machine's words; a scale not found says so in the scale's alert, once the DE1 is back.
+    const failed = connect.failure?.kind === 'machine' ? connect.failure.text : null;
     problem = {
       severity: 'warning',
-      text: connect.pending ? LOOKING[connect.pending] : (connect.failure?.text ?? NOT_CONNECTED),
+      text: connect.pending ? LOOKING[connect.pending] : (failed ?? NOT_CONNECTED),
       actions: <ConnectButtons connect={connect} machine scale={scaleMissing} holdScale={false} />,
     };
   } else if (machineError) {

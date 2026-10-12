@@ -12,8 +12,9 @@
 // emits TypeScript enums, which erasableSyntaxOnly forbids). The AsyncAPI file
 // is self-contained and written in OpenAPI 3.0's dialect (`nullable`), so its
 // components.schemas are wrapped in a stub OpenAPI 3.0 document and run
-// through the same generator, followed by the channel map kept below. Output
-// is .ts, not .d.ts, because skipLibCheck would skip a .d.ts.
+// through the same generator, followed by the spec's own channel map for the
+// channels CafAI opens (CHANNELS below). Output is .ts, not .d.ts, because
+// skipLibCheck would skip a .d.ts.
 //
 // Line endings are compared as LF: git checks these files out with LF
 // (.gitattributes), and a CRLF copy is not a different contract.
@@ -43,28 +44,21 @@ export const FILES = {
 const GENERATOR = `openapi-typescript@${JSON.parse(readFileSync(path.join(ROOT, 'node_modules/openapi-typescript/package.json'), 'utf8')).version}`;
 
 /**
- * Each channel's frames by schema name: `receive` is what Decaid pushes,
- * `send` what a client may send (AsyncAPI operations with action receive and
- * send; the spec is written from the client's side). Kept by hand so a new or
- * changed channel is a reviewed change; scripts/decaid-contract.test.mjs
- * checks it against the pinned spec.
+ * The channels CafAI opens, by the address it opens, with the frames (spec
+ * schema names) it expects on each: src/api/telemetry.ts's six and the
+ * time-to-ready plugin's. CafAI only receives; it never sends on a socket.
+ * Kept by hand so a changed channel is a reviewed change: channelDrift()
+ * compares it with a spec, and scripts/decaid-contract.test.mjs checks it
+ * against the pinned spec and the channels contract/decaid/checks/ws.ts opens.
  */
 export const CHANNELS = {
-  'ws/v1/machine/snapshot': { receive: ['MachineSnapshot'] },
-  'ws/v1/machine/shotSettings': { receive: ['ShotSettings'] },
-  'ws/v1/machine/waterLevels': { receive: ['WaterLevels'] },
-  'ws/v1/machine/shotState': { receive: ['ShotStateEvent'] },
-  'ws/v1/machine/raw': { receive: ['De1RawMessage', 'MachineRawError'], send: ['De1RawMessage'] },
-  'ws/v1/scale/snapshot': { receive: ['ScaleSnapshot', 'ScaleStatus'] },
-  'ws/v1/scales/{id}/snapshot': { receive: ['AddressedScaleSnapshot', 'ScaleStatus'] },
-  'ws/v1/grinder/snapshot': { receive: ['GrinderSnapshot'] },
-  'ws/v1/sensors/{id}/snapshot': { receive: ['SensorSnapshot'] },
-  'ws/v1/plugins/{id}/{endpoint}': { receive: ['PluginMessage'] },
-  'ws/v1/devices': { receive: ['DevicesState', 'DeviceConnectResult'], send: ['DevicesCommand'] },
-  'ws/v1/display': { receive: ['DisplayState'], send: ['DisplayCommand'] },
-  'ws/v1/update': { receive: ['AppUpdateState'], send: ['UpdateCommand'] },
-  'ws/v1/logs': { receive: ['LogMessage'] },
-  'ws/v1/webview/logs': { receive: ['LogMessage'] },
+  'ws/v1/machine/snapshot': ['MachineSnapshot'],
+  'ws/v1/machine/shotSettings': ['ShotSettings'],
+  'ws/v1/machine/waterLevels': ['WaterLevels'],
+  'ws/v1/machine/shotState': ['ShotStateEvent'],
+  'ws/v1/scale/snapshot': ['ScaleSnapshot', 'ScaleStatus'],
+  'ws/v1/devices': ['DevicesState', 'DeviceConnectResult'],
+  'ws/v1/plugins/time-to-ready.reaplugin/timeToReady': ['PluginMessage'],
 };
 
 export const lf = (text) => text.replace(/\r\n/g, '\n');
@@ -79,7 +73,12 @@ export async function generateRest(text, commit) {
   return header(commit, `Source: ${UPSTREAM.rest} (OpenAPI), through ${GENERATOR}.`) + astToString(ast);
 }
 
-/** The channel map the spec itself declares, by address (for the test and the drift watch). */
+/**
+ * The channel map the spec itself declares: each address's frames by schema
+ * name, `receive` what Decaid pushes and `send` what a client may send
+ * (AsyncAPI operations with action receive and send; the spec is written from
+ * the client's side).
+ */
 export function specChannels(doc) {
   const deref = (ref) =>
     String(ref)
@@ -101,8 +100,43 @@ export function specChannels(doc) {
   return out;
 }
 
-/** generated/ws.ts from websocket_v1.yml's text. */
-export async function generateWs(text, commit, channels = CHANNELS) {
+/** Whether a spec address matches a concrete channel ("ws/v1/plugins/{id}/{endpoint}" matches a plugin's). */
+const addressMatches = (address, channel) =>
+  new RegExp(`^${address.replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\{[^}]+\}/g, '[^/]+')}$`).test(channel);
+
+/** The spec address that serves a concrete channel: the literal address, else a template that matches; null when none does. */
+export const specAddress = (addresses, channel) =>
+  addresses.includes(channel) ? channel : (addresses.find((address) => addressMatches(address, channel)) ?? null);
+
+/**
+ * Where a spec's channel map disagrees with CHANNELS, as "channel: why": a
+ * channel CafAI opens that the spec has no address for, or on which it sends
+ * other frames than CafAI expects. [] when they agree.
+ */
+export function channelDrift(doc) {
+  const map = specChannels(doc);
+  const drift = [];
+  for (const [channel, expected] of Object.entries(CHANNELS)) {
+    const address = specAddress(Object.keys(map), channel);
+    if (address === null) {
+      drift.push(`${channel}: the spec has no address for it`);
+      continue;
+    }
+    const sent = map[address].receive ?? [];
+    if ([...sent].sort().join() !== [...expected].sort().join()) {
+      const at = address === channel ? channel : `${channel} (${address})`;
+      drift.push(`${at}: the spec sends ${sent.join(', ') || 'nothing'}, CafAI expects ${expected.join(', ')}`);
+    }
+  }
+  return drift;
+}
+
+/**
+ * generated/ws.ts from websocket_v1.yml's text. WsReceive is the spec's own
+ * channel map, cut to the addresses that serve a channel CafAI opens, so the
+ * checks read a newer Decaid's frames under the schemas it names itself.
+ */
+export async function generateWs(text, commit) {
   const doc = parse(lf(text));
   if (!String(doc.asyncapi).startsWith('3.')) throw new Error(`expected AsyncAPI 3.x, got ${doc.asyncapi}`);
   const stub = {
@@ -112,24 +146,21 @@ export async function generateWs(text, commit, channels = CHANNELS) {
     components: { schemas: doc.components.schemas },
   };
   const types = astToString(await openapiTS(stub, { silent: true }));
-  const union = (names) => names.map((name) => `components["schemas"]["${name}"]`).join(' | ');
-  const map = (title, action) => {
-    const lines = [title, `export interface Ws${action === 'receive' ? 'Receive' : 'Send'} {`];
-    for (const [address, entry] of Object.entries(channels)) {
-      if (entry[action]?.length) lines.push(`    "${address}": ${union(entry[action])};`);
-    }
-    return [...lines, '}'].join('\n');
-  };
+  const map = specChannels(doc);
+  const opened = new Set(Object.keys(CHANNELS).map((channel) => specAddress(Object.keys(map), channel)));
+  const lines = ["/** What Decaid pushes on the channels CafAI opens, by the spec's address. */", 'export interface WsReceive {'];
+  for (const [address, entry] of Object.entries(map)) {
+    if (!opened.has(address) || !entry.receive?.length) continue;
+    lines.push(`    "${address}": ${entry.receive.map((name) => `components["schemas"]["${name}"]`).join(' | ')};`);
+  }
   return (
     header(
       commit,
-      `Source: ${UPSTREAM.ws} (AsyncAPI ${doc.asyncapi}): its schemas as OpenAPI 3.0 through ${GENERATOR}, and CHANNELS from the script.`,
+      `Source: ${UPSTREAM.ws} (AsyncAPI ${doc.asyncapi}): its schemas as OpenAPI 3.0 through ${GENERATOR}, and its channel map for the channels CafAI opens.`,
     ) +
     types +
     '\n' +
-    map('/** What Decaid pushes on each channel, by address. */', 'receive') +
-    '\n' +
-    map('/** What a client may send on a channel. */', 'send') +
+    [...lines, '}'].join('\n') +
     '\nexport type WsChannel = keyof WsReceive;\n'
   );
 }

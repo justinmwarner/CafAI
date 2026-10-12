@@ -79,7 +79,7 @@ table in section 3), the renders in `docs/superpowers/specs/assets/chat-first-*.
 6. **Typing and resizing.** Typing a message is never interrupted by a
    shot; drafts survive rotation and resizing across 800 px wide and 500 px
    tall, with the card and the row in sensible places.
-7. **Looks.** Light Matcha, light Steel and dark Cherry: the row, the card,
+7. **Looks.** Light Matcha, light Tamper and dark Cherry: the row, the card,
    the chip and the alert legible and in the look.
 8. **Old behaviour still right.** The full loop (new bag, template, v1,
    shot, taste, confirm v2, Undo) on a tablet and a phone; History and

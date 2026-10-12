@@ -268,8 +268,10 @@ Claude Code runs in.
   in an empty folder. Nothing is added to Claude Code's session history.
 - The pairing code keeps other devices on your network out. A device that
   sends five wrong codes is locked out for a while.
-- The log holds times and sizes, never what you or the coach wrote, and
-  never the code (`code` shows it).
+- The log holds times, message counts, durations, model names and the
+  bridge's own events (the address of a device that sent a wrong code,
+  Claude Code's version and error output), never what you or the coach
+  wrote, and never the code (`code` shows it).
 - The coach's usage counts against your plan's limits, like any other use of
   Claude.
 

@@ -3,6 +3,7 @@ import '../testing/setup.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import Box from '@mui/material/Box';
 import { TID } from '../../testIds.ts';
 import { fadedElements, renderThemed } from '../testing/render.tsx';
 import { previewTheme } from '../testing/previewTheme.ts';
@@ -99,5 +100,21 @@ describe('BagConfirmCard (6.8)', () => {
   it('blocks Confirm while the coach is busy', () => {
     renderCard({ disabled: true });
     expect(confirmButton()).toBeDisabled();
+  });
+
+  it("keeps each field's own height inside the chat, so the roast level read from the photo shows", () => {
+    // x-chat's ChatBox (ChatBox.js): border-box, and every element inside inherits it. That took the
+    // select's 12.5 px paddings out of its 25 px height, leaving no room for the level.
+    renderThemed(
+      <Box sx={{ boxSizing: 'border-box', '& *': { boxSizing: 'inherit' } }}>
+        <BagConfirmCard details={BAG_FROM_PHOTO} confirmed={false} onConfirm={vi.fn()} />
+      </Box>,
+    );
+    const card = screen.getByTestId(TID.bagConfirm);
+    // Not the hidden copy of the notes that measures their height.
+    const fields = [...card.querySelectorAll<HTMLInputElement>('.MuiInputBase-input:not([aria-hidden="true"])')];
+    const label = (field: HTMLInputElement) => field.labels?.[0]?.textContent ?? '';
+    expect(fields.map(label)).toEqual(['Name', 'Roaster', 'Origin', 'Process', 'Roast level', 'Roast date', 'Tasting notes']);
+    for (const field of fields) expect(getComputedStyle(field).boxSizing, label(field)).toBe('content-box');
   });
 });

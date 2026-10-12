@@ -407,6 +407,22 @@ describe('MachineAlerts: Connect (6.2)', () => {
     expect(screen.queryByTestId(TID.connectScale)).not.toBeInTheDocument();
   });
 
+  it("keeps the machine's own words when the scale's Connect finds nothing; the scale's alert says why once the machine is back", async () => {
+    const services = await renderAway();
+    const answer = connectByHand(services);
+    await tap(screen.getByTestId(TID.connectScale));
+    await answer([]);
+    // The DE1 is still away: what to do about it stays, never the scale's failure in its place.
+    expect(alert()).toHaveTextContent(NOT_CONNECTED);
+    expect(alert()).not.toHaveTextContent('No scale found');
+    expect(screen.getByTestId(TID.connectMachine)).toBeEnabled();
+    expect(screen.getByTestId(TID.connectScale)).toBeEnabled();
+
+    act(() => services.telemetry.setState({ machineConnected: true }));
+    wait(3000);
+    expect(alert()).toHaveTextContent('No scale found. Check it is switched on and in Bluetooth range.');
+  });
+
   it("says Decaid's own sentence when it could not look at all", async () => {
     const services = await renderAway();
     services.decaid.failNext(

@@ -175,7 +175,7 @@ npm run release:zip     # builds dist\ and release\cafai-<version>.zip
 - **Or serve the build folder** for one run, without installing it:
 
   ```powershell
-  .\Decaid.exe --skin-path E:\source\cafai\dist
+  .\Decaid.exe --skin-path <path-to-cafai>\dist
   ```
 
   Decaid serves the folder as it is, so after `npm run build` a reload shows
@@ -221,7 +221,7 @@ It exercises:
 - Espresso that follows the profile on the simulated scale; it stops at the
   target weight only if the cup gets there first (Blooming Espresso v1 ran
   out of steps at 47 g of 50 g, stopReason "machineEnded").
-- Saved shots, with CafAI's taste notes and star rating written to them.
+- Saved shots, with CafAI's taste notes and rating written to them.
 - Decaid's grinder library and key-value store: real storage, empty at first.
   CafAI's backup lands in its `cafai` namespace and stays across Decaid
   restarts (`.\Decaid.exe --print-storage-paths` shows where).
@@ -268,17 +268,32 @@ In Git Bash it is one line:
 What each switch adds:
 
 - **`DECAID_URL` alone:** the read-only checks: the REST reads CafAI relies
-  on, and five seconds of every WebSocket channel it opens.
+  on, five seconds of every WebSocket channel it opens, and DYE2's setups
+  and Visualizer's last upload read as CafAI reads them (absent is fine; a
+  shape CafAI does not expect is not). While Decaid has the time-to-ready
+  plugin loaded, five seconds of its channel too; the check waits up to
+  20 s for the plugin, and without it is skipped, even with
+  `DECAID_REQUIRE=1`.
 - **`DECAID_WRITE=1`:** CafAI's writes, each put back when the checks end,
   even after a failure: a heartbeat, a key in the `cafai-contract-test`
   namespace, the rating-scale probe, a workflow round trip (the original
   workflow goes back), a test profile (hidden afterwards), a bean and a batch
-  (archived) and gateway mode (restored). They refuse to run unless Decaid
-  simulates the machine and no real machine is connected.
+  (archived), a grinder with a numbered dial and one with a list of settings,
+  as Settings' Add a grinder and the coach's card add them (read back, then
+  deleted), gateway mode (restored), a scan that connects nothing, a
+  connect of the machine Decaid already has connected, and CafAI's Connect
+  for the machine and the scale, which must leave connected devices as they
+  are. The last write check disconnects the simulated machine, checks that
+  CafAI reads Decaid's answer as "not connected" (the words the machine
+  alert shows), and connects the machine again (by its id, or else by a
+  scan that connects, as `scripts/decaid-ci.sh` does). The writes refuse to
+  run unless Decaid simulates the machine and no real machine is connected.
 - **`DECAID_SIM=1`** (writes too): one simulated shot with the profile Decaid
-  has loaded, notes and a rating written on it, then idle. It needs the
-  simulated scale, and gateway mode Disabled or Tracking. The shot stays in
-  Decaid's history, with "CafAI contract test" in its notes.
+  has loaded, **Next step** once during the shot (the machine must move on a
+  step, or end the shot from its last one), notes and a rating written on
+  it, then idle. It needs the simulated scale, and gateway mode Disabled or
+  Tracking. The shot stays in Decaid's history, with "CafAI contract test"
+  in its notes.
 - **`DECAID_REQUIRE=1`** (CI sets it): a check that cannot run fails
   instead of being skipped, so a missing `DECAID_URL` or switch fails the run.
 
@@ -295,7 +310,7 @@ runs them.
 Decaid's port 3000 and checks that it is ready, with the machine connected
 and a group temperature showing. Decaid must serve this repository's build:
 `npm run build`, then start Decaid with
-`.\Decaid.exe --skin-path E:\source\cafai\dist` (part 4).
+`.\Decaid.exe --skin-path <path-to-cafai>\dist` (part 4).
 
 **On Linux, and in CI:** `bash scripts/decaid-ci.sh` downloads Decaid's Linux
 release (`DECAID_TAG`, the latest by default), starts it headless under xvfb
@@ -309,4 +324,8 @@ to, on 2026-10-10): every check passed with `DECAID_WRITE=1 DECAID_SIM=1`
 (31 then, 32 with the read of every batch added that evening; about a
 minute, most of it the simulated shot), and the read-only checks with
 `localhost` as above. `npm run e2e:real` passed with Decaid serving the
-production build (`--skin-path`). Not tried: `scripts/decaid-ci.sh` (Linux).*
+production build (`--skin-path`). On 2026-10-11 all 36 passed (22 reads,
+9 writes, 5 shot) with the checks for Connect, Next step, time-to-ready and
+the plugins' data added, and `npm run e2e:real` again. Later that day the
+grinder write check passed when run on its own (`-t "grinder CafAI adds"`),
+and the 22 reads again. Not tried: `scripts/decaid-ci.sh` (Linux).*

@@ -177,8 +177,8 @@ export const KIAMBU_ITERATIONS: IterationRecord[] = [
       value: 93,
       grind: null,
       summary: 'Raise brew temperature by 1 °C',
-      rationale: 'Sour with a fast flow: more heat extracts more sweetness.',
-      expectedEffect: 'Less sharp, rounder acidity.',
+      rationale: 'Sour with a fast flow: more heat extracts more.',
+      expectedEffect: 'More extraction at the same flow.',
       tips: [],
     },
     change: KIAMBU_VERSIONS[1]?.change ?? null,
@@ -193,8 +193,8 @@ export const KIAMBU_ITERATIONS: IterationRecord[] = [
       value: 38,
       grind: null,
       summary: 'Pull a slightly longer shot',
-      rationale: 'Thin body at a 1:2 ratio; a little more yield adds extraction.',
-      expectedEffect: 'More body and sweetness.',
+      rationale: 'Weak and watery at a 1:2 ratio; a little more yield adds extraction.',
+      expectedEffect: 'A longer shot: more water through the coffee, and more extraction.',
       tips: [],
     },
     change: KIAMBU_VERSIONS[2]?.change ?? null,
@@ -306,6 +306,8 @@ export type ConversationStage =
   | 'shot'
   | 'options'
   | 'rated'
+  /** The shot card as a chat stored before D126 has it: rated with stars, nothing to compare. */
+  | 'starred'
   | 'options-multi'
   | 'diff'
   | 'applying'
@@ -332,7 +334,7 @@ export function conversation(stage: ConversationStage): CoachUiMessage[] {
   out.push(msg('user', [text('Kiambu AA from Square Mile, washed, light roast.\nBlackcurrant, grapefruit, brown sugar.')]));
   out.push(
     msg('assistant', [
-      text('Lovely. A **bright, light** Kenyan. Here is where I would start:'),
+      text('Lovely. A **washed, light** Kenyan. Here is where I would start:'),
       {
         kind: 'templates',
         requestId: 'tu-templates',
@@ -354,17 +356,21 @@ export function conversation(stage: ConversationStage): CoachUiMessage[] {
   }
   out.push(
     msg('assistant', [
-      {
-        kind: 'shot',
-        shotId: 'shot-1',
-        summary: sampleSummary({ channelingFlags: ['pressure_dip_after_peak'] }),
-        ...(stage === 'rated' ? { stars: 4 } : {}),
-      },
+      stage === 'starred'
+        ? { kind: 'shot', shotId: 'shot-1', summary: sampleSummary({ channelingFlags: ['pressure_dip_after_peak'] }), stars: 4 }
+        : {
+            kind: 'shot',
+            shotId: 'shot-1',
+            summary: sampleSummary({ channelingFlags: ['pressure_dip_after_peak'] }),
+            // The bag's first shot: compared with the last shot of the other bag (D126).
+            baseline: { kind: 'otherCoffee', shotId: 'shot-santos-1', coffee: SANTOS.name },
+            ...(stage === 'rated' ? { rating: { verdict: 'better' as const, score: 5 } } : {}),
+          },
     ]),
   );
   out.push(msg('assistant', [text('Got it: 27.8 s, 36.4 g out.')]));
   if (stage === 'shot') return out;
-  const asking = stage === 'options' || stage === 'options-multi' || stage === 'rated';
+  const asking = stage === 'options' || stage === 'options-multi' || stage === 'rated' || stage === 'starred';
   out.push(
     msg('assistant', [
       {
@@ -388,7 +394,7 @@ export function conversation(stage: ConversationStage): CoachUiMessage[] {
   out.push(
     msg('assistant', [
       text(
-        'The shot ran fast and the cup was sharp. One change for the next shot:\n- keep the dose at 18 g\n- keep your puck prep the same',
+        'You found it sharp, and the shot ran fast. One change for the next shot:\n- keep the dose at 18 g\n- keep your puck prep the same',
       ),
       {
         kind: 'diff',
@@ -396,8 +402,8 @@ export function conversation(stage: ConversationStage): CoachUiMessage[] {
         summary: 'Raise brew temperature by 1 °C',
         lines: ['Brew temperature: 92.0 °C -> 93.0 °C (every step +1.0 °C)'],
         manualSteps: [],
-        rationale: 'Sour and a fast 27.8 s shot: a little more heat pulls more sweetness from a light roast.',
-        expectedEffect: 'Less sharp, rounder acidity, a touch more sweetness.',
+        rationale: 'You found it sour, and the shot ran fast at 27.8 s: a little more heat extracts more from a light roast.',
+        expectedEffect: 'Hotter water extracts more in the same time; the flow stays about the same.',
         versionLabel: 'Kiambu AA v2',
         status,
         error: stage === 'failed' ? 'Decaid did not answer. Check that this device is on the same network.' : null,
@@ -426,7 +432,7 @@ export function coachStateFor(stage: ConversationStage, overrides: Partial<Coach
           ? 'choosing_template'
           : stage === 'diff'
             ? 'awaiting_confirmation'
-            : stage === 'options' || stage === 'options-multi' || stage === 'rated'
+            : stage === 'options' || stage === 'options-multi' || stage === 'rated' || stage === 'starred'
               ? 'awaiting_feedback'
               : 'awaiting_shot',
     messages: conversation(stage),

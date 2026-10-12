@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type { Grinder } from '../../api/grinders.ts';
 import { GatewayError } from '../../api/types.ts';
 import {
+  canAddGrinder,
   grinderLabel,
   grinderPatch,
   grinderView,
   LIBRARY_HINT,
   libraryAfterError,
+  withGrinder,
   missingGrinderLabel,
   MISSING_LINE,
   NO_STEP_LINE,
@@ -57,7 +59,7 @@ describe('stepLine: what CafAI will use', () => {
   });
 
   it('has the hint for grinders Decaid does not know, and a line for a link Decaid lost', () => {
-    expect(LIBRARY_HINT).toBe("Add your grinder to Decaid's grinder library (for example with the DYE2 plugin) and CafAI will use its step size.");
+    expect(LIBRARY_HINT).toBe("Add your grinder to Decaid's grinder library and CafAI will use its step size.");
     expect(MISSING_LINE).toBe('Decaid no longer lists this grinder, so the coach gives directions only.');
   });
 
@@ -67,19 +69,39 @@ describe('stepLine: what CafAI will use', () => {
 });
 
 describe("libraryAfterError: what a failed read of Decaid's list means", () => {
-  it('a Decaid without the grinder library (404) answered: it lists no grinders', () => {
-    expect(libraryAfterError(new GatewayError(404, '/api/v1/grinders', 'Route not found', 'http'))).toEqual({ status: 'ready', grinders: [] });
+  it('a Decaid without the grinder library (404) answered: it lists no grinders, and none can be added', () => {
+    const library = libraryAfterError(new GatewayError(404, '/api/v1/grinders', 'Route not found', 'http'));
+    expect(library).toEqual({ status: 'ready', grinders: [], noLibrary: true });
+    expect(canAddGrinder(library)).toBe(false);
   });
 
-  it('anything else means the list cannot be read right now', () => {
+  it('anything else means the list cannot be read right now, a reply CafAI could not read included', () => {
     for (const error of [
       new GatewayError(0, '/api/v1/grinders', 'Could not reach Decaid.', 'network'),
       new GatewayError(0, '/api/v1/grinders', 'Decaid did not answer in time.', 'timeout'),
       new GatewayError(500, '/api/v1/grinders', 'Internal Server Error', 'http'),
+      new GatewayError(200, '/api/v1/grinders', "Decaid sent a reply CafAI doesn't recognise.", 'unexpected_reply'),
       new TypeError('Failed to fetch'),
     ]) {
       expect(libraryAfterError(error), error.message).toEqual({ status: 'unavailable' });
     }
+  });
+});
+
+describe('canAddGrinder and withGrinder: Add a grinder', () => {
+  it('a grinder can be added once Decaid answered with its library, an empty one too', () => {
+    expect(canAddGrinder(READY)).toBe(true);
+    expect(canAddGrinder({ status: 'ready', grinders: [] })).toBe(true);
+    expect(canAddGrinder({ status: 'loading' })).toBe(false);
+    expect(canAddGrinder({ status: 'unavailable' })).toBe(false);
+  });
+
+  it('puts a grinder CafAI added first, as Decaid lists the newest, and a found one in its place', () => {
+    const added = grinder({ id: 'g-new', model: 'Mazzer Philos' });
+    expect(withGrinder(READY, added)).toEqual({ status: 'ready', grinders: [added, NICHE, ENCORE] });
+    expect(withGrinder({ status: 'ready', grinders: [] }, added)).toEqual({ status: 'ready', grinders: [added] });
+    const renamed = { ...ENCORE, burrs: 'M2' };
+    expect(withGrinder(READY, renamed)).toEqual({ status: 'ready', grinders: [NICHE, renamed] });
   });
 });
 

@@ -85,5 +85,10 @@ export type _shot = Assert<
 /** grinders.ts getGrinder: 404 is "no longer in Decaid's library". */
 export type _grinder = Assert<Exactly<Lacks<'/api/v1/grinders/{id}', 'get', 404, 'a deleted grinder'>, never>>;
 
+/** grinders.ts createGrinder: 201 is the grinder as Decaid stored it; a 400 (no model, a wrong type) is Decaid's sentence. */
+export type _grinder_create = Assert<
+  Exactly<Lacks<'/api/v1/grinders', 'post', 201, 'the added grinder'> | Lacks<'/api/v1/grinders', 'post', 400, 'refused'>, never>
+>;
+
 /** client.ts updateSettings reads the settings back after a 200. */
 export type _settings = Assert<Exactly<Lacks<'/api/v1/settings', 'post', 200, 'saved'>, never>>;

@@ -7,12 +7,15 @@ import type {
   CoachUiMessage,
   CoachUiPart,
   DiffStatus,
+  GrinderOfferStatus,
   NoticeProgress,
   SetAsideReason,
+  ShotBaseline,
+  ShotRating,
   TemplateCardItem,
   UiRole,
 } from '../types.ts';
-import type { SaveBagDetails } from '../../coach/contract.ts';
+import type { OfferGrinder, SaveBagDetails } from '../../coach/contract.ts';
 import type { ShotSummary } from '../../coach/types.ts';
 
 export const NEW_BAG_PROMPT =
@@ -76,6 +79,25 @@ export function bagConfirmPart(details: SaveBagDetails): CoachUiPart {
   return { kind: 'bagConfirm', details, confirmed: false };
 }
 
+/** The coach's offer to add a grinder to Decaid's library (D125), waiting for Add or Not now. */
+export function grinderOfferPart(requestId: string, grinder: OfferGrinder): CoachUiPart {
+  return { kind: 'grinderOffer', requestId, grinder, status: 'pending', error: null };
+}
+
+/** A grinder card's state after a tap; `linkedName` once CafAI added or found the grinder. */
+export function setGrinderOfferStatus(
+  messages: readonly CoachUiMessage[],
+  requestId: string,
+  status: GrinderOfferStatus,
+  fields: { error?: string | null; linkedName?: string } = {},
+): CoachUiMessage[] {
+  return updatePart(messages, byRequestId(requestId), (part) =>
+    part.kind === 'grinderOffer'
+      ? { ...part, status, error: fields.error ?? null, ...(fields.linkedName !== undefined ? { linkedName: fields.linkedName } : {}) }
+      : part,
+  );
+}
+
 /** The bean card while it waits for an answer. */
 export function isOpenBeanCard(part: CoachUiPart): boolean {
   return part.kind === 'beanPicker' && part.choice === null && !part.expired;
@@ -94,12 +116,14 @@ export function isOpenBagConfirm(part: CoachUiPart): boolean {
 export function setAside(part: CoachUiPart, reason: SetAsideReason): CoachUiPart {
   if (part.kind === 'templates' || part.kind === 'options') return { ...part, expired: true, setAsideReason: reason };
   if (part.kind === 'diff' && part.status === 'pending') return { ...part, status: 'expired', setAsideReason: reason };
+  if (part.kind === 'grinderOffer' && part.status === 'pending') return { ...part, status: 'expired', error: null, setAsideReason: reason };
   if ((part.kind === 'beanPicker' || part.kind === 'bagConfirm') && (isOpenBeanCard(part) || isOpenBagConfirm(part))) {
     return { ...part, expired: true, setAsideReason: reason };
   }
   return part;
 }
 
+/** A finished shot's card; what it is compared with comes once it is in the chat (shotRating.ts fillBaselines). */
 export function shotPart(shotId: string, summary: ShotSummary): CoachUiPart {
   return { kind: 'shot', shotId, summary };
 }
@@ -175,12 +199,12 @@ export function removeMessage(messages: readonly CoachUiMessage[], messageId: st
   return messages.filter((m) => m.id !== messageId);
 }
 
-/** The barista's star rating on a shot's card. */
-export function setShotStars(messages: readonly CoachUiMessage[], shotId: string, stars: number): CoachUiMessage[] {
+/** The barista's verdict on a shot's card, with what it was compared with (D126). */
+export function setShotRating(messages: readonly CoachUiMessage[], shotId: string, baseline: ShotBaseline, rating: ShotRating): CoachUiMessage[] {
   return updatePart(
     messages,
     (part) => part.kind === 'shot' && part.shotId === shotId,
-    (part) => (part.kind === 'shot' ? { ...part, stars } : part),
+    (part) => (part.kind === 'shot' ? { ...part, baseline, rating } : part),
   );
 }
 

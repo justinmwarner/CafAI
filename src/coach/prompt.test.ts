@@ -161,12 +161,14 @@ describe('buildSystemPrompt: content', () => {
     expect(intake).toMatch(/"roasted 3 days ago" counts back from today/);
   });
 
-  it('gives the roast with every shot, counted to the day of the shot (6.1)', () => {
+  it('gives the roast and the day with every shot, counted to the day of the shot (6.1)', () => {
     const shot = loopOf(prompt)
       .split('\n')
       .find((line) => line.startsWith('3. Shot completed.'))!;
-    expect(shot).toContain('"grinder":{the same fields as at intake},"roast":string|null,"summary":{aggregates and phases}}');
+    expect(shot).toContain('"grinder":{the same fields as at intake},"roast":string|null,"today":"YYYY-MM-DD","summary":{aggregates and phases}}');
     expect(shot).toMatch(/"roast" reads as at intake, counted to the day of the shot/);
+    // A date said in words days after intake counts from the latest day the coach was given.
+    expect(shot).toMatch(/"today" is the day of the shot: a roast date said in words after it counts from there/);
   });
 
   it('tells a connected machine that has not confirmed a version from one that is away (loadError)', () => {
@@ -225,6 +227,13 @@ describe('buildSystemPrompt: content', () => {
     expect(manual).toMatch(/linked but step and values are null.*give the direction and the amount only, with setting null/);
   });
 
+  it('offers once to add a grinder the user names that is not linked, which CafAI asks about on a card (D125)', () => {
+    const manual = prompt.slice(prompt.indexOf('# Manual variables'), prompt.indexOf('# Reading a shot'));
+    expect(manual).toMatch(/names the grinder they use and the grinder in \[context\] is not linked, or is a different one, call offer_grinder once/);
+    expect(manual).toMatch(/CafAI asks them on a card before adding it to Decaid's grinder library/);
+    expect(manual).toMatch(/after \{"added":false\} do not offer it again/);
+  });
+
   it('names exactly the attached tools and claims nothing else', () => {
     for (const name of Object.values(TOOL)) expect(prompt).toContain(name);
     // Crema told the model it had web search when no tool was attached.
@@ -278,6 +287,44 @@ describe('buildSystemPrompt: content', () => {
     expect(clock).toContain(
       'When you tell the user a time on that clock, count it from the start of the pour as the shot card does: the time minus pourStartS, where the pour starts.',
     );
+  });
+
+  describe("leaves the taste to the barista (D127)", () => {
+    const taste = prompt.slice(prompt.indexOf("# Taste is the barista's"), prompt.indexOf('# Rules'));
+
+    it('has its own section after the heuristics it qualifies, before the rules', () => {
+      expect(prompt.indexOf("# Taste is the barista's")).toBeGreaterThan(prompt.indexOf('</heuristics>'));
+      expect(prompt.indexOf('# Rules')).toBeGreaterThan(prompt.indexOf("# Taste is the barista's"));
+      expect(taste).toMatch(/Be generic about taste and specific about the machine/);
+    });
+
+    it('never says what a shot should taste like, predicts a flavour, corrects the palate or names a flavour first', () => {
+      expect(taste).toMatch(/Never say what a shot should, will or ought to taste like/);
+      expect(taste).toMatch(/never predict a flavour from a change \("sweeter", "less sour", "more body", "more chocolate"\)/);
+      expect(taste).toMatch(/Never tell the barista their taste is wrong/);
+      expect(taste).toMatch(/Name no flavour they did not name; the options of the taste question are the one exception/);
+      expect(taste).toMatch(/never correct their palate/);
+    });
+
+    it("explains a change by its mechanics, with the barista's own words as the reason, and asks them to notice the difference", () => {
+      expect(taste).toContain('"You found it sharp, so…"');
+      expect(taste).toMatch(/a finer grind slows the flow, so the water stays longer in the coffee and extracts more/);
+      expect(taste).toMatch(/invite them to notice the difference for themselves/);
+      // The heuristics and the lever descriptions mention flavours: knowledge for choosing, not a promise.
+      expect(taste).toMatch(/use them to choose a change, never as a promise/);
+    });
+
+    it('keeps expectedEffect to mechanics, and says CafAI sends back one that names a taste', () => {
+      expect(taste).toMatch(/expectedEffect is mechanics only/);
+      expect(taste).toMatch(/CafAI sends back one that names a taste/);
+    });
+
+    it('asks the taste question openly, and helps the barista taste with questions, never answers', () => {
+      expect(taste).toMatch(/neutral options that cover the range/);
+      expect(taste).toMatch(/never a guess from the numbers \("It ran fast; was it sour\?"\)/);
+      expect(taste).toMatch(/ask one short question at a time about what they notice/);
+      expect(taste).toMatch(/never answer for them/);
+    });
   });
 
   it('puts the rules after the catalog and the data guide, where they still bind', () => {
@@ -338,5 +385,20 @@ describe('buildSystemPrompt: the heuristics seam', () => {
     expect(swapped).toContain('<heuristics status="reviewed">\nReviewed rules.\n</heuristics>');
     const strip = (text: string) => text.replace(/<heuristics[\s\S]*<\/heuristics>/, '');
     expect(strip(swapped)).toBe(strip(prompt));
+  });
+});
+
+describe("buildSystemPrompt: the barista's verdict (D126)", () => {
+  it('documents the verdict event: the five words and what the shot was compared with', () => {
+    const line = loopOf(prompt)
+      .split('\n')
+      .find((l) => l.includes(EVENT.shotRated))!;
+    expect(line).toContain('"verdict":"much worse"|"worse"|"about the same"|"better"|"much better"');
+    expect(line).toContain('{"kind":"previous","shotId":...}|{"kind":"otherCoffee","shotId":...,"coffee":string|null}|{"kind":"usual"}');
+    expect(line).toContain('a newer one for the same shot replaces it');
+  });
+
+  it('puts the verdict above the numbers, never contradicted or explained', () => {
+    expect(loopOf(prompt)).toContain('Their verdict outranks the numbers: never contradict it or explain their taste to them');
   });
 });

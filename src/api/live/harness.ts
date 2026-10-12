@@ -18,7 +18,7 @@ import {
   parseShotStateFrame,
   parseWaterLevelsFrame,
 } from '../frames.ts';
-import { createTelemetryStore } from '../telemetry.ts';
+import { createTelemetryStore, parseTimeToReadyFrame } from '../telemetry.ts';
 import type { DecaidSettings, DeviceEntry, WorkflowContext } from '../types.ts';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -124,14 +124,17 @@ export const FRAME_PARSERS: Readonly<Record<string, (value: unknown) => unknown>
   '/ws/v1/machine/shotState': parseShotStateFrame,
   '/ws/v1/machine/waterLevels': parseWaterLevelsFrame,
   '/ws/v1/machine/shotSettings': parseShotSettingsFrame,
+  '/ws/v1/plugins/time-to-ready.reaplugin/timeToReady': parseTimeToReadyFrame,
 };
 
 /**
  * The paths of the channels CafAI's telemetry store opens, learnt from the
  * store itself (started once with sockets that only note their address), so
- * the suite checks whatever CafAI opens rather than a copy of the list.
+ * the suite checks whatever CafAI opens rather than a copy of the list:
+ * Decaid's own (`decaid`), and the ones it opens only while Decaid has their
+ * plugin loaded (`plugins`: time-to-ready's, D103).
  */
-export function telemetryChannels(): string[] {
+export function openedChannels(): { decaid: string[]; plugins: string[] } {
   const opened: string[] = [];
   class AddressOnlySocket {
     onopen: unknown = null;
@@ -153,8 +156,16 @@ export function telemetryChannels(): string[] {
     visibility: null,
   });
   store.start();
+  const decaid = [...opened];
+  store.watchTimeToReady(true);
+  const plugins = opened.slice(decaid.length);
   store.stop();
-  return opened;
+  return { decaid, plugins };
+}
+
+/** The channels CafAI's telemetry store always opens (openedChannels). */
+export function telemetryChannels(): string[] {
+  return openedChannels().decaid;
 }
 
 /** The spec's name for a channel: "ws/v1/machine/snapshot". */

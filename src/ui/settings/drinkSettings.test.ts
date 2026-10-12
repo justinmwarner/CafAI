@@ -7,6 +7,8 @@ import {
   HOT_WATER_FLOW,
   HOT_WATER_TEMPERATURE,
   HOT_WATER_VOLUME,
+  isDrinkOff,
+  nudgeDrinkField,
   RINSE_DURATION,
   RINSE_FIELDS,
   RINSE_FLOW,
@@ -59,7 +61,7 @@ describe('clampDrinkField', () => {
     expect(clampDrinkField(HOT_WATER_DURATION, 0)).toBe(1);
     expect(clampDrinkField(HOT_WATER_DURATION, 500)).toBe(120);
     expect(clampDrinkField(RINSE_DURATION, 0)).toBe(1);
-    expect(clampDrinkField(RINSE_DURATION, 500)).toBe(30);
+    expect(clampDrinkField(RINSE_DURATION, 500)).toBe(60);
     expect(clampDrinkField(RINSE_TEMPERATURE, 0)).toBe(1);
     expect(clampDrinkField(RINSE_TEMPERATURE, 150)).toBe(100);
     expect(clampDrinkField(HOT_WATER_FLOW, 0)).toBe(0.1);
@@ -73,10 +75,60 @@ describe('clampDrinkField', () => {
 });
 
 describe('steamTemperatureField', () => {
-  it('marks 0 as off, with a note, regardless of model', () => {
-    expect(steamTemperatureField(null).offValue).toBe(0);
-    expect(steamTemperatureField('Bengle').offValue).toBe(0);
-    expect(steamTemperatureField(null).offNote).toBe('Steam is off in Decaid');
+  it('reads anything below 135 °C as off, as Decaid does, with a note, regardless of model', () => {
+    for (const model of [null, 'Bengle']) {
+      const field = steamTemperatureField(model);
+      expect(isDrinkOff(field, 0)).toBe(true);
+      expect(isDrinkOff(field, 120)).toBe(true);
+      expect(isDrinkOff(field, 134)).toBe(true);
+      expect(isDrinkOff(field, 135)).toBe(false);
+      expect(isDrinkOff(field, 170)).toBe(false);
+    }
+    expect(steamTemperatureField(null).offText).toBe('Off in Decaid');
+  });
+
+  it('no other field has an off value', () => {
+    for (const field of [STEAM_DURATION, STEAM_FLOW, ...HOT_WATER_FIELDS, ...RINSE_FIELDS]) expect(isDrinkOff(field, 0)).toBe(false);
+  });
+});
+
+describe('nudgeDrinkField', () => {
+  it('moves one step the way it points, rounded as the field is', () => {
+    expect(nudgeDrinkField(STEAM_DURATION, 50, 1)).toBe(55);
+    expect(nudgeDrinkField(STEAM_FLOW, 0.8, 1)).toBe(0.9);
+    expect(nudgeDrinkField(STEAM_FLOW, 0.8, -1)).toBe(0.7);
+    expect(nudgeDrinkField(RINSE_DURATION, 45, 1)).toBe(46);
+  });
+
+  it('sends nothing for More at or above the top, or Less at or below the floor: never the wrong way', () => {
+    expect(nudgeDrinkField(STEAM_FLOW, 2.5, 1)).toBeNull();
+    expect(nudgeDrinkField(STEAM_FLOW, 3, 1)).toBeNull();
+    expect(nudgeDrinkField(RINSE_DURATION, 60, 1)).toBeNull();
+    expect(nudgeDrinkField(RINSE_DURATION, 75, 1)).toBeNull();
+    // streamline's steam off is a steam time of 0: Less must not write 1 s.
+    expect(nudgeDrinkField(STEAM_DURATION, 0, -1)).toBeNull();
+    expect(nudgeDrinkField(STEAM_FLOW, 0.1, -1)).toBeNull();
+    expect(nudgeDrinkField(steamTemperatureField(null), 160, 1)).toBeNull();
+    expect(nudgeDrinkField(steamTemperatureField(null), 135, -1)).toBeNull();
+  });
+
+  it('brings a value beyond the far end back into the range', () => {
+    expect(nudgeDrinkField(HOT_WATER_VOLUME, 300, -1)).toBe(255);
+    expect(nudgeDrinkField(STEAM_DURATION, 0, 1)).toBe(5);
+    expect(nudgeDrinkField(steamTemperatureField(null), 170, -1)).toBe(160);
+  });
+
+  it('sends nothing for a value that is not a number', () => {
+    expect(nudgeDrinkField(STEAM_FLOW, Number.NaN, 1)).toBeNull();
+  });
+});
+
+describe("the ranges take in what Decaid's own screens set (steam_form.dart, hot_water_form.dart, rinse_form.dart)", () => {
+  it('steam flow to 2.5 ml/s and flush time to 60 s; the byte-packed hot water volume stops at 255 ml', () => {
+    expect(STEAM_FLOW.range.max).toBe(2.5);
+    expect(RINSE_DURATION.range.max).toBe(60);
+    expect(HOT_WATER_VOLUME.range.max).toBe(255);
+    expect(STEAM_DURATION.range.max).toBe(120);
   });
 });
 
@@ -89,8 +141,17 @@ describe('field lists', () => {
     expect(HOT_WATER_FIELDS.map((f) => f.label)).toEqual(['Hot water temperature', 'Hot water volume', 'Hot water time', 'Hot water flow']);
   });
 
-  it('orders flush as time, temperature, flow', () => {
-    expect(RINSE_FIELDS.map((f) => f.label)).toEqual(['Flush time', 'Flush temperature', 'Flush flow']);
+  it('orders flush as temperature, time, flow: temperature first, as steam and hot water have it (D124)', () => {
+    expect(RINSE_FIELDS.map((f) => f.label)).toEqual(['Flush temperature', 'Flush time', 'Flush flow']);
+  });
+
+  it("shows each field under its drink's heading by the end of its label, and says its unit in words", () => {
+    for (const field of [...steamFields(null), ...HOT_WATER_FIELDS, ...RINSE_FIELDS]) {
+      expect(field.label.toLowerCase().endsWith(` ${field.shortLabel.toLowerCase()}`), field.label).toBe(true);
+      expect(field.spokenUnit, field.label).toMatch(/^[A-Za-z ]+$/);
+    }
+    expect(steamFields(null).map((f) => `${f.unit} ${f.spokenUnit}`)).toEqual(['°C degrees Celsius', 's seconds', 'ml/s millilitres per second']);
+    expect(HOT_WATER_VOLUME.spokenUnit).toBe('millilitres');
   });
 
   it('marks temperature, time and volume fields as integers, and flow as not', () => {

@@ -6,5 +6,6 @@ export type DiffPart = Extract<CoachUiPart, { kind: 'diff' }>;
 export type ShotPart = Extract<CoachUiPart, { kind: 'shot' }>;
 export type BeanPickerPart = Extract<CoachUiPart, { kind: 'beanPicker' }>;
 export type BagConfirmPart = Extract<CoachUiPart, { kind: 'bagConfirm' }>;
+export type GrinderOfferPart = Extract<CoachUiPart, { kind: 'grinderOffer' }>;
 export type NoticePart = Extract<CoachUiPart, { kind: 'notice' }>;
 export type NoticeTone = NoticePart['tone'];

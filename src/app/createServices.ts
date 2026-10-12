@@ -8,7 +8,7 @@ import {
   defaultGatewayOrigin,
   detectHost,
 } from '../api/index.ts';
-import { createPluginDirectory } from '../api/plugins.ts';
+import { createPluginDirectory, watchPlugins } from '../api/plugins.ts';
 import { DEFAULT_MODEL, MODELS } from '../llm/index.ts';
 import { createIdbStorage, restoreFromMirrorIfEmpty, startLateRestore } from '../storage/index.ts';
 import { openCoachSourceStore } from '../storage/coachSource.ts';
@@ -32,13 +32,15 @@ export async function createServices(win: Window): Promise<AppServices> {
   const telemetry = createTelemetryStore({ client: decaid, wsOrigin: decaid.wsOrigin });
   const heartbeat = createHeartbeat(decaid);
   const plugins = createPluginDirectory(decaid);
-  void plugins.refresh();
+  // Decaid starts its plugins after it serves the skin: read now and keep reading for a while (D103).
+  const stopPluginWatch = watchPlugins(plugins, { telemetry });
 
   const storage = await createIdbStorage({ kv: decaid.kv, appVersion: APP_VERSION, defaultModel: DEFAULT_MODEL });
   // Browser storage can be lost (a temporary origin, a reinstall, a Decaid
   // update): bring the non-secret records back from Decaid's key-value backup
   // before anything reads them, and the API key from its copy in Decaid when
-  // the user keeps one there (D99).
+  // the user keeps one there and did not forget it here, once what that copy
+  // is owed has gone out (D99).
   const [restore] = await Promise.all([restoreFromMirrorIfEmpty(storage), storage.keyBackup.restoreIfMissing()]);
 
   const appearance = createAppearanceStore(storage.settings, (await storage.settings.get()).appearance);
@@ -87,17 +89,24 @@ export async function createServices(win: Window): Promise<AppServices> {
           },
         })
       : null;
+  // The key's copy in Decaid (D99): a copy or delete Decaid did not take goes out when it may be back,
+  // before anything is restored from it, and a key it brings back reaches the coach.
+  const syncKey = () => {
+    void storage.keyBackup.restoreIfMissing().then((restored) => {
+      if (restored) void coach.refresh();
+    });
+  };
   let machineConnected = telemetry.getState().machineConnected;
   let decaidOpen = telemetry.getState().sockets.devices === 'open';
-  const stopTelemetryWatch = late
-    ? telemetry.subscribe(() => {
-        const now = telemetry.getState();
-        const back = (now.machineConnected && !machineConnected) || (now.sockets.devices === 'open' && !decaidOpen);
-        machineConnected = now.machineConnected;
-        decaidOpen = now.sockets.devices === 'open';
-        if (back) late.retryNow();
-      })
-    : () => undefined;
+  const stopTelemetryWatch = telemetry.subscribe(() => {
+    const now = telemetry.getState();
+    const back = (now.machineConnected && !machineConnected) || (now.sockets.devices === 'open' && !decaidOpen);
+    machineConnected = now.machineConnected;
+    decaidOpen = now.sockets.devices === 'open';
+    if (!back) return;
+    late?.retryNow();
+    syncKey();
+  });
 
   // Backgrounding can unload the page after ten minutes: back up on the way out.
   // Coming back into view can mean a plugin was loaded or unloaded meanwhile,
@@ -108,6 +117,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     } else {
       void plugins.refresh();
       late?.retryNow();
+      syncKey();
     }
   };
   win.document.addEventListener('visibilitychange', onVisibility);
@@ -126,6 +136,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     coachSource,
     dispose() {
       win.document.removeEventListener('visibilitychange', onVisibility);
+      stopPluginWatch();
       late?.stop();
       stopTelemetryWatch();
       stopRestoredWatch();

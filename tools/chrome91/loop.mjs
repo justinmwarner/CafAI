@@ -1,10 +1,12 @@
 // The whole coach loop in a real Chromium 91 (puppeteer 9), against the
-// mock-mode build: settings -> new bag (the chat opens with the live stats
-// card, which the first message takes away) -> templates -> v1 -> Stats
-// brings the card back -> scripted shot from Espresso in the top bar's
-// machine row (it turns into Stop, the Shot view takes the screen, the coach
-// comes back with the card) -> taste chip -> confirmed v2. Fails on any page
-// error or console error.
+// mock-mode build: settings -> new bag (the chat opens with "Which coffee is
+// it?", its rows from the mock's bean library, and the live stats card) ->
+// Something else (the bag is described in the chat; the first message takes
+// the stats card away) -> templates -> v1 -> Stats brings the card back ->
+// scripted shot from Espresso in the top bar's machine row (it turns into
+// Stop, the Shot view takes the screen, the coach comes back with the card)
+// -> Better under "Compared with ...?" (D126) -> taste chip -> confirmed v2.
+// Fails on any page error or console error.
 //
 // usage: npm run build:mock && node tools/chrome91/loop.mjs
 import http from 'node:http';
@@ -47,7 +49,10 @@ await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1.125, has
 const problems = [];
 page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 page.on('console', (m) => {
-  if (m.type() === 'error') problems.push(`console.error: ${m.text()}`);
+  // The rating-scale probe (D101) asks about a made-up shot, which a 0-10 Decaid
+  // refuses with 400 by design; the browser logs that refusal as an error.
+  const probe = m.text().startsWith('Failed to load resource') && (m.location()?.url ?? '').includes('cafai-probe');
+  if (m.type() === 'error' && !probe) problems.push(`console.error: ${m.text()}`);
 });
 
 const tid = (id) => `[data-testid="${id}"]`;
@@ -113,13 +118,20 @@ try {
     await fill('api-key-input', 'sk-ant-chrome91');
     await tap('api-key-save');
   });
-  await step('new bag: the chat opens with the live stats card', async () => {
+  await step('new bag: "Which coffee is it?" comes first, with the live stats card', async () => {
     await tap('nav-coach');
     await tap('new-bag');
+    await page.waitForSelector(`${tid('chat')} ${tid('bean-card')}`, { timeout: 15000, visible: true });
+    // Its rows: the coffees in the mock's bean library.
+    await page.waitForSelector(`${tid('bean-card')} ${tid('bean-option')}`, { timeout: 15000, visible: true });
     await page.waitForSelector(`${tid('chat')} ${tid('stats-card')}`, { timeout: 15000, visible: true });
     await waitText('machine-state', 'Ready');
   });
-  await step('describe the bag: the card goes', async () => {
+  await step('Something else: the card takes the answer', async () => {
+    await tap('bean-something-else');
+    await page.waitForSelector(tid('bean-something-else'), { timeout: 15000, hidden: true });
+  });
+  await step('describe the bag: the stats card goes', async () => {
     await fill('composer-input', 'Kiambu AA, light roast, washed, blackcurrant');
     await tap('composer-send');
     await page.waitForSelector(tid('stats-card'), { timeout: 15000, hidden: true });
@@ -142,6 +154,11 @@ try {
   await step('the coach comes back with the shot card', async () => {
     await page.waitForSelector(tid('shot-card'), { timeout: 60000, visible: true });
     await page.waitForFunction(() => window.location.hash === '#/', { timeout: 15000 });
+  });
+  await step('say how it compared: Better, once the coach is done', async () => {
+    const better = `${tid('shot-rating')} [role="radio"]:nth-child(4)`;
+    await tapAt(better, 30000);
+    await page.waitForSelector(`${better}[aria-checked="true"]`, { timeout: 15000 });
   });
   await step('tap a taste chip', async () => tap('option-sour-sharp', 30000));
   await step('confirm the change', async () => {

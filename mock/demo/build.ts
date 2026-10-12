@@ -3,7 +3,7 @@
  * own coach engine, so what it stores is exactly what the engine stores:
  * the chat (cards, notices, the user's bubbles), the API transcript with its
  * tool_use / tool_result pairs, versions, iterations, settings, and in Decaid
- * the profiles, the shot records with CafAI's notes and stars, and the
+ * the profiles, the shot records with CafAI's notes and ratings, and the
  * workflow with the active version tagged as the engine tags it.
  *
  * The engine runs on in-memory ports: CafAI's storage in memory, a mock
@@ -46,7 +46,7 @@ const TICK_MS = 40;
 /** Timers that never fire: the engine's 30 s retries and machine checks have nothing to do here. */
 const NO_TIMERS: OutboxTimers = { setTimeout: () => 0, clearTimeout: () => undefined };
 
-/** Let the engine's background writes (shot notes and stars) finish: they only wait on promises. */
+/** Let the engine's background writes (shot notes and ratings) finish: they only wait on promises. */
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 function storyClock(startMs: number) {
@@ -168,9 +168,9 @@ export async function buildDemo(nowMs: number): Promise<DemoBuild> {
     checkTimers: NO_TIMERS,
   });
 
-  // A rating the engine refuses (0 stars) waits its turn on the engine's
-  // queue: awaiting it waits for a shot the engine took from telemetry.
-  const drain = () => engine.rateShot('', 0);
+  // A rating the engine refuses (a shot no card shows) waits its turn on the
+  // engine's queue: awaiting it waits for a shot the engine took from telemetry.
+  const drain = () => engine.rateShot('', 'same');
 
   try {
     await engine.start();
@@ -210,7 +210,7 @@ export async function buildDemo(nowMs: number): Promise<DemoBuild> {
           break;
         case 'rate': {
           const card = lastPart(engine, 'shot', () => true);
-          await engine.rateShot(card.shotId, step.stars);
+          await engine.rateShot(card.shotId, step.verdict);
           break;
         }
         case 'answer': {
@@ -238,7 +238,7 @@ export async function buildDemo(nowMs: number): Promise<DemoBuild> {
       if (state.error !== null && step.kind !== 'strayShot') throw new Error(`The demo story's ${label} ended with an error: ${state.error}`);
       if (state.busy) throw new Error(`The demo story's ${label} left the coach busy.`);
     }
-    // The outbox keeps nothing: every note and star reached Decaid.
+    // The outbox keeps nothing: every note and rating reached Decaid.
     await settle();
     const exportedAt = new Date(nowMs).toISOString();
     return { data: storage.snapshot(exportedAt, DEMO_APP_VERSION), decaid: snapshotStore(decaid) };

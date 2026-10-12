@@ -132,4 +132,42 @@ describe('createServices: bags and the key back from Decaid (D99, D100)', () => 
     await vi.waitFor(() => expect(services!.coach.getState().hasApiKey).toBe(true));
     expect(services.coach.getState().restoredFromBackup).toBe(false);
   });
+
+  const keyCopy = () => decaid.state.store.get(KEY_NAMESPACE)?.get(KEY_NAME);
+
+  it('never brings back a key forgotten while Decaid was away: the next start deletes the copy first', async () => {
+    decaid.keepKey(API_KEY);
+    services = await createServices(window);
+    expect(services.coach.getState().hasApiKey).toBe(true);
+    await services.storage.keyBackup.setOn(true);
+    await services.storage.settings.update({ keepKeyInDecaid: true });
+    decaid.state.down = true;
+    expect(await services.storage.keyBackup.forgetKey(true)).toBe(false);
+    expect(keyCopy()).toBe(API_KEY);
+    services.dispose();
+    (services.storage as IdbStorage).close();
+    services = null;
+
+    decaid.state.down = false;
+    services = await createServices(window);
+    expect(keyCopy()).toBeUndefined();
+    expect(await services.storage.secrets.getApiKey()).toBeNull();
+    expect(services.coach.getState().hasApiKey).toBe(false);
+  });
+
+  it("sends a copy Decaid did not take as soon as Decaid's devices socket opens, without a restart", async () => {
+    const second = 'sk-ant-api03-TESTKEY-SECOND-0123456789abcdefghijklmnopqrstuvwxyz-DO-NOT-LEAK';
+    decaid.backUp();
+    services = await createServices(window);
+    await services.storage.keyBackup.saveKey(API_KEY, true);
+    expect(keyCopy()).toBe(API_KEY);
+    decaid.state.down = true;
+    expect(await services.storage.keyBackup.saveKey(second, true)).toBe(false);
+    expect(keyCopy()).toBe(API_KEY);
+
+    decaid.state.down = false;
+    sockets.latest('/ws/v1/devices').open();
+    await vi.waitFor(() => expect(keyCopy()).toBe(second));
+    expect(await services.storage.secrets.getApiKey()).toBe(second);
+  });
 });

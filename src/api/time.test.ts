@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { parseDecaidTimestamp } from './time.ts';
+import { formatDecaidTimestamp, parseDecaidTimestamp } from './time.ts';
+
+describe('formatDecaidTimestamp', () => {
+  it("writes a moment as Decaid writes a local time, which reads back to the same moment", () => {
+    const moment = new Date(2026, 9, 10, 7, 5, 3, 42);
+    expect(formatDecaidTimestamp(moment)).toBe('2026-10-10T07:05:03.042000');
+    expect(parseDecaidTimestamp(formatDecaidTimestamp(moment))).toBe(moment.getTime());
+  });
+});
 
 // Values below are taken from docs/verified/examples (machine, scale and shot
 // timestamps are local and zone-less; devices and shot createdAt carry a Z).

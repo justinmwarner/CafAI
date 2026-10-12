@@ -230,8 +230,12 @@ function EmptyState({ children }: { children: ReactNode }) {
   );
 }
 
-/** Bags came back from Decaid's backup but the key did not (5.5). */
-const KEY_AGAIN = "Decaid was updated or this browser's storage was cleared. Your bags are back; paste your API key again.";
+/**
+ * Bags came from Decaid's backup but the key did not (5.5): after a Decaid
+ * update or cleared browser storage, or on a device's first visit (a phone),
+ * which CafAI cannot tell apart, so the words hold for both.
+ */
+const KEY_AGAIN = "Your bags came from Decaid's backup. Paste your API key to go on.";
 
 function ApiKeyCard({ settingsHref, restored }: { settingsHref: string; restored: boolean }) {
   // Settings > Where the coach runs: on the user's computer the coach needs CafAI Bridge's code instead.
@@ -363,11 +367,13 @@ export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
           onConfirm={(requestId) => fire(coach.confirmChange(requestId))}
           onDecline={(requestId) => fire(coach.declineChange(requestId))}
           onUndo={() => fire(coach.undo())}
-          onRateShot={(shotId, stars) => fire(coach.rateShot(shotId, stars))}
+          onRateShot={(shotId, verdict) => fire(coach.rateShot(shotId, verdict))}
           onPickBean={(batchId) => fire(coach.pickBean(batchId))}
           onSkipBeanPick={() => fire(coach.skipBeanPick())}
           onBagPhoto={(photo) => fire(coach.readBagPhoto(photo))}
           onConfirmBag={(details) => fire(coach.confirmBag(details))}
+          onAddGrinder={(requestId) => fire(coach.addGrinder(requestId))}
+          onDeclineGrinder={(requestId) => fire(coach.declineGrinder(requestId))}
           onOpenGraph={() => navigate({ name: 'shot' })}
           statsCard={statsShown}
           onStats={showStats}

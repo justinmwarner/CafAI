@@ -10,7 +10,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadSpecValidator } from '../../contract/decaid/schema.ts';
 import { createDecaidClient } from '../../src/api/client.ts';
-import { getGrinder, listGrinders } from '../../src/api/grinders.ts';
+import { createGrinder, getGrinder, grinderRequest, listGrinders } from '../../src/api/grinders.ts';
 import { loadProfileOnMachine } from '../../src/api/machineProfile.ts';
 import { activateProfile, createProfileVersion } from '../../src/api/workflow.ts';
 import type { WorkflowContext } from '../../src/api/types.ts';
@@ -294,8 +294,11 @@ const ROUTES: ReadonlyArray<[Method, RegExp]> = [
   ['GET', /^\/api\/v1\/shots\/(?!latest)[^/?]+$/],
   ['PUT', /^\/api\/v1\/shots\/(?!cafai-probe)[^/?]+$/],
   ['PUT', PROBE],
+  ['GET', /^\/api\/v1\/grinders$/],
   ['GET', /^\/api\/v1\/grinders\?includeArchived=true$/],
   ['GET', /^\/api\/v1\/grinders\/[^/?]+$/],
+  ['POST', /^\/api\/v1\/grinders$/],
+  ['DELETE', /^\/api\/v1\/grinders\/[^/?]+$/],
   ['GET', /^\/api\/v1\/beans$/],
   ['POST', /^\/api\/v1\/beans$/],
   ['PUT', /^\/api\/v1\/beans\/[^/]+$/],
@@ -410,6 +413,18 @@ describe('the mock against the spec', () => {
 
     const grinders = (await attempt(() => listGrinders(client, { includeArchived: true, fetch: recording }))) ?? [];
     if (grinders[0]) await attempt(() => getGrinder(client, grinders[0]!.id, { fetch: recording }));
+    // A grinder as Settings' Add a grinder and the coach's offer add it, with each kind of dial.
+    for (const draft of [
+      { model: 'Mazzer Philos', burrs: '64 mm flat', settingType: 'numeric' as const, smallStep: 0.5, bigStep: 2, values: null },
+      { model: 'Baratza Encore', burrs: null, settingType: 'preset' as const, smallStep: null, bigStep: null, values: ['1', '2', '3'] },
+      { model: 'Kinu M47', burrs: null, settingType: null, smallStep: null, bigStep: null, values: null },
+    ]) {
+      const request = grinderRequest(draft);
+      const added = request ? await attempt(() => createGrinder(client, request, { fetch: recording })) : null;
+      // Deleting is not CafAI's, but the tests against a real Decaid undo with it.
+      if (added) await attempt(() => recording(`${ORIGIN}/api/v1/grinders/${encodeURIComponent(added.id)}`, { method: 'DELETE' }));
+    }
+    await attempt(() => listGrinders(client, { fetch: recording }));
 
     // A bag's bean and batch as the engine adds them (spec 6.1): roast date as the bag keeps it, YYYY-MM-DD.
     await attempt(() => client.listBeans());
@@ -452,8 +467,10 @@ describe('the mock against the spec', () => {
       const shot = await attempt(() => client.getShot(latest.id));
       const line = cafaiNotesLine('Sweet, a little sharp', 'Kiambu AA v1');
       const espressoNotes = mergeNotes(shot?.annotations?.espressoNotes, null, line);
+      // As CafAI writes a verdict (D126): the running score, and the words with what they compared.
+      const rating = { verdict: 'better', comparedWith: { kind: 'previous', shotId: 'shot-0' } };
       await attempt(() =>
-        client.updateShot(latest.id, { annotations: { espressoNotes, enjoyment: 8, extras: { [EXTRAS_KEY]: { notes: line, stars: 4 } } } }),
+        client.updateShot(latest.id, { annotations: { espressoNotes, enjoyment: 7, extras: { [EXTRAS_KEY]: { notes: line, ...rating } } } }),
       );
     }
     await attempt(() => client.probeEnjoymentScale());

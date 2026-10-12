@@ -16,7 +16,6 @@ import type {
   MachineSnapshot,
   PaginatedShots,
   ProfileCreateRequest,
-  ProfileRecord,
   ShotRecord,
   ShotSettings,
   ShotStateEvent,
@@ -27,6 +26,7 @@ import type {
   WorkflowPatch,
 } from '../../src/api/types.ts';
 import { clone } from '../../src/util/clone.ts';
+import type { DecaidProfileRecord } from '../decaid/profiles.ts';
 import buildInfo from './build-info.json';
 import devicesWs from './devices-ws.json';
 import error from './error.json';
@@ -67,8 +67,8 @@ export const fixtures = {
   machineSnapshotWs: typed<MachineSnapshot>(machineSnapshotWs),
   machineState: typed<MachineSnapshot>(machineState),
   profileCreateRequest: typed<ProfileCreateRequest>(profileCreateRequest),
-  profileRecord: typed<ProfileRecord>(profileRecord),
-  profilesList: typed<ProfileRecord[]>(profilesList),
+  profileRecord: typed<DecaidProfileRecord>(profileRecord),
+  profilesList: typed<DecaidProfileRecord[]>(profilesList),
   scaleSnapshotWs: typed<WeightSnapshot>(scaleSnapshotWs),
   scaleStatusWs: typed<{ status: 'connected' | 'disconnected' }>(scaleStatusWs),
   shotRecord: typed<ShotRecord>(shotRecord),

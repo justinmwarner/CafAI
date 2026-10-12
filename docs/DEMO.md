@@ -30,19 +30,22 @@ The coach screen, on the bag **Kiambu AA** (Kenya, washed, light roast) with
    three starting profiles; **Blooming Espresso** is in use.
 2. Where v1 stops (50 g for the 18 g dose) and "Loaded Kiambu AA v1 on the
    machine.".
-3. Shot one (2 stars), tasted "Sour / sharp". The coach looks at the pressure
-   curve and proposes v2, 1 °C hotter: confirmed and loaded.
-4. Shot two (3 stars): the pour never built pressure, so the coach asks what
-   the puck looks like (Pinholes and Wet patches are picked) and proposes one
-   step finer on the Niche Zero, 15 to 14.5, a change made by hand.
+3. Shot one, rated **Much worse** than the last shot of Santos (D126), tasted
+   "Sour / sharp". The coach looks at the pressure curve and proposes v2,
+   1 °C hotter: confirmed and loaded.
+4. Shot two, **Better** than the shot before: the pour never built pressure,
+   so the coach asks what the puck looks like (Pinholes and Wet patches are
+   picked) and proposes one step finer on the Niche Zero, 15 to 14.5, a
+   change made by hand.
 5. This morning, a shot that ran "D-Flow / default" (someone loaded another
    profile): CafAI says it is not part of the dial-in, and Retry loads
    Kiambu AA v2 again.
-6. Shot three (4 stars), answered with Other: "Sweeter, but a little thin".
-   The coach proposes a slower pour (v3); it is declined (Not now), asked for
-   again, loaded, and undone ("Back on Kiambu AA v2."). A middle way, v4 at
-   2.0 ml/s, is loaded and keeps its Undo.
-7. Shot four, a few minutes ago, not rated, and the open question.
+6. Shot three, **Better** again, answered with Other: "Sweeter, but a little
+   thin". The coach proposes a slower pour (v3); it is declined (Not now),
+   asked for again, loaded, and undone ("Back on Kiambu AA v2."). A middle
+   way, v4 at 2.0 ml/s, is loaded and keeps its Undo.
+7. Shot four, a few minutes ago, not rated ("Compared with your previous
+   shot?" waits for a word), and the open question.
 
 Every puck is its own, as at a real grinder, so no two shots share their
 numbers. A shot's time is the pour (D78), and every other time on its card
@@ -66,7 +69,8 @@ shot you pull now (the mock's default puck) runs about 60.4 s, first drops
 at 5.4 s, 5.3 bar at 59 s, 41.4 g.
 
 The bag picker also lists **Santos** (Brazil, natural, medium-dark): Gentle
-and Sweet, one 5-star shot answered "Balanced, sweet". The coach proposes
+and Sweet, one shot rated **Better** than the coffee usually enjoyed and
+answered "Balanced, sweet". The coach proposes
 keeping the recipe as it is (a keep card) and the barista confirms it, so
 History says "Kept as is". Its shot card carries the channeling warning
 ("Pressure dipped after the peak"): Blooming Espresso pours with flow only,

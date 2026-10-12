@@ -11,6 +11,7 @@
  *
  * The live stats card (D91) is one more row at the end, on screen only: it
  * is never one of `messages`, so it is never stored or sent to the coach.
+ * So are the taste words above the composer (D127): they only fill the draft.
  */
 import {
   createContext,
@@ -31,28 +32,34 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import SpeedRounded from '@mui/icons-material/SpeedRounded';
 import { ChatBox, type ChatBoxFeatures, type ChatBoxSlotProps, type ChatBoxSlots } from '@mui/x-chat';
-import type {
-  ChatAdapter,
-  ChatLocaleText,
-  ChatMessage,
-  ChatMessagePart,
-  ChatPartRendererMap,
-  ChatPartRendererProps,
+import {
+  useChatComposer,
+  type ChatAdapter,
+  type ChatLocaleText,
+  type ChatMessage,
+  type ChatMessagePart,
+  type ChatPartRendererMap,
+  type ChatPartRendererProps,
 } from '@mui/x-chat/headless';
-import type { CoachUiMessage, CoachUiPart } from '../../app/types.ts';
+import type { CoachUiMessage, CoachUiPart, ShotVerdict } from '../../app/types.ts';
 import type { SaveBagDetails } from '../../coach/contract.ts';
 import type { BagPhoto } from '../../llm/extractBag.ts';
 import { StatsCard } from '../machine/StatsCard.tsx';
+import { useLayout } from '../shell/layout.ts';
 import { TID } from '../testIds.ts';
 import { RichText } from './RichText.tsx';
 import { BagConfirmCard } from './parts/BagConfirmCard.tsx';
 import { BeanCard } from './parts/BeanCard.tsx';
 import { DiffCard } from './parts/DiffCard.tsx';
+import { GrinderOfferCard } from './parts/GrinderOfferCard.tsx';
 import { Notice } from './parts/Notice.tsx';
 import { OptionChips } from './parts/OptionChips.tsx';
 import { ShotCard } from './parts/ShotCard.tsx';
 import { TemplateCards } from './parts/TemplateCards.tsx';
 import { createFollowNewest, type FollowNewest, type NewestMessage } from './followNewest.ts';
+import { promptChipSx } from './promptChip.ts';
+import { TastePrompts } from './TasteWords.tsx';
+import { tasteQuestionOpen } from './tasteWords.ts';
 
 export interface ChatSurfaceProps {
   messages: readonly CoachUiMessage[];
@@ -70,8 +77,8 @@ export interface ChatSurfaceProps {
   onConfirm(requestId: string): void;
   onDecline(requestId: string): void;
   onUndo(): void;
-  /** A star tapped on a shot card (1-5). */
-  onRateShot(shotId: string, stars: number): void;
+  /** A word tapped under "Compared with ...?" on a shot card (D126). */
+  onRateShot(shotId: string, verdict: ShotVerdict): void;
   /** A batch of Decaid's bean library picked on "Which coffee is it?" (6.1). */
   onPickBean?(batchId: string): void;
   /** The bean card's Something else. */
@@ -80,6 +87,10 @@ export interface ChatSurfaceProps {
   onBagPhoto?(photo: BagPhoto): void;
   /** The details read from the photo, as the barista confirmed them. */
   onConfirmBag?(details: SaveBagDetails): void;
+  /** Add on the coach's grinder card (D125). */
+  onAddGrinder?(requestId: string): void;
+  /** The grinder card's Not now. */
+  onDeclineGrinder?(requestId: string): void;
   /** Opens the shot route (#/shot) from graphShotId's card. Without it no card shows Graph. */
   onOpenGraph?(): void;
   /** Show the live stats card after the newest message (statsCard.ts decides when). */
@@ -194,7 +205,7 @@ interface PartActions {
   confirm(requestId: string): void;
   decline(requestId: string): void;
   undo(): void;
-  rateShot(shotId: string, stars: number): void;
+  rateShot(shotId: string, verdict: ShotVerdict): void;
   openGraph(): void;
   /** The Stats prompt (it lives in x-chat's slot above the composer, so it reaches ChatSurface through here too). */
   askStats(): void;
@@ -202,6 +213,8 @@ interface PartActions {
   skipBeanPick(): void;
   bagPhoto(photo: BagPhoto): void;
   confirmBag(details: SaveBagDetails): void;
+  addGrinder(requestId: string): void;
+  declineGrinder(requestId: string): void;
 }
 
 interface PartsContextValue {
@@ -212,6 +225,10 @@ interface PartsContextValue {
   graphShotId: string | null;
   /** Whether a graph handler was given at all (ShotView still gates on graphShotId matching). */
   hasOpenGraph: boolean;
+  /** Whether a Stats handler was given: without one the prompt row has no Stats. */
+  hasStats: boolean;
+  /** The taste question waits for its answer: the prompt row offers Taste words and Need help? (D127). */
+  tasteOpen: boolean;
   actions: PartActions;
 }
 
@@ -287,9 +304,11 @@ function ShotView({ data }: { data: unknown }) {
   return (
     <ShotCard
       summary={part.summary}
+      baseline={part.baseline ?? null}
+      verdict={part.rating?.verdict ?? null}
       stars={part.stars ?? null}
       disabled={busy}
-      onRate={(stars) => actions.rateShot(part.shotId, stars)}
+      onRate={(verdict) => actions.rateShot(part.shotId, verdict)}
       onOpenGraph={showGraph ? actions.openGraph : undefined}
       visualizerUrl={part.visualizerUrl ?? null}
     />
@@ -327,6 +346,20 @@ function BagConfirmView({ data }: { data: unknown }) {
       expired={part.expired ?? false}
       setAsideReason={part.setAsideReason}
       onConfirm={actions.confirmBag}
+    />
+  );
+}
+
+function GrinderOfferView({ data }: { data: unknown }) {
+  const { busy, actions } = usePartsContext();
+  const part = cardOf(data, 'grinderOffer');
+  if (!part) return null;
+  return (
+    <GrinderOfferCard
+      part={part}
+      disabled={busy}
+      onAdd={() => actions.addGrinder(part.requestId)}
+      onDecline={() => actions.declineGrinder(part.requestId)}
     />
   );
 }
@@ -370,6 +403,7 @@ const PART_RENDERERS: ChatPartRendererMap = {
   [`${DATA_PREFIX}notice`]: ({ part }: DataRendererProps) => <NoticeView data={part.data} />,
   [`${DATA_PREFIX}beanPicker`]: ({ part }: DataRendererProps) => <BeanPickerView data={part.data} />,
   [`${DATA_PREFIX}bagConfirm`]: ({ part }: DataRendererProps) => <BagConfirmView data={part.data} />,
+  [`${DATA_PREFIX}grinderOffer`]: ({ part }: DataRendererProps) => <GrinderOfferView data={part.data} />,
   [THINKING_TYPE]: () => <ThinkingView />,
   [STATS_TYPE]: () => <StatsCard />,
 };
@@ -383,29 +417,16 @@ function authorKey(message: ChatMessage): string {
 // The prompt row
 // ---------------------------------------------------------------------------
 
-/**
- * The Stats chip as drawn: 40 px, the surface colour inside a line, the
- * accent icon; a band above and below makes it the full 48 px touch target.
- */
-const statsChipSx = {
-  position: 'relative',
-  height: 40,
-  minHeight: 40,
-  borderRadius: '20px',
-  bgcolor: 'background.paper',
-  borderColor: 'divider',
-  fontWeight: 600,
-  // A tap leaves :hover behind on a touch screen: the chip keeps its colour.
-  '&.MuiChip-clickable:hover': { bgcolor: 'background.paper' },
-  '& .MuiChip-icon': { color: 'primary.main', fontSize: 18, ml: '10px' },
-  '& .MuiChip-label': { pr: '13px' },
-  // From inside the 1 px border: 5 px out each way makes 48.
-  '&::after': { content: '""', position: 'absolute', top: -5, right: 0, bottom: -5, left: 0 },
-} as const;
+/** The Stats chip as drawn: a prompt chip (promptChip.ts) with the accent icon, one of the few marks of CafAI itself. */
+const statsChipSx = { ...promptChipSx, '& .MuiChip-icon': { color: 'primary.main', fontSize: 18, ml: '10px' } } as const;
 
-/** The composer's lane: at most 760 px, centred, never closer than 8 px to the pane's sides. */
+/**
+ * The composer's lane: at most 760 px, centred, never closer than 8 px to the
+ * pane's sides. It wraps, so the open taste words take a line of their own.
+ */
 const promptRowSx = {
   display: 'flex',
+  flexWrap: 'wrap',
   flexShrink: 0,
   gap: 1,
   mx: 'max(8px, calc((100% - 760px) / 2))',
@@ -414,24 +435,42 @@ const promptRowSx = {
 } as const;
 
 /**
- * The prompts above the composer: Stats alone (D91), on every chat. A tap
- * posts the stats card at the end of the thread; nothing is sent, and the
- * composer's draft stays as it is.
+ * A phone on its side is too short for the open taste words and the composer
+ * together: there the row gives way and scrolls, and the composer stays whole.
+ * 5 px on top keeps the chips' touch bands inside the row.
+ */
+const shortPromptRowSx = { ...promptRowSx, flexShrink: 1, minHeight: 0, overflowY: 'auto', pt: '5px' } as const;
+
+/**
+ * The prompts above the composer: Stats (D91), on every chat, and while the
+ * taste question is open Taste words and Need help? (D127). A tap on Stats
+ * posts the stats card at the end of the thread; a taste word goes into the
+ * draft. Nothing is sent, and the composer's draft is never lost.
  */
 function PromptRow() {
-  const { actions } = usePartsContext();
+  const { actions, hasStats, tasteOpen } = usePartsContext();
+  const short = useLayout().nav === 'rail';
   return (
-    <Box sx={promptRowSx}>
-      <Chip
-        variant="outlined"
-        icon={<SpeedRounded />}
-        label="Stats"
-        data-testid={TID.statsPrompt}
-        onClick={actions.askStats}
-        sx={statsChipSx}
-      />
+    <Box sx={short ? shortPromptRowSx : promptRowSx}>
+      {hasStats ? (
+        <Chip
+          variant="outlined"
+          icon={<SpeedRounded />}
+          label="Stats"
+          data-testid={TID.statsPrompt}
+          onClick={actions.askStats}
+          sx={statsChipSx}
+        />
+      ) : null}
+      {tasteOpen ? <TasteRow /> : null}
     </Box>
   );
+}
+
+/** The taste prompts with x-chat's draft: mounted only while the taste question is open, so only then does a keystroke reach it. */
+function TasteRow() {
+  const composer = useChatComposer();
+  return <TastePrompts draft={composer.value} onDraft={composer.setValue} />;
 }
 
 /** An empty thread shows nothing of x-chat's own: a chat opens with the coach's first words, or the stats card. */
@@ -524,6 +563,7 @@ const SLOTS: ChatBoxSlots = {
 
 /** x-chat draws the suggestions slot only while it has suggestions; PromptRow never hands them to the composer. */
 const PROMPTS = ['Stats'];
+const PROMPTS_WITH_TASTE = ['Stats', 'Taste words', 'Need help?'];
 
 const LOCALE_TEXT: Partial<ChatLocaleText> = {
   messageAuthorUserLabel: 'You',
@@ -604,7 +644,7 @@ export function ChatSurface(props: ChatSurfaceProps) {
       decline: act((requestId: string) => propsRef.current.onDecline(requestId)),
       undo: act(() => propsRef.current.onUndo()),
       // A rating is often given on an older card: the view stays where the barista is reading.
-      rateShot: (shotId: string, stars: number) => propsRef.current.onRateShot(shotId, stars),
+      rateShot: (shotId: string, verdict: ShotVerdict) => propsRef.current.onRateShot(shotId, verdict),
       // Navigation, not a chat append: no need to follow the thread for it either.
       openGraph: () => propsRef.current.onOpenGraph?.(),
       // No message and no coach call: the card is screen-only (statsCard.ts).
@@ -616,13 +656,16 @@ export function ChatSurface(props: ChatSurfaceProps) {
       skipBeanPick: act(() => propsRef.current.onSkipBeanPick?.()),
       bagPhoto: act((photo: BagPhoto) => propsRef.current.onBagPhoto?.(photo)),
       confirmBag: act((details: SaveBagDetails) => propsRef.current.onConfirmBag?.(details)),
+      addGrinder: act((requestId: string) => propsRef.current.onAddGrinder?.(requestId)),
+      declineGrinder: act((requestId: string) => propsRef.current.onDeclineGrinder?.(requestId)),
     };
   }, []);
 
   const latestAppliedDiff = useMemo(() => latestAppliedDiffId(messages), [messages]);
+  const tasteOpen = useMemo(() => tasteQuestionOpen(messages), [messages]);
   const partsContext = useMemo<PartsContextValue>(
-    () => ({ busy, canUndo, latestAppliedDiff, graphShotId, hasOpenGraph, actions }),
-    [busy, canUndo, latestAppliedDiff, graphShotId, hasOpenGraph, actions],
+    () => ({ busy, canUndo, latestAppliedDiff, graphShotId, hasOpenGraph, hasStats, tasteOpen, actions }),
+    [busy, canUndo, latestAppliedDiff, graphShotId, hasOpenGraph, hasStats, tasteOpen, actions],
   );
 
   const chatMessages = useMemo(() => toChatMessages(messages, busy, statsCard), [messages, busy, statsCard]);
@@ -711,7 +754,7 @@ export function ChatSurface(props: ChatSurfaceProps) {
           features={FEATURES}
           slots={SLOTS}
           slotProps={slotProps}
-          suggestions={hasStats ? PROMPTS : undefined}
+          suggestions={tasteOpen ? PROMPTS_WITH_TASTE : hasStats ? PROMPTS : undefined}
           localeText={LOCALE_TEXT}
           sx={{ height: '100%', bgcolor: 'transparent' }}
         />

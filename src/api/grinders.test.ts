@@ -1,8 +1,24 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createMockServer } from '../../mock/node.ts';
 import { createDecaidClient } from './client.ts';
-import { getGrinder, grinderSteps, listGrinders, parseGrinder, type Grinder } from './grinders.ts';
+import { driftLog } from './drift.ts';
+import {
+  addOrFindGrinder,
+  createGrinder,
+  findSameGrinder,
+  getGrinder,
+  grinderRequest,
+  grinderSteps,
+  listGrinders,
+  parseGrinder,
+  type Grinder,
+  type GrinderDraft,
+} from './grinders.ts';
 import { GatewayError } from './types.ts';
+
+const drift = () => driftLog.list().map(({ source, problem }) => ({ source, problem }));
+
+beforeEach(() => driftLog.clear());
 
 interface Seen {
   url: string;
@@ -69,19 +85,48 @@ describe('listGrinders', () => {
   });
 
   it('tolerates unknown fields and missing optional ones', async () => {
-    const minimal = { id: 'g-2', model: 'Lagom P64' };
+    const minimal = { id: 'g-2', model: 'Lagom P64', archived: false, settingType: 'numeric' };
     const { client, fetch } = stub(() => reply([{ ...minimal, manufacturer: 'Option-O', rpm: 900, settingRange: [0, 50] }]));
     expect(await listGrinders(client, { fetch })).toEqual([{ id: 'g-2', model: 'Lagom P64', archived: false, settingType: 'numeric' }]);
+    expect(drift()).toEqual([]);
   });
 
-  it('skips a record without an id or a model, so one odd grinder never hides the rest', async () => {
+  it('reads a record without archived or settingType as Decaid does, and reports what it lacked', async () => {
+    const { client, fetch } = stub(() => reply([{ id: 'g-2', model: 'Lagom P64', burrSize: '64' }]));
+    expect(await listGrinders(client, { fetch })).toEqual([{ id: 'g-2', model: 'Lagom P64', archived: false, settingType: 'numeric' }]);
+    expect(drift()).toEqual([
+      { source: 'GET /api/v1/grinders', problem: '[].burrSize: expected number, got string' },
+      { source: 'GET /api/v1/grinders', problem: '[].archived: missing' },
+      { source: 'GET /api/v1/grinders', problem: '[].settingType: missing' },
+    ]);
+  });
+
+  it('skips a record without an id or a model, so one odd grinder never hides the rest, and reports each', async () => {
     const { client, fetch } = stub(() => reply([{ model: 'No id' }, { id: 'g-3' }, { id: '', model: 'Blank id' }, null, 'text', NICHE]));
     expect((await listGrinders(client, { fetch })).map((g) => g.id)).toEqual([NICHE.id]);
+    expect(drift().map((entry) => entry.problem)).toEqual([
+      '[].id: missing',
+      '[].model: missing',
+      '[].id: empty',
+      '[]: expected object, got null',
+      '[]: expected object, got string',
+    ]);
   });
 
-  it('reads a body that is not a list as no grinders', async () => {
-    const { client, fetch } = stub(() => reply({ grinders: [NICHE] }));
-    expect(await listGrinders(client, { fetch })).toEqual([]);
+  it('only [] means no grinders: null, an empty body or a body that is not a list fails the call and says so', async () => {
+    const none = stub(() => reply([]));
+    expect(await listGrinders(none.client, { fetch: none.fetch })).toEqual([]);
+    for (const body of [() => reply(null), () => new Response('', { status: 200 }), () => reply({ grinders: [NICHE] })]) {
+      const { client, fetch } = stub(body);
+      await expect(listGrinders(client, { fetch })).rejects.toMatchObject({ code: 'unexpected_reply' });
+    }
+    // The archived list is the same route to the drift log, its query aside.
+    const archived = stub(() => reply(null));
+    await expect(listGrinders(archived.client, { fetch: archived.fetch, includeArchived: true })).rejects.toMatchObject({ code: 'unexpected_reply' });
+    expect(driftLog.list().map(({ source, problem, count }) => ({ source, problem, count }))).toEqual([
+      { source: 'GET /api/v1/grinders', problem: 'reply: expected array, got null', count: 3 },
+      { source: 'GET /api/v1/grinders', problem: 'reply: expected array, got object', count: 1 },
+    ]);
   });
 
   it("turns a failure into a GatewayError with Decaid's words, and an older Decaid's plain 404 too", async () => {
@@ -119,11 +164,145 @@ describe('getGrinder', () => {
     expect(await getGrinder(client, 'gone', { fetch })).toBeNull();
   });
 
-  it('is null for a record it cannot read, and throws on other failures', async () => {
+  it('is null for a record it cannot read, which it reports, and throws on other failures', async () => {
     const odd = stub(() => reply({ id: 'g-1' }));
     expect(await getGrinder(odd.client, 'g-1', { fetch: odd.fetch })).toBeNull();
+    const empty = stub(() => reply(null));
+    expect(await getGrinder(empty.client, 'g-1', { fetch: empty.fetch })).toBeNull();
+    expect(drift()).toEqual([
+      { source: 'GET /api/v1/grinders/{id}', problem: 'model: missing' },
+      { source: 'GET /api/v1/grinders/{id}', problem: 'reply: expected object, got null' },
+    ]);
     const broken = stub(() => reply({ error: 'boom' }, 500));
     await expect(getGrinder(broken.client, 'g-1', { fetch: broken.fetch })).rejects.toBeInstanceOf(GatewayError);
+  });
+});
+
+describe('createGrinder', () => {
+  const ADDED = { ...NICHE, id: '0f6c1d2e-8a3b-4c5d-9e7f-1a2b3c4d5e6f' };
+
+  it("posts the request as JSON on the client's origin and answers the grinder Decaid stored", async () => {
+    const { client, fetch, seen } = stub(() => reply(ADDED, 201));
+    const request = { model: 'Niche Zero', burrs: '63 mm conical', settingType: 'numeric' as const, settingSmallStep: 0.5, settingBigStep: 2 };
+    expect(await createGrinder(client, request, { fetch })).toEqual(parseGrinder(ADDED));
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.url).toBe('http://gw:8080/api/v1/grinders');
+    expect(seen[0]!.init?.method).toBe('POST');
+    expect(seen[0]!.init?.headers).toEqual({ 'Content-Type': 'application/json' });
+    expect(JSON.parse(String(seen[0]!.init?.body))).toEqual(request);
+    expect(drift()).toEqual([]);
+  });
+
+  it("turns a refusal into a GatewayError with Decaid's words, and is never retried", async () => {
+    const refused = stub(() => reply({ error: "type 'Null' is not a subtype of type 'String' in type cast" }, 400));
+    await expect(createGrinder(refused.client, { model: '' }, { fetch: refused.fetch })).rejects.toMatchObject({ status: 400, code: 'http' });
+    const busy = stub(() => reply({ error: 'admission_limit' }, 503));
+    await expect(createGrinder(busy.client, { model: 'Niche Zero' }, { fetch: busy.fetch })).rejects.toMatchObject({ status: 503 });
+    expect(busy.seen).toHaveLength(1);
+  });
+
+  it('a reply it cannot use fails the call and is reported: an empty one, or one without an id', async () => {
+    const empty = stub(() => reply(null, 201));
+    await expect(createGrinder(empty.client, { model: 'Niche Zero' }, { fetch: empty.fetch })).rejects.toMatchObject({ code: 'http' });
+    const noId = stub(() => reply({ model: 'Niche Zero', archived: false, settingType: 'numeric' }, 201));
+    await expect(createGrinder(noId.client, { model: 'Niche Zero' }, { fetch: noId.fetch })).rejects.toMatchObject({ code: 'unexpected_reply' });
+    expect(drift()).toEqual([
+      { source: 'POST /api/v1/grinders', problem: 'reply: empty' },
+      { source: 'POST /api/v1/grinders', problem: 'id: missing' },
+    ]);
+  });
+});
+
+describe('addOrFindGrinder', () => {
+  it('reuses the grinder Decaid already has, read fresh, and posts nothing', async () => {
+    const { client, fetch, seen } = stub(() => reply([ENCORE, NICHE]));
+    expect(await addOrFindGrinder(client, { model: 'niche zero' }, { fetch })).toEqual({ grinder: NICHE, added: false });
+    expect(seen.map((s) => s.init?.method)).toEqual(['GET']);
+  });
+
+  it('adds one when Decaid has none like it', async () => {
+    const added = { ...NICHE, id: 'g-new', model: 'Mazzer Philos' };
+    const { client, fetch, seen } = stub((_url, init) => (init?.method === 'POST' ? reply(added, 201) : reply([NICHE])));
+    expect(await addOrFindGrinder(client, { model: 'Mazzer Philos' }, { fetch })).toEqual({ grinder: parseGrinder(added), added: true });
+    expect(seen.map((s) => s.init?.method)).toEqual(['GET', 'POST']);
+  });
+
+  it('adds nothing when the list cannot be read: a list it could not read is not "none like it"', async () => {
+    const { client, fetch, seen } = stub(() => reply(null));
+    await expect(addOrFindGrinder(client, { model: 'Mazzer Philos' }, { fetch })).rejects.toMatchObject({ code: 'unexpected_reply' });
+    expect(seen.map((s) => s.init?.method)).toEqual(['GET']);
+  });
+});
+
+describe('grinderRequest', () => {
+  const draft = (fields: Partial<GrinderDraft>): GrinderDraft => ({
+    model: 'Niche Zero',
+    burrs: null,
+    settingType: null,
+    smallStep: null,
+    bigStep: null,
+    values: null,
+    ...fields,
+  });
+
+  it('sends only the model when that is all the barista said: Decaid keeps its own default dial', () => {
+    expect(grinderRequest(draft({}))).toEqual({ model: 'Niche Zero' });
+  });
+
+  it('trims the text, keeps one space between words, and leaves out what is blank', () => {
+    expect(grinderRequest(draft({ model: '  Mazzer   Philos ', burrs: '  ' }))).toEqual({ model: 'Mazzer Philos' });
+    expect(grinderRequest(draft({ model: 'DF64', burrs: ' SSP  MP ' }))).toEqual({ model: 'DF64', burrs: 'SSP MP' });
+  });
+
+  it('never sends a key, and is null when no model is left (D69)', () => {
+    expect(grinderRequest(draft({ model: 'Niche sk-ant-api03-abcdef123456 Zero', burrs: 'sk-ant-api03-zzzz9999' }))).toEqual({ model: 'Niche Zero' });
+    expect(grinderRequest(draft({ model: 'sk-ant-api03-abcdef123456' }))).toBeNull();
+    expect(grinderRequest(draft({ model: '   ' }))).toBeNull();
+  });
+
+  it('cuts text to what Settings takes', () => {
+    expect(grinderRequest(draft({ model: 'M'.repeat(80) }))?.model).toHaveLength(60);
+    expect(grinderRequest(draft({ values: ['x'.repeat(30)] }))?.settingValues).toEqual(['x'.repeat(20)]);
+  });
+
+  it('a numeric dial sends the steps that can move it', () => {
+    expect(grinderRequest(draft({ settingType: 'numeric', smallStep: 0.5, bigStep: 2 }))).toEqual({
+      model: 'Niche Zero',
+      settingType: 'numeric',
+      settingSmallStep: 0.5,
+      settingBigStep: 2,
+    });
+    expect(grinderRequest(draft({ smallStep: 1 }))).toEqual({ model: 'Niche Zero', settingType: 'numeric', settingSmallStep: 1 });
+    expect(grinderRequest(draft({ settingType: 'numeric', smallStep: 0, bigStep: Number.NaN }))).toEqual({ model: 'Niche Zero', settingType: 'numeric' });
+    expect(grinderRequest(draft({ smallStep: -1 }))).toEqual({ model: 'Niche Zero' });
+  });
+
+  it("a preset grinder sends its settings in order, without blanks or repeats, and never a numeric dial's steps", () => {
+    expect(grinderRequest(draft({ values: ['1', ' 2 ', '', '2', '3'], smallStep: 1 }))).toEqual({
+      model: 'Niche Zero',
+      settingType: 'preset',
+      settingValues: ['1', '2', '3'],
+    });
+    expect(grinderRequest(draft({ settingType: 'preset', values: [] }))).toEqual({ model: 'Niche Zero', settingType: 'preset' });
+  });
+});
+
+describe('findSameGrinder', () => {
+  const grinder = (fields: Partial<Grinder>): Grinder => ({ id: 'g', model: 'Niche Zero', archived: false, settingType: 'numeric', ...fields });
+
+  it('finds the same model whatever the case and spaces, and the same burrs when both say', () => {
+    const niche = grinder({ id: 'niche', burrs: '63 mm conical' });
+    expect(findSameGrinder([niche], { model: ' niche  zero ' })).toBe(niche);
+    expect(findSameGrinder([niche], { model: 'Niche Zero', burrs: '63 MM conical' })).toBe(niche);
+    expect(findSameGrinder([grinder({ id: 'bare' })], { model: 'Niche Zero', burrs: 'SSP' })?.id).toBe('bare');
+    expect(findSameGrinder([niche], { model: 'Niche Zero', burrs: 'SSP' })).toBeNull();
+    expect(findSameGrinder([niche], { model: 'Niche Duo' })).toBeNull();
+  });
+
+  it("takes the first in Decaid's order, and never an archived one", () => {
+    const list = [grinder({ id: 'old', archived: true }), grinder({ id: 'newest' }), grinder({ id: 'older' })];
+    expect(findSameGrinder(list, { model: 'Niche Zero' })?.id).toBe('newest');
+    expect(findSameGrinder([grinder({ archived: true })], { model: 'Niche Zero' })).toBeNull();
   });
 });
 
@@ -197,6 +376,17 @@ describe('against the mock Decaid', () => {
     const first = grinders[0]!;
     expect(await getGrinder(client, first.id)).toEqual(first);
     expect(await getGrinder(client, 'no-such-grinder')).toBeNull();
+  });
+
+  it('adds a grinder that the list then shows first, and refuses one without a model as Decaid does', async () => {
+    const added = await createGrinder(client, { model: 'Mazzer Philos', burrs: '64 mm flat', settingType: 'preset', settingValues: ['1', '2'] });
+    try {
+      expect(added).toMatchObject({ model: 'Mazzer Philos', burrs: '64 mm flat', archived: false, settingType: 'preset', settingValues: ['1', '2'] });
+      expect((await listGrinders(client))[0]).toEqual(added);
+      await expect(createGrinder(client, {} as never)).rejects.toMatchObject({ status: 400 });
+    } finally {
+      mock.state.deleteGrinder(added.id);
+    }
   });
 
   it('hides an archived grinder unless asked', async () => {

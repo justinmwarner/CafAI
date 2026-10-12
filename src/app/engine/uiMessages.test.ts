@@ -6,6 +6,7 @@ import {
   beanPickerPart,
   diffPart,
   filledBeanCard,
+  grinderOfferPart,
   isLoadingBeanCard,
   isOpenBagConfirm,
   isOpenBeanCard,
@@ -18,7 +19,8 @@ import {
   removeMessage,
   replaceParts,
   setAside,
-  setShotStars,
+  setGrinderOfferStatus,
+  setShotRating,
   setVisualizerLink,
   shotPart,
   startingYieldText,
@@ -65,7 +67,7 @@ describe('cards', () => {
     expect(setAside(question, 'typed')).toEqual({ ...question, expired: true, setAsideReason: 'typed' });
     const cards = templatesPart('tu-tpl', []);
     expect(setAside(cards, 'shot')).toEqual({ ...cards, expired: true, setAsideReason: 'shot' });
-    const pending = diffPart(change);
+    const pending = diffPart(change) as Extract<CoachUiPart, { kind: 'diff' }>;
     expect(setAside(pending, 'undo')).toEqual({ ...pending, status: 'expired', setAsideReason: 'undo' });
     const applied = { ...pending, status: 'applied' as const };
     expect(setAside(applied, 'other')).toBe(applied);
@@ -91,6 +93,23 @@ describe('cards', () => {
     const confirmed = { ...confirm, confirmed: true };
     expect(isOpenBagConfirm(confirmed)).toBe(false);
     expect(setAside(confirmed, 'typed')).toBe(confirmed);
+  });
+
+  it("opens the coach's grinder card waiting for a tap, records each answer, and sets it aside only while it waits (D125)", () => {
+    const grinder = { model: 'Mazzer Philos', burrs: null, settingType: null, smallStep: null, bigStep: null, values: null };
+    const offer = grinderOfferPart('tu-grinder', grinder) as Extract<CoachUiPart, { kind: 'grinderOffer' }>;
+    expect(offer).toEqual({ kind: 'grinderOffer', requestId: 'tu-grinder', grinder, status: 'pending', error: null });
+    const failed = { ...offer, error: 'Could not reach Decaid.' };
+    expect(setAside(failed, 'typed')).toEqual({ ...offer, status: 'expired', error: null, setAsideReason: 'typed' });
+    const added = { ...offer, status: 'added' as const };
+    expect(setAside(added, 'shot')).toBe(added);
+
+    const messages: CoachUiMessage[] = [message('m1', 'assistant', [offer], at)];
+    const failedNow = setGrinderOfferStatus(messages, 'tu-grinder', 'pending', { error: 'Could not reach Decaid.' });
+    expect(failedNow[0]!.parts[0]).toMatchObject({ status: 'pending', error: 'Could not reach Decaid.' });
+    const linked = setGrinderOfferStatus(failedNow, 'tu-grinder', 'existing', { linkedName: 'Niche Zero (63 mm conical)' });
+    expect(linked[0]!.parts[0]).toEqual({ ...offer, status: 'existing', error: null, linkedName: 'Niche Zero (63 mm conical)' });
+    expect(setGrinderOfferStatus(messages, 'tu-other', 'declined')).toEqual(messages);
   });
 
   it("puts the bean card up before Decaid's batches are read, open, then fills it, answered or not (6.1)", () => {
@@ -156,11 +175,12 @@ describe('message updates', () => {
     expect(removeMessage(messages, 'm-2').map((m) => m.id)).toEqual(['m-1']);
   });
 
-  it("puts a rating on a shot's card", () => {
-    const result = setShotStars(messages, 'shot-1', 4);
-    expect(result[0]!.parts[0]).toEqual({ kind: 'shot', shotId: 'shot-1', summary, stars: 4 });
+  it("puts the verdict and what it was compared with on a shot's card (D126)", () => {
+    const baseline = { kind: 'previous', shotId: 'shot-0' } as const;
+    const result = setShotRating(messages, 'shot-1', baseline, { verdict: 'better', score: 6 });
+    expect(result[0]!.parts[0]).toEqual({ kind: 'shot', shotId: 'shot-1', summary, baseline, rating: { verdict: 'better', score: 6 } });
     expect(result[1]).toBe(messages[1]);
-    expect(setShotStars(messages, 'shot-unknown', 4)).toEqual(messages);
+    expect(setShotRating(messages, 'shot-unknown', baseline, { verdict: 'better', score: 6 })).toEqual(messages);
   });
 
   it("puts the Visualizer link on a shot's card (6.4)", () => {

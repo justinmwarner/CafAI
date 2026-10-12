@@ -4,22 +4,28 @@
 // For Decaid's latest release and its main branch: when the specs differ from
 // the pin's, generate their types into a temporary folder, run the contract
 // typecheck with the #decaid aliases pointed there, run the mock contract test
-// (fixtures and the mock's replies and frames) against the new spec, and diff
+// (fixtures and the mock's replies and frames) against the new spec, compare
+// the spec's channel map with the channels CafAI opens (CHANNELS), and diff
 // the specs: operations added or removed (and whether CafAI calls them), and
-// fields added, removed or retyped in the schemas CafAI reads or writes. Then
-// list the Decaid files changed since the pin that CafAI depends on (GitHub's
-// compare API, filtered by WATCH), as "read these".
+// fields added, removed or retyped in the schemas CafAI reads or writes. What
+// can break CafAI (a removal or a retype in what it calls, opens or reads)
+// fails the check like a failed typecheck. Then list the Decaid files changed
+// since the pin that CafAI depends on (GitHub's compare API, filtered by
+// WATCH), as "read these".
 //
 // Prints a markdown report (--report <file> writes it too; --issue <file>
 // writes it cut to fit a GitHub issue). Each Decaid version is checked on its
-// own: one GitHub could not serve is a warning in the report, and the others
-// still count. Exit 0: nothing changed, or the changes are additive and every
-// check passes (an exception Decaid has fixed, `stale`, is reported for when
-// the pin moves, not failed); 1: a check failed, a spec file included (Decaid
-// no longer serves it); 2: GitHub could not be reached for any version;
-// 3: the watch itself broke.
+// own. The exit code is the first that applies:
+//   1  a check failed, a spec file included (Decaid no longer serves it);
+//   2  the watch could not look at everything: GitHub could not serve a
+//      version, or could not list the files changed since the pin;
+//   4  files CafAI depends on changed since the pin (the specs among them, if
+//      their changes are additive) and every check passes: read them;
+//   0  nothing CafAI depends on changed.
+// An exception Decaid has fixed (`stale`) is reported for when the pin moves,
+// not failed. Exit 3: the watch itself broke.
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -31,6 +37,7 @@ import {
   REPO,
   ROOT,
   SpecMissingError,
+  channelDrift,
   childOutput,
   contractTypecheck,
   fetchSpecs as fetchSpecsFromGitHub,
@@ -39,6 +46,7 @@ import {
   github,
   lf,
   sha256,
+  specAddress,
   specChannels,
 } from './decaid-contract.mjs';
 
@@ -95,7 +103,7 @@ export function usedByCafai(checksDir = CHECKS_DIR) {
   const channels = new Set();
   for (const name of readdirSync(checksDir).filter((file) => file.endsWith('.ts'))) {
     const text = readFileSync(path.join(checksDir, name), 'utf8');
-    for (const [, route, method] of text.matchAll(/(?:Res|Body|Statuses|PathParams|Lacks|Documents)<\s*'(\/api\/v1\/[^']*)',\s*'(get|put|post|delete|patch)'/g)) {
+    for (const [, route, method] of text.matchAll(/(?:Res|Body|Statuses|PathParams|Query|Lacks|Documents)<\s*'(\/api\/v1\/[^']*)',\s*'(get|put|post|delete|patch)'/g)) {
       operations.add(`${method.toUpperCase()} ${route}`);
     }
     for (const [, channel] of text.matchAll(/'(ws\/v1\/[^']+)'/g)) channels.add(channel);
@@ -123,19 +131,52 @@ function strip(node, inProperties = false) {
   return out;
 }
 
-/** Leaf differences between two stripped schemas, as "+ path = new", "- path (was old)", "~ path: old -> new". */
+/**
+ * Leaf differences between two stripped schemas, each with `keys` (from the
+ * schema's name down) and a line: "+ path = new", "- path (was old)" or
+ * "~ path: old -> new". Arrays (enum, required, allOf) are leaves.
+ */
 function leafDiff(a, b, at, out) {
   if (same(a, b)) return out;
   if (isObject(a) && isObject(b)) {
     for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
-      if (!(key in a)) out.push(`+ ${at}.${key} = ${JSON.stringify(b[key]).slice(0, 160)}`);
-      else if (!(key in b)) out.push(`- ${at}.${key} (was ${JSON.stringify(a[key]).slice(0, 160)})`);
-      else leafDiff(a[key], b[key], `${at}.${key}`, out);
+      const keys = [...at, key];
+      if (!(key in a)) out.push({ keys, line: `+ ${keys.join('.')} = ${JSON.stringify(b[key]).slice(0, 160)}` });
+      else if (!(key in b)) out.push({ keys, line: `- ${keys.join('.')} (was ${JSON.stringify(a[key]).slice(0, 160)})` });
+      else leafDiff(a[key], b[key], keys, out);
     }
   } else {
-    out.push(`~ ${at}: ${JSON.stringify(a)?.slice(0, 120)} -> ${JSON.stringify(b)?.slice(0, 120)}`);
+    out.push({ keys: at, line: `~ ${at.join('.')}: ${JSON.stringify(a)?.slice(0, 120)} -> ${JSON.stringify(b)?.slice(0, 120)}` });
   }
   return out;
+}
+
+/** Keywords whose value is a schema again: the keys below them are keywords too. */
+const SUBSCHEMAS = ['items', 'additionalProperties', 'not'];
+/** Keywords whose change retypes a value. allOf, oneOf and anyOf are arrays, so leafDiff reports them whole. */
+const RETYPING = ['type', '$ref', 'nullable', 'allOf', 'oneOf', 'anyOf', 'items'];
+
+/**
+ * Whether a schema difference can break CafAI's readers: a property removed
+ * (or a whole `properties` or `items`), or a value retyped. Enum, format,
+ * required and description changes are not: the contract typecheck covers the
+ * enums and required fields CafAI depends on. The key after `properties` is a
+ * property's name, not a keyword; keys under any other value (a default, an
+ * x- extension) are neither.
+ */
+function breaks(sign, keys) {
+  // The schema itself replaced by something that is not an object.
+  if (keys.length === 1) return true;
+  let at = 'keyword';
+  for (const key of keys.slice(1, -1)) {
+    if (at === 'name') at = 'keyword';
+    else if (at === 'keyword') at = key === 'properties' || key === 'patternProperties' ? 'name' : SUBSCHEMAS.includes(key) ? 'keyword' : 'value';
+  }
+  // A property removed, or its schema replaced by something that is not an object; an added one breaks nothing.
+  if (at === 'name') return sign !== '+';
+  if (at === 'value') return false;
+  const last = keys.at(-1);
+  return RETYPING.includes(last) || (sign === '-' && last === 'properties');
 }
 
 function operationsOf(doc) {
@@ -146,18 +187,58 @@ function operationsOf(doc) {
   return out;
 }
 
-/** Schema names reachable through $refs from `roots`. */
+/** An operation's parameters by "in name": the path item's and the operation's own (which win), $refs resolved. */
+function parametersOf(doc, operation) {
+  const [method, route] = operation.split(' ');
+  const item = doc.paths?.[route] ?? {};
+  const resolve = (parameter) =>
+    typeof parameter?.$ref === 'string' && parameter.$ref.startsWith('#/components/parameters/')
+      ? doc.components?.parameters?.[parameter.$ref.slice('#/components/parameters/'.length)]
+      : parameter;
+  const out = {};
+  for (const parameter of [...(item.parameters ?? []), ...(item[method.toLowerCase()]?.parameters ?? [])].map(resolve)) {
+    if (parameter?.name) out[`${parameter.in} ${parameter.name}`] = parameter;
+  }
+  return out;
+}
+
+/** What a parameter's value must be: its schema's type, $ref and items. */
+function parameterShape(parameter) {
+  const { type, $ref, items } = parameter.schema ?? {};
+  return JSON.stringify(strip({ type, $ref, items }));
+}
+
+/** Parameter changes that break a call CafAI makes: one removed or renamed, retyped, or added as required. */
+function parameterChanges(before, after, operations) {
+  const out = [];
+  for (const operation of operations) {
+    const was = parametersOf(before, operation);
+    const now = parametersOf(after, operation);
+    for (const [key, parameter] of Object.entries(was)) {
+      if (!(key in now)) out.push(`- parameter ${key} of ${operation}`);
+      else if (parameterShape(parameter) !== parameterShape(now[key])) {
+        out.push(`~ parameter ${key} of ${operation}: ${parameterShape(parameter)} -> ${parameterShape(now[key])}`);
+      }
+    }
+    for (const [key, parameter] of Object.entries(now)) {
+      if (!(key in was) && parameter.required === true) out.push(`+ parameter ${key} of ${operation} (required)`);
+    }
+  }
+  return out;
+}
+
+/** Schema names reachable through $refs from `roots`, also through other components (a parameter, a response). */
 function reachable(doc, roots) {
   const names = new Set();
+  const seen = new Set();
   const visit = (node) => {
     if (Array.isArray(node)) return node.forEach(visit);
     if (!isObject(node)) return;
-    if (typeof node.$ref === 'string' && node.$ref.startsWith('#/components/schemas/')) {
-      const name = node.$ref.slice('#/components/schemas/'.length);
-      if (!names.has(name)) {
-        names.add(name);
-        visit(doc.components?.schemas?.[name]);
-      }
+    const ref = typeof node.$ref === 'string' ? /^#\/components\/([^/]+)\/(.+)$/.exec(node.$ref) : null;
+    if (ref && !seen.has(node.$ref)) {
+      seen.add(node.$ref);
+      if (ref[1] === 'schemas') names.add(ref[2]);
+      visit(doc.components?.[ref[1]]?.[ref[2]]);
     }
     Object.values(node).forEach(visit);
   };
@@ -165,29 +246,36 @@ function reachable(doc, roots) {
   return names;
 }
 
-/** A spec address matching a concrete channel ("ws/v1/plugins/{id}/{endpoint}" for a plugin's). */
-const addressMatches = (address, channel) =>
-  new RegExp(`^${address.replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\{[^}]+\}/g, '[^/]+')}$`).test(channel);
-
+/** The schemas CafAI uses: reachable from the operations it calls, and from what Decaid pushes on the channels it opens. */
 function usedSchemas(docs, used) {
   const restOps = operationsOf(docs.rest);
   const rest = reachable(docs.rest, used.operations.map((op) => restOps[op]).filter(Boolean));
   const map = specChannels(docs.ws);
+  const addresses = new Set(used.channels.map((channel) => specAddress(Object.keys(map), channel)));
   const roots = Object.entries(map)
-    .filter(([address]) => used.channels.some((channel) => addressMatches(address, channel)))
-    .flatMap(([, entry]) => [...(entry.receive ?? []), ...(entry.send ?? [])].map((name) => ({ $ref: `#/components/schemas/${name}` })));
+    .filter(([address]) => addresses.has(address))
+    .flatMap(([, entry]) => (entry.receive ?? []).map((name) => ({ $ref: `#/components/schemas/${name}` })));
   return { rest, websocket: reachable(docs.ws, roots) };
 }
 
-/** What changed between two spec pairs, as far as CafAI is concerned. */
+/**
+ * What changed between two spec pairs, as far as CafAI is concerned.
+ * `breaking` is what can break CafAI: an operation it calls or a channel it
+ * opens removed, a parameter of a call it makes removed, renamed, retyped or
+ * added as required, a schema it uses removed, and a property of one removed
+ * or retyped (breaks()).
+ */
 export function diffSpecs(before, after, used) {
   const opsBefore = operationsOf(before.rest);
   const opsAfter = operationsOf(after.rest);
   const added = Object.keys(opsAfter).filter((op) => !(op in opsBefore));
   const removed = Object.keys(opsBefore).filter((op) => !(op in opsAfter));
-  const changedUsed = used.operations.filter((op) => op in opsBefore && op in opsAfter && !same(strip(opsBefore[op]), strip(opsAfter[op])));
+  const removedUsed = removed.filter((op) => used.operations.includes(op));
+  const kept = used.operations.filter((op) => op in opsBefore && op in opsAfter);
+  const changedUsed = kept.filter((op) => !same(strip(opsBefore[op]), strip(opsAfter[op])));
 
   const schemas = [];
+  const breakingSchemas = [];
   const namesBefore = usedSchemas(before, used);
   const namesAfter = usedSchemas(after, used);
   for (const [label, key] of [['rest', 'rest'], ['websocket', 'ws']]) {
@@ -196,53 +284,117 @@ export function diffSpecs(before, after, used) {
       const a = before[key].components?.schemas?.[name];
       const b = after[key].components?.schemas?.[name];
       if (a === undefined) schemas.push(`+ ${label} ${name} (new schema)`);
-      else if (b === undefined) schemas.push(`- ${label} ${name} (removed)`);
-      else for (const line of leafDiff(strip(a), strip(b), name, [])) schemas.push(`${line[0]} ${label} ${line.slice(2)}`);
+      else if (b === undefined) {
+        schemas.push(`- ${label} ${name} (removed)`);
+        breakingSchemas.push(`- ${label} ${name} (removed)`);
+      } else {
+        for (const { keys, line } of leafDiff(strip(a), strip(b), [name], [])) {
+          const entry = `${line[0]} ${label} ${line.slice(2)}`;
+          schemas.push(entry);
+          if (breaks(line[0], keys)) breakingSchemas.push(entry);
+        }
+      }
     }
   }
 
-  const channelsBefore = Object.keys(specChannels(before.ws));
-  const channelsAfter = Object.keys(specChannels(after.ws));
-  const usedAddress = (address) => used.channels.some((channel) => addressMatches(address, channel));
-  const channelsRemoved = channelsBefore.filter((address) => !channelsAfter.includes(address));
+  const addressesBefore = Object.keys(specChannels(before.ws));
+  const addressesAfter = Object.keys(specChannels(after.ws));
+  const channelsRemoved = addressesBefore.filter((address) => !addressesAfter.includes(address));
+  // A channel CafAI opens is gone when no address serves it any more: a template that only renamed a parameter still does.
+  const channelsRemovedUsed = used.channels.filter(
+    (channel) => specAddress(addressesBefore, channel) !== null && specAddress(addressesAfter, channel) === null,
+  );
   return {
-    operations: { added, removed, removedUsed: removed.filter((op) => used.operations.includes(op)), changedUsed },
+    operations: { added, removed, removedUsed, changedUsed },
     schemas,
     channels: {
-      added: channelsAfter.filter((address) => !channelsBefore.includes(address)),
+      added: addressesAfter.filter((address) => !addressesBefore.includes(address)),
       removed: channelsRemoved,
-      removedUsed: channelsRemoved.filter(usedAddress),
+      removedUsed: channelsRemovedUsed,
     },
+    breaking: [
+      ...removedUsed.map((op) => `- operation ${op} (removed)`),
+      ...channelsRemovedUsed.map((channel) => `- channel ${channel} (removed)`),
+      ...parameterChanges(before.rest, after.rest, kept),
+      ...breakingSchemas,
+    ],
   };
 }
 
-/** The mock contract test (fixtures, the mock's replies and frames) against the specs in `specDir`. */
-function runMockContract(specDir) {
+/**
+ * vitest's json report (its text, or null when there is none) as the mock
+ * check's verdict: ok when at least one test passed and none failed. A -t
+ * filter that matches no test name skips every test, and vitest exits 0.
+ */
+export function vitestRan(text) {
+  let report = null;
+  try {
+    report = text === null ? null : JSON.parse(text);
+  } catch {
+    // An unreadable report is no report.
+  }
+  if (typeof report?.numPassedTests !== 'number') return { ok: false, problem: 'vitest ran no test: it wrote no report' };
+  // Failed tests are a failed check, and the output names them.
+  if (report.numFailedTests > 0) return { ok: false, problem: null };
+  if (report.numPassedTests === 0) {
+    return {
+      ok: false,
+      problem: `vitest ran no test: ${report.numPassedTests} passed, ${report.numPendingTests} skipped (does the -t filter still match the test names?)`,
+    };
+  }
+  return { ok: true, problem: null };
+}
+
+/**
+ * The mock contract test (fixtures, the mock's replies and frames) against the
+ * specs in `specDir`. vitest also writes its json report to `reportFile`,
+ * which must show a passed test.
+ */
+function runMockContract(specDir, reportFile) {
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('VITEST')));
   const vitest = path.join(ROOT, 'node_modules', 'vitest', 'vitest.mjs');
   const result = spawnSync(
     process.execPath,
-    [vitest, 'run', 'mock/decaid/contract.test.ts', '-t', 'the fixtures|the mock against the spec'],
+    [
+      vitest,
+      'run',
+      'mock/decaid/contract.test.ts',
+      '-t',
+      'the fixtures|the mock against the spec',
+      '--reporter=default',
+      '--reporter=json',
+      `--outputFile.json=${reportFile}`,
+    ],
     { cwd: ROOT, env: { ...env, DECAID_SPEC_DIR: specDir, FORCE_COLOR: '0', NO_COLOR: '1' }, encoding: 'utf8', timeout: CHILD_TIMEOUT_MS },
   );
   const output = childOutput(result, 'vitest');
-  const problems = output
+  const ran = vitestRan(existsSync(reportFile) ? readFileSync(reportFile, 'utf8') : null);
+  const failures = output
     .split(/\r?\n/)
     .filter((line) => /^\s*\+\s+"/.test(line) || /^\s*(FAIL|×)\s/.test(line))
     .map((line) => line.trim());
-  return { ok: result.status === 0, problems: problems.length > 0 ? problems.slice(0, 40) : output.split(/\r?\n/).slice(-20) };
+  const problems = [...(ran.problem ? [ran.problem] : []), ...(failures.length > 0 ? failures : output.split(/\r?\n/).slice(-20))];
+  return { ok: result.status === 0 && ran.ok, problems: problems.slice(0, 40) };
 }
 
 const failedTarget = (result) =>
   Boolean(
     result.missingSpec ||
       result.generationError ||
+      result.diff?.breaking.length > 0 ||
+      result.channelDrift?.length > 0 ||
       (result.typecheck && (result.typecheck.unexpected.length > 0 || result.typecheck.other.length > 0)) ||
       (result.mock && !result.mock.ok),
   );
 
-/** A version GitHub could not serve: reported as a warning, not as a failed check. */
+/** A version GitHub could not serve. */
 const unreachableTarget = (result) => Boolean(result.unreachable);
+
+/** A version the watch could not look at fully: GitHub could not serve it, or could not list its changed files. */
+const blindTarget = (result) => Boolean(result.unreachable || result.filesError);
+
+/** A version on which files CafAI depends on changed since the pin: the specs, or other files under WATCH. */
+const filesChanged = (result) => Boolean(result.specsChanged || result.files?.length > 0);
 
 async function checkTarget(target, { pin, pinDocs, used, fetchSpecs, compare, keep }) {
   if (target.error) return { ...target, sha: null, unreachable: target.error, files: [] };
@@ -274,7 +426,9 @@ async function checkTarget(target, { pin, pinDocs, used, fetchSpecs, compare, ke
     writeFileSync(path.join(specDir, 'rest_v1.yml'), lf(restText));
     writeFileSync(path.join(specDir, 'websocket_v1.yml'), lf(wsText));
     try {
-      result.diff = diffSpecs(pinDocs, { rest: parse(lf(restText)), ws: parse(lf(wsText)) }, used);
+      const docs = { rest: parse(lf(restText)), ws: parse(lf(wsText)) };
+      result.diff = diffSpecs(pinDocs, docs, used);
+      result.channelDrift = channelDrift(docs.ws);
       writeFileSync(path.join(dir, 'rest.ts'), await generateRest(restText, target.sha));
       writeFileSync(path.join(dir, 'ws.ts'), await generateWs(wsText, target.sha));
     } catch (error) {
@@ -287,7 +441,7 @@ async function checkTarget(target, { pin, pinDocs, used, fetchSpecs, compare, ke
     if (!ok && sorted.unexpected.length + sorted.stale.length + sorted.other.length === 0) {
       sorted.other.push(output.trim().split(/\r?\n/).slice(-5).join(' ') || 'tsc failed without a message');
     }
-    result.mock = runMockContract(specDir);
+    result.mock = runMockContract(specDir, path.join(dir, 'vitest.json'));
   } finally {
     if (!keep) rmSync(dir, { recursive: true, force: true });
   }
@@ -301,9 +455,11 @@ async function checkTarget(target, { pin, pinDocs, used, fetchSpecs, compare, ke
 function verdict(result) {
   if (unreachableTarget(result)) return 'could not be checked';
   if (result.sameCommit) return 'same commit as the pin';
-  if (result.missingSpec) return 'a check failed';
-  if (!result.specsChanged) return 'no spec change';
-  return failedTarget(result) ? 'a check failed' : 'specs changed: additive, every check passes';
+  if (failedTarget(result)) return 'a check failed';
+  const specs = result.specsChanged ? 'specs changed: additive, every check passes' : 'no spec change';
+  if (result.filesError) return `could not be checked: ${specs}, but the changed files could not be listed`;
+  if (filesChanged(result)) return `files CafAI depends on changed (${specs})`;
+  return 'nothing CafAI depends on changed';
 }
 
 const code = (text) => `\`${String(text).replace(/`/g, "'")}\``;
@@ -338,7 +494,13 @@ function targetSection(result) {
     }
     lines.push(result.mock.ok ? '- Mock contract test against this spec: passes.' : '- Mock contract test against this spec: **fails**.');
     if (!result.mock.ok) for (const entry of result.mock.problems) lines.push(`  - ${code(entry)}`);
-    const { operations, channels, schemas } = result.diff;
+    if (result.channelDrift.length > 0) {
+      lines.push('- Channels CafAI opens: **the spec differs from CHANNELS** (scripts/decaid-contract.mjs).');
+      for (const entry of result.channelDrift) lines.push(`  - ${code(entry)}`);
+    } else {
+      lines.push('- Channels CafAI opens: the spec sends the frames CafAI expects.');
+    }
+    const { operations, channels, schemas, breaking } = result.diff;
     lines.push(
       `- Operations: ${operations.added.length} added, ${operations.removed.length} removed` +
         (operations.removedUsed.length > 0 ? `, **of which CafAI calls ${operations.removedUsed.join(', ')}**` : ', none that CafAI calls') +
@@ -352,6 +514,10 @@ function targetSection(result) {
           (channels.removedUsed.length > 0 ? `, **of which CafAI opens ${channels.removedUsed.join(', ')}**` : '') +
           '.',
       );
+    }
+    if (breaking.length > 0) {
+      lines.push('', '### Breaking: removed or retyped in what CafAI calls, opens or reads', '');
+      for (const entry of breaking) lines.push(`- ${code(entry)}`);
     }
     lines.push('', '### What changed in the schemas CafAI uses', '');
     if (schemas.length === 0) lines.push('Nothing.');
@@ -372,8 +538,9 @@ export function formatReport({ pin, results, now }) {
     '# Decaid drift watch',
     '',
     `Checked ${now.toISOString().slice(0, 16).replace('T', ' ')} UTC against the pin: Decaid ${pin.release ?? '(no tag)'} (${short(pin.commit)}). ` +
-      'Exit 0 means nothing changed or the changes are additive and every check passes; 1 that a check failed; ' +
-      '2 that GitHub could not be reached for any version.',
+      'Exit 1 means a check failed; else 2 that the watch could not look at everything (GitHub could not serve a version, ' +
+      'or list the files changed since the pin); else 4 that files CafAI depends on changed and every check passes; ' +
+      'else 0 that nothing CafAI depends on changed.',
     '',
     '| Decaid | Commit | Verdict |',
     '|---|---|---|',
@@ -385,6 +552,14 @@ export function formatReport({ pin, results, now }) {
     lines.push(
       `**Warning:** ${unreachable.length} of ${results.length} Decaid versions could not be checked: ` +
         `${unreachable.map((result) => `${result.name} (${result.unreachable})`).join('; ')}.`,
+      '',
+    );
+  }
+  const unlisted = results.filter((result) => !unreachableTarget(result) && result.filesError);
+  if (unlisted.length > 0) {
+    lines.push(
+      `**Warning:** the files changed since the pin could not be listed for ` +
+        `${unlisted.map((result) => `${result.name} (${result.filesError})`).join('; ')}.`,
       '',
     );
   }
@@ -473,8 +648,8 @@ export async function runWatch({
       results.push({ ...target, unreachable: error.message, files: [] });
     }
   }
-  // A failed check wins over a version GitHub could not serve; 2 only when nothing was checked.
-  const exitCode = results.some(failedTarget) ? 1 : results.every(unreachableTarget) ? 2 : 0;
+  // The first that applies: a failed check, a partial look, changed files CafAI depends on.
+  const exitCode = results.some(failedTarget) ? 1 : results.some(blindTarget) ? 2 : results.some(filesChanged) ? 4 : 0;
   return { code: exitCode, report: formatReport({ pin, results, now: now() }) };
 }
 

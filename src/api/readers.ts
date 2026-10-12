@@ -12,11 +12,16 @@
  * screen. What was wrong goes to the drift log as a field path and a type
  * (never a value: notes and names are free text), and then
  *   - a field CafAI cannot do without (the workflow's profile with its title
- *     and steps, any record's id, a profile record's profile, a batch's bean)
- *     fails the call with GatewayError `unexpected_reply`;
- *   - in a list, the item without it is left out and the rest are kept;
- *   - anything else reads as its fallback, or is left out where CafAI's type
- *     lets it be absent, as Decaid leaves out what it has no value for.
+ *     and steps, any record's id, a profile record's profile, a batch's bean,
+ *     a device's id, type and state) fails the call with GatewayError
+ *     `unexpected_reply`;
+ *   - in a list, the item without it is left out and the rest are kept; a
+ *     list route that answers anything but a list, null included, fails the
+ *     call, so a reply CafAI cannot read never reads as "Decaid has none";
+ *   - anything else is unknown: left out where CafAI's type lets it be
+ *     absent, as Decaid leaves out what it has no value for, null where the
+ *     type says so (a drink preset's field), or empty text a screen shows as
+ *     unknown. Never a default that a screen would show as Decaid's value.
  * The reply itself is never changed: a repair copies what it touches.
  */
 import { z } from 'zod';
@@ -29,6 +34,7 @@ import {
   type BeanBatch,
   type BuildInfo,
   type DecaidSettings,
+  type DeviceEntry,
   type MachineFrame,
   type MachineInfo,
   type PaginatedShots,
@@ -189,19 +195,9 @@ const anyObject = z.looseObject({});
 const nullableText = z.string().nullable();
 
 const BUILD_INFO: Rule = {
-  shape: z.looseObject({
-    commit: text,
-    commitShort: text,
-    branch: text,
-    buildTime: text,
-    version: text,
-    buildNumber: text,
-    appStore: flag,
-    fullVersion: text,
-    localIp: text.optional(),
-  }),
-  // Empty reads as "version unknown".
-  fallback: { commit: '', commitShort: '', branch: '', buildTime: '', version: '', buildNumber: '', appStore: false, fullVersion: '' },
+  // Only what About shows. Empty reads as "version unknown".
+  shape: z.looseObject({ version: text, fullVersion: text }),
+  fallback: { version: '', fullVersion: '' },
 };
 
 const MACHINE_INFO: Rule = {
@@ -212,13 +208,23 @@ const MACHINE_INFO: Rule = {
 
 const SETTINGS: Rule = {
   // A gateway mode CafAI cannot read is left out: CafAI says nothing about it (5.1).
-  shape: z.looseObject({ gatewayMode: text, blockOnNoScale: flag.optional(), blockTareDuringShot: flag.optional() }),
+  // Decaid always sends the preferred ids, a string or null; one it did not is left
+  // out, and Connect then connects nothing rather than guess (connectKind).
+  shape: z.looseObject({ gatewayMode: text, preferredMachineId: nullableText, preferredScaleId: nullableText }),
 };
 
 const PLUGIN: Rule = {
   // Without `loaded` a plugin counts as not running (D103).
-  shape: z.looseObject({ id, name: text.optional(), version: text.optional(), loaded: flag }),
+  shape: z.looseObject({ id, loaded: flag }),
   required: ['id'],
+};
+
+const DEVICE: Rule = {
+  // What Connect and the link state read. A device without a name in a form CafAI reads goes by
+  // none; one without `available` counts as there to connect (Decaid sends false for one it only remembers).
+  shape: z.looseObject({ id, name: text, state: text, type: text, available: flag, connectionRole: text.optional() }),
+  required: ['id', 'state', 'type'],
+  fallback: { name: '' },
 };
 
 /** Decaid omits a context key that has no value; CafAI writes null to clear one. */
@@ -239,31 +245,29 @@ const CONTEXT = z.looseObject({
   extras: anyObject.optional(),
 });
 
-/** Decaid's own defaults for a workflow without them (SteamSettings.defaults() and the others in workflow.dart). */
-const STEAM_DEFAULTS = { targetTemperature: 150, duration: 50, flow: 0.8, stopAtTemperature: 0 };
-const HOT_WATER_DEFAULTS = { targetTemperature: 75, duration: 30, volume: 50, flow: 10 };
-const RINSE_DEFAULTS = { targetTemperature: 90, duration: 10, flow: 6 };
+/**
+ * A drink preset's fields CafAI could not read are null, never Decaid's
+ * defaults: Settings shows them as unknown, and a renamed field never reads
+ * as 0.8 ml/s, nor steam that is off as 150 °C.
+ */
+const UNKNOWN_STEAM = { targetTemperature: null, duration: null, flow: null };
+const UNKNOWN_HOT_WATER = { targetTemperature: null, duration: null, volume: null, flow: null };
+const UNKNOWN_RINSE = { targetTemperature: null, duration: null, flow: null };
 
 const WORKFLOW: Rule = {
   shape: z.looseObject({
-    id: text,
-    name: text,
-    description: text,
     // Only what CafAI reads unguarded: the rest of the profile goes back to Decaid exactly as it came (the barrier, D55).
     profile: z.looseObject({ title: text, steps: z.array(z.unknown()) }),
     context: CONTEXT.optional(),
-    steamSettings: z.looseObject({ targetTemperature: num, duration: num, flow: num, stopAtTemperature: num }),
+    steamSettings: z.looseObject({ targetTemperature: num, duration: num, flow: num }),
     hotWaterData: z.looseObject({ targetTemperature: num, duration: num, volume: num, flow: num }),
     rinseData: z.looseObject({ targetTemperature: num, duration: num, flow: num }),
   }),
   required: ['profile'],
   fallback: {
-    id: '',
-    name: '',
-    description: '',
-    ...fallbacksFor('steamSettings', STEAM_DEFAULTS),
-    ...fallbacksFor('hotWaterData', HOT_WATER_DEFAULTS),
-    ...fallbacksFor('rinseData', RINSE_DEFAULTS),
+    ...fallbacksFor('steamSettings', UNKNOWN_STEAM),
+    ...fallbacksFor('hotWaterData', UNKNOWN_HOT_WATER),
+    ...fallbacksFor('rinseData', UNKNOWN_RINSE),
   },
 };
 
@@ -272,17 +276,10 @@ const PROFILE_RECORD: Rule = {
     id,
     // CafAI compares its title with the one sent to tell Decaid's dedupe (workflow.ts).
     profile: z.looseObject({ title: text }),
-    metadataHash: text,
-    compoundHash: text,
+    // Left out when Decaid sent something else: unknown, which never counts as a dedupe.
     parentId: nullableText,
-    visibility: text,
-    isDefault: flag,
-    createdAt: text,
-    updatedAt: text,
-    metadata: anyObject.nullable(),
   }),
   required: ['id', 'profile'],
-  fallback: { metadataHash: '', compoundHash: '', parentId: null, visibility: '', isDefault: false, createdAt: '', updatedAt: '', metadata: null },
 };
 
 const ANNOTATIONS = z.looseObject({
@@ -356,6 +353,30 @@ const BATCH: Rule = {
   required: ['id', 'beanId'],
 };
 
+const GRINDER: Rule = {
+  // Grinder.toJson leaves a null field out; settingType is checked as text, and parseGrinder
+  // (grinders.ts) then reads it, and a missing archived, as Decaid's Grinder.fromJson does.
+  shape: z.looseObject({
+    id,
+    model: text,
+    burrs: text.optional(),
+    burrSize: num.optional(),
+    burrType: text.optional(),
+    notes: text.optional(),
+    archived: flag,
+    settingType: text,
+    settingValues: z.array(text).optional(),
+    settingSmallStep: num.optional(),
+    settingBigStep: num.optional(),
+    rpmSmallStep: num.optional(),
+    rpmBigStep: num.optional(),
+    createdAt: text.optional(),
+    updatedAt: text.optional(),
+    extras: anyObject.optional(),
+  }),
+  required: ['id', 'model'],
+};
+
 // ---------------------------------------------------------------------------
 // Readers
 // ---------------------------------------------------------------------------
@@ -364,6 +385,7 @@ export const readBuildInfo: Reader<BuildInfo> = recordReader(BUILD_INFO);
 export const readMachineInfo: Reader<MachineInfo> = recordReader(MACHINE_INFO);
 export const readSettings: Reader<DecaidSettings> = recordReader(SETTINGS);
 export const readPlugins: Reader<PluginInfo[]> = listReader(PLUGIN);
+export const readDevices: Reader<DeviceEntry[]> = listReader(DEVICE);
 export const readWorkflow: Reader<Workflow> = recordReader(WORKFLOW);
 export const readProfileRecord: Reader<ProfileRecord> = recordReader(PROFILE_RECORD);
 export const readProfileRecords: Reader<ProfileRecord[]> = listReader(PROFILE_RECORD);
@@ -373,6 +395,9 @@ export const readBean: Reader<Bean> = recordReader(BEAN);
 export const readBeans: Reader<Bean[]> = listReader(BEAN);
 export const readBatch: Reader<BeanBatch> = recordReader(BATCH);
 export const readBatches: Reader<BeanBatch[]> = listReader(BATCH);
+/** Grinder records checked for what CafAI reads, as sent: parseGrinder (grinders.ts) reads each one on. */
+export const readGrinderRecord: Reader<Record<string, unknown>> = recordReader(GRINDER);
+export const readGrinderRecords: Reader<Record<string, unknown>[]> = listReader(GRINDER);
 
 export const readShotPage: Reader<PaginatedShots> = (data, source) => {
   const page = readRecord<PaginatedShots>(SHOT_PAGE, data, source);

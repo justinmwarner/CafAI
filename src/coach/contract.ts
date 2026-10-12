@@ -24,6 +24,8 @@ export const TOOL = {
   askUser: 'ask_user',
   /** UI tool: the next change (one variable), shown as a diff with Confirm. */
   proposeAdjustment: 'propose_adjustment',
+  /** UI tool: add the grinder the user named to Decaid's grinder library, on a card they confirm (D125). */
+  offerGrinder: 'offer_grinder',
   /** Auto tools: read-only named queries over stored shots. No eval. */
   getShotSummary: 'get_shot_summary',
   getShotSeries: 'get_shot_series',
@@ -37,7 +39,7 @@ export const TOOL = {
 export type ToolName = (typeof TOOL)[keyof typeof TOOL];
 
 /** Tools resolved by a user tap (the engine waits for the user). */
-export const UI_TOOLS: readonly ToolName[] = [TOOL.proposeTemplates, TOOL.askUser, TOOL.proposeAdjustment];
+export const UI_TOOLS: readonly ToolName[] = [TOOL.proposeTemplates, TOOL.askUser, TOOL.proposeAdjustment, TOOL.offerGrinder];
 
 /** Tools the engine resolves immediately and sends straight back. */
 export const AUTO_TOOLS: readonly ToolName[] = [
@@ -93,7 +95,7 @@ export const ProposeTemplatesInput = z.object({
       z.object({
         templateId: z.string().min(1),
         confidence: z.enum(CONFIDENCE),
-        /** One or two sentences: why this template suits this bag. */
+        /** One or two sentences: why this template suits this bag (what it does with such a coffee, never how the cup will taste). */
         reason: z.string().min(1).max(240),
       }),
     )
@@ -136,14 +138,36 @@ export const ProposeAdjustmentInput = z.object({
     .nullable(),
   /** One line, imperative: "Raise brew temperature by 1 °C". */
   summary: z.string().min(1).max(120),
-  /** Why, citing the shot data and the taste feedback. */
+  /** Why, citing the shot data and the taste feedback in the user's own words. */
   rationale: z.string().min(1).max(400),
-  /** What the next shot should taste or look like if this works. */
+  /**
+   * What the change does at the machine (flow, time, pressure, extraction),
+   * never how the shot will taste: the taste is the barista's to find (D127).
+   * "A slower pour, a few seconds longer, extracting a little more."
+   */
   expectedEffect: z.string().min(1).max(200),
   /** Non-variable reminders, e.g. "keep the same dose and puck prep". */
   tips: z.array(z.string().min(1).max(160)).max(3),
 });
 export type ProposeAdjustment = z.infer<typeof ProposeAdjustmentInput>;
+
+/** The longest grinder name, burrs and setting, and the most settings: Settings' Add a grinder takes the same (GRINDER_LIMITS, src/api/grinders.ts). */
+export const GRINDER_OFFER_LIMITS = { model: 60, burrs: 60, setting: 20, settings: 100 } as const;
+
+export const OfferGrinderInput = z.object({
+  /** The grinder's make and model as the user named it, e.g. "Mazzer Philos". */
+  model: z.string().trim().min(1).max(GRINDER_OFFER_LIMITS.model),
+  /** The burr set, when the user said it, e.g. "64 mm flat". */
+  burrs: z.string().max(GRINDER_OFFER_LIMITS.burrs).nullable(),
+  /** "numeric" (a numbered dial) or "preset" (a list of settings), when the user said. */
+  settingType: z.enum(['numeric', 'preset']).nullable(),
+  /** A numbered dial's smallest step, and its big step, when the user said them. */
+  smallStep: z.number().positive().nullable(),
+  bigStep: z.number().positive().nullable(),
+  /** A preset grinder's settings, finest first, when the user listed them. */
+  values: z.array(z.string().trim().min(1).max(GRINDER_OFFER_LIMITS.setting)).min(1).max(GRINDER_OFFER_LIMITS.settings).nullable(),
+});
+export type OfferGrinder = z.infer<typeof OfferGrinderInput>;
 
 /** `latest`, `previous`, or a shot id from get_bag_history. */
 export const ShotRefSchema = z.string().min(1);
@@ -178,6 +202,7 @@ export const TOOL_INPUTS = {
   [TOOL.proposeTemplates]: ProposeTemplatesInput,
   [TOOL.askUser]: AskUserInput,
   [TOOL.proposeAdjustment]: ProposeAdjustmentInput,
+  [TOOL.offerGrinder]: OfferGrinderInput,
   [TOOL.getShotSummary]: GetShotSummaryInput,
   [TOOL.getShotSeries]: GetShotSeriesInput,
   [TOOL.getPhaseStats]: GetPhaseStatsInput,
@@ -195,6 +220,8 @@ export const EVENT = {
   /** App context attached to the first user turn of a bag (grinder, scale). */
   context: '[context]',
   shotCompleted: '[event:shot_completed]',
+  /** The barista's verdict on a shot against the one it was compared with (D126), with the next user turn. */
+  shotRated: '[event:shot_rated]',
   undo: '[event:undo]',
   bagResumed: '[event:bag_resumed]',
 } as const;

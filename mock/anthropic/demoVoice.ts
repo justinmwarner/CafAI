@@ -6,8 +6,10 @@
  * numbers the request carries (the shot event, the tool results, the
  * pressure series), a shot's as its shot card shows them, and writes the
  * sentence without one it lacks. The card fields (summary, rationale,
- * expectedEffect) show as plain text, so they carry no markdown.
- * Deterministic: the same facts, the same words.
+ * expectedEffect) show as plain text, so they carry no markdown. It leaves
+ * the taste to the barista (D127): their words are the reason, the change is
+ * explained by what it does at the machine, and the next cup is theirs to
+ * judge. Deterministic: the same facts, the same words.
  */
 import type { TemplateId } from '../../src/coach/contract.ts';
 import { TEMPLATES } from '../../src/coach/templates/index.ts';
@@ -19,13 +21,13 @@ const bold = (text: string) => `**${text}**`;
 
 const templateName = (id: TemplateId) => TEMPLATES.find((template) => template.id === id)?.name ?? id;
 
-/** Why the first pick suits the bag, one clause, no numbers. */
+/** Why the first pick suits the bag, one clause, no numbers: what the profile does with the coffee, never how it will taste. */
 const START_WHY: Record<TemplateId, string> = {
-  'blooming-espresso': 'its bloom pause draws the sweetness out of dense, light beans',
+  'blooming-espresso': 'its bloom pause lets dense, light beans soak through before the pour',
   'd-flow': 'its gentle soak and steady pour forgive small slips while we learn the coffee',
-  londonium: 'its slowly falling pressure keeps a darker roast smooth instead of bitter',
-  allonge: 'its long, fast pour makes very light roasts sweet and clear',
-  'gentle-and-sweet': 'its low, gentle pressure keeps the acidity soft',
+  londonium: 'its slowly falling pressure goes easy on a darker roast, which extracts readily',
+  allonge: 'its long, fast pour puts more water through very light, dense beans',
+  'gentle-and-sweet': 'its low peak and slow decline keep the pressure gentle all the way',
 };
 
 const article = (word: string) => (/^[aeiou]/i.test(word) ? 'an' : 'a');
@@ -55,24 +57,24 @@ function leadFor(change: ChangeFacts): string[] {
     case 'warmer':
       return [
         `I'd raise the ${bold('brew temperature')} by 1 °C and keep the grind and dose as they are.`,
-        'More heat pulls out more sweetness without changing how the shot flows.',
+        'Hotter water extracts more in the same time, without changing how the shot flows.',
       ];
     case 'longerForSour':
       return [
         `The temperature is already at the top of this profile, so I'd let the shot run ${bold('2 g longer')} instead.`,
-        'A longer ratio extracts a little more and softens the acidity.',
+        'More water through the same coffee extracts a little more.',
       ];
     case 'cooler':
       return [
         `I'd lower the ${bold('brew temperature')} by 1 °C and keep the grind and dose as they are.`,
-        'Less heat pulls out fewer of the harsh notes that come late in the shot.',
+        'Cooler water extracts a little less in the same time.',
       ];
     case 'shorter':
-      return [`I'd stop the shot ${bold('2 g earlier')} and keep everything else the same.`, 'A shorter ratio concentrates the cup and gives it more body.'];
+      return [`I'd stop the shot ${bold('2 g earlier')} and keep everything else the same.`, 'Less water through the same coffee makes a more concentrated cup.'];
     case 'longer':
-      return [`I'd let the shot run ${bold('2 g longer')} and keep everything else the same.`, 'A longer ratio dilutes the cup a little and opens up the flavours.'];
+      return [`I'd let the shot run ${bold('2 g longer')} and keep everything else the same.`, 'More water through the same coffee dilutes the cup a little.'];
     case 'keep':
-      return ["Balanced and sweet means this recipe is dialled in, so I wouldn't change a thing.", "Let's lock it in."];
+      return ["You found it balanced and sweet, so I wouldn't change a thing.", "Let's lock it in."];
     case 'finer':
       return finerLead(change);
     case 'coarser':
@@ -82,7 +84,7 @@ function leadFor(change: ChangeFacts): string[] {
           : change.stop.reached
             ? "The yield can't run any longer in this profile, so the next lever is the grinder."
             : stopSentence(change, 'longer'),
-        `${bold('One step coarser')} on the grinder lets the water through a little faster, so it pulls out less and the cup gets lighter.`,
+        `${bold('One step coarser')} on the grinder lets the water through a little faster, so it pulls out a little less.`,
       ];
     case 'keepAfterRejectedGrind':
       return ["Let's keep the recipe as it is for one more shot.", 'Taste it again before we change anything.'];
@@ -119,16 +121,16 @@ function finerLead(change: ChangeFacts): string[] {
     ];
   }
   if (taste === 'weak') {
-    if (shortOfYield) return [stopSentence(change, 'sooner'), `${bold('One step finer')} on the grinder pulls more from the coffee and builds body.`];
+    if (shortOfYield) return [stopSentence(change, 'sooner'), `${bold('One step finer')} on the grinder pulls more from the coffee.`];
     return [
       "The yield can't go any shorter in this profile, so the next lever is the grinder.",
-      `${bold('One step finer')} slows the shot and builds body.`,
+      `${bold('One step finer')} slows the shot, so it extracts more.`,
     ];
   }
   if (taste === 'other') {
     return [
       "The taste doesn't point to one clear fix, so let's change one thing at a time.",
-      `${bold('One step finer')} on the grinder slows the shot a little, which usually brings more sweetness.`,
+      `${bold('One step finer')} on the grinder slows the shot a little, so the water stays longer in the coffee.`,
     ];
   }
   return [
@@ -144,67 +146,67 @@ function finerWhy(change: ChangeFacts): string {
   const shortOfYield = change.stop !== null && !change.stop.reached;
   if (change.taste === 'sour') {
     if (shortOfYield) {
-      return "It tasted sour, the temperature is at this profile's top, and this shot did not stop at its target yield, so a longer stop would change nothing. A finer grind extracts more instead.";
+      return "You found it sour, the temperature is at this profile's top, and this shot did not stop at its target yield, so a longer stop would change nothing. A finer grind extracts more instead.";
     }
-    return "It tasted sour and this profile's temperature and yield are at their limits, so a finer grind is the way to slow the water and extract more.";
+    return "You found it sour and this profile's temperature and yield are at their limits, so a finer grind is the way to slow the water and extract more.";
   }
   if (change.taste === 'weak') {
     if (shortOfYield) {
-      return 'It tasted weak, and this shot did not stop at its target yield, so stopping it sooner would change nothing. A slightly finer grind extracts more and builds body.';
+      return 'You found it weak, and this shot did not stop at its target yield, so stopping it sooner would change nothing. A slightly finer grind extracts more.';
     }
-    return 'It tasted weak and the yield is already as short as this profile allows, so a finer grind adds contact time and body.';
+    return 'You found it weak and the yield is already as short as this profile allows, so a finer grind adds contact time and extracts more.';
   }
-  return 'The taste did not point to one clear lever, so change one thing at a time: a slightly finer grind slows the shot and usually adds sweetness.';
+  return 'The taste did not point to one clear lever, so change one thing at a time: a slightly finer grind slows the shot and extracts a little more.';
 }
 
 const CHANGE_TEXT: Record<ChangeKind, (change: ChangeFacts) => ProposalText> = {
   warmer: ({ roastLevel }) => ({
     summary: 'Brew 1 °C hotter',
-    rationale: `Sour${onRoast(roastLevel)} usually means under-extraction. A little more heat dissolves more of the sugars, so they balance the acidity.`,
-    expectedEffect: 'Less sharpness, more sweetness and a rounder finish.',
+    rationale: `You found it sour${onRoast(roastLevel)}, which usually means under-extraction. A little more heat extracts more from the same grind and dose.`,
+    expectedEffect: 'Hotter water extracts more in the same time; the flow and the shot time stay about the same.',
   }),
   longerForSour: () => ({
     summary: 'Let the shot run 2 g longer',
-    rationale: "It tasted sour and the temperature is already at this profile's top, so a slightly longer ratio is the next way to extract more.",
-    expectedEffect: 'A rounder cup with gentler acidity.',
+    rationale: "You found it sour and the temperature is already at this profile's top, so a slightly longer ratio is the next way to extract more.",
+    expectedEffect: 'More water through the same coffee: the shot runs a little longer and extracts a little more.',
   }),
   cooler: () => ({
     summary: 'Brew 1 °C cooler',
-    rationale: 'Bitter and harsh usually means over-extraction. A little less heat pulls out fewer of the harsh compounds that come late in the shot.',
-    expectedEffect: 'A softer, cleaner finish with less bitterness.',
+    rationale: 'You found it bitter and harsh, which usually means over-extraction. A little less heat extracts less from the same grind and dose.',
+    expectedEffect: 'Cooler water extracts less in the same time; the flow and the shot time stay about the same.',
   }),
   shorter: () => ({
     summary: 'Stop the shot 2 g earlier',
-    rationale: 'It tasted weak and watery, so a slightly shorter ratio concentrates the cup without touching the grind.',
-    expectedEffect: 'More body and a fuller, more intense cup.',
+    rationale: 'You found it weak and watery, so a slightly shorter ratio concentrates the cup without touching the grind.',
+    expectedEffect: 'The shot stops 2 g sooner: less water through the same coffee, so a more concentrated cup.',
   }),
   longer: () => ({
     summary: 'Let the shot run 2 g longer',
-    rationale: 'It tasted too strong, so a slightly longer ratio dilutes it and opens up the flavours.',
-    expectedEffect: 'A lighter, clearer cup that is easier to drink.',
+    rationale: 'You found it too strong, so a slightly longer ratio puts more water through the same coffee and dilutes it a little.',
+    expectedEffect: 'The shot runs 2 g longer: more water through the same coffee, so a more dilute cup.',
   }),
   keep: () => ({
     summary: 'Keep this recipe exactly as it is',
-    rationale: 'It tasted balanced and sweet, so this recipe is dialled in. Changing anything now would only move you away from it.',
-    expectedEffect: 'The same balanced, sweet cup, shot after shot.',
+    rationale: 'You found it balanced and sweet, so keep this recipe. Changing anything now would only move you away from it.',
+    expectedEffect: 'Nothing changes: the same recipe, shot after shot.',
   }),
   finer: (change) => ({
     summary: change.grindSetting === null ? 'Grind one step finer' : `Grind one step finer, to ${change.grindSetting}`,
     rationale: finerWhy(change),
-    expectedEffect: 'A slightly slower shot with more sweetness and body.',
+    expectedEffect: 'A slightly slower shot: the water stays longer in the coffee and extracts a little more.',
   }),
   coarser: (change) => ({
     summary: change.grindSetting === null ? 'Grind one step coarser' : `Grind one step coarser, to ${change.grindSetting}`,
     rationale:
       change.stop?.reached === true
-        ? 'It tasted too strong and the yield is already as long as this profile allows, so a slightly coarser grind lets the water through faster and extracts a little less.'
-        : 'It tasted too strong, and this shot did not stop at its target yield, so a longer stop would change nothing. A slightly coarser grind lets the water through faster and extracts a little less.',
-    expectedEffect: 'A lighter, clearer cup that is easier to drink.',
+        ? 'You found it too strong and the yield is already as long as this profile allows, so a slightly coarser grind lets the water through faster and extracts a little less.'
+        : 'You found it too strong, and this shot did not stop at its target yield, so a longer stop would change nothing. A slightly coarser grind lets the water through faster and extracts a little less.',
+    expectedEffect: 'A slightly faster shot: the water spends less time in the coffee and extracts a little less.',
   }),
   keepAfterRejectedGrind: () => ({
     summary: 'Keep this recipe for one more shot',
     rationale: 'That grind move does not fit this setup, so keep the recipe as it is and taste it once more before the next change.',
-    expectedEffect: 'The same cup again, so the next change starts from a clear read.',
+    expectedEffect: 'Nothing changes, so the next change starts from a clear read.',
   }),
 };
 
@@ -248,7 +250,7 @@ export const DEMO_VOICE: Voice = {
     const check = 'Let me check the pressure curve before we change anything.';
     switch (taste) {
       case 'sour':
-        return `Sour${onRoast(roastLevel)} usually means ${bold('under-extraction')}: the water didn't pull out enough sweetness. ${check}`;
+        return `Sour${onRoast(roastLevel)} usually means ${bold('under-extraction')}: the water didn't pull enough out of the coffee. ${check}`;
       case 'bitter':
         return `Bitter and harsh usually means ${bold('over-extraction')}: the water pulled out too much. ${check}`;
       case 'weak':
@@ -256,7 +258,7 @@ export const DEMO_VOICE: Voice = {
       case 'strong':
         return `Too strong usually means the cup is more concentrated than you like. ${check}`;
       case 'balanced':
-        return "Balanced and sweet is exactly what we're after. Let me check the pressure curve to make sure the shot ran clean.";
+        return "You found it balanced and sweet: that's a recipe worth keeping. Let me check the pressure curve to make sure the shot ran clean.";
       case 'other':
         return 'Thanks, that helps. Let me check the pressure curve before I suggest a change.';
     }

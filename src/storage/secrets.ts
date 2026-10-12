@@ -2,12 +2,13 @@
 // Derived from Crema web/src/settings.ts (https://github.com/yarneo/crema @ 628cd714),
 // Copyright (C) 2026 Yarden (yarneo). Modified for CafAI: the API key moved out of the settings into its own IndexedDB database; isReady means a key is stored.
 /**
- * The API key, and nothing else.
+ * The API key, and beside it what its optional copy in Decaid is still owed
+ * (keyBackup.ts, D99): nothing else.
  *
- * The key lives in this device's browser storage and nowhere else. It is never
- * written to Decaid (whose store has no auth and is readable over the LAN),
- * never exported, never logged, and never leaves the device except as the
- * header on requests to Anthropic.
+ * The key lives in this device's browser storage. It is never exported or
+ * logged, and leaves the device only as the header on requests to Anthropic
+ * and, when the user chooses so in Settings, as its copy in a namespace of
+ * its own in Decaid's store (which has no auth and is readable over the LAN).
  *
  * It sits in a separate database from CafAI's data, so an import that
  * replaces everything, an export, or the mirror cannot touch it even by
@@ -17,20 +18,25 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { closeEventTarget, createDbHandle, DURABLE, type LostReason } from './db.ts';
 import { StorageError } from './errors.ts';
+import type { KeyCopyState, KeyCopyStore } from './keyBackup.ts';
 import type { SecretStore } from './types.ts';
 import { REDACTED, redactKeyLike } from './redact.ts';
 
 export const SECRETS_DB_NAME = 'cafai-secrets';
 const SECRETS_DB_VERSION = 1;
 const API_KEY_RECORD = 'anthropicApiKey';
+const KEY_COPY_RECORD = 'anthropicKeyCopy';
 
 interface SecretsDbSchema extends DBSchema {
-  secrets: { key: string; value: string };
+  /** The key (a string), and what its copy in Decaid is owed (KeyCopyState). */
+  secrets: { key: string; value: unknown };
 }
 
 type SecretsDb = IDBPDatabase<SecretsDbSchema>;
 
 export interface IdbSecretStore extends SecretStore {
+  /** What the key's copy in Decaid is still owed, kept beside the key on this device (D99). */
+  readonly keyCopy: KeyCopyStore;
   close(): void;
 }
 
@@ -97,11 +103,42 @@ export function createSecretStore(db: () => Promise<SecretsDb>): SecretStore {
   };
 }
 
+/** A stored KeyCopyState, read leniently: anything else is nothing owed and nothing forgotten. */
+function keyCopyState(value: unknown): KeyCopyState {
+  const record = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+  return {
+    owed: record['owed'] === 'copy' || record['owed'] === 'delete' ? record['owed'] : null,
+    forgotten: record['forgotten'] === true,
+  };
+}
+
+/** What the key's copy in Decaid is owed, in the key's own database: no import, export or mirror ever opens it. */
+export function createKeyCopyStore(db: () => Promise<SecretsDb>): KeyCopyStore {
+  return {
+    async get() {
+      try {
+        return keyCopyState(await (await db()).get('secrets', KEY_COPY_RECORD));
+      } catch (error) {
+        throw secretError(error, 'read');
+      }
+    },
+    async set(state) {
+      try {
+        const tx = (await db()).transaction('secrets', 'readwrite', DURABLE);
+        await Promise.all([tx.store.put({ owed: state.owed, forgotten: state.forgotten }, KEY_COPY_RECORD), tx.done]);
+      } catch (error) {
+        throw secretError(error, 'save');
+      }
+    },
+  };
+}
+
 export async function openSecretStore(name: string = SECRETS_DB_NAME): Promise<IdbSecretStore> {
   const handle = createDbHandle((onLost) => openSecretsDb(name, onLost));
   // Fail at start-up, not on the first key save, when storage is blocked.
   await handle.get();
-  return { ...createSecretStore(() => handle.get()), close: () => handle.close() };
+  const db = () => handle.get();
+  return { ...createSecretStore(db), keyCopy: createKeyCopyStore(db), close: () => handle.close() };
 }
 
 /** Whether CafAI has what it needs to ask the coach anything: a stored API key. */

@@ -7,6 +7,7 @@ import {
   readBean,
   readBeans,
   readBuildInfo,
+  readDevices,
   readMachineInfo,
   readMachineState,
   readPlugins,
@@ -61,23 +62,31 @@ describe('readers: what Decaid sends as it should', () => {
     expect(readShotSummary(summary, 'GET /api/v1/shots/latest')).toBe(summary);
     expect(readShotPage(fixtures.shotsList(), 'GET /api/v1/shots')).toEqual(fixtures.shotsList());
     expect(readMachineState(fixtures.machineState(), 'GET /api/v1/machine/state')).toEqual(fixtures.machineState());
-    expect(readSettings({ gatewayMode: 'tracking', blockOnNoScale: false, logLevel: 'INFO' }, 'GET /api/v1/settings')).toEqual({
-      gatewayMode: 'tracking',
-      blockOnNoScale: false,
-      logLevel: 'INFO',
-    });
+    const settings = { gatewayMode: 'tracking', blockOnNoScale: false, logLevel: 'INFO', preferredMachineId: 'F4:12:FA:5C:3D:8E', preferredScaleId: null };
+    expect(readSettings(settings, 'GET /api/v1/settings')).toBe(settings);
     expect(readBeans([bean('bean-1')], 'GET /api/v1/beans')).toEqual([bean('bean-1')]);
     expect(readBatches([batch('batch-1')], 'GET /api/v1/beans/{id}/batches')).toEqual([batch('batch-1')]);
+    expect(readDevices(fixtures.devicesWs().devices, 'GET /api/v1/devices')).toEqual(fixtures.devicesWs().devices);
     expect(drift()).toEqual([]);
   });
 
   it('a valid reply passes through untouched: keys CafAI does not know are kept, and so are enum values', () => {
     const workflow = { ...fixtures.workflowGet(), machine: { provenanceStatus: 'captured' }, somethingNew: [1, 2] };
     expect(readWorkflow(workflow, 'GET /api/v1/workflow')).toBe(workflow);
-    const settings = { gatewayMode: 'somethingNew', chargingMode: 'balanced' };
+    const settings = { gatewayMode: 'somethingNew', chargingMode: 'balanced', preferredMachineId: null, preferredScaleId: null };
     expect(readSettings(settings, 'GET /api/v1/settings')).toBe(settings);
     const record = { ...fixtures.profileRecord(), visibility: 'archived' };
     expect(readProfileRecord(record, 'GET /api/v1/profiles/{id}')).toBe(record);
+    expect(drift()).toEqual([]);
+  });
+
+  it('only what CafAI reads is checked: a field it never reads may change without a report', () => {
+    const { commitShort: _short, buildNumber: _number, ...info } = fixtures.buildInfo();
+    expect(readBuildInfo({ ...info, appStore: 'no', branch: 7 }, 'GET /api/v1/info')).toMatchObject({ version: info.version, fullVersion: info.fullVersion });
+    const { metadataHash: _hash, isDefault: _default, ...record } = fixtures.profileRecord();
+    expect(readProfileRecord({ ...record, createdAt: null }, 'POST /api/v1/profiles').id).toBe(record.id);
+    const { stopAtTemperature: _stop, ...steam } = fixtures.workflowGet().steamSettings;
+    expect(readWorkflow({ ...fixtures.workflowGet(), id: 7, steamSettings: steam }, 'GET /api/v1/workflow').steamSettings).toEqual(steam);
     expect(drift()).toEqual([]);
   });
 });
@@ -126,7 +135,7 @@ describe('readers: a field CafAI cannot do without', () => {
   });
 });
 
-describe('readers: anything else reads as its fallback, and is reported', () => {
+describe('readers: anything else is unknown, never a default, and is reported', () => {
   it('MachineInfo without GHC reads as GHC: false', () => {
     const { GHC: _ghc, ...info } = fixtures.machineInfo();
     expect(readMachineInfo(info, 'GET /api/v1/machine/info')).toEqual({ ...info, GHC: false });
@@ -134,20 +143,27 @@ describe('readers: anything else reads as its fallback, and is reported', () => 
   });
 
   it('build info Decaid sent oddly reads as empty, so About says the version is unknown', () => {
-    const info = { ...fixtures.buildInfo(), fullVersion: 802, version: null };
-    expect(readBuildInfo(info, 'GET /api/v1/info')).toMatchObject({ fullVersion: '', version: '', commit: info.commit });
+    const sent = fixtures.buildInfo();
+    const info = { ...sent, fullVersion: 802, version: null };
+    expect(readBuildInfo(info, 'GET /api/v1/info')).toMatchObject({ fullVersion: '', version: '', commit: sent.commit });
     expect(problems()).toEqual(['version: expected string, got null', 'fullVersion: expected string, got number']);
   });
 
-  it("a workflow's other parts: Decaid's own defaults for drink settings, the rest left out", () => {
+  it("a workflow's drink settings: a field CafAI cannot read is null, never Decaid's default", () => {
     const sent = fixtures.workflowGet();
     const { flow: _flow, ...steam } = sent.steamSettings;
     const { hotWaterData: _hotWater, ...rest } = sent;
-    const workflow = { ...rest, id: 7, steamSettings: steam, context: { ...sent.context, targetYield: '36', extras: [] } };
+    const workflow = {
+      ...rest,
+      steamSettings: { ...steam, targetTemperature: '0', flowRate: 0.8 },
+      rinseData: { ...sent.rinseData, duration: null },
+      context: { ...sent.context, targetYield: '36', extras: [] },
+    };
     const read = readWorkflow(workflow, 'GET /api/v1/workflow');
-    expect(read.id).toBe('');
-    expect(read.steamSettings).toEqual({ ...steam, flow: 0.8 });
-    expect(read.hotWaterData).toEqual({ targetTemperature: 75, duration: 30, volume: 50, flow: 10 });
+    // A renamed flow is not 0.8, and steam sent off as "0" is not 150 °C: both are unknown.
+    expect(read.steamSettings).toMatchObject({ targetTemperature: null, duration: steam.duration, flow: null });
+    expect(read.hotWaterData).toEqual({ targetTemperature: null, duration: null, volume: null, flow: null });
+    expect(read.rinseData).toEqual({ ...sent.rinseData, duration: null });
     expect(read.context).not.toHaveProperty('targetYield');
     expect(read.context).not.toHaveProperty('extras');
     expect(read.context?.targetDoseWeight).toBe(18);
@@ -155,33 +171,51 @@ describe('readers: anything else reads as its fallback, and is reported', () => 
     // The reply itself is never changed.
     expect(workflow.context.targetYield).toBe('36');
     expect(problems()).toEqual([
-      'id: expected string, got number',
       'context.targetYield: expected number, got string',
       'context.extras: expected object, got array',
+      'steamSettings.targetTemperature: expected number, got string',
       'steamSettings.flow: missing',
       'hotWaterData: missing',
+      'rinseData.duration: expected number, got null',
     ]);
   });
 
-  it('a fallback is never shared between replies', () => {
+  it('steam that is off in Decaid (0) is read as 0, which Settings shows as Off', () => {
+    const sent = fixtures.workflowGet();
+    const workflow = { ...sent, steamSettings: { ...sent.steamSettings, targetTemperature: 0 } };
+    expect(readWorkflow(workflow, 'GET /api/v1/workflow').steamSettings.targetTemperature).toBe(0);
+    expect(drift()).toEqual([]);
+  });
+
+  it('an unknown value is never shared between replies', () => {
     const { steamSettings: _steam, ...workflow } = fixtures.workflowGet();
     const first = readWorkflow(workflow, 'GET /api/v1/workflow');
     first.steamSettings.flow = 2.5;
-    expect(readWorkflow(workflow, 'GET /api/v1/workflow').steamSettings.flow).toBe(0.8);
+    expect(readWorkflow(workflow, 'GET /api/v1/workflow').steamSettings.flow).toBeNull();
     const { workflow: _workflow, measurements: _measurements, ...shot } = fixtures.shotRecord();
     readShot(shot, 'GET /api/v1/shots/{id}').measurements.push(fixtures.shotRecord().measurements[0]!);
     expect(readShot(shot, 'GET /api/v1/shots/{id}').measurements).toEqual([]);
   });
 
-  it('settings: a gateway mode it cannot read is left out, so nothing is said about it (5.1)', () => {
-    expect(readSettings({ gatewayMode: 1, blockOnNoScale: 'yes' }, 'GET /api/v1/settings')).toEqual({});
-    expect(problems()).toEqual(['gatewayMode: expected string, got number', 'blockOnNoScale: expected boolean, got string']);
+  it('settings: a gateway mode or a preferred device it cannot read is left out, so nothing is said or done on a guess (5.1)', () => {
+    expect(readSettings({ gatewayMode: 1, preferredMachineId: 7, preferredScaleId: null, blockOnNoScale: 'yes' }, 'GET /api/v1/settings')).toEqual({
+      preferredScaleId: null,
+      blockOnNoScale: 'yes',
+    });
+    expect(readSettings({ gatewayMode: 'tracking', preferredScaleDeviceId: 'CF:3A' }, 'GET /api/v1/settings')).not.toHaveProperty('preferredScaleId');
+    expect(problems()).toEqual([
+      'gatewayMode: expected string, got number',
+      'preferredMachineId: expected string, got number',
+      'preferredMachineId: missing',
+      'preferredScaleId: missing',
+    ]);
   });
 
-  it('a profile record: parentId reads as none, the rest as empty', () => {
+  it('a profile record: a parent it cannot read is unknown (left out), never "none"', () => {
     const { parentId: _parent, ...record } = fixtures.profileRecord();
-    expect(readProfileRecord({ ...record, isDefault: 'no' }, 'POST /api/v1/profiles')).toMatchObject({ parentId: null, isDefault: false });
-    expect(problems()).toEqual(['parentId: missing', 'isDefault: expected boolean, got string']);
+    expect(readProfileRecord(record, 'POST /api/v1/profiles')).not.toHaveProperty('parentId');
+    expect(readProfileRecord({ ...record, parentId: 5 }, 'POST /api/v1/profiles')).not.toHaveProperty('parentId');
+    expect(problems()).toEqual(['parentId: missing', 'parentId: expected string, got number']);
   });
 
   it("a shot record without its workflow reads as an empty one (the engine credits it as before, 5.10)", () => {
@@ -233,9 +267,40 @@ describe('readMachineState', () => {
     expect(drift()).toEqual([{ source: 'GET /api/v1/machine/state', problem: 'pressure: missing' }]);
   });
 
-  it('fails the call when there is no frame to read', () => {
-    const { timestamp: _timestamp, ...state } = fixtures.machineState();
-    expect(refusal(() => readMachineState(state, 'GET /api/v1/machine/state'))).toMatchObject(UNRECOGNISED);
+  it('fails the call when there is no state to read', () => {
+    const { state: _state, ...frame } = fixtures.machineState();
+    expect(refusal(() => readMachineState(frame, 'GET /api/v1/machine/state'))).toMatchObject(UNRECOGNISED);
+    expect(drift()).toEqual([{ source: 'GET /api/v1/machine/state', problem: 'state: missing' }]);
+  });
+
+  it('keeps a state without a timestamp it can read, at the time it arrived', () => {
+    const { timestamp: _timestamp, ...frame } = fixtures.machineState();
+    expect(readMachineState(frame, 'GET /api/v1/machine/state').state).toEqual(frame.state);
     expect(drift()).toEqual([{ source: 'GET /api/v1/machine/state', problem: 'timestamp: missing' }]);
+  });
+});
+
+describe('readDevices', () => {
+  it('leaves out a device without its id, type or state, and keeps the rest', () => {
+    const [scale, machine] = fixtures.devicesWs().devices;
+    const devices = readDevices([{ ...scale, id: '' }, { ...machine, type: undefined }, machine], 'GET /api/v1/devices');
+    expect(devices).toEqual([machine]);
+    expect(problems()).toEqual(['[].id: empty', '[].type: missing']);
+  });
+
+  it('a name or availability it cannot read is unknown: no name, and not "remembered only"', () => {
+    const [, machine] = fixtures.devicesWs().devices;
+    const [device] = readDevices([{ ...machine, name: null, available: 'yes' }], 'GET /api/v1/devices/scan');
+    expect(device).toEqual({ id: machine!.id, state: machine!.state, type: machine!.type, name: '' });
+    expect(problems()).toEqual(['[].name: expected string, got null', '[].available: expected boolean, got string']);
+  });
+
+  it('a reply that is not a list, null included, fails the call: never "Decaid has none"', () => {
+    expect(refusal(() => readDevices(null, 'GET /api/v1/devices'))).toMatchObject(UNRECOGNISED);
+    expect(refusal(() => readPlugins(null, 'GET /api/v1/plugins'))).toMatchObject(UNRECOGNISED);
+    expect(drift()).toEqual([
+      { source: 'GET /api/v1/devices', problem: 'reply: expected array, got null' },
+      { source: 'GET /api/v1/plugins', problem: 'reply: expected array, got null' },
+    ]);
   });
 });

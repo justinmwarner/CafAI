@@ -8,7 +8,7 @@
  */
 import type { DecaidClient, Heartbeat, HostEnvironment, TelemetryStore } from '../api/types.ts';
 import type { PluginDirectory } from '../api/plugins.ts';
-import type { Confidence, RoastLevel, SaveBagDetails } from '../coach/contract.ts';
+import type { Confidence, OfferGrinder, RoastLevel, SaveBagDetails } from '../coach/contract.ts';
 import type { ShotSummary } from '../coach/types.ts';
 import type { BagPhoto } from '../llm/extractBag.ts';
 import type { ModelInfo } from '../llm/types.ts';
@@ -79,8 +79,55 @@ export interface BeanPickerOption {
 /** The answer on the bean card: a batch, a photo of the bag, or something else (the bag described in the chat). */
 export type BeanChoice = { kind: 'batch'; batchId: string } | { kind: 'photo' } | { kind: 'other' };
 
+/**
+ * How a shot compared with the one it is set against (D126), in the
+ * barista's words, from much worse to much better. Stored as these ids; the
+ * card shows SHOT_VERDICT_WORDS and the coach hears them in lower case.
+ */
+export const SHOT_VERDICTS = ['muchWorse', 'worse', 'same', 'better', 'muchBetter'] as const;
+export type ShotVerdict = (typeof SHOT_VERDICTS)[number];
+
+/** The words on the shot card, the same words the coach hears. */
+export const SHOT_VERDICT_WORDS: Readonly<Record<ShotVerdict, string>> = {
+  muchWorse: 'Much worse',
+  worse: 'Worse',
+  same: 'About the same',
+  better: 'Better',
+  muchBetter: 'Much better',
+};
+
+/**
+ * What a shot is compared with (D126): the shot before it in its bag's chat;
+ * for a bag's first shot, the last shot of another coffee; for the very
+ * first shot, the coffee the barista usually enjoys.
+ */
+export type ShotBaseline =
+  | { kind: 'previous'; shotId: string }
+  /** `coffee`: that bag's name, or null while it had none. */
+  | { kind: 'otherCoffee'; shotId: string; coffee: string | null }
+  | { kind: 'usual' };
+
+/** The barista's answer on a shot's card (D126). */
+export interface ShotRating {
+  verdict: ShotVerdict;
+  /**
+   * The running score written to Decaid's `enjoyment`, out of 10 (ten times
+   * it on a Decaid that rates out of 100, D101), so Decaid and Visualizer
+   * have a number. Never shown.
+   */
+  score: number;
+}
+
 /** `expired`: the conversation moved on (the user typed instead of tapping). */
 export type DiffStatus = 'pending' | 'applying' | 'applied' | 'declined' | 'failed' | 'undone' | 'expired';
+
+/**
+ * The coach's offer to add a grinder to Decaid's library (D125): `pending`
+ * until a tap (and again after an Add that failed), `adding` while CafAI
+ * writes it, `added` or `existing` (Decaid had it, so CafAI linked that one)
+ * once CafAI uses it, `declined` (Not now), `expired` (set aside unanswered).
+ */
+export type GrinderOfferStatus = 'pending' | 'adding' | 'added' | 'existing' | 'declined' | 'expired';
 
 /**
  * Why the engine set a card aside unanswered: the barista typed in the chat,
@@ -150,7 +197,15 @@ export type CoachUiPart =
       kind: 'shot';
       shotId: string;
       summary: ShotSummary;
-      /** The barista's 1-5 star rating, written to Decaid's record as enjoyment on Decaid's own scale (D101). Absent until rated. */
+      /**
+       * What the card asks the barista to compare the shot with (D126).
+       * Absent on cards made before CafAI compared shots until their chat is
+       * opened, and on cards rated with stars.
+       */
+      baseline?: ShotBaseline;
+      /** The barista's verdict against `baseline` (D126). Absent until rated. */
+      rating?: ShotRating;
+      /** A 1-5 star rating given before D126: kept as it was and shown, never asked again. */
       stars?: number;
       /** The shot's page on Visualizer, once Decaid's Visualizer plugin uploaded it (6.4). Absent until then. */
       visualizerUrl?: string;
@@ -181,6 +236,20 @@ export type CoachUiPart =
       confirmed: boolean;
       /** The user typed in the chat instead: the details were not saved. */
       expired?: boolean;
+      setAsideReason?: SetAsideReason;
+    }
+  | {
+      kind: 'grinderOffer';
+      /** The offer_grinder tool_use id; the engine uses it to resolve the tap. */
+      requestId: string;
+      /** The grinder as the coach heard it from the barista: what Add sends to Decaid's library. */
+      grinder: OfferGrinder;
+      status: GrinderOfferStatus;
+      /** Why the last Add failed: the card stays open to tap again. Null otherwise. */
+      error: string | null;
+      /** The grinder CafAI linked, as Decaid's library names it ("Niche Zero (63 mm conical)"); set once added or found. */
+      linkedName?: string;
+      /** Why the card was set aside (status `expired`). */
       setAsideReason?: SetAsideReason;
     }
   | {
@@ -283,11 +352,12 @@ export interface CoachController {
   /** Revert the machine to the previous version of the active bag. */
   undo(): Promise<void>;
   /**
-   * Rate a shot 1-5 stars from its card. Written to Decaid's shot record as
-   * `enjoyment` on the scale Decaid uses (stars x 2 out of 10, x 20 out of
-   * 100, D101); never sent to the coach.
+   * Answer the shot card's "Compared with ...?" (D126); a new answer
+   * replaces the old. The verdict and what it was compared with stay on the
+   * card, Decaid's `enjoyment` gets a running score on the scale Decaid uses
+   * (D101), and the coach hears the verdict with the next message it is sent.
    */
-  rateShot(shotId: string, stars: number): Promise<void>;
+  rateShot(shotId: string, verdict: ShotVerdict): Promise<void>;
   /**
    * The bean card (6.1): fill the bag from a batch of Decaid's bean library,
    * link it, and start the coach's intake with it.
@@ -299,6 +369,14 @@ export interface CoachController {
   readBagPhoto(photo: BagPhoto): Promise<void>;
   /** The photo's details as the barista confirmed them: saved like save_bag_details, then the coach's intake. */
   confirmBag(details: SaveBagDetails): Promise<void>;
+  /**
+   * The coach's grinder card (D125): add the grinder to Decaid's grinder
+   * library, or take the one Decaid already has, link it as Settings does,
+   * and tell the coach. Nothing is added without this tap.
+   */
+  addGrinder(requestId: string): Promise<void>;
+  /** The grinder card's Not now: nothing is added, and the coach hears so. */
+  declineGrinder(requestId: string): Promise<void>;
   /** Re-send the last failed request. */
   retry(): Promise<void>;
   dismissError(): void;

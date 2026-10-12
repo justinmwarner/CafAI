@@ -7,7 +7,9 @@
  *   - demo (demoVoice.ts): fuller coaching prose for `npm run demo` (D76).
  *
  * Facts carry only what the request said (null when it did not), so a voice
- * never has a number to invent.
+ * never has a number to invent. Both follow the coach's taste rules (D127):
+ * the barista's own words are the reason for a change, what it does at the
+ * machine is its effect, and no voice says how a shot will taste.
  */
 import type { RoastLevel, TemplateId } from '../../src/coach/contract.ts';
 
@@ -146,51 +148,55 @@ function formatNumber(value: number | null): string {
   return value === null ? '?' : String(Math.round(value * 10) / 10);
 }
 
+/**
+ * The barista's taste words are the reason; what the change does at the
+ * machine is the effect, never a taste to expect (D127).
+ */
 const TERSE_CHANGES: Record<ChangeKind, (change: ChangeFacts) => ProposalText> = {
   warmer: () => ({
     summary: 'Raise brew temperature by 1 °C',
-    rationale: 'It tasted sour, which usually means under-extraction. A little more heat pulls out more sweetness.',
-    expectedEffect: 'Less sharpness and more sweetness.',
+    rationale: 'You found it sour, which usually means under-extraction. A little more heat extracts more.',
+    expectedEffect: 'More extraction at the same flow and time.',
   }),
   longerForSour: () => ({
     summary: 'Lengthen the yield by 2 g',
-    rationale: 'It tasted sour and the temperature is already at the top of this profile, so a longer ratio extracts a little more.',
-    expectedEffect: 'A rounder, less sharp cup.',
+    rationale: 'You found it sour and the temperature is already at the top of this profile, so a longer ratio extracts a little more.',
+    expectedEffect: '2 g more water through the same coffee.',
   }),
   cooler: () => ({
     summary: 'Lower brew temperature by 1 °C',
-    rationale: 'It tasted bitter, which usually means over-extraction. A little less heat softens the finish.',
-    expectedEffect: 'A softer, less harsh finish.',
+    rationale: 'You found it bitter, which usually means over-extraction. A little less heat extracts less.',
+    expectedEffect: 'Less extraction at the same flow and time.',
   }),
   shorter: () => ({
     summary: 'Shorten the yield by 2 g',
-    rationale: 'It tasted weak, so a shorter ratio will concentrate the cup.',
-    expectedEffect: 'More body and intensity.',
+    rationale: 'You found it weak, so a shorter ratio puts less water through the same coffee.',
+    expectedEffect: 'A shorter shot and a more concentrated cup.',
   }),
   longer: () => ({
     summary: 'Lengthen the yield by 2 g',
-    rationale: 'It tasted too strong, so a longer ratio will open it up.',
-    expectedEffect: 'A lighter, clearer cup.',
+    rationale: 'You found it too strong, so a longer ratio puts more water through the same coffee.',
+    expectedEffect: 'A longer shot and a more dilute cup.',
   }),
   keep: () => ({
     summary: 'Keep everything as it is',
-    rationale: 'It tasted balanced and sweet. This recipe is dialled in, so lock it in.',
-    expectedEffect: 'The same good cup again.',
+    rationale: 'You found it balanced and sweet, so lock this recipe in.',
+    expectedEffect: 'Nothing changes.',
   }),
   finer: ({ grindSetting }) => ({
     summary: grindSetting === null ? 'Grind 1 step finer' : `Grind 1 step finer, to ${grindSetting}`,
     rationale: 'The taste did not point to one clear fix, so slow the shot slightly with a finer grind.',
-    expectedEffect: 'A slightly slower shot with more sweetness.',
+    expectedEffect: 'A slightly slower shot that extracts a little more.',
   }),
   coarser: ({ grindSetting }) => ({
     summary: grindSetting === null ? 'Grind 1 step coarser' : `Grind 1 step coarser, to ${grindSetting}`,
-    rationale: 'It tasted too strong and the yield cannot run any longer, so a coarser grind will lighten it.',
-    expectedEffect: 'A lighter, clearer cup.',
+    rationale: 'You found it too strong and the yield cannot run any longer, so a coarser grind lets the water through faster.',
+    expectedEffect: 'A slightly faster shot that extracts a little less.',
   }),
   keepAfterRejectedGrind: () => ({
     summary: 'Keep everything as it is',
     rationale: 'That change is outside what this profile allows, so keep this recipe for one more shot.',
-    expectedEffect: 'The same cup, to taste again.',
+    expectedEffect: 'Nothing changes: pull it again and compare.',
   }),
 };
 

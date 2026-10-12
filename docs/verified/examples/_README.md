@@ -6,10 +6,11 @@ them is a live capture of this exact source commit.
 
 Sources:
 
-- **Decaid:** `E:\source\cafai\.ref\decaid` at commit
+- **Decaid:** `.ref\decaid` (a local reference clone at the repository's
+  root, not committed) at commit
   `a45961b323831d2170b3e7f3fef7c72fdd341642`.
 - **Real wire captures from Decaid 0.8.6+2801:**
-  `E:\source\cafai\.ref\decaid-mcp\test\fixtures\` (`machine-state.json`,
+  `.ref\decaid-mcp\test\fixtures\` (`machine-state.json`,
   `workflow.json`, `shots\shot-01.json`, `list-page-newest.json`,
   `info.json`, `errors\*.json`). These were used to sanity-check the field
   names, value types, timestamp formats and sample spacing.

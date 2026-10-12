@@ -5,9 +5,9 @@ import { TID } from '../src/ui/testIds.ts';
 import { fillField, openApp, pullShot, saveApiKey, sendChat } from './helpers.ts';
 
 /**
- * CafAI's writes to Decaid: the taste answer and the star rating land in the
- * shot record (D61), and a grinder setting Decaid could not take is sent
- * again once Decaid is back (D64).
+ * CafAI's writes to Decaid: the taste answer and the verdict on the shot land
+ * in the shot record (D61, D126), and a grinder setting Decaid could not take
+ * is sent again once Decaid is back (D64).
  */
 
 /** The newest shot record in the mock Decaid. */
@@ -34,7 +34,7 @@ async function pullFirstShot(page: Page): Promise<void> {
   await expect(page.getByTestId(TID.shotCard)).toBeVisible({ timeout: 60_000 });
 }
 
-test('writes the taste and the star rating to the shot record', async ({ page }) => {
+test('writes the taste and the verdict to the shot record', async ({ page }) => {
   await openApp(page);
   await saveApiKey(page);
   await pullFirstShot(page);
@@ -49,23 +49,53 @@ test('writes the taste and the star rating to the shot record', async ({ page })
     notes: 'Taste: Sour / sharp. Kiambu AA v1 (CafAI)',
   });
 
-  // The stars wait until the coach is done (busy blocks them), then 4 stars = enjoyment 8 of 10.
+  // The verdict waits until the coach is done (busy blocks it). The very first
+  // shot is compared with the coffee the barista usually enjoys, and a bag's
+  // first rated shot is the middle of the scale: enjoyment 5 of 10.
   await expect(page.getByTestId(TID.diffCard).last()).toBeVisible();
-  const four = page.getByTestId(TID.shotCard).last().getByRole('radio', { name: 'Rate 4 out of 5' });
-  await expect(four).toBeEnabled();
-  expect((await four.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(47.5);
-  await four.click();
-  await expect(four).toHaveAttribute('aria-checked', 'true');
-  await expect.poll(async () => (await latestShot(page))?.annotations?.enjoyment).toBe(8);
-  expect((await latestShot(page))?.annotations?.extras?.cafai).toMatchObject({ stars: 4 });
+  const card = page.getByTestId(TID.shotCard).last();
+  await expect(card.getByRole('radiogroup', { name: 'Compared with the coffee you usually enjoy?' })).toBeVisible();
+  const better = card.getByRole('radio', { name: 'Better', exact: true });
+  await expect(better).toBeEnabled();
+  expect((await better.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(47.5);
+  await better.click();
+  await expect(better).toHaveAttribute('aria-checked', 'true');
+  await expect.poll(async () => (await latestShot(page))?.annotations?.enjoyment).toBe(5);
+  expect((await latestShot(page))?.annotations?.extras?.cafai).toMatchObject({ verdict: 'better', comparedWith: { kind: 'usual' } });
 
-  // The rating lives on the shot card in the transcript, so it comes back after a reload.
+  // The verdict lives on the shot card in the transcript, so it comes back after a reload.
   await page.reload();
   await expect(page.getByTestId(TID.appReady)).toBeVisible();
-  await expect(page.getByTestId(TID.shotCard).last().getByRole('radio', { name: 'Rate 4 out of 5' })).toHaveAttribute(
+  await expect(page.getByTestId(TID.shotCard).last().getByRole('radio', { name: 'Better', exact: true })).toHaveAttribute(
     'aria-checked',
     'true',
   );
+});
+
+test('compares the next shot with the one before it, and its score moves from that shot', async ({ page }) => {
+  await openApp(page);
+  await saveApiKey(page);
+  await pullFirstShot(page);
+  await page.getByTestId(TID.optionChip('Sour / sharp')).click();
+  await expect(page.getByTestId(TID.diffCard).last()).toBeVisible();
+  await page.getByTestId(TID.shotCard).last().getByRole('radio', { name: 'About the same', exact: true }).click();
+  await expect.poll(async () => (await latestShot(page))?.annotations?.enjoyment).toBe(5);
+  const first = (await latestShot(page))!.id;
+
+  // The change card is set aside by the next shot.
+  await pullShot(page);
+  await expect(page.getByTestId(TID.shotCard)).toHaveCount(2, { timeout: 60_000 });
+  const card = page.getByTestId(TID.shotCard).last();
+  await expect(card.getByRole('radiogroup', { name: 'Compared with your previous shot?' })).toBeVisible();
+  await expect(page.getByTestId(TID.optionChip('Sour / sharp')).last()).toBeEnabled();
+  const muchBetter = card.getByRole('radio', { name: 'Much better', exact: true });
+  await muchBetter.click();
+  await expect(muchBetter).toHaveAttribute('aria-checked', 'true');
+  await expect.poll(async () => (await latestShot(page))?.annotations?.enjoyment).toBe(7);
+  expect((await latestShot(page))?.annotations?.extras?.cafai).toMatchObject({
+    verdict: 'muchBetter',
+    comparedWith: { kind: 'previous', shotId: first },
+  });
 });
 
 test('sends a grind setting Decaid could not take once Decaid is back', async ({ page }) => {

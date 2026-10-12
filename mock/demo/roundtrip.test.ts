@@ -40,9 +40,9 @@ function nodeHost(): DemoHost {
   };
 }
 
-/** Wait for everything the engine has queued (a refused 0-star rating waits its turn). */
+/** Wait for everything the engine has queued (a refused rating, for a shot no card shows, waits its turn). */
 async function idle(): Promise<void> {
-  await engine.rateShot('', 0);
+  await engine.rateShot('', 'same');
   await settle();
 }
 

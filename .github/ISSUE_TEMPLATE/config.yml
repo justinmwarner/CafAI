@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/justinmwarner/CafAI/security/advisories/new
+    about: Please report security problems privately, never in a public issue (SECURITY.md).
+  - name: A problem in Decaid itself
+    url: https://github.com/decentespresso/decaid/issues
+    about: Bugs in Decaid, its own screens or its plugins go to Decent Espresso.

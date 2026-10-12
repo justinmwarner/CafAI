@@ -3,11 +3,12 @@
  * the Anthropic API key, the model, and the grinder. The key goes straight
  * to the secret store and is never shown again; the UI only ever knows
  * whether one is saved. The grinder can be linked to Decaid's grinder
- * library, whose step size the coach then uses (GrinderFields.tsx). A key
+ * library, whose step size the coach then uses (GrinderFields.tsx), and a
+ * grinder the library lacks can be added to it (AddGrinder.tsx). A key
  * pasted into another field never becomes a setting: storage takes it out
  * (src/storage/settings.ts) and the screen says so.
  */
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent, type RefObject } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -26,19 +27,30 @@ import Typography from '@mui/material/Typography';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
-import { listGrinders } from '../../api/grinders.ts';
+import { addOrFindGrinder, listGrinders } from '../../api/grinders.ts';
+import { PLUGIN } from '../../api/plugins.ts';
 import type { ModelInfo } from '../../llm/types.ts';
 import { useCoach, useServices } from '../../app/services.tsx';
 import { containsKeyLike } from '../../storage/redact.ts';
 import type { Settings } from '../../storage/types.ts';
 import { TID } from '../testIds.ts';
 import { AboutDecaid } from './AboutDecaid.tsx';
+import { AddGrinder, type AddedGrinder } from './AddGrinder.tsx';
+import { addedNote, dye2GrindersUrl } from './addGrinder.ts';
 import { AppearanceSection } from './AppearanceSection.tsx';
 import { CoachSourceSection } from './CoachSourceSection.tsx';
 import { useApiKeyView, useCoachRunsOnComputer } from './coachSourceView.ts';
 import { DrinkSettingsSection } from './DrinkSettingsSection.tsx';
 import { GrinderFields } from './GrinderFields.tsx';
-import { grinderPatch, libraryAfterError, NOT_LISTED, type GrinderForm, type GrinderLibrary } from './grinderPicker.ts';
+import {
+  canAddGrinder,
+  grinderPatch,
+  libraryAfterError,
+  NOT_LISTED,
+  withGrinder,
+  type GrinderForm,
+  type GrinderLibrary,
+} from './grinderPicker.ts';
 import { revealInColumn } from './reveal.ts';
 import { Section } from './Section.tsx';
 
@@ -68,6 +80,11 @@ const selectSx = { ...fieldSx, '& .MuiNativeSelect-select': { py: '12.5px' } } a
 
 /** Backup-in-Decaid state while the choice is still being read, or while it is in flight. */
 type KeepState = boolean | 'loading';
+
+/** Saved while the choice is on, but the copy did not reach Decaid: src/storage/keyBackup.ts sends it when Decaid is back. */
+const KEY_SAVED_COPY_LATER = "Key saved on this device. Decaid can't be reached right now, so CafAI will copy it there as soon as it can.";
+/** Forgotten while the choice is on, but Decaid was out of reach: its copy is deleted when Decaid is back, and never restored meanwhile. */
+const KEY_GONE_DELETE_LATER = "The key is gone from this device. Decaid can't be reached right now, so CafAI will delete its copy there as soon as it can.";
 
 function ApiKeySection() {
   const { storage, coach } = useServices();
@@ -108,19 +125,12 @@ function ApiKeySection() {
     setBusy(true);
     setMessage(null);
     try {
-      await storage.secrets.setApiKey(key);
-      let text = 'Key saved on this device.';
-      if (keepInDecaid === true) {
-        try {
-          await storage.keyBackup.setOn(true);
-        } catch (backupError) {
-          text = `Key saved on this device, but Decaid could not be updated: ${errorText(backupError)}`;
-        }
-      }
+      // While the choice is on the copy in Decaid follows; one Decaid does not take now goes when it is back.
+      const copied = await storage.keyBackup.saveKey(key, keepInDecaid === true);
       setDraft('');
       setVisible(false);
       setSavedHere(true);
-      setMessage({ tone: 'success', text });
+      setMessage({ tone: 'success', text: copied ? 'Key saved on this device.' : KEY_SAVED_COPY_LATER });
       await coach.refresh();
     } catch (error) {
       setMessage({ tone: 'error', text: `Could not save the key: ${errorText(error)}` });
@@ -134,18 +144,11 @@ function ApiKeySection() {
     setBusy(true);
     setMessage(null);
     try {
-      await storage.secrets.forgetApiKey();
-      let text = 'The key is gone from this device.';
-      if (keepInDecaid === true) {
-        try {
-          await storage.keyBackup.setOn(false);
-        } catch {
-          // The choice stays on: Decaid may still have the key, so the switch must not claim otherwise.
-          text = "The key is gone from this device, but Decaid still has its copy; turn Keep my API key in Decaid off when Decaid is back.";
-        }
-      }
+      // Gone for good: a copy Decaid still holds never brings it back. While the choice is on that copy is
+      // deleted, now or once Decaid is back, and the choice stays on for the next key saved here.
+      const deleted = await storage.keyBackup.forgetKey(keepInDecaid === true);
       setSavedHere(false);
-      setMessage({ tone: 'success', text });
+      setMessage({ tone: 'success', text: deleted ? 'The key is gone from this device.' : KEY_GONE_DELETE_LATER });
       await coach.refresh();
     } catch (error) {
       setMessage({ tone: 'error', text: `Could not forget the key: ${errorText(error)}` });
@@ -260,16 +263,18 @@ function ApiKeySection() {
 const KEY_IN_DECAID_SENTENCE =
   "So you do not have to paste it again after a Decaid update. Any device on your network can read Decaid's store, and Decaid's backups include it.";
 
-/** A 38 px MUI Switch is under the 48 px touch target every other control here keeps; padding grows the whole hit area, track and thumb kept at their usual size. */
-const switchSx = { p: '17px' } as const;
+/** MUI's switch is 38 px tall: the label around it, which toggles it too, is the 48 px touch target. */
+const switchLabelSx = { minHeight: 48 } as const;
 
 /**
  * Settings > Coach's switch, D99: off by default. The checked state is
  * Settings.keepKeyInDecaid (lifted into ApiKeySection, which also needs it
  * to decide whether save() and forget() touch Decaid), never whether a
- * copy happens to exist there right now. Disabled with no key to back up;
- * a toggle that cannot reach Decaid reverts and says so, so the switch
- * never claims a state that is not real.
+ * copy happens to exist there right now. Off with no key, there is nothing
+ * to back up, so it waits for one; on, it can always be turned off, key or
+ * not (Forget may have left a copy that Decaid has not deleted yet). A
+ * toggle that cannot reach Decaid reverts and says so, so the switch never
+ * claims a state that is not real.
  */
 function KeyInDecaidSwitch({
   hasKey,
@@ -283,6 +288,7 @@ function KeyInDecaidSwitch({
   const { storage } = useServices();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const needsKey = !hasKey && keepInDecaid !== true;
 
   const toggle = async (checked: boolean) => {
     setBusy(true);
@@ -304,16 +310,16 @@ function KeyInDecaidSwitch({
         control={
           <Switch
             checked={keepInDecaid === true}
-            disabled={keepInDecaid === 'loading' || busy || !hasKey}
+            disabled={keepInDecaid === 'loading' || busy || needsKey}
             onChange={(event) => void toggle(event.target.checked)}
-            sx={switchSx}
             slotProps={{ input: { 'data-testid': TID.keyInDecaid } }}
           />
         }
         label="Keep my API key in Decaid"
+        sx={switchLabelSx}
       />
       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-        {hasKey ? KEY_IN_DECAID_SENTENCE : 'Add a key above before turning this on.'}
+        {needsKey ? 'Add a key above before turning this on.' : KEY_IN_DECAID_SENTENCE}
       </Typography>
       {error ? (
         <Typography variant="body2" sx={{ color: 'error.main' }}>
@@ -357,7 +363,7 @@ type SavedGrinder = Pick<Settings, 'grinderId' | 'grinderName'>;
 const GRINDER_LIST_TIMEOUT_MS = 5000;
 
 function CoachSettingsSection({ column }: { column: RefObject<HTMLElement | null> }) {
-  const { storage, coach, models, decaid } = useServices();
+  const { storage, coach, models, decaid, plugins } = useServices();
   const onComputer = useCoachRunsOnComputer();
   const [form, setForm] = useState<Form | null>(null);
   const [saved, setSaved] = useState<SavedGrinder>({ grinderId: null, grinderName: null });
@@ -365,6 +371,10 @@ function CoachSettingsSection({ column }: { column: RefObject<HTMLElement | null
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<Message | null>(null);
   const [keyNotice, setKeyNotice] = useState(false);
+  // What the last Add a grinder said, until the settings are saved.
+  const [addNote, setAddNote] = useState<string | null>(null);
+  // DYE2's Grinders page edits Decaid's grinders; it is there only while Decaid runs DYE2 (D103).
+  const dye2Loaded = useSyncExternalStore(plugins.subscribe, () => plugins.isLoaded(PLUGIN.dye2));
   // Grinder picks and saves so far: each pick brings the setting control and
   // Save into view, each save what it says (written under Save).
   const [picks, setPicks] = useState(0);
@@ -432,6 +442,7 @@ function CoachSettingsSection({ column }: { column: RefObject<HTMLElement | null
       // The fields show what was really saved, not what was typed.
       setForm(formFrom(next));
       setKeyNotice(tookKeyOut(sent, next));
+      setAddNote(null);
       setMessage({ tone: 'success', text: 'Settings saved.' });
       setSaves((count) => count + 1);
       await coach.refresh();
@@ -447,6 +458,12 @@ function CoachSettingsSection({ column }: { column: RefObject<HTMLElement | null
   const updateGrinder = (patch: Partial<GrinderForm>) => {
     setForm((current) => (current ? { ...current, grinder: { ...current.grinder, ...patch } } : current));
     if (patch.pick !== undefined) setPicks((count) => count + 1);
+  };
+  // Added to Decaid's library (or found there): in the list and picked; Save links it like any pick.
+  const grinderAdded = ({ grinder, added }: AddedGrinder) => {
+    setLibrary((current) => withGrinder(current, grinder));
+    updateGrinder({ pick: grinder.id });
+    setAddNote(addedNote(grinder, added));
   };
   const selected = models.find((m) => m.id === form?.model);
   const disabled = form === null || saving;
@@ -489,6 +506,15 @@ function CoachSettingsSection({ column }: { column: RefObject<HTMLElement | null
           disabled={disabled}
           onChange={updateGrinder}
           settingRef={settingRef}
+        />
+        <AddGrinder
+          canAdd={canAddGrinder(library)}
+          dye2Url={dye2Loaded ? dye2GrindersUrl(decaid.httpOrigin) : null}
+          initialModel={form && form.grinder.pick === NOT_LISTED ? form.grinder.name : ''}
+          disabled={disabled}
+          note={addNote}
+          add={(request) => addOrFindGrinder(decaid, request)}
+          onAdded={grinderAdded}
         />
         <Typography variant="body2" sx={{ color: 'text.secondary', mt: -1 }}>
           The coach uses your grinder and its dial setting to say how far to turn it.

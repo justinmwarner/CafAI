@@ -62,6 +62,34 @@ describe('SecretStore', () => {
     await expect(failing.forgetApiKey()).rejects.toMatchObject({ name: 'StorageError' });
   });
 
+  it("keeps what the key's copy in Decaid is owed beside the key, across a reload, never the key itself (D99)", async () => {
+    const name = uniqueDbName('secrets');
+    const first = await openSecretStore(name);
+    expect(await first.keyCopy.get()).toEqual({ owed: null, forgotten: false });
+    await first.setApiKey(API_KEY);
+    await first.keyCopy.set({ owed: 'delete', forgotten: true });
+    await first.forgetApiKey();
+    first.close();
+
+    const second = await openSecretStore(name);
+    expect(await second.keyCopy.get()).toEqual({ owed: 'delete', forgotten: true });
+    expect(await second.getApiKey()).toBeNull();
+    second.close();
+    const db = await openDB(name);
+    const records = await db.getAll('secrets');
+    db.close();
+    expect(JSON.stringify(records)).not.toContain(API_KEY);
+  });
+
+  it('reads a key-copy record it does not understand as nothing owed and nothing forgotten', async () => {
+    const name = uniqueDbName('secrets');
+    (await openSecretStore(name)).close();
+    const db = await openDB(name);
+    await db.put('secrets', { owed: 'everything', forgotten: 'yes' }, 'anthropicKeyCopy');
+    db.close();
+    expect(await (await openSecretStore(name)).keyCopy.get()).toEqual({ owed: null, forgotten: false });
+  });
+
   it('says what failed on this device, a phone as much as a tablet', async () => {
     const failing = createSecretStore(() => Promise.reject(new Error('blocked')));
     await expect(failing.getApiKey()).rejects.toThrow('Could not read the saved API key on this device. Reload the page and try again.');

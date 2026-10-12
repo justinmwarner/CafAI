@@ -230,7 +230,9 @@ export async function activateProfile(
  * Decaid ids hash the execution content only, and a POST with content that
  * already exists returns THAT record (201) with its old title, parent,
  * metadata and visibility. `deduped` says so: the returned title or parent
- * differs from what was sent.
+ * differs from what was sent. A parent Decaid's reply did not give in a form
+ * CafAI reads (absent after the reader, D95) is unknown, and an unknown
+ * parent is never taken for a different one.
  */
 export async function createProfileVersion(
   client: Pick<DecaidClient, 'createProfile'>,
@@ -240,6 +242,7 @@ export async function createProfileVersion(
   if (request.parentId !== undefined) body.parentId = request.parentId;
   if (request.metadata !== undefined) body.metadata = request.metadata;
   const record = await client.createProfile(body);
-  const deduped = record.profile.title !== request.profile.title || (record.parentId ?? null) !== (request.parentId ?? null);
+  const otherParent = record.parentId !== undefined && record.parentId !== (request.parentId ?? null);
+  const deduped = record.profile.title !== request.profile.title || otherParent;
   return { record, deduped };
 }

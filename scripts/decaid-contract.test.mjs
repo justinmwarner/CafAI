@@ -11,14 +11,23 @@ import {
   ROOT,
   SpecMissingError,
   UPSTREAM,
+  channelDrift,
   checkContract,
   contractTypecheck,
   fetchSpecs,
   generateRest,
   generateWs,
-  specChannels,
 } from './decaid-contract.mjs';
-import { classifyTypecheck, diffSpecs, issueBody, latestTargets, runWatch, usedByCafai, watchedFiles } from './decaid-watch.mjs';
+import {
+  classifyTypecheck,
+  diffSpecs,
+  issueBody,
+  latestTargets,
+  runWatch,
+  usedByCafai,
+  vitestRan,
+  watchedFiles,
+} from './decaid-watch.mjs';
 
 const temps = [];
 afterAll(() => {
@@ -71,9 +80,34 @@ describe('decaid-contract --check', () => {
 });
 
 describe('the channel map', () => {
-  it('lists every channel in the pinned spec, with its frames', () => {
-    const doc = parse(readFileSync(path.join(ROOT, FILES.wsSpec), 'utf8'));
-    expect(CHANNELS).toEqual(specChannels(doc));
+  const pinnedWs = () => parse(readFileSync(path.join(ROOT, FILES.wsSpec), 'utf8'));
+
+  it('expects on each channel CafAI opens the frames the pinned spec sends there', () => {
+    expect(channelDrift(pinnedWs())).toEqual([]);
+  });
+
+  it('lists the channels the contract checks open', () => {
+    const checks = readFileSync(path.join(ROOT, 'contract', 'decaid', 'checks', 'ws.ts'), 'utf8');
+    const opened = /^type Opened =([^;]+);/m.exec(checks)?.[1] ?? '';
+    const channels = Object.keys(CHANNELS).sort();
+    expect([...opened.matchAll(/'([^']+)'/g)].map(([, channel]) => channel).sort()).toEqual(channels);
+    expect(usedByCafai().channels).toEqual(channels);
+  });
+
+  it("generates WsReceive from the spec's own map, for the addresses that serve those channels", async () => {
+    const generated = await generateWs(readFileSync(path.join(ROOT, FILES.wsSpec), 'utf8'), 'test');
+    const receive = /export interface WsReceive \{\n([\s\S]*?)\n\}/.exec(generated)?.[1] ?? '';
+    expect([...receive.matchAll(/^ {4}"([^"]+)":/gm)].map(([, address]) => address)).toEqual([
+      'ws/v1/machine/snapshot',
+      'ws/v1/machine/shotSettings',
+      'ws/v1/machine/waterLevels',
+      'ws/v1/machine/shotState',
+      'ws/v1/scale/snapshot',
+      'ws/v1/plugins/{id}/{endpoint}',
+      'ws/v1/devices',
+    ]);
+    expect(receive).toContain('"ws/v1/plugins/{id}/{endpoint}": components["schemas"]["PluginMessage"];');
+    expect(generated).not.toMatch(/WsSend/);
   });
 });
 
@@ -106,7 +140,16 @@ describe('decaid-watch', () => {
 
   it('knows which operations and channels CafAI uses, from the checks', () => {
     const used = usedByCafai();
-    expect(used.operations).toEqual(expect.arrayContaining(['GET /api/v1/workflow', 'PUT /api/v1/workflow', 'POST /api/v1/machine/profile']));
+    expect(used.operations).toEqual(
+      expect.arrayContaining([
+        'GET /api/v1/workflow',
+        'PUT /api/v1/workflow',
+        'POST /api/v1/machine/profile',
+        // The bean card's one read, and DYE2's endpoint through Decaid's plugin route.
+        'GET /api/v1/bean-batches',
+        'GET /api/v1/plugins/{id}/{endpoint}',
+      ]),
+    );
     expect(used.operations).not.toContain('GET /api/v1/steams');
     expect(used.channels).toEqual(expect.arrayContaining(['ws/v1/machine/snapshot', 'ws/v1/devices']));
   });
@@ -126,6 +169,52 @@ describe('decaid-watch', () => {
         expect.stringMatching(/^~ websocket DeviceInfo\.properties\.type\.enum/),
       ]),
     );
+    // A field added, an enum value added and an operation CafAI does not call removed break nothing.
+    expect(diff.breaking).toEqual([]);
+  });
+
+  it('reads a removed or retyped field, or a removed schema, of what CafAI uses as breaking', () => {
+    const before = { rest: pinnedRest(), ws: pinnedWs() };
+    const after = additive();
+    delete after.ws.components.schemas.ScaleSnapshot.properties.weightFlow;
+    delete after.ws.components.schemas.ScaleStatus;
+    after.ws.components.schemas.WaterLevels.properties.currentLevel.type = 'string';
+    // A property named like a keyword is a property: adding it breaks nothing.
+    after.ws.components.schemas.WaterLevels.properties.type = { type: 'string' };
+    const diff = diffSpecs(before, after, usedByCafai());
+    expect(diff.breaking).toEqual([
+      '- websocket ScaleSnapshot.properties.weightFlow (was {"type":"number"})',
+      '- websocket ScaleStatus (removed)',
+      '~ websocket WaterLevels.properties.currentLevel.type: "number" -> "string"',
+    ]);
+    expect(diff.schemas).toEqual(expect.arrayContaining(['+ websocket WaterLevels.properties.type = {"type":"string"}']));
+  });
+
+  it('reads a removed, renamed, retyped or newly required parameter of a call CafAI makes as breaking', () => {
+    const before = { rest: pinnedRest(), ws: pinnedWs() };
+    const after = { rest: pinnedRest(), ws: pinnedWs() };
+    const scan = after.rest.paths['/api/v1/devices/scan'].get;
+    scan.parameters[0].name = 'autoConnect';
+    scan.parameters[1].schema = { type: 'string' };
+    scan.parameters.push({ name: 'timeoutMs', in: 'query', required: true, schema: { type: 'integer' } });
+    scan.parameters.push({ name: 'verbose', in: 'query', schema: { type: 'boolean' } });
+    expect(diffSpecs(before, after, usedByCafai()).breaking).toEqual([
+      '- parameter query connect of GET /api/v1/devices/scan',
+      '~ parameter query quick of GET /api/v1/devices/scan: {"type":"boolean"} -> {"type":"string"}',
+      '+ parameter query timeoutMs of GET /api/v1/devices/scan (required)',
+    ]);
+  });
+
+  it("compares a call's parameters as the path item's and the operation's own, $refs resolved", () => {
+    const before = { rest: pinnedRest(), ws: pinnedWs() };
+    const after = { rest: pinnedRest(), ws: pinnedWs() };
+    const item = after.rest.paths['/api/v1/devices/scan'];
+    const [connect, quick] = item.get.parameters;
+    after.rest.components.parameters = { Connect: connect };
+    // The path item's quick is a string, but the operation's own boolean one wins.
+    item.parameters = [{ $ref: '#/components/parameters/Connect' }, { ...quick, schema: { type: 'string' } }];
+    item.get.parameters = [quick];
+    expect(diffSpecs(before, after, usedByCafai()).breaking).toEqual([]);
   });
 
   it('keeps the changed files CafAI depends on', () => {
@@ -137,7 +226,7 @@ describe('decaid-watch', () => {
     expect(watchedFiles(files).map((file) => file.filename)).toEqual(['lib/src/models/data/workflow_context.dart', 'assets/api/rest_v1.yml']);
   });
 
-  it('reports an additive main as passing, with the exceptions Decaid made stale', async () => {
+  it('reports an additive main as passing, with the exceptions Decaid made stale (exit 4: files changed)', async () => {
     const pin = JSON.parse(readFileSync(path.join(ROOT, FILES.pin), 'utf8'));
     const { rest, ws } = additive();
     const specs = {
@@ -153,11 +242,14 @@ describe('decaid-watch', () => {
       compare: async () => [{ filename: 'lib/src/models/data/workflow_context.dart', status: 'modified', additions: 13, deletions: 0 }],
       now: () => new Date('2026-10-09T07:17:00Z'),
     });
-    expect(code).toBe(0);
+    expect(code).toBe(4);
     expect(report).toMatch(/## latest release v0\.8\.8/);
     expect(report).toMatch(/same commit as the pin/i);
     expect(report).toMatch(/## main/);
-    expect(report).toMatch(/additive/i);
+    expect(report).toMatch(/\| main \| fffffff \| files CafAI depends on changed \(specs changed: additive, every check passes\) \|/);
+    expect(report).toMatch(/\*\*Additive: every check passes\.\*\*/);
+    expect(report).toMatch(/Mock contract test against this spec: passes/);
+    expect(report).not.toMatch(/### Breaking/);
     expect(report).toMatch(/CafAI only: grinder/);
     expect(report).toMatch(/grinderBurrs/);
     expect(report).toMatch(/lib\/src\/models\/data\/workflow_context\.dart/);
@@ -203,7 +295,49 @@ describe('decaid-watch', () => {
     expect(report).toMatch(/Decaid no longer serves assets\/api\/websocket_v1\.yml at fffffff/);
   });
 
-  it('reports the targets that worked when GitHub fails on another, with a warning (exit 0)', async () => {
+  it('fails a target that renames a parameter of a call CafAI makes (exit 1)', async () => {
+    const rest = pinnedRest();
+    rest.paths['/api/v1/devices/scan'].get.parameters[0].name = 'autoConnect';
+    const { code, report } = await runWatch({
+      targets: async () => [{ name: 'main', sha: MAIN }],
+      fetchSpecs: async () => ({ restText: stringify(rest), wsText: readFileSync(path.join(ROOT, FILES.wsSpec), 'utf8') }),
+      compare: async () => [{ filename: 'assets/api/rest_v1.yml', status: 'modified', additions: 1, deletions: 1 }],
+    });
+    expect(code).toBe(1);
+    expect(report).toMatch(/\| main \| fffffff \| a check failed \|/);
+    expect(report).toMatch(/\*\*A check failed: CafAI may break on this Decaid\.\*\*/);
+    // Both see it: the query parameters CafAI sends are typechecked (checks/rest-write.ts), and the diff reads every parameter.
+    expect(report).toMatch(/Contract typecheck: \*\*fails\*\*/);
+    expect(report).toMatch(/unexpected: checks\/rest-write\.ts:\d+: connect: not declared by target/);
+    expect(report).toMatch(/### Breaking[^\n]*\n\n- `- parameter query connect of GET \/api\/v1\/devices\/scan`\n/);
+  }, 180_000);
+
+  it('answers 4 when files CafAI depends on changed but the specs did not, and lists them', async () => {
+    const { code, report } = await runWatch({
+      targets: async () => [{ name: 'main', sha: MAIN }],
+      fetchSpecs: pinnedSpecs,
+      compare: async () => [
+        { filename: 'lib/src/services/webserver/shots_handler.dart', status: 'modified', additions: 4, deletions: 1 },
+        { filename: 'lib/src/ui/home.dart', status: 'modified', additions: 2, deletions: 1 },
+      ],
+    });
+    expect(code).toBe(4);
+    expect(report).toMatch(/\| main \| fffffff \| files CafAI depends on changed \(no spec change\) \|/);
+    expect(report).toMatch(/- `lib\/src\/services\/webserver\/shots_handler\.dart` \(modified, \+4 -1\)/);
+    expect(report).not.toMatch(/home\.dart/);
+  });
+
+  it('answers 0 when nothing CafAI depends on changed', async () => {
+    const { code, report } = await runWatch({
+      targets: async () => [{ name: 'main', sha: MAIN }],
+      fetchSpecs: pinnedSpecs,
+      compare: async () => [{ filename: 'lib/src/ui/home.dart', status: 'modified', additions: 2, deletions: 1 }],
+    });
+    expect(code).toBe(0);
+    expect(report).toMatch(/\| main \| fffffff \| nothing CafAI depends on changed \|/);
+  });
+
+  it('reports the targets that worked when GitHub fails on another, with a warning (exit 2)', async () => {
     const { code, report } = await runWatch({
       targets: async () => [
         { name: 'latest release v0.8.8', sha: pinned().commit },
@@ -214,14 +348,14 @@ describe('decaid-watch', () => {
       },
       compare: async () => [],
     });
-    expect(code).toBe(0);
+    expect(code).toBe(2);
     expect(report).toMatch(/\| latest release v0\.8\.8 \| aab5f93 \| same commit as the pin \|/);
     expect(report).toMatch(/\*\*Warning:\*\* 1 of 2 Decaid versions could not be checked/);
     expect(report).toMatch(/\| main \| fffffff \| could not be checked \|/);
     expect(report).toMatch(/GitHub answered 502/);
   });
 
-  it('keeps checking a target when its changed files cannot be listed', async () => {
+  it('keeps checking a target when its changed files cannot be listed, as a partial look (exit 2)', async () => {
     const { code, report } = await runWatch({
       targets: async () => [{ name: 'main', sha: MAIN }],
       fetchSpecs: pinnedSpecs,
@@ -229,19 +363,21 @@ describe('decaid-watch', () => {
         throw new GitHubError('GitHub answered 502 for the compare', 502);
       },
     });
-    expect(code).toBe(0);
+    expect(code).toBe(2);
+    expect(report).toMatch(/\| main \| fffffff \| could not be checked: no spec change, but the changed files could not be listed \|/);
+    expect(report).toMatch(/\*\*Warning:\*\* the files changed since the pin could not be listed for main \(GitHub answered 502 for the compare\)/);
     expect(report).toMatch(/No spec change/);
     expect(report).toMatch(/Could not list the changed files: GitHub answered 502 for the compare/);
   });
 
-  it('checks main when the latest release cannot be looked up', async () => {
+  it('checks main when the latest release cannot be looked up (exit 2)', async () => {
     const lookup = async (pathname) => {
       if (pathname.endsWith('/releases/latest')) throw new GitHubError('GitHub answered 503 for releases/latest', 503);
       if (pathname.endsWith('/commits/main')) return { sha: pinned().commit };
       throw new Error(`not faked: ${pathname}`);
     };
     const { code, report } = await runWatch({ targets: () => latestTargets(lookup), fetchSpecs: pinnedSpecs, compare: async () => [] });
-    expect(code).toBe(0);
+    expect(code).toBe(2);
     expect(report).toMatch(/\| latest release \| - \| could not be checked \|/);
     expect(report).toMatch(/\| main \| aab5f93 \| same commit as the pin \|/);
   });
@@ -262,6 +398,20 @@ describe('decaid-watch', () => {
     expect(report).toMatch(/\*\*Warning:\*\* 2 of 2 Decaid versions could not be checked/);
   });
 
+  it('fails the mock check when vitest passed no test, or wrote no report', () => {
+    const report = (passed, failed, skipped) =>
+      JSON.stringify({ numTotalTests: passed + failed + skipped, numPassedTests: passed, numFailedTests: failed, numPendingTests: skipped });
+    // What a -t filter that matches no test name gives: every test skipped, and vitest exits 0.
+    expect(vitestRan(report(0, 0, 13))).toEqual({
+      ok: false,
+      problem: 'vitest ran no test: 0 passed, 13 skipped (does the -t filter still match the test names?)',
+    });
+    expect(vitestRan(null)).toEqual({ ok: false, problem: 'vitest ran no test: it wrote no report' });
+    expect(vitestRan('{"numTotalTests":')).toEqual({ ok: false, problem: 'vitest ran no test: it wrote no report' });
+    expect(vitestRan(report(4, 1, 8))).toEqual({ ok: false, problem: null });
+    expect(vitestRan(report(5, 0, 8))).toEqual({ ok: true, problem: null });
+  });
+
   it('cuts an issue body that is too long at a line, pointing at the full report', () => {
     const lines = Array.from({ length: 60 }, (_, index) => `line ${index} ${'x'.repeat(20)}`);
     const body = issueBody(lines.join('\n'), { limit: 500, runUrl: 'https://github.com/owner/cafai/actions/runs/7' });
@@ -275,9 +425,20 @@ describe('decaid-watch', () => {
 });
 
 describe('the contract typecheck', () => {
+  const pinnedRest = () => parse(readFileSync(path.join(ROOT, FILES.restSpec), 'utf8'));
+  const pinnedWs = () => parse(readFileSync(path.join(ROOT, FILES.wsSpec), 'utf8'));
+  /** The contract typecheck against the types generated from these spec documents. */
+  async function typecheckAgainst(rest, ws) {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'cafai-mutated-'));
+    temps.push(dir);
+    writeFileSync(path.join(dir, 'rest.ts'), await generateRest(stringify(rest), 'mutated'));
+    writeFileSync(path.join(dir, 'ws.ts'), await generateWs(stringify(ws), 'mutated'));
+    return contractTypecheck(dir);
+  }
+
   it('fails when Decaid renames, nulls or drops a field CafAI reads', async () => {
-    const rest = parse(readFileSync(path.join(ROOT, FILES.restSpec), 'utf8'));
-    const ws = parse(readFileSync(path.join(ROOT, FILES.wsSpec), 'utf8'));
+    const rest = pinnedRest();
+    const ws = pinnedWs();
     // The scale frame renames weightFlow; the machine's pressure may be null; a shot loses createdAt.
     const scale = ws.components.schemas.ScaleSnapshot.properties;
     scale.flowRate = scale.weightFlow;
@@ -285,11 +446,7 @@ describe('the contract typecheck', () => {
     rest.components.schemas.MachineSnapshot.properties.pressure.nullable = true;
     delete rest.components.schemas.ShotRecordSummary.properties.createdAt;
 
-    const dir = mkdtempSync(path.join(os.tmpdir(), 'cafai-mutated-'));
-    temps.push(dir);
-    writeFileSync(path.join(dir, 'rest.ts'), await generateRest(stringify(rest), 'mutated'));
-    writeFileSync(path.join(dir, 'ws.ts'), await generateWs(stringify(ws), 'mutated'));
-    const { ok, output } = contractTypecheck(dir);
+    const { ok, output } = await typecheckAgainst(rest, ws);
 
     expect(ok).toBe(false);
     const errors = output.split('\n').filter((line) => /error TS/.test(line));
@@ -298,5 +455,59 @@ describe('the contract typecheck', () => {
     expect(output).toMatch(/unexpected: "pressure: null not accepted"/);
     expect(output).toMatch(/"items\[\]\.createdAt: absent in source"/);
     expect(output).not.toMatch(/stale/);
+  }, 180_000);
+
+  it('fails when a channel CafAI opens switches to a schema without a field CafAI reads', async () => {
+    const ws = pinnedWs();
+    const v2 = structuredClone(ws.components.schemas.MachineSnapshot);
+    delete v2.properties.pressure;
+    ws.components.schemas.MachineSnapshotV2 = v2;
+    ws.components.messages.MachineSnapshot.payload.$ref = '#/components/schemas/MachineSnapshotV2';
+    expect(channelDrift(ws)).toEqual(['ws/v1/machine/snapshot: the spec sends MachineSnapshotV2, CafAI expects MachineSnapshot']);
+
+    const { ok, output } = await typecheckAgainst(pinnedRest(), ws);
+
+    expect(ok).toBe(false);
+    expect(classifyTypecheck(output)).toEqual({
+      unexpected: [expect.stringMatching(/^checks\/ws\.ts:\d+: pressure: absent in source$/)],
+      stale: [],
+      other: [],
+    });
+  }, 180_000);
+
+  it('passes when Decaid renames a schema on a channel CafAI does not open', async () => {
+    const before = { rest: pinnedRest(), ws: pinnedWs() };
+    const ws = pinnedWs();
+    ws.components.schemas.AppUpdateStatus = ws.components.schemas.AppUpdateState;
+    delete ws.components.schemas.AppUpdateState;
+    ws.components.messages.UpdateState.payload.$ref = '#/components/schemas/AppUpdateStatus';
+    const diff = diffSpecs(before, { rest: before.rest, ws }, usedByCafai());
+    expect(diff.breaking).toEqual([]);
+    expect(diff.schemas).toEqual([]);
+    expect(channelDrift(ws)).toEqual([]);
+
+    expect(await typecheckAgainst(before.rest, ws)).toEqual({ ok: true, output: '' });
+  }, 180_000);
+
+  it("fails when Decaid renames a setting Connect reads or a query parameter CafAI sends, or drops the bean card's route", async () => {
+    const rest = pinnedRest();
+    const settings = rest.components.schemas.ReaSettings.properties;
+    settings.preferredScaleDeviceId = settings.preferredScaleId;
+    delete settings.preferredScaleId;
+    rest.paths['/api/v1/devices/scan'].get.parameters[0].name = 'autoConnect';
+    delete rest.paths['/api/v1/bean-batches'];
+
+    const { ok, output } = await typecheckAgainst(rest, pinnedWs());
+
+    expect(ok).toBe(false);
+    const sorted = classifyTypecheck(output);
+    expect(sorted.unexpected).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^checks\/rest-read\.ts:\d+: preferredScaleId: absent in source \(optional in target\)$/),
+        expect.stringMatching(/^checks\/rest-write\.ts:\d+: connect: not declared by target$/),
+      ]),
+    );
+    // A route the spec no longer has is not even a valid path for the check.
+    expect(sorted.other.some((line) => /checks\/rest-read\.ts\(\d+,\d+\): error TS2344: Type '"\/api\/v1\/bean-batches"'/.test(line))).toBe(true);
   }, 180_000);
 });

@@ -16,16 +16,21 @@ export const COACH_TOOL_SPECS: Record<ToolName, { description: string; kind: 'ui
   },
   [TOOL.proposeTemplates]: {
     kind: 'ui',
-    description: `Show 2-5 profile templates as cards, best first, each at most once. templateId must be a catalog id: ${TEMPLATE_IDS.join(', ')}. confidence is low, medium or high; reason is one or two short sentences on why it suits this bag. The user's tap loads that template as version 1 and comes back as the tool result; wait for it.`,
+    description: `Show 2-5 profile templates as cards, best first, each at most once. templateId must be a catalog id: ${TEMPLATE_IDS.join(', ')}. confidence is low, medium or high; reason is one or two short sentences on why it suits this bag: what the profile does with a coffee like it (soak, pressure, flow), never how the cup will taste. The user's tap loads that template as version 1 and comes back as the tool result; wait for it.`,
   },
   [TOOL.askUser]: {
     kind: 'ui',
     description:
-      'Ask one short question with 2-5 short options (each at most 60 characters) for the user to tap. Never include "Other"; the app adds it as the last option, where the user can type. Set multiSelect true when several answers can apply. Use it after every shot to ask how it tasted, with the word "taste" in the question (e.g. "How did it taste?"): only the answer to a question that mentions taste is saved as the shot\'s taste, so leave the word out of other questions. Use it too for any choice the user should tap rather than type.',
+      'Ask one short question with 2-5 short options (each at most 60 characters) for the user to tap. Never include "Other"; the app adds it as the last option, where the user can type. Set multiSelect true when several answers can apply. Use it after every shot to ask how it tasted, with the word "taste" in the question (e.g. "How did it taste?") and neutral options that cover the range, never a guess from the numbers: only the answer to a question that mentions taste is saved as the shot\'s taste, so leave the word out of other questions. Use it too for any choice the user should tap rather than type.',
   },
   [TOOL.proposeAdjustment]: {
     kind: 'ui',
-    description: `Propose the next change: ONE variable. "profile" moves one lever of the current template: lever ids and bounds from the template catalog, value is the new absolute value. "grind" is a move at the grinder: direction, amount in the grinder's own dial steps (more than 0, at most ${GRIND_MAX_STEPS}) and/or the absolute setting as written on the grinder. "dose" is the new dose in grams (${DOSE_RULES.min}-${DOSE_RULES.max} g, at most ${DOSE_RULES.maxDelta} g per change). "none" keeps everything, to lock in a good shot. Fields the variable does not use are null. summary is one imperative line; rationale cites the shot data and the taste; expectedEffect says what the next shot should taste like; tips holds up to 3 reminders that change nothing. The user sees a before/after diff and confirms; a value outside the bounds comes back as an error to fix.`,
+    description: `Propose the next change: ONE variable. "profile" moves one lever of the current template: lever ids and bounds from the template catalog, value is the new absolute value. "grind" is a move at the grinder: direction, amount in the grinder's own dial steps (more than 0, at most ${GRIND_MAX_STEPS}) and/or the absolute setting as written on the grinder. "dose" is the new dose in grams (${DOSE_RULES.min}-${DOSE_RULES.max} g, at most ${DOSE_RULES.maxDelta} g per change). "none" keeps everything, to lock in a good shot. Fields the variable does not use are null. summary is one imperative line; rationale cites the shot data and the user's own taste words; expectedEffect says only what the change does at the machine (flow, time, pressure, extraction), never how the shot will taste; tips holds up to 3 reminders that change nothing. The user sees a before/after diff and confirms; a value outside the bounds comes back as an error to fix.`,
+  },
+  [TOOL.offerGrinder]: {
+    kind: 'ui',
+    description:
+      'Offer to add the user\'s grinder to Decaid\'s grinder library, where CafAI reads its dial steps. Call it once, with no other card in the reply, when the user names the grinder they use and the context\'s grinder is not linked or is another one. model: the make and model as they said it (e.g. "Mazzer Philos"). burrs, settingType ("numeric": a numbered dial; "preset": a list of settings), smallStep and bigStep (a numbered dial\'s steps) and values (a preset grinder\'s settings, finest first): only as they said them, else null; never guess. The user taps Add or Not now on a card: nothing is added without the tap, and a grinder Decaid already has is linked, not added twice. The result is {"added":true,"alreadyInDecaid":true|false,"grinder":{as in the context}}, linked from then on, or {"added":false}; wait for it.',
   },
   [TOOL.getShotSummary]: {
     kind: 'auto',

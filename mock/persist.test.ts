@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ProfileRecord, ShotRecord } from '../src/api/types.ts';
+import type { ShotRecord } from '../src/api/types.ts';
+import type { DecaidProfileRecord } from './decaid/profiles.ts';
 import { fixtures } from './fixtures/index.ts';
 import { createShotPlayer } from './decaid/shotPlayer.ts';
 import { createMockDecaid, type MockDecaid } from './decaid/state.ts';
@@ -59,7 +60,7 @@ function usedStore(): MockDecaid {
 }
 
 /** CafAI's profile records, without the timestamps a restore cannot set. */
-function cafaiProfiles(state: MockDecaid): Array<Omit<ProfileRecord, 'createdAt' | 'updatedAt'>> {
+function cafaiProfiles(state: MockDecaid): Array<Omit<DecaidProfileRecord, 'createdAt' | 'updatedAt'>> {
   return state
     .listProfiles({ includeHidden: true })
     .filter((record) => !record.isDefault)

@@ -17,7 +17,7 @@ function part(overrides: Partial<DiffPart> = {}): DiffPart {
     lines: ['Brew temperature: 92.0 °C -> 93.0 °C (all steps)', 'Profile notes updated'],
     manualSteps: [],
     rationale: 'Sour and fast.',
-    expectedEffect: 'Rounder acidity.',
+    expectedEffect: 'More extraction at the same flow.',
     versionLabel: 'Kiambu AA v3',
     status: 'pending',
     error: null,
@@ -40,8 +40,16 @@ describe('DiffCard', () => {
     expect(within(card).getByText('93.0 °C (all steps)')).toBeInTheDocument();
     expect(within(card).getByText('Profile notes updated')).toBeInTheDocument();
     expect(within(card).getByText('Sour and fast.')).toBeInTheDocument();
-    expect(within(card).getByText('Rounder acidity.')).toBeInTheDocument();
+    expect(within(card).getByText('More extraction at the same flow.')).toBeInTheDocument();
     expect(within(card).getByText(/saves this as Kiambu AA v3/)).toBeInTheDocument();
+  });
+
+  it('labels the effect as what the change does, never as a taste to expect (D127)', () => {
+    setup(part());
+    const reason = screen.getByTestId(TID.diffReason);
+    expect(reason).toHaveTextContent('Why: Sour and fast.');
+    expect(reason).toHaveTextContent('What it changes: More extraction at the same flow.');
+    expect(reason).not.toHaveTextContent(/Expect/);
   });
 
   it('lists the manual steps of a grinder change', () => {

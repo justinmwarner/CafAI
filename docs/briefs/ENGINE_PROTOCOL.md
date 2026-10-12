@@ -51,8 +51,12 @@ All JSON payloads are compact `JSON.stringify` output.
    the coach need not call `save_bag_details` then. `roast` is
    `"Roasted YYYY-MM-DD (<n> days ago)"` (`"(today)"` on the roast day), with
    `"; <m> days in the freezer not counted"` inside the brackets when the
-   picked batch spent days frozen (`freezeDate` to `unfreezeDate`, or to
-   today while not thawed), or null when the roast date is unknown. A roast,
+   bag's batch spent days frozen (`freezeDate` to `unfreezeDate`, or to
+   today while not thawed), or null when the roast date is unknown. The
+   freezer dates are read again for each turn that carries `roast`
+   (`GET /api/v1/bean-batches?includeArchived=true`), so a batch frozen or
+   thawed in Decaid after the pick counts; while Decaid cannot be read they
+   are the bean card's, as picked. A roast,
    freeze or thaw date is the day it is written with, whatever zone its
    timestamp carries. `today` is the date on the device's calendar, so the
    coach can turn "roasted 28 September" or "3 days ago" into a date; it is in
@@ -92,10 +96,12 @@ All JSON payloads are compact `JSON.stringify` output.
    without a parent.
 3. **Shot completed**: a text block
    `"[event:shot_completed]\n" + JSON` with JSON =
-   `{"shotRef":"latest","shotId":string,"version":number,"templateId":string,"levers":{"<leverId>":number,...},"doseG":number|null,"targetYieldG":number|null,"grinder":<grinder>,"roast":string|null,"summary":<ShotSummary without "series">}`.
+   `{"shotRef":"latest","shotId":string,"version":number,"templateId":string,"levers":{"<leverId>":number,...},"doseG":number|null,"targetYieldG":number|null,"grinder":<grinder>,"roast":string|null,"today":"YYYY-MM-DD","summary":<ShotSummary without "series">}`.
    `grinder` (fields as in rule 1) is what the user last saved (Settings or
    a confirmed grind move); it supersedes the intake context. `roast` reads
-   as in rule 1, the age counted to the day of the shot.
+   as in rule 1, the age counted to the day of the shot, and `today` is that
+   day on the device's calendar, so a roast date said in words after the
+   shot counts from it rather than from the intake.
    If UI tool calls are still pending, their tool_results come first in the
    same message (rule 7).
 4. **Feedback**: tool_result for `ask_user` with JSON
@@ -106,12 +112,31 @@ All JSON payloads are compact `JSON.stringify` output.
    `onMachine` is also null when no profile changed: grind, dose, none)
    or `{"applied":false,"reason":"The user declined."}`
    or `{"applied":false,"error":"<upload error sentence>"}`.
+5b. **Grinder offer** (D125): tool_result for `offer_grinder` with JSON
+   `{"added":true,"alreadyInDecaid":boolean,"grinder":<grinder>}` once the
+   user tapped Add and CafAI linked the grinder (added to Decaid's grinder
+   library, or the one Decaid already had: `alreadyInDecaid`), `grinder` as
+   in rule 1 and linked from then on, or
+   `{"added":false,"reason":"The user chose not to add it."}` for Not now.
+   A failed Add sends nothing: the card says why and waits for another tap.
 6. **Undo**: text `"[event:undo]\n" + JSON` with JSON
    `{"from":number,"to":number,"title":"<Bag> v<to>"}`.
 7. **Free text while UI calls are pending**: a tool_result for each pending
    call with JSON `{"answered":false,"note":"The user typed a message instead."}`,
    then the user's text block.
 8. **Plain free text** otherwise: one text block.
+9. **Verdict** (D126): a text block `"[event:shot_rated]\n" + JSON` with JSON
+   `{"shotId":string,"verdict":"much worse"|"worse"|"about the same"|"better"|"much better","comparedWith":<baseline>}`,
+   `<baseline>` being `{"kind":"previous","shotId":string}` (the shot before
+   it in the bag's chat), `{"kind":"otherCoffee","shotId":string,"coffee":string|null}`
+   (a bag's first shot: the last shot of another bag) or `{"kind":"usual"}`
+   (the very first shot: the coffee the user usually enjoys). A verdict is
+   given on the shot card after the shot's own event has gone, so it never
+   makes a turn of its own: it rides in the next user turn the engine sends
+   (any of rules 1-8), after the tool_results and before everything else.
+   It is sent once; a changed verdict is sent again, and the newest one for
+   a shot counts. The engine finds what to send by comparing the cards with
+   the verdicts the transcript already holds.
 
 Auto tools (`save_bag_details`, `get_shot_summary`, `get_shot_series`,
 `get_phase_stats`, `compare_shots`, `get_bag_history`, `get_recent_setups`)

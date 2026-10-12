@@ -180,13 +180,15 @@ export interface ShotStateEvent {
 }
 
 export interface DeviceEntry {
+  /** Empty when Decaid's reply gave none CafAI could read. */
   name: string;
   id: string;
   state: 'discovered' | 'connecting' | 'connected' | 'disconnecting' | 'disconnected' | (string & {});
   type: 'machine' | 'scale' | 'sensor' | 'grinder' | (string & {});
-  /** false = remembered but not present. */
-  available: boolean;
-  connectionRole?: 'primary' | 'auxiliary';
+  /** false = remembered but not present; absent when Decaid's reply could not be read. */
+  available?: boolean;
+  /** A connected scale's role: an auxiliary (dosing) scale is never the brewing scale. */
+  connectionRole?: 'primary' | 'auxiliary' | (string & {});
 }
 
 export interface ConnectionError {
@@ -244,70 +246,72 @@ export interface WorkflowContext {
   extras?: Record<string, unknown>;
 }
 
+/**
+ * The drink presets Decaid keeps on the workflow, as read: a field Decaid
+ * sent that CafAI could not read is null, never a default (D95), so a screen
+ * can say it does not know. Steam temperature 0, or anything below 135, is
+ * steam off (de1_controller.dart:575 at aab5f93).
+ */
 export interface SteamSettings {
-  targetTemperature: number;
-  duration: number;
-  flow: number;
-  stopAtTemperature: number;
+  targetTemperature: number | null;
+  duration: number | null;
+  flow: number | null;
+  /** The rest (stopAtTemperature) CafAI does not read. */
+  [key: string]: unknown;
 }
 
 export interface HotWaterData {
-  targetTemperature: number;
-  duration: number;
-  volume: number;
-  flow: number;
+  targetTemperature: number | null;
+  duration: number | null;
+  volume: number | null;
+  flow: number | null;
 }
 
 export interface RinseData {
-  targetTemperature: number;
-  duration: number;
-  flow: number;
+  targetTemperature: number | null;
+  duration: number | null;
+  flow: number | null;
 }
 
 /** The profile as Decaid returns it (numbers; version may be null on odd records). */
 export type WireProfile = Omit<ProfileJson, 'version'> & { version: string | null };
 
+/** The workflow: only what CafAI reads (its id, name and description it does not). */
 export interface Workflow {
-  /** Workflow UUID (not a profile id; the workflow profile carries no id). */
-  id: string;
-  name: string;
-  description: string;
   profile: WireProfile;
   context?: WorkflowContext;
   steamSettings: SteamSettings;
   hotWaterData: HotWaterData;
   rinseData: RinseData;
+  [key: string]: unknown;
 }
 
 /**
  * PUT /api/v1/workflow body. Deep-merged: objects merge key by key, arrays are
  * replaced wholesale. So a profile must ALWAYS be complete (all ten keys);
- * omitted profile keys would be inherited from the previous profile.
+ * omitted profile keys would be inherited from the previous profile. A drink
+ * field goes out as a number or not at all: Decaid refuses null.
  */
 export interface WorkflowPatch {
   profile?: ProfileJson;
   context?: WorkflowContext;
-  steamSettings?: Partial<SteamSettings>;
-  hotWaterData?: Partial<HotWaterData>;
-  rinseData?: Partial<RinseData>;
+  steamSettings?: { targetTemperature?: number; duration?: number; flow?: number };
+  hotWaterData?: { targetTemperature?: number; duration?: number; volume?: number; flow?: number };
+  rinseData?: { targetTemperature?: number; duration?: number; flow?: number };
 }
 
 // ---------------------------------------------------------------------------
 // Profiles
 // ---------------------------------------------------------------------------
 
+/** A profile record: only what CafAI reads. */
 export interface ProfileRecord {
   /** "profile:" + 20 lowercase hex chars: a hash of execution content (not title/notes/author). */
   id: string;
   profile: WireProfile;
-  metadataHash: string;
-  compoundHash: string;
-  parentId: string | null;
-  visibility: 'visible' | 'hidden' | 'deleted' | (string & {});
-  isDefault: boolean;
-  createdAt: string;
-  updatedAt: string;
-  metadata: Record<string, unknown> | null;
+  /** Null for a record without a parent; absent when Decaid's reply could not be read (D95). */
+  parentId?: string | null;
+  [key: string]: unknown;
 }
 
 /**
@@ -382,32 +386,27 @@ export interface ShotUpdateRequest {
 // Misc
 // ---------------------------------------------------------------------------
 
+/** GET /api/v1/info: only what CafAI reads (About shows the version). Empty when Decaid's reply could not be read. */
 export interface BuildInfo {
-  commit: string;
-  commitShort: string;
-  branch: string;
-  buildTime: string;
   version: string;
-  buildNumber: string;
-  appStore: boolean;
   fullVersion: string;
-  localIp?: string;
+  [key: string]: unknown;
 }
 
-/** The parts of GET /api/v1/settings CafAI reads. */
+/** The parts of GET /api/v1/settings CafAI reads. A key Decaid's reply did not give in a form CafAI reads is left out. */
 export interface DecaidSettings {
   /** "full": Decaid leaves stop-at-weight (and tare) to the skin. "tracking", "disabled": Decaid stops the shot. */
   gatewayMode?: 'disabled' | 'full' | 'tracking' | (string & {});
-  blockOnNoScale?: boolean;
-  blockTareDuringShot?: boolean;
+  /** The machine Decaid connects by itself; null when none is set. Connect never picks another (connectKind). */
+  preferredMachineId?: string | null;
+  /** The scale Decaid connects by itself; null when none is set. */
+  preferredScaleId?: string | null;
   [key: string]: unknown;
 }
 
 /** One installed plugin (GET /api/v1/plugins): only what CafAI reads. */
 export interface PluginInfo {
   id: string;
-  name?: string;
-  version?: string;
   /** Running now. */
   loaded?: boolean;
   [key: string]: unknown;
@@ -540,8 +539,16 @@ export interface DecaidClient {
   /** Discovery only (connect=false): otherwise Decaid connects whatever it sees. A quick scan answers [] at once. */
   scanDevices(options?: { quick?: boolean }): Promise<DeviceEntry[]>;
   connectDevice(deviceId: string, connectionRole?: 'primary' | 'auxiliary'): Promise<unknown>;
-  /** Find and connect ONE device of a kind, leaving the others alone; returns the device list after. */
-  connectKind(kind: 'machine' | 'scale'): Promise<DeviceEntry[]>;
+  /**
+   * Find and connect ONE device of a kind, leaving the others alone, as
+   * Decaid itself would choose it: its preferred device when that is there,
+   * or the only one there when none is preferred; `preferredOnly`, the
+   * preferred device or nothing. Returns the device list after. Throws a
+   * `device_choice` GatewayError, connecting nothing, when the choice is
+   * Decaid's to make: its preferred device is away but another is there,
+   * several are there and none is preferred, or its settings did not say.
+   */
+  connectKind(kind: 'machine' | 'scale', options?: { preferredOnly?: boolean }): Promise<DeviceEntry[]>;
 
   getWorkflow(): Promise<Workflow>;
   /** Returns the merged workflow; treat the response as the truth. */

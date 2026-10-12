@@ -87,7 +87,7 @@ export async function createIdbStorage(options: CreateIdbStorageOptions): Promis
   });
   const repositories = createRepositories({ db, defaultModel, onWrite: () => mirror.schedulePush() });
   const porter = createDataPorter({ db, secrets, mirror, appVersion, defaultModel, now });
-  const keyBackup = createKeyBackup(kv, secrets);
+  const keyBackup = createKeyBackup(kv, secrets, secrets.keyCopy);
   const restoredListeners = new Set<() => void>();
 
   // A store that started this session empty (first run, or browser storage
@@ -208,9 +208,10 @@ const browserTimers: RestoreTimers = {
  * still be starting (after an update, say), so keep trying its backup until
  * records come back or Decaid says it holds none. The tries run on a timer
  * for 10 minutes and whenever `retryNow` says Decaid may be back. Each try
- * also brings back the API key from its copy in Decaid, when the user keeps
- * one there (D99). The store started empty, so a try merges the backup in
- * even if a bag was started meanwhile: a merge fills blanks only.
+ * also sends what the API key's copy in Decaid is owed and brings the key
+ * back from it, unless the key was forgotten on this device (D99). The store
+ * started empty, so a try merges the backup in even if a bag was started
+ * meanwhile: a merge fills blanks only.
  */
 export function startLateRestore(storage: Storage, options: LateRestoreOptions): LateRestore {
   const timers = options.timers ?? browserTimers;

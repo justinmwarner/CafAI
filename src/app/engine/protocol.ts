@@ -7,6 +7,7 @@
 import { EVENT, type SaveBagDetails } from '../../coach/contract.ts';
 import type { GrinderInfo, ShotSummary } from '../../coach/types.ts';
 import type { ContentBlock, LlmMessage, TextBlock, ToolResultBlock, ToolUseBlock } from '../../llm/types.ts';
+import type { ShotBaseline } from '../types.ts';
 
 export function textBlock(text: string): TextBlock {
   return { type: 'text', text };
@@ -129,6 +130,8 @@ export interface ShotCompletedPayload {
   grinder: GrinderPayload;
   /** The roast as at intake, its age counted to the day of the shot (6.1); null when the roast date is unknown. */
   roast: string | null;
+  /** The day of the shot where the user is, "YYYY-MM-DD": a roast date said in words after it counts from here, not from intake. */
+  today: string;
   summary: Omit<ShotSummary, 'series'>;
 }
 
@@ -139,6 +142,22 @@ export function summaryForModel(summary: ShotSummary): Omit<ShotSummary, 'series
 
 export function shotCompletedBlock(payload: ShotCompletedPayload): TextBlock {
   return textBlock(`${EVENT.shotCompleted}\n${JSON.stringify(payload)}`);
+}
+
+/**
+ * The barista's verdict on a shot (D126): the word they tapped on its card,
+ * in lower case, and what the shot was compared with. It goes with the next
+ * user turn after the verdict was given or changed, since the shot's own
+ * event left before the barista could answer.
+ */
+export interface ShotRatedPayload {
+  shotId: string;
+  verdict: string;
+  comparedWith: ShotBaseline;
+}
+
+export function shotRatedBlock(payload: ShotRatedPayload): TextBlock {
+  return textBlock(`${EVENT.shotRated}\n${JSON.stringify(payload)}`);
 }
 
 export function undoBlock(payload: { from: number; to: number; title: string }): TextBlock {
@@ -174,6 +193,15 @@ export type AdjustmentResultPayload =
   | { applied: true; variable: string; version: number | null; title: string | null; onMachine: boolean | null; loadError: string | null }
   | { applied: false; reason: string }
   | { applied: false; error: string };
+
+/**
+ * The offer_grinder result (D125): the grinder CafAI linked, as the model
+ * hears a grinder (`alreadyInDecaid` when Decaid had it, so nothing was
+ * added), or that the user chose Not now.
+ */
+export type GrinderOfferResultPayload =
+  | { added: true; alreadyInDecaid: boolean; grinder: GrinderPayload }
+  | { added: false; reason: string };
 
 /**
  * Tool calls the model is still waiting on: the tool_use blocks of a

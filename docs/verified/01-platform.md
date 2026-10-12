@@ -4,7 +4,7 @@
 
 Rule applied: Dart code > Decaid docs > sibling-skin code > sibling READMEs > RESEARCH.md. Every doc-vs-code conflict is listed in §13.
 
-**Path aliases** (all under `E:\source\cafai\.ref\`):
+**Path aliases** (all under `.ref\`, the folder of local reference clones at the repository's root, which is not committed):
 
 | Alias | Path |
 |---|---|

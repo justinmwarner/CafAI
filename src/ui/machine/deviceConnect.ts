@@ -5,10 +5,13 @@
  * Bluetooth radio to scan with, and a second scan would only queue.
  *
  * connectKind (client.ts) looks with a scan that connects nothing, then
- * connects the one device, so the other is never disturbed. A tapped Connect
- * says how it went, in describeFailedConnect's words (src/api/devices.ts),
- * until the next try or the end of the problem; the revive, a try in the
- * background, says nothing.
+ * connects the one device Decaid itself would choose, so the other is never
+ * disturbed and Decaid's preferred device never changes behind its back. A
+ * tapped Connect says how it went, in describeFailedConnect's words
+ * (src/api/devices.ts), or why the choice is Decaid's, until the next try or
+ * the end of the problem; the revive, a try in the background, connects only
+ * the preferred scale and says nothing. A dosing scale connected as
+ * auxiliary is never the scale a Connect is for.
  */
 import { useMemo, useSyncExternalStore } from 'react';
 import { describeFailedConnect } from '../../api/devices.ts';
@@ -38,9 +41,10 @@ export interface DeviceConnect {
   /**
    * Looks for one device of `kind` and connects it, unless a connect is in
    * flight. True when Decaid lists it connected after. `quiet`: a try in the
-   * background, which leaves `failure` as it was.
+   * background, which leaves `failure` as it was. `preferredOnly`: Decaid's
+   * preferred device or nothing (connectKind).
    */
-  connect(kind: DeviceKind, options?: { quiet?: boolean }): Promise<boolean>;
+  connect(kind: DeviceKind, options?: { quiet?: boolean; preferredOnly?: boolean }): Promise<boolean>;
   /** The device a failure was about is back: the failure is over. */
   clearFailure(kind: DeviceKind): void;
 }
@@ -73,9 +77,10 @@ export function createDeviceConnect(decaid: Pick<DecaidClient, 'connectKind'>): 
       set(quiet ? { pending: kind } : { pending: kind, failure: null });
       let text: string;
       try {
-        const after = await decaid.connectKind(kind);
+        const after = await decaid.connectKind(kind, { preferredOnly: options.preferredOnly === true });
         const devices: readonly DeviceEntry[] = Array.isArray(after) ? after : [];
-        if (devices.some((device) => device.type === kind && device.state === 'connected')) {
+        // A dosing scale connected as auxiliary is not the brewing scale this was for.
+        if (devices.some((device) => device.type === kind && device.state === 'connected' && device.connectionRole !== 'auxiliary')) {
           set({ pending: null });
           return true;
         }

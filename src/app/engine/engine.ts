@@ -16,17 +16,22 @@
  * - Writes to Decaid that fail (a grinder setting, a shot's notes) wait in an
  *   outbox and go out again when Decaid is back (D64); a write Decaid refuses
  *   is dropped and the chat says so once (5.11).
+ * - A shot card asks how the shot compared with the one before it (D126):
+ *   the words stay on the card, Decaid's `enjoyment` gets a running score,
+ *   and the coach hears the verdict with the next turn it is sent.
  * - A bag whose details were saved is added to Decaid's bean library in the
  *   background, and every load names its batch (D102).
  * - A new bag opens with "Which coffee is it?": a batch from Decaid's bean
  *   library, a photo of the bag read by the coach's model, or the bag
- *   described in the chat (6.1, 6.8). The coach hears the roast date and the
- *   coffee's age at intake and with every shot.
+ *   described in the chat (6.1, 6.8). The coach hears the roast date, the
+ *   coffee's age and today's date at intake and with every shot.
  * - Decaid's plugins are optional (D103): the coach may read DYE2's setups,
  *   and a shot the Visualizer plugin uploaded gets a link to its page.
  * - v1 starts from the dose Decaid has at the pick (D57). Grind moves use the
  *   steps of the grinder linked from Decaid's library (D62), read in the
- *   background so a slow or failed read never holds anything up.
+ *   background so a slow or failed read never holds anything up. A grinder
+ *   the barista names that is not linked can be added to the library from
+ *   the coach's card, only on their tap (D125).
  * - Engine actions are serialized, so a shot that finishes mid-reply is
  *   handled after the reply, never interleaved with it.
  * - Everything is persisted as it happens (the WebView may be unloaded after
@@ -42,6 +47,7 @@ import {
   TOOL_INPUTS,
   toRoastLevel,
   type AskUser,
+  type OfferGrinder,
   type ProposeAdjustment,
   type ProposeTemplates,
   type SaveBagDetails,
@@ -50,6 +56,7 @@ import {
 import { todayOf, writtenDate, type FreezerDates } from '../../coach/roastAge.ts';
 import { reportDrift } from '../../api/drift.ts';
 import { describeValue } from '../../api/frames.ts';
+import { grinderRequest, NO_GRINDER_LIBRARY } from '../../api/grinders.ts';
 import { readDye2, visualizerIdFor, visualizerShotUrl, type Dye2Data } from '../../api/pluginData.ts';
 import { PLUGIN, type PluginDirectory } from '../../api/plugins.ts';
 import {
@@ -70,7 +77,7 @@ import { isShotRunning as shotInProgress } from '../../api/workflow.ts';
 import { redactKeyLike } from '../../storage/redact.ts';
 import type { GrinderInfo, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
 import type { BagPhoto, ExtractedBag } from '../../llm/extractBag.ts';
-import type { ContentBlock, Effort, PendingUiCall, RunnerTool, ToolResultBlock } from '../../llm/types.ts';
+import type { ContentBlock, Effort, PendingUiCall, RunnerTool, ToolResultBlock, ToolValidation } from '../../llm/types.ts';
 import type {
   AppliedChange,
   Bag,
@@ -90,6 +97,9 @@ import type {
   CoachUiPart,
   NoticeProgress,
   SetAsideReason,
+  ShotBaseline,
+  ShotRating,
+  ShotVerdict,
   TemplateCardItem,
   VersionLoad,
 } from '../types.ts';
@@ -103,6 +113,7 @@ import {
   photoIntakeText,
   pickedIntakeText,
   shotCompletedBlock,
+  shotRatedBlock,
   summaryForModel,
   textBlock,
   toolResult,
@@ -110,17 +121,20 @@ import {
   undoBlock,
   awaitingModel,
   type AdjustmentResultPayload,
+  type GrinderOfferResultPayload,
   type TemplatePickedPayload,
 } from './protocol.ts';
+import { EXTRAS_KEY, cafaiNotesLine, isTasteQuestion, lastCafaiNotes, mergeNotes, tasteWords } from './shotNotes.ts';
 import {
-  EXTRAS_KEY,
-  cafaiNotesLine,
-  enjoymentFromStars,
-  isTasteQuestion,
-  lastCafaiNotes,
-  mergeNotes,
-  tasteWords,
-} from './shotNotes.ts';
+  baselineFor,
+  enjoymentFromScore,
+  fillBaselines,
+  isShotVerdict,
+  needsBaseline,
+  runningScore,
+  untoldRatings,
+  type CreditedShot,
+} from './shotRating.ts';
 import {
   NEW_BAG_PROMPT,
   appendText,
@@ -129,6 +143,7 @@ import {
   diffPart,
   filledBeanCard,
   finishStreaming,
+  grinderOfferPart,
   isLoadingBeanCard,
   isOpenBagConfirm,
   isOpenBeanCard,
@@ -141,7 +156,8 @@ import {
   replaceParts,
   setAside,
   setDiffStatus,
-  setShotStars,
+  setGrinderOfferStatus,
+  setShotRating,
   setVisualizerLink,
   shotPart,
   startingYieldText,
@@ -203,6 +219,12 @@ interface PendingCall {
   confirming?: boolean;
 }
 
+/** A coach tool as the runner sees it, and how a stored call of it is checked again after a reload. */
+interface EngineTool extends RunnerTool {
+  /** The checks of `validate`, without the wording of what the model wrote then (D127): its card already shows it. */
+  validateStored(input: unknown): ToolValidation;
+}
+
 interface Session {
   bag: Bag;
   conversation: ConversationRecord;
@@ -236,10 +258,21 @@ interface TasteNote {
   notes: string;
 }
 
+/**
+ * The barista's verdict as CafAI writes it to a shot record (D126): the
+ * running score as `enjoyment`, and the verdict and what it was compared
+ * with in extras.cafai.
+ */
+interface RatingNote extends ShotRating {
+  comparedWith: ShotBaseline;
+}
+
 /** Everything CafAI still has to say about one shot; a newer write carries the older one's fields. */
 interface ShotWrite {
+  /** The bag whose chat has the shot: a write Decaid refuses is reported there, whichever bag is open by then. */
+  bagId: string;
   taste?: TasteNote;
-  stars?: number;
+  rating?: RatingNote;
 }
 
 const DEFAULT_YIELD_G = 36;
@@ -509,7 +542,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   /**
    * Decaid answered the question with something that tells neither scale
    * (reported as drift where it was read): it is asked again after the next
-   * shot, not at every try of the waiting stars.
+   * shot, not at every try of the waiting rating.
    */
   let scaleUnclear = false;
   /** Bags being added to Decaid's bean library now, so a second save never adds a second batch. */
@@ -811,9 +844,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
 
   /**
    * Decaid's rating scale (D101), asked once per session before the first
-   * stars go out: 10 on current builds, 100 on 0.8.6 field builds. Null while
-   * Decaid could not be asked (the next try asks again) or after it answered
-   * something that tells neither (asked again after the next shot).
+   * rating goes out: 10 on current builds, 100 on 0.8.6 field builds. Null
+   * while Decaid could not be asked (the next try asks again) or after it
+   * answered something that tells neither (asked again after the next shot).
    */
   function ratingScale(): Promise<EnjoymentScale | null> {
     if (enjoymentScale !== null) return Promise.resolve(enjoymentScale);
@@ -835,9 +868,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   /**
    * One PUT /shots/{id} with everything CafAI still has to say about the shot.
    * Safe to repeat: Decaid merges extras key by key, and CafAI's notes line
-   * replaces its own previous line instead of piling up. The stars wait in the
-   * outbox until Decaid has said its rating scale; the taste goes on without
-   * them.
+   * replaces its own previous line instead of piling up. The rating waits in
+   * the outbox until Decaid has said its rating scale; the taste goes on
+   * without it.
    */
   async function writeShot(shotId: string): Promise<void> {
     const write = shotWrites.get(shotId);
@@ -855,10 +888,11 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       annotations.espressoNotes = mergeNotes(record.annotations?.espressoNotes, lastCafaiNotes(record.annotations), write.taste.notes);
       Object.assign(own, write.taste);
     }
-    const scale = write.stars === undefined ? null : await ratingScale();
-    if (write.stars !== undefined && scale !== null) {
-      annotations.enjoyment = enjoymentFromStars(write.stars, scale);
-      own.stars = write.stars;
+    const scale = write.rating === undefined ? null : await ratingScale();
+    if (write.rating !== undefined && scale !== null) {
+      annotations.enjoyment = enjoymentFromScore(write.rating.score, scale);
+      own.verdict = write.rating.verdict;
+      own.comparedWith = write.rating.comparedWith;
     }
     if (Object.keys(own).length > 0) {
       annotations.extras = { [EXTRAS_KEY]: own };
@@ -869,21 +903,22 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         if (writeFailure(error) !== 'landed') throw error;
       }
     }
-    // A newer write came in meanwhile: it carries everything, stars included.
+    // A newer write came in meanwhile: it carries everything, the rating included.
     if (shotWrites.get(shotId) !== write) return;
-    if (write.stars === undefined || scale !== null) {
+    if (write.rating === undefined || scale !== null) {
       shotWrites.delete(shotId);
       return;
     }
-    shotWrites.set(shotId, { stars: write.stars });
+    shotWrites.set(shotId, { bagId: write.bagId, rating: write.rating });
     throw new WriteLater('Decaid has not said which rating scale it uses yet.');
   }
 
   /**
    * A write that cannot succeed was dropped rather than tried forever (5.11):
    * a refusal is reported as drift under the request Decaid refused, and the
-   * chat says once what was not saved. A failure in CafAI itself gets a plain
-   * sentence; its detail goes to the log Decaid keeps of the WebView.
+   * chat says once what was not saved: the shot's own bag's chat for a shot
+   * write, the chat on screen for the grinder. A failure in CafAI itself gets
+   * a plain sentence; its detail goes to the log Decaid keeps of the WebView.
    */
   function writeDropped(key: string, error: unknown): void {
     const readFailed = error instanceof RecordReadFailed;
@@ -891,14 +926,16 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     let what = 'the grinder for the next shots';
     let source = 'PUT /api/v1/workflow';
     let field = 'context';
+    let bagId: string | null = null;
     if (key.startsWith(SHOT_WRITE)) {
       const shotId = key.slice(SHOT_WRITE.length);
       const write = shotWrites.get(shotId);
       shotWrites.delete(shotId);
-      const parts = [...(write?.taste ? ['the taste'] : []), ...(write?.stars !== undefined ? ['the stars'] : [])];
+      const parts = [...(write?.taste ? ['the taste'] : []), ...(write?.rating ? ['the rating'] : [])];
       what = `${parts.join(' and ') || 'the notes'} for this shot`;
       source = readFailed ? 'GET /api/v1/shots/{id}' : 'PUT /api/v1/shots/{id}';
       field = readFailed ? 'record' : 'annotations';
+      bagId = write?.bagId ?? null;
     }
     const refused = cause instanceof GatewayError && cause.status >= 400 && cause.status < 500;
     let text: string;
@@ -909,13 +946,25 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       console.error(`CafAI could not save ${what}:`, describe(cause));
       text = `CafAI could not save ${what}.`;
     }
+    const notice = noticePart('warning', text);
     void enqueue(async () => {
       const s = session;
+      // The shot's bag is no longer on screen: the notice waits in its stored chat.
+      if (bagId !== null && s?.bag.id !== bagId) return noteInStoredChat(bagId, notice);
       if (!s) return;
-      addMessage('system', [noticePart('warning', text)]);
+      addMessage('system', [notice]);
       await persistConversation(s);
       emit();
     });
+  }
+
+  /** A notice for a bag that is not on screen, at the end of its stored chat, where it shows when the bag is opened. */
+  async function noteInStoredChat(bagId: string, part: CoachUiPart): Promise<void> {
+    const bag = await storage.bags.get(bagId);
+    const stored = bag ? await storage.conversations.get(bag.conversationId) : undefined;
+    if (!stored) return;
+    const at = nowIso();
+    await storage.conversations.put({ ...stored, uiMessages: [...stored.uiMessages, message(deps.newId('msg'), 'system', [part], at)], updatedAt: at });
   }
 
   /**
@@ -935,7 +984,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       text: text === null ? null : redactKeyLike(text),
       notes: cafaiNotesLine(words, version?.title ?? s.bag.name),
     };
-    void queueShotWrite(iteration.shotId, { taste });
+    void queueShotWrite(iteration.shotId, { bagId: s.bag.id, taste });
   }
 
   // -------------------------------------------------------------------------
@@ -945,10 +994,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   /**
    * After a bag's details were saved: add it to Decaid's bean library, reusing
    * the bean with the same roaster and name or adding one, then reusing that
-   * bean's unarchived batch with the bag's roast date (or, for a bag without
-   * one, a batch without one) or adding a batch, and keep both ids on the bag
-   * so every load names its batch. Not for a bag without a roaster (Decaid
-   * needs one) or a name of its own. In the background: nothing waits for it.
+   * bean's unarchived batch with the bag's roast date when both dates are
+   * known, or adding a batch, and keep both ids on the bag so every load names
+   * its batch. Not for a bag without a roaster (Decaid needs one) or a name of
+   * its own. In the background: nothing waits for it.
    * A failure (Decaid away, or a reply CafAI could not read, reported as
    * drift) leaves the bag unlinked for the next save to try again. CafAI never
    * edits or deletes a bean or a batch: a detail corrected later changes the
@@ -965,10 +1014,13 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         const known = beans.find((b) => sameName(b.roaster, roaster) && sameName(b.name, name));
         const bean = known ?? (await api.createBean(beanRequest(bag, roaster, name)));
         // A bean already in the library may hold this very bag, as when its photo was taken instead of picking it.
+        // Only the roast date tells: an undated batch may be an earlier bag of the same coffee, so a bag
+        // without a date gets a batch of its own rather than another bag's shots and setups.
         const roastDate = bag.roastDate ?? null;
-        const same = known
-          ? (await api.listBatches(bean.id)).find((b) => b.archived !== true && writtenDate(b.roastDate) === roastDate)
-          : undefined;
+        const same =
+          known && roastDate !== null
+            ? (await api.listBatches(bean.id)).find((b) => b.archived !== true && writtenDate(b.roastDate) === roastDate)
+            : undefined;
         const batch = same ?? (await api.createBatch(bean.id, batchRequest(bag)));
         // In turn with the engine's actions, so the note never lands inside a reply.
         await enqueue(() => storeLink(bag.id, bean.id, batch.id, same ? ALREADY_IN_BEANS : ADDED_TO_BEANS));
@@ -1085,9 +1137,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   }
 
   /** The freezer dates of the batch picked on the bean card, as Decaid had them then (6.1). */
-  function freezerOf(s: Session): FreezerDates | null {
-    const batchId = s.bag.decaidBatchId ?? null;
-    if (batchId === null) return null;
+  function pickedFreezer(batchId: string): FreezerDates | null {
     for (const m of state.messages) {
       for (const part of m.parts) {
         if (part.kind !== 'beanPicker' || part.choice?.kind !== 'batch' || part.choice.batchId !== batchId) continue;
@@ -1098,9 +1148,31 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     return null;
   }
 
-  /** The roast as the coach reads it, the coffee's age counted to today (6.1). */
-  function roastFor(s: Session): string | null {
-    return coach.roastLine(s.bag.roastDate ?? null, clock.now(), freezerOf(s));
+  /**
+   * The freezer dates of the bag's batch (6.1), read again from Decaid's bean
+   * library, archived batches included: a batch frozen or thawed there after
+   * the pick says so only there. While Decaid cannot be read, or no longer
+   * lists the batch, as the bean card had them at the pick. Null for a bag
+   * not linked to a batch.
+   */
+  async function freezerOf(s: Session): Promise<FreezerDates | null> {
+    const batchId = s.bag.decaidBatchId ?? null;
+    if (batchId === null) return null;
+    try {
+      const batch = (await api.listAllBatches({ includeArchived: true })).find((b) => b.id === batchId);
+      if (batch) return { freezeDate: writtenDate(batch.freezeDate), unfreezeDate: writtenDate(batch.unfreezeDate) };
+    } catch {
+      // Decaid away, or a Decaid without the bean library: the card's row.
+    }
+    return pickedFreezer(batchId);
+  }
+
+  /** The roast as the coach reads it, the coffee's age counted to today (6.1); Decaid is read only when there is a roast date. */
+  async function roastFor(s: Session): Promise<string | null> {
+    const roastDate = s.bag.roastDate ?? null;
+    if (roastDate === null) return null;
+    const freezer = await freezerOf(s);
+    return coach.roastLine(roastDate, clock.now(), freezer);
   }
 
   /**
@@ -1112,12 +1184,13 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   async function startIntake(s: Session, words: string, bag: SaveBagDetails | null): Promise<void> {
     // A bag opened a moment ago: let its dose read finish.
     await s.numbers;
+    const roast = await roastFor(s);
     const blocks = intakeBlocks(words, {
       grinder: grinderForModel(),
       scaleConnected: telemetry.getState().scaleConnected,
       doseG: coach.knownDose(s.doseG),
       bag,
-      roast: roastFor(s),
+      roast,
       today: todayOf(clock.now()),
     });
     await sendUser(s, new Map(), UNANSWERED_TEXT, blocks, 'typed');
@@ -1291,6 +1364,16 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     return storage.iterations.listByBag(s.bag.id);
   }
 
+  /** Every shot CafAI credited to another bag, named by its bag: what a bag's first shot is compared with (D126). */
+  async function shotsOfOtherBags(bagId: string): Promise<CreditedShot[]> {
+    const names = new Map(state.bags.map((bag) => [bag.id, bag.name]));
+    return (await storage.iterations.listAll()).flatMap((iteration) => {
+      if (iteration.bagId === bagId || !iteration.shotId) return [];
+      const name = names.get(iteration.bagId) ?? iteration.bagName;
+      return [{ shotId: iteration.shotId, coffee: name && name !== NEW_BAG_NAME ? name : null, at: iteration.createdAt }];
+    });
+  }
+
   /**
    * Every batch of a linked bag's bean in Decaid's library, archived ones
    * too: DYE2's setups for an earlier batch of the same coffee (6.5). None
@@ -1382,8 +1465,12 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     };
   }
 
-  /** Domain checks after the zod schema passed. Returns an error sentence or null. */
-  function domainError(name: ToolName, value: unknown): string | null {
+  /**
+   * Domain checks after the zod schema passed. Returns an error sentence or
+   * null. `fresh`: the model just wrote the call, so a proposal's wording is
+   * checked too (D127).
+   */
+  function domainError(name: ToolName, value: unknown, fresh: boolean): string | null {
     if (name === TOOL.proposeTemplates) {
       const ids = (value as ProposeTemplates).suggestions.map((s) => s.templateId);
       const unknown = ids.filter((id) => !coach.getTemplate(id));
@@ -1398,24 +1485,29 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       const context = s ? proposalContext(s) : null;
       if (!context) return 'No profile version is active yet. Propose templates first.';
       const result = coach.validateProposal(value as ProposeAdjustment, context);
-      return result.ok ? null : result.errors.join(' ');
+      // Both at once, so one retry fixes the numbers and the words.
+      const wording = fresh ? coach.proposalWordingError(value as ProposeAdjustment) : null;
+      const errors = [...(result.ok ? [] : result.errors), ...(wording ? [wording] : [])];
+      return errors.length > 0 ? errors.join(' ') : null;
     }
     return null;
   }
 
-  const tools: RunnerTool[] = (Object.values(TOOL) as ToolName[]).map((name) => {
+  const tools: EngineTool[] = (Object.values(TOOL) as ToolName[]).map((name) => {
     const schema = TOOL_INPUTS[name];
     const zodValidate = llm.validator(schema);
     const auto = AUTO_TOOLS.includes(name);
-    const tool: RunnerTool = {
+    const check = (input: unknown, fresh: boolean): ToolValidation => {
+      const parsed = zodValidate(name === TOOL.saveBagDetails ? withRoastDate(input) : input);
+      if (!parsed.ok) return parsed;
+      const error = domainError(name, parsed.value, fresh);
+      return error ? { ok: false, error } : parsed;
+    };
+    const tool: EngineTool = {
       definition: llm.toolDefinition(name, coach.toolDescription(name), schema),
       kind: auto ? 'auto' : 'ui',
-      validate(input) {
-        const parsed = zodValidate(name === TOOL.saveBagDetails ? withRoastDate(input) : input);
-        if (!parsed.ok) return parsed;
-        const error = domainError(name, parsed.value);
-        return error ? { ok: false, error } : parsed;
-      },
+      validate: (input) => check(input, true),
+      validateStored: (input) => check(input, false),
     };
     if (auto) tool.execute = (value) => executeAuto(name, value);
     return tool;
@@ -1479,6 +1571,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       s.pending.push({ id: call.id, name, input, plan });
       const iteration = await latestPendingIteration(s);
       if (iteration) await putIteration({ ...iteration, proposal: input });
+    } else if (name === TOOL.offerGrinder) {
+      // A card the barista answers: nothing reaches Decaid's grinder library before Add (D125).
+      addMessage('assistant', [grinderOfferPart(call.id, call.input as OfferGrinder)]);
+      s.pending.push({ id: call.id, name, input: call.input });
     }
   }
 
@@ -1536,8 +1632,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
 
   /**
    * Answer every tool call the model is waiting on (in tool_use order), then
-   * add `extra` blocks, append the user turn, and run the model. Cards left
-   * unanswered are set aside, and say why: `setAsideFor`.
+   * add the verdicts the coach has not heard (D126) and `extra` blocks,
+   * append the user turn, and run the model. Cards left unanswered are set
+   * aside, and say why: `setAsideFor`.
    */
   async function sendUser(
     s: Session,
@@ -1561,8 +1658,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     }
     s.pending = [];
     s.held = [];
-    const blocks: ContentBlock[] = [...results, ...extra];
-    if (blocks.length === 0) return;
+    if (results.length === 0 && extra.length === 0) return;
+    // A verdict comes after the shot's own event left, so it rides with the next turn.
+    const rated = untoldRatings(s.conversation.apiMessages, state.messages).map(shotRatedBlock);
+    const blocks: ContentBlock[] = [...results, ...rated, ...extra];
     s.conversation = {
       ...s.conversation,
       apiMessages: [...s.conversation.apiMessages, { role: 'user', content: blocks }],
@@ -1585,7 +1684,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         s.held.push(toolResult(use.id, `Unknown tool ${use.name}.`, true));
         continue;
       }
-      const validation = tool.validate(use.input);
+      const validation = tool.validateStored(use.input);
       if (!validation.ok) {
         s.held.push(toolResult(use.id, validation.error, true));
       } else if (tool.kind === 'auto' && tool.execute) {
@@ -1624,6 +1723,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     session = s;
     // A stored progress notice (an older build, a crash) describes work that is long over.
     state = { ...state, messages: withoutTransient(conversation.uiMessages), error: null };
+    // Cards from before CafAI compared shots say what they compare with too (D126).
+    if (state.messages.some((m) => m.parts.some(needsBaseline))) {
+      setMessages(fillBaselines(state.messages, await shotsOfOtherBags(bag.id)));
+    }
     lastFailed = null;
     await recoverPending(s);
     if (awaitingModel(s.conversation.apiMessages)) {
@@ -2029,6 +2132,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       await persistConversation(s);
       return;
     }
+    // A bag's first shot is compared with the last shot of another coffee (D126).
+    const firstShot = !state.messages.some((m) => m.parts.some((part) => part.kind === 'shot'));
+    const others = firstShot ? await shotsOfOtherBags(s.bag.id) : [];
     const at = nowIso();
     const iterationId = deps.newId('iter');
     await putIteration({
@@ -2047,10 +2153,14 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       updatedAt: at,
     });
     addMessage('system', [shotPart(record.id, summary)]);
+    setMessages(fillBaselines(state.messages, others));
     watchVisualizer(s, record.id, iterationId);
     if (!saysWhichRan) {
       addMessage('system', [noticePart('info', `Decaid's record did not say which profile ran; CafAI counted it for v${current.version}.`)]);
     }
+    // The card shows while the roast is worked out: its batch is read again from Decaid.
+    emit();
+    const roast = await roastFor(s);
     const template = coach.getTemplate(current.templateId);
     const block = shotCompletedBlock({
       shotRef: 'latest',
@@ -2061,10 +2171,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       doseG: summary.doseG ?? s.doseG,
       targetYieldG: summary.targetYieldG ?? s.targetYieldG,
       grinder: grinderForModel(),
-      roast: roastFor(s),
+      roast,
+      today: todayOf(clock.now()),
       summary: summaryForModel(summary),
     });
-    emit();
     await sendUser(s, new Map(), UNANSWERED_SHOT, [block], 'shot');
   }
 
@@ -2496,6 +2606,69 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     await sendUser(s, new Map([[call.id, toolResult(call.id, payload)]]), { answered: false, note: 'Not answered.' }, [], 'other');
   }
 
+  /**
+   * Add on the coach's grinder card (D125): the grinder the coach heard goes
+   * into Decaid's grinder library, or the one Decaid already has is taken
+   * (never a second entry), and it is linked as Settings links one: its id,
+   * its model as the name, the dial's setting kept. The next shots carry it
+   * in Decaid's workflow (D54), and the coach hears its dial. A failure says
+   * why on the card, which stays open to tap again; the coach waits.
+   */
+  async function addGrinder(requestId: string): Promise<void> {
+    const s = session;
+    if (!s) return;
+    const call = requireCall(s, requestId, TOOL.offerGrinder);
+    if (!call || call.confirming) return;
+    const request = grinderRequest(call.input as OfferGrinder);
+    if (!request) {
+      // Only a model that was all key text cleans down to nothing: it never goes to Decaid (D69).
+      setMessages(setGrinderOfferStatus(state.messages, requestId, 'pending', { error: 'That name looked like an API key.' }));
+      emit();
+      return;
+    }
+    call.confirming = true;
+    setMessages(setGrinderOfferStatus(state.messages, requestId, 'adding'));
+    state = { ...state, busy: true };
+    emit();
+    let linked: Awaited<ReturnType<ApiPort['addGrinder']>>;
+    try {
+      linked = await api.addGrinder(request);
+    } catch (error) {
+      call.confirming = false;
+      const why = error instanceof GatewayError && error.status === 404 ? NO_GRINDER_LIBRARY : describe(error);
+      setMessages(setGrinderOfferStatus(state.messages, requestId, 'pending', { error: why }));
+      state = { ...state, busy: false };
+      await persistConversation(s);
+      emit();
+      return;
+    }
+    const model = linked.model.trim();
+    settings = await storage.settings.update({ grinderId: linked.id, grinderName: model || null });
+    // Its dial as Decaid just answered it; a read still on its way is older.
+    grinderReads += 1;
+    linkedGrinder = { id: linked.id, info: linked.info };
+    const burrs = linked.burrs?.trim();
+    const linkedName = burrs ? `${model || 'Unnamed grinder'} (${burrs})` : model || 'Unnamed grinder';
+    setMessages(setGrinderOfferStatus(state.messages, requestId, linked.added ? 'added' : 'existing', { linkedName }));
+    state = { ...state, busy: false };
+    emit();
+    await sendGrinder();
+    const payload: GrinderOfferResultPayload = { added: true, alreadyInDecaid: !linked.added, grinder: grinderForModel() };
+    await sendUser(s, new Map([[call.id, toolResult(call.id, payload)]]), { answered: false, note: 'Not answered.' }, [], 'other');
+  }
+
+  /** Not now on the grinder card: nothing is added, and the coach hears so. */
+  async function declineGrinder(requestId: string): Promise<void> {
+    const s = session;
+    if (!s) return;
+    const call = requireCall(s, requestId, TOOL.offerGrinder);
+    if (!call || call.confirming) return;
+    setMessages(setGrinderOfferStatus(state.messages, requestId, 'declined'));
+    emit();
+    const payload: GrinderOfferResultPayload = { added: false, reason: 'The user chose not to add it.' };
+    await sendUser(s, new Map([[call.id, toolResult(call.id, payload)]]), { answered: false, note: 'Not answered.' }, [], 'other');
+  }
+
   async function undo(): Promise<void> {
     const s = session;
     if (!s || !canUndo(s)) return;
@@ -2541,16 +2714,20 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     );
   }
 
-  async function rateShot(shotId: string, stars: number): Promise<void> {
+  async function rateShot(shotId: string, verdict: ShotVerdict): Promise<void> {
     const s = session;
-    if (!s || !Number.isInteger(stars) || stars < 1 || stars > 5) return;
+    if (!s || !isShotVerdict(verdict)) return;
     const card = state.messages.flatMap((m) => m.parts).find((p) => p.kind === 'shot' && p.shotId === shotId);
-    if (!card || card.kind !== 'shot' || card.stars === stars) return;
-    // On the card, so it comes back with the transcript; to the coach, never.
-    setMessages(setShotStars(state.messages, shotId, stars));
+    // Stars given before D126 stay as they were.
+    if (!card || card.kind !== 'shot' || card.stars !== undefined || card.rating?.verdict === verdict) return;
+    const baseline = card.baseline ?? baselineFor(state.messages, shotId, await shotsOfOtherBags(s.bag.id));
+    const score = runningScore(state.messages, shotId, verdict);
+    if (!baseline || score === null) return;
+    // On the card, so it comes back with the transcript; the coach hears it with the next turn.
+    setMessages(setShotRating(state.messages, shotId, baseline, { verdict, score }));
     await persistConversation(s);
     emit();
-    void queueShotWrite(shotId, { stars });
+    void queueShotWrite(shotId, { bagId: s.bag.id, rating: { verdict, score, comparedWith: baseline } });
   }
 
   async function sendText(text: string): Promise<void> {
@@ -2720,11 +2897,13 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     confirmChange: (requestId) => enqueue(() => confirmChange(requestId)),
     declineChange: (requestId) => enqueue(() => declineChange(requestId)),
     undo: () => enqueue(() => undo()),
-    rateShot: (shotId, stars) => enqueue(() => rateShot(shotId, stars)),
+    rateShot: (shotId, verdict) => enqueue(() => rateShot(shotId, verdict)),
     pickBean: (batchId) => enqueue(() => pickBean(batchId)),
     skipBeanPick: () => enqueue(() => skipBeanPick()),
     readBagPhoto: (photo) => enqueue(() => readBagPhoto(photo)),
     confirmBag: (details) => enqueue(() => confirmBag(details)),
+    addGrinder: (requestId) => enqueue(() => addGrinder(requestId)),
+    declineGrinder: (requestId) => enqueue(() => declineGrinder(requestId)),
     retry: () =>
       enqueue(async () => {
         const task = lastFailed;

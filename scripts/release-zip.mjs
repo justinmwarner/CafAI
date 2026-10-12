@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: GPL-3.0-only
+// Derived from Crema web/scripts/validate-manifest.mjs and the release:zip script of web/package.json
+// (https://github.com/yarneo/crema @ 628cd714), Copyright (C) 2026 Yarden (yarneo).
+// Modified for CafAI: zipped in Node with fflate, both manifests written from skin.config.json, the single entry chunk and the licence files checked.
+//
 // Build the installable Decaid skin zip.
 //
 // Decaid installs a skin from a zip whose root holds index.html and the skin
@@ -9,9 +14,6 @@
 // lazily loaded chunk could 404 in a running page), and zips dist/ plus the
 // licence files named in skin.config.json (the GPL LICENSE, the NOTICE with
 // credits, the Roboto font's OFL text) into release/cafai-<version>.zip.
-//
-// Adapted from Crema's web/scripts/validate-manifest.mjs and its release:zip
-// npm script (https://github.com/yarneo/crema, GPL-3.0); modified for CafAI.
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';

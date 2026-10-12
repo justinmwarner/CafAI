@@ -4,11 +4,11 @@ import { createCoachEngine, type CoachEngine, type EngineDeps, type PageVisibili
 import type { OutboxTimers } from './outbox.ts';
 import type { ApiPort, ChangePlan, CoachPort, LlmPort, ProposalContext } from './ports.ts';
 import { message, NEW_BAG_PROMPT, progressNoticePart } from './uiMessages.ts';
-import { OTHER_OPTION, TOOL, type ProposeAdjustment } from '../../coach/contract.ts';
+import { OTHER_OPTION, TOOL, type OfferGrinder, type ProposeAdjustment } from '../../coach/contract.ts';
 import { DOSE_RULES, knownDose, REFERENCE_DOSE_G } from '../../coach/dose.ts';
 import { roastLine } from '../../coach/prompt.ts';
 import { createShotSource, runQueryTool } from '../../coach/queries.ts';
-import { validateProposal as validateWithCoach } from '../../coach/validator.ts';
+import { proposalWordingError, validateProposal as validateWithCoach } from '../../coach/validator.ts';
 import type { GrinderInfo, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
 import type { MachineProfileStatus } from '../../api/machineProfile.ts';
 import { driftLog } from '../../api/drift.ts';
@@ -27,7 +27,7 @@ import {
 } from '../../api/types.ts';
 import { LlmError, type ContentBlock, type LlmMessage, type PendingUiCall, type RunResult, type ToolResultBlock } from '../../llm/types.ts';
 import type { Bag } from '../../storage/types.ts';
-import type { CoachUiPart } from '../types.ts';
+import type { CoachUiPart, ShotVerdict } from '../types.ts';
 import { createFakeStorage, createFakeTelemetry, SAMPLE_WORKFLOW, type FakeStorage, type FakeTelemetry } from '../../ui/testing/fakeServices.ts';
 
 // ---------------------------------------------------------------------------
@@ -174,6 +174,8 @@ const coach: CoachPort = {
     }
     return { ok: true, plan: plan(input, context.profile) };
   },
+  // The coach's own check (D127): a fresh expectedEffect that names a taste goes back to the model.
+  proposalWordingError,
   summarizeShot: () => summary,
   versionTitle: (name, n) => `${name} v${n}`,
   buildVersionProfile: (_t, base, title) => ({ ...base, title }),
@@ -233,6 +235,12 @@ const machine = {
   heldGrinderReads: [] as Array<() => void>,
   /** Every grinder read so far, so a test can wait until the engine has its answer. */
   grinderReads: [] as Array<Promise<unknown>>,
+  /** The grinders an add finds by model (D125); their dials are in `grinders`. */
+  library: [] as Array<{ id: string; model: string; burrs: string | null }>,
+  /** How many more grinder adds fail as if Decaid were away. */
+  failGrinderAdds: 0,
+  /** An older Decaid without the grinder library: its routes answer a plain 404. */
+  noGrinderLibrary: false,
   /** POST /profiles answers 400 for any parent (a Decaid without the template's bundled default). */
   parentMissing: false,
   /** POST /profiles answers with a record Decaid already had (the same content). */
@@ -329,6 +337,9 @@ function makeApi(calls: ApiCall[]): ApiPort {
   machine.holdGrinderReads = false;
   machine.heldGrinderReads = [];
   machine.grinderReads = [];
+  machine.library = [];
+  machine.failGrinderAdds = 0;
+  machine.noGrinderLibrary = false;
   machine.parentMissing = false;
   machine.dedupe = false;
   machine.createError = null;
@@ -405,6 +416,29 @@ function makeApi(calls: ApiCall[]): ApiPort {
         throw new GatewayError(200, '/api/v1/shots/cafai-probe', "Decaid sent a reply CafAI doesn't recognise.", 'unexpected_reply');
       }
       return machine.enjoymentScale;
+    },
+    // As addOrFindGrinder does: the grinder with the same model, case aside, else a new one.
+    addGrinder: async (request) => {
+      calls.push({ method: 'addGrinder', args: [request] });
+      if (machine.noGrinderLibrary) throw new GatewayError(404, '/api/v1/grinders', 'Route not found', 'http');
+      if (machine.failGrinderAdds > 0) {
+        machine.failGrinderAdds -= 1;
+        throw unreachable('/api/v1/grinders');
+      }
+      const known = machine.library.find((entry) => entry.model.toLowerCase() === request.model.toLowerCase());
+      if (known) return { ...known, info: machine.grinders.get(known.id)!, added: false };
+      const added = { id: `g-added-${machine.library.length + 1}`, model: request.model, burrs: request.burrs ?? null };
+      const preset = request.settingType === 'preset';
+      const info: GrinderInfo = {
+        model: request.model,
+        settingType: preset ? 'preset' : 'numeric',
+        smallStep: preset ? null : (request.settingSmallStep ?? null),
+        bigStep: preset ? null : (request.settingBigStep ?? null),
+        values: preset ? (request.settingValues ?? null) : null,
+      };
+      machine.library.push(added);
+      machine.grinders.set(added.id, info);
+      return { ...added, info, added: true };
     },
     getGrinder: (id) => {
       calls.push({ method: 'getGrinder', args: [id] });
@@ -655,7 +689,7 @@ const proposeTemp = toolUse('t-adj', TOOL.proposeAdjustment, {
   grind: null,
   summary: 'Raise brew temperature by 1 °C',
   rationale: 'Sour with a fast first drop.',
-  expectedEffect: 'Sweeter, less sharp.',
+  expectedEffect: 'More extraction at the same flow.',
   tips: ['Keep the dose the same.'],
 });
 
@@ -797,6 +831,35 @@ describe('coach engine', () => {
     telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' });
     await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
   }
+
+  /** Another shot in the open bag, credited, with the coach asking how it tasted. */
+  async function pullAnother(shotId: string) {
+    scripts.push(() => [text('Again?'), askTaste]);
+    telemetry.emitShot({ type: 'finished', shotId, stopReason: 'targetWeight' });
+    await vi.waitFor(() => expect(cardOf(shotId)).toBeDefined());
+    await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+  }
+
+  type ShotPart = Extract<CoachUiPart, { kind: 'shot' }>;
+  const cardOf = (shotId: string) => allParts().find((p): p is ShotPart => p.kind === 'shot' && p.shotId === shotId);
+
+  /**
+   * The open bag's chat as an older CafAI stored it (each shot card changed
+   * by `change`), read again: another bag and back, since a new engine would
+   * also start a new fake Decaid.
+   */
+  async function asStoredBefore(change: (part: ShotPart) => ShotPart) {
+    const bag = engine.getState().activeBag!;
+    const stored = (await storage.conversations.get(bag.conversationId))!;
+    const uiMessages = stored.uiMessages.map((m) => ({ ...m, parts: m.parts.map((p) => (p.kind === 'shot' ? change(p) : p)) }));
+    await storage.conversations.put({ ...stored, uiMessages });
+    await engine.newBag();
+    await engine.selectBag(bag.id);
+  }
+
+  /** A card from before D126: no baseline, and the stars it was given, if any. */
+  const before = (stars?: number) => ({ baseline: _baseline, rating: _rating, ...part }: ShotPart): ShotPart =>
+    stars === undefined ? part : { ...part, stars };
 
   async function throughProposal() {
     await throughShot();
@@ -1007,6 +1070,67 @@ describe('coach engine', () => {
     expect(parsed(lastUserTurn(requests)[0])).toEqual({ selected: ['Bitter'], other: null });
   });
 
+  describe('expectedEffect is mechanics, never a taste (D127)', () => {
+    const proposal = (id: string, expectedEffect: string) =>
+      toolUse(id, TOOL.proposeAdjustment, { ...(proposeTemp as { input: Record<string, unknown> }).input, expectedEffect });
+
+    it('sends a fresh change that promises a taste back to the coach, and shows the one it writes instead', async () => {
+      await throughShot();
+      scripts.push(() => [proposal('t-adj', 'Sweeter, less sharp.')]);
+      scripts.push(() => [proposal('t-adj-2', 'More extraction at the same flow.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+
+      // The first went back as an error naming the word, inside the same run; the second is the card.
+      expect(lastUserTurn(requests)[0]).toMatchObject({
+        type: 'tool_result',
+        tool_use_id: 't-adj',
+        is_error: true,
+        content: expect.stringContaining('expectedEffect names a taste ("Sweeter")'),
+      });
+      const diffs = allParts().filter((p) => p.kind === 'diff');
+      expect(diffs).toEqual([expect.objectContaining({ requestId: 't-adj-2', status: 'pending', expectedEffect: 'More extraction at the same flow.' })]);
+      expect(engine.getState().phase).toBe('awaiting_confirmation');
+    });
+
+    it('names a wrong number and a taste in one correction, so one retry fixes both', async () => {
+      await throughShot();
+      const both = toolUse('t-adj', TOOL.proposeAdjustment, {
+        ...(proposeTemp as { input: Record<string, unknown> }).input,
+        value: 93,
+        expectedEffect: 'A rounder cup.',
+      });
+      scripts.push(() => [both]);
+      scripts.push(() => [proposal('t-adj-2', 'More extraction at the same flow.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      const correction = lastUserTurn(requests)[0] as Extract<ContentBlock, { type: 'tool_result' }>;
+      expect(correction).toMatchObject({ tool_use_id: 't-adj', is_error: true });
+      expect(correction.content).toContain('temp: at most 2.0 °C per step.');
+      expect(correction.content).toContain('expectedEffect names a taste ("rounder")');
+      expect(allParts().filter((p) => p.kind === 'diff')).toEqual([expect.objectContaining({ requestId: 't-adj-2' })]);
+    });
+
+    it('keeps a stored change usable after a reload, whatever its wording: its card already shows it', async () => {
+      await throughProposal();
+      // The transcript of an older build, whose change promised a taste.
+      const stored = (await storage.conversations.get(engine.getState().activeBag!.conversationId))!;
+      const apiMessages = stored.apiMessages.map((m) => ({
+        ...m,
+        content: m.content.map((b) =>
+          b.type === 'tool_use' && b.id === 't-adj' ? { ...b, input: { ...(b.input as object), expectedEffect: 'Sweeter, less sharp.' } } : b,
+        ),
+      }));
+      await storage.conversations.put({ ...stored, apiMessages });
+      engine.dispose();
+      engine = build();
+      await engine.start();
+      expect(engine.getState().phase).toBe('awaiting_confirmation');
+
+      scripts.push(() => [text('Done.')]);
+      await engine.confirmChange('t-adj');
+      expect(engine.getState().activeVersion?.title).toBe('Kiambu AA v2');
+    });
+  });
+
   it('reloads bags on refresh, e.g. after an import', async () => {
     await throughTemplatePick();
     const imported = { ...engine.getState().activeBag!, id: 'bag-imported', name: 'Imported bag', conversationId: 'conv-imported' };
@@ -1081,7 +1205,7 @@ describe('coach engine', () => {
         grind: { direction: 'finer', amount: 1, setting: '13' },
         summary: 'Grind 1 step finer, to 13',
         rationale: 'It ran fast.',
-        expectedEffect: 'A slower, sweeter shot.',
+        expectedEffect: 'A slower shot that extracts a little more.',
         tips: [],
       }),
     ]);
@@ -1106,7 +1230,7 @@ describe('coach engine', () => {
         grind: { direction: 'coarser', amount: 1, setting: '15' },
         summary: 'Grind 1 step coarser, to 15',
         rationale: 'It ran slow.',
-        expectedEffect: 'A faster, brighter shot.',
+        expectedEffect: 'A faster shot that extracts a little less.',
         tips: [],
       }),
     ]);
@@ -1764,7 +1888,7 @@ describe('coach engine', () => {
           grind: { direction: 'finer', amount: 1, setting },
           summary: `Grind 1 step finer, to ${setting}`,
           rationale: 'It ran fast.',
-          expectedEffect: 'A slower, sweeter shot.',
+          expectedEffect: 'A slower shot that extracts a little more.',
           tips: [],
         }),
       ]);
@@ -1869,7 +1993,7 @@ describe('coach engine', () => {
   });
 
   // -------------------------------------------------------------------------
-  // D61: taste feedback and the star rating in Decaid's shot record
+  // D61: taste feedback (and the rating, D126) in Decaid's shot record
   // -------------------------------------------------------------------------
 
   describe("writing to Decaid's shot record (D61)", () => {
@@ -1941,40 +2065,12 @@ describe('coach engine', () => {
       expect(JSON.stringify(requests)).not.toContain('sk-ant-api03');
     });
 
-    it('rates a shot: enjoyment is stars x 2, the stars stay on the card, and the coach hears nothing', async () => {
-      await throughShot();
-      const turns = requests.length;
-      await engine.rateShot('shot-1', 4);
-      expect(allParts().find((p) => p.kind === 'shot')).toMatchObject({ shotId: 'shot-1', stars: 4 });
-      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 8, extras: { cafai: { stars: 4 } } }));
-
-      await engine.rateShot('shot-1', 2);
-      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 4, extras: { cafai: { stars: 2 } } }));
-      expect(requests).toHaveLength(turns);
-
-      engine.dispose();
-      engine = build();
-      await engine.start();
-      expect(allParts().find((p) => p.kind === 'shot')).toMatchObject({ stars: 2 });
-    });
-
-    it('ignores a rating outside one to five stars, or for a shot not in the chat', async () => {
-      await throughShot();
-      await engine.rateShot('shot-1', 0);
-      await engine.rateShot('shot-1', 6);
-      await engine.rateShot('shot-1', 2.5);
-      await engine.rateShot('shot-elsewhere', 3);
-      await drain();
-      expect(callsOf('updateShot')).toEqual([]);
-      expect(allParts().find((p) => p.kind === 'shot')).not.toHaveProperty('stars');
-    });
-
     it('sends a shot write Decaid could not take again, with everything said so far', async () => {
       await throughShot();
       machine.failShotUpdates = 2;
       await answerTaste(['Sour']);
       await vi.waitFor(() => expect(machine.failShotUpdates).toBe(1));
-      await engine.rateShot('shot-1', 5);
+      await engine.rateShot('shot-1', 'better');
       await vi.waitFor(() => expect(machine.failShotUpdates).toBe(0));
       expect(machine.annotations.get('shot-1')).toBeUndefined();
 
@@ -1982,11 +2078,172 @@ describe('coach engine', () => {
       await vi.waitFor(() =>
         expect(machine.annotations.get('shot-1')).toMatchObject({
           espressoNotes: 'Taste: Sour. Kiambu AA v1 (CafAI)',
-          enjoyment: 10,
-          extras: { cafai: { selected: ['Sour'], stars: 5 } },
+          enjoyment: 5,
+          extras: { cafai: { selected: ['Sour'], verdict: 'better' } },
         }),
       );
       expect(callsOf('updateShot')).toHaveLength(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // D126: the shot compared with the one before it, in words
+  // -------------------------------------------------------------------------
+
+  describe('the verdict on a shot (D126)', () => {
+    it('rates a shot against what its card names: the words stay on the card, enjoyment starts at the middle, and a re-tap changes it', async () => {
+      await throughShot();
+      const turns = requests.length;
+      // The very first shot: there is only the coffee the barista usually enjoys to compare it with.
+      expect(cardOf('shot-1')).toMatchObject({ baseline: { kind: 'usual' } });
+      await engine.rateShot('shot-1', 'better');
+      expect(cardOf('shot-1')).toMatchObject({ baseline: { kind: 'usual' }, rating: { verdict: 'better', score: 5 } });
+      await vi.waitFor(() =>
+        expect(machine.annotations.get('shot-1')).toMatchObject({
+          enjoyment: 5,
+          extras: { cafai: { verdict: 'better', comparedWith: { kind: 'usual' } } },
+        }),
+      );
+
+      await engine.rateShot('shot-1', 'muchWorse');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 5, extras: { cafai: { verdict: 'muchWorse' } } }));
+      // A rating asks nothing of the coach: it hears the verdict with the next turn.
+      expect(requests).toHaveLength(turns);
+
+      engine.dispose();
+      engine = build();
+      await engine.start();
+      expect(cardOf('shot-1')).toMatchObject({ baseline: { kind: 'usual' }, rating: { verdict: 'muchWorse', score: 5 } });
+    });
+
+    it('keeps a running score in the bag: the shot compared with plus a step per word, a changed answer moving only its own', async () => {
+      await throughShot();
+      await engine.rateShot('shot-1', 'better');
+      await pullAnother('shot-2');
+      expect(cardOf('shot-2')!.baseline).toEqual({ kind: 'previous', shotId: 'shot-1' });
+      await engine.rateShot('shot-2', 'muchBetter');
+      await vi.waitFor(() =>
+        expect(machine.annotations.get('shot-2')).toMatchObject({
+          enjoyment: 7,
+          extras: { cafai: { verdict: 'muchBetter', comparedWith: { kind: 'previous', shotId: 'shot-1' } } },
+        }),
+      );
+      await engine.rateShot('shot-2', 'worse');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-2')).toMatchObject({ enjoyment: 4 }));
+
+      // A shot nobody rated carries the score before it.
+      await pullAnother('shot-3');
+      await pullAnother('shot-4');
+      await engine.rateShot('shot-4', 'muchBetter');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-4')).toMatchObject({ enjoyment: 6 }));
+      expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 5 });
+      expect(machine.annotations.has('shot-3')).toBe(false);
+    });
+
+    it("compares a bag's first shot with the last shot of another coffee, and starts its score at the middle", async () => {
+      await throughShot();
+      await engine.rateShot('shot-1', 'muchBetter');
+      nowMs += 60_000;
+      await anotherBag('Red Brick', 'londonium');
+      await pullAnother('shot-2');
+      expect(cardOf('shot-2')!.baseline).toEqual({ kind: 'otherCoffee', shotId: 'shot-1', coffee: 'Kiambu AA' });
+      nowMs += 60_000;
+      await pullAnother('shot-3');
+      expect(cardOf('shot-3')!.baseline).toEqual({ kind: 'previous', shotId: 'shot-2' });
+
+      await engine.rateShot('shot-2', 'muchWorse');
+      await vi.waitFor(() =>
+        expect(machine.annotations.get('shot-2')).toMatchObject({
+          enjoyment: 5,
+          extras: { cafai: { verdict: 'muchWorse', comparedWith: { kind: 'otherCoffee', shotId: 'shot-1', coffee: 'Kiambu AA' } } },
+        }),
+      );
+      await engine.rateShot('shot-3', 'better');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-3')).toMatchObject({ enjoyment: 6 }));
+    });
+
+    it('leaves stars given before shots were compared as they were, and counts them as twice their number for the next shot', async () => {
+      await throughShot();
+      await asStoredBefore(before(4));
+      expect(cardOf('shot-1')).toMatchObject({ stars: 4 });
+      expect(cardOf('shot-1')).not.toHaveProperty('baseline');
+      await engine.rateShot('shot-1', 'better');
+      await drain();
+      expect(cardOf('shot-1')).not.toHaveProperty('rating');
+      expect(callsOf('updateShot')).toEqual([]);
+
+      await pullAnother('shot-2');
+      await engine.rateShot('shot-2', 'better');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-2')).toMatchObject({ enjoyment: 9 }));
+      expect(machine.annotations.has('shot-1')).toBe(false);
+    });
+
+    it('gives the cards of a chat from before shots were compared what they compare with when it opens', async () => {
+      await throughShot();
+      await pullAnother('shot-2');
+      await asStoredBefore(before());
+      expect(cardOf('shot-1')!.baseline).toEqual({ kind: 'usual' });
+      expect(cardOf('shot-2')!.baseline).toEqual({ kind: 'previous', shotId: 'shot-1' });
+    });
+
+    it('tells the coach the verdict with its next turn, once, and again when it changes', async () => {
+      await throughShot();
+      await engine.rateShot('shot-1', 'better');
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      const answer = lastUserTurn(requests);
+      expect(answer).toHaveLength(2);
+      expect(answer[0]).toMatchObject({ type: 'tool_result', tool_use_id: 't-ask' });
+      expect(answer[1]).toEqual(text('[event:shot_rated]\n{"shotId":"shot-1","verdict":"better","comparedWith":{"kind":"usual"}}'));
+
+      scripts.push(() => [text('Sure.')]);
+      await engine.sendText('Anything else?');
+      expect(lastUserTurn(requests)).toEqual([text('Anything else?')]);
+
+      await engine.rateShot('shot-1', 'muchWorse');
+      scripts.push(() => [text('Noted.')]);
+      await engine.sendText('Hmm.');
+      expect(lastUserTurn(requests)).toEqual([
+        text('[event:shot_rated]\n{"shotId":"shot-1","verdict":"much worse","comparedWith":{"kind":"usual"}}'),
+        text('Hmm.'),
+      ]);
+    });
+
+    it('still tells a verdict given just before a reload', async () => {
+      await throughShot();
+      await engine.rateShot('shot-1', 'worse');
+      engine.dispose();
+      engine = build();
+      await engine.start();
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      expect(lastUserTurn(requests).filter((block) => block.type === 'text')).toEqual([
+        text('[event:shot_rated]\n{"shotId":"shot-1","verdict":"worse","comparedWith":{"kind":"usual"}}'),
+      ]);
+    });
+
+    it("tells a verdict given before the next shot ahead of that shot's event", async () => {
+      await throughShot();
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      await engine.rateShot('shot-1', 'same');
+      await pullAnother('shot-2');
+      expect(lastUserTurn(requests)[0]).toEqual(
+        text('[event:shot_rated]\n{"shotId":"shot-1","verdict":"about the same","comparedWith":{"kind":"usual"}}'),
+      );
+      expect(lastUserTurn(requests).map((block) => (block.type === 'text' ? block.text.split('\n')[0] : block.type))).toEqual([
+        '[event:shot_rated]',
+        '[event:shot_completed]',
+      ]);
+    });
+
+    it('ignores a verdict that is not one of the five words, or a shot not in the chat', async () => {
+      await throughShot();
+      await engine.rateShot('shot-1', 'great' as ShotVerdict);
+      await engine.rateShot('shot-elsewhere', 'better');
+      await drain();
+      expect(callsOf('updateShot')).toEqual([]);
+      expect(cardOf('shot-1')).not.toHaveProperty('rating');
     });
   });
 
@@ -2256,7 +2513,7 @@ describe('coach engine', () => {
         grind,
         summary: 'Grind 1 step finer',
         rationale: 'It ran fast.',
-        expectedEffect: 'A slower, sweeter shot.',
+        expectedEffect: 'A slower shot that extracts a little more.',
         tips: [],
       });
 
@@ -2496,6 +2753,132 @@ describe('coach engine', () => {
       expect(callsOf('getGrinder')).toHaveLength(2);
       await throughTemplateCards();
       expect(intakeGrinder()).toMatchObject({ step: 1 });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // D125: the coach offers to add the barista's grinder to Decaid's library
+  // -------------------------------------------------------------------------
+
+  describe("the coach's grinder card (D125)", () => {
+    const offer = (fields: Partial<OfferGrinder> = {}) =>
+      toolUse('t-grinder', TOOL.offerGrinder, {
+        model: 'Mazzer Philos',
+        burrs: '64 mm flat',
+        settingType: 'numeric',
+        smallStep: 0.5,
+        bigStep: null,
+        values: null,
+        ...fields,
+      });
+    const card = () => allParts().find((p): p is Extract<CoachUiPart, { kind: 'grinderOffer' }> => p.kind === 'grinderOffer');
+
+    /** A grinder typed in Settings, a template picked, then the barista names the grinder and the coach offers it. */
+    async function throughOffer(fields: Partial<OfferGrinder> = {}) {
+      await storage.settings.update({ grinderName: 'Mazzer Philos', grinderSetting: '12' });
+      await engine.refresh();
+      await throughTemplatePick();
+      scripts.push(() => [text("Decaid's grinder library does not have it yet."), offer(fields)]);
+      await engine.sendText('My grinder is a Mazzer Philos with 64 mm flat burrs, in steps of 0.5.');
+    }
+
+    it('shows the card, and adds nothing before a tap', async () => {
+      await throughOffer();
+      expect(card()).toMatchObject({
+        requestId: 't-grinder',
+        status: 'pending',
+        error: null,
+        grinder: { model: 'Mazzer Philos', burrs: '64 mm flat', settingType: 'numeric', smallStep: 0.5 },
+      });
+      expect(callsOf('addGrinder')).toEqual([]);
+      expect((await storage.settings.get()).grinderId ?? null).toBeNull();
+      expect(engine.getState().phase).toBe('awaiting_shot');
+    });
+
+    it("Add puts it in Decaid's library, links it as Settings does, writes it to the workflow and gives the coach its dial", async () => {
+      await throughOffer();
+      scripts.push(() => [text('Added. Pull a shot.')]);
+      await engine.addGrinder('t-grinder');
+      expect(callsOf('addGrinder').map((c) => c.args[0])).toEqual([
+        { model: 'Mazzer Philos', burrs: '64 mm flat', settingType: 'numeric', settingSmallStep: 0.5 },
+      ]);
+      expect(await storage.settings.get()).toMatchObject({ grinderId: 'g-added-1', grinderName: 'Mazzer Philos', grinderSetting: '12' });
+      expect(callsOf('updateWorkflow').at(-1)!.args[0]).toEqual({
+        context: { grinderId: 'g-added-1', grinderModel: 'Mazzer Philos', grinderSetting: '12', grinderBurrs: null },
+      });
+      expect(card()).toMatchObject({ status: 'added', error: null, linkedName: 'Mazzer Philos (64 mm flat)' });
+      expect(parsed(lastUserTurn(requests)[0])).toEqual({
+        added: true,
+        alreadyInDecaid: false,
+        grinder: { name: 'Mazzer Philos', setting: '12', settingType: 'numeric', step: 0.5, values: null, linked: true },
+      });
+      expect(engine.getState()).toMatchObject({ busy: false, phase: 'awaiting_shot' });
+    });
+
+    it('links the grinder Decaid already has instead of adding it twice, and says so', async () => {
+      machine.library.push({ id: 'g-niche', model: 'Niche Zero', burrs: '63 mm conical' });
+      machine.grinders.set('g-niche', NICHE);
+      await throughOffer({ model: 'niche zero', burrs: null, settingType: null, smallStep: null });
+      scripts.push(() => [text('Linked.')]);
+      await engine.addGrinder('t-grinder');
+      expect(machine.library).toHaveLength(1);
+      expect(card()).toMatchObject({ status: 'existing', linkedName: 'Niche Zero (63 mm conical)' });
+      expect(await storage.settings.get()).toMatchObject({ grinderId: 'g-niche', grinderName: 'Niche Zero' });
+      expect(parsed(lastUserTurn(requests)[0])).toMatchObject({ added: true, alreadyInDecaid: true, grinder: { name: 'Niche Zero', step: 0.5, linked: true } });
+    });
+
+    it('a failed Add says why and keeps the card open while the coach waits; a second tap adds it', async () => {
+      await throughOffer();
+      const asked = requests.length;
+      machine.failGrinderAdds = 1;
+      await engine.addGrinder('t-grinder');
+      expect(card()).toMatchObject({ status: 'pending', error: 'Decaid is not reachable.' });
+      expect(requests).toHaveLength(asked);
+      expect((await storage.settings.get()).grinderId ?? null).toBeNull();
+      expect(engine.getState().busy).toBe(false);
+
+      scripts.push(() => [text('Added.')]);
+      await engine.addGrinder('t-grinder');
+      expect(card()).toMatchObject({ status: 'added', error: null });
+      expect(callsOf('addGrinder')).toHaveLength(2);
+    });
+
+    it('on a Decaid without the grinder library, the card says so instead of "Route not found"', async () => {
+      await throughOffer();
+      machine.noGrinderLibrary = true;
+      await engine.addGrinder('t-grinder');
+      expect(card()).toMatchObject({ status: 'pending', error: 'This Decaid has no grinder library to add to. Update Decaid, then try again.' });
+    });
+
+    it('Not now adds nothing and tells the coach; the card then answers nothing', async () => {
+      await throughOffer();
+      scripts.push(() => [text('No problem.')]);
+      await engine.declineGrinder('t-grinder');
+      expect(card()).toMatchObject({ status: 'declined' });
+      expect(parsed(lastUserTurn(requests)[0])).toEqual({ added: false, reason: 'The user chose not to add it.' });
+      await engine.addGrinder('t-grinder');
+      expect(callsOf('addGrinder')).toEqual([]);
+    });
+
+    it('typing instead sets the card aside, and nothing is added', async () => {
+      await throughOffer();
+      scripts.push(() => [text('Sure.')]);
+      await engine.sendText('Actually, never mind.');
+      expect(card()).toMatchObject({ status: 'expired', setAsideReason: 'typed' });
+      expect(parsed(lastUserTurn(requests)[0])).toEqual({ answered: false, note: 'The user typed a message instead.' });
+      await engine.addGrinder('t-grinder');
+      expect(callsOf('addGrinder')).toEqual([]);
+    });
+
+    it('still answers after a reload', async () => {
+      await throughOffer();
+      engine.dispose();
+      engine = build();
+      await engine.start();
+      expect(card()).toMatchObject({ status: 'pending' });
+      scripts.push(() => [text('Added.')]);
+      await engine.addGrinder('t-grinder');
+      expect(card()).toMatchObject({ status: 'added' });
     });
   });
 
@@ -2790,7 +3173,7 @@ describe('coach engine', () => {
       grind: { direction: 'finer', amount: 1, setting: '13' },
       summary: 'Grind 1 step finer, to 13',
       rationale: 'It ran fast.',
-      expectedEffect: 'A slower, sweeter shot.',
+      expectedEffect: 'A slower shot that extracts a little more.',
       tips: [],
     });
 
@@ -3161,11 +3544,13 @@ describe('coach engine', () => {
         expect(notices().some((p) => p.text === ADDED)).toBe(false);
       });
 
-      it('reuses a batch without a roast date for a bag without one', async () => {
+      it('adds a batch for a bag without a roast date: an undated batch may be an earlier bag of the same coffee', async () => {
         machine.batches.push(batchOf('batch-28', '2026-09-28'), batchOf('batch-undated', null));
         await throughIntake();
-        await vi.waitFor(() => expect(bag()?.decaidBatchId).toBe('batch-undated'));
-        expect(callsOf('createBatch')).toEqual([]);
+        await vi.waitFor(() => expect(bag()?.decaidBatchId).toBe('batch-3'));
+        expect(callsOf('createBatch').map((c) => c.args)).toEqual([['bean-9', { roastLevel: 'light' }]]);
+        expect(notices().filter((p) => p.text === ADDED)).toHaveLength(1);
+        expect(notices().some((p) => p.text === "Already in Decaid's beans.")).toBe(false);
       });
 
       it('adds a batch when none has the same roast date', async () => {
@@ -3175,6 +3560,25 @@ describe('coach engine', () => {
         expect(callsOf('createBatch').map((c) => c.args)).toEqual([['bean-9', { roastDate: '2026-10-02', roastLevel: 'light' }]]);
         expect(notices().filter((p) => p.text === ADDED)).toHaveLength(1);
       });
+    });
+
+    it('gives a second bag of the same coffee a batch of its own when neither has a roast date', async () => {
+      await throughIntake();
+      await vi.waitFor(() => expect(bag()?.decaidBatchId).toBe('batch-1'));
+      const first = bag()!.id;
+      // The coffee bought again, described the same way.
+      await engine.newBag();
+      scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);
+      await engine.sendText('Kiambu AA again, light, washed');
+      expect(bag()!.id).not.toBe(first);
+      await vi.waitFor(() => expect(bag()?.decaidBatchId).toBe('batch-2'));
+      expect(bag()).toMatchObject({ decaidBeanId: 'bean-1' });
+      expect(callsOf('createBean')).toHaveLength(1);
+      expect(notices().map((p) => p.text)).toContain(ADDED);
+      expect(notices().some((p) => p.text === "Already in Decaid's beans.")).toBe(false);
+      scripts.push(() => [text('Loaded.')]);
+      await engine.pickTemplate('t-tpl', 'd-flow');
+      expect(callsOf('activateProfile').at(-1)!.args[1]).toMatchObject({ beanBatchId: 'batch-2' });
     });
 
     it('adds nothing for a bag without a name of its own: the placeholder "New bag" names no coffee', async () => {
@@ -3667,6 +4071,66 @@ describe('coach engine', () => {
       expect(payload.roast).toBe(roastToday('2026-09-24'));
       expect(payload.roast).toMatch(/^Roasted 2026-09-24 \(1[01] days ago\)$/);
     });
+
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    /** The day `ms` falls on, on this device's calendar. */
+    const dayOn = (ms: number) => {
+      const local = new Date(ms);
+      return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(local.getDate()).padStart(2, '0')}`;
+    };
+    /** The shot event's JSON in the latest user turn. */
+    const shotEvent = () => {
+      const event = lastUserTurn(requests).find((b) => b.type === 'text' && b.text.startsWith('[event:shot_completed]')) as { text: string };
+      return JSON.parse(event.text.split('\n')[1]!) as { roast: string | null; today: string };
+    };
+    async function pickedChelcheleThenShot(beforeShot: () => void) {
+      await openBag();
+      scripts.push(() => [text('Lovely.'), proposeTemplates]);
+      await engine.pickBean('batch-chel');
+      scripts.push(() => [text('Loaded.')]);
+      await engine.pickTemplate('t-tpl', 'd-flow');
+      beforeShot();
+      scripts.push(() => [text('Got it.'), askTaste]);
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' });
+      await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+    }
+
+    it('reads the batch again for the roast: a thaw recorded in Decaid after the pick counts', async () => {
+      stockLibrary();
+      const chel = machine.batches.find((batch) => batch.id === 'batch-chel')!;
+      delete chel.unfreezeDate;
+      await pickedChelcheleThenShot(() => {
+        // Picked while still frozen, thawed in Decaid that day; the shot comes ten days later.
+        chel.unfreezeDate = '2026-10-03T00:00:00.000';
+        nowMs += 10 * DAY_MS;
+      });
+      const { roast } = shotEvent();
+      expect(roast).toBe(roastToday('2026-09-03', { freezeDate: '2026-09-04', unfreezeDate: '2026-10-03' }));
+      expect(roast).not.toBe(roastToday('2026-09-03', { freezeDate: '2026-09-04', unfreezeDate: null }));
+      expect(callsOf('listAllBatches').at(-1)!.args).toEqual([{ includeArchived: true }]);
+    });
+
+    it('takes the freezer dates the card had while Decaid cannot be read', async () => {
+      stockLibrary();
+      await pickedChelcheleThenShot(() => {
+        machine.batches.find((batch) => batch.id === 'batch-chel')!.unfreezeDate = '2026-10-01T00:00:00.000';
+        machine.failBeanCalls = 1;
+      });
+      expect(machine.failBeanCalls).toBe(0);
+      expect(shotEvent().roast).toBe(roastToday('2026-09-03', { freezeDate: '2026-09-04', unfreezeDate: '2026-09-16' }));
+    });
+
+    it('tells the coach the day of each shot too, for a roast date said in words after intake', async () => {
+      await throughTemplatePick();
+      const intakeDay = dayOn(nowMs);
+      expect(intakeContext().today).toBe(intakeDay);
+      nowMs += 5 * DAY_MS;
+      scripts.push(() => [text('Got it.'), askTaste]);
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' });
+      await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+      expect(shotEvent().today).toBe(dayOn(nowMs));
+      expect(shotEvent().today).not.toBe(intakeDay);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -3864,37 +4328,50 @@ describe('coach engine', () => {
   });
 
   // -------------------------------------------------------------------------
-  // D101: the stars on Decaid's own rating scale
+  // D101: the rating on Decaid's own rating scale
   // -------------------------------------------------------------------------
 
   describe("Decaid's rating scale (D101)", () => {
-    it('writes stars x 20 on a Decaid that rates out of 100', async () => {
+    it('writes ten times the running score on a Decaid that rates out of 100', async () => {
       machine.enjoymentScale = 100;
       await throughShot();
-      await engine.rateShot('shot-1', 4);
-      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 80, extras: { cafai: { stars: 4 } } }));
+      await engine.rateShot('shot-1', 'worse');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 50, extras: { cafai: { verdict: 'worse' } } }));
+      await pullAnother('shot-2');
+      await engine.rateShot('shot-2', 'muchBetter');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-2')).toMatchObject({ enjoyment: 70 }));
     });
 
-    it('asks Decaid its scale once per session, and only when the first stars go out', async () => {
+    it('converts old stars by the scale when the next shot is compared with them', async () => {
+      machine.enjoymentScale = 100;
+      await throughShot();
+      await asStoredBefore(before(3));
+      await pullAnother('shot-2');
+      await engine.rateShot('shot-2', 'worse');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-2')).toMatchObject({ enjoyment: 50 }));
+    });
+
+    it('asks Decaid its scale once per session, and only when the first rating goes out', async () => {
       await throughShot();
       scripts.push(() => [text('Thanks.')]);
       await engine.answerOptions('t-ask', ['Sour'], null);
       await vi.waitFor(() => expect(callsOf('updateShot')).toHaveLength(1));
       expect(callsOf('probeEnjoymentScale')).toEqual([]);
 
-      await engine.rateShot('shot-1', 4);
-      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 8 }));
-      await engine.rateShot('shot-1', 3);
-      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 6 }));
+      await engine.rateShot('shot-1', 'better');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 5 }));
+      await pullAnother('shot-2');
+      await engine.rateShot('shot-2', 'worse');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-2')).toMatchObject({ enjoyment: 4 }));
       expect(callsOf('probeEnjoymentScale')).toHaveLength(1);
     });
 
-    it('holds the stars while Decaid cannot say its scale, sends the taste meanwhile, and asks again at the next try', async () => {
+    it('holds the rating while Decaid cannot say its scale, sends the taste meanwhile, and asks again at the next try', async () => {
       machine.enjoymentScale = null;
       await throughShot();
       scripts.push(() => [text('Thanks.')]);
       await engine.answerOptions('t-ask', ['Sour'], null);
-      await engine.rateShot('shot-1', 5);
+      await engine.rateShot('shot-1', 'muchBetter');
       await vi.waitFor(() => expect(callsOf('probeEnjoymentScale')).toHaveLength(1));
       await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
       expect(machine.annotations.get('shot-1')).toMatchObject({ espressoNotes: 'Taste: Sour. Kiambu AA v1 (CafAI)' });
@@ -3905,8 +4382,8 @@ describe('coach engine', () => {
       await vi.waitFor(() =>
         expect(machine.annotations.get('shot-1')).toMatchObject({
           espressoNotes: 'Taste: Sour. Kiambu AA v1 (CafAI)',
-          enjoyment: 10,
-          extras: { cafai: { selected: ['Sour'], stars: 5 } },
+          enjoyment: 5,
+          extras: { cafai: { selected: ['Sour'], verdict: 'muchBetter' } },
         }),
       );
       expect(callsOf('probeEnjoymentScale')).toHaveLength(2);
@@ -3916,7 +4393,7 @@ describe('coach engine', () => {
     it('after an answer that tells neither scale, asks again once per shot, not at every try', async () => {
       machine.enjoymentScale = 'unreadable';
       await throughShot();
-      await engine.rateShot('shot-1', 4);
+      await engine.rateShot('shot-1', 'better');
       await vi.waitFor(() => expect(callsOf('probeEnjoymentScale')).toHaveLength(1));
       await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
       timers.fire();
@@ -3930,7 +4407,7 @@ describe('coach engine', () => {
       machine.enjoymentScale = 10;
       scripts.push(() => [text('Again?'), askTaste]);
       telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: 'targetWeight' });
-      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 8, extras: { cafai: { stars: 4 } } }));
+      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 5, extras: { cafai: { verdict: 'better' } } }));
       expect(callsOf('probeEnjoymentScale')).toHaveLength(2);
       await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
     });
@@ -3954,15 +4431,15 @@ describe('coach engine', () => {
       vi.spyOn(console, 'warn').mockImplementation(() => {});
     });
 
-    it('drops stars Decaid refuses, reports it, says once why, and never sends them again', async () => {
+    it('drops a rating Decaid refuses, reports it, says once why, and never sends it again', async () => {
       await throughShot();
       machine.shotRefusal = refusal(400);
-      await engine.rateShot('shot-1', 4);
+      await engine.rateShot('shot-1', 'better');
       await vi.waitFor(() => expect(refusals()).toHaveLength(1));
       expect(refusals()[0]).toEqual({
         kind: 'notice',
         tone: 'warning',
-        text: 'Decaid would not save the stars for this shot: enjoyment must be between 0 and 10.',
+        text: 'Decaid would not save the rating for this shot: enjoyment must be between 0 and 10.',
       });
       expect(drift()).toContainEqual(['PUT /api/v1/shots/{id}', 'annotations: refused (HTTP 400)']);
       expect(timers.delays()).toEqual([]);
@@ -3972,6 +4449,34 @@ describe('coach engine', () => {
       expect(callsOf('updateShot (refused)')).toHaveLength(1);
       expect(callsOf('updateShot')).toEqual([]);
       expect(refusals()).toHaveLength(1);
+    });
+
+    it("says so in the shot's own bag when another bag is open by then, never in the bag on screen", async () => {
+      const said = 'Decaid would not save the rating for this shot: enjoyment must be between 0 and 10.';
+      const storedNotices = async (bag: Bag) =>
+        ((await storage.conversations.get(bag.conversationId))?.uiMessages ?? [])
+          .flatMap((m) => m.parts)
+          .flatMap((part) => (part.kind === 'notice' ? [part.text] : []));
+      await throughShot();
+      const rated = engine.getState().activeBag!;
+      // Rated while Decaid is away: the rating waits in the outbox.
+      machine.failShotUpdates = 1;
+      await engine.rateShot('shot-1', 'better');
+      await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
+      await engine.newBag();
+      const open = engine.getState().activeBag!;
+      expect(open.id).not.toBe(rated.id);
+
+      // Decaid is back and refuses the rating.
+      machine.shotRefusal = refusal(400);
+      decaidBack();
+      await vi.waitFor(async () => expect(await storedNotices(rated)).toContain(said));
+      await drain();
+      expect(refusals()).toEqual([]);
+      expect(await storedNotices(open)).not.toContain(said);
+
+      await engine.selectBag(rated.id);
+      expect(refusals().map((p) => p.text)).toEqual([said]);
     });
 
     it('names the taste when Decaid refuses the notes', async () => {
@@ -4013,14 +4518,14 @@ describe('coach engine', () => {
     it('keeps a write Decaid answered 409 or 503, says nothing, and sends it once Decaid takes it', async () => {
       await throughShot();
       machine.shotRefusal = refusal(409);
-      await engine.rateShot('shot-1', 4);
+      await engine.rateShot('shot-1', 'better');
       await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
       machine.shotRefusal = refusal(503);
       timers.fire();
       await vi.waitFor(() => expect(callsOf('updateShot (refused)')).toHaveLength(2));
       await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
       timers.fire();
-      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 8 }));
+      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ enjoyment: 5 }));
       expect(refusals()).toEqual([]);
     });
 

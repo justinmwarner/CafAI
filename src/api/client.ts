@@ -11,7 +11,7 @@
  * Decaid changed is reported and never trusted blindly (D95).
  */
 import { reportDrift } from './drift.ts';
-import { DEFAULT_TIMEOUT_MS, request, requestJson, requestValue, type Transport } from './http.ts';
+import { DEFAULT_TIMEOUT_MS, request, requestJson, requestList, requestValue, type Transport } from './http.ts';
 import { toWebSocketOrigin } from './host.ts';
 import { createKvClient } from './kv.ts';
 import {
@@ -20,6 +20,7 @@ import {
   readBean,
   readBeans,
   readBuildInfo,
+  readDevices,
   readMachineInfo,
   readMachineState,
   readPlugins,
@@ -37,6 +38,7 @@ import {
   GatewayError,
   type CommandableState,
   type DecaidClient,
+  type DecaidSettings,
   type DeviceEntry,
   type HeartbeatResponse,
   type ProfileCreateRequest,
@@ -55,8 +57,12 @@ const WORKFLOW_TIMEOUT_MS = 35_000;
 /** A quick scan answers [] at once and scans behind its answer; a full one answers when Decaid's 15 s Bluetooth scan is over. */
 const QUICK_SCAN_TIMEOUT_MS = 6_000;
 const FULL_SCAN_TIMEOUT_MS = 25_000;
-/** Decaid gives a connect 30 s (60 s on Linux) before it answers 504 (connection_manager.dart at aab5f93). */
-const CONNECT_TIMEOUT_MS = 35_000;
+/**
+ * Decaid gives a connect 30 s, 60 s on Linux, before it answers 504
+ * (connection_manager.dart:587-591 at aab5f93): CafAI waits longer than
+ * the longest of those, so Decaid's own answer always arrives first.
+ */
+const CONNECT_TIMEOUT_MS = 70_000;
 
 export interface DecaidClientOptions {
   /** e.g. "http://localhost:8080" (see defaultGatewayOrigin in host.ts). */
@@ -84,9 +90,40 @@ const PROBE_SOURCE = 'PUT /api/v1/shots/{id}';
 /** Answers to the probe that say Decaid is busy, not which scale it uses: ask again later. */
 const PROBE_LATER = new Set([408, 425, 429, 503]);
 
-/** The entries of a device list as Decaid sent it, leaving out anything that is not one. */
-const deviceList = (value: unknown): DeviceEntry[] =>
-  Array.isArray(value) ? value.filter((entry): entry is DeviceEntry => typeof entry === 'object' && entry !== null) : [];
+/** Connect left the choice to Decaid: the sentence goes after "Couldn't connect the scale." (deviceConnect.ts). */
+const leaveChoice = (why: string) => new GatewayError(0, '/api/v1/devices/connect', why, 'device_choice');
+
+/**
+ * The one device Connect may connect, chosen as Decaid's own connection
+ * policy chooses (resolveMachinePolicy, resolveScalePolicy,
+ * policy_resolver.dart at aab5f93): the preferred device when it is there,
+ * or the only one there when none is preferred. Connecting a device makes it
+ * Decaid's preferred one, so CafAI never picks one Decaid would not: when
+ * the preferred device is away but another is there, when several are there
+ * and none is preferred, or when Decaid's settings did not say, it connects
+ * nothing and says why (D98: CafAI never changes Decaid's settings by
+ * itself). `preferredOnly` (the scale's revive, which no one tapped)
+ * connects the preferred device or nothing. Null: nothing there to connect,
+ * which the device list after explains.
+ */
+function chooseDevice(
+  kind: 'machine' | 'scale',
+  there: readonly DeviceEntry[],
+  settings: DecaidSettings | null,
+  preferredOnly: boolean,
+): DeviceEntry | null {
+  const preferred = settings?.[kind === 'machine' ? 'preferredMachineId' : 'preferredScaleId'];
+  if (typeof preferred === 'string' && preferred !== '') {
+    const match = there.find((device) => device.id === preferred);
+    if (match) return match;
+    if (there.length === 0 || preferredOnly) return null;
+    throw leaveChoice(`The ${kind} Decaid uses is not in range. Switch it on, or choose another on Decaid's scan screen.`);
+  }
+  if (there.length === 0 || preferredOnly) return null;
+  if (preferred === undefined) throw leaveChoice(`Decaid did not say which ${kind} it uses. Choose yours on Decaid's scan screen.`);
+  if (there.length > 1) throw leaveChoice(`Decaid sees more than one ${kind}. Choose yours on Decaid's scan screen.`);
+  return there[0] ?? null;
+}
 
 export function createDecaidClient(options: DecaidClientOptions): GatewayClient {
   const origin = options.origin.trim().replace(/\/+$/, '');
@@ -105,9 +142,7 @@ export function createDecaidClient(options: DecaidClientOptions): GatewayClient 
       await requestJson(transport, '/api/v1/settings', { method: 'POST', body: patch });
       return client.getSettings();
     },
-    async listPlugins() {
-      return (await requestJson(transport, '/api/v1/plugins', { read: readPlugins })) ?? [];
-    },
+    listPlugins: () => requestList(transport, '/api/v1/plugins', { read: readPlugins }),
     /** A plugin's own reply: the caller knows its shape and reads it. */
     getPluginEndpoint: <T>(pluginId: string, endpoint: string) =>
       requestJson<T>(transport, `/api/v1/plugins/${id(pluginId)}/${id(endpoint)}`),
@@ -135,9 +170,7 @@ export function createDecaidClient(options: DecaidClientOptions): GatewayClient 
       return { timeout: typeof body?.timeout === 'number' ? body.timeout : -1 };
     },
 
-    async getDevices() {
-      return (await requestJson<DeviceEntry[]>(transport, '/api/v1/devices')) ?? [];
-    },
+    getDevices: () => requestList(transport, '/api/v1/devices', { read: readDevices }),
     async tareScale() {
       await requestJson(transport, '/api/v1/scale/tare', { method: 'PUT' });
     },
@@ -146,12 +179,12 @@ export function createDecaidClient(options: DecaidClientOptions): GatewayClient 
     updateWorkflow: (patch: WorkflowPatch) =>
       requestValue(transport, '/api/v1/workflow', { method: 'PUT', body: patch, timeoutMs: slow(WORKFLOW_TIMEOUT_MS), read: readWorkflow }),
 
-    async listProfiles(listOptions = {}) {
+    listProfiles(listOptions = {}) {
       const path = `/api/v1/profiles${query({
         includeHidden: listOptions.includeHidden ? 'true' : undefined,
         parentId: listOptions.parentId,
       })}`;
-      return (await requestJson(transport, path, { read: readProfileRecords })) ?? [];
+      return requestList(transport, path, { read: readProfileRecords });
     },
     getProfile: (profileId: string) =>
       requestValue(transport, `/api/v1/profiles/${id(profileId)}`, { read: readProfileRecord, source: 'GET /api/v1/profiles/{id}' }),
@@ -210,16 +243,12 @@ export function createDecaidClient(options: DecaidClientOptions): GatewayClient 
       reportDrift(PROBE_SOURCE, `enjoyment probe: unexpected ${status}`);
       throw unexpectedReply(PROBE_SOURCE, path);
     },
-    async listBeans() {
-      return (await requestJson(transport, '/api/v1/beans', { read: readBeans })) ?? [];
-    },
-    async listBatches(beanId) {
-      const source = 'GET /api/v1/beans/{id}/batches';
-      return (await requestJson(transport, `/api/v1/beans/${id(beanId)}/batches`, { read: readBatches, source })) ?? [];
-    },
-    async listAllBatches(options = {}) {
+    listBeans: () => requestList(transport, '/api/v1/beans', { read: readBeans }),
+    listBatches: (beanId) =>
+      requestList(transport, `/api/v1/beans/${id(beanId)}/batches`, { read: readBatches, source: 'GET /api/v1/beans/{id}/batches' }),
+    listAllBatches(options = {}) {
       const path = options.includeArchived ? '/api/v1/bean-batches?includeArchived=true' : '/api/v1/bean-batches';
-      return (await requestJson(transport, path, { read: readBatches, source: 'GET /api/v1/bean-batches' })) ?? [];
+      return requestList(transport, path, { read: readBatches, source: 'GET /api/v1/bean-batches' });
     },
     createBean: (request) => requestValue(transport, '/api/v1/beans', { method: 'POST', body: request, read: readBean }),
     createBatch: (beanId, request) =>
@@ -241,7 +270,11 @@ export function createDecaidClient(options: DecaidClientOptions): GatewayClient 
     async scanDevices(scanOptions = {}) {
       const quick = scanOptions.quick === true;
       const path = `/api/v1/devices/scan${query({ connect: 'false', quick: quick ? 'true' : undefined })}`;
-      return (await requestJson<DeviceEntry[]>(transport, path, { timeoutMs: slow(quick ? QUICK_SCAN_TIMEOUT_MS : FULL_SCAN_TIMEOUT_MS) })) ?? [];
+      return requestList(transport, path, {
+        read: readDevices,
+        source: 'GET /api/v1/devices/scan',
+        timeoutMs: slow(quick ? QUICK_SCAN_TIMEOUT_MS : FULL_SCAN_TIMEOUT_MS),
+      });
     },
     connectDevice(deviceId, connectionRole) {
       const body: Record<string, unknown> = { deviceId };
@@ -250,21 +283,21 @@ export function createDecaidClient(options: DecaidClientOptions): GatewayClient 
     },
     /**
      * A full scan that connects nothing, then a connect by id for the one
-     * device: the one Decaid's settings prefer when the scan found it, else
-     * the first it found that is there to connect. Never a quick scan, whose
-     * answer is always empty. A device of the kind connected by the end of
-     * the scan (Decaid reconnects on its own too) is left as it is. A connect
-     * Decaid refuses is not thrown: the device list after says how it went.
+     * device Decaid itself would choose (chooseDevice). Never a quick scan,
+     * whose answer is always empty. A device of the kind connected by the
+     * end of the scan, or one Decaid is connecting (it reconnects on its own
+     * too), is left as it is; an auxiliary (dosing) scale is never the
+     * brewing scale. A connect Decaid refuses is not thrown: the device list
+     * after says how it went.
      */
-    async connectKind(kind) {
+    async connectKind(kind, connectOptions = {}) {
       const [scanned, settings] = await Promise.all([client.scanDevices().catch(() => null), client.getSettings().catch(() => null)]);
       // A scan that failed or ran out of time still left Decaid knowing what it saw.
-      const found = deviceList(Array.isArray(scanned) ? scanned : await client.getDevices());
-      const ofKind = found.filter((device) => device.type === kind);
-      if (!ofKind.some((device) => device.state === 'connected')) {
-        const ready = ofKind.filter((device) => device.available !== false && device.state !== 'connecting' && device.id);
-        const preferred = settings?.[kind === 'machine' ? 'preferredMachineId' : 'preferredScaleId'];
-        const target = ready.find((device) => device.id === preferred) ?? ready[0];
+      const found = scanned ?? (await client.getDevices());
+      const ofKind = found.filter((device) => device.type === kind && device.connectionRole !== 'auxiliary');
+      if (!ofKind.some((device) => device.state === 'connected' || device.state === 'connecting')) {
+        const there = ofKind.filter((device) => device.available !== false);
+        const target = chooseDevice(kind, there, settings, connectOptions.preferredOnly === true);
         if (target) await client.connectDevice(target.id).catch(() => undefined);
       }
       return client.getDevices();

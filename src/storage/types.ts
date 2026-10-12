@@ -125,8 +125,9 @@ export type AppearanceMode = 'dark' | 'light' | 'auto';
 /**
  * How CafAI looks: a mode and a tint. The tint is a named tint's id (the list
  * lives with the palette, src/ui/palette.ts) or a hue from the custom slider.
- * Storage keeps any well-formed id; the UI reads one it does not know as the
- * default tint, so a tint a newer CafAI added survives a read by an older one.
+ * Storage keeps any well-formed id, and reads a renamed tint's old id as its
+ * new one (D123); the UI reads one it does not know as the default tint, so a
+ * tint a newer CafAI added survives a read by an older one.
  */
 export interface Appearance {
   mode: AppearanceMode;
@@ -154,10 +155,12 @@ export interface Settings {
   appearance?: Appearance;
   /**
    * The choice to also keep the API key in Decaid (D99), off by default.
-   * Storage always reads and writes it (false when absent); it is optional
-   * only so that older Settings literals compile. src/storage/keyBackup.ts
-   * does the actual copying; this is only the choice, so that it is never
-   * confused with whether a copy happens to exist right now.
+   * Absent until someone chooses on this device, and read as off: storage
+   * never writes it as a default, so a merge (an import, a restore) can tell
+   * a choice made here, which it keeps, from none, which it may fill.
+   * src/storage/keyBackup.ts does the actual copying; this is only the
+   * choice, so that it is never confused with whether a copy happens to
+   * exist right now.
    */
   keepKeyInDecaid?: boolean;
 }
@@ -225,10 +228,14 @@ export interface KvMirror {
   pushNow(): Promise<void>;
   /** Read the mirrored copy, e.g. to restore after browser storage was lost. */
   pull(): Promise<CafaiExport | null>;
-  /** When the last push finished (ISO), or null. */
+  /** When the last push finished (ISO); until this page pushes, Decaid's own record of the last one, once read. Null when none is known. */
   readonly lastPushAt: string | null;
   /** The last push or gate failure as a sentence, or null after a success. */
   readonly lastError: string | null;
+  /** True once the page knows how the backup stands (a push ended, or Decaid's record of the last one was read). */
+  readonly backupKnown: boolean;
+  /** Calls `listener` whenever lastPushAt, lastError or backupKnown changes; returns the unsubscribe. */
+  subscribe(listener: () => void): () => void;
 }
 
 export interface Storage {
