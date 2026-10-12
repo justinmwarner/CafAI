@@ -39,9 +39,11 @@ import { AddGrinder, type AddedGrinder } from './AddGrinder.tsx';
 import { addedNote, dye2GrindersUrl } from './addGrinder.ts';
 import { AppearanceSection } from './AppearanceSection.tsx';
 import { CoachSourceSection } from './CoachSourceSection.tsx';
-import { useApiKeyView, useCoachRunsOnComputer } from './coachSourceView.ts';
+import { useApiKeyView, useCoachRunsOnComputer, useShowsApiKey } from './coachSourceView.ts';
+import { useDecaidVersion } from './decaidVersion.ts';
 import { DrinkSettingsSection } from './DrinkSettingsSection.tsx';
 import { GrinderFields } from './GrinderFields.tsx';
+import { LogSection } from './LogSection.tsx';
 import {
   canAddGrinder,
   grinderPatch,
@@ -89,8 +91,9 @@ const KEY_GONE_DELETE_LATER = "The key is gone from this device. Decaid can't be
 function ApiKeySection() {
   const { storage, coach } = useServices();
   const hasApiKeyInEngine = useCoach((s) => s.hasApiKey);
-  // On the computer the engine's "has a key" is the bridge's code: then the key store says (coachSourceView.ts).
-  const { onComputer, keySaved } = useApiKeyView(hasApiKeyInEngine);
+  // Shown only while the coach runs on Anthropic (D140); the key store still says while the engine catches up
+  // with a choice just switched back (on the computer its "has a key" is the bridge's code, coachSourceView.ts).
+  const { keySaved } = useApiKeyView(hasApiKeyInEngine);
   // What this screen just did wins until the engine has re-read the store.
   const [savedHere, setSavedHere] = useState<boolean | null>(null);
   const hasKey = savedHere ?? keySaved;
@@ -159,15 +162,10 @@ function ApiKeySection() {
 
   return (
     <Section title="Anthropic API key">
-      {onComputer ? (
-        <Alert severity="info" sx={{ mb: 1.5 }}>
-          Not used while the coach runs on your computer.
-        </Alert>
-      ) : null}
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
         {hasKey ? <CheckCircleIcon color="success" fontSize="small" /> : null}
         <Typography variant="body1" sx={{ fontWeight: 600 }} role="status">
-          {hasKey ? 'A key is saved on this device.' : onComputer ? 'No key saved yet.' : 'No key saved yet. The coach needs one to work.'}
+          {hasKey ? 'A key is saved on this device.' : 'No key saved yet. The coach needs one to work.'}
         </Typography>
       </Stack>
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }}>
@@ -549,23 +547,9 @@ function CoachSettingsSection({ column }: { column: RefObject<HTMLElement | null
 }
 
 function AboutSection() {
-  const { appVersion, host, decaid } = useServices();
-  const [decaidVersion, setDecaidVersion] = useState<string | null>(host.hostVersion);
-  useEffect(() => {
-    if (host.hostVersion) return;
-    let live = true;
-    decaid
-      .getInfo()
-      .then((info) => {
-        if (live) setDecaidVersion(info.fullVersion || info.version);
-      })
-      .catch(() => {
-        if (live) setDecaidVersion(null);
-      });
-    return () => {
-      live = false;
-    };
-  }, [decaid, host.hostVersion]);
+  const { appVersion } = useServices();
+  // The host's, or Decaid's answer to GET /api/v1/info each time About opens; the log's header reads it too.
+  const decaidVersion = useDecaidVersion();
   return (
     <Section title="About">
       <Typography variant="body2">CafAI {appVersion}</Typography>
@@ -577,6 +561,8 @@ function AboutSection() {
 export function SettingsScreen() {
   // The column scrolls inside itself; the page never does (AppShell).
   const column = useRef<HTMLDivElement>(null);
+  // The API key's field and the bridge's address and code take turns with where the coach runs (D140).
+  const showsApiKey = useShowsApiKey();
   return (
     <Box ref={column} sx={{ height: '100%', minHeight: 0, overflowY: 'auto' }}>
       <Stack spacing={2} sx={{ p: 2, maxWidth: 760 }}>
@@ -585,10 +571,11 @@ export function SettingsScreen() {
         </Typography>
         <AppearanceSection />
         <CoachSourceSection />
-        <ApiKeySection />
+        {showsApiKey ? <ApiKeySection /> : null}
         <CoachSettingsSection column={column} />
         <DrinkSettingsSection />
         <AboutSection />
+        <LogSection />
       </Stack>
     </Box>
   );

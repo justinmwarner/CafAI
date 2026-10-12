@@ -25,8 +25,8 @@ body:
     id: cafai-version
     attributes:
       label: CafAI version
-      description: Settings > About, the line "CafAI 0.1.0".
-      placeholder: 0.1.0
+      description: Settings > About, the line "CafAI 0.1.1".
+      placeholder: 0.1.1
     validations:
       required: true
   - type: input
@@ -76,6 +76,12 @@ body:
     attributes:
       label: The report from Settings > About
       description: When Settings > About says "Decaid sent N things CafAI did not expect", tap **Copy report** and paste it here. It holds Decaid's routes and field names, never your notes or the key.
+      render: text
+  - type: textarea
+    id: traffic-log
+    attributes:
+      label: The log from Settings > Log
+      description: Right after the problem, open Settings > Log and tap **Copy** (or **Share**), then paste it here or attach it as a file. It shows what CafAI sent to and got from Decaid and the coach. The API key and the bridge's pairing code are never in it, but your chat with the coach is, so remove anything you would rather not post.
       render: text
   - type: textarea
     id: extra

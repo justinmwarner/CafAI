@@ -1668,9 +1668,11 @@ workflows has run.
 
 ## The owner's list after the alignment (2026-10-11)
 
-The owner's notes of 2026-10-11 (D123-D128): tint names, the drink
-settings, grinders, ratings in words, a coach that does not lead the
-barista's taste, and a repository ready for the public.
+The owner's notes of 2026-10-11 (D123-D128, D139, D140): tint names, the
+drink settings, grinders, ratings in words, a coach that does not lead the
+barista's taste, a repository ready for the public, a log of what CafAI
+sends and gets, and the coach's credentials following its choice. Released
+as 0.1.1.
 
 - **D123. The tints are named for coffee.** Settings > Appearance offers
   Crema, Matcha, Cold Brew, Blueberry, Plum, Cherry and Tamper
@@ -1936,6 +1938,105 @@ barista's taste, and a repository ready for the public.
   carries, and a way to report problems that never puts a key in a public
   issue, and the pictures must follow the UI without anyone retaking them
   by hand.
+- **D139. Settings > Log shows what CafAI sends to and gets from Decaid
+  and the coach, raw, and shares it; the key is never in it.** One ring
+  buffer in memory (`src/traffic/recorder.ts`), always on, never stored
+  or sent: the last 1000 entries and about 4 MB of text, the oldest
+  dropped first, one body at most 256 KB. An entry has its time, direction
+  (sent or received), channel (Decaid REST, Decaid WebSocket, the coach),
+  what (method and path with its query, the channel, or the coach's URL),
+  status or outcome, duration, size on the wire, and the raw headers and
+  body. It is recorded where the traffic passes, never at call sites:
+  `src/api/http.ts` keeps every REST exchange (a retry is another one),
+  `src/api/telemetry.ts` every socket CafAI opens (CafAI connecting and
+  closing it; it opening, closing with its code, failing; its frames;
+  CafAI sends nothing on them), `src/llm/anthropic.ts` each try of a coach
+  turn (the request; for a stream the turn as assembled, with its stop
+  reason and usage, and the events as they came, up to 32 KB; else the
+  error body, "network error", "timeout" or "cancelled") and
+  `src/llm/bridgeClient.ts` CafAI Bridge's Test and Find. The mock Decaid
+  and the scripted coach answer through the same code, so the log works
+  in mock mode and in e2e. Live frames: the machine's, the scale's and
+  time-to-ready's channels send several a second, so each keeps at most
+  one frame a second and counts the rest on it ("frame +4"); another
+  channel keeps every frame that says something new and counts a repeat
+  within the second; frames fill at most half the entries, so a busy
+  machine never pushes the REST calls and the coach out. Listeners hear of
+  changes at most twice a second; the view renders nothing while closed,
+  and Settings reads the summary every 2 seconds, never on each entry. A
+  recording that fails is dropped, never thrown into the call it watches.
+  A body is redacted only up to its cut and a 4 KB margin, so a reply of
+  megabytes is never scanned whole, and a cut body keeps nothing of the
+  reply it came from alive (a plain slice holds its parent). Redaction
+  (`src/traffic/redact.ts`) runs on the way in, whoever records: a header
+  with a key, token, secret, password, auth, cookie or session part in its
+  name keeps its name and loses its value (a rate limit's "tokens" header
+  is a count, not a secret), and that value is taken out of the rest of
+  the exchange, headers included, in any case and with any dashes (an echo
+  of the key, or of the pairing code as ABCD-EFGH); the key and the code
+  CafAI last used (read at start-up, and at each coach request and bridge
+  Test) are looked for everywhere, a chat that quotes the code and its
+  backup to Decaid included; anything shaped like `sk-ant-…` becomes
+  `[key redacted]`; a stream whose events, put together, hold a secret
+  keeps none of its events, since the pieces sit in several; a body of a
+  call to the key's copy in Decaid (`cafai-key`, D99) becomes "[not kept:
+  the API key's copy in Decaid]" unless it has no room for a key (Decaid's
+  `null` for no copy); image data and other base64 runs of 1000
+  characters or more become their size ("[image, 412 KB]"). Settings >
+  Log, after About, says "214 entries since 21:04, 1.2 MB", what the log
+  is and that it holds the barista's words, with **Open log**, **Share**,
+  **Email**, **Copy** and **Clear**. Open log is a full-screen dialog
+  beside the app's screens (`src/ui/settings/LogView.tsx`), so a shot
+  that takes the screen under it to the Shot view leaves it open: newest
+  first, one line per entry (time, ↑ or ↓, channel, what, status, size),
+  200 at a time; filters All, Decaid, Live frames and Coach, a radio group
+  the arrow keys move through; a tap opens the raw headers and body in
+  monospace, JSON pretty-printed (as it came when that would change a
+  long number) and cut at 4,000 characters until **Show all**; **Pause**
+  holds the view while the log keeps recording ("Resume (12 new)").
+  Share is the Web Share API, a `.txt` file where the browser shares
+  files, else the text, shown only where `navigator.share` exists (a
+  secure page; never Android's WebView). Email is a `mailto:` link built
+  at the tap, subject "CafAI log, <date time>", with the newest entries
+  that fit in 8,000 characters, bodies shortened to 600 and never inside
+  an emoji, and a line saying what was cut and that Share or Copy has all
+  of it; inside Decaid, whose WebView opens only http and https links, it
+  is left out and a line says to copy the log instead. Copy is About's
+  `copyText`, which works over plain http on the network; in the view its
+  text area sits inside the dialog. All three take every entry (as the
+  view was paused), whatever the filter shows, under a header: CafAI's
+  and Decaid's versions and Decaid's address, the browser, the screen,
+  the time range, the count, and that the key and the pairing code are
+  never in it. Why: the owner wants to see the raw traffic to debug and
+  to confirm things work, and to send it on at once. Recording at the
+  choke points means no call can slip past and the mocks are logged too;
+  redacting on the way in means no call site can leak the key (D69, D99).
+  Coalesced frames keep a Chromium 91 tablet fast and the buffer useful;
+  a button that cannot work (Share without the API, Email inside Decaid)
+  is left out rather than shown dead, and Copy is the way off a tablet.
+  The review before merging found the first build's Email link, built in
+  every render, threw on half an emoji and blanked the app; its Copy in
+  the view copied nothing over plain http, because the dialog's focus
+  trap took focus from a text area outside it, and still said "Copied";
+  header values and a secret split across stream events went unredacted;
+  and a rate limit's "tokens" header took its count out of the body.
+  History's export dialog had the same Copy fault; its fallback text area
+  now sits inside that dialog too.
+- **D140. The API key and the bridge's address and code take turns with
+  where the coach runs.** Settings shows the **Anthropic API key** section
+  only while **Where the coach runs** is on Anthropic; with **Claude on my
+  computer** it is gone, and the bridge's Address and Code show under the
+  choice instead, as they did before (`useShowsApiKey` in
+  `src/ui/settings/coachSourceView.ts`, `src/ui/settings/SettingsScreen.tsx`).
+  Neither shows until the saved choice has been read, so the wrong fields
+  never flash up while Settings opens; without the store (the fakes and
+  previews) the coach runs on Anthropic and the key shows. Switching keeps
+  what was saved for the other one: a key saved before is there again,
+  saved, when the choice goes back. The note "Not used while the coach runs
+  on your computer." is gone with the section it sat in. Why: the owner
+  asked that the extra field, the `sk-` key or the address and code, flip
+  with the radio; two sets of credentials on one screen made it unclear
+  which one the coach was using.
 
 ### Claude on your computer (2026-10-11)
 

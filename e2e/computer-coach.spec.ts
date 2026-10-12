@@ -15,9 +15,14 @@ test('the coach answers through CafAI Bridge on this computer, without an API ke
   await openApp(page, '#/settings');
 
   const section = page.getByRole('region', { name: 'Where the coach runs' });
+  const keySection = page.getByRole('region', { name: 'Anthropic API key' });
   await expect(section.getByTestId(TID.coachSourceAnthropic)).toBeChecked();
+  await expect(keySection).toBeVisible();
+  await expect(section.getByTestId(TID.computerAddress)).toHaveCount(0);
+  // The key's field and the bridge's address and code take turns with the choice (D140).
   await section.getByTestId(TID.coachSourceComputer).check();
-  await expect(page.getByText('Not used while the coach runs on your computer.')).toBeVisible();
+  await expect(keySection).toHaveCount(0);
+  await expect(section.getByTestId(TID.computerAddress)).toBeVisible();
 
   await section.getByTestId(TID.computerFind).click();
   await expect(section.getByText('Found CafAI Bridge on this device.')).toBeVisible();

@@ -29,7 +29,7 @@ logic; see [Influences and thanks](#influences-and-thanks).
   Bridge on your Mac or Windows PC: no API key, nothing billed per call (see
   [Claude on your computer](#claude-on-your-computer-no-api-key))
 
-**Status.** CafAI 0.1.0 is new. It is checked against Decaid's own API specs
+**Status.** CafAI 0.1.1 is new. It is checked against Decaid's own API specs
 and has passed every check against Decaid 0.8.8 running its simulated
 machine and scale (2026-10-10), but it has not yet been used on a real
 Decent machine: [docs/HARDWARE_TEST_PLAN.md](docs/HARDWARE_TEST_PLAN.md) is
@@ -290,10 +290,13 @@ with **Retry**; it never loads anything on the machine by itself.
   [DESIGN.md](DESIGN.md) describes the visual system.
 - **Settings > Where the coach runs**: **Anthropic API key** (the default)
   or **Claude on my computer** (CafAI Bridge's address and code, with
-  **Find** and **Test**).
-- **Settings > Anthropic API key**: the key, and **Keep my API key in
-  Decaid** (off by default; see Privacy for what it means). A key pasted
-  into the chat or another field is taken out, with a note.
+  **Find** and **Test**). The fields follow the choice: the API key's
+  section shows only with Anthropic, the bridge's address and code only
+  with the computer; whatever you saved for the other one stays saved.
+- **Settings > Anthropic API key** (with Anthropic chosen): the key, and
+  **Keep my API key in Decaid** (off by default; see Privacy for what it
+  means). A key pasted into the chat or another field is taken out, with a
+  note.
 - **Settings > Coach**: the model (Opus 5.5 by default, Opus 5, Sonnet 5,
   Haiku 4.5 or Fable 5.1, each with its price per million tokens) and your
   grinder, from Decaid's grinder library. **Add a grinder** adds one the
@@ -319,6 +322,16 @@ with **Retry**; it never loads anything on the machine by itself.
   CafAI did not expect, with **Copy report** (Decaid's routes and field
   names, with counts and both versions, never your notes or the key); and
   when CafAI last backed up to Decaid.
+- **Settings > Log**: what CafAI sends to and gets from Decaid (its REST
+  calls and WebSocket frames) and the coach, as it went ("214 entries
+  since 21:04, 1.2 MB"). **Open log** shows it full screen, newest first,
+  one line per entry, with filters (All, Decaid, Live frames, Coach),
+  **Pause**, and the raw headers and body of an entry you tap. **Share**
+  (where the browser has a share sheet), **Email** and **Copy** send the
+  whole log with CafAI's and Decaid's versions and your device; **Clear**
+  empties it. The machine's and the scale's frames are kept once a second
+  ("frame +4" counts the rest). The API key and the bridge's pairing code
+  are never in it.
 
 ## On a phone
 
@@ -434,6 +447,13 @@ troubleshooting.
   folder, so your hooks, plugins and CLAUDE.md stay out of them.
 - The report in Settings > About names Decaid's routes and fields and what
   was wrong with them, never your notes, your coffee or the key.
+- Settings > Log keeps the last 1000 entries (requests, replies, frames)
+  of CafAI's traffic with Decaid and the coach in the page's memory only:
+  never stored, never sent anywhere until you tap Share, Email or Copy,
+  gone when the page reloads. It holds what you and the coach wrote, so
+  share it only with someone you trust. It never holds the API key or the
+  pairing code (only that an `x-api-key` header went), the key's copy in
+  Decaid, or a bag photo (only its size).
 
 [SECURITY.md](SECURITY.md) says how to report a security problem privately.
 
@@ -506,10 +526,26 @@ troubleshooting.
   turn, the port, the network, the firewall and the schedule, and says what
   to do about each; [bridge/README.md](bridge/README.md#troubleshooting) has
   the rest.
+- **To show someone what went wrong, share the log.** Settings > Log has
+  every exchange with Decaid and the coach. Do what went wrong once more,
+  then in Settings > Log (or in **Open log**):
+  - **Share** (a phone or a computer with a share sheet, on a secure page)
+    attaches the whole log as a `.txt` file to an email or a message.
+  - **Email** opens your email app with the newest entries (a link can
+    carry only so much; it says what was cut). Share or Copy has all of it.
+  - **Copy** puts the whole log on the clipboard, over plain http too;
+    paste it into an email or a
+    [bug report](https://github.com/justinmwarner/CafAI/issues/new/choose).
+
+  Inside Decaid's own app only **Copy** works (Decaid opens no email link
+  or share sheet for a skin): copy, leave Decaid, and paste. If the paste
+  comes up empty on a tablet, the log may be too big for its clipboard:
+  **Clear**, do it again, then **Copy**. The log never holds the API key
+  or the pairing code, but it does hold what you wrote in the chat.
 
 Still stuck? [Open an issue](https://github.com/justinmwarner/CafAI/issues/new/choose)
-with the CafAI and Decaid versions from Settings > About and the tablet or
-phone you use.
+with the CafAI and Decaid versions from Settings > About, the tablet or
+phone you use, and the log from Settings > Log.
 
 ## Develop
 
@@ -720,6 +756,7 @@ General, "Read repository contents and packages permissions") can stay.
 | `src/coach` | Pure logic: templates and levers, bounded validator, profile hashing, shot summarizer and query tools, roast age, prompt |
 | `src/llm` | `LlmProvider` interface, streaming Anthropic client (fetch + SSE), tool-loop runner, the one request that reads a bag photo, the CafAI Bridge client |
 | `src/storage` | IndexedDB repositories, the key store (and the key's optional copy in Decaid), where the coach runs, export/import, mirror to Decaid's KV store |
+| `src/traffic` | The traffic log behind Settings > Log: the recorder, what it never keeps (the key, the pairing code, image data), and the text Share, Email and Copy send |
 | `src/app` | The coach engine, services, app composition |
 | `src/ui` | Shell, machine row, stats card and alert, live graph, chat surface, history and settings |
 | `mock` | MSW mocks of Decaid, Claude and CafAI Bridge, the demo, and fixtures |

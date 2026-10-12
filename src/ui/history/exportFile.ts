@@ -33,9 +33,11 @@ export function downloadText(fileName: string, text: string, mimeType = 'applica
 /**
  * Copies text to the clipboard. `navigator.clipboard` only exists on secure
  * origins, and a skin opened over the LAN (http://<tablet-ip>) is not one,
- * so fall back to the older select-and-copy command.
+ * so fall back to the older select-and-copy command. Inside a dialog, pass
+ * an element of it as `container`: a dialog keeps focus to itself, and a text
+ * area outside it would lose its selection before the copy.
  */
-export async function copyText(text: string): Promise<boolean> {
+export async function copyText(text: string, container?: HTMLElement): Promise<boolean> {
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
@@ -49,7 +51,7 @@ export async function copyText(text: string): Promise<boolean> {
   area.setAttribute('readonly', '');
   area.style.position = 'fixed';
   area.style.opacity = '0';
-  document.body.appendChild(area);
+  (container ?? document.body).appendChild(area);
   try {
     area.select();
     return document.execCommand('copy');

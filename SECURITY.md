@@ -41,6 +41,19 @@ is the first).
   browser console or to Decaid's store, because Decaid serves a skin's
   console to anyone on the network (`/api/v1/webview/logs`). Storage errors
   are fixed sentences, so a key cannot ride along in one.
+- Settings > Log, which shows what CafAI sends to and gets from Decaid and
+  the coach, never holds it. Everything is redacted on the way in
+  (`src/traffic/redact.ts`): the `x-api-key` header (and any other header
+  with a key, token, secret, password, auth, cookie or session part in
+  its name) is kept by name only, and its value is taken out of the rest
+  of that exchange too, headers included; the key and the bridge's code
+  CafAI last used are looked for in everything, a chat that quotes one
+  included; anything shaped like a key becomes `[key redacted]` in any
+  body, URL or header; a coach reply whose stream events, put together,
+  hold a secret keeps none of them; and no body said to or by the key's
+  copy in Decaid is kept. The log lives in the page's memory only and
+  leaves the device only when you tap Share, Email or Copy; it does hold
+  what you and the coach wrote.
 - A key pasted into the chat, a bag's details or a typed answer is taken out
   before the coach, the transcript or Decaid see it, and exported or backed-up
   text replaces anything shaped like a key with `[redacted]`.
@@ -63,7 +76,9 @@ is the first).
   needs the bridge's 8-character pairing code; five wrong codes from one
   address in ten minutes lock that address out for a minute, doubling up to
   fifteen. The code is kept on the device like the API key (never in Decaid
-  or an export) and never written to the bridge's log.
+  or an export), never in Settings > Log (redacted like the key, also when
+  the bridge echoes it back as ABCD-EFGH) and never written to the bridge's
+  log.
 - Its MCP endpoint answers only `127.0.0.1`, and it can be stopped over HTTP
   only from its own computer.
 - It never reads, stores or forwards your Claude credentials (it asks Claude

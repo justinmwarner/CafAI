@@ -89,15 +89,16 @@ export function computerWording(address: string): ProviderWording {
 }
 
 /**
- * `text` with `secret` replaced by [key] wherever it appears: in any case, and
- * through the dashes or spaces it may be written with (CafAI Bridge's code
- * goes as ABCDEFGH or ABCD-EFGH). Belt and braces for text a server sent.
+ * `text` with `secret` replaced by [key] (or `replacement`) wherever it
+ * appears: in any case, and through the dashes or spaces it may be written
+ * with (CafAI Bridge's code goes as ABCDEFGH or ABCD-EFGH). Belt and braces
+ * for text a server sent.
  */
-export function hideSecret(text: string, secret: string): string {
+export function hideSecret(text: string, secret: string, replacement = '[key]'): string {
   const chars = [...secret].filter((char) => !/[\s-]/.test(char));
   if (chars.length === 0) return text;
   const pattern = new RegExp(chars.map((char) => char.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')).join('[\\s-]*'), 'gi');
-  return text.replace(pattern, '[key]');
+  return text.replace(pattern, replacement);
 }
 
 /**

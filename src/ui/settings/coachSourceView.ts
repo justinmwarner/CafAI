@@ -66,6 +66,20 @@ export function useCoachRunsOnComputer(): boolean {
 }
 
 /**
+ * Whether Settings shows the API key (D140): only while the coach runs on
+ * Anthropic, so the key's field and the bridge's address and code take turns
+ * with the choice. Not until the choice has been read, so the wrong fields
+ * never flash up; always without the store (fakes, previews), where the coach
+ * runs on Anthropic.
+ */
+export function useShowsApiKey(): boolean {
+  const { coachSource } = useServices();
+  const view = useSourceView();
+  if (!coachSource) return true;
+  return view !== null && view.kind !== 'computer';
+}
+
+/**
  * For the API key section: whether the coach runs on the computer, and
  * whether a key is saved here. `engineHasKey` is the engine's hasApiKey,
  * which means just that while the coach runs on Anthropic.

@@ -6,6 +6,8 @@ workflow checks against it. Settings > About shows the version you run.
 
 ## Unreleased
 
+## 0.1.1 (2026-10-12)
+
 ### The coach
 
 - A shot is rated in words against the shot before it, no longer with
@@ -35,6 +37,17 @@ workflow checks against it. Settings > About shows the version you run.
   machine row draws them: one stepper per setting with its unit beside the
   value, Up and Down from a keyboard, and "Saving…" or a failure under the
   setting itself.
+- Settings > Log shows what CafAI sends to and gets from Decaid (REST calls
+  and WebSocket frames) and the coach, raw: **Open log** lists it newest
+  first, full screen, with filters, **Pause** and each entry's headers and
+  body, and **Share**, **Email** and **Copy** send it with CafAI's and
+  Decaid's versions. The API key and the bridge's pairing code are never in
+  it.
+- Settings shows the API key only while the coach runs on Anthropic; with
+  Claude on your computer, only the bridge's address and code. What you
+  saved for the other one stays saved.
+- History's export: **Copy** works over plain http (a phone on the
+  network), where it used to copy nothing.
 
 ### Decaid
 
@@ -62,6 +75,7 @@ workflow checks against it. Settings > About shows the version you run.
 - New: CONTRIBUTING.md, SECURITY.md (GitHub's private vulnerability
   reporting), this changelog, issue forms for bugs and features, and a pull
   request template; `npm run screenshots` retakes the README's pictures.
+  The bug form asks for the log from Settings > Log.
 
 ## 0.1.0 (first release)
 
