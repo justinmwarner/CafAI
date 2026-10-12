@@ -9,8 +9,10 @@ is bundled into the app.
 
 | Path | What it is |
 |---|---|
-| `PIN.json` | The pinned release and commit, the sha256 of both specs, the generator |
+| `PIN.json` | The pinned release and commit, the sha256 of both specs and of each agent doc, the generator |
 | `spec/rest_v1.yml`, `spec/websocket_v1.yml` | Decaid's `assets/api/` specs at the pin, verbatim |
+| `skill/` | Decaid's agent skill (`.agents/skills/decent-app/`) at the pin, verbatim, for CafAI's coding agents (below) |
+| `doc/AI_API_NOTES.md` | Decaid's API notes for agents at the pin, verbatim |
 | `generated/rest.ts`, `generated/ws.ts` | openapi-typescript output; `ws.ts` also has `WsReceive`, the spec's own channel map cut to the channels CafAI opens. Never edited by hand |
 | `helpers.ts` | `Diff`, `Extra`, `EnumDrift`, `Exactly`, and accessors by path (`Res`, `Body`, `Statuses`, `PathParams`, `Query`) |
 | `checks/*.ts` | The assertions: REST replies, REST bodies and the query and path parameters CafAI sends, WebSocket frames, enums, status codes |
@@ -19,14 +21,27 @@ is bundled into the app.
 
 `npm run typecheck` runs CafAI's own typecheck, then
 `tsc -p tsconfig.contract.json` (the checks), then
-`node scripts/decaid-contract.mjs --check` (the specs match `PIN.json` and
-regenerate to the committed files). `mock/decaid/contract.test.ts` validates
+`node scripts/decaid-contract.mjs --check` (the specs and the agent docs
+match `PIN.json`, with none missing or extra, and the specs regenerate to the
+committed files). `mock/decaid/contract.test.ts` validates
 the fixtures, the mock's replies and frames, and the bodies CafAI sends with
 `schema.ts`.
 
 CafAI's types say only what CafAI reads (an index signature takes the
 rest), so the checks cover exactly that: a field CafAI never reads may
 change, or go, without failing anything.
+
+## Decaid's agent docs
+
+`skill/` is Decaid's own agent skill and `doc/AI_API_NOTES.md` its API notes,
+both verbatim at the pin (D145). They are written for people changing
+Decaid's Flutter code; CafAI's coding agents read them through
+`.claude/skills/decaid-runtime/`, which says what applies to a client and what
+does not. They are not under `.claude/skills/` themselves, so no agent loads
+Decaid's skill as its own. `npm run decaid:update` replaces them together with
+the specs (`AGENT_DOCS` in `scripts/decaid-contract.mjs` names them), and
+`--check` fails on a hand edit, a missing file or one `PIN.json` does not
+list.
 
 ## The drift watch
 
@@ -54,7 +69,10 @@ The exit code, and what the workflow files, is the first that applies:
 
 The files are counted from the pin, so they add up until the pin moves: keep
 the `decaid-read` issue open until then, or the next run opens a new one.
-GitHub's compare lists at most 300 files.
+GitHub's compare lists at most 300 files. The files CafAI depends on
+(`WATCH` in `scripts/decaid-watch.mjs`) include the agent docs, so a change to
+Decaid's skill or API notes since the pin shows there too, under its own
+heading after the rest.
 
 ## What is not checked
 
@@ -71,8 +89,11 @@ while Decaid has the plugin loaded, the rest whether or not they are there.
 ## Moving the pin
 
 1. `npm run decaid:update -- v0.9.0` (a tag, a branch or a sha). It
-   downloads both specs at that commit, regenerates, and rewrites `PIN.json`
-   and `src/api/decaidVersion.ts` (About shows the release, D96).
+   downloads both specs and the agent docs at that commit, regenerates, and
+   rewrites `PIN.json` and `src/api/decaidVersion.ts` (About shows the
+   release, D96). A file Decaid dropped from its skill folder is deleted; if
+   the folder or the API notes moved, it stops, changes nothing, and says to
+   point `AGENT_DOCS` at their new place.
 2. `npm run typecheck` and `npx vitest run mock/decaid/contract.test.ts scripts`.
 3. Work through what fails (below): fix `src/api/types.ts` where Decaid
    changed, delete exceptions Decaid fixed, record new ones with their reason.
@@ -81,7 +102,9 @@ while Decaid has the plugin loaded, the rest whether or not they are there.
 4. Update the Dart citations in `drift.ts` to the new commit where the cited
    files changed, and `docs/upstream/decaid-spec-fixes.md` if Decent fixed
    something.
-5. Read the files the `decaid-read` issue lists, then close it.
+5. Read the files the `decaid-read` issue lists, then close it. If the agent
+   docs changed, check that `.claude/skills/decaid-runtime/SKILL.md` still
+   routes to them and still translates them for CafAI.
 
 The drift watch's report says in advance which exceptions turn stale and
 which checks fail.

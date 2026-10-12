@@ -2110,3 +2110,47 @@ docs/superpowers/specs/2026-10-11-local-claude-design.md.
   so the tablet's Decaid, which polls GitHub every 12 hours and keys
   updates on the tag, always has the newest tagged build; a tag elsewhere
   publishes nothing.
+
+### Decaid's agent skill (2026-10-11)
+
+D139-D144 are left to the work running beside this one; this starts at D145.
+
+- **D145. Decaid's agent skill comes in verbatim at the pin, behind a CafAI
+  skill.** `contract/decaid/skill/` is Decaid's `.agents/skills/decent-app/`
+  (33 files: REST and WebSocket recipes, simulated devices, 25 regression
+  scenarios) and `contract/decaid/doc/AI_API_NOTES.md` its API notes, byte for
+  byte at the pinned commit, outside `.claude/skills/` and `.agents/skills/` so
+  that no agent loads Decaid's skill as its own. CafAI's agents load
+  `.claude/skills/decaid-runtime/` instead: it maps Decaid's paths and
+  commands to CafAI's (the Windows simulator of docs/SIMULATOR.md for
+  `sb-dev.sh`, `contract/decaid/spec/` for `assets/api/`, PowerShell and
+  Node's own WebSocket for `jq` and `websocat`, `npm run test:decaid` for
+  Decaid's completion steps, `drift.ts` for "update the spec"), keeps a
+  Decaid that someone else runs read-only, and routes to the files that help
+  a client. `npm run decaid:update` brings the docs with the specs (and
+  deletes those Decaid dropped), `--check` holds them to `PIN.json`'s hashes,
+  and the drift watch lists their changes since the pin in its `decaid-read`
+  issue, under their own heading after the code's (`AGENT_DOCS` in
+  `scripts/decaid-contract.mjs`, added to `WATCH`). A folder that turned into
+  something else, a symlink or a file that is not UTF-8 text stops the update
+  as Decaid's change; nothing is written then.
+  Why: the skill's facts help a client (gotchas the spec leaves out, mock
+  device ids and names, how features behave), but it is written for changing
+  Decaid's Flutter code: its description matches most CafAI work, its dev
+  loop needs a Flutter checkout and POSIX pipes, and its rule to update the
+  spec with the handler would break CafAI's pin. Moving with the pin keeps
+  the docs describing the Decaid CafAI is checked against, and nothing a
+  third party writes reaches an agent's instructions unread (Decaid changed
+  the skill about twice a week from April to October 2026). Not chosen: a
+  submodule or subtree (the whole Flutter repository for about 140 KB of
+  markdown), links to GitHub (a fetch per lookup), following Decaid's `main`
+  (it documents what the pinned release lacks), a pull request opened by a
+  bot for every change. Tried (2026-10-11): `npm run decaid:update -- v0.8.8`
+  fetched the 34 files byte for byte as Decaid's git blobs at `aab5f93` and
+  left the specs and the generated files as they were; an agent given
+  Decaid's skill without `decaid-runtime` worked around `sb-dev.sh` and
+  `websocat` by itself, but planned to close the Decaid another run was
+  using. With it, two agents went straight to the simulator, Node's
+  WebSocket, `test:decaid` and `drift.ts`; the first read PowerShell's blank
+  rows as no Decaid running, so the skill's check now prints True or False,
+  and the second found the running Decaid and kept to reads.
