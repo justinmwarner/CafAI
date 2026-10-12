@@ -233,45 +233,46 @@ describe('CoachSourceSection', () => {
 });
 
 describe('SettingsScreen with the coach on the computer', () => {
-  it('puts the choice above the API key, and says the key and the prices do not apply while it runs there', async () => {
+  const keyRegion = () => screen.queryByRole('region', { name: 'Anthropic API key' });
+
+  it("puts the choice above the API key, and swaps the key's field for the bridge's with the choice (D140)", async () => {
     renderSection({}, <SettingsScreen />);
-    const regions = await screen.findAllByRole('region');
-    const titles = regions.map((region) => region.getAttribute('aria-label'));
+    // The key shows once the choice is read as Anthropic.
+    await screen.findByRole('region', { name: 'Anthropic API key' });
+    const titles = screen.getAllByRole('region').map((region) => region.getAttribute('aria-label'));
     expect(titles.indexOf('Where the coach runs')).toBe(titles.indexOf('Anthropic API key') - 1);
-    const keyNote = 'Not used while the coach runs on your computer.';
     const priceNote = 'The prices do not apply while the coach runs on your computer: it uses your Claude plan.';
-    expect(screen.queryByText(keyNote)).not.toBeInTheDocument();
+    expect(screen.getByTestId(TID.apiKeyInput)).toBeInTheDocument();
+    expect(screen.queryByTestId(TID.computerAddress)).not.toBeInTheDocument();
 
     await userEvent.click(await screen.findByTestId(TID.coachSourceComputer));
-    expect(await screen.findByText(keyNote)).toBeInTheDocument();
+    await waitFor(() => expect(keyRegion()).not.toBeInTheDocument());
+    expect(screen.queryByTestId(TID.apiKeyInput)).not.toBeInTheDocument();
+    expect(screen.getByTestId(TID.computerAddress)).toBeInTheDocument();
+    expect(screen.getByTestId(TID.computerCode)).toBeInTheDocument();
     expect(screen.getByText(priceNote)).toBeInTheDocument();
 
     await userEvent.click(screen.getByTestId(TID.coachSourceAnthropic));
-    await waitFor(() => expect(screen.queryByText(keyNote)).not.toBeInTheDocument());
+    expect(await screen.findByRole('region', { name: 'Anthropic API key' })).toBeInTheDocument();
+    expect(screen.getByTestId(TID.apiKeyInput)).toBeInTheDocument();
+    expect(screen.queryByTestId(TID.computerAddress)).not.toBeInTheDocument();
     expect(screen.queryByText(priceNote)).not.toBeInTheDocument();
   });
 
-  it('reads the saved choice when the screen opens', async () => {
+  it('reads the saved choice when the screen opens, and never shows the key meanwhile', async () => {
     renderSection(SAVED, <SettingsScreen />);
-    expect(await screen.findByText('Not used while the coach runs on your computer.')).toBeInTheDocument();
+    // Before the store answers: neither the key nor a guess at the choice.
+    expect(keyRegion()).not.toBeInTheDocument();
+    expect(await screen.findByTestId(TID.computerAddress)).toBeInTheDocument();
+    expect(keyRegion()).not.toBeInTheDocument();
   });
 
-  it("asks the key store whether a key is saved: the engine's hasApiKey is the bridge's code here", async () => {
-    // The engine has what the computer needs (its code) and no key is saved.
-    const { services } = renderSection(SAVED, <SettingsScreen />);
-    expect(services.coach.getState().hasApiKey).toBe(true);
-    const keySection = await screen.findByRole('region', { name: 'Anthropic API key' });
-    await waitFor(() => expect(keySection).toHaveTextContent('No key saved yet.'));
-    expect(keySection).not.toHaveTextContent('A key is saved on this device.');
-    expect(keySection).not.toHaveTextContent('The coach needs one to work.');
-    expect(screen.queryByTestId(TID.forgetKey)).not.toBeInTheDocument();
-  });
-
-  it('shows a saved key as saved while the coach waits for the code on the computer', async () => {
-    const services: FakeServices = createFakeServices({ coach: { hasApiKey: false } });
-    services.coachSource = createMemoryCoachSourceStore({ ...SAVED, code: '' });
+  it('shows the key saved before as saved once the choice is back on Anthropic', async () => {
+    const services: FakeServices = createFakeServices({ coach: { hasApiKey: true } });
+    services.coachSource = createMemoryCoachSourceStore(SAVED);
     services.storage.apiKey = 'sk-ant-api03-saved-here';
     renderWithServices(<SettingsScreen />, services);
+    await userEvent.click(await screen.findByTestId(TID.coachSourceAnthropic));
     const keySection = await screen.findByRole('region', { name: 'Anthropic API key' });
     await waitFor(() => expect(keySection).toHaveTextContent('A key is saved on this device.'));
     expect(screen.getByTestId(TID.forgetKey)).toBeInTheDocument();

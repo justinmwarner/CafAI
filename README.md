@@ -290,10 +290,13 @@ with **Retry**; it never loads anything on the machine by itself.
   [DESIGN.md](DESIGN.md) describes the visual system.
 - **Settings > Where the coach runs**: **Anthropic API key** (the default)
   or **Claude on my computer** (CafAI Bridge's address and code, with
-  **Find** and **Test**).
-- **Settings > Anthropic API key**: the key, and **Keep my API key in
-  Decaid** (off by default; see Privacy for what it means). A key pasted
-  into the chat or another field is taken out, with a note.
+  **Find** and **Test**). The fields follow the choice: the API key's
+  section shows only with Anthropic, the bridge's address and code only
+  with the computer; whatever you saved for the other one stays saved.
+- **Settings > Anthropic API key** (with Anthropic chosen): the key, and
+  **Keep my API key in Decaid** (off by default; see Privacy for what it
+  means). A key pasted into the chat or another field is taken out, with a
+  note.
 - **Settings > Coach**: the model (Opus 5.5 by default, Opus 5, Sonnet 5,
   Haiku 4.5 or Fable 5.1, each with its price per million tokens) and your
   grinder, from Decaid's grinder library. **Add a grinder** adds one the
