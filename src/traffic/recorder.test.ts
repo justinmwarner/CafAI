@@ -78,6 +78,19 @@ describe('createTrafficLog', () => {
     expect(byText.list().map((entry) => entry.what)).toEqual(['GET /4', 'GET /5']);
   });
 
+  it('keeps the last 1000 entries by default, at most 500 of them frames', () => {
+    const { log, advance } = harness();
+    for (let i = 0; i < 1100; i += 1) log.add(rest(`GET /${i}`));
+    expect(log.list()).toHaveLength(1000);
+    expect(log.list()[0]!.what).toBe('GET /100');
+    for (let i = 0; i < 700; i += 1) {
+      log.frame('ws/v1/scale/snapshot', `{"w":${i}}`, true);
+      advance(1000);
+    }
+    expect(log.list().filter((entry) => entry.frame)).toHaveLength(500);
+    expect(log.list()).toHaveLength(1000);
+  });
+
   it('lets frames fill at most their share, so they never push the REST calls out', () => {
     const { log, advance } = harness({ maxEntries: 6, maxFrameEntries: 3 });
     log.add(rest('GET /api/v1/workflow'));

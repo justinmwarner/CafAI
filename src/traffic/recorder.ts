@@ -10,8 +10,9 @@
  *
  * One ring buffer in memory, always on, never stored or sent anywhere: only
  * the barista's Share, Email or Copy takes it off the page. It keeps the
- * last 1000 entries and about 2 MB of text, dropping the oldest; one body
- * keeps at most 256 KB.
+ * last 1000 entries and about 4 MB of text, dropping the oldest; one body
+ * keeps at most 256 KB (a coach request, or a chat's backup to Decaid, is
+ * 50 to 200 KB).
  *
  * Live frames: the machine's and the scale's snapshots (and time-to-ready's)
  * stream several times a second. A streaming channel keeps at most one frame
@@ -78,7 +79,7 @@ export interface TrafficInput {
 
 export const MAX_ENTRIES = 1000;
 export const MAX_FRAME_ENTRIES = 500;
-export const MAX_TEXT_CHARS = 2_000_000;
+export const MAX_TEXT_CHARS = 4_000_000;
 export const MAX_BODY_CHARS = 256 * 1024;
 export const MAX_RAW_CHARS = 32 * 1024;
 /** A streaming channel keeps one frame per this long. */
