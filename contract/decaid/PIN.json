@@ -11,5 +11,41 @@
       "sha256": "3f62265fec357894504bf54fbfe8828e48ea99fed311a8071027bdcb72dd1369"
     }
   },
-  "generator": "openapi-typescript@7.13.0"
+  "generator": "openapi-typescript@7.13.0",
+  "agentDocs": {
+    "doc/AI_API_NOTES.md": "9449c777e9cb8fee2becc0dc7d609da53a7ad28d9e2a47390d611def3983b523",
+    "skill/SKILL.md": "8365e65a32fd1b70c08694a5866483494567febf9a5c82580c2959b0e9a85ba6",
+    "skill/lifecycle.md": "cabf3230d7f156b1c77813307111eade92421f95ee8ffea17db64a4bbba41e61",
+    "skill/rest.md": "94ebac4038deb0d1ea8de15d50f3fdc7c4e6f456976e1f5f66cc4e62471612b6",
+    "skill/scenarios/README.md": "8ad5396527bc796b3f8864cf8b33434355a2ce94a90e473582c1fb04b81f6aa7",
+    "skill/scenarios/account-proxy-consent.md": "fe8f9cdf62676be347ed5bbbf7023ddc8a5b15aa27ec9555bfa48621f75dedbc",
+    "skill/scenarios/account-proxy-cors.md": "62e9e88280bf571680bbdbfd828346b3030b97532abfa4cfd1b9e39f318cb903",
+    "skill/scenarios/account-proxy-write.md": "1b9054898e567cd9905adabc913d07875efdcb5fde4518e781d427ef8d8f8866",
+    "skill/scenarios/api-pressure-hardening.md": "1004eadeda75dd468d69f4077e522a00c3d55db4b642e82266db2d1a4f72e539",
+    "skill/scenarios/auxiliary-scale-connections.md": "f05b543b0beb98beba612d67492957182f4354f11943c9abb5d0d41d43747a7f",
+    "skill/scenarios/backup-import-entry-limit.md": "92d41f6c9b380bbd0d36c3b8dd60b392b4ff6ef405a9b760fc1272b8482acfad",
+    "skill/scenarios/bengle-cup-warmer.md": "0b6d1e52e767ed836d533aba8d5dea1322e9d7867f608dde3f6c017545e886a2",
+    "skill/scenarios/bengle-integrated-scale.md": "63c229c072449a2981188a856c17ba4eef296811797a8d5a81533f8945ede700",
+    "skill/scenarios/bengle-led-strip.md": "c0ec847b36814b981bc7cc7d6e1e09e56bcfc00437dea030fd1a068118a26f29",
+    "skill/scenarios/bengle-scale-calibration.md": "cdfed2d8db21a6601e3c5c4c1598b897f5d7d1f38ae7949dc797b2c7f0a8f149",
+    "skill/scenarios/bengle-wake-schedule.md": "c7d622543de24e082ebb114dbca0eede96a4df8e6ec3fea551a376b064391e7c",
+    "skill/scenarios/ble-error-surfacing.md": "f6e568944574450f94292a9caddabef14ebc44076c41daf5776079dd992369d1",
+    "skill/scenarios/build-info.md": "4a20521a54944ff20a583f53bb1fb0adb99259cf2ac2c2e0dd6cd732a2f1fb25",
+    "skill/scenarios/debug-scale-control.md": "8849d6c75aa4f36e84aa006abcb5420c8f44921a42ec3745261247abeecba3b8",
+    "skill/scenarios/device-scan-connection-policy.md": "52ba65ceb24da0e266692c56d3c2948183d6bef6073dff72fc01a844e80b722c",
+    "skill/scenarios/display-brightness.md": "ec23c25d47855384745f655731409b1c96594ce4bd9e9dc1b6a7258d9dfd2146",
+    "skill/scenarios/etag-conditional-gets.md": "f2ffa3f0add1144516bb52c1a08fa73c104a4bb5636db3e0a26661cacf8316c6",
+    "skill/scenarios/firmware.md": "24fe053a7368c1701350084c0c76476e3f749113ee9e27554c013da191b2e6ce",
+    "skill/scenarios/hot-water-stop-at-weight.md": "bf3b6a82052ae3d18ed92c84ab7ce0d9a1d0dabf88c7a2bc954f75bc5a4ddb09",
+    "skill/scenarios/onboarding-connection-phases.md": "50c9a0ea9a564949543839099ec8c7e75c06b325cbdbb65501b6f42ebcfb4b7b",
+    "skill/scenarios/onboarding-preferred-device.md": "a199af1ddc436606f5150aa0102e1800418b4944810c2f2b8b185d2ebb84b013",
+    "skill/scenarios/plugin-decent-proxy.md": "af7ec325afdd40be39faa23dcd2aabe77a4ffd9c4f47814cd53f59112ac20f25",
+    "skill/scenarios/profiles-defaults.md": "a232879972cbe009335a21aa5fc965b9d862dc7ab2ec7f89d778cd5e26d95198",
+    "skill/scenarios/shot-state-ws.md": "831aa34cf3610c17587441747e4eb5e5107c303474c91f14b513b00b63d5f198",
+    "skill/scenarios/update-check-capability.md": "0d346a76f27e5e5abe901c15448d0af478a3516112f6924ec4c553046926c0d6",
+    "skill/simulated-devices.md": "e7dae60ad8e81b86843cc93642de5fb177bac9d35fe4f530631b9b578b80a94c",
+    "skill/troubleshooting.md": "5baadc8cea88ec1e99fb9dac3dbb3f0881b632802da4707e4340e8a49994fc2d",
+    "skill/verification.md": "a64ffc027ab45ccdfbef1124afb95136a0df5f38af7e55dfaf4302679cceb1e6",
+    "skill/websocket.md": "f4dc0731ab7fb49c48a2b8d5d1aadf960a6ceaf846fa2b05f65cf466130b7466"
+  }
 }

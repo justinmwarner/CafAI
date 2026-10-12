@@ -31,6 +31,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parse } from 'yaml';
 import {
+  AGENT_DOCS,
   CHILD_TIMEOUT_MS,
   FILES,
   GitHubError,
@@ -50,7 +51,10 @@ import {
   specChannels,
 } from './decaid-contract.mjs';
 
-/** The Decaid paths CafAI depends on: the specs, the skin docs, the handlers and models it reads, the plugins it uses. */
+/**
+ * The Decaid paths CafAI depends on: the specs, the skin docs, the handlers
+ * and models it reads, the plugins it uses, and the agent docs its agents read.
+ */
 export const WATCH = [
   'assets/api/',
   'doc/Skins.md',
@@ -66,6 +70,8 @@ export const WATCH = [
   // DYE2 is not in Decaid's tree (assets/plugins/dye2.reaplugin/ is gitignored):
   // this script downloads the release Decaid bundles, pinned by version and sha256.
   'scripts/fetch_dye2_plugin.sh',
+  // contract/decaid keeps them at the pin (D145); npm run decaid:update brings their changes.
+  ...AGENT_DOCS.map((doc) => doc.upstream),
 ];
 
 /** GitHub's issue body limit is 65,536 characters; the rest of a longer report is in the run's artifact. */
@@ -528,7 +534,15 @@ function targetSection(result) {
   lines.push('### Files changed since the pin that CafAI depends on (read these)', '');
   if (result.filesError) lines.push(`Could not list the changed files: ${result.filesError}.`);
   else if (result.files.length === 0) lines.push('None.');
-  for (const file of result.files) lines.push(`- ${code(file.filename)} (${file.status}, +${file.additions} -${file.deletions})`);
+  // Decaid changes its agent docs often; they go last, so they do not bury the code.
+  const isAgentDoc = (file) => AGENT_DOCS.some((doc) => file.filename.startsWith(doc.upstream));
+  const entry = (file) => `- ${code(file.filename)} (${file.status}, +${file.additions} -${file.deletions})`;
+  for (const file of result.files.filter((file) => !isAgentDoc(file))) lines.push(entry(file));
+  const docs = result.files.filter(isAgentDoc);
+  if (docs.length > 0) {
+    lines.push('', "#### Decaid's agent docs (contract/decaid/skill/ and doc/ have them at the pin; npm run decaid:update brings these)", '');
+    for (const file of docs) lines.push(entry(file));
+  }
   lines.push('');
   return lines;
 }
@@ -675,18 +689,22 @@ function option(args, name) {
 async function main(args) {
   const reportFile = option(args, '--report');
   const issueFile = option(args, '--issue');
+  // process.exit() after fetch() aborts Node 24 on Windows with a libuv
+  // assertion (see leave() in bridge/cafai-bridge.mjs): set the exit code,
+  // and let the event loop empty.
   let outcome;
   try {
     outcome = await runWatch({ keep: args.includes('--keep') });
   } catch (error) {
     // A broken watch is not a Decaid change: exit 3, so the workflow files no issue.
     console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
-    process.exit(3);
+    process.exitCode = 3;
+    return;
   }
   console.log(outcome.report);
   if (reportFile) writeFileSync(reportFile, `${outcome.report}\n`);
   if (issueFile) writeFileSync(issueFile, `${issueBody(outcome.report, { runUrl: runUrlFromEnv() })}\n`);
-  process.exit(outcome.code);
+  process.exitCode = outcome.code;
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) await main(process.argv.slice(2));

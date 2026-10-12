@@ -52,10 +52,12 @@ GPL-3.0-or-later
     src/coach/profile.ts reproduces its Profile.fromJson and toJson.
   - Not part of the skin: contract/decaid/spec/ holds Decaid's REST and
     WebSocket specs verbatim at v0.8.8 (aab5f93), from which the types in
-    contract/decaid/generated/ are generated; src/coach/__fixtures__/ holds
-    two of its bundled profiles as test vectors; and the mock Decaid in
-    mock/decaid/ reproduces its API's behaviour, with a second port of
-    ProfileHash (mock/decaid/profiles.ts).
+    contract/decaid/generated/ are generated, and contract/decaid/skill/ and
+    contract/decaid/doc/ its agent skill (.agents/skills/decent-app/) and API
+    notes (doc/AI_API_NOTES.md) verbatim at the same commit, for CafAI's
+    coding agents; src/coach/__fixtures__/ holds two of its bundled profiles
+    as test vectors; and the mock Decaid in mock/decaid/ reproduces its API's
+    behaviour, with a second port of ProfileHash (mock/decaid/profiles.ts).
 
 -------------------------------------------------------------------------------
 Libraries
