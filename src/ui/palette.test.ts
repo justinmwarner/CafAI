@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contrastRatio } from './color.ts';
+import { blend, contrastRatio } from './color.ts';
 import { buildPalette, customTint, DEFAULT_TINT_ID, namedTint, TINTS, type Palette, type ThemeMode, type Tint } from './palette.ts';
 
 const MODES: readonly ThemeMode[] = ['dark', 'light'];
@@ -75,6 +75,14 @@ describe('buildPalette', () => {
     expect(buildPalette('dark', namedTint('matcha')).background).not.toBe(buildPalette('dark', namedTint('cherry')).background);
   });
 
+  it('washes the flow blue and the ink over the page for the dial', () => {
+    const dark = buildPalette('dark', namedTint('crema'));
+    expect(dark.waterWash).toBe(blend(dark.graph.flow, dark.background, 0.22));
+    expect(dark.milkWash).toBe(blend(dark.ink, dark.background, 0.09));
+    const light = buildPalette('light', namedTint('crema'));
+    expect(light.waterWash).toBe(blend(light.graph.flow, light.background, 0.16));
+  });
+
   it('is dark on dark and light on light', () => {
     const dark = buildPalette('dark', namedTint('crema'));
     const light = buildPalette('light', namedTint('crema'));
@@ -120,6 +128,10 @@ const PAIRS: readonly (readonly [string, number, (p: Palette) => readonly (reado
         (c) => [[c, p.background], [c, p.surface]] as const,
       ),
   ],
+  // The steam, hot water and flush dial (D149): its number in ink and its
+  // "of" line in ink-muted sit over the water and the milk inside the ring.
+  ['ink on the dial’s water and milk', 7, (p) => [[p.ink, p.waterWash], [p.ink, p.milkWash]]],
+  ['inkMuted on the dial’s water and milk', 4.5, (p) => [[p.inkMuted, p.waterWash], [p.inkMuted, p.milkWash]]],
 ];
 
 describe('contrast (WCAG AA) in every tint, at every hue, in both modes', () => {

@@ -21,7 +21,14 @@ describe('theme', () => {
     expect(t.palette.background).toMatchObject({ default: p.background, paper: p.surface });
     expect(t.palette.text).toMatchObject({ primary: p.ink, secondary: p.inkMuted });
     expect(t.palette.divider).toBe(p.line);
-    expect(t.palette.cafai).toEqual({ raised: p.raised, accentSoft: p.accentSoft, live: p.live, graph: p.graph });
+    expect(t.palette.cafai).toEqual({
+      raised: p.raised,
+      accentSoft: p.accentSoft,
+      live: p.live,
+      graph: p.graph,
+      waterWash: p.waterWash,
+      milkWash: p.milkWash,
+    });
   });
 
   it('sets everything in Figtree, with the arrows fallback next', () => {
