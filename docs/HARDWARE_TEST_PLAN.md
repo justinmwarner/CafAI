@@ -466,6 +466,40 @@ this bag's, and the banner offers Retry to load the bag's version.
     `/api/v1/workflow` -> `context.beanBatchId` is that batch, and
     `coffeeName` and `coffeeRoaster` are the bean's.
 
+## 13. Steam, hot water and flush views (D146-D150)
+
+Only the mock and Decaid's source say what a DE1 sends while it steams,
+pours hot water or flushes; these checks say what a real one does. Keep the
+traffic log on (Settings > Log) and share it after the section.
+
+1. **Steam from the top bar.** Pitcher under the wand, Steam. Expected: the
+   screen becomes the steam view by itself, Steam's place in the top bar is
+   Stop, the header says "Heating" (if the heater warms first) then
+   "Steaming", the dial counts toward the steam time set ("of 50 s") and its
+   scene moves; Steam (°C), Pressure and Flow move. Let it time out. Expected:
+   "Purging" while the wand purges, then "Done", the loops still, the
+   settings live, **Go back**. Record: the substates the log shows in order
+   (`steam/…`), whether Pressure and Flow read anything while steaming, the
+   dial's time at the end against the time set, and how long the purge took.
+2. **Steam stopped early.** Steam, then Stop in the top bar after about 10 s.
+   Expected: Stop works on the first tap; the dial stops near 10 s; Done.
+3. **Steam from the group head** (a machine with a GHC). Start steam on the
+   machine. Expected: the view takes the screen as in 1.
+4. **Hot water, with the scale and a cup on it.** Hot water. Expected: the
+   hot water view; the water fills the dial toward the volume set; Scale
+   counts up from about 0 (if Decaid's stop at weight is on, it tares the
+   scale first); it stops by itself. Record the dial's millilitres, the
+   scale's grams and the cup's real weight of water, which say how close the
+   machine's flow measure is.
+5. **Flush.** Flush. Expected: the flush view; the dial counts toward the
+   flush time; Water, Flow and Group move; Done. Record the dial's time
+   against the flush time set.
+6. **Typing keeps the screen.** Settings, tap in the API key field, start a
+   flush on the machine. Expected: Settings stays.
+7. **Go back.** Start hot water from Settings (not typing), then Go back once
+   it is done. Expected: Settings again; after 1, Go back returns to the
+   coach.
+
 ## Results
 
 | Section | Step | Expected | Observed | Pass? |
@@ -504,6 +538,13 @@ this bag's, and the banner offers Retry to load the bag's version.
 | 12 | 8.5 | Next Decaid: its dialog before every photo; Allow opens the camera, Deny leaves the card as it was | | |
 | 12 | 9 | On Visualizer after a real upload; this shot's page; the same link in History | | |
 | 12 | 10 | A coffee DYE2 has seen: picked on the card, linked, its age and DYE2's setups used | | |
+| 13 | 1 | Steam view by itself; Heating, Steaming, Purging, Done; substates and the purge's length recorded | | |
+| 13 | 2 | Stop early: first tap, the dial stops with it | | |
+| 13 | 3 | Steam from the group head takes the screen | | |
+| 13 | 4 | Hot water: the dial's ml against the scale and the real water | | |
+| 13 | 5 | Flush: the dial's time against the flush time | | |
+| 13 | 6 | Typing keeps Settings | | |
+| 13 | 7 | Go back to Settings, and to the coach | | |
 
 Send back this table, the saved shot and profile JSON files, the `[CafAI]`
 lines from `/api/v1/webview/logs`, the output of `npm run test:decaid`, and,

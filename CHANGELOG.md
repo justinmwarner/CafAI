@@ -6,6 +6,18 @@ workflow checks against it. Settings > About shows the version you run.
 
 ## Unreleased
 
+### The everyday skin
+
+- Steam, hot water and flush take the screen while they run, as a shot
+  does, whether they started from CafAI, the group head or Decaid: a dial
+  fills toward the time or volume set, with steam rising from milk, water
+  filling or the shower screen pouring while the machine works (still under
+  reduced motion); the machine's readings (steam temperature, pressure and
+  flow; hot water's flow, the scale and the time; the flush's water, flow
+  and group temperature) and a trace of the run; and the drink's settings,
+  held while it runs and yours to change the moment it stops. The view stays
+  with its result, and **Go back** returns to where you were.
+
 ## 0.1.1 (2026-10-12)
 
 ### The coach
