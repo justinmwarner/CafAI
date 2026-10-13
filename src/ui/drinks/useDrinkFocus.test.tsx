@@ -18,7 +18,7 @@ const frame = (state: string, substate = 'pouring'): MachineFrame => ({
 
 function Harness() {
   const route = useRoute();
-  const { guardUntil, back, goBack } = useDrinkFocus(route);
+  const { guardUntil, back, goBack } = useDrinkFocus();
   return (
     <div>
       <output data-testid="route">{route.name === 'drink' ? `drink:${route.drink}` : route.name}</output>

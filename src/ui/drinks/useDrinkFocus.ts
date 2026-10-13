@@ -9,9 +9,9 @@
  *
  * It never sends anything to the machine.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useServices } from '../../app/services.tsx';
-import { replaceRoute, routeHref, type Route } from '../router.ts';
+import { parseRoute, replaceRoute, routeHref, type Route } from '../router.ts';
 import { GUARD_MS, isTextEntry } from '../shell/useShotFocus.ts';
 import { drinkStarted, goBackRoute, NO_ORIGIN, type DrinkFocusState } from './drinkFocus.ts';
 import { drinkTraceFor, type DrinkRun } from './drinkTrace.ts';
@@ -24,22 +24,19 @@ export interface DrinkFocus {
   goBack(): void;
 }
 
-export function useDrinkFocus(route: Route): DrinkFocus {
+export function useDrinkFocus(): DrinkFocus {
   const { telemetry } = useServices();
   const trace = useMemo(() => drinkTraceFor(telemetry), [telemetry]);
   const [guardUntil, setGuardUntil] = useState<number | null>(null);
   const [focus, setFocus] = useState<DrinkFocusState>(NO_ORIGIN);
   const focusRef = useRef(focus);
-  /** The route on screen, for the runs that start between renders. */
-  const shown = useRef(route);
-  useLayoutEffect(() => {
-    shown.current = route;
-  }, [route]);
 
   useEffect(() => {
     let guardTimer: ReturnType<typeof setTimeout> | null = null;
     const started = (run: DrinkRun) => {
-      const step = drinkStarted(focusRef.current, { kind: run.kind, typing: isTextEntry(document.activeElement), shown: shown.current });
+      // The screen on show from the hash, not the last render: the shot focus may have switched a moment ago, before React heard.
+      const shown = parseRoute(window.location.hash);
+      const step = drinkStarted(focusRef.current, { kind: run.kind, typing: isTextEntry(document.activeElement), shown });
       if (step.state !== focusRef.current) {
         focusRef.current = step.state;
         setFocus(step.state);

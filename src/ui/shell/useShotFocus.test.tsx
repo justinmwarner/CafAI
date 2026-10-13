@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen } from '@testing-library/react';
 import type { CoachUiMessage } from '../../app/types.ts';
 import type { ShotSummary } from '../../coach/types.ts';
-import { navigate, useRoute } from '../router.ts';
+import { navigate, replaceRoute, useRoute } from '../router.ts';
 import { createFakeServices, type FakeServices } from '../testing/fakeServices.ts';
 import { renderWithServices } from '../testing/renderWithServices.tsx';
 import { GUARD_MS, isTextEntry, useShotFocus } from './useShotFocus.ts';
@@ -201,6 +201,31 @@ describe('useShotFocus', () => {
     await settle();
     expect(window.location.hash).toBe('#/shot');
     expect(text('route')).toBe('shot');
+  });
+
+  it("a drink's view that took the screen keeps it when the shot's card arrives, even before React heard of the switch", async () => {
+    const services = renderHarness();
+    start(services);
+    await settle();
+    finish(services);
+    // The drink focus replaces the hash (steam started right after the shot); the card lands before the hashchange.
+    replaceRoute({ name: 'drink', drink: 'steam' });
+    addMessages(services, card('m-card', 'shot-2'));
+    expect(window.location.hash).toBe('#/steam');
+    await settle();
+    expect(text('route')).toBe('drink');
+  });
+
+  it("a drink's view that took the screen keeps it when the shot's card arrives afterwards", async () => {
+    const services = renderHarness();
+    start(services);
+    await settle();
+    finish(services);
+    replaceRoute({ name: 'drink', drink: 'flush' });
+    await settle();
+    addMessages(services, card('m-card', 'shot-2'));
+    await settle();
+    expect(window.location.hash).toBe('#/flush');
   });
 
   it('the next shot switches by itself again', async () => {

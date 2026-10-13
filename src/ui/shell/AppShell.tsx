@@ -589,7 +589,7 @@ function Shell({ route, onNavigate, children }: AppShellProps) {
   // And its one recording of steam, hot water and flush, for the same reason (D148).
   drinkTraceFor(telemetry);
   const { awaitingOutcome, guardUntil: shotGuard } = useShotFocus(route);
-  const drinkFocus = useDrinkFocus(route);
+  const drinkFocus = useDrinkFocus();
   const guardUntil = laterGuard(shotGuard, drinkFocus.guardUntil);
   const typing = useTextEntryFocus();
   const layout = useShellLayout(typing);
