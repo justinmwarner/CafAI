@@ -1,6 +1,20 @@
 # Good morning: CafAI after your answers (2026-10-04)
 
-**Newest (2026-10-11):** your list after the alignment, on branch
+**Newest (2026-10-13):** steam, hot water and flush take the screen while
+they run (D146-D150, branch `feat/drink-views`, merged into `main`): a dial
+fills toward the time or volume set, with steam rising from milk, water
+filling or the shower screen pouring while the machine works; the machine's
+readings and a trace of the run; and the drink's own settings, held while
+it runs and live once it stops, with **Go back** rather than a return (your
+two answers). The mock now runs each drink for its real time or volume.
+On the final code: typecheck, lint, 3767 unit tests, both builds and the
+release zip pass; Playwright passed 305 of 307 in the full run, and the two
+that crashed as this machine's session ended (a crashed page and a worker
+exit, not assertions) pass on all five sizes when run again, with the new
+spec. Chromium 91 runs the views with no page errors. What a real DE1 sends
+while it steams is still unverified: `docs/HARDWARE_TEST_PLAN.md` section 13.
+
+**Before that (2026-10-11):** your list after the alignment, on branch
 `feat/decaid-alignment` (D123-D128): tints named for coffee, the drink
 settings laid out by drink, grinders added from Settings or the chat,
 ratings in words instead of stars, a coach that leaves the taste to you,
