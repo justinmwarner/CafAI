@@ -3,7 +3,7 @@ import { ServicesProvider } from './services.tsx';
 import type { Services } from './types.ts';
 import { AppTheme } from '../ui/AppTheme.tsx';
 import { AppShell } from '../ui/shell/AppShell.tsx';
-import { navigate, routeHref, useRoute, type Route } from '../ui/router.ts';
+import { isRemembered, navigate, routeHref, useRoute, type Route } from '../ui/router.ts';
 import { CoachScreen } from '../ui/chat/CoachScreen.tsx';
 import { HistoryScreen } from '../ui/history/HistoryScreen.tsx';
 import { LogView } from '../ui/settings/LogView.tsx';
@@ -26,6 +26,7 @@ export function restoreRoute(win: Window = window): void {
 }
 
 function rememberRoute(route: Route): void {
+  if (!isRemembered(route)) return;
   try {
     window.localStorage.setItem(ROUTE_KEY, routeHref(route));
   } catch {
@@ -48,9 +49,9 @@ function Routed() {
   } else if (route.name === 'settings') {
     screen = <SettingsScreen />;
   } else {
-    // The coach and the shot routes alike: the shell lays the Shot view over
-    // the coach, and the same element in the same place keeps the coach
-    // mounted across the switch, scroll and draft intact.
+    // The coach, the shot and the drinks' routes alike: the shell lays the
+    // Shot view or a drink's view over the coach, and the same element in the
+    // same place keeps the coach mounted across the switch, scroll and draft intact.
     screen = <CoachScreen />;
   }
   return (
