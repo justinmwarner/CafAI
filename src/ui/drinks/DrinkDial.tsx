@@ -112,6 +112,8 @@ const dialStyles = (theme: Theme, water: boolean): SystemStyleObject<Theme> => {
       opacity: 0.7,
     },
     '& .screen': { stroke: theme.palette.text.secondary, strokeWidth: 5, strokeLinecap: 'round' },
+    // Once the drink is over (or before it), no water falls.
+    '&[data-moving="false"] .stream, &[data-moving="false"] .streak': { display: 'none' },
     // The loops run only while the machine does.
     '&[data-moving="true"] .wave': { animation: `${slide} 4.2s linear infinite` },
     '&[data-moving="true"] .milk-level .wave': { animationDuration: '2.2s' },
