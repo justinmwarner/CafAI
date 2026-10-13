@@ -666,6 +666,42 @@ const VISUALIZER_UPLOAD_DELAY_MS = 4000;
 /** Visualizer's real ids are large sequential numbers; the mock just counts up from one. */
 const FIRST_VISUALIZER_ID = 1_000_000;
 
+/**
+ * Steam, hot water and flush as a DE1 runs them (D150): a heater's warm-up
+ * (preparingForShot), then the drink until the time or the volume set in the
+ * workflow (re-read every frame, as Decaid writes it to the machine at once),
+ * with readings shaped like the machine's own; steam ends with the wand's
+ * purge (puffing). The other activities keep their short generic run.
+ */
+type MockDrink = 'steam' | 'hotWater' | 'flush';
+const MOCK_DRINKS: ReadonlySet<MockActivity> = new Set<MockActivity>(['steam', 'hotWater', 'flush']);
+/** Frames of preparingForShot before the drink's work starts. */
+const DRINK_WARMUP_FRAMES: Readonly<Record<MockDrink, number>> = { steam: 2, hotWater: 2, flush: 1 };
+/** The steam wand's purge after the steam, in frames. */
+const STEAM_PURGE_FRAMES = 3;
+/**
+ * Decaid turns the steam heater off for a steam temperature under this
+ * (state.ts writes it to the machine as 0): its reading then neither sags
+ * under the draw nor recovers to a target.
+ */
+const STEAM_OFF_BELOW = 135;
+/** Frames hot water takes to reach its flow, and a flush its. */
+const WATER_RAMP_FRAMES = 5;
+const FLUSH_RAMP_FRAMES = 3;
+/** The mock pours hot water at 8 ml/s at most, whatever is set (the DE1's own ceiling is near it). */
+const HOT_WATER_MAX_FLOW = 8;
+/** The cup on the scale lags the water by about this much while it pours. */
+const SCALE_LAG_ML = 1.5;
+
+interface DrinkRunState {
+  /** Frames since the start. */
+  frame: number;
+  /** Seconds of the drink's work so far. */
+  workS: number;
+  waterMl: number;
+  purge: number;
+}
+
 export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions = {}): ShotPlayer {
   let speed = options.speed && options.speed > 0 ? options.speed : 1;
   let activity: MockActivity | null = null;
@@ -679,6 +715,7 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
   let shotCount = 0;
   let activityFrame = 0;
   let activityStop = false;
+  let drinkRun: DrinkRunState = { frame: 0, workS: 0, waterMl: 0, purge: 0 };
   let idleTick = 0;
   const waiters: Array<() => void> = [];
   let ttrTimer: ReturnType<typeof setTimeout> | null = null;
@@ -987,10 +1024,114 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
     return { flow: rinse.flow ?? 6, pressure: 0.6, mix: rinse.targetTemperature ?? 90 };
   }
 
+  /**
+   * The scale weighs the hot water: tared as the water starts, the cup then
+   * following the water SCALE_LAG_ML behind, and holding all of it once the
+   * water stops.
+   */
+  function weighWater(weightG: number, flow: number, at: number): void {
+    const scale = state.getScaleSnapshot();
+    if (!scale) return;
+    state.setScaleWeight({ ...scale, timestamp: formatLocalTimestamp(at), weight: quantize(Math.max(0, weightG), 10), weightFlow: quantize(flow, 10) });
+  }
+
+  function drinkTick(name: MockDrink): void {
+    timer = null;
+    if (!state.isMachineConnected()) {
+      settle();
+      return;
+    }
+    const current = state.getMachineSnapshot();
+    const at = Math.max(state.clock.now(), parseDecaidTimestamp(current.timestamp) + FRAME_MS);
+    const workflow = state.getWorkflow();
+    const run = drinkRun;
+    const warming = run.frame < DRINK_WARMUP_FRAMES[name];
+    const k = run.frame - DRINK_WARMUP_FRAMES[name];
+    const steamSet = workflow.steamSettings.targetTemperature ?? 150;
+    let finished = activityStop;
+    let substate = warming ? 'preparingForShot' : 'pouring';
+    let flow = 0;
+    let pressure = 0.002;
+    let mix = current.mixTemperature;
+    let group = current.groupTemperature;
+    let steamTemperature = current.steamTemperature;
+    if (name === 'hotWater' && run.frame === 0) weighWater(0, 0, at);
+    if (!finished && !warming) {
+      if (name === 'steam') {
+        const steam = workflow.steamSettings;
+        if (run.workS >= (steam.duration ?? 50) - 1e-9) {
+          if (run.purge >= STEAM_PURGE_FRAMES) finished = true;
+          else {
+            substate = 'puffing';
+            pressure = 1.2 - run.purge * 0.35;
+            run.purge += 1;
+          }
+        } else {
+          flow = (steam.flow ?? 0.8) + 0.06 * Math.sin(k * 0.9);
+          pressure = 1.9 + 0.25 * Math.sin(k * 0.7) + 0.08 * Math.sin(k * 2.3);
+          // The heater sags a few degrees under the draw and recovers.
+          if (steamSet >= STEAM_OFF_BELOW) steamTemperature = Math.round(steamSet - 3 + 2 * Math.sin(k / 6));
+          run.workS += DT;
+        }
+      } else if (name === 'hotWater') {
+        const water = workflow.hotWaterData;
+        if (run.waterMl >= (water.volume ?? 50) || run.workS >= (water.duration ?? 30) - 1e-9) finished = true;
+        else {
+          flow = Math.min(water.flow ?? 10, HOT_WATER_MAX_FLOW) * Math.min(1, (k + 1) / WATER_RAMP_FRAMES);
+          pressure = 0.4;
+          mix = water.targetTemperature ?? 75;
+          run.waterMl += flow * DT;
+          run.workS += DT;
+          weighWater(run.waterMl - SCALE_LAG_ML, flow, at);
+        }
+      } else {
+        const rinse = workflow.rinseData;
+        if (run.workS >= (rinse.duration ?? 10) - 1e-9) finished = true;
+        else {
+          flow = (rinse.flow ?? 6) * Math.min(1, (k + 1) / FLUSH_RAMP_FRAMES);
+          pressure = 0.6;
+          mix = rinse.targetTemperature ?? 90;
+          // Water through the group brings it toward its target.
+          group = group + (current.targetGroupTemperature - group) * 0.15;
+          run.workS += DT;
+        }
+      }
+    }
+    if (finished) {
+      substate = 'idle';
+      if (name === 'steam' && steamSet >= STEAM_OFF_BELOW) steamTemperature = steamSet;
+      // The water still on its way lands: the cup holds all that was poured.
+      if (name === 'hotWater') weighWater(run.waterMl, 0, at);
+    }
+    state.setMachineSnapshot({
+      ...current,
+      timestamp: formatLocalTimestamp(at),
+      state: { state: finished ? 'idle' : name, substate },
+      flow: quantize(flow, 4096),
+      pressure: quantize(pressure, 4096),
+      targetFlow: quantize(substate === 'pouring' ? flow : 0, 16),
+      targetPressure: 0,
+      mixTemperature: quantize(mix, 256),
+      groupTemperature: quantize(group, 65536),
+      steamTemperature,
+    });
+    state.clock.advanceTo(at + 1);
+    run.frame += 1;
+    if (finished) {
+      settle();
+      return;
+    }
+    timer = setTimeout(activityTick, wallDelay());
+  }
+
   function activityTick(): void {
     timer = null;
     const name = activity;
     if (!name || name === 'espresso') return;
+    if (MOCK_DRINKS.has(name)) {
+      drinkTick(name as MockDrink);
+      return;
+    }
     if (!state.isMachineConnected()) {
       settle();
       return;
@@ -1025,6 +1166,7 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
     resting = 'idle';
     activityFrame = 0;
     activityStop = false;
+    drinkRun = { frame: 0, workS: 0, waterMl: 0, purge: 0 };
     activityTick();
   }
 
