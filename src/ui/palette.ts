@@ -100,6 +100,10 @@ export interface Palette {
   onError: string;
   /** The pulsing dot of a live shot. */
   live: string;
+  /** The water inside the steam, hot water and flush dial: the flow's blue washed over the page (D149). */
+  waterWash: string;
+  /** The milk inside the steam dial: the ink washed over the page. */
+  milkWash: string;
   graph: GraphPalette;
 }
 
@@ -169,6 +173,7 @@ export function buildPalette(mode: ThemeMode, tint: Tint): Palette {
   const ink = neutral('ink');
   const inkMuted = neutral('inkMuted');
   const accent = oklch(tint.accentLightness?.[mode] ?? ACCENT_LIGHTNESS[mode], tint.chroma, tint.hue);
+  const flow = fixed('flow');
   return {
     mode,
     background,
@@ -186,9 +191,11 @@ export function buildPalette(mode: ThemeMode, tint: Tint): Palette {
     info: fixed('info'),
     onError: dark ? oklch(0.2, 0.02, 25) : oklch(0.99, 0.005, 25),
     live: fixed('live'),
+    waterWash: blend(flow, background, dark ? 0.22 : 0.16),
+    milkWash: blend(ink, background, 0.09),
     graph: {
       pressure: fixed('pressure'),
-      flow: fixed('flow'),
+      flow,
       weightFlow: fixed('weightFlow'),
       weight: fixed('weight'),
       grid: blend(ink, background, 0.08),

@@ -2255,3 +2255,63 @@ D139-D144 are left to the work running beside this one; this starts at D145.
   WebSocket, `test:decaid` and `drift.ts`; the first read PowerShell's blank
   rows as no Decaid running, so the skill's check now prints True or False,
   and the second found the running Decaid and kept to reads.
+
+### Steam, hot water and flush views (2026-10-13)
+
+D141-D144 are still left to the work running beside this one; this starts at D146.
+
+- **D146. Steam, hot water and flush take the screen while they run.** When
+  the machine starts one, from CafAI's top bar, the group head or Decaid, the
+  main pane switches to that drink's view (`#/steam`, `#/hot-water`,
+  `#/flush`) with `location.replace` and the 350 ms tap guard, as a shot does
+  (D85): not while a field that takes typed text has focus, nor when the view
+  is already up; a run already under way when CafAI starts takes it too.
+  There is no return of its own: the view stays after the run, and **Go
+  back** (shown only once nothing runs, so a wet thumb aiming for Stop in the
+  top bar cannot land on it) returns, with `location.replace`, to the screen
+  the view took over (the last one that was not a drink's view), or the
+  coach. The views are not places in the navigation, and a drink's route is
+  never remembered across a reload (`isRemembered`). Stop stays in the top
+  bar (D90). Why: the owner's ask ("have the screen go to a different page
+  that shows it happening") and answer, offered an 8 s hold and a return
+  ("Stay on the view, you can have a Go back button").
+- **D147. The view's settings are Settings' steppers, held while anything
+  runs.** The stepper and its reads and writes moved out of
+  `DrinkSettingsSection.tsx` into `DrinkFields.tsx` and `useDrinkPresets.ts`;
+  the stepper takes its arrangement from its parent (one row per setting, or
+  side by side with the label over the stepper), because the view's card is
+  laid out for its own width, not the window's. Decaid's own steam screen
+  changes the steam time (+10 s) and flow while steaming; offered that, the
+  owner kept D114's rule, so the steppers show, held, with the reason, and
+  come alive the moment the run ends.
+- **D148. What the views show, and from where.** One recording of drinks for
+  the app (`drinkTrace.ts`, as `shotTrace.ts` for shots): a run is the frames
+  in a drink's states (steam with steamRinse, hot water, flush), outside
+  React. Its time counts on the machine's timestamps from the first frame
+  past heating (`preparingForShot`) and stops while steam is paused or the
+  wand purges or rinses; its water is the flow summed over that time. The
+  targets come from the machine's live settings (`ws/v1/machine/shotSettings`)
+  before Decaid's workflow; the flush has none there. Steam shows the heater
+  against its setting, pressure and flow; hot water its flow, the scale and
+  the time against its limit, and no live temperature, because during hot
+  water `mixTemperature` is not the water's (Decaid's spec); flush its water,
+  flow and the group against its target. Done, the readouts become the run's:
+  averages over the working frames, and values at the end.
+- **D149. The dial, and its motion.** A ring that fills toward the target
+  with a tip at its end, ink for steam and the flow's blue for water, over a
+  scene that moves only while the machine runs (steam rising from milk, water
+  filling under a stream, a shower screen pouring), masked out behind the
+  number. The loops stop under reduced motion and when the run ends; the arc,
+  the tip and the level ease 250 ms between frames and keep moving under
+  reduced motion (at once), because they are readings. Two palette roles,
+  `waterWash` and `milkWash`, with ink (7:1) and ink-muted (4.5:1) on both in
+  the contrast sweep (worst 4.95:1, light mode, hue 152).
+- **D150. The mock runs drinks for their real time or volume.** Steam warms,
+  steams for the time set and purges the wand (`puffing`); hot water pours
+  until the volume or the time limit, its scale tared at the start and
+  weighing it; a flush runs for its time at its flow, the group closing on its
+  target; all re-read the workflow every frame, and a workflow PUT that
+  changes steam or hot water reaches the mock machine's shot settings and
+  their channel, as Decaid's DE1 write does. Before this every drink lasted
+  20 frames, about 4 s, whatever was set, which no view of a run could be
+  tested against.

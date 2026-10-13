@@ -10,7 +10,8 @@ the shot data, your feedback and the change that led to it.
 
 CafAI is also a complete everyday skin: espresso, steam, flush and hot water
 from the top bar, a live card with the machine's state, a big live shot
-graph, a tablet and a phone layout, and a look of your own. It follows the
+graph, a live view of each steam, hot water and flush while it runs, a
+tablet and a phone layout, and a look of your own. It follows the
 patterns of Decent's own skin, streamline.js, and began as a port of Crema's
 logic; see [Influences and thanks](#influences-and-thanks).
 
@@ -230,7 +231,15 @@ with **Retry**; it never loads anything on the machine by itself.
   shot starts, the screen becomes the Shot view by itself: a big timer,
   pressure, flow, weight and weight flow, the graph, and a note from the
   coach saying it is watching. When the shot's card reaches the chat, the
-  coach comes back by itself; the top bar and Stop never move. Problems
+  coach comes back by itself; the top bar and Stop never move. Steam, hot
+  water and flush take the screen the same way while they run, whoever
+  started them: a dial fills toward the time or volume set (steam rising
+  from milk, water filling, the shower screen pouring, still under reduced
+  motion), with the machine's readings (steam temperature, pressure and
+  flow; hot water's flow, the scale and the time; the flush's water, flow
+  and group temperature), a trace of the run, and the drink's own settings,
+  held while it runs and yours to change the moment it stops. The view stays
+  with its result; **Go back** returns to where you were. Problems
   (not connected, Decaid out of reach, water to refill, an error the machine
   or a device reports, a failed command, Decaid set to leave stopping shots
   to the skin, a scale that dropped) show in one slim alert under the top

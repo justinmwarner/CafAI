@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CafAI: steam, hot water and flush, live</title>
+<style>
+  @font-face { font-family: 'Figtree'; font-weight: 300 900; font-style: normal; src: url('../../../node_modules/@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2') format('woff2'); }
+
+  /* Dark Crema, from src/ui/palette.ts. water-wash: graph-flow at 22% over background; milk-wash: ink at 9% over background. */
+  .t-crema-dark { --bg:#140e09; --surface:#1c160f; --raised:#282018; --ink:#f4ede6; --muted:#b8afa6; --line:#2f2924; --grid:#26201b; --field:#504c46; --disabled:#5c554f; --accent:#d5a776; --accent-soft:#3a2d1f; --on-accent:#1e1408; --success:#6ad895; --warning:#eec05b; --error:#f47b74; --on-error:#1e1311; --live:#f75d59; --pressure:#5ed99e; --flow:#65b2f1; --wflow:#f7a062; --weight:#dabfa2; --water-wash:#26323c; --milk-wash:#2a231e; }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; background: #101010; color: #d8d8d8; font-family: 'Figtree', system-ui, sans-serif; }
+  .board { display: flex; flex-direction: column; gap: 40px; width: 1440px; }
+  .intro h1 { font-size: 26px; font-weight: 700; margin: 0 0 8px; color: #fff; }
+  .intro p { font-size: 15.5px; line-height: 1.55; margin: 0 0 6px; color: #bdbdbd; max-width: 1240px; }
+  .rowf { display: flex; gap: 32px; align-items: flex-start; }
+  .fw { display: flex; flex-direction: column; gap: 10px; }
+  .cap { font-size: 14.5px; line-height: 1.5; color: #bdbdbd; max-width: 430px; }
+  .cap b { color: #fff; font-weight: 650; }
+  .cap ul { margin: 6px 0 0; padding-left: 18px; }
+  .cap li { margin: 3px 0; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 650; letter-spacing: .02em; color: #fff; background: #2a2a2a; border-radius: 6px; padding: 2px 8px; margin-bottom: 6px; }
+
+  .frame { position: relative; overflow: hidden; background: var(--bg); color: var(--ink); box-shadow: 0 0 0 1px #2c2c2c, 0 18px 40px rgba(0,0,0,.45); font-size: 16px; display: flex; flex-direction: column; }
+  .tab { width: 962px; height: 602px; border-radius: 12px; }
+  .ph { width: 390px; height: 844px; border-radius: 30px; }
+  .phs { width: 844px; height: 390px; border-radius: 30px; }
+
+  .ic { width: 22px; height: 22px; fill: currentColor; flex: none; }
+  .ic.s { width: 18px; height: 18px; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* Top bar, as built: the brand, the places, the machine row (Stop in the running start's place), Decaid, Exit. */
+  .tb { height: 56px; flex: none; display: flex; align-items: center; gap: 4px; padding: 0 12px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .brand { display: flex; align-items: center; gap: 6px; color: var(--accent); font-weight: 750; font-size: 19px; margin-right: 6px; }
+  .nav-i { height: 48px; padding: 0 8px; display: inline-flex; align-items: center; gap: 8px; border-radius: 12px; color: var(--muted); font-weight: 600; font-size: 16px; white-space: nowrap; }
+  .nav-i .ic { width: 20px; height: 20px; }
+  .grow { flex: 1 1 auto; }
+  .mrow { display: flex; gap: 2px; }
+  .mb { width: 54px; height: 48px; border-radius: 12px; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; color: var(--ink); font-size: 11.5px; font-weight: 600; }
+  .mb .ic { width: 21px; height: 21px; }
+  .mb.off { color: var(--disabled); }
+  .mb.stop { background: var(--error); color: var(--on-error); font-weight: 700; }
+  .sep { width: 1px; height: 30px; background: var(--line); margin: 0 4px; }
+  .ib { width: 48px; height: 48px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
+  .exit { height: 48px; padding: 0 12px; display: inline-flex; align-items: center; gap: 8px; border-radius: 12px; background: var(--raised); color: var(--ink); font-weight: 600; font-size: 16px; }
+  .exit small { display: block; font-size: 13px; color: var(--muted); font-weight: 400; line-height: 1.2; }
+  .exit span { line-height: 1.1; }
+
+  /* Phone bars. */
+  .ptb { height: 52px; flex: none; display: flex; align-items: center; padding: 0 4px 0 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .ptb .brand { font-size: 19px; }
+  .pmb { width: 44px; height: 44px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; color: var(--ink); }
+  .pmb.off { color: var(--disabled); }
+  .pmb.stop { background: var(--error); color: var(--on-error); }
+  .tabs { height: 64px; flex: none; display: grid; grid-template-columns: repeat(4, 1fr); padding: 6px; background: var(--surface); border-top: 1px solid var(--line); }
+  .tabb { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--muted); font-size: 12.5px; font-weight: 650; }
+  .tabb .pill { width: 58px; height: 30px; border-radius: 15px; display: flex; align-items: center; justify-content: center; }
+  .rail { width: 80px; flex: none; display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 8px 6px; background: var(--surface); border-right: 1px solid var(--line); }
+  .rail .tabb { min-height: 60px; }
+
+  /* ---------- The drink view ---------- */
+  .main { flex: 1 1 auto; min-height: 0; display: flex; }
+  .dv { flex: 1 1 auto; min-width: 0; min-height: 0; max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; padding: 14px 20px; overflow: hidden; }
+  .dv-h { flex: none; display: flex; align-items: center; gap: 10px; min-height: 40px; }
+  .dv-h .dicon { width: 24px; height: 24px; color: var(--muted); }
+  .dv-h .name { font-size: 17px; font-weight: 700; }
+  .dv-h .state { font-size: 15px; color: var(--muted); font-weight: 550; white-space: nowrap; }
+  .dv-h .state.done { color: var(--success); display: inline-flex; align-items: center; gap: 4px; }
+  .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--live); flex: none; animation: pulse 1.6s ease-in-out infinite; }
+  .back { display: inline-flex; align-items: center; gap: 2px; font-size: 15px; color: var(--muted); white-space: nowrap; }
+  .tbtn { height: 48px; padding: 0 12px; border-radius: 12px; display: inline-flex; align-items: center; color: var(--accent); font-weight: 600; font-size: 16px; }
+  .goback { height: 48px; padding: 0 16px 0 12px; border-radius: 12px; display: inline-flex; align-items: center; gap: 8px; background: var(--raised); color: var(--ink); font-weight: 600; font-size: 16px; white-space: nowrap; flex: none; }
+  .goback .ic { width: 20px; height: 20px; }
+
+  .dv-body { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 32px; align-items: center; }
+  .dv-side { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+
+  /* The dial. */
+  .dial { position: relative; flex: none; }
+  .dial > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .dial .ctr { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+  .big { font-size: 46px; font-weight: 650; letter-spacing: -.02em; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .big .u { font-size: .5em; font-weight: 550; color: var(--muted); margin-left: 4px; letter-spacing: 0; }
+  .of { margin-top: 8px; font-size: 13px; font-weight: 550; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ctr .ok { width: 28px; height: 28px; color: var(--success); margin-bottom: 6px; animation: rise 200ms ease-out both; }
+  .d272 { width: 272px; height: 272px; }
+  .d212 { width: 212px; height: 212px; }
+  .d212 .big { font-size: 34px; }
+  .d184 { width: 184px; height: 184px; }
+  .d184 .big { font-size: 32px; }
+  .d184 .of, .d212 .of { margin-top: 6px; }
+
+  .track { fill: none; stroke: var(--raised); stroke-width: 10; }
+  .arc { fill: none; stroke-width: 10; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 136px 136px; transition: stroke-dasharray 200ms linear; }
+  .arc.steam, .head.steam { stroke: var(--ink); }
+  .arc.water, .head.water { stroke: var(--flow); }
+  .head { stroke-width: 0; }
+  .head.steam { fill: var(--ink); stroke: var(--bg); stroke-width: 3; }
+  .head.water { fill: var(--flow); stroke: var(--bg); stroke-width: 3; }
+  .tick { stroke: var(--grid); stroke-width: 2; stroke-linecap: round; }
+  .tick.major { stroke: var(--line); stroke-width: 2.5; }
+
+  /* The scene inside the dial: calm loops, all still under reduced motion. */
+  .milk { fill: var(--milk-wash); }
+  .milk-top { fill: none; stroke: var(--muted); stroke-width: 2; opacity: .55; }
+  .water-body { fill: var(--water-wash); }
+  .water-top { fill: none; stroke: var(--flow); stroke-width: 2; }
+  .wave { animation: wave 4.2s linear infinite; }
+  .wave.fast { animation-duration: 2.2s; }
+  .wisp { fill: none; stroke: var(--muted); stroke-width: 3; stroke-linecap: round; opacity: 0; animation: wisp 3.6s cubic-bezier(.3,.6,.5,1) infinite; }
+  .wisp.w2 { animation-delay: 1.2s; }
+  .wisp.w3 { animation-delay: 2.4s; }
+  .stream { fill: none; stroke: var(--flow); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 12 9; animation: fall .62s linear infinite; }
+  .streak { fill: none; stroke: var(--flow); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 9 15; opacity: .7; animation: fall .7s linear infinite; }
+  .streak.k2 { animation-duration: .82s; animation-delay: -.3s; }
+  .streak.k3 { animation-duration: .66s; animation-delay: -.5s; }
+  .screen { stroke: var(--muted); stroke-width: 5; stroke-linecap: round; }
+  .still .wave, .still .wisp, .still .stream, .still .streak { animation: none; }
+  .still .wisp { opacity: 0; }
+
+  /* Readouts: the Shot view's, with their series swatches. */
+  .ro { display: grid; column-gap: 18px; row-gap: 12px; }
+  .ro.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ro.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ro.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .r .lab { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 550; color: var(--muted); white-space: nowrap; }
+  .sw { width: 12px; height: 3px; border-radius: 2px; flex: none; }
+  .r .v { font-size: 30px; font-weight: 650; letter-spacing: -.01em; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .r .v .u { font-size: .6em; font-weight: 550; color: var(--muted); margin-left: 3px; letter-spacing: 0; }
+  .r .c { font-size: 13px; color: var(--muted); min-height: 18px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .small .r .v { font-size: 24px; }
+
+  /* The run so far: a quiet trace, Decent's colours, no axes but the time. */
+  .trace { position: relative; height: 104px; }
+  .trace svg { width: 100%; height: 100%; display: block; overflow: visible; }
+  .trace .g { stroke: var(--grid); stroke-width: 1; }
+  .trace .t { font-size: 12px; fill: var(--muted); font-family: inherit; }
+  .trace .p { fill: none; stroke: var(--pressure); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+  .trace .f { fill: none; stroke: var(--flow); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+  .trace .w { fill: none; stroke: var(--weight); stroke-width: 1.5; stroke-linejoin: round; }
+  .trace .tip { fill: var(--bg); stroke-width: 2.5; }
+
+  /* The drink's own settings: the stepper from Settings > Steam, hot water and flush. */
+  .set { flex: none; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px 16px 14px; }
+  .set-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .set-h b { font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .set-h span { font-size: 15px; color: var(--muted); }
+  .set-grid { display: grid; column-gap: 16px; row-gap: 8px; }
+  .set-grid.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .set-grid.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .fl { font-size: 13px; font-weight: 550; color: var(--muted); margin-bottom: 6px; }
+  .stp { height: 48px; border: 1px solid var(--field); border-radius: 12px; display: flex; align-items: center; }
+  .stp .b { flex: 0 0 30%; min-width: 48px; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--ink); }
+  .stp .b .ic { width: 24px; height: 24px; }
+  .stp .val { flex: 1 1 auto; text-align: center; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .stp .val .u { font-size: 13px; font-weight: 550; color: var(--muted); margin-left: 3px; }
+  .stp.dis { border-color: var(--line); }
+  .stp.dis .b { color: var(--disabled); }
+  .stp.dis .val { color: var(--muted); }
+  .stp.focus { border: 2px solid var(--accent); }
+  .saved { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  /* A phone: each setting one row, the stepper at the end. */
+  .set-rows { display: grid; grid-template-columns: max-content minmax(0, 184px); justify-content: space-between; align-items: center; column-gap: 16px; row-gap: 8px; }
+  .set-rows .rl { font-size: 15px; color: var(--ink); }
+
+  .pv { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 12px 16px 14px; overflow: hidden; }
+  .pv .dial { align-self: center; }
+  .pv .dv-h { min-height: 36px; }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+  @keyframes wave { from { transform: translateX(0); } to { transform: translateX(-80px); } }
+  @keyframes wisp { 0% { transform: translateY(6px); opacity: 0; } 14% { opacity: .9; } 72% { opacity: .65; } 100% { transform: translateY(-122px); opacity: 0; } }
+  @keyframes fall { to { stroke-dashoffset: -24px; } }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .live-dot, .wave, .wisp, .stream, .streak, .ctr .ok { animation: none !important; }
+    .wisp { opacity: 0; }
+    .arc { transition: none; }
+  }
+</style>
+</head>
+<body class="t-crema-dark">
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-brand" viewBox="0 0 24 24"><path d="M20 3H6c-1.1 0-2 .9-2 2v8c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2m0 5h-2V5h2zM3 21h16c.55 0 1-.45 1-1s-.45-1-1-1H3c-.55 0-1 .45-1 1s.45 1 1 1"/></symbol>
+    <symbol id="i-coach" viewBox="0 0 24 24"><path d="M20 6h-1v8c0 .55-.45 1-1 1H6v1c0 1.1.9 2 2 2h10l4 4V8c0-1.1-.9-2-2-2m-3 5V4c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v13l4-4h9c1.1 0 2-.9 2-2"/></symbol>
+    <symbol id="i-shot" viewBox="0 0 24 24"><path d="m4.2 17.78 5.3-5.3 3.25 3.25c.41.41 1.07.39 1.45-.04l7.17-8.07c.35-.39.33-.99-.04-1.37-.4-.4-1.07-.39-1.45.04l-6.39 7.18-3.29-3.29a.996.996 0 0 0-1.41 0l-6.09 6.1c-.39.39-.39 1.02 0 1.41l.09.09c.39.39 1.03.39 1.41 0"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18m-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8z"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.030 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6"/></symbol>
+    <symbol id="i-espresso" viewBox="0 0 24 24"><path d="M18.5 3H6c-1.1 0-2 .9-2 2v5.71c0 3.83 2.95 7.18 6.78 7.29 3.96.12 7.22-3.06 7.22-7v-1h.5c1.93 0 3.5-1.57 3.5-3.5S20.43 3 18.5 3M16 5v3H6V5zm2.5 3H18V5h.5c.83 0 1.5.67 1.5 1.5S19.33 8 18.5 8M4 19h16v2H4z"/></symbol>
+    <symbol id="i-steam" viewBox="0 0 24 24"><path d="M14.5 17c0 1.65-1.35 3-3 3s-3-1.35-3-3h2c0 .55.45 1 1 1s1-.45 1-1-.45-1-1-1H2v-2h9.5c1.65 0 3 1.35 3 3M19 6.5C19 4.57 17.43 3 15.5 3S12 4.57 12 6.5h2c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S16.330 8 15.5 8H2v2h13.5c1.93 0 3.5-1.57 3.5-3.5m-.5 4.5H2v2h16.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5v2c1.93 0 3.5-1.57 3.5-3.5S20.43 11 18.5 11"/></symbol>
+    <symbol id="i-flush" viewBox="0 0 24 24"><path d="M12 3c-.55 0-1 .45-1 1v1.07C7.06 5.56 4 8.92 4 13h16c0-4.08-3.06-7.44-7-7.930V4c0-.55-.45-1-1-1M8 15a1 1 0 1 0 0 2 1 1 0 0 0 0-2m4 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2m4 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2m-6 3a1 1 0 1 0 0 2 1 1 0 0 0 0-2m4 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2"/></symbol>
+    <symbol id="i-water" viewBox="0 0 24 24"><path d="M12 2.69 6.34 8.35a8 8 0 1 0 11.32 0z"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+    <symbol id="i-open" viewBox="0 0 24 24"><path d="M18 19H6c-.55 0-1-.45-1-1V6c0-.55.45-1 1-1h5c.55 0 1-.45 1-1s-.45-1-1-1H5c-1.11 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-6c0-.55-.45-1-1-1s-1 .45-1 1v5c0 .55-.45 1-1 1M14 4c0 .55.45 1 1 1h2.59l-9.13 9.13a.996.996 0 1 0 1.41 1.41L19 6.41V9c0 .55.45 1 1 1s1-.45 1-1V4c0-.55-.45-1-1-1h-5c-.55 0-1 .45-1 1"/></symbol>
+    <symbol id="i-exit" viewBox="0 0 24 24"><path d="M5 5h6c.55 0 1-.45 1-1s-.45-1-1-1H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h6c.55 0 1-.45 1-1s-.45-1-1-1H5z"/><path d="m20.65 11.65-2.79-2.79c-.32-.32-.86-.1-.86.35V11h-7c-.55 0-1 .45-1 1s.45 1 1 1h7v1.79c0 .45.54.67.85.35l2.79-2.79c.2-.19.2-.51.01-.7"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></symbol>
+    <symbol id="i-check-circle" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2M9.29 16.29 5.7 12.7a.996.996 0 0 1 0-1.41c.39-.39 1.02-.39 1.41 0L10 14.17l6.88-6.88c.39-.39 1.02-.39 1.41 0s.39 1.02 0 1.41l-7.59 7.59c-.38.39-1.02.39-1.41 0"/></symbol>
+    <symbol id="i-add" viewBox="0 0 24 24"><path d="M18 13h-5v5c0 .55-.45 1-1 1s-1-.45-1-1v-5H6c-.55 0-1-.45-1-1s.45-1 1-1h5V6c0-.55.45-1 1-1s1 .45 1 1v5h5c.55 0 1 .45 1 1s-.45 1-1 1"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 11H7.83l4.88-4.88c.39-.39.39-1.03 0-1.42a.996.996 0 0 0-1.41 0l-6.59 6.59c-.39.39-.39 1.02 0 1.41l6.59 6.59c.39.39 1.02.39 1.41 0s.39-1.02 0-1.41L7.83 13H19c.55 0 1-.45 1-1s-.45-1-1-1"/></symbol>
+    <symbol id="i-remove" viewBox="0 0 24 24"><path d="M18 13H6c-.55 0-1-.45-1-1s.45-1 1-1h12c.55 0 1 .45 1 1s-.45 1-1 1"/></symbol>
+
+    <!-- The dial's scenes. All in a 272 box, clipped to the dial's inside. -->
+    <clipPath id="inside"><circle cx="136" cy="136" r="99"/></clipPath>
+    <!-- Streams fall behind the number: gone across the middle, where it sits. -->
+    <linearGradient id="fade-mid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff"/><stop offset=".3" stop-color="#fff"/><stop offset=".36" stop-color="#000"/>
+      <stop offset=".66" stop-color="#000"/><stop offset=".72" stop-color="#fff"/><stop offset="1" stop-color="#fff"/>
+    </linearGradient>
+    <mask id="behind-number" maskUnits="userSpaceOnUse" x="0" y="0" width="272" height="272"><rect width="272" height="272" fill="url(#fade-mid)"/></mask>
+  </defs>
+</svg>
+
+<div class="board">
+  <div class="intro">
+    <h1>Steam, hot water and flush, live</h1>
+    <p>When the machine starts steaming, pouring hot water or flushing, from CafAI's top bar, the group head or Decaid, the screen under the top bar turns into that drink's own view, as it does for a shot. Left: the dial, filling toward the drink's own target (the steam time, the hot water volume, the flush time) with a small scene that moves only while the machine runs. Right: what the machine reports, then the run so far. Under it: the drink's settings, the very steppers of Settings &gt; Steam, hot water and flush.</p>
+    <p>Stop stays where it is, in the top bar, in the place of the start that runs. Every setting is held while anything runs (the machine is using them) and comes alive the moment it stops. Once it's done the view stays, with the result and <b>Go back</b>, which returns to the screen the view took over. Every loop here (the wisps, the stream, the wave, the live dot) holds still under reduced motion; the arc, the level and the numbers still move, because they are the readings.</p>
+  </div>
+
+  <!-- ===================== Tablet: steam, running ===================== -->
+  <div class="rowf">
+    <div class="fw">
+      <div class="frame tab">
+        <div class="tb">
+          <div class="brand"><svg class="ic"><use href="#i-brand"/></svg>CafAI</div>
+          <span class="nav-i"><svg class="ic"><use href="#i-coach"/></svg>Coach</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-shot"/></svg>Shot</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-history"/></svg>History</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-settings"/></svg>Settings</span>
+          <span class="grow"></span>
+          <div class="mrow">
+            <span class="mb off"><svg class="ic"><use href="#i-espresso"/></svg>Espresso</span>
+            <span class="mb stop"><svg class="ic"><use href="#i-stop"/></svg>Stop</span>
+            <span class="mb off"><svg class="ic"><use href="#i-flush"/></svg>Flush</span>
+            <span class="mb off"><svg class="ic"><use href="#i-water"/></svg>Hot water</span>
+          </div>
+          <span class="sep"></span>
+          <span class="ib"><svg class="ic"><use href="#i-open"/></svg></span>
+          <span class="exit"><svg class="ic"><use href="#i-exit"/></svg><span>Exit<small>to Decaid</small></span></span>
+        </div>
+        <div class="main">
+          <div class="dv">
+            <div class="dv-h">
+              <span class="live-dot"></span>
+              <svg class="ic dicon"><use href="#i-steam"/></svg>
+              <span class="name">Steam</span>
+              <span class="state">· Steaming</span>
+            </div>
+            <div class="dv-body">
+              <div class="dial d272" data-sim="steam" data-from="17.6" data-to="38" data-of="50" data-unit="s" data-tenths="1">
+                <svg viewBox="0 0 272 272">
+                  <g class="ticks" data-major="5"></g>
+                  <circle class="track" cx="136" cy="136" r="112"/>
+                  <g clip-path="url(#inside)">
+                    <g class="lvl" data-base="206" data-rise="34">
+                      <path class="milk wave fast" d=""/>
+                      <path class="milk-top wave fast" d=""/>
+                    </g>
+                    <g mask="url(#behind-number)">
+                      <path class="wisp" d="M110 204c-7-9 6-16 0-25s7-16 1-25"/>
+                      <path class="wisp w2" d="M136 208c-7-9 6-16 0-25s7-16 1-25"/>
+                      <path class="wisp w3" d="M162 204c-7-9 6-16 0-25s7-16 1-25"/>
+                    </g>
+                  </g>
+                  <circle class="arc steam" cx="136" cy="136" r="112" pathLength="100" stroke-dasharray="35 100"/>
+                  <circle class="head steam" r="8" cx="136" cy="24"/>
+                </svg>
+                <div class="ctr"><div class="big"><span class="n">17.6</span><span class="u">s</span></div><div class="of">of 50 s</div></div>
+              </div>
+              <div class="dv-side">
+                <div class="ro c3">
+                  <div class="r"><div class="lab">Steam</div><div class="v"><span data-j="152:1.6:0">152</span><span class="u">°C</span></div><div class="c">set 150</div></div>
+                  <div class="r"><div class="lab"><span class="sw" style="background:var(--pressure)"></span>Pressure</div><div class="v"><span data-j="1.9:.25:1">1.9</span><span class="u">bar</span></div><div class="c">&nbsp;</div></div>
+                  <div class="r"><div class="lab"><span class="sw" style="background:var(--flow)"></span>Flow</div><div class="v"><span data-j="0.8:.12:1">0.8</span><span class="u">ml/s</span></div><div class="c">set 0.8</div></div>
+                </div>
+                <div class="trace" data-trace="steam" data-span="50" data-from="17.6"><svg viewBox="0 0 560 104" preserveAspectRatio="none"></svg></div>
+              </div>
+            </div>
+            <div class="set">
+              <div class="set-h"><b>Steam settings</b><span>Change these once it stops: the machine is using them now.</span></div>
+              <div class="set-grid c3">
+                <div><div class="fl">Temperature</div><div class="stp dis"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">150<span class="u">°C</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div></div>
+                <div><div class="fl">Time</div><div class="stp dis"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">50<span class="u">s</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div></div>
+                <div><div class="fl">Flow</div><div class="stp dis"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">0.8<span class="u">ml/s</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">
+      <span class="tag">TABLET · STEAM, RUNNING</span><br>
+      <b>The dial counts the steam time toward the time set</b> (50 s here), in tenths like the shot timer; the arc's tip is where the machine is. Inside, the milk's surface turns and wisps rise, only while it steams. Ink, not a colour: steam is white.
+      <ul>
+        <li><b>Steam</b> is the heater's temperature beside the one set; <b>Pressure</b> and <b>Flow</b> are the steam's, in Decent's colours, and the trace under them is the steam so far: a wand that sputters shows here.</li>
+        <li>The header names the phase in words: "Heating the steam…", "Steaming", "Purging the wand", "Done".</li>
+        <li><b>Steam settings</b> are the same steppers as Settings, held while the machine runs (it is using them), with the reason on the same line. Stop is where Steam was.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===================== Tablet: hot water, running ===================== -->
+  <div class="rowf">
+    <div class="fw">
+      <div class="frame tab">
+        <div class="tb">
+          <div class="brand"><svg class="ic"><use href="#i-brand"/></svg>CafAI</div>
+          <span class="nav-i"><svg class="ic"><use href="#i-coach"/></svg>Coach</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-shot"/></svg>Shot</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-history"/></svg>History</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-settings"/></svg>Settings</span>
+          <span class="grow"></span>
+          <div class="mrow">
+            <span class="mb off"><svg class="ic"><use href="#i-espresso"/></svg>Espresso</span>
+            <span class="mb off"><svg class="ic"><use href="#i-steam"/></svg>Steam</span>
+            <span class="mb off"><svg class="ic"><use href="#i-flush"/></svg>Flush</span>
+            <span class="mb stop"><svg class="ic"><use href="#i-stop"/></svg>Stop</span>
+          </div>
+          <span class="sep"></span>
+          <span class="ib"><svg class="ic"><use href="#i-open"/></svg></span>
+          <span class="exit"><svg class="ic"><use href="#i-exit"/></svg><span>Exit<small>to Decaid</small></span></span>
+        </div>
+        <div class="main">
+          <div class="dv">
+            <div class="dv-h">
+              <span class="live-dot"></span>
+              <svg class="ic dicon"><use href="#i-water"/></svg>
+              <span class="name">Hot water</span>
+              <span class="state">· Pouring</span>
+            </div>
+            <div class="dv-body">
+              <div class="dial d272" data-sim="water" data-from="96" data-to="200" data-of="200" data-unit="ml" data-rate="5.2">
+                <svg viewBox="0 0 272 272">
+                  <g class="ticks" data-major="5"></g>
+                  <circle class="track" cx="136" cy="136" r="112"/>
+                  <g clip-path="url(#inside)">
+                    <g class="lvl" data-base="236" data-rise="200" data-fill="1">
+                      <path class="water-body wave" d=""/>
+                      <path class="water-top wave" d=""/>
+                    </g>
+                    <line class="stream" x1="136" y1="30" x2="136" y2="240" mask="url(#behind-number)"/>
+                  </g>
+                  <circle class="arc water" cx="136" cy="136" r="112" pathLength="100" stroke-dasharray="48 100"/>
+                  <circle class="head water" r="8" cx="136" cy="24"/>
+                </svg>
+                <div class="ctr"><div class="big"><span class="n">96</span><span class="u">ml</span></div><div class="of">of 200 ml</div></div>
+              </div>
+              <div class="dv-side">
+                <div class="ro c3">
+                  <div class="r"><div class="lab"><span class="sw" style="background:var(--flow)"></span>Flow</div><div class="v"><span data-j="5.2:.2:1">5.2</span><span class="u">ml/s</span></div><div class="c">set 5.0</div></div>
+                  <div class="r"><div class="lab"><span class="sw" style="background:var(--weight)"></span>Scale</div><div class="v"><span class="sim-w">94.8</span><span class="u">g</span></div><div class="c">in the cup</div></div>
+                  <div class="r"><div class="lab">Time</div><div class="v"><span class="sim-t">18.5</span><span class="u">s</span></div><div class="c">stops by 60 s</div></div>
+                </div>
+                <div class="trace" data-trace="water" data-span="40" data-from="18.5"><svg viewBox="0 0 560 104" preserveAspectRatio="none"></svg></div>
+              </div>
+            </div>
+            <div class="set">
+              <div class="set-h"><b>Hot water settings</b><span>Change these once it stops: the machine is using them now.</span></div>
+              <div class="set-grid c4">
+                <div><div class="fl">Temperature</div><div class="stp dis"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">85<span class="u">°C</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div></div>
+                <div><div class="fl">Volume</div><div class="stp dis"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">200<span class="u">ml</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div></div>
+                <div><div class="fl">Time</div><div class="stp dis"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">60<span class="u">s</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div></div>
+                <div><div class="fl">Flow</div><div class="stp dis"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">5.0<span class="u">ml/s</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">
+      <span class="tag">TABLET · HOT WATER, RUNNING</span><br>
+      <b>The dial fills toward the volume set</b>: the water's level rises inside it as the millilitres come, with the stream falling into it (behind the number, never across it). Blue, the flow's colour, for both water drinks.
+      <ul>
+        <li><b>Flow</b> beside what is set; <b>Scale</b> when one is connected (Decaid tares it as the water starts and stops at the volume as grams); <b>Time</b> with the limit that stops it if the volume does not. No live temperature: during hot water the machine's mix temperature is not the water's, so CafAI leaves it out.</li>
+        <li>Hot water's four settings are held until it stops (Decaid fixes its weight stop as the water starts); one row here, one per row on a phone.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===================== Tablet: flush, done ===================== -->
+  <div class="rowf">
+    <div class="fw">
+      <div class="frame tab">
+        <div class="tb">
+          <div class="brand"><svg class="ic"><use href="#i-brand"/></svg>CafAI</div>
+          <span class="nav-i"><svg class="ic"><use href="#i-coach"/></svg>Coach</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-shot"/></svg>Shot</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-history"/></svg>History</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-settings"/></svg>Settings</span>
+          <span class="grow"></span>
+          <div class="mrow">
+            <span class="mb"><svg class="ic"><use href="#i-espresso"/></svg>Espresso</span>
+            <span class="mb"><svg class="ic"><use href="#i-steam"/></svg>Steam</span>
+            <span class="mb"><svg class="ic"><use href="#i-flush"/></svg>Flush</span>
+            <span class="mb"><svg class="ic"><use href="#i-water"/></svg>Hot water</span>
+          </div>
+          <span class="sep"></span>
+          <span class="ib"><svg class="ic"><use href="#i-open"/></svg></span>
+          <span class="exit"><svg class="ic"><use href="#i-exit"/></svg><span>Exit<small>to Decaid</small></span></span>
+        </div>
+        <div class="main">
+          <div class="dv">
+            <div class="dv-h">
+              <svg class="ic dicon"><use href="#i-flush"/></svg>
+              <span class="name">Flush</span>
+              <span class="state done">· <svg class="ic s"><use href="#i-check"/></svg>Done</span>
+              <span class="grow"></span>
+              <span class="goback"><svg class="ic"><use href="#i-back"/></svg>Go back</span>
+            </div>
+            <div class="dv-body">
+              <div class="dial d272 still">
+                <svg viewBox="0 0 272 272">
+                  <g class="ticks" data-major="5"></g>
+                  <circle class="track" cx="136" cy="136" r="112"/>
+                  <circle class="arc water" cx="136" cy="136" r="112" pathLength="100" stroke-dasharray="100 100"/>
+                </svg>
+                <div class="ctr"><svg class="ic ok"><use href="#i-check-circle"/></svg><div class="big">5.0<span class="u">s</span></div><div class="of">of 5 s</div></div>
+              </div>
+              <div class="dv-side">
+                <div class="ro c3">
+                  <div class="r"><div class="lab">Water</div><div class="v">41<span class="u">ml</span></div><div class="c">through the group</div></div>
+                  <div class="r"><div class="lab"><span class="sw" style="background:var(--flow)"></span>Flow</div><div class="v">8.1<span class="u">ml/s</span></div><div class="c">average</div></div>
+                  <div class="r"><div class="lab">Group</div><div class="v">92.4<span class="u">°C</span></div><div class="c">target 93.0</div></div>
+                </div>
+                <div class="trace" data-trace="flush" data-span="5" data-from="5" data-done="1"><svg viewBox="0 0 560 104" preserveAspectRatio="none"></svg></div>
+              </div>
+            </div>
+            <div class="set">
+              <div class="set-h"><b>Flush settings</b><span>Changes go to Decaid at once.</span></div>
+              <div class="set-grid c3">
+                <div><div class="fl">Temperature</div><div class="stp"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">90<span class="u">°C</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div></div>
+                <div><div class="fl">Time</div><div class="stp focus"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">5<span class="u">s</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div></div>
+                <div><div class="fl">Flow</div><div class="stp"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">8.0<span class="u">ml/s</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">
+      <span class="tag">TABLET · FLUSH, DONE</span><br>
+      <b>Done: the view stays, with the result and Go back.</b> Go back returns to the screen the view took over (the coach here; Settings or History if that is where the barista was), or the coach when there is none.
+      <ul>
+        <li>The dial keeps the final time with a check; the readouts become the run's: water through the group, the average flow, the group's temperature at the end.</li>
+        <li>The settings come alive the moment it stops, so a flush that was too short is one tap from a longer one; the next Flush in the top bar uses it.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===================== Phones ===================== -->
+  <div class="rowf">
+    <div class="fw">
+      <div class="frame ph">
+        <div class="ptb">
+          <div class="brand"><svg class="ic"><use href="#i-brand"/></svg>CafAI</div>
+          <span class="grow"></span>
+          <span class="pmb off"><svg class="ic"><use href="#i-espresso"/></svg></span>
+          <span class="pmb stop"><svg class="ic"><use href="#i-stop"/></svg></span>
+          <span class="pmb off"><svg class="ic"><use href="#i-flush"/></svg></span>
+          <span class="pmb off"><svg class="ic"><use href="#i-water"/></svg></span>
+          <span class="ib"><svg class="ic"><use href="#i-open"/></svg></span>
+          <span class="ib"><svg class="ic"><use href="#i-exit"/></svg></span>
+        </div>
+        <div class="pv small">
+          <div class="dv-h">
+            <span class="live-dot"></span>
+            <svg class="ic dicon"><use href="#i-steam"/></svg>
+            <span class="name">Steam</span>
+            <span class="state">· Steaming</span>
+          </div>
+          <div class="dial d212" data-sim="steam" data-from="17.6" data-to="38" data-of="50" data-unit="s" data-tenths="1">
+            <svg viewBox="0 0 272 272">
+              <g class="ticks" data-major="5"></g>
+              <circle class="track" cx="136" cy="136" r="112"/>
+              <g clip-path="url(#inside)">
+                <g class="lvl" data-base="206" data-rise="34">
+                  <path class="milk wave fast" d=""/>
+                  <path class="milk-top wave fast" d=""/>
+                </g>
+                <g mask="url(#behind-number)">
+                  <path class="wisp" d="M110 204c-7-9 6-16 0-25s7-16 1-25"/>
+                  <path class="wisp w2" d="M136 208c-7-9 6-16 0-25s7-16 1-25"/>
+                  <path class="wisp w3" d="M162 204c-7-9 6-16 0-25s7-16 1-25"/>
+                </g>
+              </g>
+              <circle class="arc steam" cx="136" cy="136" r="112" pathLength="100" stroke-dasharray="35 100"/>
+              <circle class="head steam" r="8" cx="136" cy="24"/>
+            </svg>
+            <div class="ctr"><div class="big"><span class="n">17.6</span><span class="u">s</span></div><div class="of">of 50 s</div></div>
+          </div>
+          <div class="ro c3">
+            <div class="r"><div class="lab">Steam</div><div class="v"><span data-j="152:1.6:0">152</span><span class="u">°C</span></div><div class="c">set 150</div></div>
+            <div class="r"><div class="lab"><span class="sw" style="background:var(--pressure)"></span>Pressure</div><div class="v"><span data-j="1.9:.25:1">1.9</span><span class="u">bar</span></div><div class="c">&nbsp;</div></div>
+            <div class="r"><div class="lab"><span class="sw" style="background:var(--flow)"></span>Flow</div><div class="v"><span data-j="0.8:.12:1">0.8</span><span class="u">ml/s</span></div><div class="c">set 0.8</div></div>
+          </div>
+          <div class="trace" style="height:64px" data-trace="steam" data-span="50" data-from="17.6"><svg viewBox="0 0 358 64" preserveAspectRatio="none"></svg></div>
+          <div class="set">
+            <div class="set-h" style="display:block"><b>Steam settings</b><div style="font-size:15px;color:var(--muted);margin-top:2px">Change these once it stops.</div></div>
+            <div class="set-rows">
+              <span class="rl">Temperature</span><div class="stp dis"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">150<span class="u">°C</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div>
+              <span class="rl">Time</span><div class="stp dis"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">50<span class="u">s</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div>
+              <span class="rl">Flow</span><div class="stp dis"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">0.8<span class="u">ml/s</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div>
+            </div>
+          </div>
+        </div>
+        <div class="tabs">
+          <span class="tabb"><span class="pill"><svg class="ic"><use href="#i-coach"/></svg></span>Coach</span>
+          <span class="tabb"><span class="pill"><svg class="ic"><use href="#i-shot"/></svg></span>Shot</span>
+          <span class="tabb"><span class="pill"><svg class="ic"><use href="#i-history"/></svg></span>History</span>
+          <span class="tabb"><span class="pill"><svg class="ic"><use href="#i-settings"/></svg></span>Settings</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="fw">
+      <div class="frame ph">
+        <div class="ptb">
+          <div class="brand"><svg class="ic"><use href="#i-brand"/></svg>CafAI</div>
+          <span class="grow"></span>
+          <span class="pmb"><svg class="ic"><use href="#i-espresso"/></svg></span>
+          <span class="pmb"><svg class="ic"><use href="#i-steam"/></svg></span>
+          <span class="pmb"><svg class="ic"><use href="#i-flush"/></svg></span>
+          <span class="pmb"><svg class="ic"><use href="#i-water"/></svg></span>
+          <span class="ib"><svg class="ic"><use href="#i-open"/></svg></span>
+          <span class="ib"><svg class="ic"><use href="#i-exit"/></svg></span>
+        </div>
+        <div class="pv small">
+          <div class="dv-h">
+            <svg class="ic dicon"><use href="#i-water"/></svg>
+            <span class="name">Hot water</span>
+            <span class="state done">· <svg class="ic s"><use href="#i-check"/></svg>Done</span>
+            <span class="grow"></span>
+            <span class="goback"><svg class="ic"><use href="#i-back"/></svg>Go back</span>
+          </div>
+          <div class="dial d212 still">
+            <svg viewBox="0 0 272 272">
+              <g class="ticks" data-major="5"></g>
+              <circle class="track" cx="136" cy="136" r="112"/>
+              <g clip-path="url(#inside)">
+                <g class="lvl" data-base="236" data-rise="200" data-fill="1" data-level="0.99">
+                  <path class="water-body wave" d=""/>
+                  <path class="water-top wave" d=""/>
+                </g>
+              </g>
+              <circle class="arc water" cx="136" cy="136" r="112" pathLength="100" stroke-dasharray="99 100"/>
+            </svg>
+            <div class="ctr"><svg class="ic ok"><use href="#i-check-circle"/></svg><div class="big">198<span class="u">ml</span></div><div class="of">in 38.6 s</div></div>
+          </div>
+          <div class="ro c3">
+            <div class="r"><div class="lab"><span class="sw" style="background:var(--flow)"></span>Flow</div><div class="v">5.1<span class="u">ml/s</span></div><div class="c">average</div></div>
+            <div class="r"><div class="lab"><span class="sw" style="background:var(--weight)"></span>Scale</div><div class="v">195.2<span class="u">g</span></div><div class="c">in the cup</div></div>
+            <div class="r"><div class="lab">Time</div><div class="v">38.6<span class="u">s</span></div><div class="c">&nbsp;</div></div>
+          </div>
+          <div class="set">
+            <div class="set-h" style="display:block"><b>Hot water settings</b><div style="font-size:15px;color:var(--muted);margin-top:2px">Changes go to Decaid at once.</div></div>
+            <div class="set-rows">
+              <span class="rl">Temperature</span><div class="stp"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">85<span class="u">°C</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div>
+              <span class="rl">Volume</span><div class="stp"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">200<span class="u">ml</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div>
+              <span class="rl">Time</span><div class="stp"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">60<span class="u">s</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div>
+            </div>
+          </div>
+        </div>
+        <div class="tabs">
+          <span class="tabb"><span class="pill"><svg class="ic"><use href="#i-coach"/></svg></span>Coach</span>
+          <span class="tabb"><span class="pill"><svg class="ic"><use href="#i-shot"/></svg></span>Shot</span>
+          <span class="tabb"><span class="pill"><svg class="ic"><use href="#i-history"/></svg></span>History</span>
+          <span class="tabb"><span class="pill"><svg class="ic"><use href="#i-settings"/></svg></span>Settings</span>
+        </div>
+      </div>
+    </div>
+    <div class="cap">
+      <span class="tag">PHONE · UPRIGHT</span><br>
+      <b>The same view, stacked</b>: the dial centred, the readouts under it, the trace, then the settings as rows (label, stepper at the end), scrolling inside the view when they run past the tabs. The tabs stay; none is current while a drink's view is up.
+      <ul>
+        <li><b>Left, steam running.</b> Stop in Steam's place in the top bar.</li>
+        <li><b>Right, hot water done.</b> The level stays where it ended; Go back at the end of the header. The settings run on below (Flow scrolled out of this frame).</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="rowf">
+    <div class="fw">
+      <div class="frame phs">
+        <div class="ptb">
+          <div class="brand"><svg class="ic"><use href="#i-brand"/></svg>CafAI</div>
+          <span class="grow"></span>
+          <span class="pmb off"><svg class="ic"><use href="#i-espresso"/></svg></span>
+          <span class="pmb off"><svg class="ic"><use href="#i-steam"/></svg></span>
+          <span class="pmb stop"><svg class="ic"><use href="#i-stop"/></svg></span>
+          <span class="pmb off"><svg class="ic"><use href="#i-water"/></svg></span>
+          <span class="ib"><svg class="ic"><use href="#i-open"/></svg></span>
+          <span class="ib"><svg class="ic"><use href="#i-exit"/></svg></span>
+        </div>
+        <div class="main">
+          <div class="rail">
+            <span class="tabb"><span class="pill"><svg class="ic"><use href="#i-coach"/></svg></span>Coach</span>
+            <span class="tabb"><span class="pill"><svg class="ic"><use href="#i-shot"/></svg></span>Shot</span>
+            <span class="tabb"><span class="pill"><svg class="ic"><use href="#i-history"/></svg></span>History</span>
+            <span class="tabb"><span class="pill"><svg class="ic"><use href="#i-settings"/></svg></span>Settings</span>
+          </div>
+          <div class="pv small" style="flex-direction:row;gap:20px;align-items:flex-start;padding:10px 14px">
+            <div class="dial d184" style="align-self:center" data-sim="flush" data-from="0.4" data-to="5" data-of="5" data-unit="s" data-tenths="1">
+              <svg viewBox="0 0 272 272">
+                <g class="ticks" data-major="5"></g>
+                <circle class="track" cx="136" cy="136" r="112"/>
+                <g clip-path="url(#inside)">
+                  <line class="screen" x1="104" y1="44" x2="168" y2="44"/>
+                  <g mask="url(#behind-number)">
+                    <line class="streak" x1="106" y1="54" x2="104" y2="236"/>
+                    <line class="streak k2" x1="121" y1="54" x2="120" y2="236"/>
+                    <line class="streak k3" x1="136" y1="54" x2="136" y2="236"/>
+                    <line class="streak" x1="151" y1="54" x2="152" y2="236"/>
+                    <line class="streak k2" x1="166" y1="54" x2="168" y2="236"/>
+                  </g>
+                </g>
+                <circle class="arc water" cx="136" cy="136" r="112" pathLength="100" stroke-dasharray="40 100"/>
+                <circle class="head water" r="8" cx="136" cy="24"/>
+              </svg>
+              <div class="ctr"><div class="big"><span class="n">2.0</span><span class="u">s</span></div><div class="of">of 5 s</div></div>
+            </div>
+            <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:10px">
+              <div class="dv-h" style="min-height:32px">
+                <span class="live-dot"></span>
+                <svg class="ic dicon"><use href="#i-flush"/></svg>
+                <span class="name">Flush</span>
+                <span class="state">· Flushing</span>
+              </div>
+              <div class="ro c3">
+                <div class="r"><div class="lab">Water</div><div class="v"><span class="sim-v">16</span><span class="u">ml</span></div><div class="c">so far</div></div>
+                <div class="r"><div class="lab"><span class="sw" style="background:var(--flow)"></span>Flow</div><div class="v"><span data-j="8.1:.3:1">8.1</span><span class="u">ml/s</span></div><div class="c">set 8.0</div></div>
+                <div class="r"><div class="lab">Group</div><div class="v"><span data-j="91.8:.2:1">91.8</span><span class="u">°C</span></div><div class="c">target 93.0</div></div>
+              </div>
+              <div class="set" style="padding:10px 14px">
+                <div class="set-h" style="margin-bottom:8px"><b>Flush settings</b><span>Change these once it stops.</span></div>
+                <div class="set-rows">
+                  <span class="rl">Temperature</span><div class="stp dis"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">90<span class="u">°C</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div>
+                  <span class="rl">Time</span><div class="stp dis"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">5<span class="u">s</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">
+      <span class="tag">PHONE · ON ITS SIDE · FLUSH, RUNNING</span><br>
+      <b>The dial at the left, everything else beside it</b>, so nothing is taller than the screen's short side; the settings scroll inside the right column. Flush's scene is the shower screen with water falling from it, again behind the number.
+    </div>
+  </div>
+</div>
+
+<script>
+  // Mockup only: draws the ticks and the waves, and plays the runs so the motion can be judged.
+  const NS = 'http://www.w3.org/2000/svg';
+  const C = 136, R1 = 124, R2 = 133;
+  document.querySelectorAll('.ticks').forEach((g) => {
+    for (let i = 0; i < 60; i++) {
+      const a = (i / 60) * Math.PI * 2 - Math.PI / 2, major = i % 5 === 0;
+      const r1 = major ? R1 - 4 : R1;
+      const l = document.createElementNS(NS, 'line');
+      l.setAttribute('x1', C + Math.cos(a) * r1); l.setAttribute('y1', C + Math.sin(a) * r1);
+      l.setAttribute('x2', C + Math.cos(a) * R2); l.setAttribute('y2', C + Math.sin(a) * R2);
+      l.setAttribute('class', major ? 'tick major' : 'tick');
+      g.appendChild(l);
+    }
+  });
+  // A wave 80 px long, drawn wide enough to slide one length and still cover the dial.
+  function waveTop(y, amp) {
+    let s = `M20 ${y}`;
+    for (let x = 20; x < 340; x += 80) s += ` c13 ${-amp} 27 ${-amp} 40 0 s27 ${amp} 40 0`;
+    return s;
+  }
+  function setLevel(lvl, frac) {
+    const base = +lvl.dataset.base, rise = +lvl.dataset.rise, y = base - rise * frac;
+    const [body, top] = lvl.querySelectorAll('path');
+    const amp = lvl.dataset.fill ? 4 : 5;
+    const t = waveTop(y, amp);
+    top.setAttribute('d', t);
+    body.setAttribute('d', `${t} L340 280 L20 280 Z`);
+    const stream = lvl.parentNode.querySelector('.stream');
+    if (stream) stream.setAttribute('y2', y - 2);
+  }
+  document.querySelectorAll('.lvl').forEach((l) => setLevel(l, l.dataset.level ? +l.dataset.level : 0.5));
+  function placeHead(dial, frac) {
+    const head = dial.querySelector('.head'); if (!head) return;
+    const a = frac * Math.PI * 2 - Math.PI / 2;
+    head.setAttribute('cx', C + Math.cos(a) * 112); head.setAttribute('cy', C + Math.sin(a) * 112);
+  }
+  // Traces: the run so far, made up but shaped like the machine's.
+  function series(kind, n, t0, span) {
+    const pts = [];
+    for (let i = 0; i <= n; i++) {
+      const t = (i / n) * t0;
+      if (kind === 'steam') pts.push([t, 1.6 + 0.35 * Math.sin(t * 1.7) + 0.12 * Math.sin(t * 5.3) + (t < 1.2 ? -1.6 + t * 1.33 : 0), 1.0 + 0.12 * Math.sin(t * 2.3 + 1) + (t < 1 ? -1 + t : 0)]);
+      else if (kind === 'water') pts.push([t, null, Math.min(5.2, t * 4) + 0.15 * Math.sin(t * 3), Math.max(0, (t - 1.4) * 5.1)]);
+      else pts.push([t, null, Math.min(8.1, t * 12) + 0.2 * Math.sin(t * 9)]);
+    }
+    return pts;
+  }
+  function drawTrace(el, t0) {
+    const svg = el.querySelector('svg'); const vb = svg.viewBox.baseVal; const W = vb.width, H = vb.height - 16;
+    const kind = el.dataset.trace, span = Math.max(+el.dataset.span, t0);
+    const yMax = kind === 'steam' ? 3 : kind === 'water' ? 8 : 12;
+    let html = '';
+    for (const f of [0, .5, 1]) html += `<line class="g" x1="0" x2="${W}" y1="${(H * f).toFixed(1)}" y2="${(H * f).toFixed(1)}"/>`;
+    const pts = series(kind, 60, t0, span);
+    const x = (t) => (t / span) * W, y = (v, m = yMax) => H - (Math.max(0, Math.min(m, v)) / m) * H;
+    const path = (col, m) => pts.filter((p) => p[col] != null).map((p, i) => `${i ? 'L' : 'M'}${x(p[0]).toFixed(1)},${y(p[col], m).toFixed(1)}`).join('');
+    if (kind === 'water') html += `<path class="w" d="${path(3, 220)}"/>`;
+    if (kind === 'steam') html += `<path class="p" d="${path(1)}"/>`;
+    html += `<path class="f" d="${path(2)}"/>`;
+    const last = pts[pts.length - 1];
+    if (!el.dataset.done) {
+      if (kind === 'steam') html += `<circle class="tip" cx="${x(last[0]).toFixed(1)}" cy="${y(last[1]).toFixed(1)}" r="3.5" stroke="var(--pressure)"/>`;
+      html += `<circle class="tip" cx="${x(last[0]).toFixed(1)}" cy="${y(last[2]).toFixed(1)}" r="3.5" stroke="var(--flow)"/>`;
+    }
+    html += `<text class="t" x="0" y="${vb.height - 2}">0 s</text><text class="t" x="${W}" y="${vb.height - 2}" text-anchor="end">${span} s</text>`;
+    svg.innerHTML = html;
+  }
+  document.querySelectorAll('.trace').forEach((el) => drawTrace(el, +el.dataset.from));
+
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const sims = [...document.querySelectorAll('.dial[data-sim]')].map((dial) => ({ dial, v: +dial.dataset.from }));
+  function step() {
+    for (const s of sims) {
+      const d = s.dial.dataset, of = +d.of, to = +d.to;
+      const rate = d.rate ? +d.rate : 1;
+      s.v += rate * 0.1;
+      if (s.v > to) s.v = +d.from;
+      const frac = Math.min(1, s.v / of);
+      s.dial.querySelector('.arc').setAttribute('stroke-dasharray', `${(frac * 100).toFixed(2)} 100`);
+      placeHead(s.dial, frac);
+      s.dial.querySelector('.n').textContent = d.tenths ? s.v.toFixed(1) : Math.round(s.v);
+      const lvl = s.dial.querySelector('.lvl');
+      if (lvl) setLevel(lvl, d.sim === 'water' ? frac : 0.15 + 0.85 * frac);
+      const frame = s.dial.closest('.frame');
+      if (d.sim === 'water' && frame) {
+        const t = s.v / rate;
+        frame.querySelectorAll('.sim-t').forEach((n) => (n.textContent = t.toFixed(1)));
+        frame.querySelectorAll('.sim-w').forEach((n) => (n.textContent = Math.max(0, s.v - 1.2).toFixed(1)));
+        frame.querySelectorAll('.trace').forEach((el) => drawTrace(el, t));
+      } else if (frame) {
+        frame.querySelectorAll('.sim-v').forEach((n) => (n.textContent = Math.round(s.v * 8.1)));
+        frame.querySelectorAll('.trace').forEach((el) => drawTrace(el, s.v));
+      }
+    }
+  }
+  function jitter() {
+    document.querySelectorAll('[data-j]').forEach((n) => {
+      const [base, amp, dec] = n.dataset.j.split(':').map(Number);
+      n.textContent = (base + (Math.random() - 0.5) * amp).toFixed(dec);
+    });
+  }
+  sims.forEach((s) => { const f = Math.min(1, s.v / +s.dial.dataset.of); placeHead(s.dial, f); s.dial.querySelector('.arc').setAttribute('stroke-dasharray', `${(f * 100).toFixed(2)} 100`); const l = s.dial.querySelector('.lvl'); if (l) setLevel(l, s.dial.dataset.sim === 'water' ? f : 0.15 + 0.85 * f); });
+  if (!reduced && !location.hash.includes('still')) { setInterval(step, 100); setInterval(jitter, 450); }
+</script>
+</body>
+</html>

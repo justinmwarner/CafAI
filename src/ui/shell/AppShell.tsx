@@ -21,7 +21,9 @@
  * The coach stays mounted, hidden, under the Shot view, so its scroll
  * position and the composer's draft survive a shot; and every layout puts
  * the routed screen and the machine row at the same places in the tree, so a
- * rotation keeps them mounted too.
+ * rotation keeps them mounted too. A drink's view (steam, hot water, flush)
+ * lies over the coach the same way while it runs and after (D146): the app
+ * switches to it when the machine starts one, as it does for a shot.
  *
  * The shell also keeps two things running for as long as the app does: the
  * scale's revive when the machine wakes (useScaleRevive.ts), and Decaid's
@@ -45,6 +47,9 @@ import ShowChartRounded from '@mui/icons-material/ShowChartRounded';
 import { PLUGIN } from '../../api/plugins.ts';
 import type { HostEnvironment } from '../../api/types.ts';
 import { useServices } from '../../app/services.tsx';
+import { DrinkView } from '../drinks/DrinkView.tsx';
+import { drinkTraceFor } from '../drinks/drinkTrace.ts';
+import { useDrinkFocus } from '../drinks/useDrinkFocus.ts';
 import { LoadedProfileProvider } from '../machine/LoadedProfileContext.tsx';
 import { MachineAlerts } from '../machine/MachineAlerts.tsx';
 import { MachineRow } from '../machine/MachineRow.tsx';
@@ -550,7 +555,14 @@ function useTimeToReadyChannel(): void {
   }, [loaded, telemetry]);
 }
 
-/** Over the hidden coach: the Shot view. */
+/** The later of two guards: whichever focus switched last guards the pane. */
+function laterGuard(a: number | null, b: number | null): number | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return Math.max(a, b);
+}
+
+/** Over the hidden coach: the Shot view, or a drink's. */
 const overlaySx = {
   position: 'absolute',
   top: 0,
@@ -574,7 +586,11 @@ function Shell({ route, onNavigate, children }: AppShellProps) {
   // creates it, every later one finds it), so whichever graph opens mid-shot
   // has the shot from its first frame.
   shotTraceFor(telemetry);
-  const { awaitingOutcome, guardUntil } = useShotFocus(route);
+  // And its one recording of steam, hot water and flush, for the same reason (D148).
+  drinkTraceFor(telemetry);
+  const { awaitingOutcome, guardUntil: shotGuard } = useShotFocus(route);
+  const drinkFocus = useDrinkFocus();
+  const guardUntil = laterGuard(shotGuard, drinkFocus.guardUntil);
   const typing = useTextEntryFocus();
   const layout = useShellLayout(typing);
 
@@ -584,8 +600,13 @@ function Shell({ route, onNavigate, children }: AppShellProps) {
   const rail = tabs && layout.nav === 'rail';
   const bar = tabs && layout.nav === 'bar';
   const openShot = () => onNavigate({ name: 'shot' });
-  // The Shot route in both layouts: the big graph at the main pane's full width.
-  const overlay = route.name === 'shot' ? <ShotView awaitingOutcome={awaitingOutcome} /> : null;
+  // The Shot route, or a drink's, in both layouts: the view at the main pane's full width, over the coach.
+  const overlay =
+    route.name === 'shot' ? (
+      <ShotView awaitingOutcome={awaitingOutcome} />
+    ) : route.name === 'drink' ? (
+      <DrinkView key={route.drink} kind={route.drink} back={drinkFocus.back} onGoBack={drinkFocus.goBack} />
+    ) : null;
 
   return (
     <Box

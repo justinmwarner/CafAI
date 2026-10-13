@@ -403,6 +403,28 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
   let snapshot: MachineSnapshot = { ...fixtures.machineState(), timestamp: localNow() };
   const machineInfo: MachineInfo = { ...fixtures.machineInfo(), GHC: options.ghc ?? false };
   let shotSettings = fixtures.shotSettings();
+  /**
+   * Decaid writes a changed steam or hot water preset to the DE1's shot
+   * settings at once (de1_controller.dart _writeSteamSettings,
+   * _writeHotWaterSettings; steam under 135 °C goes as 0, off), and the
+   * machine's shotSettings channel says so.
+   */
+  function shotSettingsFromWorkflow(): void {
+    const steam = workflow.steamSettings;
+    const water = workflow.hotWaterData;
+    const steamTemp = steam.targetTemperature ?? shotSettings.targetSteamTemp;
+    const next: ShotSettings = {
+      ...shotSettings,
+      targetSteamTemp: steamTemp < 135 ? 0 : steamTemp,
+      targetSteamDuration: steam.duration ?? shotSettings.targetSteamDuration,
+      targetHotWaterTemp: water.targetTemperature ?? shotSettings.targetHotWaterTemp,
+      targetHotWaterVolume: water.volume ?? shotSettings.targetHotWaterVolume,
+      targetHotWaterDuration: water.duration ?? shotSettings.targetHotWaterDuration,
+    };
+    if (JSON.stringify(next) === JSON.stringify(shotSettings)) return;
+    shotSettings = next;
+    if (machineConnected) emit('shotSettings', shotSettings);
+  }
   let waterLevels = fixtures.waterLevelsWs();
   let heartbeatCount = 0;
   const machineCommands: string[] = [];
@@ -849,6 +871,7 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
         validateWorkflowPatch(body);
         const merged = deepMergeJson(clone(workflow) as unknown as JsonObject, clone(body));
         workflow = normalizeWorkflow(merged);
+        shotSettingsFromWorkflow();
       } catch (error) {
         throw toProfileError(error, 500);
       }

@@ -143,6 +143,31 @@ describe('PUT /workflow semantics', () => {
   });
 });
 
+describe('the shot settings follow the workflow', () => {
+  it("a steam or hot water change reaches the machine's shot settings, and its channel", () => {
+    const mock = createMockDecaid({ seedExamples: false });
+    const heard: unknown[] = [];
+    mock.on('shotSettings', (settings) => heard.push(settings));
+    mock.updateWorkflow({ steamSettings: { duration: 55 }, hotWaterData: { volume: 120 } });
+    expect(mock.getShotSettings()).toMatchObject({ targetSteamDuration: 55, targetHotWaterVolume: 120, targetSteamTemp: 150 });
+    expect(heard).toHaveLength(1);
+  });
+
+  it('steam below 135 °C reaches the machine as 0, steam off', () => {
+    const mock = createMockDecaid({ seedExamples: false });
+    mock.updateWorkflow({ steamSettings: { targetTemperature: 0 } });
+    expect(mock.getShotSettings().targetSteamTemp).toBe(0);
+  });
+
+  it('a change to anything else sends nothing', () => {
+    const mock = createMockDecaid({ seedExamples: false });
+    const heard: unknown[] = [];
+    mock.on('shotSettings', (settings) => heard.push(settings));
+    mock.updateWorkflow({ rinseData: { duration: 12 } });
+    expect(heard).toEqual([]);
+  });
+});
+
 describe('profiles', () => {
   const request = () => fixtures.profileCreateRequest();
 

@@ -10,7 +10,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useServices } from '../../app/services.tsx';
 import type { CoachUiMessage } from '../../app/types.ts';
-import { replaceRoute, routeHref, sameRoute, type Route, type RouteName } from '../router.ts';
+import { parseRoute, replaceRoute, routeHref, sameRoute, type Route, type RouteName } from '../router.ts';
 import { IDLE, shotFocus, type FocusCommand, type FocusEvent, type FocusState } from './shotFocus.ts';
 
 /** How long the screen the app just switched to ignores taps, in ms. */
@@ -52,13 +52,18 @@ export interface ShotFocus {
   guardUntil: number | null;
 }
 
+/**
+ * The route on screen now, from the hash: not the last render's, which lags
+ * a moment behind another switch of the app's (a drink's view taking the
+ * screen, useDrinkFocus.ts) until React hears of it.
+ */
+const onScreen = (): Route => parseRoute(window.location.hash);
+
 export function useShotFocus(route: Route): ShotFocus {
   const { telemetry, coach } = useServices();
   const [awaitingOutcome, setAwaitingOutcome] = useState(false);
   const [guardUntil, setGuardUntil] = useState<number | null>(null);
   const focus = useRef<FocusState>(IDLE);
-  /** The route on screen, for the events that arrive between renders. */
-  const shown = useRef(route);
   /** The route of the app's own switch on its way, so its arrival is not taken for the barista's move. */
   const ownSwitch = useRef<RouteName | null>(null);
   const dispatchRef = useRef<((event: FocusEvent) => void) | null>(null);
@@ -86,7 +91,7 @@ export function useShotFocus(route: Route): ShotFocus {
     const carryOut = (command: FocusCommand) => {
       if (command === 'goShot') switchTo({ name: 'shot' });
       // Back to the coach only from the Shot route the app put the barista on.
-      else if (command === 'goCoach' && shown.current.name === 'shot') switchTo({ name: 'coach' });
+      else if (command === 'goCoach' && onScreen().name === 'shot') switchTo({ name: 'coach' });
     };
 
     const dispatch = (event: FocusEvent) => {
@@ -110,7 +115,7 @@ export function useShotFocus(route: Route): ShotFocus {
         dispatch({
           type: 'shotStarted',
           typing: isTextEntry(document.activeElement),
-          onShotRoute: shown.current.name === 'shot',
+          onShotRoute: onScreen().name === 'shot',
         });
         return;
       }
@@ -137,7 +142,6 @@ export function useShotFocus(route: Route): ShotFocus {
   // no automatic return for this shot.
   const previous = useRef(route);
   useLayoutEffect(() => {
-    shown.current = route;
     const from = previous.current;
     previous.current = route;
     if (sameRoute(from, route)) return;

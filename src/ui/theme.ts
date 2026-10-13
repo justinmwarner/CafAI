@@ -24,6 +24,9 @@ export interface CafaiColors {
   accentSoft: string;
   live: string;
   graph: GraphPalette;
+  /** The drinks' dial: its water and its milk (DrinkDial.tsx). */
+  waterWash: string;
+  milkWash: string;
 }
 
 declare module '@mui/material/styles' {
@@ -83,7 +86,14 @@ export function createCafaiTheme(palette: Palette = buildPalette('dark', namedTi
       background: { default: palette.background, paper: palette.surface },
       text: { primary: palette.ink, secondary: palette.inkMuted },
       divider: palette.line,
-      cafai: { raised: palette.raised, accentSoft: palette.accentSoft, live: palette.live, graph: palette.graph },
+      cafai: {
+        raised: palette.raised,
+        accentSoft: palette.accentSoft,
+        live: palette.live,
+        graph: palette.graph,
+        waterWash: palette.waterWash,
+        milkWash: palette.milkWash,
+      },
     },
     shape: { borderRadius: 12 },
     typography: {

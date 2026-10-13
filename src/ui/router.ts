@@ -7,12 +7,25 @@
  * missing route is simply the coach, never an error screen.
  */
 import { useMemo, useSyncExternalStore } from 'react';
+import type { DrinkKind } from './drinks/kinds.ts';
 
-export type Route = { name: 'coach' } | { name: 'history'; bagId?: string } | { name: 'settings' } | { name: 'shot' };
+export type Route =
+  | { name: 'coach' }
+  | { name: 'history'; bagId?: string }
+  | { name: 'settings' }
+  | { name: 'shot' }
+  /** A drink's view while it runs: the app's to open (useDrinkFocus.ts), never a place in the navigation. */
+  | { name: 'drink'; drink: DrinkKind };
 
 export type RouteName = Route['name'];
 
 const COACH: Route = { name: 'coach' };
+
+/** Each drink's view by its path: `#/steam`, `#/hot-water`, `#/flush`. */
+const DRINK_PATHS: Readonly<Record<DrinkKind, string>> = { steam: 'steam', hotWater: 'hot-water', flush: 'flush' };
+const DRINK_OF_PATH: ReadonlyMap<string, DrinkKind> = new Map(
+  (Object.keys(DRINK_PATHS) as DrinkKind[]).map((drink) => [DRINK_PATHS[drink], drink]),
+);
 
 /** Parse `location.hash` (with or without the leading `#`). */
 export function parseRoute(hash: string): Route {
@@ -30,6 +43,8 @@ export function parseRoute(hash: string): Route {
     if (screen === 'history') return { name: 'history' };
     if (screen === 'settings') return { name: 'settings' };
     if (screen === 'shot') return { name: 'shot' };
+    const drink = DRINK_OF_PATH.get(screen);
+    if (drink) return { name: 'drink', drink };
     return COACH;
   }
   if (screen === 'history' && segments.length === 2 && segments[1]) {
@@ -53,12 +68,24 @@ export function routeHref(route: Route): string {
       return '#/settings';
     case 'shot':
       return '#/shot';
+    case 'drink':
+      return `#/${DRINK_PATHS[route.drink]}`;
   }
 }
 
 export function sameRoute(a: Route, b: Route): boolean {
   if (a.name === 'history' && b.name === 'history') return (a.bagId ?? null) === (b.bagId ?? null);
+  if (a.name === 'drink' && b.name === 'drink') return a.drink === b.drink;
   return a.name === b.name;
+}
+
+/**
+ * Whether the app may reopen on this route after Decaid reloads it (App.tsx
+ * remembers the last route): not a drink's view, which belongs to a run that
+ * is over by then. A reload opens the screen under it instead.
+ */
+export function isRemembered(route: Route): boolean {
+  return route.name !== 'drink';
 }
 
 /** Go to a route (a normal hash change, so useRoute() picks it up). */

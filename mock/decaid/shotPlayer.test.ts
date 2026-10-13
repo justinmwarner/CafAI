@@ -7,7 +7,7 @@ import gentle from '../../src/coach/templates/source/Gentle_and_sweet1.json';
 import londonium from '../../src/coach/templates/source/Londonium.json';
 import allonge from '../../src/coach/templates/source/rao_allonge.json';
 import { normalizeProfile } from './profiles.ts';
-import { createShotPlayer, createShotSimulation, DEFAULT_PUCK_RESISTANCE, type ShotSimulationInput, type SimFrame } from './shotPlayer.ts';
+import { createShotPlayer, createShotSimulation, DEFAULT_PUCK_RESISTANCE, FRAME_MS, type ShotSimulationInput, type SimFrame } from './shotPlayer.ts';
 import { createMockDecaid } from './state.ts';
 
 const START = new Date(2026, 9, 3, 8, 15, 2, 725).getTime();
@@ -518,17 +518,114 @@ describe('createShotPlayer', () => {
     expect(shotStates.at(-1)!.state).toBe('idle');
   });
 
-  it('steam, flush and hot water run for a few seconds and return to idle', async () => {
-    for (const name of ['steam', 'flush', 'hotWater'] as const) {
-      const { player, machine } = setup();
-      player.command(name);
-      expect(player.activity).toBe(name);
-      await vi.advanceTimersByTimeAsync(800);
-      expect(player.activity).toBeNull();
-      expect(machine.some((f) => f.state.state === name && f.state.substate === 'pouring')).toBe(true);
-      expect(machine.at(-1)!.state).toEqual({ state: 'idle', substate: 'idle' });
-      vi.useRealTimers();
+  /** Seconds of data time the frames in `substate` of `state` cover (each frame is FRAME_MS). */
+  const secondsIn = (frames: MachineSnapshot[], state: string, substate: string) =>
+    (frames.filter((f) => f.state.state === state && f.state.substate === substate).length * FRAME_MS) / 1000;
+  const runsOf = (frames: MachineSnapshot[]) => {
+    const runs: string[] = [];
+    for (const f of frames) {
+      const name = `${f.state.state}/${f.state.substate}`;
+      if (runs.at(-1) !== name) runs.push(name);
     }
+    return runs;
+  };
+
+  it('steam warms, steams for the steam time set, purges the wand, then rests', async () => {
+    const { player, machine } = setup();
+    player.command('steam');
+    expect(player.activity).toBe('steam');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(player.activity).toBeNull();
+    expect(runsOf(machine)).toEqual(['steam/preparingForShot', 'steam/pouring', 'steam/puffing', 'idle/idle']);
+    // The fixture's workflow: 50 s at 0.8 ml/s and 150 °C.
+    expect(secondsIn(machine, 'steam', 'pouring')).toBeCloseTo(50, 0);
+    const steaming = machine.filter((f) => f.state.substate === 'pouring');
+    expect(Math.min(...steaming.map((f) => f.flow))).toBeGreaterThan(0.6);
+    expect(Math.max(...steaming.map((f) => f.flow))).toBeLessThan(1);
+    expect(Math.min(...steaming.map((f) => f.pressure))).toBeGreaterThan(1.4);
+    expect(Math.max(...steaming.map((f) => f.steamTemperature))).toBeLessThanOrEqual(150);
+    for (const f of steaming) expect(Number.isInteger(f.steamTemperature)).toBe(true);
+  });
+
+  it('steam that is off (under 135 °C) leaves the heater reading where it was', async () => {
+    const { player, machine, state } = setup();
+    state.updateWorkflow({ steamSettings: { targetTemperature: 0 } });
+    const before = state.getMachineSnapshot().steamTemperature;
+    player.command('steam');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(player.activity).toBeNull();
+    expect(machine.length).toBeGreaterThan(250);
+    expect(machine.every((f) => f.steamTemperature === before)).toBe(true);
+  });
+
+  it('hot water pours until the volume set, the scale weighing what it poured', async () => {
+    const { player, machine, state } = setup();
+    player.command('hotWater');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(player.activity).toBeNull();
+    expect(runsOf(machine)).toEqual(['hotWater/preparingForShot', 'hotWater/pouring', 'idle/idle']);
+    const pouring = machine.filter((f) => f.state.substate === 'pouring');
+    const water = pouring.reduce((sum, f) => sum + (f.flow * FRAME_MS) / 1000, 0);
+    // The fixture's 50 ml, at the mock's 8 ml/s at most.
+    expect(water).toBeGreaterThanOrEqual(50);
+    expect(water).toBeLessThan(52);
+    expect(Math.max(...pouring.map((f) => f.flow))).toBeCloseTo(8, 1);
+    expect(state.getScaleSnapshot()!.weight).toBeGreaterThan(45);
+  });
+
+  it('hot water stops at its time limit when the volume would take longer', async () => {
+    const { player, machine, state } = setup();
+    state.updateWorkflow({ hotWaterData: { flow: 1, duration: 5 } });
+    player.command('hotWater');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(player.activity).toBeNull();
+    expect(secondsIn(machine, 'hotWater', 'pouring')).toBeCloseTo(5, 0);
+  });
+
+  it('the scale is tared as hot water starts, and the cup holds all the water once it stops', async () => {
+    const { player, machine, state } = setup();
+    state.setScaleWeight({ ...state.getScaleSnapshot()!, weight: 312.4 });
+    const weights: number[] = [];
+    state.on('scale', (frame) => {
+      if ('weight' in frame) weights.push(frame.weight);
+    });
+    player.command('hotWater');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(player.activity).toBeNull();
+    expect(weights[0]).toBe(0);
+    for (let i = 1; i < weights.length; i += 1) expect(weights[i]!).toBeGreaterThanOrEqual(weights[i - 1]!);
+    const water = machine.filter((f) => f.state.substate === 'pouring').reduce((sum, f) => sum + (f.flow * FRAME_MS) / 1000, 0);
+    expect(state.getScaleSnapshot()!.weight).toBeCloseTo(water, 1);
+    expect(state.getScaleSnapshot()!.weightFlow).toBe(0);
+  });
+
+  it('flush runs for the flush time set at the flow set', async () => {
+    const { player, machine } = setup();
+    player.command('flush');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(player.activity).toBeNull();
+    expect(runsOf(machine)).toEqual(['flush/preparingForShot', 'flush/pouring', 'idle/idle']);
+    // The fixture's 10 s at 6 ml/s.
+    expect(secondsIn(machine, 'flush', 'pouring')).toBeCloseTo(10, 0);
+    expect(machine.filter((f) => f.state.substate === 'pouring').at(-1)!.flow).toBeCloseTo(6, 1);
+  });
+
+  it('Stop ends a drink on the next frame', async () => {
+    const { player, machine } = setup();
+    player.command('steam');
+    await vi.advanceTimersByTimeAsync(300);
+    player.command('idle');
+    await vi.advanceTimersByTimeAsync(100);
+    expect(player.activity).toBeNull();
+    expect(machine.at(-1)!.state).toEqual({ state: 'idle', substate: 'idle' });
+  });
+
+  it('a steam rinse keeps its short run', async () => {
+    const { player, machine } = setup();
+    player.command('steamRinse');
+    await vi.advanceTimersByTimeAsync(800);
+    expect(player.activity).toBeNull();
+    expect(machine.some((f) => f.state.state === 'steamRinse' && f.state.substate === 'pouring')).toBe(true);
   });
 
   it('sleeping and idle toggle sleep', () => {
@@ -805,7 +902,8 @@ describe('createShotPlayer', () => {
     it('an activity returning to idle does not show preparingForShot', async () => {
       const { state, player } = setup();
       player.command('steam');
-      await vi.advanceTimersByTimeAsync(5000);
+      // The fixture's 50 s of steam, its warm-up and purge: about 5.1 s of wall time at speed 10.
+      await vi.advanceTimersByTimeAsync(10_000);
       expect(player.activity).toBeNull();
       expect(state.getMachineSnapshot().state).toEqual({ state: 'idle', substate: 'idle' });
       player.dispose();
