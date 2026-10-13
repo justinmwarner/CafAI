@@ -317,6 +317,32 @@ describe('AppShell on a tablet: the shot', () => {
     expect(screen.queryByTestId(TID.shotView)).not.toBeInTheDocument();
   });
 
+  it("on a drink's route the main pane shows that drink's view over the routed screen, kept mounted and hidden, with no place current", () => {
+    renderShell({ name: 'drink', drink: 'steam' });
+    const main = screen.getByRole('main');
+    expect(within(main).getByTestId(TID.drinkView)).toHaveAttribute('data-drink', 'steam');
+    const routed = screen.getByText('routed screen');
+    expect(main).toContainElement(routed);
+    expect(routed).not.toBeVisible();
+    for (const id of [TID.navCoach, TID.navShot, TID.navHistory, TID.navSettings]) {
+      expect(screen.getByTestId(id)).not.toHaveAttribute('aria-current');
+    }
+    expect(within(screen.getByRole('banner')).getByTestId(TID.machineRow)).toBeInTheDocument();
+  });
+
+  it('a drink starting switches the main pane to its view by itself and guards the pane, never the top bar', () => {
+    window.location.hash = '#/';
+    const { services } = renderShell();
+    act(() =>
+      services.telemetry.setState({
+        machine: { ...IDLE_TELEMETRY.machine!, timestamp: '2026-10-13T08:00:01.000000', state: { state: 'steam', substate: 'pouring' } },
+      }),
+    );
+    expect(window.location.hash).toBe('#/steam');
+    expect(within(screen.getByRole('main')).getByTestId(TID.tapGuard)).toBeInTheDocument();
+    expect(within(screen.getByRole('banner')).queryByTestId(TID.tapGuard)).toBeNull();
+  });
+
   it('a shot switches the main pane by itself and guards it, never the top bar', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     try {
