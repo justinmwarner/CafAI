@@ -88,7 +88,8 @@ const dialStyles = (theme: Theme, water: boolean): SystemStyleObject<Theme> => {
   return {
     position: 'relative',
     flex: 'none',
-    '& svg': { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, width: '100%', height: '100%', overflow: 'visible' },
+    // The drawing alone: the done check inside the dial is an svg too.
+    '& > svg': { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, width: '100%', height: '100%', overflow: 'visible' },
     '& .tick': { stroke: theme.palette.cafai.graph.grid, strokeWidth: 2, strokeLinecap: 'round' },
     '& .tick.major': { stroke: theme.palette.divider, strokeWidth: 2.5 },
     '& .track': { fill: 'none', stroke: theme.palette.cafai.raised, strokeWidth: 10 },

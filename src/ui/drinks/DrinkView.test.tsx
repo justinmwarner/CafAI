@@ -113,6 +113,17 @@ describe('DrinkView', () => {
     expect(screen.getByTestId(TID.drinkDial)).toHaveAttribute('data-moving', 'false');
   });
 
+  it('sets the done check above the number, not over the whole dial as the drawing is', () => {
+    const { send } = renderView('flush');
+    send(frame('flush', 'pouring'));
+    send(frame('idle', 'idle'));
+    const dial = screen.getByTestId(TID.drinkDial);
+    const check = dial.querySelector('.done-check');
+    expect(check).not.toBeNull();
+    expect(getComputedStyle(check!).position).not.toBe('absolute');
+    expect(getComputedStyle(dial.querySelector(':scope > svg')!).position).toBe('absolute');
+  });
+
   it("draws the trace of the run's flow", () => {
     const { send } = renderView('flush');
     send(frame('flush', 'pouring', { flow: 6 }));
