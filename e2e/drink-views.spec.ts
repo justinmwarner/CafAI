@@ -41,6 +41,11 @@ test('Steam from the row takes the screen, Stop in its place; its settings wait 
   await expect
     .poll(() => page.evaluate(() => (window as CafaiMockWindow).__CAFAI_MOCK__?.state.getWorkflow().steamSettings.duration))
     .toBe(55);
+  // The change is for the next steam: the finished one keeps the time it ran toward.
+  await expect
+    .poll(() => page.evaluate(() => (window as CafaiMockWindow).__CAFAI_MOCK__?.state.getShotSettings().targetSteamDuration))
+    .toBe(55);
+  await expect(view(page).getByTestId(TID.drinkDialOf)).toHaveText('of 50 s');
 
   await view(page).getByRole('button', { name: 'Go back to the coach' }).click();
   await expect(view(page)).toHaveCount(0);

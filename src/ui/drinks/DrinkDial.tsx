@@ -24,7 +24,7 @@ import type { SystemStyleObject } from '@mui/system';
 import CheckCircleRounded from '@mui/icons-material/CheckCircleRounded';
 import { useServices } from '../../app/services.tsx';
 import { TID } from '../testIds.ts';
-import { dialReading } from './drinkModel.ts';
+import { dialReading, dialSpoken } from './drinkModel.ts';
 import { drinkTraceFor, type DrinkRun } from './drinkTrace.ts';
 import type { DrinkKind } from './kinds.ts';
 
@@ -150,8 +150,10 @@ export function DrinkDial({ kind, run, target, size }: DrinkDialProps) {
   // SVG ids are document-wide; React's own ids hold characters url(#…) does not take.
   const id = `dial${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const live = run?.live ?? false;
-  const done = run !== null && !run.live;
+  // A run the machine's going away cut short is not done: no check for it.
+  const done = run !== null && !run.live && !run.lost;
   const water = kind !== 'steam';
+  const root = useRef<HTMLDivElement>(null);
   const arc = useRef<SVGCircleElement>(null);
   const tip = useRef<SVGGElement>(null);
   const levels = useRef<SVGGElement[]>([]);
@@ -165,6 +167,9 @@ export function DrinkDial({ kind, run, target, size }: DrinkDialProps) {
   useLayoutEffect(() => {
     const draw = () => {
       const reading = dialReading(kind, run, target);
+      // The dial's name in words, rewritten only when it changes (about once a second), never read out by itself.
+      const spoken = dialSpoken(kind, run, target);
+      if (root.current && root.current.getAttribute('aria-label') !== spoken) root.current.setAttribute('aria-label', spoken);
       if (value.current) value.current.textContent = reading.number;
       // A space before the unit, as every reading has one (DESIGN.md, Numbers), for a screen reader too.
       if (unit.current) unit.current.textContent = reading.unit === null ? '' : ` ${reading.unit}`;
@@ -190,7 +195,13 @@ export function DrinkDial({ kind, run, target, size }: DrinkDialProps) {
 
   const fontSize = size >= 260 ? '2.875rem' : size >= 200 ? '2.125rem' : '2rem';
   return (
-    <Box data-testid={TID.drinkDial} data-moving={live ? 'true' : 'false'} sx={(theme) => ({ width: size, height: size, ...dialStyles(theme, water) })}>
+    <Box
+      ref={root}
+      role="img"
+      data-testid={TID.drinkDial}
+      data-moving={live ? 'true' : 'false'}
+      sx={(theme) => ({ width: size, height: size, ...dialStyles(theme, water) })}
+    >
       <svg viewBox={`0 0 ${BOX} ${BOX}`} aria-hidden focusable="false">
         <defs>
           <clipPath id={`${id}-inside`}>
@@ -213,14 +224,17 @@ export function DrinkDial({ kind, run, target, size }: DrinkDialProps) {
         ))}
         <circle className="track" cx={C} cy={C} r={RING} />
         <g clipPath={`url(#${id}-inside)`}>
+          {/* The fills under the number; every line (a surface, a wisp, a stream) is masked out across its band. */}
           {kind === 'steam' ? (
             <>
               <g className="level milk-level" ref={levelRef(0)}>
                 <path className="milk-body wave" d={MILK_BODY} />
-                <path className="milk-top wave" d={MILK_TOP} />
               </g>
               <g mask={`url(#${id}-behind)`}>
-                <g className="level" ref={levelRef(1)}>
+                <g className="level milk-level" ref={levelRef(1)}>
+                  <path className="milk-top wave" d={MILK_TOP} />
+                </g>
+                <g className="level" ref={levelRef(2)}>
                   {WISPS.map((d, i) => (
                     <path key={d} className={`wisp wisp-${i + 1}`} d={d} />
                   ))}
@@ -232,7 +246,11 @@ export function DrinkDial({ kind, run, target, size }: DrinkDialProps) {
               <line className="stream" x1={C} y1={30} x2={C} y2={FLOOR} mask={`url(#${id}-behind)`} />
               <g className="level" ref={levelRef(0)}>
                 <path className="water-body wave" d={WATER_BODY} />
-                <path className="water-top wave" d={WATER_TOP} />
+              </g>
+              <g mask={`url(#${id}-behind)`}>
+                <g className="level" ref={levelRef(1)}>
+                  <path className="water-top wave" d={WATER_TOP} />
+                </g>
               </g>
             </>
           ) : (
@@ -251,7 +269,9 @@ export function DrinkDial({ kind, run, target, size }: DrinkDialProps) {
           <circle cx={C} cy={C - RING} r={8} />
         </g>
       </svg>
+      {/* What the dial shows, drawn: its name above says it in words. */}
       <Box
+        aria-hidden
         sx={{
           position: 'absolute',
           top: 0,

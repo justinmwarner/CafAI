@@ -9,7 +9,8 @@
  * not while the heater still warms (preparingForShot), nor while steam is
  * paused or the wand purges or rinses (pausedSteam, puffing, steamRinse). It
  * runs on the machine's own frame timestamps, as the shot timer does, from the
- * first frame past heating. Its water is the flow summed over the same time.
+ * first frame past heating to the frame that ends the run (not one the
+ * machine went away in). Its water is the flow summed over the same time.
  * A frame older than the last is left out, as the shot graph leaves it out.
  *
  * Frames never touch React state: views hear of each (onData) and draw it
@@ -171,6 +172,20 @@ function record(run: Recording, frame: MachineFrame, weight: number | null): boo
   return true;
 }
 
+/**
+ * The run's last stretch, from its last frame to the frame that ended it: the
+ * drink worked until the machine said otherwise, as a purge frame ends
+ * steam's time. So a 10 s flush reads 10.0 s, not its last frame's 9.8.
+ */
+function closeOn(run: Recording, frame: MachineFrame): void {
+  const at = parseDecaidTimestamp(frame.timestamp);
+  if (run.lastAt === null || !run.lastWorking || !Number.isFinite(at) || at <= run.lastAt) return;
+  const seconds = (at - run.lastAt) / 1000;
+  run.elapsedS += seconds;
+  const flow = finite(frame.flow);
+  if (flow !== null && run.lastFlow !== null) run.waterMl += Math.max(0, ((flow + run.lastFlow) / 2) * seconds);
+}
+
 export function createDrinkTrace(telemetry: TelemetryStore): DrinkTrace {
   let state: DrinkTraceState = { live: null, runId: 0 };
   let current: Recording | null = null;
@@ -209,7 +224,10 @@ export function createDrinkTrace(telemetry: TelemetryStore): DrinkTrace {
 
   function take(frame: MachineFrame): void {
     const kind = drinkOfState(frame.state?.state);
-    if (current && current.kind !== kind) end(false);
+    if (current && current.kind !== kind) {
+      closeOn(current, frame);
+      end(false);
+    }
     if (kind === null) return;
     const run = current ?? begin(kind);
     const now = telemetry.getState();

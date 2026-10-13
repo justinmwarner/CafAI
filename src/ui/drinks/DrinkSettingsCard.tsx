@@ -49,8 +49,15 @@ export function DrinkSettingsCard({ kind, drinks, layout }: DrinkSettingsCardPro
         <Typography id={headingId} variant="subtitle2" component="h3" sx={{ flex: 'none' }}>
           {drink.name} settings
         </Typography>
-        {/* Two lines kept on a narrow card, one on a wide one: the steppers never move as the words change. */}
-        <Typography variant="body2" role="status" color="text.secondary" sx={{ minHeight: rows ? '3em' : '1.5em' }}>
+        {/* Two lines kept on a narrow card; one line on a wide one, cut short rather than wrapped: the steppers never move as the words change. */}
+        <Typography
+          variant="body2"
+          role="status"
+          color="text.secondary"
+          noWrap={!rows}
+          title={rows ? undefined : WORDS[drinks.reason ?? 'ready']}
+          sx={{ minHeight: rows ? '3em' : '1.5em', minWidth: 0 }}
+        >
           {WORDS[drinks.reason ?? 'ready']}
         </Typography>
       </Box>

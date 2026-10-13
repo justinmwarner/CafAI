@@ -68,6 +68,50 @@ describe('DrinkView', () => {
     expect(screen.getByTestId(TID.drinkDialOf)).toHaveTextContent('of 40 s');
   });
 
+  it("keeps a finished run's target on the dial when a setting changes afterwards", async () => {
+    const services = createFakeServices();
+    const { send } = renderView('steam', services);
+    await screen.findByText('Changes go to Decaid at once.');
+    send(frame('steam', 'pouring'));
+    send(frame('steam', 'pouring'));
+    send(frame('idle', 'idle'));
+    expect(screen.getByTestId(TID.drinkDialOf)).toHaveTextContent('of 50 s');
+    // The barista sets a longer steam for next time; the machine's shot settings follow.
+    act(() =>
+      services.telemetry.setState({
+        shotSettings: {
+          steamSetting: 0,
+          targetSteamTemp: 150,
+          targetSteamDuration: 55,
+          targetHotWaterTemp: 75,
+          targetHotWaterVolume: 50,
+          targetHotWaterDuration: 30,
+          targetShotVolume: 0,
+          groupTemp: 93,
+        },
+      }),
+    );
+    expect(screen.getByTestId(TID.drinkDialOf)).toHaveTextContent('of 50 s');
+  });
+
+  it('shows no check for a run the machine going away cut short', () => {
+    const { services, send } = renderView('steam');
+    send(frame('steam', 'pouring'));
+    act(() => services.telemetry.setState({ machineConnected: false }));
+    expect(screen.getByTestId(TID.drinkPhase)).toHaveTextContent('Connection lost');
+    expect(screen.getByTestId(TID.drinkDial).querySelector('.done-check')).toBeNull();
+  });
+
+  it('names the dial in words for a screen reader', async () => {
+    const { send } = renderView('steam');
+    await screen.findByText('Changes go to Decaid at once.');
+    expect(screen.getByRole('img', { name: 'Steam time: none yet' })).toBeInTheDocument();
+    send(frame('steam', 'pouring'));
+    send(frame('steam', 'pouring'));
+    send(frame('steam', 'pouring'));
+    expect(screen.getByRole('img', { name: 'Steam time: 1 second of 50' })).toBeInTheDocument();
+  });
+
   it('shows the readouts of the drink, live', () => {
     const { send } = renderView('steam');
     send(frame('steam', 'pouring', { steamTemperature: 152, pressure: 1.94, flow: 0.81 }));

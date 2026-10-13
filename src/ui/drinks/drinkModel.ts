@@ -93,6 +93,21 @@ export function dialReading(kind: DrinkKind, run: DrinkRun | null, target: numbe
   };
 }
 
+/**
+ * The dial in words, for a screen reader: what it counts, how far, and toward
+ * what ("Steam time: 12 seconds of 50"). Whole seconds and millilitres, so it
+ * changes about once a second, not with every frame.
+ */
+export function dialSpoken(kind: DrinkKind, run: DrinkRun | null, target: number | null): string {
+  const name = kind === 'steam' ? 'Steam time' : kind === 'flush' ? 'Flush time' : 'Hot water';
+  if (run === null) return `${name}: none yet`;
+  const of = target === null ? '' : ` of ${plain(target)}`;
+  if (kind === 'hotWater') return `${name}: ${Math.round(run.waterMl)} millilitres${of}`;
+  // As the dial shows it: 4.96 s reads 5.0, so 5.
+  const seconds = Math.floor(Math.round(run.elapsedS * 10) / 10);
+  return `${name}: ${seconds} ${seconds === 1 ? 'second' : 'seconds'}${of}`;
+}
+
 /** A readout's series colour, as the trace draws it. */
 export type Swatch = 'pressure' | 'flow' | 'weight';
 

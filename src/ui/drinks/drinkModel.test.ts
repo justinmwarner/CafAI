@@ -3,6 +3,7 @@ import type { MachineFrame, ShotSettings } from '../../api/types.ts';
 import { IDLE_TELEMETRY, SAMPLE_WORKFLOW } from '../testing/fakeServices.ts';
 import {
   dialReading,
+  dialSpoken,
   drinkReadouts,
   drinkTarget,
   hotWaterTimeLimit,
@@ -118,6 +119,19 @@ describe('dialReading', () => {
 
   it('says how long a finished hot water took', () => {
     expect(dialReading('hotWater', run({ kind: 'hotWater', live: false, waterMl: 198, elapsedS: 38.62 }), 200).of).toBe('in 38.6 s');
+  });
+});
+
+describe('dialSpoken', () => {
+  it('says what the dial counts, how far, and toward what, in whole units', () => {
+    expect(dialSpoken('steam', run({ elapsedS: 12.34 }), 50)).toBe('Steam time: 12 seconds of 50');
+    expect(dialSpoken('flush', run({ kind: 'flush', elapsedS: 4.96 }), null)).toBe('Flush time: 5 seconds');
+    expect(dialSpoken('flush', run({ kind: 'flush', elapsedS: 1.01 }), 10)).toBe('Flush time: 1 second of 10');
+    expect(dialSpoken('hotWater', run({ kind: 'hotWater', waterMl: 111.6 }), 200)).toBe('Hot water: 112 millilitres of 200');
+  });
+
+  it('says there is nothing yet before any run', () => {
+    expect(dialSpoken('steam', null, 50)).toBe('Steam time: none yet');
   });
 });
 

@@ -11,8 +11,8 @@
  *
  * - wide (a tablet): the dial at the left, the readouts over the trace beside
  *   it, the settings across the bottom with their fields side by side;
- * - narrow (an upright phone, under NARROW_BELOW): one column, the settings
- *   one row each, the view scrolling inside itself;
+ * - narrow (an upright phone or small tablet, under NARROW_BELOW): one
+ *   column, the settings one row each, the view scrolling inside itself;
  * - short (a phone on its side, under SHORT_BELOW): the dial at the left, and
  *   beside it the header, the readouts and the settings, which scroll; no
  *   trace.
@@ -21,7 +21,7 @@
  * (D90). Every part keeps its place in the tree in every layout, so a rotation
  * keeps a half-typed setting.
  */
-import { useMemo, useRef, useSyncExternalStore, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
@@ -46,7 +46,12 @@ import { drinkTraceFor, type DrinkRun } from './drinkTrace.ts';
 import type { DrinkKind } from './kinds.ts';
 
 const MAX_WIDTH = 960;
-const NARROW_BELOW = 600;
+/**
+ * Under this the dial, three readouts and three or four steppers side by side
+ * do not fit (an iPad mini or a small tablet upright, in the phone's shell):
+ * one column. Every Decent tablet is wider.
+ */
+const NARROW_BELOW = 800;
 const SHORT_BELOW = 440;
 
 type Arrangement = 'wide' | 'narrow' | 'short';
@@ -147,8 +152,16 @@ export function DrinkView({ kind, back, onGoBack }: DrinkViewProps) {
   const layout = useOwnLayout(view, arrangement);
   const drinks = useDrinkPresets();
   const shotSettings = useTelemetry((s) => s.shotSettings);
-  const target = drinkTarget(kind, shotSettings, drinks.presets);
-  const timeSet = kind === 'hotWater' ? hotWaterTimeLimit(shotSettings, drinks.presets) : target;
+  const liveTarget = drinkTarget(kind, shotSettings, drinks.presets);
+  const liveTimeSet = kind === 'hotWater' ? hotWaterTimeLimit(shotSettings, drinks.presets) : liveTarget;
+  // A run's targets as it ran: a setting changed once it is over is for the next run, not this one's dial.
+  const [held, setHeld] = useState<{ runId: number; target: number | null; timeSet: number | null } | null>(null);
+  useEffect(() => {
+    if (run !== null && live) setHeld({ runId: run.id, target: liveTarget, timeSet: liveTimeSet });
+  }, [run, live, liveTarget, liveTimeSet]);
+  const kept = run !== null && !live && held?.runId === run.id ? held : null;
+  const target = kept ? kept.target : liveTarget;
+  const timeSet = kept ? kept.timeSet : liveTimeSet;
   const { name, icon } = DRINK[kind];
 
   return (

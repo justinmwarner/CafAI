@@ -75,6 +75,23 @@ describe('createDrinkTrace', () => {
     expect(trace.runOf('hotWater')!.waterMl).toBeCloseTo(11, 6);
   });
 
+  it('counts the last stretch up to the frame that ends the run, but not one the machine went away in', () => {
+    const { telemetry, trace, send } = recording();
+    send(frame(0, 'flush', 'pouring', { flow: 6 }));
+    send(frame(1, 'flush', 'pouring', { flow: 6 }));
+    send(frame(1.5, 'idle', 'idle', { flow: 0 }));
+    const flush = trace.runOf('flush')!;
+    expect(flush.elapsedS).toBeCloseTo(1.5, 6);
+    // 6 * 1 + (6 + 0) / 2 * 0.5
+    expect(flush.waterMl).toBeCloseTo(7.5, 6);
+    expect(flush.t).toEqual([0, 1]);
+
+    send(frame(2, 'hotWater', 'pouring', { flow: 4 }));
+    send(frame(3, 'hotWater', 'pouring', { flow: 4 }));
+    telemetry.setState({ machineConnected: false });
+    expect(trace.runOf('hotWater')!.elapsedS).toBeCloseTo(1, 6);
+  });
+
   it('never sums a negative flow into the water', () => {
     const { trace, send } = recording();
     send(frame(0, 'flush', 'pouring', { flow: -0.4 }));
