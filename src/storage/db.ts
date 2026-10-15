@@ -1,6 +1,6 @@
 /**
  * CafAI's IndexedDB database: the primary store for bags, profile versions,
- * iterations, conversations and settings.
+ * iterations, conversations, settings and machine care's steps.
  *
  * Decaid serves the skin from a stable per-skin origin, so this database
  * survives restarts and same-id updates. It can still be hidden (temporary
@@ -9,11 +9,12 @@
  * here at all: it lives in its own database (secrets.ts).
  */
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { Bag, ConversationRecord, IterationRecord, ProfileVersion, Settings } from './types.ts';
+import type { Bag, CareRecord, ConversationRecord, IterationRecord, ProfileVersion, Settings } from './types.ts';
 import { StorageError, toStorageError } from './errors.ts';
 
 export const CAFAI_DB_NAME = 'cafai';
-export const CAFAI_DB_VERSION = 1;
+/** 2: the care store (D-CARE-7). */
+export const CAFAI_DB_VERSION = 2;
 /** The settings store holds exactly one record, under this key. */
 export const SETTINGS_KEY = 'current';
 
@@ -23,11 +24,13 @@ export interface CafaiDbSchema extends DBSchema {
   iterations: { key: string; value: IterationRecord; indexes: { bagId: string; createdAt: string } };
   conversations: { key: string; value: ConversationRecord };
   settings: { key: string; value: Settings };
+  /** Machine care's steps, by the step's id (D-CARE-7). */
+  care: { key: string; value: CareRecord };
 }
 
 export type CafaiDb = IDBPDatabase<CafaiDbSchema>;
 
-export const DATA_STORES = ['bags', 'versions', 'iterations', 'conversations', 'settings'] as const;
+export const DATA_STORES = ['bags', 'versions', 'iterations', 'conversations', 'settings', 'care'] as const;
 
 /**
  * Every write waits for the data to reach disk before it resolves. Writes are
@@ -56,6 +59,8 @@ export function openCafaiDb(name = CAFAI_DB_NAME, onLost?: (reason: LostReason) 
         db.createObjectStore('conversations', { keyPath: 'id' });
         db.createObjectStore('settings');
       }
+      // Only adds a store: everything a version-1 database holds stays as it was.
+      if (oldVersion < 2) db.createObjectStore('care', { keyPath: 'id' });
     },
     // Nothing of ours to close here: the older connection belongs to another
     // window, whose own `blocking` handler below closes it, and then this open
@@ -84,17 +89,19 @@ export async function readAll(db: CafaiDb): Promise<{
   versions: ProfileVersion[];
   iterations: IterationRecord[];
   conversations: ConversationRecord[];
+  care: CareRecord[];
 }> {
   const tx = db.transaction(DATA_STORES, 'readonly');
-  const [settings, bags, versions, iterations, conversations] = await Promise.all([
+  const [settings, bags, versions, iterations, conversations, care] = await Promise.all([
     tx.objectStore('settings').get(SETTINGS_KEY),
     tx.objectStore('bags').getAll(),
     tx.objectStore('versions').getAll(),
     tx.objectStore('iterations').getAll(),
     tx.objectStore('conversations').getAll(),
+    tx.objectStore('care').getAll(),
     tx.done,
   ]);
-  return { settings, bags, versions, iterations, conversations };
+  return { settings, bags, versions, iterations, conversations, care };
 }
 
 export interface DbHandle<T> {

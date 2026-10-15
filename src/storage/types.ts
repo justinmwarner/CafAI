@@ -134,6 +134,22 @@ export interface Appearance {
   tint: string | { hue: number };
 }
 
+/** Decent's bands of the water's total dissolved solids (its water page): under 30 ppm, 30 to 120, over 120 (D-CARE-5). */
+export type WaterBand = 'under30' | 'to120' | 'over120';
+
+/** The filter at the water tank's intake: V1 (citric acid) or V2 (baking soda) (D-CARE-5). */
+export type IntakeFilter = 'v1' | 'v2';
+
+/** What sets Machine care's reminders, and whether the stats card shows them (D-CARE-5, D-CARE-6). */
+export interface CareSettings {
+  /** Null: not sure, reminded as 30 to 120 ppm. */
+  water: WaterBand | null;
+  /** Null: not sure, reminded as V1, the more often of the two. */
+  filter: IntakeFilter | null;
+  /** The stats card's line when a step is due; on by default. */
+  reminders: boolean;
+}
+
 /** Non-secret settings. Mirrored to Decaid. Never holds the API key. */
 export interface Settings {
   model: string;
@@ -163,6 +179,35 @@ export interface Settings {
    * exist right now.
    */
   keepKeyInDecaid?: boolean;
+  /**
+   * Machine care's reminders (D-CARE-5): the water, the intake filter and the
+   * stats card's line. Left out while it holds the defaults (DEFAULT_CARE in
+   * settings.ts), as the key-copy choice is: read `care ?? DEFAULT_CARE`.
+   */
+  care?: CareSettings;
+}
+
+/** How a care step's last time came about: marked done on the Care screen, or a cycle CafAI saw run (D-CARE-4). */
+export type CareMark = 'tick' | 'seen';
+
+/**
+ * A step of the cleaning guide beyond Daily, as CafAI keeps it (D-CARE-7):
+ * when it was last done, and Decaid's totals from when its count began, so
+ * the shots and steams since are the totals now less these (D-CARE-3).
+ */
+export interface CareRecord {
+  /** The step's id in the cleaning guide (src/ui/care/careGuide.ts). */
+  id: string;
+  /** When it was last done; null while it was never marked done. */
+  doneAt: IsoDateTime | null;
+  by: CareMark | null;
+  /** Where its count begins: doneAt, or the first time CafAI counted it (D-CARE-8). */
+  countFrom: IsoDateTime;
+  /** Decaid's shot total at countFrom; null while unknown. */
+  shotTotal: number | null;
+  /** Decaid's steam total (its steam records) at countFrom; null while unknown. */
+  steamTotal: number | null;
+  updatedAt: IsoDateTime;
 }
 
 export interface BagRepository {
@@ -194,6 +239,13 @@ export interface SettingsRepository {
   update(patch: Partial<Settings>): Promise<Settings>;
 }
 
+/** Machine care's steps (D-CARE-7), one record per step. */
+export interface CareRepository {
+  /** By the step's id. */
+  list(): Promise<CareRecord[]>;
+  put(record: CareRecord): Promise<void>;
+}
+
 /** The API key. Local to this device and origin only. */
 export interface SecretStore {
   getApiKey(): Promise<string | null>;
@@ -212,6 +264,8 @@ export interface CafaiExport {
   versions: ProfileVersion[];
   iterations: IterationRecord[];
   conversations: ConversationRecord[];
+  /** Machine care's steps (D-CARE-7); absent from files made before them, which an older CafAI leaves out. */
+  care?: CareRecord[];
 }
 
 export interface DataPorter {
@@ -244,6 +298,7 @@ export interface Storage {
   iterations: IterationRepository;
   conversations: ConversationRepository;
   settings: SettingsRepository;
+  care: CareRepository;
   secrets: SecretStore;
   porter: DataPorter;
   mirror: KvMirror;

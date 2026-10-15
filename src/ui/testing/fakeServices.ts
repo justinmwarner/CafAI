@@ -32,6 +32,7 @@ import type { ModelInfo } from '../../llm/types.ts';
 import type {
   Bag,
   CafaiExport,
+  CareRecord,
   ConversationRecord,
   IterationRecord,
   ProfileVersion,
@@ -329,6 +330,7 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
   const versions = new Map<string, ProfileVersion>((seed.versions ?? []).map((v) => [v.id, v]));
   const iterations = new Map<string, IterationRecord>((seed.iterations ?? []).map((i) => [i.id, i]));
   const conversations = new Map<string, ConversationRecord>((seed.conversations ?? []).map((c) => [c.id, c]));
+  const care = new Map<string, CareRecord>((seed.care ?? []).map((record) => [record.id, record]));
   let settings: Settings = seed.settings ?? {
     model: 'claude-opus-5-5',
     grinderName: null,
@@ -363,6 +365,10 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
       get: async () => settings,
       update: async (patch) => (settings = { ...settings, ...patch }),
     },
+    care: {
+      list: async () => [...care.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).map((record) => clone(record)),
+      put: async (record) => void care.set(record.id, clone(record)),
+    },
     secrets: {
       getApiKey: async () => storage.apiKey,
       setApiKey: async (key) => void (storage.apiKey = key),
@@ -379,6 +385,7 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
         versions: [...versions.values()],
         iterations: [...iterations.values()],
         conversations: [...conversations.values()],
+        care: [...care.values()],
       }),
       importAll: async () => ({ imported: 0 }),
     },

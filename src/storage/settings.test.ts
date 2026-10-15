@@ -6,9 +6,11 @@ import { createRepositories } from './repositories.ts';
 import {
   applySettingsPatch,
   DEFAULT_APPEARANCE,
+  DEFAULT_CARE,
   defaultSettings,
   fillBlankSettings,
   normalizeAppearance,
+  normalizeCareSettings,
   normalizeSettings,
   sameAppearance,
 } from './settings.ts';
@@ -29,6 +31,7 @@ describe('defaultSettings', () => {
       appearance: DEFAULT_APPEARANCE,
     });
     expect(defaultSettings(MODEL)).not.toHaveProperty('keepKeyInDecaid');
+    expect(defaultSettings(MODEL)).not.toHaveProperty('care');
   });
 });
 
@@ -69,10 +72,14 @@ describe('normalizeSettings', () => {
   });
 
   it('never carries fields outside Settings, such as an API key', () => {
-    const normalized = normalizeSettings({ ...makeSettings({ keepKeyInDecaid: true }), apiKey: API_KEY, theme: 'dark' }, MODEL);
+    const normalized = normalizeSettings(
+      { ...makeSettings({ keepKeyInDecaid: true, care: { water: 'to120', filter: null, reminders: true } }), apiKey: API_KEY, theme: 'dark' },
+      MODEL,
+    );
     expect(Object.keys(normalized).sort()).toEqual([
       'activeBagId',
       'appearance',
+      'care',
       'grinderId',
       'grinderName',
       'grinderSetting',
@@ -360,6 +367,36 @@ describe('the key-copy choice through an import (D99)', () => {
     await repos.settings.update({ activeBagId: 'bag_1', grinderName: 'Niche Zero' });
     await porter.importAll(exportWith(makeSettings({ keepKeyInDecaid: true })), 'merge');
     expect(await repos.settings.get()).toMatchObject({ keepKeyInDecaid: true, activeBagId: 'bag_1', grinderName: 'Niche Zero' });
+  });
+});
+
+describe('machine care (D-CARE-5)', () => {
+  it('reads the water, the filter and the switch leniently: an answer it does not know is not said, the switch on', () => {
+    expect(normalizeCareSettings(undefined)).toEqual(DEFAULT_CARE);
+    expect(normalizeCareSettings({ water: 'over120', filter: 'v2', reminders: false })).toEqual({ water: 'over120', filter: 'v2', reminders: false });
+    expect(normalizeCareSettings({ water: 'hard', filter: 'v3', reminders: 'yes' })).toEqual(DEFAULT_CARE);
+    expect(normalizeSettings({ ...makeSettings(), care: { water: 'to120' } }, MODEL).care).toEqual({ water: 'to120', filter: null, reminders: true });
+    // At its defaults the block is left out, as the key-copy choice: the settings of a CafAI that never set it stay as they were.
+    expect(normalizeSettings({ model: MODEL }, MODEL)).not.toHaveProperty('care');
+    expect(normalizeSettings({ ...makeSettings(), care: DEFAULT_CARE }, MODEL)).not.toHaveProperty('care');
+  });
+
+  it('a patch changes the care block field by field: the water never resets the filter', () => {
+    const set = applySettingsPatch(makeSettings(), { care: { water: null, filter: 'v2', reminders: true } }, MODEL);
+    const next = applySettingsPatch(set, { care: { water: 'under30' } as never }, MODEL);
+    expect(next.care).toEqual({ water: 'under30', filter: 'v2', reminders: true });
+    expect(applySettingsPatch(next, { activeBagId: 'bag_1' }, MODEL).care).toEqual(next.care);
+    expect(applySettingsPatch(next, { care: { water: null, filter: null } as never }, MODEL)).not.toHaveProperty('care');
+  });
+
+  it('a restore fills a blank answer and takes a switch still at its default; an answer given here wins', () => {
+    const incoming = makeSettings({ care: { water: 'over120', filter: 'v1', reminders: false } });
+    expect(fillBlankSettings(makeSettings(), incoming, MODEL).care).toEqual({ water: 'over120', filter: 'v1', reminders: false });
+    const mine = makeSettings({ care: { water: 'under30', filter: null, reminders: true } });
+    expect(fillBlankSettings(mine, incoming, MODEL).care).toEqual({ water: 'under30', filter: 'v1', reminders: false });
+    const off = makeSettings({ care: { water: null, filter: 'v2', reminders: false } });
+    expect(fillBlankSettings(off, makeSettings(), MODEL).care).toEqual({ water: null, filter: 'v2', reminders: false });
+    expect(fillBlankSettings(makeSettings(), makeSettings(), MODEL)).not.toHaveProperty('care');
   });
 });
 

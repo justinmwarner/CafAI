@@ -19,6 +19,7 @@ import {
   API_KEY,
   MODEL,
   makeBag,
+  makeCareRecord,
   makeConversation,
   makeIteration,
   makeSettings,
@@ -76,7 +77,7 @@ describe('push', () => {
     const { source } = memorySource(fullSnapshot());
     await makeMirror(kv, source).pushNow();
     const values = kv.values();
-    expect(Object.keys(values).sort()).toEqual(['bags', 'conv.bag_kiambu', 'iterations', 'meta', 'settings', 'versions']);
+    expect(Object.keys(values).sort()).toEqual(['bags', 'care', 'conv.bag_kiambu', 'iterations', 'meta', 'settings', 'versions']);
     expect(values['meta']).toEqual({
       schemaVersion: 1,
       appVersion: '1.2.3',
@@ -211,6 +212,7 @@ describe('push', () => {
     await mirror.pushNow();
     expect(Object.keys(kv.values()).sort()).toEqual([
       'bags',
+      'care',
       'conv.bag_b',
       'conv.bag_kiambu',
       'iterations',
@@ -239,7 +241,7 @@ describe('push', () => {
     await mirror.settled();
     expect(mirror.lastError).toBeNull();
     expect(mirror.lastPushAt).toBe(NOW.toISOString());
-    expect(Object.keys(kv.values()).sort()).toEqual(['bags', 'conv.bag_kiambu', 'iterations', 'meta', 'settings', 'versions']);
+    expect(Object.keys(kv.values()).sort()).toEqual(['bags', 'care', 'conv.bag_kiambu', 'iterations', 'meta', 'settings', 'versions']);
   });
 
   it('pushes nothing while Decaid answers its full read with something CafAI cannot read, even with data here, and tries again (5.3)', async () => {
@@ -505,6 +507,7 @@ describe('pull', () => {
       versions: [makeVersion()],
       iterations: [{ ...makeIteration(), summary }],
       conversations: [makeConversation()],
+      care: [],
     });
   });
 
@@ -547,6 +550,22 @@ describe('pull', () => {
       grinderId: null,
       appearance: DEFAULT_APPEARANCE,
     });
+  });
+
+  it("carries machine care's records as one key, by step, and drops one it cannot use (D-CARE-7)", async () => {
+    const kv = createMemoryKv();
+    const care = [makeCareRecord({ id: 'rinza' }), makeCareRecord()];
+    await makeMirror(kv, memorySource({ ...fullSnapshot(), care }).source).pushNow();
+    expect(kv.values()['care']).toEqual([makeCareRecord(), makeCareRecord({ id: 'rinza' })]);
+    expect((await makeMirror(kv, memorySource().source).pull())?.care).toEqual([makeCareRecord(), makeCareRecord({ id: 'rinza' })]);
+
+    const odd = createMemoryKv({ cafai: { care: [makeCareRecord(), { id: 'descale' }, 'junk'] } });
+    expect((await makeMirror(odd, memorySource().source).pull())?.care).toEqual([makeCareRecord()]);
+    // A namespace holding only the care key is still CafAI's backup.
+    expect(await makeMirror(createMemoryKv({ cafai: { care: [] } }), memorySource().source).pull()).not.toBeNull();
+    // A backup made before machine care's records has none.
+    const before = createMemoryKv({ cafai: { settings: makeSettings(), bags: [makeBag()] } });
+    expect((await makeMirror(before, memorySource().source).pull())?.care).toEqual([]);
   });
 
   it('rejects when Decaid cannot be read, so a failure never looks like an empty backup', async () => {

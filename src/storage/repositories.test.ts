@@ -8,6 +8,7 @@ import {
   API_KEY,
   MODEL,
   makeBag,
+  makeCareRecord,
   makeConversation,
   makeIteration,
   makeSettings,
@@ -207,6 +208,22 @@ describe('SettingsRepository', () => {
     await db.put('settings', { model: 7, grinderName: 'Niche Zero' } as never, SETTINGS_KEY);
     db.close();
     expect(await repos.settings.get()).toEqual(makeSettings({ grinderName: 'Niche Zero' }));
+  });
+});
+
+describe('CareRepository (D-CARE-7)', () => {
+  it('keeps one record per step, by its id, committed by the time put() resolves, and asks for a push', async () => {
+    const { name, repos, writes } = setup();
+    expect(await repos.care.list()).toEqual([]);
+    await repos.care.put(makeCareRecord({ id: 'rinza' }));
+    await repos.care.put(makeCareRecord());
+    expect((await repos.care.list()).map((record) => record.id)).toEqual(['detergent-clean', 'rinza']);
+    await repos.care.put(makeCareRecord({ doneAt: '2026-10-09T08:00:00.000Z', shotTotal: 160 }));
+    expect(await readCommitted(name, (db) => db.get('care', 'detergent-clean'))).toEqual(
+      makeCareRecord({ doneAt: '2026-10-09T08:00:00.000Z', shotTotal: 160 }),
+    );
+    expect(await repos.care.list()).toHaveLength(2);
+    expect(writes.count).toBe(3);
   });
 });
 

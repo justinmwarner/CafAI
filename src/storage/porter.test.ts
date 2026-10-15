@@ -3,6 +3,7 @@ import { createDbHandle, openCafaiDb } from './db.ts';
 import { createRepositories } from './repositories.ts';
 import { openSecretStore, REDACTED } from './secrets.ts';
 import {
+  careRecordWins,
   createDataPorter,
   exportFileName,
   ImportError,
@@ -16,6 +17,7 @@ import {
   API_KEY,
   MODEL,
   makeBag,
+  makeCareRecord,
   makeConversation,
   makeIteration,
   makeSettings,
@@ -88,6 +90,7 @@ function exportOf(overrides: Partial<CafaiExport> = {}): CafaiExport {
     versions: [],
     iterations: [],
     conversations: [],
+    care: [],
     ...overrides,
   };
 }
@@ -359,5 +362,58 @@ describe('importAll merge', () => {
     const { porter, mirror } = await setup();
     await porter.importAll(exportOf({ bags: [makeBag()] }), 'merge');
     expect(mirror).toMatchObject({ pushes: 1, replaced: 0 });
+  });
+});
+
+describe("machine care's records (D-CARE-7)", () => {
+  const NEVER = { doneAt: null, by: null } as const;
+
+  it('travel in the export and back, and a replace takes the file’s', async () => {
+    const a = await setup();
+    await a.repos.care.put(makeCareRecord({ id: 'rinza' }));
+    await a.repos.care.put(makeCareRecord());
+    const file = await a.porter.exportAll();
+    expect(file.care?.map((record) => record.id)).toEqual(['detergent-clean', 'rinza']);
+
+    const b = await setup();
+    await b.repos.care.put(makeCareRecord({ id: 'descale' }));
+    expect(await b.porter.importAll(JSON.parse(serializeExport(file)), 'replace')).toEqual({ imported: 2 });
+    expect(await b.repos.care.list()).toEqual(file.care);
+  });
+
+  it('an older file, without them, imports and leaves the steps as they were on a merge', async () => {
+    const { repos, porter } = await setup();
+    await repos.care.put(makeCareRecord());
+    const { care: _care, ...older } = exportOf({ bags: [makeBag()] });
+    await porter.importAll(older, 'merge');
+    expect(await repos.care.list()).toEqual([makeCareRecord()]);
+    expect(parseCafaiExport(older).care).toBeUndefined();
+  });
+
+  it('a merge keeps the later last time, whatever the records’ updatedAt says', async () => {
+    const { repos, porter } = await setup();
+    await repos.care.put(makeCareRecord({ doneAt: '2026-10-08T08:00:00.000Z', updatedAt: '2026-10-08T08:00:00.000Z' }));
+    const older = makeCareRecord({ doneAt: '2026-10-01T08:00:00.000Z', updatedAt: '2026-10-12T08:00:00.000Z' });
+    expect(await porter.importAll(exportOf({ care: [older] }), 'merge')).toEqual({ imported: 0 });
+    const later = makeCareRecord({ doneAt: '2026-10-11T08:00:00.000Z', shotTotal: 180 });
+    expect(await porter.importAll(exportOf({ care: [later, makeCareRecord({ id: 'rinza' })] }), 'merge')).toEqual({ imported: 2 });
+    expect(await repos.care.list()).toEqual([later, makeCareRecord({ id: 'rinza' })]);
+  });
+
+  it('a record marked done outranks one never marked, and of two never marked the earlier start wins', () => {
+    const done = makeCareRecord();
+    const fresh = makeCareRecord({ ...NEVER, countFrom: '2026-10-14T08:00:00.000Z', updatedAt: '2026-10-14T08:00:00.000Z' });
+    const earlier = makeCareRecord({ ...NEVER, countFrom: '2026-09-20T08:00:00.000Z' });
+    expect(careRecordWins(done, fresh)).toBe(true);
+    expect(careRecordWins(fresh, done)).toBe(false);
+    expect(careRecordWins(earlier, fresh)).toBe(true);
+    expect(careRecordWins(fresh, earlier)).toBe(false);
+    expect(careRecordWins(done, done)).toBe(false);
+  });
+
+  it('reads what it cannot use as unknown, so a file from a newer CafAI still imports; a record without its step or times is damage', () => {
+    const odd = { ...makeCareRecord(), by: 'machine', shotTotal: -3, steamTotal: 'many', extra: true };
+    expect(parseCafaiExport(exportOf({ care: [odd as never] })).care).toEqual([makeCareRecord({ by: null, shotTotal: null, steamTotal: null })]);
+    expect(() => parseCafaiExport(exportOf({ care: [{ ...makeCareRecord(), countFrom: '' }] }))).toThrow(IMPORT_MESSAGES.damaged('care[0].countFrom'));
   });
 });

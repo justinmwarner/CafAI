@@ -9,7 +9,8 @@
  *   replace - clear the data stores and write the file's records and settings.
  *   merge   - add records missing here, take records whose updatedAt (for
  *             profile versions, createdAt) is newer than ours, and fill blank
- *             settings; whatever is newer here stays.
+ *             settings; whatever is newer here stays. A care step's record
+ *             goes by its last time instead (careRecordWins, D-CARE-7).
  *
  * Neither touches the API key: it lives in a separate database this module
  * never opens. The export only reads the key to blank it out wherever a user
@@ -18,11 +19,11 @@
 import type { IDBPTransaction } from 'idb';
 import { DATA_STORES, DURABLE, readAll, SETTINGS_KEY, type CafaiDb, type CafaiDbSchema } from './db.ts';
 import { toStorageError } from './errors.ts';
-import { byCreatedAt } from './repositories.ts';
+import { byCreatedAt, byId } from './repositories.ts';
 import { describePath, ExportSchema } from './schema.ts';
 import { redactSecret } from './secrets.ts';
 import { fillBlankSettings, normalizeSettings } from './settings.ts';
-import type { CafaiExport, DataPorter, SecretStore } from './types.ts';
+import type { CafaiExport, CareRecord, DataPorter, SecretStore } from './types.ts';
 
 export const IMPORT_MESSAGES = {
   notAnExport: 'This is not a CafAI export file.',
@@ -128,15 +129,30 @@ async function inOneTransaction(db: CafaiDb, run: (tx: WriteTx, pending: Promise
 }
 
 async function replaceAll(db: CafaiDb, data: CafaiExport, defaultModel: string): Promise<number> {
+  const care = data.care ?? [];
   await inOneTransaction(db, async (tx, pending) => {
     for (const name of DATA_STORES) pending.push(tx.objectStore(name).clear());
     for (const bag of data.bags) pending.push(tx.objectStore('bags').put(bag));
     for (const version of data.versions) pending.push(tx.objectStore('versions').put(version));
     for (const record of data.iterations) pending.push(tx.objectStore('iterations').put(record));
     for (const conversation of data.conversations) pending.push(tx.objectStore('conversations').put(conversation));
+    for (const record of care) pending.push(tx.objectStore('care').put(record));
     pending.push(tx.objectStore('settings').put(normalizeSettings(data.settings, defaultModel), SETTINGS_KEY));
   });
-  return data.bags.length + data.versions.length + data.iterations.length + data.conversations.length;
+  return data.bags.length + data.versions.length + data.iterations.length + data.conversations.length + care.length;
+}
+
+/**
+ * Whether an incoming care record should replace this device's (D-CARE-7):
+ * the later last done wins, a done one wins over one never done, and of two
+ * never done the earlier start, from which the count is truer. updatedAt
+ * cannot decide: a device that lost its storage starts counting afresh, and
+ * its new records must not outrank the ones a backup brings back.
+ */
+export function careRecordWins(incoming: CareRecord, local: CareRecord): boolean {
+  if (incoming.doneAt !== null && local.doneAt !== null) return isNewer(incoming.doneAt, local.doneAt);
+  if (incoming.doneAt !== null || local.doneAt !== null) return incoming.doneAt !== null;
+  return isNewer(local.countFrom, incoming.countFrom);
 }
 
 interface KeyedStore<T> {
@@ -162,6 +178,13 @@ async function mergeAll(db: CafaiDb, data: CafaiExport, defaultModel: string): P
     for (const record of data.iterations) count(await putIfNewer(tx.objectStore('iterations'), record, (r) => r.updatedAt));
     for (const conversation of data.conversations) {
       count(await putIfNewer(tx.objectStore('conversations'), conversation, (r) => r.updatedAt));
+    }
+    const care = tx.objectStore('care');
+    for (const record of data.care ?? []) {
+      const local = await care.get(record.id);
+      if (local !== undefined && !careRecordWins(record, local)) continue;
+      await care.put(record);
+      count(true);
     }
     const settings = tx.objectStore('settings');
     const local = normalizeSettings(await settings.get(SETTINGS_KEY), defaultModel);
@@ -190,6 +213,7 @@ export function createDataPorter(deps: PorterDeps): DataPorter {
         versions: stored.versions.sort(byCreatedAt),
         iterations: stored.iterations.sort(byCreatedAt),
         conversations: stored.conversations.sort(byCreatedAt),
+        care: stored.care.sort(byId),
       };
       // The key is not part of any record; this only catches one pasted into a
       // note or the chat. If the key cannot be read, the export still goes

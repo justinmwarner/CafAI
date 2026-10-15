@@ -10,17 +10,17 @@ import {
   type LostReason,
 } from './db.ts';
 import { StorageError, STORAGE_MESSAGES, toStorageError } from './errors.ts';
-import { makeBag, makeConversation, makeIteration, makeSettings, makeVersion, uniqueDbName } from './testing/fixtures.ts';
+import { makeBag, makeCareRecord, makeConversation, makeIteration, makeSettings, makeVersion, uniqueDbName } from './testing/fixtures.ts';
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe('openCafaiDb', () => {
-  it('creates the five stores with their key paths and indexes', async () => {
+  it('creates the six stores with their key paths and indexes', async () => {
     const db = await openCafaiDb(uniqueDbName());
-    expect([...db.objectStoreNames].sort()).toEqual(['bags', 'conversations', 'iterations', 'settings', 'versions']);
-    const tx = db.transaction(['bags', 'versions', 'iterations', 'conversations', 'settings']);
+    expect([...db.objectStoreNames].sort()).toEqual(['bags', 'care', 'conversations', 'iterations', 'settings', 'versions']);
+    const tx = db.transaction(['bags', 'versions', 'iterations', 'conversations', 'settings', 'care']);
     expect(tx.objectStore('bags').keyPath).toBe('id');
     expect(tx.objectStore('versions').keyPath).toBe('id');
     expect([...tx.objectStore('versions').indexNames]).toEqual(['bagId']);
@@ -29,7 +29,44 @@ describe('openCafaiDb', () => {
     expect(tx.objectStore('conversations').keyPath).toBe('id');
     // One settings record under a fixed key, so no key path.
     expect(tx.objectStore('settings').keyPath).toBeNull();
+    // Machine care's steps, by the step's id (D-CARE-7).
+    expect(tx.objectStore('care').keyPath).toBe('id');
     await tx.done;
+    db.close();
+  });
+
+  it('upgrades a version-1 database by adding the care store, and keeps everything it held (D-CARE-7)', async () => {
+    const name = uniqueDbName();
+    // Version 1 exactly as CafAI 0.1.2 created it.
+    const old = await openDB(name, 1, {
+      upgrade(db) {
+        db.createObjectStore('bags', { keyPath: 'id' });
+        db.createObjectStore('versions', { keyPath: 'id' }).createIndex('bagId', 'bagId');
+        const iterations = db.createObjectStore('iterations', { keyPath: 'id' });
+        iterations.createIndex('bagId', 'bagId');
+        iterations.createIndex('createdAt', 'createdAt');
+        db.createObjectStore('conversations', { keyPath: 'id' });
+        db.createObjectStore('settings');
+      },
+    });
+    await old.put('bags', makeBag());
+    await old.put('versions', makeVersion());
+    await old.put('iterations', makeIteration());
+    await old.put('conversations', makeConversation());
+    await old.put('settings', makeSettings({ grinderName: 'Niche Zero' }), SETTINGS_KEY);
+    old.close();
+
+    const db = await openCafaiDb(name);
+    expect(db.version).toBe(CAFAI_DB_VERSION);
+    const all = await readAll(db);
+    expect(all.bags).toEqual([makeBag()]);
+    expect(all.versions).toEqual([makeVersion()]);
+    expect(all.iterations).toEqual([makeIteration()]);
+    expect(all.conversations).toEqual([makeConversation()]);
+    expect(all.settings).toEqual(makeSettings({ grinderName: 'Niche Zero' }));
+    expect(all.care).toEqual([]);
+    await db.put('care', makeCareRecord());
+    expect((await readAll(db)).care).toEqual([makeCareRecord()]);
     db.close();
   });
 
@@ -67,12 +104,14 @@ describe('readAll', () => {
     await db.put('iterations', makeIteration());
     await db.put('conversations', makeConversation());
     await db.put('settings', makeSettings({ grinderName: 'Niche Zero' }), SETTINGS_KEY);
+    await db.put('care', makeCareRecord());
     const all = await readAll(db);
     expect(all.bags).toEqual([makeBag()]);
     expect(all.versions).toEqual([makeVersion()]);
     expect(all.iterations).toEqual([makeIteration()]);
     expect(all.conversations).toEqual([makeConversation()]);
     expect(all.settings).toEqual(makeSettings({ grinderName: 'Niche Zero' }));
+    expect(all.care).toEqual([makeCareRecord()]);
     db.close();
   });
 });

@@ -8,11 +8,12 @@
  * them), lists come back in the same order, and settings go through the
  * storage module's own normalization.
  */
-import { byCreatedAt } from '../../src/storage/repositories.ts';
+import { byCreatedAt, byId } from '../../src/storage/repositories.ts';
 import { applySettingsPatch, normalizeSettings } from '../../src/storage/settings.ts';
 import type {
   Bag,
   CafaiExport,
+  CareRecord,
   ConversationRecord,
   IterationRecord,
   ProfileVersion,
@@ -48,6 +49,7 @@ export function createMemoryStorage(options: MemoryStorageOptions): MemoryStorag
   const versions = table<ProfileVersion>();
   const iterations = table<IterationRecord>();
   const conversations = table<ConversationRecord>();
+  const care = table<CareRecord>();
   let settings: Settings = applySettingsPatch(normalizeSettings(null, defaultModel), options.settings ?? {}, defaultModel);
   let apiKey: string | null = options.apiKey ?? null;
 
@@ -61,6 +63,7 @@ export function createMemoryStorage(options: MemoryStorageOptions): MemoryStorag
     versions: versions.all().sort(byCreatedAt),
     iterations: iterations.all().sort(byCreatedAt),
     conversations: conversations.all().sort(byCreatedAt),
+    care: care.all().sort(byId),
   });
 
   return {
@@ -98,6 +101,10 @@ export function createMemoryStorage(options: MemoryStorageOptions): MemoryStorag
         settings = applySettingsPatch(settings, patch, defaultModel);
         return clone(settings);
       },
+    },
+    care: {
+      list: async () => care.all().sort(byId),
+      put: care.put,
     },
     secrets: {
       getApiKey: async () => apiKey,
