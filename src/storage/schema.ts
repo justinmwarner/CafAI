@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import { ROAST_LEVELS, VARIABLES, type ProposeAdjustment } from '../coach/contract.ts';
 import type { ProfileJson, ShotSummary } from '../coach/types.ts';
+import type { TemperatureUnit } from '../coach/temperature.ts';
 import type { LlmMessage } from '../llm/types.ts';
 import type { CoachUiMessage } from '../app/types.ts';
 import type { Appearance, AppliedChange, Feedback } from './types.ts';
@@ -120,6 +121,12 @@ export const SettingsSchema = z.object({
   appearance: exact<Appearance>(z.unknown()).optional(),
   /** Absent from exports made before D99; read as off (settings.ts), same treatment as appearance above. */
   keepKeyInDecaid: z.boolean().optional(),
+  /**
+   * The temperature unit (D-TEMP-2); absent from exports made before it, or from a device that never chose,
+   * and read as °C. Not shape-checked here, as appearance: settings.ts keeps only a unit it knows, so a file
+   * from a newer CafAI with another one still imports.
+   */
+  temperatureUnit: exact<TemperatureUnit>(z.unknown()).optional(),
 });
 
 export const BagSchema = z.object({
