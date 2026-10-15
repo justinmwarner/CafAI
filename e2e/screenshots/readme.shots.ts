@@ -1,5 +1,6 @@
 import { statSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
+import type { CafaiMockWindow } from '../../mock/browser.ts';
 import { TID } from '../../src/ui/testIds.ts';
 import { goTo, isPhone, pullShot } from '../helpers.ts';
 
@@ -124,4 +125,21 @@ test('care: the cleaning guide, Weekly', async ({ page }) => {
   await page.getByTestId(TID.careSegment('weekly')).click();
   await expect(page.getByTestId(TID.careRoutine)).toContainText('Steam Rinza through the wand');
   await snap(page, 'care');
+});
+
+test('sleep and wake: the wake times on a phone', async ({ page }) => {
+  test.skip(!isPhone(page), 'The README shows Sleep and wake on the phone only.');
+  await openDemo(page);
+  // Wake times as a barista would keep them, put into the mock Decaid before Settings reads them.
+  await page.evaluate(() => {
+    const state = (window as CafaiMockWindow).__CAFAI_MOCK__!.state;
+    state.addWakeSchedule({ time: '06:30', daysOfWeek: [1, 2, 3, 4, 5], enabled: true, keepAwakeFor: 60 });
+    state.addWakeSchedule({ time: '08:00', daysOfWeek: [6, 7], enabled: true, keepAwakeFor: 120 });
+  });
+  await goTo(page, 'settings');
+  const section = page.getByTestId(TID.sleepWake);
+  await section.scrollIntoViewIfNeeded();
+  await expect(section.getByTestId(TID.nextWake)).toHaveText(/^Next wake: /);
+  await section.evaluate((element) => element.scrollIntoView({ block: 'end' }));
+  await snap(page, 'sleep-wake');
 });

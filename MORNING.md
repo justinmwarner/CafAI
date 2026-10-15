@@ -1,6 +1,27 @@
 # Good morning: CafAI after your answers (2026-10-04)
 
-**Newest (2026-10-15):** the cleaning guide, the first machine care item of
+**Newest (2026-10-15, later):** the wake schedule, the next item of the
+gap review (D157-D160, branch `feat/wake-schedule`, merged into `main`).
+Settings > **Sleep and wake** edits what Decaid keeps and acts on while it
+runs, CafAI open or not: **Sleep when idle** with its minutes, and the
+**wake times**, each a time in 24-hour figures, its days and how long the
+machine stays awake after, with when the next one wakes it. So "warm at
+06:30 on weekdays" is set without leaving CafAI. A new wake time keeps the
+machine awake for an hour (D159): with Decaid's default 30 minutes of idle
+sleep, a machine woken at 06:30 is otherwise asleep again at 07:00. One
+call of mine to check (D158): Decaid 0.8.8 wakes the machine on its
+schedules even with its own "Auto sleep & wake" switch off, but its page
+then hides them, so CafAI writes Sleep when idle off as 0 minutes with that
+switch left on, and a wake time added while the switch is off first turns
+it on at 0 minutes. The heartbeat's -1 goes unused: the settings say what
+is on. The mock Decaid answers the presence routes as Decaid's handler
+does, and the contract checks cover them. On the final code: typecheck,
+lint, 3913 unit tests, both builds and the release zip pass; Playwright
+passed all 376 tests (8 skipped by design). Not yet seen on a real DE1: a
+schedule waking it from Decaid's sleep (`docs/HARDWARE_TEST_PLAN.md`
+section 15). Waking early enough to be ready at the time waits (D160).
+
+**Before that (2026-10-15):** the cleaning guide, the first machine care item of
 the gap review (D151-D156, branch `feat/machine-care`, merged into `main`).
 Settings > Machine care > **Cleaning guide** opens Decent's routine one
 routine at a time (Daily, Weekly, Monthly, As needed: your two answers),

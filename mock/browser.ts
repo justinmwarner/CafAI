@@ -9,6 +9,8 @@
  *   await page.evaluate(() => window.__CAFAI_MOCK__.player.start());
  *   await page.evaluate(() => window.__CAFAI_MOCK__.state.setMachineConnected(false));
  *   await page.evaluate(() => window.__CAFAI_MOCK__.state.getMachineProfile().title);
+ *   await page.evaluate(() => window.__CAFAI_MOCK__.state.addWakeSchedule({ time: '06:30', daysOfWeek: [1, 2, 3, 4, 5], enabled: true }));
+ *   await page.evaluate(() => window.__CAFAI_MOCK__.state.getPresenceSettings().schedules);
  *
  * URL switches, read once at start (mock/decaid/urlOptions.ts):
  *   ?mockSpeed=N            wall-clock compression of shots and activities

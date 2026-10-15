@@ -15,12 +15,15 @@ import type {
   HostEnvironment,
   LiveSample,
   PluginInfo,
+  PresenceSettings,
   ShotLifecycleEvent,
   TelemetryState,
   TelemetryStore,
+  WakeSchedule,
   Workflow,
 } from '../../api/types.ts';
 import { createAppearanceStore, type AppearanceStore } from '../../app/appearance.ts';
+import { clone } from '../../util/clone.ts';
 import type { CoachController, CoachState, Services } from '../../app/types.ts';
 import type { PluginDirectory } from '../../api/plugins.ts';
 import type { ModelInfo } from '../../llm/types.ts';
@@ -147,6 +150,8 @@ export interface FakeDecaid extends DecaidClient {
   calls: Call[];
   /** Make the next call to `method` reject with `error`. */
   failNext(method: string, error: Error): void;
+  /** Decaid's sleep and wake settings as this fake holds them; tests may set them before rendering. */
+  presence: PresenceSettings;
 }
 
 export function createFakeDecaid(): FakeDecaid {
@@ -168,9 +173,62 @@ export function createFakeDecaid(): FakeDecaid {
   const batchesByBean = new Map<string, BeanBatch[]>();
   let beanSeq = 0;
   let batchSeq = 0;
-  return {
+  let scheduleSeq = 0;
+  /** Like `call`, but changes the fake's state only when the call does not fail. */
+  const act = async <T>(method: string, args: unknown[], apply: () => T): Promise<T> => {
+    await call(method, args, undefined);
+    return apply();
+  };
+  const fake: FakeDecaid = {
     calls,
     failNext: (method, error) => void failures.set(method, error),
+    // Decaid's own defaults (settings_controller.dart:64-66 at aab5f93).
+    presence: { userPresenceEnabled: true, sleepTimeoutMinutes: 30, schedules: [], keepAwakeUntil: null },
+    getPresenceSettings: () => act('getPresenceSettings', [], () => clone(fake.presence)),
+    updatePresenceSettings: (patch) =>
+      act('updatePresenceSettings', [patch], () => {
+        const minutes = patch.sleepTimeoutMinutes;
+        fake.presence = {
+          ...fake.presence,
+          ...(patch.userPresenceEnabled === undefined ? {} : { userPresenceEnabled: patch.userPresenceEnabled }),
+          ...(minutes === undefined ? {} : { sleepTimeoutMinutes: Math.min(240, Math.max(0, minutes)) }),
+        };
+        return { userPresenceEnabled: fake.presence.userPresenceEnabled, sleepTimeoutMinutes: fake.presence.sleepTimeoutMinutes };
+      }),
+    addWakeSchedule: (request) =>
+      act('addWakeSchedule', [request], () => {
+        scheduleSeq += 1;
+        const schedule: WakeSchedule = {
+          id: `schedule_${scheduleSeq}`,
+          time: request.time,
+          daysOfWeek: [...request.daysOfWeek].sort((a, b) => a - b),
+          enabled: request.enabled,
+          ...(request.keepAwakeFor ? { keepAwakeFor: request.keepAwakeFor } : {}),
+        };
+        fake.presence = { ...fake.presence, schedules: [...fake.presence.schedules, schedule] };
+        return clone(schedule);
+      }),
+    updateWakeSchedule: (id, patch) =>
+      act('updateWakeSchedule', [id, patch], () => {
+        const existing = fake.presence.schedules.find((schedule) => schedule.id === id);
+        if (!existing) throw new Error('Schedule not found');
+        const { keepAwakeFor: _old, ...rest } = existing;
+        const keepAwakeFor = patch.keepAwakeFor === undefined ? existing.keepAwakeFor : (patch.keepAwakeFor ?? undefined);
+        const updated: WakeSchedule = {
+          ...rest,
+          ...(patch.time === undefined ? {} : { time: patch.time }),
+          ...(patch.daysOfWeek === undefined ? {} : { daysOfWeek: [...patch.daysOfWeek].sort((a, b) => a - b) }),
+          ...(patch.enabled === undefined ? {} : { enabled: patch.enabled }),
+          ...(keepAwakeFor ? { keepAwakeFor } : {}),
+        };
+        fake.presence = { ...fake.presence, schedules: fake.presence.schedules.map((schedule) => (schedule.id === id ? updated : schedule)) };
+        return clone(updated);
+      }),
+    deleteWakeSchedule: (id) =>
+      act('deleteWakeSchedule', [id], () => {
+        if (!fake.presence.schedules.some((schedule) => schedule.id === id)) throw new Error('Schedule not found');
+        fake.presence = { ...fake.presence, schedules: fake.presence.schedules.filter((schedule) => schedule.id !== id) };
+      }),
     httpOrigin: 'http://localhost:8080',
     wsOrigin: 'ws://localhost:8080',
     getInfo: () =>
@@ -249,6 +307,7 @@ export function createFakeDecaid(): FakeDecaid {
       delete: async (ns, key) => void kvData.delete(`${ns}/${key}`),
     },
   };
+  return fake;
 }
 
 export interface FakeStorage extends Storage {

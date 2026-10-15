@@ -274,6 +274,75 @@ describe('settings over HTTP (D1)', () => {
   });
 });
 
+describe('sleep and wake over HTTP (presence_handler.dart at aab5f93)', () => {
+  const post = (path: string, body?: string) => call(path, { method: 'POST', body });
+
+  it("GET /presence/settings answers Decaid's defaults, as a real Decaid 0.8.8 does", async () => {
+    expect(await call('/presence/settings')).toMatchObject({
+      status: 200,
+      text: '{"userPresenceEnabled":true,"sleepTimeoutMinutes":30,"keepAwakeUntil":null,"schedules":[]}',
+    });
+  });
+
+  it('POST /presence/settings answers the two as saved, and 400 for malformed JSON, no body or a body that is not an object', async () => {
+    expect(await post('/presence/settings', JSON.stringify({ sleepTimeoutMinutes: 999 }))).toMatchObject({
+      status: 200,
+      body: { userPresenceEnabled: true, sleepTimeoutMinutes: 240 },
+    });
+    for (const body of ['not json', undefined]) {
+      expect(await post('/presence/settings', body), String(body)).toMatchObject({ status: 400, body: { error: 'Malformed JSON' } });
+    }
+    for (const body of ['[1,2]', 'null', '"on"']) {
+      expect(await post('/presence/settings', body), body).toMatchObject({ status: 400, body: { error: 'Request body must be a JSON object' } });
+    }
+    expect(await post('/presence/settings', JSON.stringify({ sleepTimeoutMinutes: 30 }))).toMatchObject({ status: 200 });
+  });
+
+  it('a schedule: 201 to add it, in the list, 200 to change it and to delete it, then 404 {error, id}', async () => {
+    const added = await post('/presence/schedules', JSON.stringify({ time: '06:30', daysOfWeek: [1, 2, 3, 4, 5], enabled: true, keepAwakeFor: 45 }));
+    expect(added.status).toBe(201);
+    const id = (added.body as { id: string }).id;
+    expect(await call('/presence/schedules')).toMatchObject({ status: 200, body: [added.body] });
+    expect(await call(`/presence/schedules/${id}`, { method: 'PUT', body: JSON.stringify({ enabled: false, keepAwakeFor: null }) })).toMatchObject({
+      status: 200,
+      body: { id, time: '06:30', daysOfWeek: [1, 2, 3, 4, 5], enabled: false },
+    });
+    expect((await call('/presence/settings')).body).toMatchObject({ schedules: [{ id, enabled: false }] });
+    expect(await call(`/presence/schedules/${id}`, { method: 'DELETE' })).toMatchObject({ status: 200, body: { deleted: id } });
+    const gone = { status: 404, body: { error: 'Schedule not found', id } };
+    expect(await call(`/presence/schedules/${id}`, { method: 'PUT', body: '{"enabled":true}' })).toMatchObject(gone);
+    expect(await call(`/presence/schedules/${id}`, { method: 'DELETE' })).toMatchObject(gone);
+    expect((await call('/presence/schedules')).body).toEqual([]);
+  });
+
+  it('a body Decaid cannot read is a 500 on the schedule routes, an unknown id a 404 before the body is read, a value out of range a 400', async () => {
+    const unreadable = await post('/presence/schedules', 'not json');
+    expect(unreadable.status).toBe(500);
+    expect((unreadable.body as { error: string }).error).toMatch(/^FormatException: /);
+    expect(await post('/presence/schedules')).toMatchObject({ status: 500, body: { error: 'FormatException: Unexpected end of input (at character 1)' } });
+    expect(await post('/presence/schedules', '[]')).toMatchObject({
+      status: 500,
+      body: { error: "type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>' in type cast" },
+    });
+    expect(await post('/presence/schedules', '{"time":"25:00"}')).toMatchObject({ status: 400, body: { error: 'time must be hour 0-23 and minute 0-59' } });
+    expect(await call('/presence/schedules/unknown', { method: 'PUT', body: 'not json' })).toMatchObject({
+      status: 404,
+      body: { error: 'Schedule not found', id: 'unknown' },
+    });
+    const { id } = mock.state.addWakeSchedule({ time: '06:30' });
+    try {
+      expect((await call(`/presence/schedules/${id}`, { method: 'PUT', body: 'not json' })).status).toBe(500);
+      expect((await call(`/presence/schedules/${id}`, { method: 'PUT', body: '{"daysOfWeek":[0]}' })).status).toBe(400);
+    } finally {
+      mock.state.deleteWakeSchedule(id);
+    }
+  });
+
+  it('answers with the id as the path carries it: Decaid never decodes it', async () => {
+    expect(await call('/presence/schedules/a%2Fb', { method: 'DELETE' })).toMatchObject({ status: 404, body: { error: 'Schedule not found', id: 'a%2Fb' } });
+  });
+});
+
 describe('plugins over HTTP (D3, D7)', () => {
   it('lists the four plugins loaded, with manifest fields', async () => {
     const reply = await call('/plugins');

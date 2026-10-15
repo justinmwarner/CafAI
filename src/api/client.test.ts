@@ -123,6 +123,21 @@ describe('replies are read, not trusted', () => {
     ]);
   });
 
+  it("the sleep and wake settings: a schedule CafAI cannot read is left out, and a schedule's own reply is named by its route's template", async () => {
+    const schedule = { id: 'wake-1', time: '06:30', daysOfWeek: [1, 2, 3, 4, 5], enabled: true };
+    const settings = { userPresenceEnabled: true, sleepTimeoutMinutes: 30, keepAwakeUntil: null, schedules: [schedule, { ...schedule, id: 'wake-2', time: 630 }] };
+    expect((await answering(settings).getPresenceSettings()).schedules).toEqual([schedule]);
+    await expect(answering({ ...schedule, time: undefined }).updateWakeSchedule('wake-1', { enabled: false })).rejects.toMatchObject({ code: 'unexpected_reply' });
+    await expect(answering({ userPresenceEnabled: true }).updatePresenceSettings({ userPresenceEnabled: true })).rejects.toMatchObject({
+      code: 'unexpected_reply',
+    });
+    expect(drift()).toEqual([
+      { source: 'GET /api/v1/presence/settings', problem: 'schedules[].time: expected string, got number' },
+      { source: 'PUT /api/v1/presence/schedules/{id}', problem: 'time: missing' },
+      { source: 'POST /api/v1/presence/settings', problem: 'sleepTimeoutMinutes: missing' },
+    ]);
+  });
+
   it('a list keeps what it can use, and an empty list is an empty list', async () => {
     const bean = { id: 'bean-1', roaster: 'Square Mile', name: 'Guji', archived: false };
     expect(await answering([bean, { name: 'no id' }]).listBeans()).toEqual([bean]);
@@ -744,6 +759,50 @@ describe('against the mock Decaid', () => {
     expect(mock.player.activity).toBeNull();
   });
 
+  it("reads and changes Decaid's sleep and wake settings: the minutes clamped, the two answered as saved", async () => {
+    expect(await client.getPresenceSettings()).toEqual({ userPresenceEnabled: true, sleepTimeoutMinutes: 30, keepAwakeUntil: null, schedules: [] });
+    expect(mock.state.requests.at(-1)).toMatchObject({ method: 'GET', path: '/api/v1/presence/settings' });
+    expect(await client.updatePresenceSettings({ sleepTimeoutMinutes: 999 })).toEqual({ userPresenceEnabled: true, sleepTimeoutMinutes: 240 });
+    expect(mock.state.requests.at(-1)).toMatchObject({ method: 'POST', path: '/api/v1/presence/settings', body: { sleepTimeoutMinutes: 999 } });
+    expect(await client.updatePresenceSettings({ userPresenceEnabled: true, sleepTimeoutMinutes: 0 })).toEqual({ userPresenceEnabled: true, sleepTimeoutMinutes: 0 });
+    const refused = await client.updatePresenceSettings({ sleepTimeoutMinutes: 2.5 }).catch((e: unknown) => e);
+    expect(refused).toMatchObject({ status: 400, message: 'sleepTimeoutMinutes must be an integer' });
+    await client.updatePresenceSettings({ sleepTimeoutMinutes: 30 });
+  });
+
+  it('adds, changes and deletes a wake schedule: its path and body, and the schedule as Decaid stored it', async () => {
+    const added = await client.addWakeSchedule({ time: '06:30', daysOfWeek: [5, 1], enabled: true, keepAwakeFor: 45 });
+    expect(added).toEqual({ id: expect.stringMatching(/^[0-9a-f-]{36}$/), time: '06:30', daysOfWeek: [1, 5], enabled: true, keepAwakeFor: 45 });
+    expect(mock.state.requests.at(-1)).toMatchObject({
+      method: 'POST',
+      path: '/api/v1/presence/schedules',
+      body: { time: '06:30', daysOfWeek: [5, 1], enabled: true, keepAwakeFor: 45 },
+    });
+
+    const changed = await client.updateWakeSchedule(added.id, { enabled: false, keepAwakeFor: null });
+    expect(changed).toEqual({ id: added.id, time: '06:30', daysOfWeek: [1, 5], enabled: false });
+    expect(mock.state.requests.at(-1)).toMatchObject({
+      method: 'PUT',
+      path: `/api/v1/presence/schedules/${added.id}`,
+      body: { enabled: false, keepAwakeFor: null },
+    });
+    expect((await client.getPresenceSettings()).schedules).toEqual([changed]);
+
+    await expect(client.deleteWakeSchedule(added.id)).resolves.toBeUndefined();
+    expect(mock.state.requests.at(-1)).toMatchObject({ method: 'DELETE', path: `/api/v1/presence/schedules/${added.id}` });
+    expect((await client.getPresenceSettings()).schedules).toEqual([]);
+  });
+
+  it('a wake schedule deleted elsewhere, or already gone, is a 404 GatewayError', async () => {
+    for (const call of [() => client.updateWakeSchedule('gone', { enabled: false }), () => client.deleteWakeSchedule('gone')]) {
+      const error = await call().catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(GatewayError);
+      expect(error).toMatchObject({ status: 404, code: 'http', message: 'Schedule not found' });
+    }
+    const refused = await client.addWakeSchedule({ time: '25:00', daysOfWeek: [], enabled: true }).catch((e: unknown) => e);
+    expect(refused).toMatchObject({ status: 400, message: 'time must be hour 0-23 and minute 0-59' });
+  });
+
   it('reads and writes the key-value store through client.kv', async () => {
     await client.kv.set('cafai', 'meta', { schemaVersion: 1 });
     expect(await client.kv.get('cafai', 'meta')).toEqual({ schemaVersion: 1 });
@@ -763,6 +822,7 @@ describe('against the mock Decaid', () => {
     const latest = await client.getLatestShot();
     await client.getShot(latest!.id);
     await client.listPlugins();
+    await client.getPresenceSettings();
     for (const bean of await client.listBeans()) await client.listBatches(bean.id);
     expect((await client.listAllBatches({ includeArchived: true })).length).toBeGreaterThan(0);
     expect(drift()).toEqual([]);

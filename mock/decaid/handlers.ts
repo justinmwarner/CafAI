@@ -12,7 +12,8 @@
  * Machine writes queue behind each other as on Decaid's DE1 write queue
  * (machine.ts): POST /machine/profile and every state request but idle wait
  * for a profile upload in flight. The grinder routes follow
- * grinders_handler.dart (grinders.ts).
+ * grinders_handler.dart (grinders.ts), and the sleep and wake routes
+ * presence_handler.dart (presence.ts).
  */
 import { http, HttpResponse, type HttpHandler } from 'msw';
 import type { MachineStateName } from '../../src/api/types.ts';
@@ -106,8 +107,8 @@ function invalidJson(text: string): string {
   return `FormatException: Unexpected character (at character 1)\n${text.slice(0, 40)}`;
 }
 
-/** GrindersHandler runs every body through jsonDecode, so an empty one is a FormatException too. */
-function parseGrinderBody(text: string): unknown {
+/** GrindersHandler and PresenceHandler run every body through jsonDecode, so an empty one is a FormatException too. */
+function decodeBody(text: string): unknown {
   if (!text.trim()) throw new SyntaxError('empty body');
   return JSON.parse(text) as unknown;
 }
@@ -115,6 +116,11 @@ function parseGrinderBody(text: string): unknown {
 /** The raw path segments after /api/v1/store (Decaid never decodes them). */
 function rawStoreSegments(url: URL): string[] {
   return url.pathname.split('/').slice(4);
+}
+
+/** A wake schedule's id as the path carries it: PresenceHandler never decodes it (presence_handler.dart:191, 276). */
+function rawScheduleId(url: URL): string {
+  return url.pathname.split('/').pop() ?? '';
 }
 
 export function decaidHttpHandlers(state: MockDecaid, player: ShotPlayer): HttpHandler[] {
@@ -235,6 +241,42 @@ export function decaidHttpHandlers(state: MockDecaid, player: ShotPlayer): HttpH
     }),
     route('get', '/machine/capabilities', () => json({ capabilities: state.getCapabilities() })),
     route('post', '/machine/heartbeat', () => json(state.heartbeat())),
+
+    // ---- sleep and wake (presence_handler.dart): Decaid's own settings, no machine needed -------
+    route('get', '/presence/settings', () => json(state.getPresenceSettings())),
+    route('post', '/presence/settings', ({ bodyText }) => {
+      let body: unknown;
+      try {
+        body = decodeBody(bodyText);
+      } catch {
+        return json({ error: 'Malformed JSON' }, 400);
+      }
+      return json(state.updatePresenceSettings(body));
+    }),
+    route('get', '/presence/schedules', () => json(state.listWakeSchedules())),
+    route('post', '/presence/schedules', ({ bodyText }) => {
+      let body: unknown;
+      try {
+        body = decodeBody(bodyText);
+      } catch {
+        // No FormatException catch of its own: the catch-all's 500.
+        return json({ error: invalidJson(bodyText) }, 500);
+      }
+      return json(state.addWakeSchedule(body), 201);
+    }),
+    route('put', '/presence/schedules/:id', ({ url, bodyText }) => {
+      const id = rawScheduleId(url);
+      // Decaid looks the schedule up before it reads the body.
+      state.getWakeSchedule(id);
+      let body: unknown;
+      try {
+        body = decodeBody(bodyText);
+      } catch {
+        return json({ error: invalidJson(bodyText) }, 500);
+      }
+      return json(state.updateWakeSchedule(id, body));
+    }),
+    route('delete', '/presence/schedules/:id', ({ url }) => json(state.deleteWakeSchedule(rawScheduleId(url)))),
 
     // ---- scale ---------------------------------------------------------------------------
     route('get', '/scale/info', () => {
@@ -361,7 +403,7 @@ export function decaidHttpHandlers(state: MockDecaid, player: ShotPlayer): HttpH
     route('post', '/grinders', ({ bodyText }) => {
       let body: unknown;
       try {
-        body = parseGrinderBody(bodyText);
+        body = decodeBody(bodyText);
       } catch {
         return json({ error: invalidJson(bodyText) }, 400);
       }
@@ -373,7 +415,7 @@ export function decaidHttpHandlers(state: MockDecaid, player: ShotPlayer): HttpH
       state.getGrinder(id);
       let body: unknown;
       try {
-        body = parseGrinderBody(bodyText);
+        body = decodeBody(bodyText);
       } catch {
         return json({ error: invalidJson(bodyText) }, 400);
       }

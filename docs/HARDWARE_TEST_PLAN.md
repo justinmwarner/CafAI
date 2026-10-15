@@ -532,6 +532,38 @@ it does.
    the video. Expected: the flush view takes the screen, and **Go back**
    returns to Machine care.
 
+## 15. Sleep and wake: Decaid's idle sleep and wake times (D157-D160)
+
+Settings > Sleep and wake only edits what Decaid keeps; Decaid does the
+sleeping and the waking. The mock and the simulator show the settings
+travel; only a real DE1 shows Decaid acting on them. Have a few quiet
+minutes, and put every setting back after.
+
+1. **Open it.** Settings > Sleep and wake. Expected: what Decaid's own
+   Sleep & Wake page shows (Decaid settings, the "opens elsewhere" button):
+   Sleep when idle on with Decaid's minutes, or off where Decaid's minutes
+   are 0 or its switch is off; Decaid's wake times, earliest first.
+2. **The idle sleep.** Set Sleep after to 5 min, then leave the machine and
+   CafAI alone. Expected: the DE1 sleeps about 5 minutes after the last tap
+   or drink. Record how long it took.
+3. **A wake time.** With the DE1 asleep, add a wake time 3 minutes ahead,
+   every day, After waking: Stay awake for 30 min. Expected: within 30
+   seconds of that minute the DE1 wakes and heats. Record what CafAI's top
+   bar and the stats card show while it does, and how long it takes to be
+   ready.
+4. **The window.** Still at 5 minutes, leave it alone after that wake.
+   Expected: Settings says "A wake time keeps the machine awake until …",
+   the DE1 stays awake past 5 minutes, and sleeps within 5 minutes of the
+   window's end.
+5. **Decaid's own page.** Turn Sleep when idle off in CafAI, then open
+   Decaid's Sleep & Wake page. Expected: its switch on, Sleep 0, and the
+   wake time listed; the DE1 no longer sleeps by itself.
+6. **The tablet's screen off.** Add a wake time 3 minutes ahead, then turn
+   the tablet's screen off (Decaid left open). Record: does the DE1 wake?
+   (Decaid acts on the schedule only while it runs.)
+7. **Delete.** Delete the test wake times and set the minutes back.
+   Expected: Decaid's page shows them gone.
+
 ## Results
 
 | Section | Step | Expected | Observed | Pass? |
@@ -584,6 +616,13 @@ it does.
 | 14 | 5 | Offline: the steps in full | | |
 | 14 | 6 | iPad or Mac: no poster; 16:56 opens YouTube at 16:56 | | |
 | 14 | 7 | Flush with the video open keeps Care; without it, the flush view and Go back to Machine care | | |
+| 15 | 1 | Sleep when idle and the wake times as Decaid's own page has them | | |
+| 15 | 2 | Asleep about 5 min after the last use; how long it took | | |
+| 15 | 3 | Woken within 30 s of the minute; what the top bar and stats card show; time to ready | | |
+| 15 | 4 | Kept awake through the window, asleep within 5 min of its end | | |
+| 15 | 5 | Off in CafAI: Decaid's switch on, Sleep 0, the wake time listed | | |
+| 15 | 6 | Screen off: does the DE1 still wake? | | |
+| 15 | 7 | Deleted from Decaid too | | |
 
 Send back this table, the saved shot and profile JSON files, the `[CafAI]`
 lines from `/api/v1/webview/logs`, the output of `npm run test:decaid`, and,

@@ -11,12 +11,15 @@ import {
   readMachineInfo,
   readMachineState,
   readPlugins,
+  readPresenceSaved,
+  readPresenceSettings,
   readProfileRecord,
   readProfileRecords,
   readSettings,
   readShot,
   readShotPage,
   readShotSummary,
+  readWakeSchedule,
   readWorkflow,
 } from './readers.ts';
 import { GatewayError } from './types.ts';
@@ -277,6 +280,85 @@ describe('readMachineState', () => {
     const { timestamp: _timestamp, ...frame } = fixtures.machineState();
     expect(readMachineState(frame, 'GET /api/v1/machine/state').state).toEqual(frame.state);
     expect(drift()).toEqual([{ source: 'GET /api/v1/machine/state', problem: 'timestamp: missing' }]);
+  });
+});
+
+describe('readPresenceSettings, readPresenceSaved and readWakeSchedule (Settings > Sleep and wake)', () => {
+  const SETTINGS = 'GET /api/v1/presence/settings';
+  const schedule = (id: string) => ({ id, time: '06:30', daysOfWeek: [1, 2, 3, 4, 5], enabled: true });
+  const settings = (schedules: unknown[]) => ({ userPresenceEnabled: true, sleepTimeoutMinutes: 30, keepAwakeUntil: null, schedules });
+
+  it('reads the settings as Decaid sends them, a schedule with a keep-awake window and one without', () => {
+    const sent = { ...settings([{ ...schedule('a'), keepAwakeFor: 45 }, schedule('b')]), keepAwakeUntil: '2026-10-15T07:15:00.000' };
+    expect(readPresenceSettings(sent, SETTINGS)).toEqual(sent);
+    expect(readPresenceSaved({ userPresenceEnabled: false, sleepTimeoutMinutes: 0 }, 'POST /api/v1/presence/settings')).toEqual({
+      userPresenceEnabled: false,
+      sleepTimeoutMinutes: 0,
+    });
+    expect(readWakeSchedule(schedule('c'), 'POST /api/v1/presence/schedules')).toEqual(schedule('c'));
+    expect(drift()).toEqual([]);
+  });
+
+  it('leaves out a schedule it cannot read, reports it, and keeps the rest', () => {
+    const read = readPresenceSettings(
+      settings([schedule('a'), { ...schedule('b'), time: '6:30' }, { ...schedule('c'), daysOfWeek: [0] }, { ...schedule('d'), id: undefined }, 'junk', schedule('e')]),
+      SETTINGS,
+    );
+    expect(read.schedules.map((item) => item.id)).toEqual(['a', 'e']);
+    expect(drift()).toEqual([
+      { source: SETTINGS, problem: 'schedules[].time: unexpected string' },
+      { source: SETTINGS, problem: 'schedules[].daysOfWeek.0: unexpected number' },
+      { source: SETTINGS, problem: 'schedules[].id: missing' },
+      { source: SETTINGS, problem: 'schedules[]: expected object, got string' },
+    ]);
+  });
+
+  it('keeps a schedule whose keep-awake window it cannot read, without it', () => {
+    const read = readPresenceSettings(settings([{ ...schedule('a'), keepAwakeFor: '45' }]), SETTINGS);
+    expect(read.schedules).toEqual([schedule('a')]);
+    expect(problems()).toEqual(['schedules[].keepAwakeFor: expected number, got string']);
+  });
+
+  it('settings without userPresenceEnabled, sleepTimeoutMinutes or schedules, or with one it cannot read, fail the call and say which', () => {
+    for (const key of ['userPresenceEnabled', 'sleepTimeoutMinutes', 'schedules'] as const) {
+      const { [key]: _gone, ...rest } = settings([]);
+      expect(refusal(() => readPresenceSettings(rest, SETTINGS)), key).toMatchObject(UNRECOGNISED);
+    }
+    expect(refusal(() => readPresenceSettings({ ...settings([]), sleepTimeoutMinutes: '30' }, SETTINGS))).toMatchObject(UNRECOGNISED);
+    expect(refusal(() => readPresenceSettings({ ...settings([]), schedules: null }, SETTINGS))).toMatchObject(UNRECOGNISED);
+    expect(refusal(() => readPresenceSettings([], SETTINGS))).toMatchObject(UNRECOGNISED);
+    expect(problems()).toEqual([
+      'userPresenceEnabled: missing',
+      'sleepTimeoutMinutes: missing',
+      'schedules: missing',
+      'sleepTimeoutMinutes: expected number, got string',
+      'schedules: expected array, got null',
+      'reply: expected object, got array',
+    ]);
+  });
+
+  it('a keepAwakeUntil it cannot read is left out: unknown, never "no window"', () => {
+    expect(readPresenceSettings({ ...settings([]), keepAwakeUntil: 1760512500000 }, SETTINGS)).not.toHaveProperty('keepAwakeUntil');
+    const { keepAwakeUntil: _gone, ...without } = settings([]);
+    expect(readPresenceSettings(without, SETTINGS)).not.toHaveProperty('keepAwakeUntil');
+    expect(problems()).toEqual(['keepAwakeUntil: expected string, got number', 'keepAwakeUntil: missing']);
+  });
+
+  it('a saved reply without either setting, or a schedule without its id, time, days or enabled, fails the call', () => {
+    expect(refusal(() => readPresenceSaved({ userPresenceEnabled: true }, 'POST /api/v1/presence/settings'))).toMatchObject(UNRECOGNISED);
+    expect(refusal(() => readPresenceSaved({ sleepTimeoutMinutes: 30 }, 'POST /api/v1/presence/settings'))).toMatchObject(UNRECOGNISED);
+    for (const key of ['id', 'time', 'daysOfWeek', 'enabled'] as const) {
+      const { [key]: _gone, ...rest } = schedule('a');
+      expect(refusal(() => readWakeSchedule(rest, 'PUT /api/v1/presence/schedules/{id}')), key).toMatchObject(UNRECOGNISED);
+    }
+    expect(problems()).toEqual([
+      'sleepTimeoutMinutes: missing',
+      'userPresenceEnabled: missing',
+      'id: missing',
+      'time: missing',
+      'daysOfWeek: missing',
+      'enabled: missing',
+    ]);
   });
 });
 

@@ -127,6 +127,21 @@ export type BeanRead<P extends string = ''> = NullIn<P, 'country' | 'region' | '
 /** CAFAI NARROWER: the spec allows null; BeanBatch.toJson leaves a null field out (lib/src/models/data/bean.dart:292-317). */
 export type BatchRead<P extends string = ''> = NullIn<P, 'extras'>;
 
+/** CAFAI NARROWER: the spec allows null; WakeSchedule.toJson leaves keepAwakeFor out when there is none (lib/src/models/wake_schedule.dart:66-68). */
+export type WakeScheduleRead<P extends string = ''> = NullIn<P, 'keepAwakeFor'>;
+
+/**
+ * SPEC GAP: the settings reply has no `required`; Decaid always sends the
+ * four keys, keepAwakeUntil null when no keep-awake window runs
+ * (lib/src/services/webserver/presence_handler.dart:44-49). CafAI needs three
+ * of them; a keepAwakeUntil it cannot read is left out.
+ * CAFAI NARROWER: each schedule as WakeScheduleRead.
+ */
+export type PresenceRead = Opt<'', 'userPresenceEnabled' | 'sleepTimeoutMinutes' | 'schedules'> | WakeScheduleRead<'schedules[].'>;
+
+/** SPEC GAP: the reply to a settings change has no `required`; Decaid always answers the two as saved (lib/src/services/webserver/presence_handler.dart:98-101). */
+export type PresenceSavedRead = Opt<'', 'userPresenceEnabled' | 'sleepTimeoutMinutes'>;
+
 /**
  * SPEC DRIFT: no handler sends the spec's Error {e, st}; they send {error},
  * {error, message}, {error, st} or {details, type}
@@ -278,7 +293,8 @@ export const SPEC_EXCEPTIONS: readonly SpecException[] = [
       'SPEC DRIFT: Decaid writes local times without a zone (DateTime.toIso8601String on a local time: ' +
       'lib/src/models/device/machine.dart:99, lib/src/controllers/scale_controller.dart:318, ' +
       'lib/src/models/data/profile_record.dart:145-146, lib/src/models/data/shot_record.dart:53, ' +
-      'lib/src/models/data/bean.dart:117-118, 296, 313-314, lib/src/models/data/grinder.dart:128-129) and reads ' +
+      'lib/src/models/data/bean.dart:117-118, 296, 313-314, lib/src/models/data/grinder.dart:128-129, ' +
+      'lib/src/services/webserver/presence_handler.dart:47) and reads ' +
       'dates with DateTime.parse, which takes them and date-only strings (lib/src/services/webserver/beans_handler.dart:184-186); ' +
       '`format: date-time` wants RFC 3339 with a zone.',
   },

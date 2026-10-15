@@ -293,9 +293,14 @@ describe('decaid-watch', () => {
         // The bean card's one read, and DYE2's endpoint through Decaid's plugin route.
         'GET /api/v1/bean-batches',
         'GET /api/v1/plugins/{id}/{endpoint}',
+        // Settings > Sleep and wake.
+        'GET /api/v1/presence/settings',
+        'DELETE /api/v1/presence/schedules/{id}',
       ]),
     );
     expect(used.operations).not.toContain('GET /api/v1/steams');
+    // The schedules come with the settings.
+    expect(used.operations).not.toContain('GET /api/v1/presence/schedules');
     expect(used.channels).toEqual(expect.arrayContaining(['ws/v1/machine/snapshot', 'ws/v1/devices']));
   });
 

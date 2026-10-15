@@ -89,15 +89,17 @@ Three items, each building on the one before:
   the profiles still in °C, as streamline does. Check first: the steppers'
   step in °F, rounding so a value read back shows what was set, and the
   coach's levers and their bounds said in °F.
-- **Wake schedule.** Decaid keeps wake schedules (a time, weekdays and a
-  keep-awake window: `/api/v1/presence/schedules`) and the sleep timeout
-  (`/api/v1/presence/settings`), and its own settings edit them; CafAI only
-  sends the heartbeat (`src/api/heartbeat.ts`). A Settings section shows
-  and edits them, so "warm at 6:30 on weekdays" is set without leaving
-  CafAI (later, perhaps: waking early enough to be ready at that time, from
-  the time-to-ready plugin). Check first: that a schedule wakes a real DE1
-  from Decaid's sleep, and what to show when presence tracking is off (the
-  heartbeat answers -1).
+- **Wake schedule: built on 2026-10-15** (D157-D160). Settings > Sleep and
+  wake edits what Decaid keeps and acts on: Sleep when idle with its
+  minutes, and the wake times, each a time, its days and how long it keeps
+  the machine awake (a new one an hour), with the next wake over them, so
+  "warm at 06:30 on weekdays" is set without leaving CafAI. Presence
+  tracking off reads as Sleep when idle off; CafAI writes off as 0 minutes
+  with Decaid's own switch left on, since Decaid wakes on its schedules
+  either way but hides them on its own page while that switch is off
+  (D158). Left: waking early enough to be ready at the time, from the
+  time-to-ready plugin (D160), and a schedule waking a real DE1 from
+  Decaid's sleep (`docs/HARDWARE_TEST_PLAN.md` section 15).
 
 ## Claude on your computer: what is left (D130-D137)
 

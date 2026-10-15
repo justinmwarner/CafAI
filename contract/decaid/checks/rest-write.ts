@@ -24,6 +24,9 @@ export type _machine_profile = Assert<
   Exactly<Sent<{ v: C.WireProfile | ProfileJson }, { v: Body<'/api/v1/machine/profile', 'post'> }>, X.MachineProfileWrite>
 >;
 export type _machine_state = Assert<Exactly<Sent<{ newState: C.CommandableState }, PathParams<'/api/v1/machine/state/{newState}', 'put'>>, never>>;
+/** client.ts updateWakeSchedule and deleteWakeSchedule: the schedule's id in the path. */
+export type _wake_schedule_id = Assert<Exactly<Sent<{ id: string }, PathParams<'/api/v1/presence/schedules/{id}', 'put'>>, never>>;
+export type _wake_schedule_delete_id = Assert<Exactly<Sent<{ id: string }, PathParams<'/api/v1/presence/schedules/{id}', 'delete'>>, never>>;
 /** client.ts connectDevice. */
 export type _connect = Assert<
   Exactly<Sent<{ deviceId: string; connectionRole?: 'primary' | 'auxiliary' }, Body<'/api/v1/devices/connect', 'put'>>, never>
@@ -35,6 +38,12 @@ export type _bean = Assert<Exactly<Sent<C.BeanCreateRequest, Body<'/api/v1/beans
 export type _batch = Assert<Exactly<Sent<C.BatchCreateRequest, Body<'/api/v1/beans/{beanId}/batches', 'post'>>, never>>;
 /** grinders.ts createGrinder: Settings' Add a grinder, and the coach's offer the barista confirms. */
 export type _grinder_create = Assert<Exactly<Sent<GrinderCreateRequest, Body<'/api/v1/grinders', 'post'>>, never>>;
+/** client.ts updatePresenceSettings: Settings > Sleep and wake changes one setting or both. */
+export type _presence = Assert<Exactly<Sent<C.PresencePatch, Body<'/api/v1/presence/settings', 'post'>>, never>>;
+/** client.ts addWakeSchedule: always the time as "HH:MM", never hour and minute. */
+export type _wake_schedule_create = Assert<Exactly<Sent<C.WakeScheduleRequest, Body<'/api/v1/presence/schedules', 'post'>>, never>>;
+/** client.ts updateWakeSchedule: only the keys that change; keepAwakeFor null clears it. */
+export type _wake_schedule_update = Assert<Exactly<Sent<C.WakeSchedulePatch, Body<'/api/v1/presence/schedules/{id}', 'put'>>, never>>;
 
 // ---- Query parameters: a renamed one would be ignored, as Decaid ignores what it does not know ----------
 /** client.ts scanDevices: connect=false keeps the scan from connecting every device it finds (D111). */

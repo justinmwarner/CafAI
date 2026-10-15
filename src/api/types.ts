@@ -476,6 +476,62 @@ export interface DecaidErrorBody {
   st?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Sleep and wake (Decaid's presence settings)
+// ---------------------------------------------------------------------------
+
+/**
+ * One of Decaid's wake schedules (lib/src/models/wake_schedule.dart at
+ * aab5f93). While Decaid runs and the machine is connected and asleep,
+ * Decaid wakes it at the time on the days, whether or not its idle sleep is
+ * on (presence_controller.dart:478-511).
+ */
+export interface WakeSchedule {
+  id: string;
+  /** "HH:MM", 24-hour, in the local time of the device Decaid runs on. */
+  time: string;
+  /** ISO weekdays, 1 = Monday to 7 = Sunday; empty means every day. */
+  daysOfWeek: number[];
+  enabled: boolean;
+  /** Minutes (1-720) Decaid keeps the machine awake after the wake; left out when there is none. */
+  keepAwakeFor?: number;
+}
+
+/** GET /api/v1/presence/settings: Decaid's idle sleep and its wake schedules. */
+export interface PresenceSettings {
+  /** Decaid's "Auto sleep & wake": off, Decaid never puts the machine to sleep by itself. */
+  userPresenceEnabled: boolean;
+  /** Minutes without use before Decaid puts the machine to sleep, 0-240; 0 = never. */
+  sleepTimeoutMinutes: number;
+  schedules: WakeSchedule[];
+  /**
+   * When the keep-awake window of a wake now running ends: a local time
+   * without a zone. Null when none runs; left out when CafAI could not read it.
+   */
+  keepAwakeUntil?: string | null;
+}
+
+/** POST /api/v1/presence/settings: only the keys given change. */
+export interface PresencePatch {
+  userPresenceEnabled?: boolean;
+  /** A whole number; Decaid clamps it into 0-240. */
+  sleepTimeoutMinutes?: number;
+}
+
+/** POST /api/v1/presence/schedules body. */
+export interface WakeScheduleRequest {
+  /** "HH:MM", 24-hour. */
+  time: string;
+  /** ISO weekdays; empty means every day. */
+  daysOfWeek: number[];
+  enabled: boolean;
+  /** 1-720 minutes; null or left out for no keep-awake window. */
+  keepAwakeFor?: number | null;
+}
+
+/** PUT /api/v1/presence/schedules/{id}: only the keys given change; keepAwakeFor null clears it. */
+export type WakeSchedulePatch = Partial<WakeScheduleRequest>;
+
 /** A failed Decaid call, with a sentence a barista can act on in `message`. */
 export class GatewayError extends Error {
   readonly status: number;
@@ -532,6 +588,17 @@ export interface DecaidClient {
   /** Actuates hardware: only ever call from an explicit tap. */
   setMachineState(state: CommandableState): Promise<void>;
   heartbeat(): Promise<HeartbeatResponse>;
+
+  /** Decaid's idle sleep and wake schedules (Settings > Sleep and wake). */
+  getPresenceSettings(): Promise<PresenceSettings>;
+  /** Answers the two settings as Decaid saved them (it clamps the minutes into 0-240). */
+  updatePresenceSettings(patch: PresencePatch): Promise<Pick<PresenceSettings, 'userPresenceEnabled' | 'sleepTimeoutMinutes'>>;
+  /** Answers the schedule as Decaid stored it, with the id Decaid gave it. */
+  addWakeSchedule(request: WakeScheduleRequest): Promise<WakeSchedule>;
+  /** A 404 GatewayError when the schedule is gone (deleted elsewhere). */
+  updateWakeSchedule(id: string, patch: WakeSchedulePatch): Promise<WakeSchedule>;
+  /** A 404 GatewayError when the schedule is already gone. */
+  deleteWakeSchedule(id: string): Promise<void>;
 
   getDevices(): Promise<DeviceEntry[]>;
   /** Primary scale. Never before espresso: Decaid tares twice by itself. */
