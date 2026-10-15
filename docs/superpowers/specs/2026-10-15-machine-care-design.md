@@ -243,9 +243,10 @@ guide** (tonal, the cleaning icon, `CleaningServicesRounded`).
   ("1:48", "16:56"), `embedUrl(seconds)`, `watchUrl(seconds?)`.
 - **`src/ui/care/videoPlace.ts`**: `videoPlaysInPlace(host)`.
 - **`src/ui/care/CareScreen.tsx`** (the screen: header, layout, the player's
-  state), **`CareSegments.tsx`** (the tab list), **`CareRoutine.tsx`** (a
+  state), **`CareSegments.tsx`** (the tab list), **`RoutineCard.tsx`** (a
   routine's card and its steps), **`CareVideo.tsx`** (the poster, the player,
-  the links; the narrow row), **`MomentButton.tsx`**.
+  the links; the narrow row), **`MomentButton.tsx`**, and **`routines.ts`**
+  (the routines' ids, shared with the router).
 - **`src/ui/settings/CareSection.tsx`**: the Settings section.
 - **Routes** (`router.ts`): the care route, its paths, `sameRoute`, and
   `placeOf(route)`, the place a route belongs to (`care` is Settings', a
@@ -255,7 +256,8 @@ guide** (tonal, the cleaning icon, `CleaningServicesRounded`).
   lowercased `__DECENT_HOST__.platform` when it is a string, else null.
 - **Test ids** (`testIds.ts`): `careSection`, `careOpen`, `careScreen`,
   `careBack`, `careSegment(routine)`, `careRoutine`, `careStep(id)`,
-  `careMoment(id)`, `carePoster`, `carePlayer`, `careWatch`.
+  `careMoment(id)` (a step's, or a routine's by its id), `careLink(id)`,
+  `careVideo`, `carePoster`, `carePlayer`, `careWatch`.
 
 ## 8. Testing
 
