@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { TOOL, TOOL_INPUTS, type ToolName } from '../../src/coach/contract.ts';
-import { BAG_PHOTO_ANSWER, createScenarioMemory, respond, type ScenarioMemory, type ScenarioResponse } from './scenario.ts';
+import { buildSystemPrompt } from '../../src/coach/prompt.ts';
+import { TEMPLATES } from '../../src/coach/templates/index.ts';
+import {
+  BAG_PHOTO_ANSWER,
+  createScenarioMemory,
+  promptTemperatureUnit,
+  respond,
+  type ScenarioMemory,
+  type ScenarioResponse,
+} from './scenario.ts';
 
 type Block = Record<string, unknown>;
 type Message = { role: 'user' | 'assistant'; content: Block[] };
@@ -863,5 +872,43 @@ describe('scripted replies', () => {
     const reply = ok(call([...UP_TO_SHOT, user(text('It smells amazing'))]));
     expect(reply.text).toBe('Got it. Pull a shot when you are ready, or tell me more about the coffee.');
     expect(reply.tools).toEqual([]);
+  });
+});
+
+describe('the scripted coach follows the °F prompt (D-TEMP-7)', () => {
+  const FAHRENHEIT_PROMPT = buildSystemPrompt(TEMPLATES, { temperatureUnit: 'fahrenheit' });
+  const conversation = (taste: string) => [...UP_TO_SHOT, shot(BLOOMING_LEVERS, 'blooming-espresso', 1), SHOT_REPLY, answer([taste]), ANSWER_REPLY, SERIES];
+  const proposal = (result: ScenarioResponse) => ok(result).tools[0]?.input as Record<string, unknown>;
+
+  it('reads the unit from the system prompt', () => {
+    expect(promptTemperatureUnit(FAHRENHEIT_PROMPT)).toBe('fahrenheit');
+    expect(promptTemperatureUnit([{ type: 'text', text: FAHRENHEIT_PROMPT }])).toBe('fahrenheit');
+    expect(promptTemperatureUnit(buildSystemPrompt(TEMPLATES))).toBe('celsius');
+    for (const other of [undefined, null, '', 'You are an espresso coach.', 42]) expect(promptTemperatureUnit(other)).toBe('celsius');
+  });
+
+  it('writes its change in °F, while the proposal itself stays in °C', () => {
+    const sour = proposal(call(conversation('Sour / sharp'), { over: { system: FAHRENHEIT_PROMPT } }));
+    expect(sour).toMatchObject({ variable: 'profile', lever: 'temp', value: 93, summary: 'Raise brew temperature by 1.8 °F' });
+    const bitter = proposal(call(conversation('Bitter / harsh'), { over: { system: FAHRENHEIT_PROMPT } }));
+    expect(bitter).toMatchObject({ lever: 'temp', value: 91, summary: 'Lower brew temperature by 1.8 °F' });
+    expect(JSON.stringify([sour, bitter])).not.toContain('°C');
+  });
+
+  it('the demo voice too, in its words before the card', () => {
+    const headers = new Headers(HEADERS);
+    const result = respond(request(conversation('Sour / sharp'), { system: FAHRENHEIT_PROMPT }), headers, createScenarioMemory({ session: 'f' }), {
+      voice: 'demo',
+    });
+    const reply = ok(result);
+    expect(reply.text).toContain("I'd raise the **brew temperature** by 1.8 °F");
+    expect(reply.tools[0]?.input).toMatchObject({ lever: 'temp', value: 93, summary: 'Brew 1.8 °F hotter' });
+    expect(reply.text).not.toContain('°C');
+  });
+
+  it('in °C it says what it always said', () => {
+    expect(proposal(call(conversation('Sour / sharp'), { over: { system: buildSystemPrompt(TEMPLATES) } }))).toMatchObject({
+      summary: 'Raise brew temperature by 1 °C',
+    });
   });
 });
