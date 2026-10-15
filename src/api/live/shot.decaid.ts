@@ -2,7 +2,8 @@
  * A simulated shot through CafAI's own client and parsers (spec 4.4,
  * DECAID_SIM=1): espresso, Next step once mid-shot (D113), the shotState
  * sequence, the shot record read and summarised by CafAI's summariser, notes
- * and a rating written and read back, then idle. Every reply and every frame of the shot is checked against the
+ * and a rating written and read back, a TDS and its EY written, read back and
+ * cleared, then idle. Every reply and every frame of the shot is checked against the
  * pinned spec and for drift. A simulator only (D104): it refuses to run unless
  * Decaid simulates the machine and no real machine is connected, because
  * espresso moves water. `npm test` never runs it.
@@ -150,6 +151,23 @@ describeDecaid('shot', ({ url, require }) => {
     const annotations = (await live.client.getShot(id)).annotations;
     expect(annotations?.espressoNotes, 'espressoNotes').toBe(NOTES);
     expect(annotations?.enjoyment, `enjoyment on the 0-${scale} scale`).toBe(enjoyment);
+    expect(live.problems()).toEqual([]);
+  });
+
+  it('a TDS and its EY are written and read back, then cleared with null (D-TDS-4)', async ({ skip }) => {
+    const id = shotId;
+    if (id === null) return require ? assert.fail(NO_SHOT) : skip(NO_SHOT);
+    await live.client.updateShot(id, { annotations: { drinkTds: 9.25, drinkEy: 20.8 } });
+    const read = (await live.client.getShot(id)).annotations;
+    expect(read?.drinkTds, 'drinkTds').toBe(9.25);
+    expect(read?.drinkEy, 'drinkEy').toBe(20.8);
+    // As CafAI removes a reading: Decaid's deep merge writes the nulls, and its toJson leaves the keys out.
+    await live.client.updateShot(id, { annotations: { drinkTds: null, drinkEy: null } });
+    const cleared = (await live.client.getShot(id)).annotations ?? {};
+    expect('drinkTds' in cleared, 'drinkTds after null').toBe(false);
+    expect('drinkEy' in cleared, 'drinkEy after null').toBe(false);
+    // The notes and the rating the check above wrote stay.
+    expect(cleared.espressoNotes, 'espressoNotes').toBe(NOTES);
     expect(live.problems()).toEqual([]);
   });
 

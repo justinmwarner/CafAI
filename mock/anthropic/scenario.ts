@@ -27,6 +27,7 @@ import {
   type ChangeKind,
   type PickFacts,
   type ProposalText,
+  type ReadingFacts,
   type ShotStop,
   type Taste,
   type Voice,
@@ -795,6 +796,30 @@ function readsPhoto(messages: Message[]): boolean {
   return messages.some((message) => message.content.some((block) => block.type === 'image'));
 }
 
+/** The TDS readings a user message carries (D-TDS-6): each [event:shot_measured] payload's TDS and EY. */
+function readingsIn(message: Message | undefined): ReadingFacts[] {
+  return textsOf(message)
+    .filter((t) => t.startsWith(EVENT.shotMeasured))
+    .map((t) => {
+      const payload = eventPayload(t);
+      return { tdsPct: num(payload?.tdsPct), eyPct: num(payload?.eyPct) };
+    });
+}
+
+/**
+ * Rule 0b: a reply to a turn that carries TDS readings starts by saying what
+ * it heard, one line per reading, before its own words; the rules decide as
+ * they would without them (D-TDS-9).
+ */
+function acknowledgeReadings(reply: Reply, messages: Message[], voice: Voice): Reply {
+  const readings = readsPhoto(messages) ? [] : readingsIn(messages[messages.length - 1]);
+  if (readings.length === 0) return reply;
+  const line = readings.map((reading) => voice.measured(reading)).join(' ');
+  const [first, ...rest] = reply.blocks;
+  if (first?.type === 'text') return { ...reply, blocks: [{ type: 'text', text: `${line} ${first.text}` }, ...rest] };
+  return { ...reply, blocks: [{ type: 'text', text: line }, ...reply.blocks] };
+}
+
 function decide(script: Script): Reply {
   const { messages, voice } = script;
   // 0. A photo of the bag: the canned bag's details, as JSON.
@@ -958,11 +983,12 @@ export function respond(
   memory.counter += 1;
   const turn = memory.counter;
   let toolCount = 0;
-  const reply = decide({
+  const voice = options.voice === 'demo' ? DEMO_VOICE : TERSE_VOICE;
+  const reply = acknowledgeReadings(
+    decide({ messages, newToolId: () => `toolu_mock_${memory.session}_${turn}_${++toolCount}`, voice }),
     messages,
-    newToolId: () => `toolu_mock_${memory.session}_${turn}_${++toolCount}`,
-    voice: options.voice === 'demo' ? DEMO_VOICE : TERSE_VOICE,
-  });
+    voice,
+  );
 
   const signature = `mock-sig-${memory.session}-${turn}-${hash(JSON.stringify(reply.blocks))}`;
   const encoded = encodeAssistantTurn(reply.blocks, {

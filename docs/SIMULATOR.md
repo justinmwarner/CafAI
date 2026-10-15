@@ -291,7 +291,8 @@ What each switch adds:
 - **`DECAID_SIM=1`** (writes too): one simulated shot with the profile Decaid
   has loaded, **Next step** once during the shot (the machine must move on a
   step, or end the shot from its last one), notes and a rating written on
-  it, then idle. It needs the simulated scale, and gateway mode Disabled or
+  it, a TDS and its EY written and then cleared with null, then idle. It
+  needs the simulated scale, and gateway mode Disabled or
   Tracking. The shot stays in Decaid's history, with "CafAI contract test"
   in its notes.
 - **`DECAID_REQUIRE=1`** (CI sets it): a check that cannot run fails

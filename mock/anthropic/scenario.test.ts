@@ -519,6 +519,39 @@ describe('scripted replies', () => {
     ]);
   });
 
+  it('rule 0b: a reply to a turn carrying a TDS reading starts with what it heard, and the rule decides as before (D-TDS-9)', () => {
+    const measured = (tdsPct: number | null, eyPct: number | null) =>
+      text(`[event:shot_measured]\n${JSON.stringify({ shotId: 'shot-1', tdsPct, eyPct, doseG: 18, yieldG: 40.4 })}`);
+    const tasted = (...readings: Block[]) =>
+      ok(call([...UP_TO_SHOT, shot(BLOOMING_LEVERS), SHOT_REPLY, user(toolResult('t_ask', { selected: ['Sour / sharp'], other: null }), ...readings)]));
+
+    const reply = tasted(measured(9.25, 20.8));
+    expect(reply.text).toBe('Noted: TDS 9.25 %, EY 20.8 %. Thanks. Let me look at the pressure curve.');
+    expect(reply.tools.map((t) => t.name)).toEqual([TOOL.getShotSeries]);
+    expect(tasted(measured(9.25, null)).text).toBe('Noted: TDS 9.25 %, no EY. Thanks. Let me look at the pressure curve.');
+    expect(tasted(measured(null, null)).text).toBe('Noted: no TDS reading for that shot. Thanks. Let me look at the pressure curve.');
+    expect(tasted(measured(9, 20), measured(9.5, 21.1)).text).toBe('Noted: TDS 9.00 %, EY 20.0 %. Noted: TDS 9.50 %, EY 21.1 %. Thanks. Let me look at the pressure curve.');
+
+    // A reading after a proposal comes with its decision: the confirmation, and the reading first.
+    const confirmed = ok(
+      call([
+        ...UP_TO_SHOT,
+        shot(BLOOMING_LEVERS),
+        SHOT_REPLY,
+        answer(['Sour / sharp']),
+        ANSWER_REPLY,
+        SERIES,
+        ADJUST_REPLY,
+        user(toolResult('t_adj', { applied: true, variable: 'profile', version: 2, title: 'Kiambu AA v2', onMachine: true, loadError: null }), measured(9.25, 20.8)),
+      ]),
+    );
+    expect(confirmed.text).toBe('Noted: TDS 9.25 %, EY 20.8 %. Done. v2 is on the machine. Pull another shot and tell me how it tastes.');
+    // A reply that has no words of its own gets the line alone, before its tool call.
+    const proposal = ok(call([...UP_TO_SHOT, shot(BLOOMING_LEVERS), SHOT_REPLY, answer(['Sour / sharp']), ANSWER_REPLY, user(...SERIES.content, measured(9.25, 20.8))]));
+    expect(proposal.content.filter((b) => b.type !== 'thinking').map((b) => b.type)).toEqual(['text', 'tool_use']);
+    expect(proposal.text).toBe('Noted: TDS 9.25 %, EY 20.8 %.');
+  });
+
   it('rule 2: sour raises the temperature by 1 °C', () => {
     expect(adjustmentFor(['Sour / sharp'])).toMatchObject({ variable: 'profile', lever: 'temp', value: 93, grind: null });
   });

@@ -110,6 +110,14 @@ export interface AppliedFacts {
   title: string | null;
 }
 
+/** A TDS reading from an [event:shot_measured] payload (D-TDS-6): the TDS and its EY, null when the request had none. */
+export interface ReadingFacts {
+  /** Null: the barista removed the reading. */
+  tdsPct: number | null;
+  /** Null without a dose or a yield, or with no reading. */
+  eyPct: number | null;
+}
+
 /** propose_adjustment's free text. */
 export interface ProposalText {
   summary: string;
@@ -142,7 +150,13 @@ export interface Voice {
   undo(back: { to: number; title: string | null }): string;
   /** Rule 8. */
   fallback(): string;
+  /** Rule 0b: the line a reply to a turn carrying a TDS reading starts with (D-TDS-9). */
+  measured(reading: ReadingFacts): string;
 }
+
+/** A TDS as CafAI writes it, to 0.01 ("9.25"); an EY to 0.1 ("20.8"). */
+export const tdsText = (tdsPct: number) => tdsPct.toFixed(2);
+export const eyText = (eyPct: number) => (Math.round(eyPct * 10) / 10).toFixed(1);
 
 function formatNumber(value: number | null): string {
   return value === null ? '?' : String(Math.round(value * 10) / 10);
@@ -228,4 +242,8 @@ export const TERSE_VOICE: Voice = {
   declined: ({ version }) => `OK, we keep v${version} as it is. Tell me what you would like to try instead.`,
   undo: ({ to }) => `Back on v${to}. Pull a shot when you are ready.`,
   fallback: () => 'Got it. Pull a shot when you are ready, or tell me more about the coffee.',
+  measured({ tdsPct, eyPct }) {
+    if (tdsPct === null) return 'Noted: no TDS reading for that shot.';
+    return eyPct === null ? `Noted: TDS ${tdsText(tdsPct)} %, no EY.` : `Noted: TDS ${tdsText(tdsPct)} %, EY ${eyText(eyPct)} %.`;
+  },
 };
