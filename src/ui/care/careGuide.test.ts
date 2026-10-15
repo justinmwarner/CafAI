@@ -76,7 +76,7 @@ describe('keepUnits', () => {
   it("joins every number and unit in the guide's steps", () => {
     for (const step of ROUTINES.flatMap((routine) => routine.steps)) {
       for (const text of [step.when, step.how, step.where, step.note]) {
-        if (text !== undefined) expect(keepUnits(text)).not.toMatch(/\d (g|ml|°C|ppm|litres|minutes)\b/);
+        if (text !== undefined) expect(keepUnits(text)).not.toMatch(/\d (g|ml|°C|ppm|litres|minutes|seconds)\b/);
       }
     }
   });

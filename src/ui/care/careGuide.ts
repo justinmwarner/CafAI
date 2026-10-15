@@ -62,6 +62,7 @@ export const CARE_SOURCES =
 
 const DESCALING_PAGE = 'https://decentespresso.com/docs/de1_descaling_instructions';
 const STEAM_TIP_PAGE = 'https://decentespresso.com/docs/how_to_replace_your_steam_tip';
+const INTAKE_FILTER_PAGE = 'https://decentespresso.com/docs/the_actual_flow_rate_has_become_lower_than_the_machines_reading';
 
 export const ROUTINES: readonly CareRoutine[] = [
   {
@@ -70,13 +71,13 @@ export const ROUTINES: readonly CareRoutine[] = [
     cadence: 'On days you pull shots.',
     moment: 20,
     steps: [
-      // Quick start p.25 (take the jug away; a burst clears the wand; point it at the drip tray) and the group head
-      // controller page ("Remove the milk jug before it does!").
+      // Quick start p.25 (take the jug away; "in a couple of seconds, a burst of pressure will clear the wand. Just point the
+      // wand towards the drip tray") and the group head controller page ("Remove the milk jug before it does!").
       {
         id: 'purge-wand',
         title: 'Purge and wipe the steam wand',
         when: 'Each time you steam',
-        how: 'Take the jug away as steam stops: the DE1 clears the wand a moment later. Point it at the drip tray, then wipe it with a damp cloth.',
+        how: 'Take the jug away as steam stops and point the wand at the drip tray: the DE1 clears it a moment later. Then wipe it with a damp cloth.',
       },
       // Quick start p.34 (daily with clean water, no detergent; "Use the Forward Flush x5 preset or the Flush button", at
       // least twice) and the video at 1:48 (a blind basket, Forward Flush x5 twice).
@@ -95,13 +96,13 @@ export const ROUTINES: readonly CareRoutine[] = [
         when: 'After the flush',
         how: 'Wipe the screen under the group head with a damp cloth. Then a coffee basket in, one more Flush, and rinse the portafilter.',
       },
-      // Quick start p.37 (wipe the wand and steam clean water at the day's end; after a lot of milk, Rinza soaked about
-      // 10 minutes, "Do not steam!").
+      // Quick start p.37 (wipe the wand and steam clean water at the day's end; after a lot of milk, an ounce of Rinza, the tip
+      // soaked about 10 minutes, "Do not steam!").
       {
         id: 'rinse-wand',
         title: 'Rinse the steam wand',
         when: "When you're done for the day",
-        how: "Wipe it, and steam a jug of clean water through. After a lot of milk, first soak the tip in Rinza solution for about 10 minutes: soak it, don't steam it.",
+        how: 'Wipe it, and steam a jug of clean water through. After a lot of milk, first soak the tip in a little Rinza for about 10 minutes, without steaming it.',
       },
     ],
   },
@@ -112,40 +113,44 @@ export const ROUTINES: readonly CareRoutine[] = [
     moment: 460,
     steps: [
       // The Forward Flush x5 profile's own notes (Decaid's assets/defaultProfiles/Cleaning__Forward_Flush_x5_2.json: 3 g,
-      // half a teaspoon) and the video at 7:53 (3 g); quick start pp.40-41 (a tablespoon of Cafiza, until no suds, then a
-      // coffee basket and Flush; never detergent in the tank). Clean: Decent's app tour at 26:23 (a blind basket, a spoonful,
-      // Clean).
+      // half a teaspoon; run it; portafilter off and Flush until the water goes clear; the profile again without detergent;
+      // Flush for 20 seconds) and the video at 7:53 (3 g); quick start pp.40-41 (a tablespoon of Cafiza; never detergent in
+      // the tank). Clean: Decent's app tour at 26:23 (a blind basket, a spoonful, Clean).
       {
         id: 'detergent-clean',
         title: 'Clean the group head with detergent',
-        how: '3 g (half a teaspoon) of espresso machine detergent in the blind basket, then the Forward Flush x5 profile until no suds show. Coffee basket in, then Flush. Never put detergent in the tank.',
+        how: '3 g (half a teaspoon) of espresso machine detergent in the blind basket, then the Forward Flush x5 profile. Portafilter off, Flush until the water runs clear; rinse the basket and run the profile again without detergent. Last, Flush for 20 seconds. Never put detergent in the tank.',
         where: 'From streamline for now: the profile, or its Clean (Settings > Maintenance).',
         note: "Decent's quick start says a tablespoon; the profile's notes and the video, half a teaspoon.",
         moment: 473,
       },
-      // Quick start p.39 (about 30 ml in 500 ml, or one tablet, steamed; then clean water twice) and the video at 11:11.
+      // Quick start p.39, "an alternate approach to soaking" (about 30 ml in 500 ml, or one tablet; "Steam the jug with the
+      // Rinza-and-water solution"; then clean water twice) and the video at 11:11.
       {
         id: 'rinza',
         title: 'Steam Rinza through the wand',
-        how: '30 ml of Rinza in 500 ml of water (or one tablet), steamed until it boils; then clean water, twice.',
+        how: '30 ml of Rinza in 500 ml of water (or one tablet): steam the jug with it, then steam clean water through, twice.',
+        note: "Decent's quick start gives steaming this diluted mix as the other way to the soak; Rinza any stronger is only soaked.",
         moment: 671,
       },
-      // Quick start p.38 (weekly, soap and water) and the video at 6:52 (daily for hygiene; the tank, tray and cover in a
-      // dishwasher).
+      // Quick start p.38 (weekly, soap and water; a refill kit turned off before the tank comes out) and the video at 6:52
+      // (daily for hygiene; the tank, tray and cover in a dishwasher).
       {
         id: 'tank-tray',
         title: 'Wash the water tank and drip tray',
-        how: 'The tank, the drip tray and its cover, with soap and water.',
+        how: 'The tank, the drip tray and its cover, with soap and water. With a refill kit, turn it off before you take the tank out.',
         note: "The video washes them every day, in a dishwasher; Decent's pages say weekly, with soap and water.",
         moment: 412,
       },
-      // Decent's "The actual flow rate has become lower than the machine's reading" (V1: citric acid, weekly or fortnightly;
-      // V2: baking soda, at least monthly, a pipe cleaner if clogged), the video's description (V2: baking soda, 30 minutes to
-      // an hour) and 15:04, the time that page links in the video.
+      // Decent's "The actual flow rate has become lower than the machine's reading" (photos of V1 and V2; V1: citric acid,
+      // weekly or fortnightly; V2: baking soda, at least monthly, a pipe cleaner if clogged), the video at 15:04 (5% citric
+      // acid, about 30 minutes; the time that page links in the video) and its description (V2: baking soda, 30 minutes to an
+      // hour, then scrub gently).
       {
         id: 'intake-filter',
         title: 'Clean the intake filter',
-        how: "The filter at the tank's intake (the thimble). V1: soak it in citric acid for 30 minutes, every week or two. V2: in baking soda, at least monthly, with a pipe cleaner if it's clogged.",
+        how: "The filter at the tank's intake (the thimble); Decent's page shows which one you have. V1: soak it in citric acid for about 30 minutes, every week or two. V2: in baking soda for 30 minutes to an hour, at least monthly, then scrub it gently (a pipe cleaner if it's clogged).",
+        link: { label: "Decent's intake filter page", url: INTAKE_FILTER_PAGE },
         moment: 904,
       },
     ],
@@ -162,7 +167,7 @@ export const ROUTINES: readonly CareRoutine[] = [
       {
         id: 'group-parts',
         title: "Soak the group head's parts",
-        how: 'Machine off. The centre screw frees the shower screen and a diffuser, three more the inner one (mind the temperature probe). Soak them overnight in 15 g of detergent in 500 ml of hot water; refit the inner diffuser first.',
+        how: 'Machine off and cool. The centre screw frees the shower screen and a diffuser, three more the inner one (mind the temperature probe). Soak them overnight in 15 g of detergent in 500 ml of hot water, rinse them in fresh water, and refit the inner diffuser first.',
         note: 'The video does this every two weeks. Since v1.44 (2023) the screws are Torx: T20 in the centre, T10 for the three.',
         moment: 1016,
       },
@@ -224,7 +229,7 @@ export function routineOf(id: RoutineId): CareRoutine {
 }
 
 /** The units the guide's sentences use, as they follow a number. */
-const UNIT_AFTER_NUMBER = /(\d) (g|ml|°C|ppm|litres|minutes)(?=[\s.,;:)]|$)/g;
+const UNIT_AFTER_NUMBER = /(\d) (g|ml|°C|ppm|litres|minutes|seconds)(?=[\s.,;:)]|$)/g;
 
 /**
  * A number and its unit never part at a line's end ("60 °C", "500 ml"): the
