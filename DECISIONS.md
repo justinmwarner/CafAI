@@ -2315,3 +2315,27 @@ D141-D144 are still left to the work running beside this one; this starts at D14
   their channel, as Decaid's DE1 write does. Before this every drink lasted
   20 frames, about 4 s, whatever was set, which no view of a run could be
   tested against.
+
+### The gap review (2026-10-13)
+
+- **D151. Machine care, overlaid curves, TDS, °F and a wake schedule go on
+  the roadmap.** The owner asked what CafAI lacks next to other skins and
+  apps, and to add a cleaning guide built on Decent's video. Four passes
+  looked: CafAI's own code; the skins and plugins in `.ref/` (streamline,
+  MSL, decaid-zen, DYE2, decaid-mcp, Decaid's own screens, Crema); the web
+  (de1app's skins and plugins, other skins for Decaid, Visualizer,
+  Beanconqueror, other machines' apps); and the video with Decent's docs.
+  The largest gap was care: CafAI cannot start the DE1's cleaning,
+  descaling or transport cycles, Decaid's own screens cannot either (only
+  streamline and MSL can), and no skin for Decaid keeps reminders or shows
+  how to clean. From twelve gaps the owner chose the guide, the cycles,
+  reminders set by the water, overlaid shot curves, TDS and EY, °F and a
+  wake schedule (docs/ROADMAP.md). Not chosen for now: favourites from
+  Decaid's profile library (every other skin has a profile picker), steam
+  stopped by the milk's weight, statistics, a chime when a shot ends,
+  languages, and more detail on the screensaver already listed. Left to
+  Decaid, whose screens do them: pairing, calibration, firmware, backups,
+  plugins and charging; Home Assistant has its own integrations for
+  Decaid. Why: the owner's ask ("break it down to what you do every day,
+  week, month, etc. so it's easy to clean without having to find
+  everything") and picks.
