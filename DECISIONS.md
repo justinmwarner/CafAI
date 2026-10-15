@@ -2591,8 +2591,9 @@ The °F item of D151 (`docs/superpowers/specs/2026-10-15-fahrenheit-design.md`).
   30 °C or 50 °F, which no brew, steam or hot water temperature is); beside
   an arrow, and otherwise, it is a temperature. A range converts both ends
   ("1-3 °C under its target" reads "1.8-5.4 °F under"); "93 °C (199 °F)"
-  keeps the barista's half. It works both ways, so the coach's °F words read
-  in °C after a switch back. The answer a question sends is still the
+  keeps the barista's half, and a conversion the barista asked for, "200 °F
+  is 93.3 °C", stays as written. It works both ways, so the coach's °F words
+  read in °C after a switch back. The answer a question sends is still the
   coach's own option; what the barista typed, Decaid's own words and the log
   stay as written. Why: unlike a taste promise (D127), a unit is arithmetic
   CafAI can do itself, so a second turn of the model, at the moment the

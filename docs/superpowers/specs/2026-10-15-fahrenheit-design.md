@@ -133,8 +133,9 @@ without the 32, when it has a sign ("+1.0 °C"), follows "by", comes before
 a comparative ("hotter", "cooler", "under", "per"…), or is small (under
 30 °C or 50 °F, which no brew, steam or hot water temperature is);
 otherwise as a temperature. A range converts both ends ("88-94 °C", "1-2
-°C"). "93 °C (199 °F)" keeps the barista's half. It works both ways, so
-words the coach wrote in °F read in °C after a switch back.
+°C"). "93 °C (199 °F)" keeps the barista's half, and a conversion the
+barista asked for ("200 °F is 93.3 °C") stays as written. It works both
+ways, so words the coach wrote in °F read in °C after a switch back.
 
 Unlike a taste promise (D127), a unit is arithmetic CafAI does exactly: a
 second turn of the model, at the moment the barista waits for a change,

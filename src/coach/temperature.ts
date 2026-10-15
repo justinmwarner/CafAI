@@ -158,6 +158,22 @@ function doublesFor(to: TemperatureUnit): readonly RegExp[] {
 
 /** Built once: the chat rewrites a coach's reply on every streamed piece of it. */
 const DOUBLES: Record<TemperatureUnit, readonly RegExp[]> = { celsius: doublesFor('celsius'), fahrenheit: doublesFor('fahrenheit') };
+
+/**
+ * A temperature said to be one in the barista's unit, "200 °F is 93.3 °C",
+ * "93 °C = 199.4 °F": a conversion asked for, left as written. Keyed by the
+ * barista's unit; `after` and `before` are the text either side of the other
+ * unit's temperature.
+ */
+function pairedFor(to: TemperatureUnit): { after: RegExp; before: RegExp } {
+  const ours = plainPattern(to);
+  const is = String.raw`(?:is|equals|makes)\b|=`;
+  return {
+    after: new RegExp(String.raw`^\s*(?:${is})\s*${APPROXIMATELY}${ours}`, 'i'),
+    before: new RegExp(String.raw`${ours}\s*(?:${is})\s*${APPROXIMATELY}$`, 'i'),
+  };
+}
+const PAIRED: Record<TemperatureUnit, { after: RegExp; before: RegExp }> = { celsius: pairedFor('celsius'), fahrenheit: pairedFor('fahrenheit') };
 const PATTERNS: Record<TemperatureUnit, RegExp> = {
   celsius: new RegExp(temperaturePattern('celsius'), 'g'),
   fahrenheit: new RegExp(temperaturePattern('fahrenheit'), 'g'),
@@ -187,6 +203,7 @@ export function inTemperatureUnit(text: string, unit: TemperatureUnit): string {
     (match: string, sign: string | undefined, first: string, separator: string | undefined, secondSign: string | undefined, second: string | undefined, written: string, offset: number) => {
       const before = source.slice(0, offset);
       const after = source.slice(offset + match.length);
+      if (PAIRED[unit].after.test(after) || PAIRED[unit].before.test(before)) return match;
       const small = (value: string) => Number(value) < CHANGE_BELOW[from];
       // "Step 3 to 90 °C": a small number before a temperature is not one end of its range.
       const mixed = second !== undefined && sign === undefined && small(first) !== small(second);

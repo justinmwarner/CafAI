@@ -114,6 +114,15 @@ describe('inTemperatureUnit, into °F', () => {
     expect(inF('1 °C (1.8 °F) hotter')).toBe('1.8 °F hotter');
   });
 
+  it('leaves a conversion the barista asked for as written', () => {
+    expect(inF('200 °F is 93.3 °C.')).toBe('200 °F is 93.3 °C.');
+    expect(inF('93 °C is about 199.4 °F.')).toBe('93 °C is about 199.4 °F.');
+    expect(inF('93 °C = 199.4 °F')).toBe('93 °C = 199.4 °F');
+    expect(inC('200 °F is 93.3 °C.')).toBe('200 °F is 93.3 °C.');
+    // A temperature beside it that is not the pair is still written in the barista's unit.
+    expect(inF('200 °F is 93.3 °C, so I would go to 94 °C.')).toBe('200 °F is 93.3 °C, so I would go to 201 °F.');
+  });
+
   it('reads the ways a sentence writes the unit', () => {
     expect(inF('93°C')).toBe('199 °F');
     expect(inF('93 ºC')).toBe('199 °F');
