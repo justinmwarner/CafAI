@@ -2498,3 +2498,87 @@ The wake schedule item of D151, built on branch `feat/wake-schedule`.
   roadmap keeps the item's research for when it comes back, and the care
   reminders go ahead without it. Why: the owner's call ("I'm not super
   interested in number 1... we can consider it in the future").
+
+### Overlaid shot curves (2026-10-15)
+
+The overlaid curves item of D151, built on its own branch
+(`docs/superpowers/specs/2026-10-15-shot-overlay-design.md`).
+
+- **D-CURVE-1. The shot drawn under a shot is the one its card's question
+  names.** The card's baseline (D126): "Compared with your previous shot?"
+  draws the shot before it in the bag's chat; a bag's first shot, "Compared
+  with your last shot of Red Brick?", draws that one, named "Last shot of
+  Red Brick"; the very first, against the coffee usually enjoyed, and a card
+  rated with stars before D126 draw their own shot alone
+  (`comparisonTarget` in `src/ui/compare/comparison.ts`). A shot that pulls
+  has no card yet, so the Shot view's guide is the bag's newest card, the
+  shot the new card will be compared with; a bag's first shot pulls with
+  none (`src/ui/compare/shotViewComparison.ts`). Why: the roadmap said "the
+  bag's previous version's shot", but the card asks about the previous
+  shot, and drawing another would ask about one shot and draw another; a
+  grind move, the commonest change, makes no new version, so the previous
+  version's shot would often be several shots back and the change the
+  coach made would not be on the curve at all; and two shots of one version
+  are what the barista is asked to compare.
+- **D-CURVE-2. It shows on the card and in the Shot view, while the shot
+  pulls and after.** Every card whose question names a shot draws it; the
+  Shot view draws the guide from the shot's start, then what its card asks
+  about once the card is in, and keeps that for the shot when the chat
+  moves to another bag. Nothing before any shot ("Pull a shot to see it
+  here." stays alone), and nothing in History, which draws no curves. Why:
+  Crema and DSx draw the previous shot under the live one, so the barista
+  sees during the pour whether the change moved the flow, and the card and
+  its graph then say the same thing.
+- **D-CURVE-3. The shot under is a faint band, told apart by its form and
+  its lightness, and named in words.** Its pressure and flow are bands (7 px
+  in the Shot view, 5 px on the card, round ends and joins) in their own
+  hues washed toward the page, 45% in dark mode and 50% in light
+  (`graph.pressureGuide`, `graph.flowGuide` in `src/ui/palette.ts`), under
+  everything this shot draws: in uPlot's drawAxes hook, after the grid and
+  before the series (`src/ui/compare/guide.ts`), and first in the card's
+  drawing. This shot's lines stay solid on top and the profile's targets
+  keep their dashes. A key names it: a pale neutral band (`graph.guide`)
+  beside "Previous shot" in the card's legend, and "Previous shot · 28.1 s ·
+  36.2 g" over the Shot view's plot; the curves' names tell a screen reader
+  a shot is under them, and the card's description gives its time and peak.
+  The contrast sweep checks the band and the swatch at 1.9:1 or more on the
+  page and the card, and this shot's line at 2:1 or more on its band, in
+  every tint and at every hue (worst 1.97 and 2.13:1, light mode). Seen in
+  the PNGs at 1280x800, 962x602 and 390x844, dark and light, in Crema,
+  Matcha and Tamper. Why: opacity would hide the colour from the sweep
+  (DESIGN.md); a dashed or dotted line would read as the targets; and in
+  light mode a series is about 4.5:1 against the page, which leaves about
+  2:1 on each side for a band between them. That is below the 3:1 a series
+  keeps, on purpose: the band is the faint one, and its words are in the
+  key. A shot under at 3:1 would have to be a thin dotted line in full
+  colour, as Crema draws it with opacity.
+- **D-CURVE-4. The curve under comes from its card in the chat, and from
+  Decaid only when it is not there.** The roadmap's premise, that CafAI keeps
+  shot summaries without their curves, holds only for the iterations' copy
+  in Decaid's store (`withoutSeries` in `src/storage/mirror.ts`): each shot's
+  card in the chat keeps its summary with the ~1 Hz series, in IndexedDB and
+  in the chat's copy in Decaid (`conv.<bagId>`). So a shot is drawn from its
+  card, with no request, when the chat on screen has it with a curve; any
+  other (another coffee's last shot, a bag the barista has since left) is
+  read once with `GET /api/v1/shots/{id}`, summarised as any shot is, and
+  kept for the session, at most 24, callers wanting it meanwhile sharing
+  the request (`src/ui/compare/comparisonShots.ts`, `useComparison.ts`). A
+  404 is kept as none; any other failure draws this shot alone, saying
+  nothing, and may be read again after 60 s when something wants it. The
+  card and the Shot view draw the same ~1 Hz curve. The mock Decaid already
+  answers the route as Decaid does, 404 included; the live read suite checks
+  that 404. Why: most cards need no request, a shot's start (when the
+  tablet's Decaid is busiest) needs none, the curves still draw with Decaid
+  away, and a guide needs no 4-5 Hz frames.
+- **D-CURVE-5. Both shots count from the pour's start, and the time runs to
+  the longer.** The shot under and this shot are drawn from `pourStartS`
+  (the first frame after preheat; the preheat's last point pinned at 0), as
+  the Shot view's clock and the card's times already count, so shots whose
+  preheats differ line up. The card's curves therefore start at the pour,
+  without the flat stub of preheat they drew before (a summary saved before
+  CafAI recorded `pourStartS` draws as it did). The time runs to the longer
+  shot, in the Shot view at least 30 s as before, so a live shot's axis
+  holds still as it passes the previous one's time. Only pressure and flow
+  are drawn under. Why: aligned at the records' start, a shot would seem
+  shifted by nothing but its preheat; and the shot's weight and weight flow
+  under too would double the lines on a graph read from a step back.

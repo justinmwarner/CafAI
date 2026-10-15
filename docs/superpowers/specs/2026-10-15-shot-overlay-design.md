@@ -81,7 +81,10 @@ readable where the two run together. That is below the 3:1 a series keeps,
 on purpose: the band is the faint one, its words are in the key, and in
 light mode a series' own 4.5:1 or so against the page leaves room for no
 more than about 2:1 on each side of a band between them. Auto is light or
-dark, so it is covered by both.
+dark, so it is covered by both. As built, the worst across the sweep: the
+band 1.97:1 on the page and this shot's line 2.13:1 on its band in light
+mode, 2.38:1 and 3.22:1 in dark; seen in PNGs at 1280x800, 962x602 and
+390x844, dark and light, in Crema, Matcha and Tamper.
 
 The words: the card's curves are named "Pressure and flow during the shot,
 with the pressure and flow of your previous shot under them", and
@@ -128,7 +131,7 @@ would double the lines on a graph read from a step back.
 - `src/ui/compare/comparison.ts` (pure): `comparisonTarget(baseline)` (the
   shot and its name), `pourCurve(summary)` (times from the pour's start,
   memoised per summary), `chatShotSummary(messages, shotId)` (memoised per
-  messages array), `newestShotId`, and the words (`curveName`,
+  messages array), `newestShotId`, and the words (`underThem`,
   `describeShot`, `keyFacts`).
 - `src/ui/compare/comparisonShots.ts`: the per-client cache of shots read
   from Decaid: one request per shot, shared while in flight, 404 kept as
@@ -142,7 +145,7 @@ would double the lines on a graph read from a step back.
   switch of bag).
 - `src/ui/compare/guide.ts`: drawing the band on uPlot's canvas, in its
   `drawAxes` hook (after the grid, before the series), clipped to the plot.
-- `src/ui/compare/GuideKey.tsx`: the band swatch and its words.
+- `src/ui/compare/GuideKey.tsx`: the band's swatch for the keys.
 - `src/ui/chat/parts/ShotSparkline.tsx`: the card's curves, moved out of
   `ShotCard.tsx`, which now only mounts it.
 - `src/ui/machine/LiveShotGraph.tsx`: the guide hook, the time axis, the key
