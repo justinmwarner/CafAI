@@ -87,12 +87,19 @@ ahead without them:
   Check first: which yield (`actualYield`) and dose (`actualDoseWeight` or
   the workflow's) the EY uses, and that a reading typed after the taste
   answer still reaches the coach.
-- **°F.** CafAI writes °C everywhere (`src/ui/machine/format.ts`,
-  `src/ui/settings/drinkSettings.ts`). A setting shows °F on the readouts,
-  the steppers and in the coach's words ("2 °F hotter"), with Decaid and
-  the profiles still in °C, as streamline does. Check first: the steppers'
-  step in °F, rounding so a value read back shows what was set, and the
-  coach's levers and their bounds said in °F.
+- **°F: built on 2026-10-15** (D-TEMP-1 to D-TEMP-7,
+  `docs/superpowers/specs/2026-10-15-fahrenheit-design.md`). Settings >
+  Appearance > Temperatures turns every temperature a barista reads or sets
+  into °F, the coach's words too, with Decaid, the profiles and the coach's
+  tools still in °C, as streamline does. The steppers show whole °F and move
+  one whole °C a tap, the step Decaid keeps, since a 1 °F step would get
+  stuck and an unrounded °C comes back truncated; every value reads back as
+  set (D-TEMP-3). The coach is told in its prompt, its temperature levers and
+  their bounds worked out in °F (D-TEMP-5), and a °C it still writes reads in
+  °F where it shows, a change without the 32 (D-TEMP-6). Left: a real coach
+  in °F over a real dial-in, the drink temperatures on a real DE1, and
+  Decaid's own words (a device error naming a temperature), which stay in
+  Decaid's unit (`docs/HARDWARE_TEST_PLAN.md`).
 - **Wake schedule: built on 2026-10-15** (D157-D160). Settings > Sleep and
   wake edits what Decaid keeps and acts on: Sleep when idle with its
   minutes, and the wake times, each a time, its days and how long it keeps
