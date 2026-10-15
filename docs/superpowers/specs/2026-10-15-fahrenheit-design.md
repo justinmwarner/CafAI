@@ -164,7 +164,8 @@ follows the prompt would.
   unit; `MachineStatus.tsx` and `drinkModel.ts` pass it.
 - The coach's words on display: `RichText.tsx`, `DiffCard.tsx`,
   `TemplateCards.tsx`, `OptionChips.tsx`, `HistoryScreen.tsx`, and the care
-  guide's `RoutineCard.tsx` (`keepUnits` keeps "140 °F" together too).
+  guide through `src/ui/care/careUnits.ts` in `RoutineCard.tsx` (`keepUnits`
+  keeps "140 °F" together too).
 - The scripted coach: `mock/anthropic/scenario.ts` reads the unit from the
   request's system prompt; `voice.ts` and `demoVoice.ts` word it.
 
