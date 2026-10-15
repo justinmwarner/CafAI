@@ -15,6 +15,11 @@ export function useServices(): Services {
   return services;
 }
 
+/** The services, or null outside a ServicesProvider: for a part that also draws on its own (a card in a test or a preview). */
+export function useOptionalServices(): Services | null {
+  return useContext(ServicesContext);
+}
+
 /**
  * Subscribe to one slice of live telemetry. The component re-renders only when
  * the selected value changes (Object.is), so a WebSocket tick never re-renders
