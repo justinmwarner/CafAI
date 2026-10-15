@@ -128,6 +128,8 @@ export function usePresence(): PresenceView {
         ? { userPresenceEnabled: true }
         : { userPresenceEnabled: true, sleepTimeoutMinutes: remembered.current }
       : { sleepTimeoutMinutes: 0 };
+    // A change of the minutes still on its way no longer decides what shows: this answer does.
+    minutesSaves.current.newest += 1;
     setSleepBusy(true);
     setSleepError(null);
     setMinutesError(null);

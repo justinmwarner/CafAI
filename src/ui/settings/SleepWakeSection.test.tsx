@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '../chat/testing/setup.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GatewayError, type PresenceSettings, type WakeSchedule } from '../../api/types.ts';
 import { renderWithServices } from '../chat/testing/render.tsx';
@@ -96,6 +96,28 @@ describe('Sleep when idle', () => {
     await user.click(screen.getByRole('button', { name: 'Less sleep after' }));
     expect(await screen.findByText('Could not save the minutes: Decaid is busy. Try again in a moment.')).toBeInTheDocument();
     expect(minutes()).toHaveValue('30');
+  });
+
+  it('keeps Sleep when idle off when a change of the minutes sent before it answers late', async () => {
+    const { services, user } = renderSection();
+    await loaded();
+    const send = services.decaid.updatePresenceSettings;
+    let answer!: () => void;
+    const late = new Promise<void>((resolve) => (answer = resolve));
+    services.decaid.updatePresenceSettings = async (patch) => {
+      if (patch.sleepTimeoutMinutes !== 35) return send(patch);
+      await late;
+      return { userPresenceEnabled: true, sleepTimeoutMinutes: 35 };
+    };
+    await user.click(screen.getByRole('button', { name: 'More sleep after' }));
+    await user.click(sleepSwitch());
+    await waitFor(() => expect(sleepSwitch()).not.toBeChecked());
+    await act(async () => {
+      answer();
+      await late;
+    });
+    expect(sleepSwitch()).not.toBeChecked();
+    expect(minutes()).toBeNull();
   });
 
   it('keeps the switch where Decaid has it when the change fails', async () => {
