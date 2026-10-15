@@ -52,6 +52,13 @@ Answers given, after the mockup:
 | Links | Inside Decaid a plain link, which Decaid opens in the system browser (as On Visualizer does, D121). In a browser, a new tab (`target="_blank"`, `rel="noopener noreferrer"`), so CafAI stays open. |
 | Offline | The guide shows in full. A tapped player shows YouTube's own error inside its frame; the links say nothing until tapped. |
 
+As built, after the branch's review: while the video is open, a drink
+starting leaves Care on screen (D156: Daily's own steps, a Flush or the
+wand's rinse from the top bar, would otherwise close the video the barista
+is following); with it closed, the row above holds. A tap on the poster
+gives the focus to the player it opens. Four steps' words were put right
+against the quick start and the profile's notes (DECISIONS.md D155).
+
 ## 4. The guide
 
 From the video and Decent's own pages, read on 2026-10-15 (sources at the end
@@ -71,25 +78,25 @@ Maintenance has Clean, Machine Descaling and Transport Mode.
 
 | Step | When | How | Note, where, link | Moment |
 |---|---|---|---|---|
-| Purge and wipe the steam wand | Each time you steam | Take the jug away as steam stops: the DE1 clears the wand a moment later. Point it at the drip tray, then wipe it with a damp cloth. | | |
+| Purge and wipe the steam wand | Each time you steam | Take the jug away as steam stops and point the wand at the drip tray: the DE1 clears it a moment later. Then wipe it with a damp cloth. | | |
 | Flush the group head | After the day's last shot | Blind basket in, then Flush at least twice. Water only. | Note: "Decent's Forward Flush x5 profile does the same in pulses, as in the video; streamline can run it." | 1:48 |
 | Wipe the shower screen | After the flush | Wipe the screen under the group head with a damp cloth. Then a coffee basket in, one more Flush, and rinse the portafilter. | | |
-| Rinse the steam wand | When you're done for the day | Wipe it, and steam a jug of clean water through. After a lot of milk, first soak the tip in Rinza solution for about 10 minutes: soak it, don't steam it. | | |
+| Rinse the steam wand | When you're done for the day | Wipe it, and steam a jug of clean water through. After a lot of milk, first soak the tip in a little Rinza for about 10 minutes, without steaming it. | | |
 
 **Weekly**: "Once a week." The routine's moment: 7:40.
 
 | Step | When | How | Note, where, link | Moment |
 |---|---|---|---|---|
-| Clean the group head with detergent | | 3 g (half a teaspoon) of espresso machine detergent in the blind basket, then the Forward Flush x5 profile until no suds show. Coffee basket in, then Flush. Never put detergent in the tank. | Where: "From streamline for now: the profile, or its Clean (Settings > Maintenance)." Note: "Decent's quick start says a tablespoon; the profile's notes and the video, half a teaspoon." | 7:53 |
-| Steam Rinza through the wand | | 30 ml of Rinza in 500 ml of water (or one tablet), steamed until it boils; then clean water, twice. | | 11:11 |
-| Wash the water tank and drip tray | | The tank, the drip tray and its cover, with soap and water. | Note: "The video washes them every day, in a dishwasher; Decent's pages say weekly, with soap and water." | 6:52 |
-| Clean the intake filter | | The filter at the tank's intake (the thimble). V1: soak it in citric acid for 30 minutes, every week or two. V2: in baking soda, at least monthly, with a pipe cleaner if it's clogged. | | 15:04 |
+| Clean the group head with detergent | | 3 g (half a teaspoon) of espresso machine detergent in the blind basket, then the Forward Flush x5 profile. Portafilter off, Flush until the water runs clear; rinse the basket and run the profile again without detergent. Last, Flush for 20 seconds. Never put detergent in the tank. | Where: "From streamline for now: the profile, or its Clean (Settings > Maintenance)." Note: "Decent's quick start says a tablespoon; the profile's notes and the video, half a teaspoon." | 7:53 |
+| Steam Rinza through the wand | | 30 ml of Rinza in 500 ml of water (or one tablet): steam the jug with it, then steam clean water through, twice. | Note: "Decent's quick start gives steaming this diluted mix as the other way to the soak; Rinza any stronger is only soaked." | 11:11 |
+| Wash the water tank and drip tray | | The tank, the drip tray and its cover, with soap and water. With a refill kit, turn it off before you take the tank out. | Note: "The video washes them every day, in a dishwasher; Decent's pages say weekly, with soap and water." | 6:52 |
+| Clean the intake filter | | The filter at the tank's intake (the thimble); Decent's page shows which one you have. V1: soak it in citric acid for about 30 minutes, every week or two. V2: in baking soda for 30 minutes to an hour, at least monthly, then scrub it gently (a pipe cleaner if it's clogged). | Link: "Decent's intake filter page". | 15:04 |
 
 **Monthly**: "Every two to four weeks." The routine's moment: 16:36.
 
 | Step | When | How | Note, where, link | Moment |
 |---|---|---|---|---|
-| Soak the group head's parts | | Machine off. The centre screw frees the shower screen and a diffuser, three more the inner one (mind the temperature probe). Soak them overnight in 15 g of detergent in 500 ml of hot water; refit the inner diffuser first. | Note: "The video does this every two weeks. Since v1.44 (2023) the screws are Torx: T20 in the centre, T10 for the three." | 16:56 |
+| Soak the group head's parts | | Machine off and cool. The centre screw frees the shower screen and a diffuser, three more the inner one (mind the temperature probe). Soak them overnight in 15 g of detergent in 500 ml of hot water, rinse them in fresh water, and refit the inner diffuser first. | Note: "The video does this every two weeks. Since v1.44 (2023) the screws are Torx: T20 in the centre, T10 for the three." | 16:56 |
 | Look at the group gasket | | While the parts are off, wipe the gasket. Hard, cracked, or water beading round the portafilter in a shot: time for a new one. Between sessions, leave the portafilter out. | | |
 
 **As needed**: "When your water, the steam or a move calls for it." No

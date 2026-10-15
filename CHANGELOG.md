@@ -22,7 +22,8 @@ workflow checks against it. Settings > About shows the version you run.
   moment in Decent's video "How often/to clean DE1". The video plays in
   place in a browser and on Decent's tablets; elsewhere in Decaid each
   moment opens YouTube at that time. Nothing loads from YouTube until you
-  tap, and the steps themselves work offline.
+  tap, and the steps themselves work offline. While the video is open, a
+  drink you start leaves the guide on screen.
 
 ## 0.1.1 (2026-10-12)
 

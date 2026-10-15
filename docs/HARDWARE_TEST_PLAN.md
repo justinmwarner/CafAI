@@ -525,6 +525,12 @@ it does.
 6. **An iPad or a Mac with Decaid** (if you have one). Open Care. Expected:
    no poster; tapping **16:56** under Monthly opens YouTube at 16:56 in
    Safari or the YouTube app, and CafAI stays where it was.
+7. **Flush while the video plays** (D156). On Daily, tap **1:48**, then
+   Flush in the top bar with a blind basket in. Expected: Care and the video
+   stay on screen, Flush's place is Stop while it runs, and the flush ends
+   by itself. Then leave Care, come back, and Flush again without opening
+   the video. Expected: the flush view takes the screen, and **Go back**
+   returns to Machine care.
 
 ## Results
 
@@ -577,6 +583,7 @@ it does.
 | 14 | 4 | Full screen fills the screen; the way back to CafAI | | |
 | 14 | 5 | Offline: the steps in full | | |
 | 14 | 6 | iPad or Mac: no poster; 16:56 opens YouTube at 16:56 | | |
+| 14 | 7 | Flush with the video open keeps Care; without it, the flush view and Go back to Machine care | | |
 
 Send back this table, the saved shot and profile JSON files, the `[CafAI]`
 lines from `/api/v1/webview/logs`, the output of `npm run test:decaid`, and,

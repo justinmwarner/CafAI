@@ -235,13 +235,14 @@ with **Retry**; it never loads anything on the machine by itself.
   coach saying it is watching. When the shot's card reaches the chat, the
   coach comes back by itself; the top bar and Stop never move. Steam, hot
   water and flush take the screen the same way while they run, whoever
-  started them: a dial fills toward the time or volume set (steam rising
-  from milk, water filling, the shower screen pouring, still under reduced
-  motion), with the machine's readings (steam temperature, pressure and
-  flow; hot water's flow, the scale and the time; the flush's water, flow
-  and group temperature), a trace of the run, and the drink's own settings,
-  held while it runs and yours to change the moment it stops. The view stays
-  with its result; **Go back** returns to where you were. Problems
+  started them (unless you are typing, or following Decent's cleaning video
+  in Settings > Machine care): a dial fills toward the time or volume set
+  (steam rising from milk, water filling, the shower screen pouring, still
+  under reduced motion), with the machine's readings (steam temperature,
+  pressure and flow; hot water's flow, the scale and the time; the flush's
+  water, flow and group temperature), a trace of the run, and the drink's
+  own settings, held while it runs and yours to change the moment it stops.
+  The view stays with its result; **Go back** returns to where you were. Problems
   (not connected, Decaid out of reach, water to refill, an error the machine
   or a device reports, a failed command, Decaid set to leave stopping shots
   to the skin, a scale that dropped) show in one slim alert under the top
@@ -337,8 +338,10 @@ with **Retry**; it never loads anything on the machine by itself.
   the 2022 video and Decent's current pages differ, the step follows the
   pages and says so. The video plays in place in a browser and on Decent's
   tablets; inside Decaid on Windows, a Mac or an iPad, each moment opens
-  YouTube at that time instead (Decaid would not let it play in place). The
-  steps are CafAI's own words and work offline. CafAI cannot start the DE1's
+  YouTube at that time instead (Decaid would not let it play in place).
+  While the video is open, a drink you start (the flush a step asks for,
+  say) leaves the guide on screen rather than taking it over. The steps are
+  CafAI's own words and work offline. CafAI cannot start the DE1's
   Clean, Descale or Transport yet; the steps that need them say to use
   streamline, the skin Decaid comes with, for now.
 - **Settings > About**: CafAI's version, and the Decaid you run next to the

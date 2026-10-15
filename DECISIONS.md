@@ -2400,5 +2400,25 @@ The first machine care item of D151, designed and built on branch
   streamline for now", until the second machine care item. The same reading
   corrected the roadmap: the video is spoken in English, the quick start's
   weekly Rinza is steamed, and the water page's LSI table, keyed to LSI
-  rather than ppm, runs from every 100 to every 2,250 shots. Why: the
-  owner's ask, and D151's rule that Decent's current docs win.
+  rather than ppm, runs from every 100 to every 2,250 shots. The branch's
+  review then checked each step against the quick start and the profile's
+  notes and put four right: the purge points the wand at the drip tray
+  before the burst, the weekly clean runs as the profile's notes run it
+  (once with detergent, a Flush until the water runs clear, once without, a
+  last Flush of 20 s), the soaked parts are rinsed before they go back, and
+  the intake filter step links Decent's page, which shows which of the two
+  filters a machine has. Why: the owner's ask, and D151's rule that
+  Decent's current docs win.
+- **D156. A drink leaves the Care screen where it is while Decent's video
+  is open.** While the player is open on Care (after a tap on the poster or
+  a moment), a drink starting does not switch to its view:
+  `useDrinkFocus.ts` reads `isCareVideoOpen` (`src/ui/care/videoHold.ts`,
+  set by `CareScreen.tsx` while its player is open) as it reads the
+  barista's typing, and Stop takes the drink's place in the top bar as
+  always. With the video closed, a drink takes the screen as anywhere and
+  Go back returns to Machine care; a shot still takes the screen (D85).
+  Why: the review found that Daily's own steps, a Flush or the wand's rinse
+  started from the top bar, closed the video at the moment the barista was
+  following it, and Go back reopened Care at the poster, the video's place
+  lost, for a view nobody asked for. This changes D146's rule for this one
+  case, as typing already did.
