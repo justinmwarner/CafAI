@@ -23,6 +23,7 @@ import type {
   Workflow,
 } from '../../api/types.ts';
 import { createAppearanceStore, type AppearanceStore } from '../../app/appearance.ts';
+import { clone } from '../../util/clone.ts';
 import type { CoachController, CoachState, Services } from '../../app/types.ts';
 import type { PluginDirectory } from '../../api/plugins.ts';
 import type { ModelInfo } from '../../llm/types.ts';
@@ -183,7 +184,7 @@ export function createFakeDecaid(): FakeDecaid {
     failNext: (method, error) => void failures.set(method, error),
     // Decaid's own defaults (settings_controller.dart:64-66 at aab5f93).
     presence: { userPresenceEnabled: true, sleepTimeoutMinutes: 30, schedules: [], keepAwakeUntil: null },
-    getPresenceSettings: () => act('getPresenceSettings', [], () => structuredClone(fake.presence)),
+    getPresenceSettings: () => act('getPresenceSettings', [], () => clone(fake.presence)),
     updatePresenceSettings: (patch) =>
       act('updatePresenceSettings', [patch], () => {
         const minutes = patch.sleepTimeoutMinutes;
@@ -205,7 +206,7 @@ export function createFakeDecaid(): FakeDecaid {
           ...(request.keepAwakeFor ? { keepAwakeFor: request.keepAwakeFor } : {}),
         };
         fake.presence = { ...fake.presence, schedules: [...fake.presence.schedules, schedule] };
-        return structuredClone(schedule);
+        return clone(schedule);
       }),
     updateWakeSchedule: (id, patch) =>
       act('updateWakeSchedule', [id, patch], () => {
@@ -221,7 +222,7 @@ export function createFakeDecaid(): FakeDecaid {
           ...(keepAwakeFor ? { keepAwakeFor } : {}),
         };
         fake.presence = { ...fake.presence, schedules: fake.presence.schedules.map((schedule) => (schedule.id === id ? updated : schedule)) };
-        return structuredClone(updated);
+        return clone(updated);
       }),
     deleteWakeSchedule: (id) =>
       act('deleteWakeSchedule', [id], () => {

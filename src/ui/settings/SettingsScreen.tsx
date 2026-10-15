@@ -56,6 +56,7 @@ import {
 } from './grinderPicker.ts';
 import { revealInColumn } from './reveal.ts';
 import { Section } from './Section.tsx';
+import { SleepWakeSection } from './SleepWakeSection.tsx';
 
 // The test id goes on the switch's checkbox input, the one element a test (or a keyboard) can focus and drive.
 declare module '@mui/material/Switch' {
@@ -575,6 +576,7 @@ export function SettingsScreen() {
         {showsApiKey ? <ApiKeySection /> : null}
         <CoachSettingsSection column={column} />
         <DrinkSettingsSection />
+        <SleepWakeSection />
         <CareSection />
         <AboutSection />
         <LogSection />
