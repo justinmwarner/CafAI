@@ -66,6 +66,8 @@ From the built-in demo (`npm run demo`, no machine needed);
 | ![The shot view on a tablet: pressure, flow, weight and weight flow over a 60 s Blooming Espresso shot](docs/images/tablet-shot.png) | ![History on a tablet: Kiambu AA's versions v4 (active), v3 (undone) and v2, each with its change and shots](docs/images/tablet-history.png) |
 | **Settings > Appearance: Light, in Matcha** | **On a phone: the coach and the shot** |
 | ![Settings on a tablet in the Light mode with the Matcha tint: the mode, seven tints and a custom hue](docs/images/tablet-settings.png) | <img src="docs/images/phone-coach.png" width="49%" alt="The coach on a phone, proposing one change"> <img src="docs/images/phone-shot.png" width="49%" alt="The shot graph on a phone"> |
+| **Settings > Machine care: Decent's cleaning routine, by how often** | |
+| ![Machine care on a tablet: the Weekly routine's steps, each with its time in Decent's video, beside the video's card](docs/images/tablet-care.png) | |
 
 ## What you need
 

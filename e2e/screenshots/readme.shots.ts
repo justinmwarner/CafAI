@@ -113,3 +113,15 @@ test('settings: a look of your own, Light in Matcha', async ({ page }) => {
   await expect(page.getByTestId(TID.tintSwatch('matcha'))).toHaveAttribute('aria-checked', 'true');
   await snap(page, 'settings');
 });
+
+test('care: the cleaning guide, Weekly', async ({ page }) => {
+  test.skip(isPhone(page), 'The README shows the cleaning guide on the tablet only.');
+  await openDemo(page);
+  await goTo(page, 'settings');
+  const open = page.getByTestId(TID.careOpen);
+  await open.scrollIntoViewIfNeeded();
+  await open.click();
+  await page.getByTestId(TID.careSegment('weekly')).click();
+  await expect(page.getByTestId(TID.careRoutine)).toContainText('Steam Rinza through the wand');
+  await snap(page, 'care');
+});
