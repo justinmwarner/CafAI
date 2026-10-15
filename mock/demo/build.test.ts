@@ -411,8 +411,19 @@ describe('the mock Decaid after the story', () => {
       },
     });
     expect(shotRecord(SHOTS.santos.id).annotations).toMatchObject({ enjoyment: 5, espressoNotes: 'Taste: Balanced, sweet. Santos v1 (CafAI)' });
-    // Not rated and not answered yet: only what Decaid wrote itself.
-    expect(Object.keys(shotRecord(SHOTS.kiambu4.id).annotations ?? {}).sort()).toEqual(['actualDoseWeight', 'actualYield']);
+    // Not rated and not answered yet: what Decaid wrote itself, and the TDS measured meanwhile with its EY (D-TDS-4).
+    const kiambu4 = shotRecord(SHOTS.kiambu4.id).annotations ?? {};
+    expect(Object.keys(kiambu4).sort()).toEqual(['actualDoseWeight', 'actualYield', 'drinkEy', 'drinkTds']);
+    // 9.10 % x 40.4 g / 18.0 g = 20.4 %, the card's own numbers.
+    expect(kiambu4).toMatchObject({ drinkTds: 9.1, drinkEy: 20.4 });
+  });
+
+  it("carries the last shot's TDS and EY on its card, untold until the viewer answers (D-TDS-6)", async () => {
+    const { untoldReadings } = await import('../../src/app/engine/shotReading.ts');
+    const last = parts('shot').find((card) => card.shotId === SHOTS.kiambu4.id)!;
+    expect(last.summary).toMatchObject({ doseG: 18, yieldG: 40.4, tdsPct: 9.1, eyPct: 20.4 });
+    const { apiMessages, uiMessages } = conversationOf(demo, 'Kiambu AA');
+    expect(untoldReadings(apiMessages, uiMessages)).toEqual([{ shotId: SHOTS.kiambu4.id, tdsPct: 9.1, eyPct: 20.4, doseG: 18, yieldG: 40.4 }]);
   });
 
   it('summarizes each shot card from its record', async () => {

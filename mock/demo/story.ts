@@ -11,7 +11,8 @@
  * washed, light): Blooming Espresso over four shots, with a hotter v2, a
  * by-hand grind move, a shot that ran another profile, a slower pour
  * declined, re-offered, applied and undone, a middle way as v4, and the last
- * shot's "How did it taste?" left open for the viewer to answer.
+ * shot measured with a refractometer (D-TDS-1) and its "How did it taste?"
+ * left open for the viewer to answer.
  *
  * Two choices follow the mock rather than an idea of the story:
  * - The channeling warning is on Santos's shot. Blooming Espresso is all
@@ -63,6 +64,8 @@ export type StoryStep =
   | (At & { kind: 'retry' })
   /** The verdict on the latest shot card: how it compared with the shot its card names (D126). */
   | (At & { kind: 'rate'; verdict: ShotVerdict })
+  /** A TDS from a refractometer typed on the latest shot card (D-TDS-1): the coach hears it with the next turn. */
+  | (At & { kind: 'measure'; tdsPct: number })
   | (At & { kind: 'answer'; selected: string[]; other: string | null; coach: CoachReply[] })
   | (At & { kind: 'confirm'; coach: CoachReply[] })
   | (At & { kind: 'decline'; coach: CoachReply[] })
@@ -572,4 +575,6 @@ export const STORY: readonly StoryStep[] = [
   { kind: 'say', minutesAgo: 29, text: '1.8 feels like a big jump. Could we meet halfway, at 2.0?', coach: [halfway] },
   { kind: 'confirm', minutesAgo: 28, coach: [halfwayLoaded] },
   { kind: 'shot', minutesAgo: 6, shot: SHOTS.kiambu4, coach: [lastShot] },
+  // Measured with a refractometer while the taste question waits: the coach hears it with the answer.
+  { kind: 'measure', minutesAgo: 3, tdsPct: 9.1 },
 ];

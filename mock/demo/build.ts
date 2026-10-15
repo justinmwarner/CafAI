@@ -213,6 +213,11 @@ export async function buildDemo(nowMs: number): Promise<DemoBuild> {
           await engine.rateShot(card.shotId, step.verdict);
           break;
         }
+        case 'measure': {
+          const card = lastPart(engine, 'shot', () => true);
+          await engine.setShotTds(card.shotId, step.tdsPct);
+          break;
+        }
         case 'answer': {
           model.expect(step.coach);
           const question = lastPart(engine, 'options', (part) => part.answer === null && !part.expired);
