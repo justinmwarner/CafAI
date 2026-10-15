@@ -25,8 +25,8 @@ body:
     id: cafai-version
     attributes:
       label: CafAI version
-      description: Settings > About, the line "CafAI 0.1.1".
-      placeholder: 0.1.1
+      description: Settings > About, the line "CafAI 0.1.2".
+      placeholder: 0.1.2
     validations:
       required: true
   - type: input

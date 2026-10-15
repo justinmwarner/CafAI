@@ -6,6 +6,8 @@ workflow checks against it. Settings > About shows the version you run.
 
 ## Unreleased
 
+## 0.1.2 (2026-10-15)
+
 ### The everyday skin
 
 - Steam, hot water and flush take the screen while they run, as a shot
