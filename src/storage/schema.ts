@@ -74,6 +74,9 @@ const SummaryShape = z.looseObject({
   channelingFlags: z.array(text),
   phases: z.array(z.unknown()),
   series: z.looseObject({ tS: z.array(z.number()) }).optional(),
+  /** The barista's refractometer reading and its EY (D-TDS-5); absent on a shot without one. */
+  tdsPct: z.number().optional(),
+  eyPct: z.number().nullable().optional(),
 });
 
 const FeedbackShape = z.looseObject({

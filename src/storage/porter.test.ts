@@ -204,6 +204,15 @@ describe('import validation', () => {
     expect(() => parseCafaiExport(exportOf({ iterations: [makeIteration({ visualizerUrl: 42 as never })] }))).toThrow(ImportError);
   });
 
+  it("keeps a shot's TDS and EY in its summary, and refuses numbers that are not numbers (D-TDS-5)", () => {
+    const measured = { ...makeSummary(), tdsPct: 9.25, eyPct: 20.8 };
+    const noEy = { ...makeSummary(), tdsPct: 9.25, eyPct: null };
+    const parsed = parseCafaiExport(exportOf({ iterations: [makeIteration({ summary: measured }), makeIteration({ id: 'iter_no_ey', summary: noEy })] }));
+    expect(parsed.iterations[0]?.summary).toEqual(measured);
+    expect(parsed.iterations[1]?.summary).toEqual(noEy);
+    expect(() => parseCafaiExport(exportOf({ iterations: [makeIteration({ summary: { ...makeSummary(), tdsPct: '9.25' as never } })] }))).toThrow(ImportError);
+  });
+
   it('accepts iterations without summary.series, as restored from the mirror', () => {
     const { series: _series, ...summary } = makeSummary();
     const parsed = parseCafaiExport(exportOf({ iterations: [makeIteration({ summary: summary as never })] }));
