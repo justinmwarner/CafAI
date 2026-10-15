@@ -33,7 +33,7 @@ import { usePresence } from './usePresence.ts';
 import { describeDays, describeSchedule, describeWhen, keptAwakeUntil, nextWake, SLEEP_AFTER, sortSchedules } from './wakeSchedule.ts';
 import { WakeTimeDialog } from './WakeTimeDialog.tsx';
 
-export const SLEEP_WAKE_HELP = 'Decaid sleeps and wakes the machine while it runs, with CafAI open or not. Changes go to Decaid at once.';
+export const SLEEP_WAKE_HELP = 'Decaid keeps these and acts on them while it runs, with CafAI open or not. Changes go to Decaid at once.';
 const READING = "Reading Decaid's sleep and wake settings…";
 const SLEEP_ON = 'Using the machine, or CafAI, starts the time again.';
 const SLEEP_OFF = 'The machine stays on until you put it to sleep.';
