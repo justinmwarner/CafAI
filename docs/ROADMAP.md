@@ -86,7 +86,8 @@ on the one before:
   CafAI's data in IndexedDB and Decaid's store. One question, the water's
   hardness, sets the descale interval from Decent's water page: below
   30 ppm never; 30-120 ppm yearly; above 120 ppm at least twice a year
-  (by its LSI table, every 300 to 2,250 shots); the intake filter weekly
+  (its LSI table, keyed to the water's LSI rather than its ppm, runs from
+  every 100 to every 2,250 shots); the intake filter weekly
   or fortnightly (V1, citric acid) or monthly (V2, baking soda). Models:
   de1app's Maintenance Tracker plugin (days, shots or ml, in green, amber
   and red, reset when the app's Clean or Descale runs) and GaggiMate's
