@@ -2422,3 +2422,63 @@ The first machine care item of D151, designed and built on branch
   following it, and Go back reopened Care at the poster, the video's place
   lost, for a view nobody asked for. This changes D146's rule for this one
   case, as typing already did.
+
+### The wake schedule (2026-10-15)
+
+The wake schedule item of D151, built on branch `feat/wake-schedule`.
+
+- **D157. Settings > Sleep and wake edits Decaid's own idle sleep and wake
+  schedules.** A section after Steam, hot water and flush
+  (`src/ui/settings/SleepWakeSection.tsx`, its reads and writes in
+  `usePresence.ts`) reads `GET /api/v1/presence/settings` once each time
+  Settings opens and writes Decaid's presence routes at once, with no Save
+  (`src/api/client.ts`). CafAI keeps no copy: Decaid stores them and acts on
+  them (presence_controller.dart at aab5f93), as for its own Sleep & Wake
+  page and streamline's Presence page. No machine is needed to change them,
+  as they are Decaid's settings, kept on its device; while none is connected
+  the section says Decaid can wake the machine only while it is. Why: the
+  owner's pick (D151), so "warm at 06:30 on weekdays" is set without
+  leaving CafAI; Decaid wakes the machine while it runs whether CafAI is
+  open or not, and a copy in CafAI would drift from what Decaid's own page
+  shows.
+- **D158. Sleep when idle is the minutes, with Decaid's own switch left
+  on.** One switch, Sleep when idle: on while Decaid's `userPresenceEnabled`
+  is on and `sleepTimeoutMinutes` above 0, with the minutes under it (1 to
+  240, the drink settings' stepper, 5 a step). Off writes 0 minutes,
+  Decaid's own "0 = disabled", and leaves `userPresenceEnabled` on; on
+  writes the minutes the section last saw above 0 (Decaid's 30 when it saw
+  none). A wake time added or turned on while `userPresenceEnabled` is off
+  first turns it on at 0 minutes, so the machine still does not sleep by
+  itself. The heartbeat's -1, the roadmap's question, is left unused: the
+  settings say what is on. Why: Decaid 0.8.8 wakes the machine on its
+  schedules whatever `userPresenceEnabled` says (presence_controller.dart:
+  478-511), its own page hides the schedules while that switch is off
+  (presence_settings_page.dart:126-129), and a Bengle's firmware gets the
+  wake windows only while it is on (presence_controller.dart:391-405). On
+  at 0 minutes is the one state in which the machine does not sleep by
+  itself, the wake times work on a DE1 and a Bengle alike, and Decaid's own
+  page shows what CafAI shows; two switches for one idea would ask the
+  barista to learn Decaid's model.
+- **D159. A new wake time keeps the machine awake for an hour.** The wake
+  times are rows, earliest first: the time in 24-hour figures, as CafAI
+  writes every time, its days ("Weekdays", "Mon, Wed, Fri") and how long it
+  keeps the machine awake, with its own switch at the end; a tap opens a
+  dialog with the time as an hour and a minute, two selects (the browser's
+  time field shows the device's own clock, "06:00 AM" in US English), the
+  seven days (all seven stored as Decaid's every day, as its own page
+  stores them) and After waking: Sleep when idle, as usual, or awake for
+  30 minutes to 12 hours. A new one starts at Decaid's
+  06:00, every day, awake for an hour. Over the rows, when the next one
+  wakes the machine ("Next wake: tomorrow at 06:30."). Why the hour: with
+  only the idle sleep, Decaid's default 30 minutes, a machine woken at 06:30
+  is asleep again at 07:00 when nobody has come to it; Decaid's page and
+  streamline start with none, which is how a wake time quietly fails.
+- **D160. Waking early enough to be ready is not done.** The roadmap's
+  "perhaps" (wake early enough to be ready at the time, from the
+  time-to-ready plugin) waits: the dialog says the machine takes a while to
+  heat, so set the time a little before coffee. Not yet seen on a real DE1:
+  a schedule waking it from Decaid's sleep, and the keep-awake window
+  holding the idle sleep off (`docs/HARDWARE_TEST_PLAN.md` section 15). Why:
+  time-to-ready's estimate only exists while the machine heats, so the
+  wake's time would have to be learned from past mornings, which is its own
+  item.

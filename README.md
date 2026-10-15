@@ -66,8 +66,8 @@ From the built-in demo (`npm run demo`, no machine needed);
 | ![The shot view on a tablet: pressure, flow, weight and weight flow over a 60 s Blooming Espresso shot](docs/images/tablet-shot.png) | ![History on a tablet: Kiambu AA's versions v4 (active), v3 (undone) and v2, each with its change and shots](docs/images/tablet-history.png) |
 | **Settings > Appearance: Light, in Matcha** | **On a phone: the coach and the shot** |
 | ![Settings on a tablet in the Light mode with the Matcha tint: the mode, seven tints and a custom hue](docs/images/tablet-settings.png) | <img src="docs/images/phone-coach.png" width="49%" alt="The coach on a phone, proposing one change"> <img src="docs/images/phone-shot.png" width="49%" alt="The shot graph on a phone"> |
-| **Settings > Machine care: Decent's cleaning routine, by how often** | |
-| ![Machine care on a tablet: the Weekly routine's steps, each with its time in Decent's video, beside the video's card](docs/images/tablet-care.png) | |
+| **Settings > Machine care: Decent's cleaning routine, by how often** | **Settings > Sleep and wake: warm at 06:30 on weekdays** |
+| ![Machine care on a tablet: the Weekly routine's steps, each with its time in Decent's video, beside the video's card](docs/images/tablet-care.png) | <img src="docs/images/phone-sleep-wake.png" width="49%" alt="Sleep and wake on a phone: Sleep when idle after 30 minutes, held off until 10:00 by a wake time, and two wake times, weekdays at 06:30 for an hour and weekends at 08:00 for two, with the next wake over them"> |
 
 ## What you need
 
@@ -328,6 +328,15 @@ with **Retry**; it never loads anything on the machine by itself.
   answers, the fields show a dash, and a write that fails says why under
   its setting. Steam that is off in Decaid (below 135 °C) reads "Off in
   Decaid"; turning it on or off stays in Decaid.
+- **Settings > Sleep and wake**: what Decaid does with the machine when
+  nobody is using it. **Sleep when idle**, with the minutes it waits (1 to
+  240), and the **wake times**: each a time, its days (every day, weekdays,
+  or any you pick) and how long the machine stays on after, even with
+  nobody there (an hour for a new one, so a machine woken at 06:30 is not
+  asleep again by the time you come down), with the next wake over the
+  list. Decaid keeps them and acts on them while it runs, CafAI open or
+  not, and only while the machine is connected; its own Sleep & Wake page
+  shows the same. Changes go to Decaid at once.
 - **Settings > Machine care**: **Cleaning guide** opens Decent's routine for
   the DE1, one at a time: **Daily** (purge the wand, flush the group head,
   wipe the shower screen, rinse the wand), **Weekly** (detergent, Rinza, the

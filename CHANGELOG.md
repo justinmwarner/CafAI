@@ -24,6 +24,10 @@ workflow checks against it. Settings > About shows the version you run.
   moment opens YouTube at that time. Nothing loads from YouTube until you
   tap, and the steps themselves work offline. While the video is open, a
   drink you start leaves the guide on screen.
+- Settings > Sleep and wake: Decaid's idle sleep (on or off, and after how
+  many minutes) and its wake times, each a time, its days and how long the
+  machine stays on after, with when the next one wakes the machine. Decaid
+  keeps them and wakes the machine while it runs, CafAI open or not.
 
 ## 0.1.1 (2026-10-12)
 
