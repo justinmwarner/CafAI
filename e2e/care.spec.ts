@@ -61,6 +61,26 @@ test('a moment plays the video in place at its time, in view', async ({ page }) 
   expect(asked.every((url) => url.startsWith('https://www.youtube-nocookie.com/'))).toBe(true);
 });
 
+test("a step's moment keeps a column of its own on a tablet; on a phone the words below the title take the whole width", async ({ page }) => {
+  await openApp(page, '#/care');
+  const how = await page.getByTestId(TID.careStep('flush-group')).getByText('Blind basket in, then Flush at least twice. Water only.').boundingBox();
+  const moment = await page.getByTestId(TID.careMoment('flush-group')).boundingBox();
+  if (how === null || moment === null) throw new Error('The step is not laid out.');
+  if (isPhone(page)) expect(how.x + how.width).toBeGreaterThanOrEqual(moment.x + moment.width - 1);
+  else expect(how.x + how.width).toBeLessThanOrEqual(moment.x);
+});
+
+test("on a phone the video takes the column's width, before a tap and playing", async ({ page }) => {
+  test.skip(!isPhone(page), 'On a tablet the video has a column of its own.');
+  await stubYouTube(page);
+  await openApp(page, '#/care');
+  const widthOf = async (testId: string) => (await page.getByTestId(testId).boundingBox())?.width ?? 0;
+  expect(Math.abs((await widthOf(TID.careVideo)) - (await widthOf(TID.careRoutine)))).toBeLessThanOrEqual(1);
+  await page.getByTestId(TID.careMoment('flush-group')).click();
+  await expect(page.getByTestId(TID.carePlayer)).toBeVisible();
+  expect(Math.abs((await widthOf(TID.careVideo)) - (await widthOf(TID.careRoutine)))).toBeLessThanOrEqual(1);
+});
+
 test('inside Decaid on Windows the moments are links to YouTube, and nothing is framed', async ({ page }) => {
   const asked = await stubYouTube(page);
   await page.addInitScript(() => {

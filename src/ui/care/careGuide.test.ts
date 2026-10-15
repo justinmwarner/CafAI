@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CARE_VIDEO, CARE_VIDEO_MINUTES, embedUrl, formatMoment, routineOf, ROUTINES, watchUrl } from './careGuide.ts';
+import { CARE_VIDEO, CARE_VIDEO_MINUTES, embedUrl, formatMoment, keepUnits, routineOf, ROUTINES, watchUrl } from './careGuide.ts';
 import { ROUTINE_IDS } from './routines.ts';
 
 const STEPS = ROUTINES.flatMap((routine) => routine.steps);
@@ -51,6 +51,34 @@ describe('the guide', () => {
   it('finds a routine by id', () => {
     expect(routineOf('weekly').label).toBe('Weekly');
     expect(routineOf('asNeeded').label).toBe('As needed');
+  });
+});
+
+describe('keepUnits', () => {
+  const NBSP = ' ';
+
+  it('joins a number to its unit with a no-break space', () => {
+    expect(keepUnits("Steam heater off until it's down to 60 °C (up to an hour).")).toBe(
+      `Steam heater off until it's down to 60${NBSP}°C (up to an hour).`,
+    );
+    expect(keepUnits('80 g of citric acid in 1.5 litres of water.')).toBe(`80${NBSP}g of citric acid in 1.5${NBSP}litres of water.`);
+    expect(keepUnits('30 to 120 ppm: every year or two.')).toBe(`30 to 120${NBSP}ppm: every year or two.`);
+    expect(keepUnits('for about 10 minutes: soak it')).toBe(`for about 10${NBSP}minutes: soak it`);
+    expect(keepUnits('30 ml of Rinza in 500 ml')).toBe(`30${NBSP}ml of Rinza in 500${NBSP}ml`);
+  });
+
+  it('leaves other words alone', () => {
+    expect(keepUnits('T20 in the centre, T10 for the three.')).toBe('T20 in the centre, T10 for the three.');
+    expect(keepUnits('Since v1.44 (2023) the screws')).toBe('Since v1.44 (2023) the screws');
+    expect(keepUnits('3 good reasons')).toBe('3 good reasons');
+  });
+
+  it("joins every number and unit in the guide's steps", () => {
+    for (const step of ROUTINES.flatMap((routine) => routine.steps)) {
+      for (const text of [step.when, step.how, step.where, step.note]) {
+        if (text !== undefined) expect(keepUnits(text)).not.toMatch(/\d (g|ml|°C|ppm|litres|minutes)\b/);
+      }
+    }
   });
 });
 

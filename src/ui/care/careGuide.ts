@@ -223,6 +223,18 @@ export function routineOf(id: RoutineId): CareRoutine {
   return ROUTINES.find((routine) => routine.id === id) ?? ROUTINES[0]!;
 }
 
+/** The units the guide's sentences use, as they follow a number. */
+const UNIT_AFTER_NUMBER = /(\d) (g|ml|°C|ppm|litres|minutes)(?=[\s.,;:)]|$)/g;
+
+/**
+ * A number and its unit never part at a line's end ("60 °C", "500 ml"): the
+ * space between them becomes a no-break space. CafAI's readouts are too short
+ * to wrap; the guide's sentences are not.
+ */
+export function keepUnits(text: string): string {
+  return text.replace(UNIT_AFTER_NUMBER, '$1 $2');
+}
+
 /** A moment as the video's own clock shows it: "1:48", "16:56". */
 export function formatMoment(seconds: number): string {
   const whole = Math.max(0, Math.floor(seconds));

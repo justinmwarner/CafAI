@@ -12,7 +12,7 @@ import Typography from '@mui/material/Typography';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import { TID } from '../testIds.ts';
-import { CARE_SOURCES, type CareRoutine, type CareStep } from './careGuide.ts';
+import { CARE_SOURCES, keepUnits, type CareRoutine, type CareStep } from './careGuide.ts';
 import { MomentButton } from './MomentButton.tsx';
 
 export interface RoutineCardProps {
@@ -43,6 +43,23 @@ const numberSx = {
   fontWeight: 650,
 } as const;
 
+/**
+ * A step's grid. The moment sits beside the title: on a wide screen it keeps
+ * a column of its own down the step, so the words line up step after step;
+ * on a narrow one the words under the title take the whole width. A step
+ * without a moment has no column for one, not even its gap.
+ */
+function stepGrid(numbered: boolean, moment: boolean) {
+  if (numbered) {
+    return moment
+      ? { gridTemplateColumns: '28px minmax(0, 1fr) auto', gridTemplateAreas: '"num head moment" "num body moment"' }
+      : { gridTemplateColumns: '28px minmax(0, 1fr)', gridTemplateAreas: '"num head" "num body"' };
+  }
+  return moment
+    ? { gridTemplateColumns: 'minmax(0, 1fr) auto', gridTemplateAreas: '"head moment" "body body"' }
+    : { gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateAreas: '"head" "body"' };
+}
+
 function Step({ step, number, props }: { step: CareStep; number: number; props: RoutineCardProps }) {
   const { numbered, links, linkProps, playingKey, onPlay } = props;
   return (
@@ -51,7 +68,7 @@ function Step({ step, number, props }: { step: CareStep; number: number; props: 
       data-testid={TID.careStep(step.id)}
       sx={{
         display: 'grid',
-        gridTemplateColumns: numbered ? '28px minmax(0, 1fr) auto' : 'minmax(0, 1fr) auto',
+        ...stepGrid(numbered, step.moment !== undefined),
         columnGap: 1.5,
         alignItems: 'start',
         py: 1.5,
@@ -60,32 +77,34 @@ function Step({ step, number, props }: { step: CareStep; number: number; props: 
       }}
     >
       {numbered ? (
-        <Box aria-hidden sx={numberSx}>
+        <Box aria-hidden sx={{ ...numberSx, gridArea: 'num' }}>
           {number}
         </Box>
       ) : null}
-      <Box sx={{ minWidth: 0 }}>
+      <Box sx={{ gridArea: 'head', minWidth: 0 }}>
         <Typography variant="subtitle1" component="h3" sx={{ fontWeight: 600 }}>
           {step.title}
         </Typography>
         {step.when ? (
           <Typography variant="label" component="p" sx={{ color: 'text.secondary', mt: '1px' }}>
-            {step.when}
+            {keepUnits(step.when)}
           </Typography>
         ) : null}
+      </Box>
+      <Box sx={{ gridArea: 'body', minWidth: 0 }}>
         <Typography variant="body2" sx={{ mt: 0.5 }}>
-          {step.how}
+          {keepUnits(step.how)}
         </Typography>
         {step.where ? (
           <Typography variant="label" component="p" sx={{ color: 'text.secondary', mt: 0.5 }}>
-            {step.where}
+            {keepUnits(step.where)}
           </Typography>
         ) : null}
         {step.note ? (
           <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75, mt: 0.75, color: 'text.secondary' }}>
             <InfoOutlinedIcon sx={{ fontSize: 16, mt: '1px', flex: 'none' }} />
             <Typography variant="label" component="p">
-              {step.note}
+              {keepUnits(step.note)}
             </Typography>
           </Box>
         ) : null}
@@ -103,19 +122,20 @@ function Step({ step, number, props }: { step: CareStep; number: number; props: 
           </Button>
         ) : null}
       </Box>
-      {step.moment === undefined ? (
-        <span />
-      ) : (
-        <MomentButton
-          seconds={step.moment}
-          what={step.title}
-          link={links}
-          linkProps={linkProps}
-          playing={playingKey === step.id}
-          onPlay={() => onPlay(step.moment!, step.id, step.title)}
-          testId={TID.careMoment(step.id)}
-          nudge
-        />
+      {step.moment === undefined ? null : (
+        // A flex box, so the button's nudge is a margin like any other.
+        <Box sx={{ gridArea: 'moment', display: 'flex' }}>
+          <MomentButton
+            seconds={step.moment}
+            what={step.title}
+            link={links}
+            linkProps={linkProps}
+            playing={playingKey === step.id}
+            onPlay={() => onPlay(step.moment!, step.id, step.title)}
+            testId={TID.careMoment(step.id)}
+            nudge
+          />
+        </Box>
       )}
     </Box>
   );

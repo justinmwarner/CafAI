@@ -199,6 +199,13 @@ The screen lays itself out for its own box (`useOwnLayout`):
   Decaid opens it in the browser, and Watch on YouTube. Steps lose their
   numbers.
 
+As built, after seeing it at every size: the steps' column is at most
+680 px wide (the chat's lane) and the narrow column at most 760 px (as
+Settings), both from the left, so a line stays readable on a big tablet;
+on a narrow screen a step's moment sits beside its title only and the
+words under the title take the whole width; and a number never parts from
+its unit at a line's end ("60 °C").
+
 **The segments**: the Mode control's look (DESIGN.md, Appearance controls):
 a raised track, radius 14, 4 px padding and gaps; segments at least 48 px,
 radius 10, 15 px labels at 600 in ink-muted that wrap inside their segment
