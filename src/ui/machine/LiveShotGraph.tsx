@@ -26,6 +26,12 @@
  * plot.
  *
  * Before the first shot there is no time to show: the timer shows a dash.
+ *
+ * Under the shot, faint, the shot it is compared with (D-CURVE-1 to
+ * D-CURVE-5): while it pulls the bag's previous shot, once its card is in the
+ * one the card asks about. Its pressure and flow are wide pale bands drawn
+ * after the grid and before every series (compare/guide.ts), the time axis
+ * runs to the longer of the two, and a line over the plot names it.
  */
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import uPlot from 'uplot';
@@ -36,6 +42,11 @@ import { keyframes, useTheme } from '@mui/material/styles';
 import { useCoach, useServices, useTelemetry } from '../../app/services.tsx';
 import type { CoachUiMessage } from '../../app/types.ts';
 import type { ShotSummary } from '../../coach/types.ts';
+import { hasCurve, keyFacts, pourCurve, underThem, type PourCurve } from '../compare/comparison.ts';
+import { drawGuide } from '../compare/guide.ts';
+import { GuideSwatch } from '../compare/GuideKey.tsx';
+import { shotViewComparisonFor } from '../compare/shotViewComparison.ts';
+import { useComparisonSummary } from '../compare/useComparison.ts';
 import type { GraphPalette } from '../palette.ts';
 import { TID } from '../testIds.ts';
 import { DASH, formatSeconds } from './format.ts';
@@ -107,7 +118,14 @@ function useCardNumbers(shotId: string | null): CardNumbers | null {
 
 const finiteMax = (value: number | null | undefined) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
 
-function graphOptions(width: number, height: number, colors: GraphPalette, fontFamily: string): uPlot.Options {
+/** Canvas pixels per CSS pixel, as uPlot draws them (1 under the test's stand-in). */
+const canvasRatio = (): number => {
+  const ratio = (uPlot as { pxRatio?: unknown }).pxRatio;
+  return typeof ratio === 'number' && ratio > 0 ? ratio : 1;
+};
+
+/** `guide`: the shot drawn under this one, read at each draw so a new one needs no new plot. */
+function graphOptions(width: number, height: number, colors: GraphPalette, fontFamily: string, guide: () => PourCurve | null): uPlot.Options {
   const font = `12px ${fontFamily}`;
   const line = (stroke: string, scale: string, width: number, dash?: number[]): uPlot.Series => ({
     scale,
@@ -124,7 +142,12 @@ function graphOptions(width: number, height: number, colors: GraphPalette, fontF
     legend: { show: false },
     padding: [AXIS.top, 4, 0, 0],
     scales: {
-      x: { time: false, range: (_plot, _min, max) => [0, Math.max(MIN_WINDOW_S, Math.ceil(finiteMax(max)))] },
+      // To the longer of this shot and the one under it (D-CURVE-5): a live
+      // shot's axis then holds still as it passes the previous one's time.
+      x: {
+        time: false,
+        range: (_plot, _min, max) => [0, Math.max(MIN_WINDOW_S, Math.ceil(finiteMax(max)), Math.ceil(guide()?.endS ?? 0))],
+      },
       y: { auto: false, range: [0, 12] },
       w: {
         range: (_plot, _min, max) => [0, Math.max(MIN_WEIGHT_G, Math.ceil((finiteMax(max) * 1.15) / 10) * 10)],
@@ -163,6 +186,15 @@ function graphOptions(width: number, height: number, colors: GraphPalette, fontF
         values: (_plot, splits) => splits.map((v) => `${v}g`),
       },
     ],
+    // After the grid, before the first series: the shot under lies under everything this shot draws.
+    hooks: {
+      drawAxes: [
+        (plot) => {
+          const curve = guide();
+          if (curve) drawGuide(plot, curve, colors, canvasRatio());
+        },
+      ],
+    },
     // Same order as SERIES_KEYS: targets underneath, pressure on top.
     series: [
       {},
@@ -255,7 +287,7 @@ export interface LiveShotGraphProps {
 }
 
 export function LiveShotGraph({ minPlotHeight = 160, compact = false, narrow = false }: LiveShotGraphProps) {
-  const { telemetry } = useServices();
+  const { telemetry, coach } = useServices();
   const trace = useMemo(() => shotTraceFor(telemetry), [telemetry]);
   const { phase, finishedShotId } = useSyncExternalStore(trace.subscribe, trace.getState);
   const plotHost = useRef<HTMLDivElement>(null);
@@ -264,6 +296,20 @@ export function LiveShotGraph({ minPlotHeight = 160, compact = false, narrow = f
   const card = useCardNumbers(finishedShotId);
   const shownCard = useRef<CardNumbers | null>(null);
   const repaint = useRef<(() => void) | null>(null);
+  // The shot under this one (D-CURVE-1): which, then its curve, from the chat or once from Decaid.
+  const comparison = useMemo(() => shotViewComparisonFor(trace, coach), [trace, coach]);
+  const target = useSyncExternalStore(comparison.subscribe, comparison.getTarget);
+  const previous = useComparisonSummary(target);
+  const guide = useMemo(() => {
+    const curve = previous ? pourCurve(previous) : null;
+    return curve && hasCurve(curve) ? curve : null;
+  }, [previous]);
+  const guideRef = useRef<PourCurve | null>(null);
+  // Before the plot's own effect, so a plot made with a guide known draws it from its first paint.
+  useEffect(() => {
+    guideRef.current = guide;
+    repaint.current?.();
+  }, [guide]);
   // The Shot view's step and target come from the app's one workflow read;
   // outside the shell (a component test) there is none and they stay blank.
   const shared = useSharedLoadedProfile();
@@ -281,7 +327,7 @@ export function LiveShotGraph({ minPlotHeight = 160, compact = false, narrow = f
     if (!host) return;
     const { buffer } = trace;
     const size = measure(host);
-    const plot = new uPlot(graphOptions(size.width, size.height, colors, fontFamily), buffer.data, host);
+    const plot = new uPlot(graphOptions(size.width, size.height, colors, fontFamily, () => guideRef.current), buffer.data, host);
     let frame: number | null = null;
 
     const paint = () => {
@@ -351,11 +397,13 @@ export function LiveShotGraph({ minPlotHeight = 160, compact = false, narrow = f
     readouts.current[key] = node;
   };
 
+  // Only with a shot on the plot to compare (the store gives none before any shot).
+  const under = guide !== null && target !== null && previous !== null ? { target, previous } : null;
   const plot = (
     <Box
       ref={plotHost}
       role="img"
-      aria-label="Pressure, flow and weight over the shot"
+      aria-label={under ? `Pressure, flow and weight over the shot, ${underThem(under.target)}` : 'Pressure, flow and weight over the shot'}
       sx={{
         position: 'relative',
         flex: '1 1 auto',
@@ -487,6 +535,22 @@ export function LiveShotGraph({ minPlotHeight = 160, compact = false, narrow = f
           </Box>
         ))}
       </Box>
+
+      {under ? (
+        // The key for the band under the curves (D-CURVE-3): its form, the shot's name, its time and yield. One line, cut short rather than wrapped.
+        <Typography
+          variant="label"
+          component="p"
+          color="text.secondary"
+          data-testid={TID.shotGuideKey}
+          sx={{ m: 0, display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, fontVariantNumeric: 'tabular-nums' }}
+        >
+          <GuideSwatch width={16} height={7} />
+          <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {`${under.target.name} · ${keyFacts(under.previous)}`}
+          </Box>
+        </Typography>
+      ) : null}
 
       {plot}
     </Box>

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { Profiler, type ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, screen, within } from '@testing-library/react';
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import { ThemeProvider } from '@mui/material/styles';
 import { formatLocalTimestamp } from '../../../mock/decaid/clock.ts';
 import { normalizeProfile } from '../../../mock/decaid/profiles.ts';
@@ -849,5 +849,126 @@ describe("LiveShotGraph: the Shot view's readouts and step", () => {
     act(() => services.telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: null }));
     expect(screen.getByText(/pull a shot/i)).toBeInTheDocument();
     expect(weight()).not.toHaveTextContent('of');
+  });
+});
+
+describe('LiveShotGraph: the shot under this one (D-CURVE-1 to D-CURVE-5)', () => {
+  type Hook = (plot: unknown) => void;
+  interface Options {
+    hooks?: { drawAxes?: Hook[]; draw?: Hook[] };
+    scales: { x: { range: (plot: unknown, min: number | null, max: number | null) => [number, number] } };
+  }
+  const options = () => fakePlots[fakePlots.length - 1]!.opts as Options;
+  const plotArea = () => screen.getByRole('img', { name: /^Pressure, flow and weight over the shot/ });
+  const key = () => screen.queryByTestId(TID.shotGuideKey);
+  const red = { kind: 'otherCoffee', shotId: 'shot-r', coffee: 'Red Brick' } as const;
+
+  /** A plot to hand the draw hook: it notes the colour of each band stroked. */
+  function canvas() {
+    const strokes: string[] = [];
+    const ctx = {
+      lineWidth: 1,
+      lineJoin: 'miter',
+      lineCap: 'butt',
+      strokeStyle: '',
+      save() {},
+      restore() {},
+      beginPath() {},
+      rect() {},
+      clip() {},
+      setLineDash() {},
+      moveTo() {},
+      lineTo() {},
+      stroke() {
+        strokes.push(String(ctx.strokeStyle));
+      },
+    };
+    return { plot: { ctx, bbox: { left: 0, top: 0, width: 600, height: 300 }, valToPos: (value: number) => value * 10 }, strokes };
+  }
+
+  /** The previous shot's card: a 35 s synthetic shot that pours for 32.5 s. */
+  const previous = () => summaryWith('shot-0', 32.5, 38.6);
+
+  /** The chat's card for `shotId`, comparing it with Red Brick's last shot. */
+  const comparedWithRed = (shotId: string): CoachUiMessage => {
+    const message = shotCard(shotId, summaryWith(shotId, 2, 3));
+    return { ...message, parts: [{ kind: 'shot', shotId, summary: summaryWith(shotId, 2, 3), baseline: red }] };
+  };
+
+  it('draws nothing under, and names nothing, before any shot', () => {
+    renderWithServices(<LiveShotGraph />, createFakeServices({ coach: { messages: [shotCard('shot-0', previous())] } }));
+    expect(key()).toBeNull();
+    expect(plotArea()).toHaveAccessibleName('Pressure, flow and weight over the shot');
+    expect(options().scales.x.range(null, null, null)).toEqual([0, 30]);
+    const { plot, strokes } = canvas();
+    for (const hook of options().hooks?.drawAxes ?? []) hook(plot);
+    expect(strokes).toEqual([]);
+  });
+
+  it("while a shot pulls, draws the bag's previous shot under it, after the grid and before every series, and names it over the plot", () => {
+    const services = createFakeServices({ coach: { messages: [shotCard('shot-0', previous())] } });
+    renderWithServices(<LiveShotGraph />, services);
+    act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+    act(() => {
+      for (const t of [0, 1, 2]) services.telemetry.emitSample(sample(t));
+    });
+    runFrames();
+    expect(key()).toHaveTextContent('Previous shot · 32.5 s · 38.6 g');
+    expect(plotArea()).toHaveAccessibleName(
+      'Pressure, flow and weight over the shot, with the pressure and flow of your previous shot under them',
+    );
+    // In the hook uPlot calls once the grid is drawn and before the series, never over them.
+    expect(options().hooks?.draw).toBeUndefined();
+    const { plot, strokes } = canvas();
+    for (const hook of options().hooks?.drawAxes ?? []) hook(plot);
+    expect(strokes).toEqual([theme.palette.cafai.graph.flowGuide, theme.palette.cafai.graph.pressureGuide]);
+    // The time runs to the end of the longer shot from the start: the previous one's, until this one passes it.
+    const end = Math.ceil(previous().series.tS[previous().series.tS.length - 1]! - (previous().pourStartS ?? 0));
+    expect(options().scales.x.range(null, 0, 2)).toEqual([0, Math.max(30, end)]);
+    expect(options().scales.x.range(null, 0, 40.2)).toEqual([0, 41]);
+    // The previous shot's card is in the chat: Decaid is not asked.
+    expect(services.decaid.calls.filter((call) => call.method === 'getShot')).toEqual([]);
+  });
+
+  it("once the shot's card is in, draws the shot that card asks about: another coffee's, read from Decaid once", async () => {
+    const services = createFakeServices({ coach: { messages: [] } });
+    const getShot = vi.fn(async (id: string) => syntheticShotRecord({ id, endS: 28 }));
+    services.decaid.getShot = getShot;
+    renderWithServices(<LiveShotGraph />, services);
+    act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+    act(() => {
+      for (const t of [0, 1, 2]) services.telemetry.emitSample(sample(t));
+      services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' });
+    });
+    runFrames();
+    // A bag's first shot: nothing of its own to compare while it pulled.
+    expect(key()).toBeNull();
+    act(() => services.coach.setState({ messages: [comparedWithRed('shot-1')] }));
+    await waitFor(() => expect(key()).toHaveTextContent(/^Last shot of Red Brick · /));
+    expect(getShot).toHaveBeenCalledTimes(1);
+    expect(getShot).toHaveBeenCalledWith('shot-r');
+    // The coach's reply streaming in asks nothing more.
+    act(() => services.coach.setState({ busy: true }));
+    act(() => services.coach.setState({ busy: false }));
+    expect(getShot).toHaveBeenCalledTimes(1);
+  });
+
+  it('draws its own shot alone, quietly, when Decaid no longer has the one under', async () => {
+    const services = createFakeServices({ coach: { messages: [] } });
+    const getShot = vi.fn(() => Promise.reject(new Error('Shot not found')));
+    services.decaid.getShot = getShot;
+    renderWithServices(<LiveShotGraph />, services);
+    act(() => {
+      services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' });
+      services.telemetry.emitSample(sample(0));
+      services.telemetry.emitSample(sample(1));
+      services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: null });
+    });
+    act(() => services.coach.setState({ messages: [comparedWithRed('shot-1')] }));
+    await waitFor(() => expect(getShot).toHaveBeenCalledTimes(1));
+    await act(async () => {});
+    expect(key()).toBeNull();
+    expect(plotArea()).toHaveAccessibleName('Pressure, flow and weight over the shot');
+    expect(screen.queryByText(/not found/i)).toBeNull();
   });
 });
