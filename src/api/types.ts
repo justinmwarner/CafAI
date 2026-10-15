@@ -382,6 +382,19 @@ export interface ShotUpdateRequest {
   annotations?: ShotAnnotations | null;
 }
 
+/**
+ * A steam record without its measurements (GET /api/v1/steams/latest): one
+ * per steaming, opened when the machine enters steam and kept when it leaves
+ * (steam_sequencer.dart at aab5f93). Only what CafAI reads: the care
+ * reminders count steams (D-CARE-3).
+ */
+export interface SteamRecordSummary {
+  id: string;
+  /** When the steaming began: local, no zone. */
+  timestamp: string;
+  [key: string]: unknown;
+}
+
 // ---------------------------------------------------------------------------
 // Misc
 // ---------------------------------------------------------------------------
@@ -638,6 +651,15 @@ export interface DecaidClient {
    * `unexpected_reply` GatewayError.
    */
   probeEnjoymentScale(): Promise<EnjoymentScale | null>;
+
+  /**
+   * GET /api/v1/steams/ids: every steam record's id, to count them (the care
+   * reminders, D-CARE-3). A Decaid older than the pin, without steam
+   * records, answers 404.
+   */
+  listSteamIds(): Promise<string[]>;
+  /** The newest steam record, without its measurements; null when there is none. */
+  getLatestSteam(): Promise<SteamRecordSummary | null>;
 
   listBeans(): Promise<Bean[]>;
   listBatches(beanId: string): Promise<BeanBatch[]>;

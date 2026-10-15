@@ -14,9 +14,11 @@ import type {
   Heartbeat,
   HostEnvironment,
   LiveSample,
+  PaginatedShots,
   PluginInfo,
   PresenceSettings,
   ShotLifecycleEvent,
+  SteamRecordSummary,
   TelemetryState,
   TelemetryStore,
   WakeSchedule,
@@ -152,6 +154,10 @@ export interface FakeDecaid extends DecaidClient {
   failNext(method: string, error: Error): void;
   /** Decaid's sleep and wake settings as this fake holds them; tests may set them before rendering. */
   presence: PresenceSettings;
+  /** What listShots answers, whatever it is asked (the care reminders read its total). */
+  shotPage: PaginatedShots;
+  /** Decaid's steam records as the care reminders count them: their ids and the newest. */
+  steams: { ids: string[]; latest: SteamRecordSummary | null };
 }
 
 export function createFakeDecaid(): FakeDecaid {
@@ -184,6 +190,8 @@ export function createFakeDecaid(): FakeDecaid {
     failNext: (method, error) => void failures.set(method, error),
     // Decaid's own defaults (settings_controller.dart:64-66 at aab5f93).
     presence: { userPresenceEnabled: true, sleepTimeoutMinutes: 30, schedules: [], keepAwakeUntil: null },
+    shotPage: { items: [], total: 0, limit: 20, offset: 0 },
+    steams: { ids: [], latest: null },
     getPresenceSettings: () => act('getPresenceSettings', [], () => clone(fake.presence)),
     updatePresenceSettings: (patch) =>
       act('updatePresenceSettings', [patch], () => {
@@ -275,7 +283,9 @@ export function createFakeDecaid(): FakeDecaid {
         metadata: request.metadata ?? null,
       }),
     updateProfile: (id, body) => call('updateProfile', [id, body], Promise.reject(new Error('unsupported')) as never),
-    listShots: (options) => call('listShots', [options], { items: [], total: 0, limit: 20, offset: 0 }),
+    listShots: (options) => call('listShots', [options], clone(fake.shotPage)),
+    listSteamIds: () => call('listSteamIds', [], [...fake.steams.ids]),
+    getLatestSteam: () => call('getLatestSteam', [], fake.steams.latest === null ? null : clone(fake.steams.latest)),
     getLatestShot: () => call('getLatestShot', [], null),
     getShot: (id) => call('getShot', [id], Promise.reject(new Error('not found')) as never),
     updateShot: (id, patch) => call('updateShot', [id, patch], Promise.reject(new Error('unsupported')) as never),
