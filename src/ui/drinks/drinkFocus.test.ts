@@ -34,5 +34,6 @@ describe('Go back', () => {
     expect(goBackLabel({ name: 'shot' })).toBe('Go back to the shot');
     expect(goBackLabel({ name: 'history' })).toBe('Go back to History');
     expect(goBackLabel({ name: 'settings' })).toBe('Go back to Settings');
+    expect(goBackLabel({ name: 'care', routine: 'daily' })).toBe('Go back to Machine care');
   });
 });

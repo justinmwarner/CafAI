@@ -7,12 +7,15 @@
  * missing route is simply the coach, never an error screen.
  */
 import { useMemo, useSyncExternalStore } from 'react';
+import { ROUTINE_IDS, type RoutineId } from './care/routines.ts';
 import type { DrinkKind } from './drinks/kinds.ts';
 
 export type Route =
   | { name: 'coach' }
   | { name: 'history'; bagId?: string }
   | { name: 'settings' }
+  /** Settings > Machine care's guide (D152), on one of its routines (D153). */
+  | { name: 'care'; routine: RoutineId }
   | { name: 'shot' }
   /** A drink's view while it runs: the app's to open (useDrinkFocus.ts), never a place in the navigation. */
   | { name: 'drink'; drink: DrinkKind };
@@ -26,6 +29,10 @@ const DRINK_PATHS: Readonly<Record<DrinkKind, string>> = { steam: 'steam', hotWa
 const DRINK_OF_PATH: ReadonlyMap<string, DrinkKind> = new Map(
   (Object.keys(DRINK_PATHS) as DrinkKind[]).map((drink) => [DRINK_PATHS[drink], drink]),
 );
+
+/** Each routine by its path: Daily is the guide's own `#/care`, the others `#/care/weekly` and so on. */
+const ROUTINE_PATHS: Readonly<Record<RoutineId, string>> = { daily: '', weekly: 'weekly', monthly: 'monthly', asNeeded: 'as-needed' };
+const ROUTINE_OF_PATH: ReadonlyMap<string, RoutineId> = new Map(ROUTINE_IDS.map((routine) => [ROUTINE_PATHS[routine], routine]));
 
 /** Parse `location.hash` (with or without the leading `#`). */
 export function parseRoute(hash: string): Route {
@@ -43,6 +50,7 @@ export function parseRoute(hash: string): Route {
     if (screen === 'history') return { name: 'history' };
     if (screen === 'settings') return { name: 'settings' };
     if (screen === 'shot') return { name: 'shot' };
+    if (screen === 'care') return { name: 'care', routine: 'daily' };
     const drink = DRINK_OF_PATH.get(screen);
     if (drink) return { name: 'drink', drink };
     return COACH;
@@ -53,6 +61,9 @@ export function parseRoute(hash: string): Route {
     } catch {
       return { name: 'history' };
     }
+  }
+  if (screen === 'care' && segments.length === 2) {
+    return { name: 'care', routine: ROUTINE_OF_PATH.get(segments[1]!.toLowerCase()) ?? 'daily' };
   }
   return COACH;
 }
@@ -66,6 +77,10 @@ export function routeHref(route: Route): string {
       return route.bagId ? `#/history/${encodeURIComponent(route.bagId)}` : '#/history';
     case 'settings':
       return '#/settings';
+    case 'care': {
+      const path = ROUTINE_PATHS[route.routine];
+      return path ? `#/care/${path}` : '#/care';
+    }
     case 'shot':
       return '#/shot';
     case 'drink':
@@ -76,6 +91,7 @@ export function routeHref(route: Route): string {
 export function sameRoute(a: Route, b: Route): boolean {
   if (a.name === 'history' && b.name === 'history') return (a.bagId ?? null) === (b.bagId ?? null);
   if (a.name === 'drink' && b.name === 'drink') return a.drink === b.drink;
+  if (a.name === 'care' && b.name === 'care') return a.routine === b.routine;
   return a.name === b.name;
 }
 
@@ -86,6 +102,17 @@ export function sameRoute(a: Route, b: Route): boolean {
  */
 export function isRemembered(route: Route): boolean {
   return route.name !== 'drink';
+}
+
+/**
+ * The place in the navigation a route belongs to, which the top bar and the
+ * tabs mark current: the cleaning guide is Settings' (D152), a drink's view
+ * no place's (D146).
+ */
+export function placeOf(route: Route): RouteName | null {
+  if (route.name === 'drink') return null;
+  if (route.name === 'care') return 'settings';
+  return route.name;
 }
 
 /** Go to a route (a normal hash change, so useRoute() picks it up). */

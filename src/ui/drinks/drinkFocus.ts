@@ -57,6 +57,8 @@ export function goBackLabel(route: Route): string {
       return 'Go back to History';
     case 'settings':
       return 'Go back to Settings';
+    case 'care':
+      return 'Go back to Machine care';
     case 'drink':
       return 'Go back';
   }

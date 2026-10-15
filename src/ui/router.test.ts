@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isRemembered, parseRoute, routeHref, sameRoute, type Route } from './router.ts';
+import { isRemembered, parseRoute, placeOf, routeHref, sameRoute, type Route } from './router.ts';
 
 describe('parseRoute', () => {
   it('treats an empty or bare hash as the coach', () => {
@@ -42,6 +42,19 @@ describe('parseRoute', () => {
     expect(parseRoute('#/steam/extra')).toEqual({ name: 'coach' });
   });
 
+  it('reads the cleaning guide and its routine', () => {
+    expect(parseRoute('#/care')).toEqual({ name: 'care', routine: 'daily' });
+    expect(parseRoute('#/care/')).toEqual({ name: 'care', routine: 'daily' });
+    expect(parseRoute('#/care/weekly')).toEqual({ name: 'care', routine: 'weekly' });
+    expect(parseRoute('#/Care/Monthly')).toEqual({ name: 'care', routine: 'monthly' });
+    expect(parseRoute('#/care/as-needed')).toEqual({ name: 'care', routine: 'asNeeded' });
+    expect(parseRoute('#/care/weekly?_=1')).toEqual({ name: 'care', routine: 'weekly' });
+    // An unknown routine is Daily; anything deeper is not the guide.
+    expect(parseRoute('#/care/asNeeded')).toEqual({ name: 'care', routine: 'daily' });
+    expect(parseRoute('#/care/yearly')).toEqual({ name: 'care', routine: 'daily' });
+    expect(parseRoute('#/care/weekly/extra')).toEqual({ name: 'coach' });
+  });
+
   it("tolerates Decaid's ?_=<ms> cache buster", () => {
     expect(parseRoute('#/?_=1759480000000')).toEqual({ name: 'coach' });
     expect(parseRoute('#/settings?_=1759480000000')).toEqual({ name: 'settings' });
@@ -73,6 +86,13 @@ describe('routeHref', () => {
     expect(routeHref({ name: 'drink', drink: 'hotWater' })).toBe('#/hot-water');
   });
 
+  it("builds the cleaning guide's links", () => {
+    expect(routeHref({ name: 'care', routine: 'daily' })).toBe('#/care');
+    expect(routeHref({ name: 'care', routine: 'weekly' })).toBe('#/care/weekly');
+    expect(routeHref({ name: 'care', routine: 'monthly' })).toBe('#/care/monthly');
+    expect(routeHref({ name: 'care', routine: 'asNeeded' })).toBe('#/care/as-needed');
+  });
+
   it('round-trips through parseRoute', () => {
     const routes: Route[] = [
       { name: 'coach' },
@@ -83,6 +103,10 @@ describe('routeHref', () => {
       { name: 'drink', drink: 'steam' },
       { name: 'drink', drink: 'hotWater' },
       { name: 'drink', drink: 'flush' },
+      { name: 'care', routine: 'daily' },
+      { name: 'care', routine: 'weekly' },
+      { name: 'care', routine: 'monthly' },
+      { name: 'care', routine: 'asNeeded' },
     ];
     for (const route of routes) expect(parseRoute(routeHref(route))).toEqual(route);
   });
@@ -101,6 +125,12 @@ describe('sameRoute', () => {
     expect(sameRoute({ name: 'drink', drink: 'steam' }, { name: 'drink', drink: 'flush' })).toBe(false);
     expect(sameRoute({ name: 'drink', drink: 'steam' }, { name: 'shot' })).toBe(false);
   });
+
+  it('compares the guide by routine', () => {
+    expect(sameRoute({ name: 'care', routine: 'daily' }, { name: 'care', routine: 'daily' })).toBe(true);
+    expect(sameRoute({ name: 'care', routine: 'daily' }, { name: 'care', routine: 'weekly' })).toBe(false);
+    expect(sameRoute({ name: 'care', routine: 'daily' }, { name: 'settings' })).toBe(false);
+  });
 });
 
 describe('isRemembered', () => {
@@ -110,5 +140,17 @@ describe('isRemembered', () => {
     expect(isRemembered({ name: 'history', bagId: 'b' })).toBe(true);
     expect(isRemembered({ name: 'settings' })).toBe(true);
     expect(isRemembered({ name: 'drink', drink: 'steam' })).toBe(false);
+    expect(isRemembered({ name: 'care', routine: 'monthly' })).toBe(true);
+  });
+});
+
+describe('placeOf', () => {
+  it("puts the guide under Settings, and a drink's view nowhere", () => {
+    expect(placeOf({ name: 'care', routine: 'weekly' })).toBe('settings');
+    expect(placeOf({ name: 'drink', drink: 'steam' })).toBeNull();
+    expect(placeOf({ name: 'history', bagId: 'b' })).toBe('history');
+    expect(placeOf({ name: 'settings' })).toBe('settings');
+    expect(placeOf({ name: 'shot' })).toBe('shot');
+    expect(placeOf({ name: 'coach' })).toBe('coach');
   });
 });
