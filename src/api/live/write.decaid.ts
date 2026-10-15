@@ -10,10 +10,12 @@
 import { afterAll, assert, beforeAll, beforeEach, expect, it } from 'vitest';
 import { buildStartingProfile, buildVersionProfile, getTemplate, profileId, startingYield } from '../../coach/index.ts';
 import type { ProfileJson, Template } from '../../coach/types.ts';
+import { clampDrinkField, HOT_WATER_TEMPERATURE, RINSE_TEMPERATURE, steamTemperatureField } from '../../ui/settings/drinkSettings.ts';
+import { fieldView } from '../../ui/settings/drinkUnits.ts';
 import { deviceConnections, type DeviceConnections } from '../frames.ts';
 import { createGrinder, getGrinder, grinderRequest, listGrinders, type GrinderDraft } from '../grinders.ts';
 import { loadProfileOnMachine } from '../machineProfile.ts';
-import type { DeviceEntry, WorkflowContext } from '../types.ts';
+import type { DeviceEntry, WorkflowContext, WorkflowPatch } from '../types.ts';
 import { activateProfile, createProfileVersion, findProfileMismatch } from '../workflow.ts';
 import { describeDecaid, openDecaid, type LiveDecaid } from './env.ts';
 import { contextDifference, contextNotKept, createUndoList, restoreContext, simulatorProblem, waitUntil } from './harness.ts';
@@ -236,6 +238,45 @@ describeDecaid('write', ({ url }) => {
 
     await putBack();
     expect(await client.getPresenceSettings(), 'after putting back').toMatchObject(saved);
+    expect(live.problems()).toEqual([]);
+  });
+
+  it('drink temperatures set in °F: kept as the whole °C CafAI sends, and read back as set, at each end (D-TEMP-3)', async () => {
+    const client = live.client;
+    // Decaid puts the drinks' settings on the machine at once, so it takes them only with one connected (D114).
+    if (!links.machine) assert.fail('The simulated machine is not connected.');
+    const original = await client.getWorkflow();
+    const steam = original.steamSettings.targetTemperature;
+    const water = original.hotWaterData.targetTemperature;
+    const rinse = original.rinseData.targetTemperature;
+    if (steam === null || water === null || rinse === null) assert.fail(`Decaid sent a drink temperature CafAI could not read (${steam}, ${water}, ${rinse}).`);
+    const putBack = undo.add('the drink temperatures', async () => {
+      const after = await client.updateWorkflow({
+        steamSettings: { targetTemperature: steam },
+        hotWaterData: { targetTemperature: water },
+        rinseData: { targetTemperature: rinse },
+      });
+      const kept = [after.steamSettings.targetTemperature, after.hotWaterData.targetTemperature, after.rinseData.targetTemperature];
+      if (kept.join() !== [steam, water, rinse].join()) throw new Error(`Decaid kept ${kept.join(', ')}, not ${steam}, ${water}, ${rinse}.`);
+    });
+    const cases = [
+      ['steamSettings', steamTemperatureField(null), [275, 300, 320]],
+      ['hotWaterData', HOT_WATER_TEMPERATURE, [34, 167, 212]],
+      ['rinseData', RINSE_TEMPERATURE, [34, 194, 212]],
+    ] as const;
+    for (const [drink, spec, typed] of cases) {
+      const view = fieldView(spec, 'fahrenheit');
+      for (const fahrenheit of typed) {
+        // As the stepper sends it: the nearest whole °C, inside CafAI's range.
+        const celsius = clampDrinkField(spec, view.fromShown(fahrenheit));
+        const patch: WorkflowPatch = { [drink]: { targetTemperature: celsius } };
+        await client.updateWorkflow(patch);
+        const kept = (await client.getWorkflow())[drink].targetTemperature;
+        expect(kept, `${drink} at ${fahrenheit} °F`).toBe(celsius);
+        expect(view.shown(kept ?? Number.NaN), `${drink} at ${fahrenheit} °F, read back`).toBe(fahrenheit);
+      }
+    }
+    await putBack();
     expect(live.problems()).toEqual([]);
   });
 
