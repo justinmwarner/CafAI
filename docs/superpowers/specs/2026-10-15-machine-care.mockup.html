@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CafAI: machine care, the cleaning guide</title>
+<style>
+  @font-face { font-family: 'Figtree'; font-weight: 300 900; font-style: normal; src: url('../../../node_modules/@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2') format('woff2'); }
+
+  /* Dark Crema, from src/ui/palette.ts. */
+  .t-crema-dark { --bg:#140e09; --surface:#1c160f; --raised:#282018; --ink:#f4ede6; --muted:#b8afa6; --line:#2f2924; --grid:#26201b; --field:#504c46; --disabled:#5c554f; --accent:#d5a776; --accent-soft:#3a2d1f; --on-accent:#1e1408; --success:#6ad895; --warning:#eec05b; --error:#f47b74; --info:#65b2f1; }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; background: #101010; color: #d8d8d8; font-family: 'Figtree', system-ui, sans-serif; }
+  .board { display: flex; flex-direction: column; gap: 40px; width: 1440px; }
+  .intro h1 { font-size: 26px; font-weight: 700; margin: 0 0 8px; color: #fff; }
+  .intro p { font-size: 15.5px; line-height: 1.55; margin: 0 0 6px; color: #bdbdbd; max-width: 1240px; }
+  .rowf { display: flex; gap: 32px; align-items: flex-start; }
+  .fw { display: flex; flex-direction: column; gap: 10px; }
+  .cap { font-size: 14.5px; line-height: 1.5; color: #bdbdbd; max-width: 430px; }
+  .cap b { color: #fff; font-weight: 650; }
+  .cap ul { margin: 6px 0 0; padding-left: 18px; }
+  .cap li { margin: 3px 0; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 650; letter-spacing: .02em; color: #fff; background: #2a2a2a; border-radius: 6px; padding: 2px 8px; margin-bottom: 6px; }
+
+  .frame { position: relative; overflow: hidden; background: var(--bg); color: var(--ink); box-shadow: 0 0 0 1px #2c2c2c, 0 18px 40px rgba(0,0,0,.45); font-size: 16px; display: flex; flex-direction: column; }
+  .tab { width: 962px; height: 602px; border-radius: 12px; }
+  .ph { width: 390px; height: 844px; border-radius: 30px; }
+
+  .ic { width: 22px; height: 22px; fill: currentColor; flex: none; }
+  .ic.s { width: 18px; height: 18px; }
+  .ic.xs { width: 16px; height: 16px; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* Top bar, as built. */
+  .tb { height: 56px; flex: none; display: flex; align-items: center; gap: 4px; padding: 0 12px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .brand { display: flex; align-items: center; gap: 6px; color: var(--accent); font-weight: 750; font-size: 19px; margin-right: 6px; }
+  .nav-i { height: 48px; padding: 0 8px; display: inline-flex; align-items: center; gap: 8px; border-radius: 12px; color: var(--muted); font-weight: 600; font-size: 16px; white-space: nowrap; }
+  .nav-i.on { color: var(--accent); background: var(--accent-soft); }
+  .nav-i .ic { width: 20px; height: 20px; }
+  .grow { flex: 1 1 auto; }
+  .mrow { display: flex; gap: 2px; }
+  .mb { width: 54px; height: 48px; border-radius: 12px; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; color: var(--ink); font-size: 11.5px; font-weight: 600; }
+  .mb .ic { width: 21px; height: 21px; }
+  .sep { width: 1px; height: 30px; background: var(--line); margin: 0 4px; }
+  .ib { width: 48px; height: 48px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); flex: none; }
+  .exit { height: 48px; padding: 0 12px; display: inline-flex; align-items: center; gap: 8px; border-radius: 12px; background: var(--raised); color: var(--ink); font-weight: 600; font-size: 16px; }
+  .exit small { display: block; font-size: 13px; color: var(--muted); font-weight: 400; line-height: 1.2; }
+  .exit span { line-height: 1.1; }
+
+  /* Phone bars. */
+  .ptb { height: 52px; flex: none; display: flex; align-items: center; padding: 0 4px 0 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .pmb { width: 44px; height: 44px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; color: var(--ink); }
+  .tabs { height: 64px; flex: none; display: grid; grid-template-columns: repeat(4, 1fr); padding: 6px; background: var(--surface); border-top: 1px solid var(--line); }
+  .tabb { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--muted); font-size: 12.5px; font-weight: 650; }
+  .tabb .pill { width: 58px; height: 30px; border-radius: 15px; display: flex; align-items: center; justify-content: center; }
+  .tabb.on { color: var(--accent); }
+  .tabb.on .pill { background: var(--accent-soft); }
+
+  /* ---------- Settings (as built) with the new section ---------- */
+  .settings { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 16px; }
+  .settings .col { max-width: 760px; display: flex; flex-direction: column; gap: 16px; }
+  .sec { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+  .sec h2 { margin: 0 0 8px; font-size: 17px; font-weight: 700; }
+  .sec p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--muted); }
+  .sec.new { box-shadow: 0 0 0 2px #e9c46a; }
+  .tonal { height: 48px; padding: 0 16px; border-radius: 12px; display: inline-flex; align-items: center; gap: 8px; background: var(--raised); color: var(--ink); font-weight: 600; font-size: 16px; white-space: nowrap; }
+  .tonal .ic { width: 20px; height: 20px; }
+  .dimmed { opacity: .55; }
+  .stub-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .stub-fields .g b { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+  .stub-fields .fl { font-size: 13px; font-weight: 550; color: var(--muted); margin-bottom: 6px; }
+  .stub-fields .stp { height: 48px; border: 1px solid var(--field); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 600; margin-bottom: 12px; }
+
+  /* ---------- The Care screen ---------- */
+  .care { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .care-h { flex: none; display: flex; align-items: center; gap: 2px; padding: 4px 16px 4px 4px; border-bottom: 1px solid var(--line); min-height: 57px; }
+  .care-h .title { font-size: 19px; font-weight: 700; letter-spacing: -.005em; }
+  .care-b { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 360px; column-gap: 20px; padding: 12px 16px 0; overflow: hidden; }
+  .care-l { min-width: 0; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+  .care-r { min-width: 0; }
+
+  /* The routines: the Mode control's segments. */
+  .seg { flex: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 4px; background: var(--raised); border-radius: 14px; }
+  .seg span { min-height: 48px; border-radius: 10px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 15px; font-weight: 600; line-height: 1.2; color: var(--muted); padding: 0 6px; }
+  .seg span.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.35); }
+
+  .routine { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 4px 16px 4px; }
+  .r-h { display: flex; align-items: center; gap: 12px; padding: 10px 0 8px; border-bottom: 1px solid var(--line); }
+  .r-h .when { flex: 1 1 auto; min-width: 0; }
+  .r-h .when b { display: block; font-size: 17px; font-weight: 700; line-height: 1.35; }
+  .r-h .when span { display: block; font-size: 15px; color: var(--muted); line-height: 1.4; }
+
+  .step { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; column-gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); align-items: start; }
+  .step:first-of-type { border-top: 0; }
+  .r-h + .step { border-top: 0; }
+  .n { width: 28px; height: 28px; border-radius: 50%; background: var(--raised); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 650; color: var(--muted); margin-top: 1px; }
+  .st { font-size: 17px; font-weight: 600; line-height: 1.35; }
+  .sw { font-size: 13px; font-weight: 550; color: var(--muted); line-height: 1.3; margin-top: 1px; }
+  .how { font-size: 15px; line-height: 1.5; margin-top: 4px; }
+  .where { font-size: 13px; line-height: 1.4; color: var(--muted); margin-top: 4px; }
+  .note { display: flex; gap: 6px; align-items: flex-start; font-size: 13px; line-height: 1.4; color: var(--muted); margin-top: 6px; }
+  .note .ic { margin-top: 1px; }
+  .mom { height: 48px; padding: 0 12px 0 8px; border-radius: 12px; display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-weight: 600; font-size: 16px; font-variant-numeric: tabular-nums; white-space: nowrap; margin-top: -10px; }
+  .mom.on { background: var(--accent-soft); }
+  .mom .ic { width: 22px; height: 22px; }
+  .mom.ext .ic.o { width: 16px; height: 16px; margin-left: 2px; }
+  .r-h .mom { margin-top: 0; }
+
+  /* The video card. */
+  .video { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px; }
+  .poster { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; background: var(--raised); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--ink); }
+  .poster .play { width: 64px; height: 64px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center; }
+  .poster .play .ic { width: 34px; height: 34px; margin-left: 3px; }
+  .poster .pl { font-size: 16px; font-weight: 600; }
+  .player { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: #2a2622; }
+  .player .still { position: absolute; inset: 0; background:
+      radial-gradient(ellipse at 52% 42%, #6b5a52 0 13%, transparent 14%),
+      linear-gradient(180deg, #5c4f4b 0%, #4a403c 62%, #8a8580 62%, #a8a29b 100%); }
+  .player .ov { position: absolute; left: 10px; top: 8px; font: 600 12px/1.25 system-ui; color: #fff; text-shadow: 0 1px 2px #000; }
+  .player .ov small { display: block; color: #ff6b5a; font-weight: 600; }
+  .player .cc { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); white-space: nowrap; background: rgba(8,8,8,.75); color: #fff; font: 500 11.5px/1.3 system-ui; padding: 2px 6px; }
+  .player .bar { position: absolute; left: 10px; right: 10px; bottom: 9px; height: 3px; background: rgba(255,255,255,.3); border-radius: 2px; }
+  .player .bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 49%; background: #f00; border-radius: 2px; }
+  .player .yt { position: absolute; right: 8px; top: 6px; font: 700 10px/1 system-ui; color: #fff; background: rgba(0,0,0,.5); padding: 3px 5px; border-radius: 3px; }
+  .v-t { font-size: 17px; font-weight: 600; line-height: 1.35; margin-top: 10px; }
+  .v-d { font-size: 15px; color: var(--muted); line-height: 1.45; }
+  .v-p { font-size: 13px; color: var(--muted); line-height: 1.35; margin-top: 6px; }
+  .v-now { font-size: 15px; line-height: 1.45; margin-top: 8px; }
+  .v-now b { font-weight: 600; }
+  .tbtn { height: 48px; padding: 0 8px; margin-left: -8px; border-radius: 12px; display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-weight: 600; font-size: 16px; white-space: nowrap; }
+  .tbtn .ic { width: 18px; height: 18px; }
+  .src { font-size: 13px; line-height: 1.4; color: var(--muted); padding: 10px 2px 14px; }
+
+  /* Phone. */
+  .pcare { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .pcare .care-h { padding-right: 12px; }
+  .pscroll { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 12px 16px 0; display: flex; flex-direction: column; gap: 12px; }
+  .vrow { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 8px 12px 8px 8px; }
+  .vrow .play { width: 48px; height: 48px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center; }
+  .vrow .play .ic { width: 28px; height: 28px; margin-left: 2px; }
+  .vrow b { display: block; font-size: 15px; font-weight: 600; line-height: 1.35; }
+  .vrow span { display: block; font-size: 13px; color: var(--muted); line-height: 1.35; }
+  .ph .step { grid-template-columns: minmax(0, 1fr) auto; }
+  .ph .step .n { display: none; }
+  .ph .seg span { font-size: 15px; padding: 0 2px; }
+</style>
+</head>
+<body class="t-crema-dark">
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-brand" viewBox="0 0 24 24"><path d="M20 3H6c-1.1 0-2 .9-2 2v8c0 2.21 1.79 4 4 4h6c2.21 0 4-1.790 4-4v-3h2c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2m0 5h-2V5h2zM3 21h16c.55 0 1-.45 1-1s-.45-1-1-1H3c-.55 0-1 .45-1 1s.45 1 1 1"/></symbol>
+    <symbol id="i-coach" viewBox="0 0 24 24"><path d="M20 6h-1v8c0 .55-.45 1-1 1H6v1c0 1.1.9 2 2 2h10l4 4V8c0-1.1-.9-2-2-2m-3 5V4c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v13l4-4h9c1.1 0 2-.9 2-2"/></symbol>
+    <symbol id="i-shot" viewBox="0 0 24 24"><path d="m4.2 17.78 5.3-5.3 3.25 3.25c.41.41 1.07.39 1.45-.04l7.17-8.07c.35-.39.33-.99-.04-1.37-.4-.4-1.07-.39-1.45.04l-6.390 7.18-3.29-3.29a.996.996 0 0 0-1.41 0l-6.09 6.1c-.39.39-.39 1.02 0 1.41l.09.09c.39.39 1.03.39 1.41 0"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18m-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8z"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.030 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6"/></symbol>
+    <symbol id="i-espresso" viewBox="0 0 24 24"><path d="M18.5 3H6c-1.1 0-2 .9-2 2v5.71c0 3.83 2.95 7.18 6.78 7.29 3.96.12 7.22-3.06 7.22-7v-1h.5c1.93 0 3.5-1.57 3.5-3.5S20.43 3 18.5 3M16 5v3H6V5zm2.5 3H18V5h.5c.83 0 1.5.67 1.5 1.5S19.33 8 18.5 8M4 19h16v2H4z"/></symbol>
+    <symbol id="i-steam" viewBox="0 0 24 24"><path d="M14.5 17c0 1.65-1.35 3-3 3s-3-1.35-3-3h2c0 .55.45 1 1 1s1-.45 1-1-.45-1-1-1H2v-2h9.5c1.65 0 3 1.35 3 3M19 6.5C19 4.57 17.43 3 15.5 3S12 4.57 12 6.5h2c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S16.330 8 15.5 8H2v2h13.5c1.93 0 3.5-1.57 3.5-3.5m-.5 4.5H2v2h16.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5v2c1.93 0 3.5-1.57 3.5-3.5S20.43 11 18.5 11"/></symbol>
+    <symbol id="i-flush" viewBox="0 0 24 24"><path d="M12 3c-.55 0-1 .45-1 1v1.07C7.06 5.56 4 8.92 4 13h16c0-4.08-3.06-7.44-7-7.930V4c0-.55-.45-1-1-1M8 15a1 1 0 1 0 0 2 1 1 0 0 0 0-2m4 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2m4 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2m-6 3a1 1 0 1 0 0 2 1 1 0 0 0 0-2m4 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2"/></symbol>
+    <symbol id="i-water" viewBox="0 0 24 24"><path d="M12 2.69 6.34 8.35a8 8 0 1 0 11.32 0z"/></symbol>
+    <symbol id="i-open" viewBox="0 0 24 24"><path d="M18 19H6c-.55 0-1-.45-1-1V6c0-.55.45-1 1-1h5c.55 0 1-.45 1-1s-.45-1-1-1H5c-1.11 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-6c0-.55-.45-1-1-1s-1 .45-1 1v5c0 .55-.45 1-1 1M14 4c0 .55.45 1 1 1h2.59l-9.13 9.13a.996.996 0 1 0 1.41 1.41L19 6.41V9c0 .55.45 1 1 1s1-.45 1-1V4c0-.55-.45-1-1-1h-5c-.55 0-1 .45-1 1"/></symbol>
+    <symbol id="i-exit" viewBox="0 0 24 24"><path d="M5 5h6c.55 0 1-.45 1-1s-.45-1-1-1H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h6c.55 0 1-.45 1-1s-.45-1-1-1H5z"/><path d="m20.65 11.65-2.79-2.79c-.32-.32-.86-.1-.86.35V11h-7c-.55 0-1 .45-1 1s.45 1 1 1h7v1.79c0 .45.54.67.85.35l2.79-2.79c.2-.19.2-.51.01-.7"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 11H7.83l4.88-4.88c.39-.39.39-1.03 0-1.42a.996.996 0 0 0-1.41 0l-6.59 6.59c-.39.39-.39 1.02 0 1.41l6.59 6.59c.39.39 1.02.39 1.41 0s.39-1.02 0-1.41L7.83 13H19c.55 0 1-.45 1-1s-.45-1-1-1"/></symbol>
+    <symbol id="i-clean" viewBox="0 0 24 24"><path d="M16 11h-1V4c0-1.66-1.34-3-3-3S9 2.34 9 4v7H8c-2.76 0-5 2.24-5 5v5c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-5c0-2.76-2.24-5-5-5m3 10h-2v-3c0-.55-.45-1-1-1s-1 .45-1 1v3h-2v-3c0-.55-.45-1-1-1s-1 .45-1 1v3H9v-3c0-.55-.45-1-1-1s-1 .45-1 1v3H5v-5c0-1.65 1.35-3 3-3h8c1.65 0 3 1.35 3 3z"/></symbol>
+    <symbol id="i-playc" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2M9.5 14.67V9.33c0-.79.88-1.27 1.54-.84l4.15 2.67c.61.39.61 1.29 0 1.68l-4.15 2.67c-.66.43-1.540-.05-1.54-.84"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 6.82v10.36c0 .79.87 1.27 1.54.84l8.14-5.18c.62-.39.62-1.29 0-1.69L9.54 5.98C8.87 5.55 8 6.03 8 6.82"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8"/></symbol>
+  </defs>
+</svg>
+
+<div class="board">
+  <div class="intro">
+    <h1>Machine care: the cleaning guide (D151, the first item)</h1>
+    <p>Settings gets a <b>Machine care</b> section; its <b>Cleaning guide</b> opens a screen of its own, <code>#/care</code>, under Settings (the Settings place stays lit, and a back arrow returns there). The four places in the top bar stay as they are: at 962 px the bar has 18 px to spare, no room for a fifth. Later the stats card's "Weekly clean due" line (the third item) opens the same screen on the right routine.</p>
+    <p>The screen splits Decent's routine by how often: <b>Daily · Weekly · Monthly · As needed</b>, one at a time, so a routine fits on the tablet without scrolling. Each step is what to do, when, and a line on how, with its moment in Decent's video ("How often/to clean DE1", Decent Espresso Tech, 2022, 22 min). Where the video and Decent's current docs differ, the step follows the docs and says so in a quiet note. The list is CafAI's own text: it works offline.</p>
+    <p>The video loads only when you tap play or a moment, from <code>youtube-nocookie.com</code>. It plays in place in a browser and inside Decaid on Android (Decent's tablets). Inside Decaid on Windows, a Mac or an iPad it cannot: Decaid sends any page a frame loads to the system browser (tried on Decaid 0.8.8 for Windows), so there each moment is a link that opens YouTube at that moment instead.</p>
+  </div>
+
+  <!-- ===================== Tablet: Settings with the new section ===================== -->
+  <div class="rowf">
+    <div class="fw">
+      <span class="tag">TABLET · SETTINGS · THE NEW SECTION</span>
+      <div class="frame tab">
+        <div class="tb">
+          <div class="brand"><svg class="ic"><use href="#i-brand"/></svg>CafAI</div>
+          <span class="nav-i"><svg class="ic"><use href="#i-coach"/></svg>Coach</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-shot"/></svg>Shot</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-history"/></svg>History</span>
+          <span class="nav-i on"><svg class="ic"><use href="#i-settings"/></svg>Settings</span>
+          <span class="grow"></span>
+          <div class="mrow">
+            <span class="mb"><svg class="ic"><use href="#i-espresso"/></svg>Espresso</span>
+            <span class="mb"><svg class="ic"><use href="#i-steam"/></svg>Steam</span>
+            <span class="mb"><svg class="ic"><use href="#i-flush"/></svg>Flush</span>
+            <span class="mb"><svg class="ic"><use href="#i-water"/></svg>Hot water</span>
+          </div>
+          <span class="sep"></span>
+          <span class="ib"><svg class="ic"><use href="#i-open"/></svg></span>
+          <span class="exit"><svg class="ic"><use href="#i-exit"/></svg><span>Exit<small>to Decaid</small></span></span>
+        </div>
+        <div class="settings">
+          <div class="col">
+            <div class="sec dimmed">
+              <h2>Steam, hot water and flush</h2>
+              <p style="margin-bottom:12px">The Steam, Hot water and Flush buttons use these. Changes go to Decaid at once.</p>
+              <div class="stub-fields">
+                <div class="g"><b><svg class="ic s"><use href="#i-steam"/></svg>Steam</b><div class="fl">Temperature</div><div class="stp">150 °C</div><div class="fl">Time</div><div class="stp">50 s</div></div>
+                <div class="g"><b><svg class="ic s"><use href="#i-water"/></svg>Hot water</b><div class="fl">Temperature</div><div class="stp">85 °C</div><div class="fl">Volume</div><div class="stp">200 ml</div></div>
+                <div class="g"><b><svg class="ic s"><use href="#i-flush"/></svg>Flush</b><div class="fl">Temperature</div><div class="stp">93 °C</div><div class="fl">Time</div><div class="stp">10 s</div></div>
+              </div>
+            </div>
+            <div class="sec new">
+              <h2>Machine care</h2>
+              <p style="margin-bottom:12px">What to clean every day, week and month, with Decent's video.</p>
+              <span class="tonal"><svg class="ic"><use href="#i-clean"/></svg>Cleaning guide</span>
+            </div>
+            <div class="sec dimmed">
+              <h2>About</h2>
+              <p>CafAI 0.1.1</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">
+      <b>Settings &gt; Machine care</b>, the section after Steam, hot water and flush (the machine's sections together), before About.
+      <ul>
+        <li>One line in body-small, ink-muted, and one tonal button with the cleaning icon: <b>Cleaning guide</b>, as Log has <b>Open log</b>.</li>
+        <li>No Save: nothing here is a setting yet. The third item (reminders) adds the water's hardness here.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===================== Tablet: Care, Daily, before a tap ===================== -->
+  <div class="rowf">
+    <div class="fw">
+      <span class="tag">TABLET · CARE · DAILY · NOTHING LOADED YET</span>
+      <div class="frame tab">
+        <div class="tb">
+          <div class="brand"><svg class="ic"><use href="#i-brand"/></svg>CafAI</div>
+          <span class="nav-i"><svg class="ic"><use href="#i-coach"/></svg>Coach</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-shot"/></svg>Shot</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-history"/></svg>History</span>
+          <span class="nav-i on"><svg class="ic"><use href="#i-settings"/></svg>Settings</span>
+          <span class="grow"></span>
+          <div class="mrow">
+            <span class="mb"><svg class="ic"><use href="#i-espresso"/></svg>Espresso</span>
+            <span class="mb"><svg class="ic"><use href="#i-steam"/></svg>Steam</span>
+            <span class="mb"><svg class="ic"><use href="#i-flush"/></svg>Flush</span>
+            <span class="mb"><svg class="ic"><use href="#i-water"/></svg>Hot water</span>
+          </div>
+          <span class="sep"></span>
+          <span class="ib"><svg class="ic"><use href="#i-open"/></svg></span>
+          <span class="exit"><svg class="ic"><use href="#i-exit"/></svg><span>Exit<small>to Decaid</small></span></span>
+        </div>
+        <div class="care">
+          <div class="care-h">
+            <span class="ib" style="color:var(--ink)"><svg class="ic"><use href="#i-back"/></svg></span>
+            <span class="title">Machine care</span>
+          </div>
+          <div class="care-b">
+            <div class="care-l">
+              <div class="seg"><span class="on">Daily</span><span>Weekly</span><span>Monthly</span><span>As needed</span></div>
+              <div class="routine">
+                <div class="r-h">
+                  <div class="when"><b>Daily</b><span>On days you pull shots.</span></div>
+                  <span class="mom"><svg class="ic"><use href="#i-playc"/></svg>0:20</span>
+                </div>
+                <div class="step">
+                  <span class="n">1</span>
+                  <div><div class="st">Purge and wipe the steam wand</div><div class="sw">Each time you steam</div><div class="how">Take the jug away as steam stops: the DE1 clears the wand a moment later. Point it at the drip tray, then wipe it with a damp cloth.</div></div>
+                  <span></span>
+                </div>
+                <div class="step">
+                  <span class="n">2</span>
+                  <div><div class="st">Flush the group head</div><div class="sw">After the day's last shot</div><div class="how">Blind basket in, then Flush at least twice. Water only.</div>
+                    <div class="note"><svg class="ic xs"><use href="#i-info"/></svg><span>Decent's Forward Flush x5 profile does the same in pulses, as in the video; streamline can run it.</span></div></div>
+                  <span class="mom"><svg class="ic"><use href="#i-playc"/></svg>1:48</span>
+                </div>
+                <div class="step">
+                  <span class="n">3</span>
+                  <div><div class="st">Wipe the shower screen</div><div class="sw">After the flush</div><div class="how">Wipe the screen under the group head with a damp cloth. Then a coffee basket in, one more Flush, and rinse the portafilter.</div></div>
+                  <span></span>
+                </div>
+              </div>
+            </div>
+            <div class="care-r">
+              <div class="video">
+                <div class="poster"><span class="play"><svg class="ic"><use href="#i-play"/></svg></span><span class="pl">Play Decent's video</span></div>
+                <div class="v-t">How often/to clean DE1</div>
+                <div class="v-d">Decent Espresso Tech · 22 min · 2022</div>
+                <div class="v-p">Loads from YouTube when you tap play.</div>
+                <span class="tbtn">Watch on YouTube<svg class="ic"><use href="#i-open"/></svg></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">
+      <b>Care, Daily.</b> A header like History's: a back arrow ("Back to Settings") and <b>Machine care</b> in title.
+      <ul>
+        <li><b>The routines</b>: the Mode control's segments, Daily first. One routine shows at a time; the choice is in the address (<code>#/care/weekly</code>), so a reload keeps it and the reminders can open the right one.</li>
+        <li><b>A routine</b>: one card, its name and how often, and its part of the video (0:20 for Daily). Then the steps, numbered: what (subtitle at 600), when (label, ink-muted), how (body-small).</li>
+        <li><b>A moment</b>: a text button in the accent at the step's end, a play icon and the time ("1:48"), named "Watch from 1:48 in Decent's video".</li>
+        <li><b>The video card</b>, beside: CafAI's own poster (no thumbnail from YouTube, so nothing loads before the tap), the title, who and how long, that it loads from YouTube, and <b>Watch on YouTube</b> (a link, the "opens elsewhere" icon).</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===================== Tablet: Care, Weekly, playing ===================== -->
+  <div class="rowf">
+    <div class="fw">
+      <span class="tag">TABLET · CARE · WEEKLY · PLAYING FROM A STEP</span>
+      <div class="frame tab">
+        <div class="tb">
+          <div class="brand"><svg class="ic"><use href="#i-brand"/></svg>CafAI</div>
+          <span class="nav-i"><svg class="ic"><use href="#i-coach"/></svg>Coach</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-shot"/></svg>Shot</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-history"/></svg>History</span>
+          <span class="nav-i on"><svg class="ic"><use href="#i-settings"/></svg>Settings</span>
+          <span class="grow"></span>
+          <div class="mrow">
+            <span class="mb"><svg class="ic"><use href="#i-espresso"/></svg>Espresso</span>
+            <span class="mb"><svg class="ic"><use href="#i-steam"/></svg>Steam</span>
+            <span class="mb"><svg class="ic"><use href="#i-flush"/></svg>Flush</span>
+            <span class="mb"><svg class="ic"><use href="#i-water"/></svg>Hot water</span>
+          </div>
+          <span class="sep"></span>
+          <span class="ib"><svg class="ic"><use href="#i-open"/></svg></span>
+          <span class="exit"><svg class="ic"><use href="#i-exit"/></svg><span>Exit<small>to Decaid</small></span></span>
+        </div>
+        <div class="care">
+          <div class="care-h">
+            <span class="ib" style="color:var(--ink)"><svg class="ic"><use href="#i-back"/></svg></span>
+            <span class="title">Machine care</span>
+          </div>
+          <div class="care-b">
+            <div class="care-l">
+              <div class="seg"><span>Daily</span><span class="on">Weekly</span><span>Monthly</span><span>As needed</span></div>
+              <div class="routine">
+                <div class="r-h">
+                  <div class="when"><b>Weekly</b><span>Once a week.</span></div>
+                  <span class="mom"><svg class="ic"><use href="#i-playc"/></svg>7:40</span>
+                </div>
+                <div class="step">
+                  <span class="n">1</span>
+                  <div><div class="st">Clean the group head with detergent</div><div class="how">3 g (half a teaspoon) of espresso machine detergent in the blind basket, then the Forward Flush x5 profile until no suds show. Coffee basket in, then Flush.</div>
+                    <div class="where">From streamline for now: the profile, or its Clean (Settings &gt; Maintenance).</div>
+                    <div class="note"><svg class="ic xs"><use href="#i-info"/></svg><span>Decent's quick start says a tablespoon; the profile's notes and the video, half a teaspoon.</span></div></div>
+                  <span class="mom"><svg class="ic"><use href="#i-playc"/></svg>7:53</span>
+                </div>
+                <div class="step">
+                  <span class="n">2</span>
+                  <div><div class="st">Steam Rinza through the wand</div><div class="how">30 ml of Rinza in 500 ml of water (or one tablet), steamed until it boils; then clean water, twice.</div></div>
+                  <span class="mom on"><svg class="ic"><use href="#i-playc"/></svg>11:11</span>
+                </div>
+              </div>
+            </div>
+            <div class="care-r">
+              <div class="video">
+                <div class="player"><div class="still"></div><div class="ov">2. Weekly<small>2) Steam wand with Rinza</small></div><div class="yt">YouTube</div><div class="cc">Put the steam tip in the solution like this.</div><div class="bar"><i></i></div></div>
+                <div class="v-now">Playing from <b class="num">11:11</b>: Steam Rinza through the wand</div>
+                <div class="v-d">How often/to clean DE1 · Decent Espresso Tech</div>
+                <span class="tbtn">Watch on YouTube<svg class="ic"><use href="#i-open"/></svg></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">
+      <b>Playing.</b> A tap on a moment loads YouTube's player in the poster's place at that moment, playing; the step's moment takes the accent wash while it is the one playing. Another moment reloads the player there. Leaving the screen ends the video.
+      <ul>
+        <li><b>A note</b> where the docs differ: an outlined info icon and a line in label, ink-muted, after the how.</li>
+        <li><b>Watch on YouTube</b> stays, for full screen or the YouTube app, and if YouTube ever refuses the player.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===================== Tablet: Decaid on Windows, a Mac or an iPad ===================== -->
+  <div class="rowf">
+    <div class="fw">
+      <span class="tag">TABLET · INSIDE DECAID ON WINDOWS, A MAC OR AN IPAD · MONTHLY</span>
+      <div class="frame tab">
+        <div class="tb">
+          <div class="brand"><svg class="ic"><use href="#i-brand"/></svg>CafAI</div>
+          <span class="nav-i"><svg class="ic"><use href="#i-coach"/></svg>Coach</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-shot"/></svg>Shot</span>
+          <span class="nav-i"><svg class="ic"><use href="#i-history"/></svg>History</span>
+          <span class="nav-i on"><svg class="ic"><use href="#i-settings"/></svg>Settings</span>
+          <span class="grow"></span>
+          <div class="mrow">
+            <span class="mb"><svg class="ic"><use href="#i-espresso"/></svg>Espresso</span>
+            <span class="mb"><svg class="ic"><use href="#i-steam"/></svg>Steam</span>
+            <span class="mb"><svg class="ic"><use href="#i-flush"/></svg>Flush</span>
+            <span class="mb"><svg class="ic"><use href="#i-water"/></svg>Hot water</span>
+          </div>
+          <span class="sep"></span>
+          <span class="ib"><svg class="ic"><use href="#i-open"/></svg></span>
+          <span class="exit"><svg class="ic"><use href="#i-exit"/></svg><span>Exit<small>to Decaid</small></span></span>
+        </div>
+        <div class="care">
+          <div class="care-h">
+            <span class="ib" style="color:var(--ink)"><svg class="ic"><use href="#i-back"/></svg></span>
+            <span class="title">Machine care</span>
+          </div>
+          <div class="care-b">
+            <div class="care-l">
+              <div class="seg"><span>Daily</span><span>Weekly</span><span class="on">Monthly</span><span>As needed</span></div>
+              <div class="routine">
+                <div class="r-h">
+                  <div class="when"><b>Monthly</b><span>Every two to four weeks.</span></div>
+                  <span class="mom ext"><svg class="ic"><use href="#i-playc"/></svg>16:36<svg class="ic o"><use href="#i-open"/></svg></span>
+                </div>
+                <div class="step">
+                  <span class="n">1</span>
+                  <div><div class="st">Soak the group head's parts</div><div class="how">Machine off. The centre screw frees the shower screen and a diffuser, three more the inner one (mind the temperature probe). Soak them overnight in 15 g of detergent in 500 ml of hot water.</div>
+                    <div class="note"><svg class="ic xs"><use href="#i-info"/></svg><span>The video does this every two weeks. Since v1.44 (2023) the screws are Torx: T20 in the centre, T10 for the three.</span></div></div>
+                  <span class="mom ext"><svg class="ic"><use href="#i-playc"/></svg>16:56<svg class="ic o"><use href="#i-open"/></svg></span>
+                </div>
+                <div class="step">
+                  <span class="n">2</span>
+                  <div><div class="st">Look at the group gasket</div><div class="how">While the parts are off, wipe the gasket. Hard, cracked, or water beading round the portafilter in a shot: time for a new one.</div></div>
+                  <span></span>
+                </div>
+              </div>
+            </div>
+            <div class="care-r">
+              <div class="video">
+                <div class="v-t" style="margin-top:2px">How often/to clean DE1</div>
+                <div class="v-d">Decent Espresso Tech · 22 min · 2022</div>
+                <div class="v-now">Decaid opens the video in your browser: each time starts it at that step.</div>
+                <span class="tbtn">Watch on YouTube<svg class="ic"><use href="#i-open"/></svg></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">
+      <b>Where the player cannot play here.</b> Inside Decaid on Windows, a Mac or an iPad, Decaid would cancel the player and open YouTube outside anyway, so CafAI never puts it on the page there.
+      <ul>
+        <li>No poster: the card says that Decaid opens the video in the browser.</li>
+        <li>Each moment is a link to <code>youtube.com/watch?v=0cm1JxB_6bI&amp;t=996s</code>, with the "opens elsewhere" icon after the time.</li>
+        <li>CafAI knows where it runs from Decaid's own <code>__DECENT_HOST__.platform</code>.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===================== Phone ===================== -->
+  <div class="rowf">
+    <div class="fw">
+      <span class="tag">PHONE · CARE · DAILY</span>
+      <div class="frame ph">
+        <div class="ptb">
+          <div class="brand"><svg class="ic"><use href="#i-brand"/></svg>CafAI</div>
+          <span class="grow"></span>
+          <span class="pmb"><svg class="ic"><use href="#i-espresso"/></svg></span>
+          <span class="pmb"><svg class="ic"><use href="#i-steam"/></svg></span>
+          <span class="pmb"><svg class="ic"><use href="#i-flush"/></svg></span>
+          <span class="pmb"><svg class="ic"><use href="#i-water"/></svg></span>
+          <span class="ib"><svg class="ic"><use href="#i-open"/></svg></span>
+          <span class="ib"><svg class="ic"><use href="#i-exit"/></svg></span>
+        </div>
+        <div class="pcare">
+          <div class="care-h">
+            <span class="ib" style="color:var(--ink)"><svg class="ic"><use href="#i-back"/></svg></span>
+            <span class="title">Machine care</span>
+          </div>
+          <div class="pscroll">
+            <div class="seg"><span class="on">Daily</span><span>Weekly</span><span>Monthly</span><span>As needed</span></div>
+            <div class="vrow"><span class="play"><svg class="ic"><use href="#i-play"/></svg></span><div><b>Decent's video · 22 min</b><span>Loads from YouTube when you tap play.</span></div></div>
+            <div class="routine">
+              <div class="r-h">
+                <div class="when"><b>Daily</b><span>On days you pull shots.</span></div>
+                <span class="mom"><svg class="ic"><use href="#i-playc"/></svg>0:20</span>
+              </div>
+              <div class="step">
+                <div><div class="st">Purge and wipe the steam wand</div><div class="sw">Each time you steam</div><div class="how">Take the jug away as steam stops: the DE1 clears the wand a moment later. Point it at the drip tray, then wipe it.</div></div>
+                <span></span>
+              </div>
+              <div class="step">
+                <div><div class="st">Flush the group head</div><div class="sw">After the day's last shot</div><div class="how">Blind basket in, then Flush at least twice. Water only.</div></div>
+                <span class="mom"><svg class="ic"><use href="#i-playc"/></svg>1:48</span>
+              </div>
+              <div class="step">
+                <div><div class="st">Wipe the shower screen</div><div class="sw">After the flush</div><div class="how">Wipe the screen under the group head. Then a coffee basket in, one more Flush, and rinse the portafilter.</div></div>
+                <span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="tabs">
+          <span class="tabb"><span class="pill"><svg class="ic"><use href="#i-coach"/></svg></span>Coach</span>
+          <span class="tabb"><span class="pill"><svg class="ic"><use href="#i-shot"/></svg></span>Shot</span>
+          <span class="tabb"><span class="pill"><svg class="ic"><use href="#i-history"/></svg></span>History</span>
+          <span class="tabb on"><span class="pill"><svg class="ic"><use href="#i-settings"/></svg></span>Settings</span>
+        </div>
+      </div>
+    </div>
+    <div class="fw">
+      <span class="tag">PHONE · PLAYING FROM A STEP</span>
+      <div class="frame ph">
+        <div class="ptb">
+          <div class="brand"><svg class="ic"><use href="#i-brand"/></svg>CafAI</div>
+          <span class="grow"></span>
+          <span class="pmb"><svg class="ic"><use href="#i-espresso"/></svg></span>
+          <span class="pmb"><svg class="ic"><use href="#i-steam"/></svg></span>
+          <span class="pmb"><svg class="ic"><use href="#i-flush"/></svg></span>
+          <span class="pmb"><svg class="ic"><use href="#i-water"/></svg></span>
+          <span class="ib"><svg class="ic"><use href="#i-open"/></svg></span>
+          <span class="ib"><svg class="ic"><use href="#i-exit"/></svg></span>
+        </div>
+        <div class="pcare">
+          <div class="care-h">
+            <span class="ib" style="color:var(--ink)"><svg class="ic"><use href="#i-back"/></svg></span>
+            <span class="title">Machine care</span>
+          </div>
+          <div class="pscroll">
+            <div class="seg"><span class="on">Daily</span><span>Weekly</span><span>Monthly</span><span>As needed</span></div>
+            <div class="video">
+              <div class="player"><div class="still"></div><div class="ov">1. Daily<small>1) Grouphead w/o detergent</small></div><div class="yt">YouTube</div><div class="cc">If you use a 18g basket, remove it, and put it in like this.</div><div class="bar"><i style="width:8%"></i></div></div>
+              <div class="v-now">Playing from <b class="num">1:48</b>: Flush the group head</div>
+              <span class="tbtn">Watch on YouTube<svg class="ic"><use href="#i-open"/></svg></span>
+            </div>
+            <div class="routine">
+              <div class="r-h">
+                <div class="when"><b>Daily</b><span>On days you pull shots.</span></div>
+                <span class="mom"><svg class="ic"><use href="#i-playc"/></svg>0:20</span>
+              </div>
+              <div class="step">
+                <div><div class="st">Purge and wipe the steam wand</div><div class="sw">Each time you steam</div></div>
+                <span></span>
+              </div>
+              <div class="step">
+                <div><div class="st">Flush the group head</div><div class="sw">After the day's last shot</div></div>
+                <span class="mom on"><svg class="ic"><use href="#i-playc"/></svg>1:48</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="tabs">
+          <span class="tabb"><span class="pill"><svg class="ic"><use href="#i-coach"/></svg></span>Coach</span>
+          <span class="tabb"><span class="pill"><svg class="ic"><use href="#i-shot"/></svg></span>Shot</span>
+          <span class="tabb"><span class="pill"><svg class="ic"><use href="#i-history"/></svg></span>History</span>
+          <span class="tabb on"><span class="pill"><svg class="ic"><use href="#i-settings"/></svg></span>Settings</span>
+        </div>
+      </div>
+    </div>
+    <div class="cap">
+      <b>Phone.</b> One column that scrolls under the header: the routines, the video, the routine's steps.
+      <ul>
+        <li>The video starts as one short row (a play button, "Decent's video · 22 min", that it loads from YouTube), so the steps stay in view.</li>
+        <li>A moment turns the row into the player at the top of the column and scrolls it into view.</li>
+        <li>No step numbers on a phone: the room goes to the words.</li>
+        <li>On its side the same column, beside the rail.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -2315,3 +2315,110 @@ D141-D144 are still left to the work running beside this one; this starts at D14
   their channel, as Decaid's DE1 write does. Before this every drink lasted
   20 frames, about 4 s, whatever was set, which no view of a run could be
   tested against.
+
+### The gap review (2026-10-13)
+
+- **D151. Machine care, overlaid curves, TDS, °F and a wake schedule go on
+  the roadmap.** The owner asked what CafAI lacks next to other skins and
+  apps, and to add a cleaning guide built on Decent's video. Four passes
+  looked: CafAI's own code; the skins and plugins in `.ref/` (streamline,
+  MSL, decaid-zen, DYE2, decaid-mcp, Decaid's own screens, Crema); the web
+  (de1app's skins and plugins, other skins for Decaid, Visualizer,
+  Beanconqueror, other machines' apps); and the video with Decent's docs.
+  The largest gap was care: CafAI cannot start the DE1's cleaning,
+  descaling or transport cycles, Decaid's own screens cannot either (only
+  streamline and MSL can), and no skin for Decaid keeps reminders or shows
+  how to clean. From twelve gaps the owner chose the guide, the cycles,
+  reminders set by the water, overlaid shot curves, TDS and EY, °F and a
+  wake schedule (docs/ROADMAP.md). Not chosen for now: favourites from
+  Decaid's profile library (every other skin has a profile picker), steam
+  stopped by the milk's weight, statistics, a chime when a shot ends,
+  languages, and more detail on the screensaver already listed. Left to
+  Decaid, whose screens do them: pairing, calibration, firmware, backups,
+  plugins and charging; Home Assistant has its own integrations for
+  Decaid. Why: the owner's ask ("break it down to what you do every day,
+  week, month, etc. so it's easy to clean without having to find
+  everything") and picks.
+
+### The cleaning guide (2026-10-15)
+
+The first machine care item of D151, designed and built on branch
+`feat/machine-care` (`docs/superpowers/specs/2026-10-15-machine-care-design.md`).
+
+- **D152. The cleaning guide sits under Settings.** Settings > Machine care
+  (`src/ui/settings/CareSection.tsx`, after Steam, hot water and flush)
+  links to the Care screen, `#/care` (`src/ui/care/CareScreen.tsx`), while
+  the Settings place in the top bar and the Settings tab stay current
+  (`placeOf` in `src/ui/router.ts`); a back arrow returns to Settings, and a
+  drink's view that takes the screen goes back to "Machine care". The top
+  bar keeps its four places. Why: the owner's choice, after the mockup; at
+  962 px the bar has 18 px to spare, no room for a fifth place without
+  taking every place's label away, and the stats card's due line (the
+  reminders item) will be a second way in.
+- **D153. One routine at a time, in the address.** Daily, Weekly, Monthly
+  and As needed are segments in a tab list (`src/ui/care/CareSegments.tsx`,
+  drawn as the Mode control), the chosen one part of the route
+  (`#/care/weekly`; `#/care` is Daily; an unknown one is Daily) and
+  replaced, not pushed, so Back leaves Care instead of walking through the
+  segments. Why: the owner's choice; a routine fits a tablet with little
+  scrolling, and the reminders can open the one that is due.
+- **D154. Decent's video plays in place only where Decaid lets it.**
+  Nothing loads from YouTube until a tap: CafAI draws its own poster, with
+  no thumbnail. A tap puts YouTube's player from `youtube-nocookie.com` on
+  the page at the moment tapped, playing, made again on every tap. That
+  happens outside Decaid and inside it on Android (`videoPlaysInPlace` in
+  `src/ui/care/videoPlace.ts`, from Decaid's own `__DECENT_HOST__.platform`,
+  now `HostEnvironment.platform`); anywhere else inside Decaid there is no
+  poster and every moment is a link to `youtube.com/watch?v=…&t=<s>s`, which
+  Decaid opens in the system browser. Outside Decaid links open a new tab.
+  Why, tried on 2026-10-15: the player plays from a `localhost` page with
+  Decaid's user agent (just `Decent`) in Chromium 153 and in Chromium 91;
+  Decaid 0.8.8 for Windows cancelled it and opened YouTube in the browser
+  (its log: "Opening external link in system browser:
+  https://www.youtube-nocookie.com/embed/…"), because its navigation guard
+  (`classifySkinNavigation`) treats a frame as it treats a page; iOS and
+  macOS ask the app about frames the same way, while Android's WebView never
+  asks about a frame's http(s) loads. Not yet seen on a Decent tablet:
+  `docs/HARDWARE_TEST_PLAN.md` section 14.
+- **D155. The guide's words follow Decent's pages where the 2022 video
+  differs, and say so.** `src/ui/care/careGuide.ts` holds the guide as data,
+  each step's sources in a comment beside it, read on 2026-10-15: the video
+  and its captions, the quick start, the water, descaling, flow rate and
+  steam tip pages, the gasket page and video, the v1.44 blog, the group head
+  upgrade video and Decent's app tour. The calls: the daily flush uses
+  Flush, which the quick start allows ("Use the Forward Flush x5 preset or
+  the Flush button"), so Daily needs nothing but CafAI; the weekly detergent
+  is 3 g, as the Forward Flush x5 profile's own notes and the video say,
+  with the quick start's tablespoon in a note; Rinza is steamed weekly (the
+  quick start's weekly step and the video agree) and soaked, not steamed,
+  only after a lot of milk; the tank and the drip tray are weekly, with
+  soap, the video's daily wash a note; the group head's parts come off with
+  the machine off (the video switches it off at the back too; only its
+  description says sleep); three moments come from the captions rather than
+  the description: 6:52, 15:04 (the time Decent's own flow rate page links)
+  and 21:36. A step that needs a cycle or the cleaning profile says "From
+  streamline for now", until the second machine care item. The same reading
+  corrected the roadmap: the video is spoken in English, the quick start's
+  weekly Rinza is steamed, and the water page's LSI table, keyed to LSI
+  rather than ppm, runs from every 100 to every 2,250 shots. The branch's
+  review then checked each step against the quick start and the profile's
+  notes and put four right: the purge points the wand at the drip tray
+  before the burst, the weekly clean runs as the profile's notes run it
+  (once with detergent, a Flush until the water runs clear, once without, a
+  last Flush of 20 s), the soaked parts are rinsed before they go back, and
+  the intake filter step links Decent's page, which shows which of the two
+  filters a machine has. Why: the owner's ask, and D151's rule that
+  Decent's current docs win.
+- **D156. A drink leaves the Care screen where it is while Decent's video
+  is open.** While the player is open on Care (after a tap on the poster or
+  a moment), a drink starting does not switch to its view:
+  `useDrinkFocus.ts` reads `isCareVideoOpen` (`src/ui/care/videoHold.ts`,
+  set by `CareScreen.tsx` while its player is open) as it reads the
+  barista's typing, and Stop takes the drink's place in the top bar as
+  always. With the video closed, a drink takes the screen as anywhere and
+  Go back returns to Machine care; a shot still takes the screen (D85).
+  Why: the review found that Daily's own steps, a Flush or the wand's rinse
+  started from the top bar, closed the video at the moment the barista was
+  following it, and Go back reopened Care at the poster, the video's place
+  lost, for a view nobody asked for. This changes D146's rule for this one
+  case, as typing already did.

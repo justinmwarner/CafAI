@@ -38,6 +38,7 @@ import { AboutDecaid } from './AboutDecaid.tsx';
 import { AddGrinder, type AddedGrinder } from './AddGrinder.tsx';
 import { addedNote, dye2GrindersUrl } from './addGrinder.ts';
 import { AppearanceSection } from './AppearanceSection.tsx';
+import { CareSection } from './CareSection.tsx';
 import { CoachSourceSection } from './CoachSourceSection.tsx';
 import { useApiKeyView, useCoachRunsOnComputer, useShowsApiKey } from './coachSourceView.ts';
 import { useDecaidVersion } from './decaidVersion.ts';
@@ -574,6 +575,7 @@ export function SettingsScreen() {
         {showsApiKey ? <ApiKeySection /> : null}
         <CoachSettingsSection column={column} />
         <DrinkSettingsSection />
+        <CareSection />
         <AboutSection />
         <LogSection />
       </Stack>

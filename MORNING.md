@@ -1,6 +1,26 @@
 # Good morning: CafAI after your answers (2026-10-04)
 
-**Newest (2026-10-13):** steam, hot water and flush take the screen while
+**Newest (2026-10-15):** the cleaning guide, the first machine care item of
+the gap review (D151-D156, branch `feat/machine-care`, merged into `main`).
+Settings > Machine care > **Cleaning guide** opens Decent's routine one
+routine at a time (Daily, Weekly, Monthly, As needed: your two answers),
+each step with what to do, when, and its moment in Decent's video "How
+often/to clean DE1". Where the 2022 video and Decent's current pages
+differ, the step follows the pages and says so; a review checked every step
+against the quick start and the Forward Flush x5 profile's own notes and
+put four right. YouTube accepts Decaid's user agent, even in Chromium 91,
+but Decaid 0.8.8 for Windows refused to frame the player and opened YouTube
+in the browser instead, so the video plays in place in a browser and on
+Android, and inside Decaid elsewhere each moment is a link to YouTube at
+that time. Nothing loads from YouTube until a tap. One call of mine to
+check (D156): while the video is open, a drink started from the top bar
+leaves the guide on screen rather than closing the video the barista is
+following. On the final code: typecheck, lint, 3831 unit tests, both
+builds and the release zip pass; Playwright passed all 356 tests (8 skipped
+by design); Chromium 91 plays the video in place. Not yet seen on a Decent
+tablet: `docs/HARDWARE_TEST_PLAN.md` section 14.
+
+**Before that (2026-10-13):** steam, hot water and flush take the screen while
 they run (D146-D150, branch `feat/drink-views`, merged into `main`): a dial
 fills toward the time or volume set, with steam rising from milk, water
 filling or the shower screen pouring while the machine works; the machine's

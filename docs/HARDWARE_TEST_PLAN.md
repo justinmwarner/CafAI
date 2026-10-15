@@ -500,6 +500,38 @@ traffic log on (Settings > Log) and share it after the section.
    it is done. Expected: Settings again; after 1, Go back returns to the
    coach.
 
+## 14. Machine care: the cleaning guide's video (D152-D155)
+
+The guide's words need nothing but CafAI; its video is the part only a
+device can settle. Decaid 0.8.8 for Windows would not frame YouTube's
+player (D154): on Android it should play in place, because Android's
+WebView never asks Decaid about a frame's loads. These checks say whether
+it does.
+
+1. **Open it.** Settings > Machine care > **Cleaning guide**. Expected: the
+   Care screen on Daily, the Settings place lit, a poster with a play button
+   beside the steps, and nothing from YouTube yet.
+2. **A moment, on a Decent tablet in Decaid.** Tap **1:48** beside Flush the
+   group head. Expected: YouTube's player plays in place from 1:48, with
+   sound, and Decaid opens no browser. Record what happens if the frame
+   stays empty, shows an error, or a browser opens.
+3. **Another moment.** Tap **0:20** at the top of Daily. Expected: the
+   player starts again there, and 0:20 is marked instead of 1:48.
+4. **Full screen.** The player's own full screen button. Record: does it
+   fill the screen, and does Back (or the button again) return to CafAI?
+5. **Offline.** Turn the tablet's Wi-Fi off and open Care. Expected: every
+   routine's steps show in full; a tap on a moment shows YouTube's own error
+   inside the frame.
+6. **An iPad or a Mac with Decaid** (if you have one). Open Care. Expected:
+   no poster; tapping **16:56** under Monthly opens YouTube at 16:56 in
+   Safari or the YouTube app, and CafAI stays where it was.
+7. **Flush while the video plays** (D156). On Daily, tap **1:48**, then
+   Flush in the top bar with a blind basket in. Expected: Care and the video
+   stay on screen, Flush's place is Stop while it runs, and the flush ends
+   by itself. Then leave Care, come back, and Flush again without opening
+   the video. Expected: the flush view takes the screen, and **Go back**
+   returns to Machine care.
+
 ## Results
 
 | Section | Step | Expected | Observed | Pass? |
@@ -545,6 +577,13 @@ traffic log on (Settings > Log) and share it after the section.
 | 13 | 5 | Flush: the dial's time against the flush time | | |
 | 13 | 6 | Typing keeps Settings | | |
 | 13 | 7 | Go back to Settings, and to the coach | | |
+| 14 | 1 | Care on Daily, Settings lit, the poster, nothing from YouTube | | |
+| 14 | 2 | 1:48 plays in place with sound; no browser opens | | |
+| 14 | 3 | 0:20 starts it again and takes the mark | | |
+| 14 | 4 | Full screen fills the screen; the way back to CafAI | | |
+| 14 | 5 | Offline: the steps in full | | |
+| 14 | 6 | iPad or Mac: no poster; 16:56 opens YouTube at 16:56 | | |
+| 14 | 7 | Flush with the video open keeps Care; without it, the flush view and Go back to Machine care | | |
 
 Send back this table, the saved shot and profile JSON files, the `[CafAI]`
 lines from `/api/v1/webview/logs`, the output of `npm run test:decaid`, and,

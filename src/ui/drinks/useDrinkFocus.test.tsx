@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen } from '@testing-library/react';
 import { formatLocalTimestamp } from '../../../mock/decaid/clock.ts';
 import type { MachineFrame } from '../../api/types.ts';
+import { setCareVideoOpen } from '../care/videoHold.ts';
 import { navigate, useRoute } from '../router.ts';
 import { GUARD_MS } from '../shell/useShotFocus.ts';
 import { createFakeServices, IDLE_TELEMETRY, type FakeServices } from '../testing/fakeServices.ts';
@@ -77,6 +78,35 @@ describe('useDrinkFocus', () => {
     act(() => screen.getByLabelText('Draft').focus());
     send(services, frame('hotWater'));
     expect(window.location.hash).toBe('#/settings');
+  });
+
+  it("stays on Care while Decent's video is open there, and switches from it once the video is closed (D156)", async () => {
+    window.location.hash = '#/care/weekly';
+    await settle();
+    const services = renderHarness();
+    setCareVideoOpen(true);
+    try {
+      send(services, frame('flush'));
+      expect(window.location.hash).toBe('#/care/weekly');
+    } finally {
+      setCareVideoOpen(false);
+    }
+    send(services, frame('idle', 'idle'));
+    send(services, frame('flush'));
+    expect(window.location.hash).toBe('#/flush');
+    await settle();
+    expect(text('back')).toBe('care');
+  });
+
+  it('a video left open on Care holds nothing anywhere else', () => {
+    const services = renderHarness();
+    setCareVideoOpen(true);
+    try {
+      send(services, frame('steam'));
+      expect(window.location.hash).toBe('#/steam');
+    } finally {
+      setCareVideoOpen(false);
+    }
   });
 
   it('does not switch back by itself when the run ends', async () => {

@@ -454,6 +454,8 @@ export function createFakeServices(options: {
   coach?: Partial<CoachState>;
   storage?: Partial<CafaiExport>;
   insideDecaid?: boolean;
+  /** Decaid's platform (HostEnvironment.platform); inside Decaid a Decent tablet's, 'android', unless given. */
+  platform?: string | null;
 } = {}): FakeServices {
   const heartbeat = {
     count: 0,
@@ -464,6 +466,7 @@ export function createFakeServices(options: {
   const host = {
     insideDecaid: options.insideDecaid ?? false,
     hostVersion: options.insideDecaid ? '0.9.0' : null,
+    platform: options.platform !== undefined ? options.platform : options.insideDecaid ? 'android' : null,
     settingsUrl: 'http://localhost:8080/api/v1/plugins/settings.reaplugin/ui?backName=CafAI',
     exits: 0,
     exitToSkinSwitcher() {

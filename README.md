@@ -66,6 +66,8 @@ From the built-in demo (`npm run demo`, no machine needed);
 | ![The shot view on a tablet: pressure, flow, weight and weight flow over a 60 s Blooming Espresso shot](docs/images/tablet-shot.png) | ![History on a tablet: Kiambu AA's versions v4 (active), v3 (undone) and v2, each with its change and shots](docs/images/tablet-history.png) |
 | **Settings > Appearance: Light, in Matcha** | **On a phone: the coach and the shot** |
 | ![Settings on a tablet in the Light mode with the Matcha tint: the mode, seven tints and a custom hue](docs/images/tablet-settings.png) | <img src="docs/images/phone-coach.png" width="49%" alt="The coach on a phone, proposing one change"> <img src="docs/images/phone-shot.png" width="49%" alt="The shot graph on a phone"> |
+| **Settings > Machine care: Decent's cleaning routine, by how often** | |
+| ![Machine care on a tablet: the Weekly routine's steps, each with its time in Decent's video, beside the video's card](docs/images/tablet-care.png) | |
 
 ## What you need
 
@@ -233,13 +235,14 @@ with **Retry**; it never loads anything on the machine by itself.
   coach saying it is watching. When the shot's card reaches the chat, the
   coach comes back by itself; the top bar and Stop never move. Steam, hot
   water and flush take the screen the same way while they run, whoever
-  started them: a dial fills toward the time or volume set (steam rising
-  from milk, water filling, the shower screen pouring, still under reduced
-  motion), with the machine's readings (steam temperature, pressure and
-  flow; hot water's flow, the scale and the time; the flush's water, flow
-  and group temperature), a trace of the run, and the drink's own settings,
-  held while it runs and yours to change the moment it stops. The view stays
-  with its result; **Go back** returns to where you were. Problems
+  started them (unless you are typing, or following Decent's cleaning video
+  in Settings > Machine care): a dial fills toward the time or volume set
+  (steam rising from milk, water filling, the shower screen pouring, still
+  under reduced motion), with the machine's readings (steam temperature,
+  pressure and flow; hot water's flow, the scale and the time; the flush's
+  water, flow and group temperature), a trace of the run, and the drink's
+  own settings, held while it runs and yours to change the moment it stops.
+  The view stays with its result; **Go back** returns to where you were. Problems
   (not connected, Decaid out of reach, water to refill, an error the machine
   or a device reports, a failed command, Decaid set to leave stopping shots
   to the skin, a scale that dropped) show in one slim alert under the top
@@ -325,6 +328,22 @@ with **Retry**; it never loads anything on the machine by itself.
   answers, the fields show a dash, and a write that fails says why under
   its setting. Steam that is off in Decaid (below 135 °C) reads "Off in
   Decaid"; turning it on or off stays in Decaid.
+- **Settings > Machine care**: **Cleaning guide** opens Decent's routine for
+  the DE1, one at a time: **Daily** (purge the wand, flush the group head,
+  wipe the shower screen, rinse the wand), **Weekly** (detergent, Rinza, the
+  tank and drip tray, the intake filter), **Monthly** (the group head's
+  parts, the gasket) and **As needed** (descaling for your water, a clogged
+  steam tip, emptying the machine to move it). Each step says what to do and
+  when, with its moment in Decent's video "How often/to clean DE1"; where
+  the 2022 video and Decent's current pages differ, the step follows the
+  pages and says so. The video plays in place in a browser and on Decent's
+  tablets; inside Decaid on Windows, a Mac or an iPad, each moment opens
+  YouTube at that time instead (Decaid would not let it play in place).
+  While the video is open, a drink you start (the flush a step asks for,
+  say) leaves the guide on screen rather than taking it over. The steps are
+  CafAI's own words and work offline. CafAI cannot start the DE1's
+  Clean, Descale or Transport yet; the steps that need them say to use
+  streamline, the skin Decaid comes with, for now.
 - **Settings > About**: CafAI's version, and the Decaid you run next to the
   one CafAI was checked against ("Decaid 0.9.0 (CafAI was verified with
   0.8.8)", with a note when yours is older); anything Decaid sent that
@@ -442,6 +461,12 @@ troubleshooting.
   as enjoyment, and CafAI's own extras), which Decaid may upload to
   Visualizer if you set that up. Notes you wrote yourself are never
   overwritten.
+- Settings > Machine care loads nothing from YouTube until you tap play or
+  one of the video's moments. Then YouTube's player comes from
+  `youtube-nocookie.com` (YouTube's privacy-enhanced mode), and YouTube,
+  that is Google, sees your device's address and that the video played.
+  Inside Decaid on Windows, a Mac or an iPad a moment opens YouTube in your
+  browser instead.
 - With an API key, calls go straight from the tablet to `api.anthropic.com`.
 - With Claude on my computer, calls go from the tablet to CafAI Bridge on
   your computer, over your network in plain HTTP with the pairing code
@@ -767,7 +792,7 @@ General, "Read repository contents and packages permissions") can stay.
 | `src/storage` | IndexedDB repositories, the key store (and the key's optional copy in Decaid), where the coach runs, export/import, mirror to Decaid's KV store |
 | `src/traffic` | The traffic log behind Settings > Log: the recorder, what it never keeps (the key, the pairing code, image data), and the text Share, Email and Copy send |
 | `src/app` | The coach engine, services, app composition |
-| `src/ui` | Shell, machine row, stats card and alert, live graph, chat surface, history and settings |
+| `src/ui` | Shell, machine row, stats card and alert, live graph, chat surface, history, settings and the cleaning guide |
 | `mock` | MSW mocks of Decaid, Claude and CafAI Bridge, the demo, and fixtures |
 | `bridge` | CafAI Bridge: the coach on your own Claude Code ([bridge/README.md](bridge/README.md)) |
 | `contract/decaid` | Decaid's specs at the pinned release, the types generated from them, and the checks `npm run typecheck` runs, with the recorded spec errors; Decaid's agent skill and API notes at the same release |
