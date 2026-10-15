@@ -307,6 +307,11 @@ const ROUTES: ReadonlyArray<[Method, RegExp]> = [
   ['GET', /^\/api\/v1\/bean-batches$/],
   ['GET', /^\/api\/v1\/bean-batches\?includeArchived=true$/],
   ['PUT', /^\/api\/v1\/bean-batches\/[^/]+$/],
+  ['GET', /^\/api\/v1\/presence\/settings$/],
+  ['POST', /^\/api\/v1\/presence\/settings$/],
+  ['POST', /^\/api\/v1\/presence\/schedules$/],
+  ['PUT', /^\/api\/v1\/presence\/schedules\/[^/?]+$/],
+  ['DELETE', /^\/api\/v1\/presence\/schedules\/[^/?]+$/],
   ['GET', /^\/api\/v1\/store\/cafai$/],
   ['GET', /^\/api\/v1\/store\/cafai\?full=1$/],
   ['GET', /^\/api\/v1\/store\/cafai\/meta$/],
@@ -440,6 +445,22 @@ describe('the mock against the spec', () => {
       if (batch) {
         await attempt(() => recording(`${ORIGIN}/api/v1/bean-batches/${encodeURIComponent(batch.id)}`, { method: 'PUT', body: JSON.stringify({ archived: true }) }));
       }
+    }
+
+    // Settings > Sleep and wake: the settings, the minutes changed, the idle sleep on with no timeout, and a schedule
+    // whose keep-awake window began five minutes ago, so the settings carry its end (a local time), changed and deleted.
+    await attempt(() => client.getPresenceSettings());
+    await attempt(() => client.updatePresenceSettings({ sleepTimeoutMinutes: 45 }));
+    await attempt(() => client.updatePresenceSettings({ userPresenceEnabled: true, sleepTimeoutMinutes: 0 }));
+    const began = new Date(Date.now() - 5 * 60_000);
+    const time = [began.getHours(), began.getMinutes()].map((part) => String(part).padStart(2, '0')).join(':');
+    const schedule = await attempt(() => client.addWakeSchedule({ time, daysOfWeek: [], enabled: true, keepAwakeFor: 45 }));
+    if (schedule) {
+      const awake = await attempt(() => client.getPresenceSettings());
+      expect(awake?.keepAwakeUntil, 'the end of the keep-awake window running now').toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000$/);
+      await attempt(() => client.updateWakeSchedule(schedule.id, { enabled: false }));
+      await attempt(() => client.updateWakeSchedule(schedule.id, { keepAwakeFor: null }));
+      await attempt(() => client.deleteWakeSchedule(schedule.id));
     }
 
     await attempt(() => client.kv.getAll('cafai'));

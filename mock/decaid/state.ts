@@ -20,12 +20,14 @@ import type {
   MachineSnapshot,
   PaginatedShots,
   PluginInfo,
+  PresenceSettings,
   ScaleWsFrame,
   ShotRecord,
   ShotRecordSummary,
   ShotSettings,
   ShotStateEvent,
   TimeToReadyFrame,
+  WakeSchedule,
   WaterLevels,
   WeightSnapshot,
   WireProfile,
@@ -48,6 +50,19 @@ import { createGrinderRecord, seedGrinders, sortGrinders, updateGrinderRecord, t
 import { deepMergeJson, isPlainObject, type JsonObject } from './json.ts';
 import { createMachineProfile, DEFAULT_UPLOAD_MS, idleTemperature } from './machine.ts';
 import { ALL_PLUGIN_IDS, listPluginInfos, PLUGIN_IDS } from './plugins.ts';
+import {
+  activeKeepAwakeOccurrence,
+  applyPresencePatch,
+  createWakeScheduleRecord,
+  keepAwakeUntilText,
+  occurrenceKey,
+  presenceSettingsJson,
+  seedPresence,
+  updateWakeScheduleRecord,
+  wakeScheduleJson,
+  type KeepAwakeOccurrence,
+  type PresenceSeed,
+} from './presence.ts';
 import { buildProfileRecord, normalizeProfile, profileHash, type DecaidProfileRecord } from './profiles.ts';
 import { normalizeWorkflow, validateWorkflowPatch } from './workflow.ts';
 
@@ -78,6 +93,8 @@ export interface MockDecaidOptions {
   seedGrinders?: boolean;
   /** Seed two beans with a batch each, and DYE2's two recent setups for the first (default true). */
   seedBeans?: boolean;
+  /** Decaid's sleep and wake settings and wake schedules at the start (presence.ts); default Decaid's own: on, 30 minutes, no schedules. */
+  presence?: PresenceSeed;
   /**
    * How long the DE1 takes to take a new profile, in wall-clock ms (default
    * 800; not scaled by the player's speed). 0 uploads at once.
@@ -195,6 +212,22 @@ export interface MockDecaid {
   setSettings(patch: Partial<DecaidSettings>): void;
   /** POST /settings: merges only the keys Decaid's handler recognises, validated as it does; throws 400/500 on a bad one. */
   applySettingsPatch(body: unknown): void;
+
+  // Sleep and wake (Decaid's presence settings, presence.ts)
+  /** GET /presence/settings: keepAwakeUntil from the data clock, null without a machine. */
+  getPresenceSettings(): PresenceSettings;
+  /** POST /presence/settings: 400 for a body that is not an object or a field of the wrong type; answers the two settings as saved. */
+  updatePresenceSettings(body: unknown): Pick<PresenceSettings, 'userPresenceEnabled' | 'sleepTimeoutMinutes'>;
+  /** GET /presence/schedules (CafAI reads them with the settings). */
+  listWakeSchedules(): WakeSchedule[];
+  /** One schedule, or 404 `{error, id}`: not a Decaid route, but how PUT looks the id up before it reads the body. */
+  getWakeSchedule(id: string): WakeSchedule;
+  /** POST /presence/schedules: a new UUID, added last; 400 for a value out of range, 500 for a body Decaid's casts refuse. */
+  addWakeSchedule(body: unknown): WakeSchedule;
+  /** PUT /presence/schedules/{id}: only the keys given change; 404 for an unknown id. */
+  updateWakeSchedule(id: string, body: unknown): WakeSchedule;
+  /** DELETE /presence/schedules/{id}: 404 for an unknown id. */
+  deleteWakeSchedule(id: string): { deleted: string };
 
   // Plugins (D3)
   listPlugins(): PluginInfo[];
@@ -440,6 +473,9 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
     preferredGrinderDeviceId: null,
     ...options.settings,
   };
+  let presence = seedPresence(options.presence);
+  /** The keep-awake runs the machine went to sleep in, by schedule and start (presence_controller.dart:46, 167-175). */
+  const sleptThrough = new Map<string, KeepAwakeOccurrence>();
   const enjoymentScale = options.enjoymentScale === 100 ? 100 : 10;
   const loadedPlugins = new Set(options.loadedPlugins ?? ALL_PLUGIN_IDS);
   const slowWorkflowMs = options.slowWorkflowMs !== undefined && Number.isFinite(options.slowWorkflowMs) ? Math.max(0, options.slowWorkflowMs) : null;
@@ -607,6 +643,33 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
     return box;
   }
 
+  /** PUT and DELETE look the schedule up first (presence_handler.dart:193-202, 278-287). */
+  function scheduleIndex(id: string): number {
+    const index = presence.schedules.findIndex((schedule) => schedule.id === id);
+    if (index === -1) throw new MockHttpError(404, { error: 'Schedule not found', id });
+    return index;
+  }
+
+  /**
+   * PresenceController._activeKeepAwakeOccurrence (presence_controller.dart:58-69,
+   * 210-227): the keep-awake run going on now, while a machine is connected,
+   * unless the machine went to sleep in it. A run that is over, or whose
+   * schedule is gone, is forgotten as Decaid forgets it.
+   */
+  function keepAwakeOccurrence(): KeepAwakeOccurrence | null {
+    if (!machineConnected) return null;
+    const now = clock.now();
+    const occurrence = activeKeepAwakeOccurrence(presence.schedules, now);
+    const key = occurrence ? occurrenceKey(occurrence) : null;
+    for (const [slept, past] of sleptThrough) {
+      const gone = !presence.schedules.some((schedule) => schedule.id === past.scheduleId);
+      if (gone || (slept !== key && now >= past.end)) sleptThrough.delete(slept);
+    }
+    if (!occurrence || key === null || !sleptThrough.has(key)) return occurrence;
+    sleptThrough.set(key, occurrence);
+    return null;
+  }
+
   const mock: MockDecaid = {
     clock,
 
@@ -637,8 +700,15 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
     },
     getMachineSnapshot: () => clone(snapshot),
     setMachineSnapshot(next) {
+      const wasAsleep = snapshot.state.state === 'sleeping';
       snapshot = clone(next);
-      if (machineConnected) emit('machine', snapshot);
+      if (!machineConnected) return;
+      // A machine that goes to sleep in a keep-awake run ends it (presence_controller.dart:167-175).
+      if (snapshot.state.state === 'sleeping' && !wasAsleep) {
+        const occurrence = keepAwakeOccurrence();
+        if (occurrence) sleptThrough.set(occurrenceKey(occurrence), occurrence);
+      }
+      emit('machine', snapshot);
     },
     renamedReading: options.renamedReading ? Object.freeze({ ...options.renamedReading }) : null,
     getMachineInfo() {
@@ -661,7 +731,9 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
     },
     heartbeat() {
       heartbeatCount += 1;
-      return { timeout: machineConnected ? 1800 : -1 };
+      // The idle sleep restarted: its minutes in seconds, or -1 when it is off or there is no machine (presence_controller.dart:104-115, 462-469).
+      const { userPresenceEnabled, sleepTimeoutMinutes } = presence;
+      return { timeout: machineConnected && userPresenceEnabled && sleepTimeoutMinutes > 0 ? sleepTimeoutMinutes * 60 : -1 };
     },
     get heartbeatCount() {
       return heartbeatCount;
@@ -813,6 +885,34 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
         patch.themeMode = value;
       }
       settings = { ...settings, ...patch };
+    },
+
+    // ---- sleep and wake -------------------------------------------------------------------
+    getPresenceSettings() {
+      const occurrence = keepAwakeOccurrence();
+      return presenceSettingsJson(presence, occurrence ? keepAwakeUntilText(occurrence) : null);
+    },
+    updatePresenceSettings(body) {
+      presence = applyPresencePatch(presence, body);
+      return { userPresenceEnabled: presence.userPresenceEnabled, sleepTimeoutMinutes: presence.sleepTimeoutMinutes };
+    },
+    listWakeSchedules: () => presence.schedules.map(wakeScheduleJson),
+    getWakeSchedule: (id) => wakeScheduleJson(presence.schedules[scheduleIndex(id)]!),
+    addWakeSchedule(body) {
+      const schedule = createWakeScheduleRecord(body, newId());
+      presence = { ...presence, schedules: [...presence.schedules, schedule] };
+      return wakeScheduleJson(schedule);
+    },
+    updateWakeSchedule(id, body) {
+      const index = scheduleIndex(id);
+      const updated = updateWakeScheduleRecord(presence.schedules[index]!, body);
+      presence = { ...presence, schedules: presence.schedules.map((schedule, at) => (at === index ? updated : schedule)) };
+      return wakeScheduleJson(updated);
+    },
+    deleteWakeSchedule(id) {
+      const index = scheduleIndex(id);
+      presence = { ...presence, schedules: presence.schedules.filter((_, at) => at !== index) };
+      return { deleted: id };
     },
 
     // ---- plugins ----------------------------------------------------------------------

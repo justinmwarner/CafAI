@@ -94,6 +94,15 @@ describeDecaid('read', ({ url }) => {
     expect(live.problems()).toEqual([]);
   });
 
+  it('GET /api/v1/presence/settings: the idle sleep and the wake schedules, as Settings > Sleep and wake reads them', async () => {
+    const presence = await live.client.getPresenceSettings();
+    expect(presence.sleepTimeoutMinutes, 'minutes, 0-240').toBeGreaterThanOrEqual(0);
+    expect(presence.sleepTimeoutMinutes, 'minutes, 0-240').toBeLessThanOrEqual(240);
+    expect(presence, 'keepAwakeUntil, null without a keep-awake window').toHaveProperty('keepAwakeUntil');
+    console.log(`Sleep and wake: idle sleep ${presence.userPresenceEnabled ? `on, ${presence.sleepTimeoutMinutes} min` : 'off'}, ${presence.schedules.length} wake schedules`);
+    expect(live.problems()).toEqual([]);
+  });
+
   it('GET /api/v1/machine/capabilities', async () => {
     const capabilities = await machineCall(() => live.client.getCapabilities());
     if (capabilities) expect(Array.isArray(capabilities)).toBe(true);

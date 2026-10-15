@@ -92,3 +92,20 @@ export type _grinder_create = Assert<
 
 /** client.ts updateSettings reads the settings back after a 200. */
 export type _settings = Assert<Exactly<Lacks<'/api/v1/settings', 'post', 200, 'saved'>, never>>;
+
+/** client.ts updatePresenceSettings: 200 is the two settings as saved. */
+export type _presence = Assert<Exactly<Lacks<'/api/v1/presence/settings', 'post', 200, 'saved'>, never>>;
+
+/** client.ts addWakeSchedule: 201 is the schedule as Decaid stored it, with the id Decaid gave it. */
+export type _wake_schedule_create = Assert<Exactly<Lacks<'/api/v1/presence/schedules', 'post', 201, 'the added schedule'>, never>>;
+
+/** client.ts updateWakeSchedule and deleteWakeSchedule: a 404 is a schedule deleted elsewhere, or already gone. */
+export type _wake_schedule = Assert<
+  Exactly<
+    | Lacks<'/api/v1/presence/schedules/{id}', 'put', 200, 'the changed schedule'>
+    | Lacks<'/api/v1/presence/schedules/{id}', 'put', 404, 'deleted elsewhere'>
+    | Lacks<'/api/v1/presence/schedules/{id}', 'delete', 200, 'deleted'>
+    | Lacks<'/api/v1/presence/schedules/{id}', 'delete', 404, 'already gone'>,
+    never
+  >
+>;

@@ -36,6 +36,8 @@ const TAG = { versionId: 'cafai-contract-test', bagId: 'cafai-contract-test' };
  * suite's own, the same one every run, and hiding it hides nothing else.
  */
 const TEST_TARGET_G = 41.5;
+/** The test wake schedule's time, at weekends only and never enabled. */
+const TEST_WAKE_TIME = '04:56';
 /** From a disconnect to Decaid answering that the machine is not connected. */
 const DISCONNECT_MS = 15_000;
 /** Decaid gives a connect up to 60 s on Linux (connection_manager.dart:587-591 at aab5f93). */
@@ -201,6 +203,39 @@ describeDecaid('write', ({ url }) => {
       expect((await listGrinders(live.client, { fetch: live.fetch, includeArchived: true })).map((g) => g.id), 'after deleting').not.toContain(added.id);
       expect(await getGrinder(live.client, added.id, { fetch: live.fetch }), 'read by its id after deleting').toBeNull();
     }
+    expect(live.problems()).toEqual([]);
+  });
+
+  it('sleep and wake: the settings changed and put back, a wake schedule added, changed and deleted', async () => {
+    const client = live.client;
+    const before = await client.getPresenceSettings();
+    const saved = { userPresenceEnabled: before.userPresenceEnabled, sleepTimeoutMinutes: before.sleepTimeoutMinutes };
+    const putBack = undo.add('the sleep and wake settings', async () => {
+      const after = await client.updatePresenceSettings(saved);
+      if (after.userPresenceEnabled !== saved.userPresenceEnabled || after.sleepTimeoutMinutes !== saved.sleepTimeoutMinutes) {
+        throw new Error(`Decaid kept ${JSON.stringify(after)}, not ${JSON.stringify(saved)}.`);
+      }
+    });
+    expect(await client.updatePresenceSettings({ sleepTimeoutMinutes: 999 }), 'minutes clamped to 240').toEqual({ ...saved, sleepTimeoutMinutes: 240 });
+    expect(await client.updatePresenceSettings({ userPresenceEnabled: true, sleepTimeoutMinutes: 0 }), 'on, never idle').toEqual({
+      userPresenceEnabled: true,
+      sleepTimeoutMinutes: 0,
+    });
+
+    // Disabled from the start, so it never wakes the simulated machine nor holds off its sleep.
+    const added = await client.addWakeSchedule({ time: TEST_WAKE_TIME, daysOfWeek: [7, 6], enabled: false, keepAwakeFor: 45 });
+    const deleteNow = undo.add('the test wake schedule', () => client.deleteWakeSchedule(added.id));
+    expect(added, 'the schedule Decaid stored').toEqual({ id: expect.any(String), time: TEST_WAKE_TIME, daysOfWeek: [6, 7], enabled: false, keepAwakeFor: 45 });
+    const changed = await client.updateWakeSchedule(added.id, { keepAwakeFor: null });
+    expect(changed, 'keepAwakeFor cleared').toEqual({ id: added.id, time: TEST_WAKE_TIME, daysOfWeek: [6, 7], enabled: false });
+    expect((await client.getPresenceSettings()).schedules, 'with the settings').toContainEqual(changed);
+
+    await deleteNow();
+    expect((await client.getPresenceSettings()).schedules.map((schedule) => schedule.id), 'after deleting').not.toContain(added.id);
+    expect(await client.deleteWakeSchedule(added.id).then(() => null, (error: unknown) => error), 'deleted again').toMatchObject({ status: 404 });
+
+    await putBack();
+    expect(await client.getPresenceSettings(), 'after putting back').toMatchObject(saved);
     expect(live.problems()).toEqual([]);
   });
 

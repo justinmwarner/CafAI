@@ -49,6 +49,8 @@ every field as optional, although the `toJson` methods always send them.
 | `ShotRecord`, `ShotRecordSummary` | REST 7426, 7514 | `models/data/shot_record.dart:50-76` | `id`, `timestamp`, `createdAt`, `updatedAt`, `workflow`; `measurements` on `ShotRecord` |
 | `ShotSnapshot` | REST 7559 | `models/data/shot_snapshot.dart:23-28` | `machine`, `scale`, `volume` |
 | `POST /machine/heartbeat` reply | REST 4349 | `services/webserver/presence_handler.dart:27` | `timeout` |
+| `GET /presence/settings` reply | REST 4387 | `services/webserver/presence_handler.dart:44-49` | `userPresenceEnabled`, `sleepTimeoutMinutes`, `keepAwakeUntil` (nullable), `schedules` |
+| `POST /presence/settings` reply | REST 4459 | `services/webserver/presence_handler.dart:98-101` | `userPresenceEnabled`, `sleepTimeoutMinutes` |
 | `PluginManifest` (`GET /plugins`) | REST 7630 | `plugins/plugin_manifest.dart:314-327`, `services/webserver/plugins_handler.dart:24-29` | `id`, `name`, `author`, `description`, `version`, `apiVersion`, `permissions`, `drivers`, `settings`, `api` (nullable), `loaded`, `autoLoad` |
 
 `Profile` is also the request schema. If the request should stay lenient
@@ -120,11 +122,13 @@ zone-less, `DateTime.toIso8601String()` on a local time, for example
 `updatedAt` (`models/data/profile_record.dart:145-146`), `ShotRecord.timestamp`
 (`models/data/shot_record.dart:53`), bean and batch dates
 (`models/data/bean.dart:117-118, 296-314`), grinder dates
-(`models/data/grinder.dart:128-129`). A validator with formats on rejects
-every one. Either send UTC (a change for skins that read local time) or
-drop `format: date-time` from these and say "local time, no zone" (a
-`pattern` keeps them checkable). Shot `createdAt`/`updatedAt` and the
-devices timestamps are UTC with `Z` and can keep the format.
+(`models/data/grinder.dart:128-129`), `keepAwakeUntil` in
+`GET /presence/settings` (`services/webserver/presence_handler.dart:47`). A
+validator with formats on rejects every one. Either send UTC (a change for
+skins that read local time) or drop `format: date-time` from these and say
+"local time, no zone" (a `pattern` keeps them checkable). Shot
+`createdAt`/`updatedAt` and the devices timestamps are UTC with `Z` and can
+keep the format.
 
 ### 8. Statuses the handlers answer that the spec lacks
 
@@ -145,6 +149,21 @@ devices timestamps are UTC with `Z` and can keep the format.
 - `POST /settings` (REST 1461) answers 400 `{message}` for an unknown
   `gatewayMode` or `themeMode` (`services/webserver/settings_handler.dart:76-84, 300-311`)
   and 200 `null` otherwise (`:314`).
+- `POST /presence/schedules` (REST 4503) documents 201 and 500 only, and
+  `PUT /presence/schedules/{id}` (REST 4576) 200, 404 and 500. Both answer
+  400 `{error}` for a time, a weekday or a `keepAwakeFor` out of range
+  (`services/webserver/presence_handler.dart:137-161, 221-244`). The 400's
+  own text says 0 clears `keepAwakeFor` (`:139, 242`), and both routes take
+  0 as none (`:245-247`, `models/wake_schedule.dart:30-32`), which the
+  request schemas' `minimum: 1` rules out.
+- Neither schedule route checks the body itself: one that is not a JSON
+  object, malformed JSON, or a field of the wrong type (`"enabled": "yes"`,
+  `"time": 630`, no `time` and no `hour`) throws from a cast into the
+  catch-all, which answers 500 with Dart's message
+  (`services/webserver/presence_handler.dart:134-169, 185-188, 209-257, 270-273`).
+  `POST /presence/settings` answers such bodies 400 (`:63-89, 104-105`); a
+  400 here too, documented, would let a skin tell a bad request from a
+  failure.
 
 ### 9. `WorkflowPatch` needs patch schemas
 
@@ -161,6 +180,10 @@ and `RinseDataPatch`.
   `text/plain` lines (`services/webserver/webview_logs_handler.dart:20-22`).
 - WS `DevicesState` (885) does not list `charging`, which battery platforms
   send (`services/webserver/devices_handler.dart:156`).
+- `POST /presence/settings` (REST 4413) says it "Returns the full settings
+  after update"; it answers only `userPresenceEnabled` and
+  `sleepTimeoutMinutes` (`services/webserver/presence_handler.dart:98-101`),
+  as its reply schema says.
 - `POST /machine/shotSettings` (REST 434, schema 6615) needs every field:
   `De1ShotSettings.fromJson` throws on a missing one
   (`models/device/de1_interface.dart:160-170`), so the schema wants a
@@ -214,7 +237,8 @@ and `RinseDataPatch`.
      sentence on local time.
    - Statuses: 500 on the machine routes and on tare, 409 and 504 on
      `POST /machine/profile`, the 500 for an unknown state name, the 400 on
-     `POST /settings`.
+     `POST /settings`, the 400 on `POST` and `PUT /presence/schedules` (and
+     400 rather than 500 for a body they cannot read).
    - `HotWaterDataPatch`, `RinseDataPatch` in `WorkflowPatch`.
    - `text/plain` for `GET /webview/logs`; `required` for `ShotSettings` as a request.
 2. `assets/api/websocket_v1.yml`

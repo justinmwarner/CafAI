@@ -12,7 +12,9 @@
  * fresh, as after a Decaid restart: machine and scale links, frames, the shot
  * player, faults and the request log. So a test can empty CafAI's own browser
  * storage, reload, and watch CafAI restore itself from the backup
- * (e2e/restore.spec.ts).
+ * (e2e/restore.spec.ts). Decaid's own settings are not kept either (GET
+ * /api/v1/settings, and the sleep and wake settings with their schedules), nor
+ * the grinder library: each load starts from the mock's defaults and seeds.
  *
  * The snapshot lives in localStorage under one key, `cafai-mock:store`:
  * - it survives reloads, navigation and other pages of the same browser

@@ -2,7 +2,8 @@
  * REST replies CafAI reads: Diff<the spec's reply, CafAI's type>, which must
  * equal the exceptions recorded in drift.ts. Covers every reply in
  * docs/audit/2026-10-09/cafai.md section 1.2 and section 1.6, and the ones
- * the Decaid features read (settings, plugins, beans, batches).
+ * the Decaid features read (settings, plugins, beans, batches, and the sleep
+ * and wake settings with their schedules).
  */
 import type { Assert, Diff, Exactly, Res, Rest } from '../helpers.ts';
 import type * as X from '../drift.ts';
@@ -46,6 +47,16 @@ export type _batches = Assert<Exactly<Diff<{ list: Res<'/api/v1/beans/{beanId}/b
 /** client.ts listAllBatches: every batch in one read, for the bean card (6.1). */
 export type _all_batches = Assert<Exactly<Diff<{ list: Res<'/api/v1/bean-batches', 'get'> }, { list: C.BeanBatch[] }>, X.BatchRead<'list[].'>>>;
 export type _batch_create = Assert<Exactly<Diff<Res<'/api/v1/beans/{beanId}/batches', 'post', 201>, C.BeanBatch>, X.BatchRead>>;
+
+// ---- Sleep and wake (presence) ----------------------------------------------------------------------
+/** client.ts getPresenceSettings: the schedules come with the settings, so CafAI never reads GET /presence/schedules. */
+export type _presence = Assert<Exactly<Diff<Res<'/api/v1/presence/settings', 'get'>, C.PresenceSettings>, X.PresenceRead>>;
+/** client.ts updatePresenceSettings: the two settings as Decaid saved them. */
+export type _presence_update = Assert<
+  Exactly<Diff<Res<'/api/v1/presence/settings', 'post'>, Awaited<ReturnType<C.DecaidClient['updatePresenceSettings']>>>, X.PresenceSavedRead>
+>;
+export type _wake_schedule_create = Assert<Exactly<Diff<Res<'/api/v1/presence/schedules', 'post', 201>, C.WakeSchedule>, X.WakeScheduleRead>>;
+export type _wake_schedule_update = Assert<Exactly<Diff<Res<'/api/v1/presence/schedules/{id}', 'put'>, C.WakeSchedule>, X.WakeScheduleRead>>;
 
 // ---- KV store and errors --------------------------------------------------------------------------
 /** kv.ts reads the namespace as keys (string[]) or, with ?full=1, as a map of any JSON. */
