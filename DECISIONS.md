@@ -2546,7 +2546,7 @@ Numbered D-TDS-n until the merge numbers them from D162 on.
   not, as in the composer. The cell takes the focus back only when a
   keyboard opened the field, so no focus ring lands on it after a tap. Why:
   Add a grinder's steps are the model (the decimal keyboard, the comma, Save
-  and the error under the field); a blur that saved, as the drink steppers'
+  and the error under the field); a blur that saved, as a drink stepper's
   does, would race the tap on Save and keep half-typed numbers.
 - **D-TDS-4. Both go to the shot's record through the shot write queue.**
   `drinkTds` and `drinkEy` go in the same `PUT /api/v1/shots/{id}` as the
@@ -2613,5 +2613,7 @@ Numbered D-TDS-n until the merge numbers them from D162 on.
 - **D-TDS-9. The scripted coach says what it heard.** A reply to a turn
   that carries the event starts "Noted: TDS 9.25 %, EY 20.8 %." in the terse
   voice (ENGINE_PROTOCOL rule 0b), the decision unchanged; the demo voice
-  says it in full, doubts an EY over 30 %, and names no taste. Why: mock
-  mode, the demo and the e2e can then see a late reading reach the coach.
+  says it in full, doubts an EY over 30 %, and names no taste. The demo's
+  last shot carries a reading (TDS 9.10 %, EY 20.4 %), untold until the
+  viewer answers its open question (docs/DEMO.md). Why: mock mode, the demo
+  and the e2e can then see a reading reach the coach.
