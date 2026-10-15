@@ -406,3 +406,38 @@ describe("buildSystemPrompt: the barista's verdict (D126)", () => {
     expect(loopOf(prompt)).toContain('Their verdict outranks the numbers: never contradict it or explain their taste to them');
   });
 });
+
+describe('buildSystemPrompt: a refractometer reading (D-TDS-6, D-TDS-7)', () => {
+  const section = prompt.slice(prompt.indexOf('# A refractometer reading'), prompt.indexOf('# Coaching heuristics'));
+
+  it('documents the reading event: the TDS, the EY worked out from the card, null for none, and when it comes', () => {
+    const line = loopOf(prompt)
+      .split('\n')
+      .find((l) => l.includes(EVENT.shotMeasured))!;
+    expect(line).toMatch(/^10\. Measured\./);
+    expect(line).toContain('{"shotId":...,"tdsPct":number|null,"eyPct":number|null,"doseG":number|null,"yieldG":number|null}');
+    expect(line).toContain('TDS x yieldG / doseG');
+    expect(line).toContain('tdsPct null means the user removed the reading');
+    expect(line).toContain('often after you have proposed a change');
+  });
+
+  it('says what TDS and EY are, that the barista measured the TDS, and how far to trust them', () => {
+    expect(section).toContain('TDS (total dissolved solids) is the share of the drink that is dissolved coffee');
+    expect(section).toContain('EY (extraction yield) is the share of the dose that ended up in the cup');
+    expect(section).toContain('The barista measures the TDS; CafAI works out the EY.');
+    expect(section).toMatch(/Trust it as a measurement with an error of its own/);
+    expect(section).toMatch(/above 30 % is more than coffee can give/);
+  });
+
+  it('keeps the taste the barista’s: EY is no taste and no target, and the verdict outranks it (D127)', () => {
+    expect(section).toContain('It is a number about extraction, not a taste.');
+    expect(section).toContain('never hold up a number as the one to aim for');
+    expect(section).toContain('their verdict and their words outrank it');
+    // No flavour words: the section explains the measurement, never the cup.
+    expect(section).not.toMatch(/\b(sweet|sour|bitter|acid|body|fruity|chocolate)/i);
+  });
+
+  it('leaves a proposal already made alone when a reading comes late', () => {
+    expect(section).toContain('does not reopen the proposal');
+  });
+});

@@ -359,6 +359,14 @@ export interface CoachController {
    */
   rateShot(shotId: string, verdict: ShotVerdict): Promise<void>;
   /**
+   * The barista's TDS from a refractometer on a shot's card, in % (D-TDS-1),
+   * or null to remove it. The card and the shot's iteration keep it with the
+   * EY CafAI works out from the card's dose and yield; both go to the shot's
+   * record in Decaid (drinkTds, drinkEy); the coach hears it with the next
+   * turn it is sent. A TDS outside 0.01-25 % is ignored.
+   */
+  setShotTds(shotId: string, tdsPct: number | null): Promise<void>;
+  /**
    * The bean card (6.1): fill the bag from a batch of Decaid's bean library,
    * link it, and start the coach's intake with it.
    */

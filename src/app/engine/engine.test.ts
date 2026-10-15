@@ -2268,6 +2268,195 @@ describe('coach engine', () => {
   });
 
   // -------------------------------------------------------------------------
+  // D-TDS: the barista's refractometer reading, and the EY CafAI works out
+  // -------------------------------------------------------------------------
+
+  describe('a TDS reading on a shot (D-TDS)', () => {
+    /** The shot's iteration as CafAI stored it. */
+    const iterationOf = async (shotId: string) => (await storage.iterations.listAll()).find((i) => i.shotId === shotId);
+    /** The reading event as the coach hears it, for the fake coach's summary: 18 g in, 50.2 g out. */
+    const measured = (tdsPct: number | null, eyPct: number | null) =>
+      text(`[event:shot_measured]\n${JSON.stringify({ shotId: 'shot-1', tdsPct, eyPct, doseG: 18, yieldG: 50.2 })}`);
+
+    it("keeps it on the card and the shot's iteration with the EY from the card's dose and yield, and writes both to Decaid's record", async () => {
+      await throughShot();
+      const turns = requests.length;
+      await engine.setShotTds('shot-1', 8.5);
+      // 8.5 % x 50.2 g / 18 g = 23.7 %: the card's own numbers, so EY = TDS x ratio.
+      expect(cardOf('shot-1')!.summary).toMatchObject({ doseG: 18, yieldG: 50.2, tdsPct: 8.5, eyPct: 23.7 });
+      expect((await iterationOf('shot-1'))!.summary).toMatchObject({ tdsPct: 8.5, eyPct: 23.7 });
+      await vi.waitFor(() => expect(callsOf('updateShot')).toHaveLength(1));
+      // drinkTds and drinkEy alone: no notes and no extras for a reading.
+      expect(callsOf('updateShot')[0]!.args).toEqual(['shot-1', { annotations: { drinkTds: 8.5, drinkEy: 23.7 } }]);
+      // A reading asks nothing of the coach: it hears it with the next turn.
+      expect(requests).toHaveLength(turns);
+
+      // On the card in the transcript, so it comes back after a reload.
+      engine.dispose();
+      engine = build();
+      await engine.start();
+      expect(cardOf('shot-1')!.summary).toMatchObject({ tdsPct: 8.5, eyPct: 23.7 });
+    });
+
+    it('changes a reading, and removes it: the card, the iteration and Decaid follow, both numbers cleared', async () => {
+      await throughShot();
+      await engine.setShotTds('shot-1', 8.5);
+      await engine.setShotTds('shot-1', 9.1);
+      expect(cardOf('shot-1')!.summary).toMatchObject({ tdsPct: 9.1, eyPct: 25.4 });
+      await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toMatchObject({ drinkTds: 9.1, drinkEy: 25.4 }));
+      expect((await iterationOf('shot-1'))!.summary).toMatchObject({ tdsPct: 9.1, eyPct: 25.4 });
+
+      await engine.setShotTds('shot-1', null);
+      expect(cardOf('shot-1')!.summary).not.toHaveProperty('tdsPct');
+      expect(cardOf('shot-1')!.summary).not.toHaveProperty('eyPct');
+      expect((await iterationOf('shot-1'))!.summary).not.toHaveProperty('tdsPct');
+      // Decaid's null clears each field (its deep merge, then toJson leaves them out).
+      await vi.waitFor(() => expect(callsOf('updateShot').at(-1)!.args).toEqual(['shot-1', { annotations: { drinkTds: null, drinkEy: null } }]));
+    });
+
+    it('tells the coach with its next turn, once, again when it changes, and that it was removed', async () => {
+      await throughShot();
+      await engine.setShotTds('shot-1', 8.5);
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      const answer = lastUserTurn(requests);
+      expect(answer).toHaveLength(2);
+      expect(answer[0]).toMatchObject({ type: 'tool_result', tool_use_id: 't-ask' });
+      expect(answer[1]).toEqual(measured(8.5, 23.7));
+
+      scripts.push(() => [text('Sure.')]);
+      await engine.sendText('Anything else?');
+      expect(lastUserTurn(requests)).toEqual([text('Anything else?')]);
+
+      await engine.setShotTds('shot-1', 9.1);
+      scripts.push(() => [text('Noted.')]);
+      await engine.sendText('Hmm.');
+      expect(lastUserTurn(requests)).toEqual([measured(9.1, 25.4), text('Hmm.')]);
+
+      await engine.setShotTds('shot-1', null);
+      scripts.push(() => [text('Noted.')]);
+      await engine.sendText('Never mind.');
+      expect(lastUserTurn(requests)).toEqual([measured(null, null), text('Never mind.')]);
+      scripts.push(() => [text('Sure.')]);
+      await engine.sendText('Next?');
+      expect(lastUserTurn(requests)).toEqual([text('Next?')]);
+    });
+
+    it('a reading typed after the coach proposed a change reaches it with Confirm, the proposal kept', async () => {
+      await throughProposal();
+      await engine.setShotTds('shot-1', 9.25);
+      // The change card waits as it was: a reading sets nothing aside and asks nothing.
+      expect(allParts().find((p) => p.kind === 'diff')).toMatchObject({ status: 'pending' });
+      expect(engine.getState().phase).toBe('awaiting_confirmation');
+      scripts.push(() => [text('Done.')]);
+      await engine.confirmChange('t-adj');
+      const turn = lastUserTurn(requests);
+      expect(parsed(turn[0])).toMatchObject({ applied: true, version: 2 });
+      expect(turn[1]).toEqual(measured(9.25, 25.8));
+    });
+
+    it('rides after the verdict, ahead of the next shot’s event', async () => {
+      await throughShot();
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      await engine.rateShot('shot-1', 'same');
+      await engine.setShotTds('shot-1', 8.5);
+      await pullAnother('shot-2');
+      expect(lastUserTurn(requests).map((block) => (block.type === 'text' ? block.text.split('\n')[0] : block.type))).toEqual([
+        '[event:shot_rated]',
+        '[event:shot_measured]',
+        '[event:shot_completed]',
+      ]);
+    });
+
+    it('still tells a reading given just before a reload', async () => {
+      await throughShot();
+      await engine.setShotTds('shot-1', 8.5);
+      engine.dispose();
+      engine = build();
+      await engine.start();
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      expect(lastUserTurn(requests).filter((block) => block.type === 'text')).toEqual([measured(8.5, 23.7)]);
+    });
+
+    it('says nothing of a reading removed before the coach heard it', async () => {
+      await throughShot();
+      await engine.setShotTds('shot-1', 9);
+      await engine.setShotTds('shot-1', null);
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      expect(lastUserTurn(requests).filter((block) => block.type === 'text')).toEqual([]);
+      // Decaid still hears the removal: the first write may have gone already.
+      await vi.waitFor(() =>
+        expect(callsOf('updateShot').map((call) => call.args[1])).toContainEqual({ annotations: { drinkTds: null, drinkEy: null } }),
+      );
+      expect(machine.annotations.get('shot-1')).toMatchObject({ drinkTds: null, drinkEy: null });
+    });
+
+    it('keeps a TDS without an EY when the card has no yield: drinkTds alone goes to Decaid', async () => {
+      await throughShot();
+      await asStoredBefore((part) => ({ ...part, summary: { ...part.summary, yieldG: null, ratio: null } }));
+      await engine.setShotTds('shot-1', 8.5);
+      expect(cardOf('shot-1')!.summary).toMatchObject({ tdsPct: 8.5, eyPct: null });
+      await vi.waitFor(() => expect(callsOf('updateShot')).toHaveLength(1));
+      expect(callsOf('updateShot')[0]!.args).toEqual(['shot-1', { annotations: { drinkTds: 8.5 } }]);
+    });
+
+    it('ignores a TDS out of range, a shot no card shows, and the reading the card already has', async () => {
+      await throughShot();
+      await engine.setShotTds('shot-1', 0);
+      await engine.setShotTds('shot-1', 25.5);
+      await engine.setShotTds('shot-1', Number.NaN);
+      await engine.setShotTds('shot-elsewhere', 9);
+      await engine.setShotTds('shot-1', null);
+      await drain();
+      expect(callsOf('updateShot')).toEqual([]);
+      expect(cardOf('shot-1')!.summary).not.toHaveProperty('tdsPct');
+
+      await engine.setShotTds('shot-1', 8.504);
+      await vi.waitFor(() => expect(callsOf('updateShot')).toHaveLength(1));
+      // Kept to 0.01 %: typed again, the same reading sends nothing.
+      expect(cardOf('shot-1')!.summary.tdsPct).toBe(8.5);
+      await engine.setShotTds('shot-1', 8.5);
+      await drain();
+      expect(callsOf('updateShot')).toHaveLength(1);
+    });
+
+    it('sends a reading Decaid could not take again, with the taste said so far, once Decaid is back', async () => {
+      await throughShot();
+      machine.failShotUpdates = 2;
+      await engine.setShotTds('shot-1', 8.5);
+      await vi.waitFor(() => expect(machine.failShotUpdates).toBe(1));
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      await vi.waitFor(() => expect(machine.failShotUpdates).toBe(0));
+      expect(machine.annotations.get('shot-1')).toBeUndefined();
+
+      decaidBack();
+      await vi.waitFor(() =>
+        expect(machine.annotations.get('shot-1')).toMatchObject({
+          drinkTds: 8.5,
+          drinkEy: 23.7,
+          espressoNotes: 'Taste: Sour. Kiambu AA v1 (CafAI)',
+        }),
+      );
+      expect(callsOf('updateShot')).toHaveLength(1);
+    });
+
+    it('says once in the chat when Decaid refuses a reading, naming it', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      await throughShot();
+      machine.shotRefusal = new GatewayError(400, '/api/v1/shots/shot-1', 'Invalid request', 'http', { error: 'Invalid request' });
+      await engine.setShotTds('shot-1', 8.5);
+      await vi.waitFor(() => expect(notices().filter((p) => p.text.startsWith('Decaid would not save'))).toHaveLength(1));
+      expect(notices().find((p) => p.text.startsWith('Decaid would not save'))!.text).toBe('Decaid would not save the TDS for this shot: Invalid request.');
+      // The card keeps the reading: it is the barista's, and the coach still hears it.
+      expect(cardOf('shot-1')!.summary).toMatchObject({ tdsPct: 8.5 });
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // D65: progress while CafAI looks for a shot
   // -------------------------------------------------------------------------
 
