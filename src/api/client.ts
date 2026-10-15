@@ -24,12 +24,15 @@ import {
   readMachineInfo,
   readMachineState,
   readPlugins,
+  readPresenceSaved,
+  readPresenceSettings,
   readProfileRecord,
   readProfileRecords,
   readSettings,
   readShot,
   readShotPage,
   readShotSummary,
+  readWakeSchedule,
   readWorkflow,
   unexpectedReply,
 } from './readers.ts';
@@ -168,6 +171,29 @@ export function createDecaidClient(options: DecaidClientOptions): GatewayClient 
     async heartbeat() {
       const body = await requestJson<HeartbeatResponse>(transport, '/api/v1/machine/heartbeat', { method: 'POST' });
       return { timeout: typeof body?.timeout === 'number' ? body.timeout : -1 };
+    },
+
+    /**
+     * Decaid's own settings, kept on the device it runs on (presence_handler.dart
+     * at aab5f93): no machine needed, and none of them goes through the DE1's
+     * write queue. The schedules come with the settings, so CafAI never reads
+     * GET /api/v1/presence/schedules.
+     */
+    getPresenceSettings: () => requestValue(transport, '/api/v1/presence/settings', { read: readPresenceSettings }),
+    updatePresenceSettings: (patch) =>
+      requestValue(transport, '/api/v1/presence/settings', { method: 'POST', body: patch, read: readPresenceSaved }),
+    addWakeSchedule: (request) =>
+      requestValue(transport, '/api/v1/presence/schedules', { method: 'POST', body: request, read: readWakeSchedule }),
+    updateWakeSchedule: (scheduleId, patch) =>
+      requestValue(transport, `/api/v1/presence/schedules/${id(scheduleId)}`, {
+        method: 'PUT',
+        body: patch,
+        read: readWakeSchedule,
+        source: 'PUT /api/v1/presence/schedules/{id}',
+      }),
+    async deleteWakeSchedule(scheduleId) {
+      // Decaid answers {deleted: id}; the 200 is all CafAI needs.
+      await requestJson(transport, `/api/v1/presence/schedules/${id(scheduleId)}`, { method: 'DELETE' });
     },
 
     getDevices: () => requestList(transport, '/api/v1/devices', { read: readDevices }),

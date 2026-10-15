@@ -39,9 +39,11 @@ import {
   type MachineInfo,
   type PaginatedShots,
   type PluginInfo,
+  type PresenceSettings,
   type ProfileRecord,
   type ShotRecord,
   type ShotRecordSummary,
+  type WakeSchedule,
   type Workflow,
 } from './types.ts';
 
@@ -377,6 +379,29 @@ const GRINDER: Rule = {
   required: ['id', 'model'],
 };
 
+/** "06:30", as WakeSchedule.toJson pads it (wake_schedule.dart:58-63 at aab5f93). */
+const clockTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const weekday = z.number().int().min(1).max(7);
+
+const WAKE_SCHEDULE: Rule = {
+  // A schedule CafAI cannot show as it is, or change, is left out of the list (and reported).
+  // WakeSchedule.toJson leaves keepAwakeFor out when there is none (wake_schedule.dart:66-68).
+  shape: z.looseObject({ id, time: clockTime, daysOfWeek: z.array(weekday), enabled: flag, keepAwakeFor: num.optional() }),
+  required: ['id', 'time', 'daysOfWeek', 'enabled'],
+};
+
+const PRESENCE: Rule = {
+  // Settings > Sleep and wake shows nothing it could not read: without these the read fails, and says so.
+  shape: z.looseObject({ userPresenceEnabled: flag, sleepTimeoutMinutes: num, schedules: z.array(z.unknown()), keepAwakeUntil: nullableText }),
+  required: ['userPresenceEnabled', 'sleepTimeoutMinutes', 'schedules'],
+};
+
+/** POST /api/v1/presence/settings answers the two settings as saved (presence_handler.dart:98-101). */
+const PRESENCE_SAVED: Rule = {
+  shape: z.looseObject({ userPresenceEnabled: flag, sleepTimeoutMinutes: num }),
+  required: ['userPresenceEnabled', 'sleepTimeoutMinutes'],
+};
+
 // ---------------------------------------------------------------------------
 // Readers
 // ---------------------------------------------------------------------------
@@ -402,6 +427,15 @@ export const readGrinderRecords: Reader<Record<string, unknown>[]> = listReader(
 export const readShotPage: Reader<PaginatedShots> = (data, source) => {
   const page = readRecord<PaginatedShots>(SHOT_PAGE, data, source);
   return { ...page, items: readList<ShotRecordSummary>(SHOT_SUMMARY, page.items, source, 'items[]') };
+};
+
+export const readWakeSchedule: Reader<WakeSchedule> = recordReader(WAKE_SCHEDULE);
+export const readPresenceSaved: Reader<Pick<PresenceSettings, 'userPresenceEnabled' | 'sleepTimeoutMinutes'>> = recordReader(PRESENCE_SAVED);
+
+/** The settings, and each schedule read like a list's item: one CafAI cannot read is left out, the rest kept. */
+export const readPresenceSettings: Reader<PresenceSettings> = (data, source) => {
+  const settings = readRecord<PresenceSettings>(PRESENCE, data, source);
+  return { ...settings, schedules: readList<WakeSchedule>(WAKE_SCHEDULE, settings.schedules, source, 'schedules[]') };
 };
 
 /** GET /api/v1/machine/state, read like a snapshot frame (frames.ts reports what it lacks). */
