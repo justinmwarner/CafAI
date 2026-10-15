@@ -1,5 +1,7 @@
 import { Fragment, useMemo } from 'react';
 import Box from '@mui/material/Box';
+import { useTemperatureUnit } from '../../app/services.tsx';
+import { inTemperatureUnit } from '../../coach/temperature.ts';
 import { parseRichText, withoutOpenMarkers, type RichInline } from './textBlocks.ts';
 
 function Inline({ inlines }: { inlines: RichInline[] }) {
@@ -36,9 +38,14 @@ const richTextSx = {
 /**
  * Model text as React text nodes: never HTML, links or images (see textBlocks.ts).
  * While `streaming`, markup that has not closed yet shows without its markers.
+ * A temperature in the other unit reads in the barista's (D-TEMP-6).
  */
 export function RichText({ text, streaming = false }: { text: string; streaming?: boolean }) {
-  const blocks = useMemo(() => parseRichText(streaming ? withoutOpenMarkers(text) : text), [text, streaming]);
+  const unit = useTemperatureUnit();
+  const blocks = useMemo(
+    () => parseRichText(inTemperatureUnit(streaming ? withoutOpenMarkers(text) : text, unit)),
+    [text, streaming, unit],
+  );
   return (
     <Box sx={richTextSx}>
       {blocks.map((block, i) => {

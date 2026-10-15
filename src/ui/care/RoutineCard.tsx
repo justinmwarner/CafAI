@@ -5,14 +5,17 @@
  * now, the note where the video and Decent's pages differ, a link to
  * Decent's page, and the step's moment. The sources close it.
  */
+import { useMemo } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
+import { useTemperatureUnit } from '../../app/services.tsx';
 import { TID } from '../testIds.ts';
 import { CARE_SOURCES, keepUnits, type CareRoutine, type CareStep } from './careGuide.ts';
+import { routineInUnit } from './careUnits.ts';
 import { MomentButton } from './MomentButton.tsx';
 
 export interface RoutineCardProps {
@@ -142,7 +145,10 @@ function Step({ step, number, props }: { step: CareStep; number: number; props: 
 }
 
 export function RoutineCard(props: RoutineCardProps) {
-  const { routine, links, linkProps, playingKey, onPlay, panelId, tabId } = props;
+  const { links, linkProps, playingKey, onPlay, panelId, tabId } = props;
+  // Its temperatures in the barista's unit (D-TEMP-6).
+  const unit = useTemperatureUnit();
+  const routine = useMemo(() => routineInUnit(props.routine, unit), [props.routine, unit]);
   return (
     <Paper
       variant="outlined"
