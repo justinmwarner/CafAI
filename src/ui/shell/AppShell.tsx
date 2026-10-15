@@ -59,7 +59,7 @@ import { useScaleRevive } from '../machine/useScaleRevive.ts';
 import { dismissEngineWarning, engineWarning, isEngineWarningDismissed, readEngineCheck } from '../platform/engineCheck.ts';
 import { watchSafeArea } from '../platform/safeArea.ts';
 import { useHeartbeatOnInteraction } from '../platform/useHeartbeatOnInteraction.ts';
-import type { Route, RouteName } from '../router.ts';
+import { placeOf, type Route, type RouteName } from '../router.ts';
 import { TID } from '../testIds.ts';
 import { layoutFor, useLayout, type Layout } from './layout.ts';
 import { LiveStrip } from './LiveStrip.tsx';
@@ -385,7 +385,7 @@ function TopBar({ phone, route, onNavigate, host, insetLeft }: TopBarProps) {
       {phone ? null : (
         <Box component="nav" aria-label="Main" sx={{ display: 'flex', gap: { xs: 0.25, lg: 0.5 }, flex: 'none' }}>
           {NAV.map((item) => (
-            <NavButton key={item.name} item={item} active={route.name === item.name} onNavigate={onNavigate} />
+            <NavButton key={item.name} item={item} active={placeOf(route) === item.name} onNavigate={onNavigate} />
           ))}
         </Box>
       )}
@@ -491,7 +491,7 @@ function Tabs({ route, onNavigate, rail }: { route: Route; onNavigate: (route: R
       }}
     >
       {TABS.map((item) => (
-        <Tab key={item.name} item={item} active={route.name === item.name} rail={rail} onNavigate={onNavigate} />
+        <Tab key={item.name} item={item} active={placeOf(route) === item.name} rail={rail} onNavigate={onNavigate} />
       ))}
     </Box>
   );

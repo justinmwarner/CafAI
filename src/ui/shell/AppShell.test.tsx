@@ -156,6 +156,12 @@ describe('AppShell', () => {
     ]);
   });
 
+  it('marks Settings current on the cleaning guide, which is under it', () => {
+    renderShell({ name: 'care', routine: 'weekly' });
+    expect(screen.getByTestId(TID.navSettings)).toHaveAttribute('aria-current', 'page');
+    for (const id of [TID.navCoach, TID.navShot, TID.navHistory]) expect(screen.getByTestId(id)).not.toHaveAttribute('aria-current');
+  });
+
   it('Exit calls host.exitToSkinSwitcher(), on every screen', async () => {
     for (const route of [{ name: 'coach' }, { name: 'shot' }, { name: 'history' }, { name: 'settings' }] as Route[]) {
       const { services, unmount } = renderShell(route);
@@ -492,6 +498,12 @@ describe('AppShell on a phone', () => {
       { name: 'coach' },
       { name: 'history' },
     ]);
+  });
+
+  it("marks the Settings tab current on the cleaning guide", () => {
+    renderShell({ name: 'care', routine: 'daily' });
+    expect(screen.getByTestId(TID.tabSettings)).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByTestId(TID.tabCoach)).not.toHaveAttribute('aria-current');
   });
 
   it('the Shot tab is the Shot view, the one a tablet shows, over the coach kept mounted and hidden', () => {

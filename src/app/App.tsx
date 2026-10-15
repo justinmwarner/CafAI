@@ -3,7 +3,8 @@ import { ServicesProvider } from './services.tsx';
 import type { Services } from './types.ts';
 import { AppTheme } from '../ui/AppTheme.tsx';
 import { AppShell } from '../ui/shell/AppShell.tsx';
-import { isRemembered, navigate, routeHref, useRoute, type Route } from '../ui/router.ts';
+import { isRemembered, navigate, replaceRoute, routeHref, useRoute, type Route } from '../ui/router.ts';
+import { CareScreen } from '../ui/care/CareScreen.tsx';
 import { CoachScreen } from '../ui/chat/CoachScreen.tsx';
 import { HistoryScreen } from '../ui/history/HistoryScreen.tsx';
 import { LogView } from '../ui/settings/LogView.tsx';
@@ -48,6 +49,14 @@ function Routed() {
     );
   } else if (route.name === 'settings') {
     screen = <SettingsScreen />;
+  } else if (route.name === 'care') {
+    screen = (
+      <CareScreen
+        routine={route.routine}
+        onRoutine={(routine) => replaceRoute({ name: 'care', routine })}
+        onBack={() => navigate({ name: 'settings' })}
+      />
+    );
   } else {
     // The coach, the shot and the drinks' routes alike: the shell lays the
     // Shot view or a drink's view over the coach, and the same element in the
