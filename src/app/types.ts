@@ -15,6 +15,7 @@ import type { ModelInfo } from '../llm/types.ts';
 import type { CoachSourceStore } from '../storage/coachSource.ts';
 import type { Bag, ProfileVersion, Storage } from '../storage/types.ts';
 import type { AppearanceStore } from './appearance.ts';
+import type { CareService } from './care/careService.ts';
 
 /** Everything the UI needs, provided once through ServicesProvider (src/app/services.tsx). */
 export interface Services {
@@ -36,6 +37,12 @@ export interface Services {
    * Settings then offers only the API key.
    */
   coachSource?: CoachSourceStore;
+  /**
+   * Machine care's steps, their counts and marks (D-CARE-1 to D-CARE-8,
+   * src/app/care/careService.ts). Optional: fakes and previews leave it out,
+   * and then no step shows a last time and the stats card no line.
+   */
+  care?: CareService;
 }
 
 export type UiRole = 'user' | 'assistant' | 'system';

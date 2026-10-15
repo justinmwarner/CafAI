@@ -417,7 +417,7 @@ function ExportDialog({ result, onClose }: { result: ExportResult; onClose(): vo
 type ListData = { bags: Bag[]; shotCounts: Map<string, number> };
 
 export function HistoryScreen({ bagId, onSelectBag = hashNavigate }: HistoryScreenProps) {
-  const { storage, coach, host, appearance } = useServices();
+  const { storage, coach, host, appearance, care } = useServices();
   const [coachBags, coachVersions, coachPhase, coachBusy] = useCoachCommits();
   const [reloads, setReloads] = useState(0);
   const [list, setList] = useState<ListData | null>(null);
@@ -502,13 +502,15 @@ export function HistoryScreen({ bagId, onSelectBag = hashNavigate }: HistoryScre
         coach.refresh().catch(() => undefined);
         // An import can bring a look along (a device still on the default takes it).
         appearance.reload().catch(() => undefined);
+        // And machine care's last times (D-CARE-7).
+        care?.reload().catch(() => undefined);
       } catch (error) {
         setMessage({ tone: 'error', text: `Import failed: ${errorText(error)}` });
       } finally {
         setWorking(null);
       }
     },
-    [storage, coach, appearance],
+    [storage, coach, appearance, care],
   );
 
   const current = bagId === null ? list : detail?.id === bagId ? detail : null;
