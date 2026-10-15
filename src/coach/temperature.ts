@@ -140,21 +140,32 @@ function otherUnit(unit: TemperatureUnit): TemperatureUnit {
   return unit === 'fahrenheit' ? 'celsius' : 'fahrenheit';
 }
 
-/** "93 °C (199 °F)", "93 °C / 199 °F", "199 °F (93 °C)": the barista's half is enough. */
-function dropDoubles(text: string, from: TemperatureUnit, to: TemperatureUnit): string {
-  const theirs = plainPattern(from);
+/**
+ * "93 °C (199 °F)", "93 °C / 199 °F", "199 °F (93 °C)" and "199 °F / 93 °C",
+ * written for a barista who reads `to`: each keeps the barista's half, the
+ * first group of each pattern.
+ */
+function doublesFor(to: TemperatureUnit): readonly RegExp[] {
+  const theirs = plainPattern(otherUnit(to));
   const ours = plainPattern(to);
-  return text
-    .replace(new RegExp(String.raw`${theirs}\s*\(\s*(${APPROXIMATELY}${ours})\s*\)`, 'g'), '$1')
-    .replace(new RegExp(String.raw`(${ours})\s*\(\s*${APPROXIMATELY}${theirs}\s*\)`, 'g'), '$1')
-    .replace(new RegExp(String.raw`${theirs}\s*/\s*(${ours})`, 'g'), '$1')
-    .replace(new RegExp(String.raw`(${ours})\s*/\s*${theirs}`, 'g'), '$1');
+  return [
+    String.raw`${theirs}\s*\(\s*(${APPROXIMATELY}${ours})\s*\)`,
+    String.raw`(${ours})\s*\(\s*${APPROXIMATELY}${theirs}\s*\)`,
+    String.raw`${theirs}\s*/\s*(${ours})`,
+    String.raw`(${ours})\s*/\s*${theirs}`,
+  ].map((source) => new RegExp(source, 'g'));
 }
 
+/** Built once: the chat rewrites a coach's reply on every streamed piece of it. */
+const DOUBLES: Record<TemperatureUnit, readonly RegExp[]> = { celsius: doublesFor('celsius'), fahrenheit: doublesFor('fahrenheit') };
 const PATTERNS: Record<TemperatureUnit, RegExp> = {
   celsius: new RegExp(temperaturePattern('celsius'), 'g'),
   fahrenheit: new RegExp(temperaturePattern('fahrenheit'), 'g'),
 };
+
+function dropDoubles(text: string, to: TemperatureUnit): string {
+  return DOUBLES[to].reduce((sentence, pattern) => sentence.replace(pattern, '$1'), text);
+}
 
 /** Any unit at all: a degree sign, ℃ or ℉, or "degrees". */
 const ANY_UNIT = /[°º℃℉]|degree/i;
@@ -170,7 +181,7 @@ export function inTemperatureUnit(text: string, unit: TemperatureUnit): string {
   // Most sentences name no temperature at all.
   if (!ANY_UNIT.test(text)) return text;
   const from = otherUnit(unit);
-  const source = dropDoubles(text, from, unit);
+  const source = dropDoubles(text, unit);
   return source.replace(
     PATTERNS[from],
     (match: string, sign: string | undefined, first: string, separator: string | undefined, secondSign: string | undefined, second: string | undefined, written: string, offset: number) => {
