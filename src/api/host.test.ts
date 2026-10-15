@@ -146,6 +146,15 @@ describe('detectHost', () => {
     );
   });
 
+  it("reads Decaid's platform, lowercased, only inside Decaid", () => {
+    expect(detectHost(fakeWindow({ decentHost: { platform: 'android', version: '0.9.0' } }).win).platform).toBe('android');
+    expect(detectHost(fakeWindow({ decentHost: { platform: ' Windows ' } }).win).platform).toBe('windows');
+    expect(detectHost(fakeWindow({ decentHost: { version: '0.9.0' } }).win).platform).toBeNull();
+    expect(detectHost(fakeWindow({ decentHost: { platform: 7 } }).win).platform).toBeNull();
+    expect(detectHost(fakeWindow({ decentHost: true }).win).platform).toBeNull();
+    expect(detectHost(fakeWindow().win).platform).toBeNull();
+  });
+
   it('tolerates an odd __DECENT_HOST__ value', () => {
     expect(detectHost(fakeWindow({ decentHost: true }).win)).toMatchObject({ insideDecaid: true, hostVersion: null });
     expect(detectHost(fakeWindow({ decentHost: { version: 9 } }).win).hostVersion).toBe('9');

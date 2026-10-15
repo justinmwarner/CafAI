@@ -649,6 +649,12 @@ export interface HostEnvironment {
   insideDecaid: boolean;
   /** Decaid version from __DECENT_HOST__, when inside Decaid. */
   hostVersion: string | null;
+  /**
+   * Decaid's platform from __DECENT_HOST__ ('android', 'ios', 'macos',
+   * 'windows', 'linux'), lowercased; null outside Decaid or when it does not
+   * say. The cleaning guide's video plays in place only on Android (D154).
+   */
+  platform: string | null;
   /** Decaid's settings UI (includes the Web Interface / skin switcher section). */
   settingsUrl: string;
   /** Exit to Decaid's dashboard (Skins page); falls back to settingsUrl in a browser. */

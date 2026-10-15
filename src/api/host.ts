@@ -94,6 +94,12 @@ function hostVersionOf(decentHost: unknown): string | null {
   return null;
 }
 
+function platformOf(decentHost: unknown): string | null {
+  if (typeof decentHost !== 'object' || decentHost === null) return null;
+  const platform = (decentHost as { platform?: unknown }).platform;
+  return typeof platform === 'string' && platform.trim() ? platform.trim().toLowerCase() : null;
+}
+
 /**
  * Detect whether CafAI runs inside Decaid and how to leave it.
  *
@@ -113,6 +119,7 @@ export function detectHost(win: Window): HostEnvironment {
   return {
     insideDecaid,
     hostVersion: insideDecaid ? hostVersionOf(decentHost) : null,
+    platform: insideDecaid ? platformOf(decentHost) : null,
     settingsUrl,
     exitToSkinSwitcher() {
       // Resolved at tap time: skin-api.js is injected by Decaid and may load
