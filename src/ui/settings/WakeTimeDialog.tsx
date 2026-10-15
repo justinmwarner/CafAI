@@ -36,22 +36,31 @@ const fieldSx = { '& .MuiInputBase-root': { minHeight: 48 } } as const;
 const selectSx = { ...fieldSx, '& .MuiNativeSelect-select': { py: '12.5px' } } as const;
 const mutedSx = { color: 'text.secondary' } as const;
 
-/** What a time field gives ("06:30", or "06:30:00" from some browsers), as Decaid takes it; null when it is not a time. */
-function wakeTime(value: string): string | null {
-  const match = /^([01]\d|2[0-3]):([0-5]\d)(:\d{2})?$/.exec(value.trim());
-  return match ? `${match[1]}:${match[2]}` : null;
-}
+/** The time's figures as the rows draw them: 22 px at 650, tabular. */
+const figuresSx = { fontSize: '1.375rem', fontWeight: 650, fontVariantNumeric: 'tabular-nums' } as const;
+/** The hour and the minute in those figures; 8.5 px over and under a 22 px line makes each select 48 px tall. */
+const timeSelectSx = { ...fieldSx, minWidth: 88, '& .MuiNativeSelect-select': { ...figuresSx, py: '8.5px' } } as const;
+
+const pad = (value: number) => String(value).padStart(2, '0');
+/**
+ * The hour and the minute as two selects, not the browser's time field: that
+ * one shows the device's own clock ("06:00 AM" in US English), and CafAI
+ * writes every time in 24-hour figures. Every minute, as Decaid takes any.
+ */
+const HOURS = Array.from({ length: 24 }, (_, hour) => pad(hour));
+const MINUTES = Array.from({ length: 60 }, (_, minute) => pad(minute));
 
 /**
  * The days as the Appearance mode control draws its choices: on the raised
  * track, each day picked a paper-coloured pill. Seven share the track's
- * width, 48 px tall; on the narrowest phones each is still about 44 px wide.
+ * width, 48 px tall; on a phone upright the padding and gaps are 2 px, so
+ * each is still 44 px wide on a 390 px screen.
  */
 const daysSx: SxProps<Theme> = (theme) => ({
   bgcolor: 'cafai.raised',
   borderRadius: '14px',
-  p: '3px',
-  gap: '3px',
+  p: { xs: '2px', sm: '3px' },
+  gap: { xs: '2px', sm: '3px' },
   '& .MuiToggleButtonGroup-grouped': {
     flex: '1 1 0',
     minWidth: 0,
@@ -59,7 +68,8 @@ const daysSx: SxProps<Theme> = (theme) => ({
     px: 0,
     m: 0,
     border: 0,
-    borderRadius: '11px',
+    // The track's radius less its padding, so the corners stay concentric.
+    borderRadius: { xs: '12px', sm: '11px' },
     color: 'text.secondary',
     fontSize: '0.9375rem',
     transition: theme.transitions.create(['background-color', 'color', 'box-shadow'], {
@@ -88,14 +98,17 @@ export interface WakeTimeDialogProps {
 type Busy = 'saving' | 'deleting' | null;
 
 export function WakeTimeDialog({ schedule, sleepWhenIdle, onAdd, onSave, onDelete, onClose }: WakeTimeDialogProps) {
-  const [time, setTime] = useState(schedule?.time ?? NEW_WAKE_TIME);
+  // "HH:MM", as CafAI reads every wake time (readers.ts).
+  const [hour, setHour] = useState(() => (schedule?.time ?? NEW_WAKE_TIME).slice(0, 2));
+  const [minute, setMinute] = useState(() => (schedule?.time ?? NEW_WAKE_TIME).slice(3, 5));
   const [days, setDays] = useState<number[]>(() => daysPicked(schedule?.daysOfWeek ?? []));
   const [keepAwake, setKeepAwake] = useState<number | null>(schedule ? (schedule.keepAwakeFor ?? null) : NEW_KEEP_AWAKE);
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
+  const timeLabelId = useId();
   const daysLabelId = useId();
 
-  const picked = wakeTime(time);
+  const picked = `${hour}:${minute}`;
   const noDays = days.length === 0;
   // A wake time Decaid holds outside the choices (set on its own page) is offered as it is.
   const choices = keepAwake === null || KEEP_AWAKE_CHOICES.includes(keepAwake) ? KEEP_AWAKE_CHOICES : [...KEEP_AWAKE_CHOICES, keepAwake];
@@ -104,7 +117,7 @@ export function WakeTimeDialog({ schedule, sleepWhenIdle, onAdd, onSave, onDelet
     event.preventDefault();
     // React carries the submit up through the portal to any form around the section.
     event.stopPropagation();
-    if (busy !== null || picked === null || noDays) return;
+    if (busy !== null || noDays) return;
     const daysOfWeek = daysToStore(days);
     setBusy('saving');
     setError(null);
@@ -157,21 +170,55 @@ export function WakeTimeDialog({ schedule, sleepWhenIdle, onAdd, onSave, onDelet
     >
       <DialogTitle>{schedule === null ? 'Add a wake time' : 'Change the wake time'}</DialogTitle>
       <DialogContent sx={{ display: 'grid', gap: 2.5, alignContent: 'start', px: { xs: 2, sm: 3 } }}>
-        <TextField
-          type="time"
-          size="small"
-          label="Time"
-          value={time}
-          disabled={disabled}
-          onChange={(event) => {
-            setTime(event.target.value);
-            setError(null);
-          }}
-          error={picked === null}
-          helperText={picked === null ? 'Choose a time.' : 'The machine takes a while to heat, so set it a little before you want coffee.'}
-          sx={{ ...fieldSx, mt: 1 }}
-          slotProps={{ htmlInput: { step: 60, 'data-testid': TID.wakeDialogTime }, inputLabel: { shrink: true } }}
-        />
+        <Box sx={{ display: 'grid', gap: 1 }}>
+          <Typography variant="label" component="div" id={timeLabelId} sx={mutedSx}>
+            Time
+          </Typography>
+          <Box role="group" aria-labelledby={timeLabelId} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <TextField
+              select
+              size="small"
+              value={hour}
+              disabled={disabled}
+              onChange={(event) => {
+                setHour(event.target.value);
+                setError(null);
+              }}
+              sx={timeSelectSx}
+              slotProps={{ select: { native: true }, htmlInput: { 'aria-label': 'Hour', 'data-testid': TID.wakeDialogHour } }}
+            >
+              {HOURS.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </TextField>
+            <Typography component="span" aria-hidden sx={figuresSx}>
+              :
+            </Typography>
+            <TextField
+              select
+              size="small"
+              value={minute}
+              disabled={disabled}
+              onChange={(event) => {
+                setMinute(event.target.value);
+                setError(null);
+              }}
+              sx={timeSelectSx}
+              slotProps={{ select: { native: true }, htmlInput: { 'aria-label': 'Minute', 'data-testid': TID.wakeDialogMinute } }}
+            >
+              {MINUTES.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </TextField>
+          </Box>
+          <Typography variant="body2" sx={mutedSx}>
+            The machine takes a while to heat, so set it a little before you want coffee.
+          </Typography>
+        </Box>
         <Box sx={{ display: 'grid', gap: 1 }}>
           <Typography variant="label" component="div" id={daysLabelId} sx={mutedSx}>
             Days
@@ -239,7 +286,7 @@ export function WakeTimeDialog({ schedule, sleepWhenIdle, onAdd, onSave, onDelet
         <Button
           type="submit"
           variant="contained"
-          disabled={disabled || picked === null || noDays}
+          disabled={disabled || noDays}
           data-testid={TID.wakeDialogSave}
           sx={{ minHeight: 48 }}
         >

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '../chat/testing/setup.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GatewayError, type PresenceSettings, type WakeSchedule } from '../../api/types.ts';
 import { renderWithServices } from '../chat/testing/render.tsx';
@@ -199,9 +199,10 @@ describe('the wake time dialog', () => {
     await loaded();
     await user.click(screen.getByTestId(TID.wakeAdd));
     expect(screen.getByRole('dialog', { name: 'Add a wake time' })).toBeInTheDocument();
-    expect(dialog().getByTestId(TID.wakeDialogTime)).toHaveValue('06:00');
+    expect(dialog().getByTestId(TID.wakeDialogHour)).toHaveValue('06');
+    expect(dialog().getByTestId(TID.wakeDialogMinute)).toHaveValue('00');
     expect(dialog().getByText('Every day')).toBeInTheDocument();
-    fireEvent.change(dialog().getByTestId(TID.wakeDialogTime), { target: { value: '06:30' } });
+    await user.selectOptions(dialog().getByTestId(TID.wakeDialogMinute), '30');
     await user.click(dialog().getByTestId(TID.wakeDialogDay('Sat')));
     await user.click(dialog().getByTestId(TID.wakeDialogDay('Sun')));
     expect(dialog().getByText('Weekdays')).toBeInTheDocument();
@@ -231,7 +232,7 @@ describe('the wake time dialog', () => {
     expect(services.decaid.presence).toMatchObject({ userPresenceEnabled: true, sleepTimeoutMinutes: 0 });
   });
 
-  it('asks for a day and a time before it adds', async () => {
+  it('asks for a day before it adds', async () => {
     const { user } = renderSection();
     await loaded();
     await user.click(screen.getByTestId(TID.wakeAdd));
@@ -240,9 +241,22 @@ describe('the wake time dialog', () => {
     expect(dialog().getByTestId(TID.wakeDialogSave)).toBeDisabled();
     await user.click(dialog().getByTestId(TID.wakeDialogDay('Mon')));
     expect(dialog().getByTestId(TID.wakeDialogSave)).toBeEnabled();
-    fireEvent.change(dialog().getByTestId(TID.wakeDialogTime), { target: { value: '' } });
-    expect(dialog().getByText('Choose a time.')).toBeInTheDocument();
-    expect(dialog().getByTestId(TID.wakeDialogSave)).toBeDisabled();
+  });
+
+  it('offers the time in 24-hour figures, every hour and every minute, whatever the device clock says', async () => {
+    const { calls, user } = renderSection();
+    await loaded();
+    await user.click(screen.getByTestId(TID.wakeAdd));
+    const time = dialog().getByRole('group', { name: 'Time' });
+    const hours = within(within(time).getByRole('combobox', { name: 'Hour' })).getAllByRole('option');
+    const minutes = within(within(time).getByRole('combobox', { name: 'Minute' })).getAllByRole('option');
+    expect(hours.map((option) => option.textContent)).toEqual(Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, '0')));
+    expect(minutes).toHaveLength(60);
+    expect(minutes.at(-1)).toHaveTextContent('59');
+    await user.selectOptions(within(time).getByRole('combobox', { name: 'Hour' }), '22');
+    await user.selectOptions(within(time).getByRole('combobox', { name: 'Minute' }), '05');
+    await user.click(dialog().getByTestId(TID.wakeDialogSave));
+    await waitFor(() => expect(calls('addWakeSchedule')).toEqual([[{ time: '22:05', daysOfWeek: [], enabled: true, keepAwakeFor: 60 }]]));
   });
 
   it('stays open and says why when Decaid does not take it', async () => {
@@ -260,7 +274,8 @@ describe('the wake time dialog', () => {
     await loaded();
     await user.click(screen.getByTestId(TID.wakeEdit('w1')));
     expect(screen.getByRole('dialog', { name: 'Change the wake time' })).toBeInTheDocument();
-    expect(dialog().getByTestId(TID.wakeDialogTime)).toHaveValue('06:30');
+    expect(dialog().getByTestId(TID.wakeDialogHour)).toHaveValue('06');
+    expect(dialog().getByTestId(TID.wakeDialogMinute)).toHaveValue('30');
     expect(dialog().getByTestId(TID.wakeDialogDay('Sat'))).toHaveAttribute('aria-pressed', 'false');
     expect(dialog().getByTestId(TID.wakeDialogDay('Mon'))).toHaveAttribute('aria-pressed', 'true');
     await user.selectOptions(dialog().getByTestId(TID.wakeDialogKeepAwake), 'Sleep when idle, as usual');
