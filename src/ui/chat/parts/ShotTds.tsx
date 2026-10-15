@@ -38,6 +38,9 @@ import { formatGrams } from '../format.ts';
 /** A number the card does not have, as the card's other numbers show it (format.ts). */
 const NO_VALUE = '–';
 
+/** A number and its unit never part at a line's end ("45.8 g", "25 %"): the space between them becomes a no-break space. */
+const keepUnits = (text: string) => text.replace(/(\d) (g|%)(?=[\s.,;:)]|$)/g, '$1 $2');
+
 /** The card's metric value: what ShotCard's own metrics are set in. */
 const valueStyle = { fontWeight: 650, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' } as const;
 
@@ -79,9 +82,9 @@ function noEyReason(summary: Pick<ShotSummary, 'doseG' | 'yieldG'>): string {
 export function fieldHelp(summary: Pick<ShotSummary, 'doseG' | 'yieldG'>): string {
   const hasEy = typeof summary.doseG === 'number' && summary.doseG > 0 && typeof summary.yieldG === 'number' && summary.yieldG > 0;
   if (hasEy) {
-    return (
+    return keepUnits(
       `What your refractometer reads. CafAI works out the EY from this shot's ${formatGrams(summary.doseG)} dose ` +
-      `and ${formatGrams(summary.yieldG)} yield, and the coach gets both with your next tap or message.`
+        `and ${formatGrams(summary.yieldG)} yield, and the coach gets both with your next tap or message.`,
     );
   }
   const why = noEyReason(summary);
@@ -92,7 +95,7 @@ export function fieldHelp(summary: Pick<ShotSummary, 'doseG' | 'yieldG'>): strin
 function readingNote(reading: ShotReading, summary: Pick<ShotSummary, 'doseG' | 'yieldG'>): { warning: boolean; text: string } | null {
   if (reading.eyPct === null) return { warning: false, text: `No EY: ${noEyReason(summary)}.` };
   if (reading.eyPct > EY_MAX_PCT) {
-    return { warning: true, text: `An EY of ${formatEy(reading.eyPct)} is more than coffee gives up. Check the TDS, and the dose in Decaid.` };
+    return { warning: true, text: keepUnits(`An EY of ${formatEy(reading.eyPct)} is more than coffee gives up. Check the TDS, and the dose in Decaid.`) };
   }
   return null;
 }
@@ -110,6 +113,8 @@ export function ShotTds({ summary, onSave, busy = false }: ShotTdsProps) {
   const fieldId = useId();
   const helpId = useId();
   const cellRef = useRef<HTMLButtonElement | null>(null);
+  /** The field was opened from a keyboard (Enter or Space on the cell): closing it gives the cell the focus back. */
+  const fromKeyboard = useRef(false);
   const reading = readingOf(summary);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -134,8 +139,9 @@ export function ShotTds({ summary, onSave, busy = false }: ShotTdsProps) {
   const close = () => {
     setEditing(false);
     setProblem(null);
-    // Back to the cell, so a keyboard keeps its place (on a touch screen this opens no keyboard).
-    cellRef.current?.focus();
+    // A keyboard keeps its place on the cell. Opened by a tap, the focus leaves with the field, so the
+    // on-screen keyboard goes and no keyboard focus ring lands on the cell (DESIGN.md: touch never sees one).
+    if (fromKeyboard.current) cellRef.current?.focus();
   };
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -169,7 +175,12 @@ export function ShotTds({ summary, onSave, busy = false }: ShotTdsProps) {
         aria-label={reading ? `TDS ${formatTds(reading.tdsPct)}, change it` : 'Add TDS'}
         aria-expanded={editing}
         aria-controls={editing ? fieldId : undefined}
-        onClick={() => (editing ? close() : open())}
+        onClick={(event) => {
+          // A click from Enter or Space has no pointer count.
+          fromKeyboard.current = event.detail === 0;
+          if (editing) close();
+          else open();
+        }}
         sx={cellButtonSx(reading !== null)}
       >
         <Typography variant="label" component="span" sx={{ color: 'text.secondary' }}>
@@ -252,7 +263,7 @@ export function ShotTds({ summary, onSave, busy = false }: ShotTdsProps) {
             role={problem ? 'alert' : undefined}
             sx={{ color: problem ? 'error.main' : 'text.secondary' }}
           >
-            {problem ?? fieldHelp(summary)}
+            {problem ? keepUnits(problem) : fieldHelp(summary)}
           </Typography>
         </Box>
       ) : null}

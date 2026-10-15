@@ -40,18 +40,32 @@ describe('ShotTds: the TDS cell and its field (D-TDS-1, D-TDS-3)', () => {
     expect(input).toHaveValue('');
     // What to type, where the EY comes from, and when the coach hears it.
     expect(input).toHaveAccessibleDescription(fieldHelp(sampleSummary()));
+    // A number keeps its unit at a line's end: a no-break space between them.
     expect(fieldHelp(sampleSummary())).toBe(
-      "What your refractometer reads. CafAI works out the EY from this shot's 18.0 g dose and 36.4 g yield, and the coach gets both with your next tap or message.",
+      "What your refractometer reads. CafAI works out the EY from this shot's 18.0 g dose and 36.4 g yield, and the coach gets both with your next tap or message.",
     );
   });
 
-  it('saves a reading typed with a comma, closes, and gives the cell back the focus', async () => {
+  it('saves a reading typed with a comma and closes; opened by a tap, the focus leaves with the field', async () => {
     const { onSaveTds } = card();
     await userEvent.click(button('Add TDS'));
     await userEvent.type(field(), '9,25');
     await userEvent.click(button('Save'));
     expect(onSaveTds).toHaveBeenCalledWith(9.25);
     expect(screen.queryByRole('textbox', { name: 'TDS' })).toBeNull();
+    // No keyboard focus ring lands on the cell for a touch.
+    expect(button('Add TDS')).not.toHaveFocus();
+  });
+
+  it('opened from the keyboard, gives the cell back the focus when it closes', async () => {
+    card();
+    button('Add TDS').focus();
+    await userEvent.keyboard('{Enter}');
+    expect(field()).toHaveFocus();
+    await userEvent.keyboard('9.25{Enter}');
+    expect(button('Add TDS')).toHaveFocus();
+    await userEvent.keyboard(' ');
+    await userEvent.keyboard('{Escape}');
     expect(button('Add TDS')).toHaveFocus();
   });
 
