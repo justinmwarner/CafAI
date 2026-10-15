@@ -2482,3 +2482,19 @@ The wake schedule item of D151, built on branch `feat/wake-schedule`.
   time-to-ready's estimate only exists while the machine heats, so the
   wake's time would have to be learned from past mornings, which is its own
   item.
+
+### Putting the cycles off (2026-10-15)
+
+- **D161. Clean, Descale and Transport from CafAI wait.** The owner put the
+  machine care item that starts the DE1's cycles off for later, and asked
+  that nothing of it be reachable meanwhile. Nothing was: CafAI's commands
+  stop at espresso, steam, hot water, flush, sleep and the next step
+  (`CommandableState` in `src/api/types.ts`). Two things stay as they were.
+  Stop still shows while a cleaning, descale or air purge started on the
+  machine or in streamline runs (D97), since a run nobody can stop is worse
+  than one CafAI did not start. The cleaning guide's steps that need a
+  cycle still send the barista to streamline, now as "From streamline:"
+  rather than "From streamline for now:", which promised the item. The
+  roadmap keeps the item's research for when it comes back, and the care
+  reminders go ahead without it. Why: the owner's call ("I'm not super
+  interested in number 1... we can consider it in the future").

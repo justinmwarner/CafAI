@@ -350,9 +350,9 @@ with **Retry**; it never loads anything on the machine by itself.
   YouTube at that time instead (Decaid would not let it play in place).
   While the video is open, a drink you start (the flush a step asks for,
   say) leaves the guide on screen rather than taking it over. The steps are
-  CafAI's own words and work offline. CafAI cannot start the DE1's
-  Clean, Descale or Transport yet; the steps that need them say to use
-  streamline, the skin Decaid comes with, for now.
+  CafAI's own words and work offline. CafAI does not start the DE1's
+  Clean, Descale or Transport; the steps that need them say to use
+  streamline, the skin Decaid comes with.
 - **Settings > About**: CafAI's version, and the Decaid you run next to the
   one CafAI was checked against ("Decaid 0.9.0 (CafAI was verified with
   0.8.8)", with a note when yours is older); anything Decaid sent that

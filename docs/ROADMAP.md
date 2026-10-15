@@ -12,7 +12,8 @@ commands stop at espresso, steam, hot water, flush, sleep and the next step
 else starts them. Decaid's own screens have none of them, so today an owner
 switches to streamline to descale. No skin for Decaid keeps reminders, and
 until CafAI's guide none showed how to clean; Decent's video and docs do.
-Three items, each building on the one before:
+Three items; the cycles, the second, wait (D161), and the reminders go
+ahead without them:
 
 - **A cleaning guide, with Decent's video: built on 2026-10-15** (D152-D155,
   `docs/superpowers/specs/2026-10-15-machine-care-design.md`). Settings >
@@ -25,7 +26,10 @@ Three items, each building on the one before:
   plays in place only in a browser and on Android, and is a link to the
   moment elsewhere in Decaid. Left: the check on a Decent tablet and an
   iPad (`docs/HARDWARE_TEST_PLAN.md` section 14).
-- **Clean, Descale and Transport from CafAI.** Decaid takes
+- **Clean, Descale and Transport from CafAI: put off on 2026-10-15**
+  (D161). Not built, and nothing in CafAI starts a cycle; the guide's
+  steps send the barista to streamline. What follows is kept for when it
+  comes back. Decaid takes
   `PUT /api/v1/machine/state/cleaning`, `descaling` and `airPurge`, and
   streamline's pages are the model
   (`.ref/streamline-js/src/settings/categories/maintenance.js`,
