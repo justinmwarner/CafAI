@@ -400,7 +400,8 @@ describe('the guide', () => {
     const moments = ROUTINES.flatMap((routine) => [routine.moment, ...routine.steps.map((step) => step.moment)]).filter(
       (moment): moment is number => moment !== undefined,
     );
-    expect(moments.length).toBeGreaterThanOrEqual(13);
+    // The description's key moments, and 6:52, 15:04 and 21:36 from the captions (D155).
+    expect([...moments].sort((a, b) => a - b)).toEqual([20, 108, 310, 412, 460, 473, 671, 904, 996, 1016, 1296]);
     for (const moment of moments) {
       expect(Number.isInteger(moment)).toBe(true);
       expect(moment).toBeGreaterThanOrEqual(0);
