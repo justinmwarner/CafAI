@@ -173,7 +173,8 @@ export function RoutineCard(props: RoutineCardProps) {
           />
         )}
       </Box>
-      <Box component="ol" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+      {/* The role again: WebKit (Decaid on an iPad or a Mac) drops a list's role with its markers, and the numbers are hidden from screen readers. */}
+      <Box component="ol" role="list" sx={{ listStyle: 'none', m: 0, p: 0 }}>
         {routine.steps.map((step, index) => (
           <Step key={step.id} step={step} number={index + 1} props={props} />
         ))}

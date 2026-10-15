@@ -11,6 +11,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useServices } from '../../app/services.tsx';
+import { isCareVideoOpen } from '../care/videoHold.ts';
 import { parseRoute, replaceRoute, routeHref, type Route } from '../router.ts';
 import { GUARD_MS, isTextEntry } from '../shell/useShotFocus.ts';
 import { drinkStarted, goBackRoute, NO_ORIGIN, type DrinkFocusState } from './drinkFocus.ts';
@@ -36,7 +37,8 @@ export function useDrinkFocus(): DrinkFocus {
     const started = (run: DrinkRun) => {
       // The screen on show from the hash, not the last render: the shot focus may have switched a moment ago, before React heard.
       const shown = parseRoute(window.location.hash);
-      const step = drinkStarted(focusRef.current, { kind: run.kind, typing: isTextEntry(document.activeElement), shown });
+      const held = shown.name === 'care' && isCareVideoOpen();
+      const step = drinkStarted(focusRef.current, { kind: run.kind, typing: isTextEntry(document.activeElement), held, shown });
       if (step.state !== focusRef.current) {
         focusRef.current = step.state;
         setFocus(step.state);

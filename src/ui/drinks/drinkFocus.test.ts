@@ -9,6 +9,18 @@ describe('drinkStarted', () => {
     });
   });
 
+  it("stays while the barista follows Decent's video on Care (D156)", () => {
+    const origin = { origin: { name: 'coach' as const } };
+    expect(drinkStarted(origin, { kind: 'flush', typing: false, held: true, shown: { name: 'care', routine: 'daily' } })).toEqual({
+      state: origin,
+      go: null,
+    });
+    expect(drinkStarted(origin, { kind: 'flush', typing: false, held: false, shown: { name: 'care', routine: 'daily' } })).toEqual({
+      state: { origin: { name: 'care', routine: 'daily' } },
+      go: { name: 'drink', drink: 'flush' },
+    });
+  });
+
   it('stays while the barista types, and when the view is already there', () => {
     const origin = { origin: { name: 'coach' as const } };
     expect(drinkStarted(origin, { kind: 'flush', typing: true, shown: { name: 'history' } })).toEqual({ state: origin, go: null });

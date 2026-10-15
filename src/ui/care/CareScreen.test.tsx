@@ -6,8 +6,9 @@ import { createFakeServices } from '../testing/fakeServices.ts';
 import { renderWithServices } from '../testing/renderWithServices.tsx';
 import { TID } from '../testIds.ts';
 import { embedUrl, watchUrl } from './careGuide.ts';
-import { CareScreen, WIDE_FROM } from './CareScreen.tsx';
+import { CareScreen, maxPlayerHeight, WIDE_FROM } from './CareScreen.tsx';
 import type { RoutineId } from './routines.ts';
+import { isCareVideoOpen } from './videoHold.ts';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -122,9 +123,48 @@ describe('CareScreen', () => {
     expect(screen.getByTestId(TID.careLink('descale'))).not.toHaveAttribute('target');
   });
 
+  it('the poster gives the focus to the player it opens; a moment keeps it', async () => {
+    care();
+    await userEvent.click(screen.getByTestId(TID.carePoster));
+    expect(screen.getByTestId(TID.carePlayer)).toHaveFocus();
+    const moment = screen.getByTestId(TID.careMoment('flush-group'));
+    await userEvent.click(moment);
+    expect(moment).toHaveFocus();
+  });
+
+  it("holds a drink's switch while the video is open, and lets go when Care goes (D156)", async () => {
+    const { unmount } = care();
+    expect(isCareVideoOpen()).toBe(false);
+    await userEvent.click(screen.getByTestId(TID.careMoment('flush-group')));
+    expect(isCareVideoOpen()).toBe(true);
+    unmount();
+    expect(isCareVideoOpen()).toBe(false);
+  });
+
+  it('holds nothing where the moments are links', () => {
+    care({ insideDecaid: true, platform: 'ios' });
+    expect(isCareVideoOpen()).toBe(false);
+  });
+
+  it('names the video by a heading, under the screen', () => {
+    care();
+    expect(screen.getByRole('heading', { level: 2, name: 'How often/to clean DE1' })).toBeInTheDocument();
+  });
+
   it("in a browser, links open a new tab", () => {
     care({ routine: 'asNeeded' });
     expect(screen.getByTestId(TID.careWatch)).toHaveAttribute('target', '_blank');
     expect(screen.getByTestId(TID.careLink('steam-tip'))).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+});
+
+describe('maxPlayerHeight', () => {
+  it('limits the player in one column to the room under the header, and never on a wide screen', () => {
+    // A phone on its side: 317 px under its bars, the 57 px header, 8 px of air.
+    expect(maxPlayerHeight(false, 317)).toBe(252);
+    expect(maxPlayerHeight(true, 317)).toBeNull();
+    expect(maxPlayerHeight(false, 0)).toBeNull();
+    // Never smaller than 120 px, however short the screen.
+    expect(maxPlayerHeight(false, 150)).toBe(120);
   });
 });

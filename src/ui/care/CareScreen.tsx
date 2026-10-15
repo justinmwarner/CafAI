@@ -25,6 +25,7 @@ import { CareSegments } from './CareSegments.tsx';
 import { CareVideo, type Playing } from './CareVideo.tsx';
 import { RoutineCard } from './RoutineCard.tsx';
 import type { RoutineId } from './routines.ts';
+import { setCareVideoOpen } from './videoHold.ts';
 import { outsideLinkProps, videoPlaysInPlace } from './videoPlace.ts';
 
 export interface CareScreenProps {
@@ -38,6 +39,24 @@ export interface CareScreenProps {
 /** Two columns from this own width: every Decent tablet, an iPad on its side. */
 export const WIDE_FROM = 840;
 const chooseWide = (width: number) => width >= WIDE_FROM;
+const heightOf = (_width: number, height: number) => height;
+
+/** The header's height: History's. */
+const HEADER_HEIGHT = 57;
+/** Room kept under the player in one column, so all of it is in view once brought there. */
+const PLAYER_AIR = 8;
+/** The player never shrinks below this to fit a short screen. */
+const MIN_PLAYER_HEIGHT = 120;
+
+/**
+ * The tallest the player may be in one column: the room under the header,
+ * less a little air, so a phone on its side shows all of it; null on a wide
+ * screen (it has its own column) or before the screen is measured.
+ */
+export function maxPlayerHeight(wide: boolean, roomHeight: number): number | null {
+  if (wide || roomHeight <= 0) return null;
+  return Math.max(MIN_PLAYER_HEIGHT, roomHeight - HEADER_HEIGHT - PLAYER_AIR);
+}
 
 const PANEL_ID = 'care-routine-panel';
 const tabIdOf = (routine: RoutineId) => `care-tab-${routine}`;
@@ -77,19 +96,19 @@ export function CareScreen({ routine, onRoutine, onBack }: CareScreenProps) {
   const inPlace = videoPlaysInPlace(host);
   const linkProps = outsideLinkProps(host);
   const box = useRef<HTMLDivElement>(null);
-  const video = useRef<HTMLDivElement>(null);
   const wide = useOwnLayout(box, chooseWide);
+  const roomHeight = useOwnLayout(box, heightOf);
   const [playing, setPlaying] = useState<Playing | null>(null);
   const play = (start: number, key: string, label: string | null) =>
     setPlaying((current) => ({ start, key, label, take: (current?.take ?? 0) + 1 }));
 
-  // In one column the player may be above the step that started it: bring it into view.
-  const take = playing?.take ?? 0;
+  // While the video is open, a drink starting leaves Care where it is (D156).
+  const videoOpen = playing !== null;
   useEffect(() => {
-    if (take === 0 || wide) return;
-    const node = video.current;
-    if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'nearest' });
-  }, [take, wide]);
+    if (!videoOpen) return;
+    setCareVideoOpen(true);
+    return () => setCareVideoOpen(false);
+  }, [videoOpen]);
 
   return (
     <Box ref={box} data-testid={TID.careScreen} sx={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -99,7 +118,7 @@ export function CareScreen({ routine, onRoutine, onBack }: CareScreenProps) {
           display: 'flex',
           alignItems: 'center',
           gap: 0.25,
-          minHeight: 57,
+          minHeight: HEADER_HEIGHT,
           pl: 0.5,
           pr: 2,
           py: 0.5,
@@ -122,12 +141,12 @@ export function CareScreen({ routine, onRoutine, onBack }: CareScreenProps) {
           {/* At the top of its column on a wide screen; across the column's width on a narrow one. */}
           <Box sx={wide ? { gridArea: 'video', alignSelf: 'start', minWidth: 0 } : { minWidth: 0 }}>
             <CareVideo
-              ref={video}
               inPlace={inPlace}
               compact={!wide}
               playing={playing}
               onPlayFromStart={() => play(0, 'poster', null)}
               linkProps={linkProps}
+              maxPlayerHeight={maxPlayerHeight(wide, roomHeight)}
             />
           </Box>
           {/* Keyed by the routine, so a new routine starts at its top. */}

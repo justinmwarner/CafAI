@@ -6,7 +6,7 @@
  * cannot play in place (inside Decaid off Android) there is no poster: the
  * card says Decaid opens the video in the browser, and the moments are links.
  */
-import type { Ref } from 'react';
+import { useEffect, useId, useRef, type RefObject } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import ButtonBase from '@mui/material/ButtonBase';
@@ -31,12 +31,13 @@ export interface Playing {
 export interface CareVideoProps {
   /** YouTube's player can play here (videoPlace.ts); otherwise links. */
   inPlace: boolean;
-  /** The narrow screen: one short row until a tap. */
+  /** The narrow screen: one short row until a tap, and the player brought into view when it opens. */
   compact: boolean;
   playing: Playing | null;
   onPlayFromStart(): void;
   linkProps: { target?: '_blank'; rel?: string };
-  ref?: Ref<HTMLDivElement>;
+  /** The tallest the player may be, so all of it fits in view (a phone on its side); null for no limit. */
+  maxPlayerHeight?: number | null;
 }
 
 export const LOADS_FROM_YOUTUBE = 'Loads from YouTube when you tap play.';
@@ -62,6 +63,14 @@ function playCircleSx(size: number) {
   } as const;
 }
 
+function Title() {
+  return (
+    <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
+      {CARE_VIDEO.title}
+    </Typography>
+  );
+}
+
 function WatchLink({ linkProps }: { linkProps: CareVideoProps['linkProps'] }) {
   return (
     <Button
@@ -78,13 +87,57 @@ function WatchLink({ linkProps }: { linkProps: CareVideoProps['linkProps'] }) {
   );
 }
 
-export function CareVideo({ inPlace, compact, playing, onPlayFromStart, linkProps, ref }: CareVideoProps) {
+interface PlayerProps {
+  playing: Playing;
+  reveal: boolean;
+  /** Set by the poster as it starts the player: it is gone once the player opens, so the focus goes to the player. */
+  takeFocus: RefObject<boolean>;
+  maxHeight: number | null;
+}
+
+/** YouTube's player, made again on every tap; never smaller than 16:9 at its width, and centred when a short screen narrows it. */
+function Player({ playing, reveal, takeFocus, maxHeight }: PlayerProps) {
+  const frame = useRef<HTMLIFrameElement>(null);
+  useEffect(() => {
+    const node = frame.current;
+    if (!node) return;
+    if (takeFocus.current) {
+      takeFocus.current = false;
+      node.focus();
+    }
+    // In one column the player may be above the step that started it.
+    if (reveal && typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'nearest' });
+  }, [playing.take, reveal, takeFocus]);
+  const limit = maxHeight === null ? null : { maxWidth: Math.floor((maxHeight * 16) / 9), mx: 'auto' };
+  return (
+    <Box sx={{ ...frameSx, ...limit, bgcolor: 'cafai.raised' }}>
+      <Box
+        component="iframe"
+        ref={frame}
+        key={playing.take}
+        data-testid={TID.carePlayer}
+        src={embedUrl(playing.start)}
+        title={`Decent's video: ${CARE_VIDEO.title}`}
+        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+        allowFullScreen
+        referrerPolicy="strict-origin-when-cross-origin"
+        sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 0 }}
+      />
+    </Box>
+  );
+}
+
+export function CareVideo({ inPlace, compact, playing, onPlayFromStart, linkProps, maxPlayerHeight = null }: CareVideoProps) {
+  const takeFocus = useRef(false);
+  const loadsId = useId();
+  const startFromPoster = () => {
+    takeFocus.current = true;
+    onPlayFromStart();
+  };
   if (!inPlace) {
     return (
-      <Paper ref={ref} variant="outlined" data-testid={TID.careVideo} sx={cardSx}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          {CARE_VIDEO.title}
-        </Typography>
+      <Paper variant="outlined" data-testid={TID.careVideo} sx={cardSx}>
+        <Title />
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
           {DETAILS}
         </Typography>
@@ -97,20 +150,8 @@ export function CareVideo({ inPlace, compact, playing, onPlayFromStart, linkProp
   }
   if (playing) {
     return (
-      <Paper ref={ref} variant="outlined" data-testid={TID.careVideo} sx={cardSx}>
-        <Box sx={{ ...frameSx, bgcolor: 'cafai.raised' }}>
-          <Box
-            component="iframe"
-            key={playing.take}
-            data-testid={TID.carePlayer}
-            src={embedUrl(playing.start)}
-            title={`Decent's video: ${CARE_VIDEO.title}`}
-            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-            allowFullScreen
-            referrerPolicy="strict-origin-when-cross-origin"
-            sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 0 }}
-          />
-        </Box>
+      <Paper variant="outlined" data-testid={TID.careVideo} sx={cardSx}>
+        <Player playing={playing} reveal={compact} takeFocus={takeFocus} maxHeight={maxPlayerHeight} />
         <Typography variant="body2" sx={{ mt: 1 }}>
           {playing.label === null ? (
             'Playing from the start'
@@ -133,11 +174,13 @@ export function CareVideo({ inPlace, compact, playing, onPlayFromStart, linkProp
   }
   if (compact) {
     return (
-      <Paper ref={ref} variant="outlined" data-testid={TID.careVideo} sx={{ ...cardSx, p: 0, overflow: 'hidden' }}>
+      // No overflow clipping here: it would clip the row's focus ring, which is drawn outside it.
+      <Paper variant="outlined" data-testid={TID.careVideo} sx={{ ...cardSx, p: 0 }}>
         <ButtonBase
           data-testid={TID.carePoster}
           aria-label={PLAY_NAME}
-          onClick={onPlayFromStart}
+          aria-describedby={loadsId}
+          onClick={startFromPoster}
           sx={{
             width: '100%',
             display: 'grid',
@@ -148,6 +191,8 @@ export function CareVideo({ inPlace, compact, playing, onPlayFromStart, linkProp
             textAlign: 'left',
             p: 1,
             pr: 1.5,
+            // The card's corner inside its 1 px line, so a press fills the row and no more.
+            borderRadius: '15px',
             fontFamily: 'inherit',
             color: 'text.primary',
           }}
@@ -159,7 +204,7 @@ export function CareVideo({ inPlace, compact, playing, onPlayFromStart, linkProp
             <Typography component="span" variant="body2" sx={{ display: 'block', fontWeight: 600 }}>
               Decent's video · {CARE_VIDEO_MINUTES}
             </Typography>
-            <Typography component="span" variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+            <Typography id={loadsId} component="span" variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
               {LOADS_FROM_YOUTUBE}
             </Typography>
           </Box>
@@ -168,11 +213,12 @@ export function CareVideo({ inPlace, compact, playing, onPlayFromStart, linkProp
     );
   }
   return (
-    <Paper ref={ref} variant="outlined" data-testid={TID.careVideo} sx={cardSx}>
+    <Paper variant="outlined" data-testid={TID.careVideo} sx={cardSx}>
       <ButtonBase
         data-testid={TID.carePoster}
         aria-label={PLAY_NAME}
-        onClick={onPlayFromStart}
+        aria-describedby={loadsId}
+        onClick={startFromPoster}
         sx={{
           ...frameSx,
           display: 'flex',
@@ -190,13 +236,13 @@ export function CareVideo({ inPlace, compact, playing, onPlayFromStart, linkProp
           Play Decent's video
         </Box>
       </ButtonBase>
-      <Typography variant="subtitle1" sx={{ fontWeight: 600, mt: 1.25 }}>
-        {CARE_VIDEO.title}
-      </Typography>
+      <Box sx={{ mt: 1.25 }}>
+        <Title />
+      </Box>
       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
         {DETAILS}
       </Typography>
-      <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 0.75 }}>
+      <Typography id={loadsId} variant="caption" component="p" sx={{ color: 'text.secondary', mt: 0.75 }}>
         {LOADS_FROM_YOUTUBE}
       </Typography>
       <WatchLink linkProps={linkProps} />

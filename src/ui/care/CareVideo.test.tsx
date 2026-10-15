@@ -85,3 +85,28 @@ describe('MomentButton', () => {
     expect(link).not.toHaveAttribute('target');
   });
 });
+
+describe('CareVideo on a short screen', () => {
+  it('narrows the player to keep 16:9 within the height it may take, centred', () => {
+    renderWithServices(
+      <CareVideo
+        inPlace
+        compact
+        playing={{ start: 108, key: 'flush-group', label: 'Flush the group head', take: 1 }}
+        onPlayFromStart={() => undefined}
+        linkProps={NEW_TAB}
+        maxPlayerHeight={225}
+      />,
+    );
+    const box = screen.getByTestId(TID.carePlayer).parentElement!;
+    expect(getComputedStyle(box).maxWidth).toBe('400px');
+  });
+
+  it('describes the poster by where the video comes from', () => {
+    video({ compact: true });
+    expect(screen.getByTestId(TID.carePoster)).toHaveAccessibleDescription(LOADS_FROM_YOUTUBE);
+    cleanup();
+    video();
+    expect(screen.getByTestId(TID.carePoster)).toHaveAccessibleDescription(LOADS_FROM_YOUTUBE);
+  });
+});
