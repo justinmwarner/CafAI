@@ -70,6 +70,11 @@ export const WATCH = [
   'lib/src/settings/sleep_timeout_preference.dart',
   'lib/src/settings/settings_controller.dart',
   'lib/src/settings/presence_settings_page.dart',
+  // The care reminders (D-CARE-3, D-CARE-4): which runs Decaid saves as shots (none for a cleaning profile),
+  // when a steam record opens and closes, and what the shot and steam lists cost Decaid to read.
+  'lib/src/controllers/de1_state_manager.dart',
+  'lib/src/controllers/steam_sequencer.dart',
+  'lib/src/services/database/mappers/',
   'lib/src/skin_feature/',
   'lib/src/webui_support/',
   'assets/plugins/visualizer.reaplugin/',
