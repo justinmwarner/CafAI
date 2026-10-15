@@ -1,6 +1,7 @@
 import { createContext, useContext, useSyncExternalStore, type ReactNode } from 'react';
 import type { CoachState, Services } from './types.ts';
 import type { TelemetryState } from '../api/types.ts';
+import { DEFAULT_TEMPERATURE_UNIT, type TemperatureUnit } from '../coach/temperature.ts';
 import type { Appearance } from '../storage/types.ts';
 
 const ServicesContext = createContext<Services | null>(null);
@@ -35,4 +36,16 @@ export function useCoach<T>(selector: (state: CoachState) => T): T {
 export function useAppearance(): Appearance {
   const { appearance } = useServices();
   return useSyncExternalStore(appearance.subscribe, appearance.get);
+}
+
+const unchanging = () => () => undefined;
+const inCelsius = () => DEFAULT_TEMPERATURE_UNIT;
+
+/**
+ * The barista's temperature unit (D-TEMP-2). °C outside a ServicesProvider,
+ * as in a card's own test, so a temperature always reads as something.
+ */
+export function useTemperatureUnit(): TemperatureUnit {
+  const store = useContext(ServicesContext)?.temperatureUnit;
+  return useSyncExternalStore(store?.subscribe ?? unchanging, store?.get ?? inCelsius);
 }

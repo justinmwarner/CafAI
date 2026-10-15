@@ -3,7 +3,9 @@ import { createDecaidClient } from '../api/client.ts';
 import type { Grinder } from '../api/grinders.ts';
 import type { ShotUpdateRequest, WireProfile } from '../api/types.ts';
 import { TOOL } from '../coach/contract.ts';
-import { getTemplate } from '../coach/index.ts';
+import { FAHRENHEIT_HEADING } from '../coach/fahrenheitPrompt.ts';
+import { buildSystemPrompt, getTemplate, TEMPLATES } from '../coach/index.ts';
+import type { TemperatureUnit } from '../coach/temperature.ts';
 import { createFakeDecaid } from '../ui/testing/fakeServices.ts';
 import { createApiPort, createCoachPort, createLlmPort, grinderInfo } from './adapters.ts';
 
@@ -197,6 +199,20 @@ describe('grinderInfo', () => {
 describe('createCoachPort', () => {
   const coach = createCoachPort();
   const blooming = getTemplate('blooming-espresso')!;
+
+  it('builds one prompt per temperature unit, and reads the unit for every request (D-TEMP-5)', () => {
+    let unit: TemperatureUnit = 'celsius';
+    const port = createCoachPort({ temperatureUnit: () => unit });
+    const celsius = port.systemPrompt();
+    expect(celsius).toBe(buildSystemPrompt(TEMPLATES));
+    expect(coach.systemPrompt()).toBe(celsius);
+    unit = 'fahrenheit';
+    const fahrenheit = port.systemPrompt();
+    expect(fahrenheit).toContain(FAHRENHEIT_HEADING);
+    expect(port.systemPrompt()).toBe(fahrenheit);
+    unit = 'celsius';
+    expect(port.systemPrompt()).toBe(celsius);
+  });
 
   it("builds v1 from the dose with the coach's own rules (D57)", () => {
     expect(coach.buildStartingProfile(blooming, 16).target_weight).toBe(45);

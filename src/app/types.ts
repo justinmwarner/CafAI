@@ -15,6 +15,7 @@ import type { ModelInfo } from '../llm/types.ts';
 import type { CoachSourceStore } from '../storage/coachSource.ts';
 import type { Bag, ProfileVersion, Storage } from '../storage/types.ts';
 import type { AppearanceStore } from './appearance.ts';
+import type { TemperatureUnitStore } from './temperatureUnit.ts';
 
 /** Everything the UI needs, provided once through ServicesProvider (src/app/services.tsx). */
 export interface Services {
@@ -30,6 +31,8 @@ export interface Services {
   plugins: PluginDirectory;
   /** How CafAI looks: the appearance setting as live state. */
   appearance: AppearanceStore;
+  /** °C or °F where the barista reads or sets a temperature (D-TEMP-2), as live state. */
+  temperatureUnit: TemperatureUnitStore;
   /**
    * Where the coach runs: Anthropic, or CafAI Bridge on the user's computer
    * (src/app/coachAccess.ts). Optional: fakes and previews leave it out, and
