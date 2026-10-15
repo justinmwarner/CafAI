@@ -79,6 +79,8 @@ export interface ChatSurfaceProps {
   onUndo(): void;
   /** A word tapped under "Compared with ...?" on a shot card (D126). */
   onRateShot(shotId: string, verdict: ShotVerdict): void;
+  /** A TDS saved (or removed, null) on a shot card (D-TDS-1). Without it the cards offer no Add. */
+  onShotTds?(shotId: string, tdsPct: number | null): void;
   /** A batch of Decaid's bean library picked on "Which coffee is it?" (6.1). */
   onPickBean?(batchId: string): void;
   /** The bean card's Something else. */
@@ -212,6 +214,7 @@ interface PartActions {
   decline(requestId: string): void;
   undo(): void;
   rateShot(shotId: string, verdict: ShotVerdict): void;
+  shotTds(shotId: string, tdsPct: number | null): void;
   openGraph(): void;
   /** The Stats prompt (it lives in x-chat's slot above the composer, so it reaches ChatSurface through here too). */
   askStats(): void;
@@ -233,6 +236,8 @@ interface PartsContextValue {
   hasOpenGraph: boolean;
   /** Whether a Stats handler was given: without one the prompt row has no Stats. */
   hasStats: boolean;
+  /** Whether a TDS handler was given: without one the shot cards offer no Add. */
+  hasShotTds: boolean;
   /** The taste question waits for its answer: the prompt row offers Taste words and Need help? (D127). */
   tasteOpen: boolean;
   actions: PartActions;
@@ -302,7 +307,7 @@ function DiffView({ data }: { data: unknown }) {
 }
 
 function ShotView({ data }: { data: unknown }) {
-  const { busy, graphShotId, hasOpenGraph, actions } = usePartsContext();
+  const { busy, graphShotId, hasOpenGraph, hasShotTds, actions } = usePartsContext();
   const part = cardOf(data, 'shot');
   if (!part) return null;
   // The trace holds one shot: only the card of that shot may open its graph.
@@ -317,6 +322,7 @@ function ShotView({ data }: { data: unknown }) {
       onRate={(verdict) => actions.rateShot(part.shotId, verdict)}
       onOpenGraph={showGraph ? actions.openGraph : undefined}
       visualizerUrl={part.visualizerUrl ?? null}
+      onSaveTds={hasShotTds ? (tdsPct) => actions.shotTds(part.shotId, tdsPct) : undefined}
     />
   );
 }
@@ -605,6 +611,7 @@ export function ChatSurface(props: ChatSurfaceProps) {
   // partsContext stable so part renderers do not re-render on every parent render.
   const hasOpenGraph = onOpenGraph !== undefined;
   const hasStats = onStats !== undefined;
+  const hasShotTds = props.onShotTds !== undefined;
 
   // Latest-ref: the adapter and part actions stay stable while the parent
   // passes fresh callbacks on every render (every streamed token).
@@ -651,6 +658,8 @@ export function ChatSurface(props: ChatSurfaceProps) {
       undo: act(() => propsRef.current.onUndo()),
       // A rating is often given on an older card: the view stays where the barista is reading.
       rateShot: (shotId: string, verdict: ShotVerdict) => propsRef.current.onRateShot(shotId, verdict),
+      // So is a TDS: measured a minute or two after the shot, often under the coach's reply.
+      shotTds: (shotId: string, tdsPct: number | null) => propsRef.current.onShotTds?.(shotId, tdsPct),
       // Navigation, not a chat append: no need to follow the thread for it either.
       openGraph: () => propsRef.current.onOpenGraph?.(),
       // No message and no coach call: the card is screen-only (statsCard.ts).
@@ -670,8 +679,8 @@ export function ChatSurface(props: ChatSurfaceProps) {
   const latestAppliedDiff = useMemo(() => latestAppliedDiffId(messages), [messages]);
   const tasteOpen = useMemo(() => tasteQuestionOpen(messages), [messages]);
   const partsContext = useMemo<PartsContextValue>(
-    () => ({ busy, canUndo, latestAppliedDiff, graphShotId, hasOpenGraph, hasStats, tasteOpen, actions }),
-    [busy, canUndo, latestAppliedDiff, graphShotId, hasOpenGraph, hasStats, tasteOpen, actions],
+    () => ({ busy, canUndo, latestAppliedDiff, graphShotId, hasOpenGraph, hasStats, hasShotTds, tasteOpen, actions }),
+    [busy, canUndo, latestAppliedDiff, graphShotId, hasOpenGraph, hasStats, hasShotTds, tasteOpen, actions],
   );
 
   const chatMessages = useMemo(() => toChatMessages(messages, busy, statsCard), [messages, busy, statsCard]);

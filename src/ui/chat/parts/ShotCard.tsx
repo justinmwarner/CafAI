@@ -17,6 +17,7 @@ import type { ShotSummary } from '../../../coach/types.ts';
 import { TID } from '../../testIds.ts';
 import { describeChannelingFlag, formatBar, formatGrams, formatRatio, formatSeconds, shotRatio } from '../format.ts';
 import { sparklinePath } from '../sparkline.ts';
+import { ShotTds } from './ShotTds.tsx';
 
 const SPARK_WIDTH = 240;
 const SPARK_HEIGHT = 48;
@@ -235,12 +236,14 @@ export interface ShotCardProps {
   stars?: number | null;
   /** Rate the shot. Without it the card shows no rating. */
   onRate?: (verdict: ShotVerdict) => void;
-  /** True while the coach is working; blocks a rating tap. */
+  /** True while the coach is working; blocks a rating tap and a TDS save. */
   disabled?: boolean;
   /** Opens the shot's full graph (#/shot). Without it the card shows no Graph link. */
   onOpenGraph?: () => void;
   /** The shot's page on Visualizer, once Decaid's Visualizer plugin uploaded it (6.4). */
   visualizerUrl?: string | null;
+  /** Keep the barista's TDS (%) or remove it (null) (D-TDS-1). Without it the card shows a reading it has, and no Add. */
+  onSaveTds?: (tdsPct: number | null) => void;
 }
 
 /** A finished shot at a glance: the numbers the coach reasons about, its curves, and the barista's verdict. */
@@ -253,6 +256,7 @@ export function ShotCard({
   disabled = false,
   onOpenGraph,
   visualizerUrl = null,
+  onSaveTds,
 }: ShotCardProps) {
   // The shot time is the pour, so every other time counts from its start too:
   // a peak "at 61 s" of a 60 s shot would come after the shot ended.
@@ -282,6 +286,7 @@ export function ShotCard({
         <Metric label="Ratio" value={formatRatio(shotRatio(summary))} />
         <Metric label="Peak pressure" value={peak} />
         <Metric label="First drop" value={formatSeconds(firstDrop)} />
+        <ShotTds summary={summary} onSave={onSaveTds} busy={disabled} />
       </Box>
       <Sparkline summary={summary} onOpenGraph={onOpenGraph} />
       {summary.channelingFlags.length > 0 ? (

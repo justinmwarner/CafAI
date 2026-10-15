@@ -26,6 +26,7 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import type { Bag, IterationRecord, ProfileVersion } from '../../storage/types.ts';
 import { OTHER_OPTION } from '../../coach/contract.ts';
+import { formatEy, formatTds, readingOf } from '../../coach/extraction.ts';
 import { useCoach, useServices } from '../../app/services.tsx';
 import { TID } from '../testIds.ts';
 import {
@@ -159,11 +160,15 @@ function ChangeLines({ lines }: { lines: string[] }) {
 function shotLine(record: IterationRecord): string {
   const s = record.summary;
   if (!s) return 'No shot data';
+  // The barista's refractometer reading, and its EY when there is one (D-TDS-5).
+  const reading = readingOf(s);
+  const measured = reading ? [`TDS ${formatTds(reading.tdsPct)}`, ...(reading.eyPct === null ? [] : [`EY ${formatEy(reading.eyPct)}`])] : [];
   return [
     formatSeconds(s.durationS),
     `${formatGrams(s.doseG)} → ${formatGrams(s.yieldG)}`,
     formatRatio(shotRatio(s)),
     `peak ${formatBar(s.peakPressureBar)}`,
+    ...measured,
   ].join(' · ');
 }
 
