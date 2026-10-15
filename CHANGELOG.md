@@ -17,6 +17,12 @@ workflow checks against it. Settings > About shows the version you run.
   and group temperature) and a trace of the run; and the drink's settings,
   held while it runs and yours to change the moment it stops. The view stays
   with its result, and **Go back** returns to where you were.
+- Settings > Machine care: Decent's cleaning routine, one at a time (Daily,
+  Weekly, Monthly, As needed), each step with what to do, when, and its
+  moment in Decent's video "How often/to clean DE1". The video plays in
+  place in a browser and on Decent's tablets; elsewhere in Decaid each
+  moment opens YouTube at that time. Nothing loads from YouTube until you
+  tap, and the steps themselves work offline.
 
 ## 0.1.1 (2026-10-12)
 

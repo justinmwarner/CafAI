@@ -325,6 +325,20 @@ with **Retry**; it never loads anything on the machine by itself.
   answers, the fields show a dash, and a write that fails says why under
   its setting. Steam that is off in Decaid (below 135 °C) reads "Off in
   Decaid"; turning it on or off stays in Decaid.
+- **Settings > Machine care**: **Cleaning guide** opens Decent's routine for
+  the DE1, one at a time: **Daily** (purge the wand, flush the group head,
+  wipe the shower screen, rinse the wand), **Weekly** (detergent, Rinza, the
+  tank and drip tray, the intake filter), **Monthly** (the group head's
+  parts, the gasket) and **As needed** (descaling for your water, a clogged
+  steam tip, emptying the machine to move it). Each step says what to do and
+  when, with its moment in Decent's video "How often/to clean DE1"; where
+  the 2022 video and Decent's current pages differ, the step follows the
+  pages and says so. The video plays in place in a browser and on Decent's
+  tablets; inside Decaid on Windows, a Mac or an iPad, each moment opens
+  YouTube at that time instead (Decaid would not let it play in place). The
+  steps are CafAI's own words and work offline. CafAI cannot start the DE1's
+  Clean, Descale or Transport yet; the steps that need them say to use
+  streamline, the skin Decaid comes with, for now.
 - **Settings > About**: CafAI's version, and the Decaid you run next to the
   one CafAI was checked against ("Decaid 0.9.0 (CafAI was verified with
   0.8.8)", with a note when yours is older); anything Decaid sent that
@@ -442,6 +456,12 @@ troubleshooting.
   as enjoyment, and CafAI's own extras), which Decaid may upload to
   Visualizer if you set that up. Notes you wrote yourself are never
   overwritten.
+- Settings > Machine care loads nothing from YouTube until you tap play or
+  one of the video's moments. Then YouTube's player comes from
+  `youtube-nocookie.com` (YouTube's privacy-enhanced mode), and YouTube,
+  that is Google, sees your device's address and that the video played.
+  Inside Decaid on Windows, a Mac or an iPad a moment opens YouTube in your
+  browser instead.
 - With an API key, calls go straight from the tablet to `api.anthropic.com`.
 - With Claude on my computer, calls go from the tablet to CafAI Bridge on
   your computer, over your network in plain HTTP with the pairing code
@@ -767,7 +787,7 @@ General, "Read repository contents and packages permissions") can stay.
 | `src/storage` | IndexedDB repositories, the key store (and the key's optional copy in Decaid), where the coach runs, export/import, mirror to Decaid's KV store |
 | `src/traffic` | The traffic log behind Settings > Log: the recorder, what it never keeps (the key, the pairing code, image data), and the text Share, Email and Copy send |
 | `src/app` | The coach engine, services, app composition |
-| `src/ui` | Shell, machine row, stats card and alert, live graph, chat surface, history and settings |
+| `src/ui` | Shell, machine row, stats card and alert, live graph, chat surface, history, settings and the cleaning guide |
 | `mock` | MSW mocks of Decaid, Claude and CafAI Bridge, the demo, and fixtures |
 | `bridge` | CafAI Bridge: the coach on your own Claude Code ([bridge/README.md](bridge/README.md)) |
 | `contract/decaid` | Decaid's specs at the pinned release, the types generated from them, and the checks `npm run typecheck` runs, with the recorded spec errors; Decaid's agent skill and API notes at the same release |

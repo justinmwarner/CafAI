@@ -10,52 +10,21 @@ CafAI cannot start the DE1's cleaning, descaling or transport cycles: its
 commands stop at espresso, steam, hot water, flush, sleep and the next step
 (`src/api/types.ts`), though D97 gives the three cycles Stop when something
 else starts them. Decaid's own screens have none of them, so today an owner
-switches to streamline to descale. No skin for Decaid keeps reminders or
-shows how to clean; Decent's video and docs do. Three items, each building
-on the one before:
+switches to streamline to descale. No skin for Decaid keeps reminders, and
+until CafAI's guide none showed how to clean; Decent's video and docs do.
+Three items, each building on the one before:
 
-- **A cleaning guide, with Decent's video** (the owner's item). A Care
-  screen (where it sits in the shell is a design call) lists what to do
-  daily, weekly and every two to four weeks, each step with a line on how
-  and a jump to its moment in Decent's "How often/to clean DE1" (Decent
-  Espresso Tech, 2022-03-07, 22:33,
-  <https://www.youtube.com/watch?v=0cm1JxB_6bI>). Decent's quick start
-  sends owners to it, and it may be embedded. Its moments, from its
-  description (YouTube shows them as key moments, not chapters, so the
-  first starts at 0:20):
-
-  | When | Moment | Starts |
-  |---|---|---|
-  | Daily | Daily | 0:20 (20 s) |
-  | Daily | Group head without detergent: a blind basket, Forward Flush x5 twice after the day's last shot | 1:48 (108 s) |
-  | Daily | Steam tip, and washing the tank and the drip tray | 5:10 (310 s) |
-  | Weekly | Weekly | 7:40 (460 s) |
-  | Weekly | Group head with detergent | 7:53 (473 s) |
-  | Weekly | Steam wand with Rinza | 11:11 (671 s) |
-  | Weekly | Water tank and thimble (the intake filter) | 14:23 (863 s) |
-  | Every 2-4 weeks | Fortnightly / Monthly | 16:36 (996 s) |
-  | Every 2-4 weeks | Group head parts: the screen and two diffusers, soaked overnight | 16:56 (1016 s) |
-
-  Where the 2022 video and Decent's current docs differ, the steps follow
-  the docs and say so: descaling with 60-120 ppm water (the video: hardly
-  needed; the docs: every year or two), the steam tip (the video takes it
-  off every night; Decent only for a clog, holding the inner tube), Rinza
-  (the video steams it; the quick start soaks it: "Do not steam!"), and the
-  group head's parts (the video: every two weeks, the machine asleep; the
-  quick start: monthly, the machine off; Torx screws since v1.44). What the
-  video leaves out comes from the docs: the steam purge after steaming,
-  wiping the shower screen, the gasket, the machine's own Clean cycle and
-  Transport. The player loads only on a tap, from `youtube-nocookie.com`,
-  and README's Privacy says Google is then reached; each moment is also a
-  link to `watch?v=0cm1JxB_6bI&t=<s>s`, which Decaid opens in the system
-  browser, and the list works offline. Check first: the player on a Decent
-  tablet (Android's WebView does not ask Decaid about an iframe's http(s)
-  loads, so it should play in place, but Decaid's WebView calls itself
-  just `Decent`, which YouTube may refuse), on Decaid for Windows with the
-  simulator, and on an iPad, where Decaid's navigation guard
-  (`classifySkinNavigation` in `lib/src/skin_feature/skin_view.dart`,
-  Decaid `af4e995`) would cancel the player and open YouTube outside, so
-  the links are the way there.
+- **A cleaning guide, with Decent's video: built on 2026-10-15** (D152-D155,
+  `docs/superpowers/specs/2026-10-15-machine-care-design.md`). Settings >
+  Machine care opens the Care screen: Daily, Weekly, Monthly and As needed,
+  one at a time, each step with a line on how and its moment in Decent's
+  "How often/to clean DE1"; where the 2022 video and Decent's current pages
+  differ, the step follows the pages and says so. YouTube accepts Decaid's
+  user agent (`Decent`), even in Chromium 91, but Decaid for Windows sent
+  the player to the system browser instead of framing it, so the player
+  plays in place only in a browser and on Android, and is a link to the
+  moment elsewhere in Decaid. Left: the check on a Decent tablet and an
+  iPad (`docs/HARDWARE_TEST_PLAN.md` section 14).
 - **Clean, Descale and Transport from CafAI.** Decaid takes
   `PUT /api/v1/machine/state/cleaning`, `descaling` and `airPurge`, and
   streamline's pages are the model
@@ -67,7 +36,8 @@ on the one before:
   Steam, and turns the heater back on however it ends; Transport drains the
   machine into the tank. A cycle started on the machine shows too, and
   done is only "seen, then gone": the firmware sends no end. The guide's
-  daily and weekly group flush is a profile, not a cycle: Decent's
+  weekly clean with detergent is a profile, not a cycle (its daily flush is
+  Flush, which the quick start allows): Decent's
   "Cleaning/Forward Flush x5", which Decaid ships
   (`assets/defaultProfiles/Cleaning__Forward_Flush_x5_2.json`). CafAI
   would load it, run it over the blind basket and put the bag's version
