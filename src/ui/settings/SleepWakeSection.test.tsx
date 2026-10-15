@@ -135,6 +135,7 @@ describe('the wake times', () => {
     await loaded();
     const rows = within(screen.getByRole('list', { name: 'Wake times' })).getAllByRole('listitem');
     expect(rows.map((row) => row.textContent)).toEqual(['06:30Weekdays · stays awake for 1 h', '08:00Weekends']);
+    expect(screen.getByTestId(TID.wakeEdit('w1'))).toHaveAccessibleName('Change the wake time 06:30, Weekdays, stays awake for 1 h');
     expect(screen.getByTestId(TID.nextWake)).toHaveTextContent('Next wake: tomorrow at 08:00.');
   });
 

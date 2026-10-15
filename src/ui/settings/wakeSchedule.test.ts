@@ -11,6 +11,7 @@ import {
   keptAwakeUntil,
   nextWake,
   sortSchedules,
+  speakSchedule,
 } from './wakeSchedule.ts';
 
 const wake = (id: string, time: string, daysOfWeek: number[] = [], extra: Partial<WakeSchedule> = {}): WakeSchedule => ({
@@ -70,6 +71,11 @@ describe('keeping awake', () => {
   it('puts the days and the window under a wake time', () => {
     expect(describeSchedule(wake('a', '06:30', [1, 2, 3, 4, 5], { keepAwakeFor: 60 }))).toBe('Weekdays · stays awake for 1 h');
     expect(describeSchedule(wake('b', '08:00', [6, 7]))).toBe('Weekends');
+  });
+
+  it('says a wake time aloud, the time first and whether it is off last', () => {
+    expect(speakSchedule(wake('a', '06:30', [1, 2, 3, 4, 5], { keepAwakeFor: 60 }))).toBe('06:30, Weekdays, stays awake for 1 h');
+    expect(speakSchedule(wake('b', '08:00', [6, 7], { enabled: false }))).toBe('08:00, Weekends, off');
   });
 });
 

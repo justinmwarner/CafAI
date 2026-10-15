@@ -108,6 +108,14 @@ export function describeSchedule(schedule: WakeSchedule): string {
   return schedule.keepAwakeFor ? `${days} · stays awake for ${formatMinutes(schedule.keepAwakeFor)}` : days;
 }
 
+/** The same said aloud, for the row's button: "06:30, Weekdays, stays awake for 1 h, off". */
+export function speakSchedule(schedule: WakeSchedule): string {
+  const parts = [schedule.time, describeDays(schedule.daysOfWeek)];
+  if (schedule.keepAwakeFor) parts.push(`stays awake for ${formatMinutes(schedule.keepAwakeFor)}`);
+  if (!schedule.enabled) parts.push('off');
+  return parts.join(', ');
+}
+
 /** Earliest first, as a day runs; at the same time, the one with the earliest day first. */
 export function sortSchedules(schedules: readonly WakeSchedule[]): WakeSchedule[] {
   const firstDay = (schedule: WakeSchedule) => daysPicked(schedule.daysOfWeek)[0] ?? 0;

@@ -30,7 +30,7 @@ import { TID } from '../testIds.ts';
 import { DrinkField } from './DrinkFields.tsx';
 import { Section } from './Section.tsx';
 import { usePresence } from './usePresence.ts';
-import { describeDays, describeSchedule, describeWhen, keptAwakeUntil, nextWake, SLEEP_AFTER, sortSchedules } from './wakeSchedule.ts';
+import { describeDays, describeSchedule, describeWhen, keptAwakeUntil, nextWake, SLEEP_AFTER, sortSchedules, speakSchedule } from './wakeSchedule.ts';
 import { WakeTimeDialog } from './WakeTimeDialog.tsx';
 
 export const SLEEP_WAKE_HELP = 'Decaid keeps these and acts on them while it runs, with CafAI open or not. Changes go to Decaid at once.';
@@ -97,7 +97,7 @@ function WakeRow({ schedule, switching, onEdit, onSwitch }: WakeRowProps) {
   const ink = schedule.enabled ? 'text.primary' : 'text.secondary';
   return (
     <Box role="listitem" sx={rowSx} data-testid={TID.wakeRow(schedule.id)}>
-      <ButtonBase onClick={onEdit} aria-label={`Change the wake time ${schedule.time}, ${days}`} data-testid={TID.wakeEdit(schedule.id)} sx={editSx}>
+      <ButtonBase onClick={onEdit} aria-label={`Change the wake time ${speakSchedule(schedule)}`} data-testid={TID.wakeEdit(schedule.id)} sx={editSx}>
         <Box sx={{ minWidth: 0 }}>
           <Typography component="div" sx={{ ...timeSx, color: ink }}>
             {schedule.time}
