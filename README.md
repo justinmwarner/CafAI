@@ -197,10 +197,18 @@ no API key ([docs/DEMO.md](docs/DEMO.md)).
    score in `enjoyment`, on the rating scale your Decaid keeps (0-10, or
    0-100 on older builds): CafAI asks it. When Decaid's Visualizer plugin
    has uploaded the shot, its card links to the shot's page (**On
-   Visualizer**), and History keeps the link. A taste, rating or grinder
-   setting Decaid did not take is tried again every 30 s until it goes
-   through (a reload drops what waits); one Decaid refuses is dropped, and
-   the chat says so once.
+   Visualizer**), and History keeps the link. With a refractometer, tap
+   **TDS · Add** among the card's numbers and type its reading (0.01-25 %;
+   a comma works too): CafAI works out the extraction yield (EY) from the
+   card's own dose and yield, so the EY is the TDS times the ratio, shows
+   both on the card and in History, and writes them to the shot's record in
+   Decaid (`drinkTds`, `drinkEy`), which Visualizer reads. The coach hears
+   the reading with your next tap or message, even one typed after it
+   suggested a change, and is told it is a number about extraction, never a
+   taste. A shot with no yield (no scale) keeps its TDS without an EY. A
+   taste, rating, TDS or grinder setting Decaid did not take is tried again
+   every 30 s until it goes through (a reload drops what waits); one Decaid
+   refuses is dropped, and the chat says so once.
 6. **One change.** The coach proposes the next version or a manual step such
    as grind, changing one variable at a time, and explains it by what it
    does at the machine, with your own words as the reason. You see a
@@ -465,11 +473,11 @@ troubleshooting.
   coffee (profile, grind, dose, yield, rpm, basket and date, and DYE2's
   equipment and basket names), which then go to Anthropic with the rest of
   the conversation. CafAI never writes DYE2's data.
-- Your taste answer for a shot, and how it compared with the shot before,
-  are also written to that shot's record in Decaid (notes, a running score
-  as enjoyment, and CafAI's own extras), which Decaid may upload to
-  Visualizer if you set that up. Notes you wrote yourself are never
-  overwritten.
+- Your taste answer for a shot, how it compared with the shot before, and
+  a TDS you type with its EY, are also written to that shot's record in
+  Decaid (notes, a running score as enjoyment, `drinkTds` and `drinkEy`, and
+  CafAI's own extras), which Decaid may upload to Visualizer if you set that
+  up. Notes you wrote yourself are never overwritten.
 - Settings > Machine care loads nothing from YouTube until you tap play or
   one of the video's moments. Then YouTube's player comes from
   `youtube-nocookie.com` (YouTube's privacy-enhanced mode), and YouTube,

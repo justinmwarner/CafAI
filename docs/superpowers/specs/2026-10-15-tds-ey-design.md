@@ -3,7 +3,10 @@
 Date: 2026-10-15. Status: approved as the roadmap describes it (the owner's
 pick from the gap review, D151); the calls below were made while building,
 with no check-in, and each is recorded as a decision (DECISIONS.md, "TDS and
-EY on the shot card", D-TDS-1 to D-TDS-9).
+EY on the shot card", D-TDS-1 to D-TDS-9). As built: two rules changed from
+this spec's first draft once the card was looked at, the cell's height (it
+no longer grows the card) and typing while the coach works (allowed, as in
+the composer); section 3 has both.
 The item on the roadmap ([ROADMAP.md](../../ROADMAP.md), "More from the gap
 review (D151)").
 
@@ -40,14 +43,15 @@ answer still reaches the coach.
 
 | Thing | Rule |
 |---|---|
-| Where | Every shot card in the chat. In the card's grid of numbers, after First drop: on a tablet the grid has room for five columns, so the cell fills the empty one and the card grows by 6 px (the cell is 48 px, the others 42); on a phone it takes a row of its own. |
-| No reading | The cell is one button, 48 px tall: "TDS" (label, ink-muted) over "+ Add" (accent, 600), named "Add TDS". |
+| Where | Every shot card in the chat. In the card's grid of numbers, after First drop: on a tablet the grid has room for five columns, so the cell fills the empty one and the card does not grow; on a phone it takes a row of its own. |
+| No reading | The cell is one button, 48 px tall: "TDS" (label, ink-muted) over "+ Add" (accent, 600), named "Add TDS". Its box reaches 3 px into the gaps above and below, so its row stays as tall as the other numbers' (42 px). |
 | A reading | Two numbers: **TDS** "9.25 %" (two decimals) and **EY** "20.8 %" (one decimal), as the card's other numbers. The TDS cell is a button named "TDS 9.25 %, change it", with a small edit icon after the value; EY is a plain number. No EY (no dose or no yield): its value is a dash and a line under the numbers says why. |
 | The field | Under the numbers, across the card: an outlined text field labelled "TDS", "%" at its end, 48 px; then **Save** (contained), **Remove** (text, only when changing a reading) and **Cancel** (text). Under it, in body-small and ink-muted: what TDS is, where the EY comes from with this shot's dose and yield, and "The coach gets it with your next tap or message." |
 | Typing | CafAI's number field (D-TDS-3): text with `inputmode="decimal"` (the numeric keyboard with a decimal point), `enterkeyhint="done"`, at most 8 characters; "9,25" reads as 9.25, a trailing "%" is allowed. Enter (the keyboard's Done) or Save keeps it; Cancel, or Escape, closes it and keeps nothing. Leaving the field keeps the draft and does nothing else: a tap on Save leaves the field first. |
 | Range | More than 0 and at most 25 %, the range of the refractometers baristas use; rounded to 0.01 %, what they read. "abc", 0 or 30 says why under the field, in the error colour, and saves nothing. Empty and Save removes a reading (or closes the field when there is none). |
 | EY | TDS (%) × yield (g) ÷ dose (g), the card's own Dose → yield, to 0.1 % (D-TDS-2). Over 30 %, more than coffee gives up: kept and sent as typed, with a line in the warning colour under the numbers (D-TDS-8). |
-| While the coach works | The cell and the field are held, as the rating is (MUI's faded look on the buttons only; the numbers stay in ink), and a draft stays in the field. |
+| While the coach works | Save and Remove are held, as the rating is, and Enter waits; typing is not, as in the composer, and the cell still opens the field. A draft stays in the field. |
+| Focus | Opened from a keyboard (Enter or Space on the cell), closing the field gives the cell the focus back; opened by a tap, the focus leaves with the field, so the on-screen keyboard goes and no focus ring lands on the cell. |
 | Saving | The card shows the reading at once. The write to Decaid waits and goes again when Decaid cannot take it, as the taste does; one Decaid refuses says so once in the chat. |
 | Changing, removing | A new TDS replaces the old on the card, the iteration and Decaid (both numbers again); Remove takes both off the card and the iteration and sends `null` for both. The coach hears the new reading, or that it was removed, with its next turn. |
 | History | A shot row ends "· TDS 9.25 % · EY 20.8 %". |

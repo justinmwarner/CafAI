@@ -79,14 +79,22 @@ ahead without them:
   summaries without their curves, so both shots come from Decaid
   (`GET /api/v1/shots/{id}`). Check first: how the graph tells the two
   shots apart in every tint and both modes, by more than colour.
-- **TDS and EY on the shot card.** An optional TDS field for a barista
-  with a refractometer: CafAI works out EY from the TDS, the yield and the
-  dose, writes both to the shot's record (`drinkTds` and `drinkEy`, already
-  in Decaid's annotations, so Visualizer gets them), and gives them to the
-  coach, the one measure of extraction it cannot read off the curves.
-  Check first: which yield (`actualYield`) and dose (`actualDoseWeight` or
-  the workflow's) the EY uses, and that a reading typed after the taste
-  answer still reaches the coach.
+- **TDS and EY on the shot card: built on 2026-10-15** (D-TDS-1 to
+  D-TDS-9, `docs/superpowers/specs/2026-10-15-tds-ey-design.md`). Every
+  shot card's numbers have a quiet TDS cell, "+ Add", that opens a field with
+  the decimal keyboard (0.01-25 %, a comma read as a point); the reading
+  shows as TDS and EY, the EY worked out from the card's own dose and yield
+  (Decaid's `actualDoseWeight` or the workflow's dose, and its settled
+  `actualYield` or the scale's last weight), so EY = TDS × ratio. Both go to
+  the shot's record (`drinkTds`, `drinkEy`) through the queue the taste and
+  the rating use, the card and the shot's iteration keep them, and the
+  coach hears each reading with its next turn, as a verdict, so one typed
+  after it proposed a change comes with Confirm or the next message; the
+  prompt says what TDS and EY are and how far to trust them. A shot with no
+  yield keeps its TDS without an EY. Left: a TDS from a refractometer Decaid
+  connects (it lists a DiFluid R2 on main), a reading added in Visualizer
+  coming back to the card, and a later reading reaching visualizer.coffee
+  on a real upload (`docs/HARDWARE_TEST_PLAN.md`).
 - **°F.** CafAI writes °C everywhere (`src/ui/machine/format.ts`,
   `src/ui/settings/drinkSettings.ts`). A setting shows °F on the readouts,
   the steppers and in the coach's words ("2 °F hotter"), with Decaid and

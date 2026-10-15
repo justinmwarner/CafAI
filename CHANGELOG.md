@@ -6,6 +6,15 @@ workflow checks against it. Settings > About shows the version you run.
 
 ## Unreleased
 
+- A shot's card takes a TDS from your refractometer: tap **TDS · Add**
+  among its numbers and type the reading (a comma works too). CafAI works
+  out the extraction yield (EY) from the card's own dose and yield, shows
+  both on the card and in History, and writes them to the shot's record in
+  Decaid, so Visualizer gets them. The coach hears the reading with your
+  next tap or message, even one typed after it suggested a change, and is
+  told what TDS and EY are and how far to trust them: a number about
+  extraction, never a taste. Change or remove a reading the same way.
+
 ## 0.1.2 (2026-10-15)
 
 ### The everyday skin

@@ -687,6 +687,7 @@ elapsed = Date.parse(m.machine.timestamp) - Date.parse(measurements[0].machine.t
 | Anything else | `_deepMerge(existing.toJson(), patch)`: maps merge recursively, so **`annotations.extras` merges per key**; lists and scalars replace. |
 
 - **Clearing.** `null` on a canonical field clears it. `annotations: null` clears all annotations. Legacy `shotNotes`/`metadata` map onto `espressoNotes`/`extras`; canonical fields win (`:298-351`; Skins.md:793-795).
+- **TDS and EY.** `annotations.drinkTds` and `drinkEy` are percentages, `double?` (data/shot_annotations.dart:8-9), read with `parseOptionalDouble` (`:30-31`; it takes a numeric string too, data/utils.dart:7-12) and left out of `toJson` when null (`:49-50`), so `null` in a PUT clears each. Decaid never fills them itself; Visualizer's plugin uploads them as `drink_tds` and `drink_ey`. CafAI writes numbers, the TDS to 0.01 and the EY to 0.1, and clears both with `null` (D-TDS-4). Read at af4e995 (2026-10-15); the pinned spec (aab5f93) has both as nullable numbers.
 - **Not validated.** Top-level `timestamp`, `workflow` and `stopReason` are mutable; this is issue #913, and the spec's `ShotUpdateRequest` lists only annotations, stopReason, shotNotes and metadata.
 - **`updatedAt`.** It changes only when the content changes, ignoring the bookkeeping extras keys (`:239-248`).
 - **Response.** The full updated `ShotRecord`.
