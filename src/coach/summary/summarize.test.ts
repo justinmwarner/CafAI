@@ -9,7 +9,7 @@ import blooming from '../templates/source/Blooming_espresso.json';
 import example from '../../../docs/verified/examples/shot-record.json';
 import { normalizeProfile } from '../../../mock/decaid/profiles.ts';
 import { createShotSimulation } from '../../../mock/decaid/shotPlayer.ts';
-import { pourSeconds, pourStartSeconds, resampleSeries, shotPhases, summarizeShot, summaryForModel } from './summarize.ts';
+import { poured, pourSeconds, pourStartSeconds, resampleSeries, shotPhases, summarizeShot, summaryForModel } from './summarize.ts';
 import { shotRows } from './analysis.ts';
 import { elapsedSeconds, parseTimestampMicros } from './time.ts';
 
@@ -255,6 +255,56 @@ describe('summarizeShot: the time is the pour, the yield what is in the cup', ()
     expect(pourSeconds([])).toBeNull();
     const doneAtOnce = [...preheat, { ...rows[preheat.length]!, substate: 'pouringDone' }, { ...rows[preheat.length + 1]!, substate: 'idle' }];
     expect(pourSeconds(doneAtOnce)).toBe(0);
+  });
+});
+
+describe('poured: a record that holds a pour, or a run that never poured (D-SIMA-1)', () => {
+  /** A record's preheat and the first `pourSamples` samples after it, as Decaid keeps a run stopped then. */
+  function stoppedAfter(record: ShotRecord, pourSamples: number): ShotRecord {
+    const preheat = record.measurements.findIndex((m) => m.machine.state.substate !== 'preparingForShot');
+    return { ...record, measurements: record.measurements.slice(0, preheat + pourSamples) };
+  }
+
+  it("a real DE1's run stopped with the pour's first frame never poured (decaid-mcp's shot-09)", () => {
+    const record = asRecord(shot09);
+    // Four frames of preheat over a second, then one of preinfusion: Decaid kept it.
+    expect(record.measurements.map((m) => m.machine.state.substate)).toEqual([
+      'preparingForShot',
+      'preparingForShot',
+      'preparingForShot',
+      'preparingForShot',
+      'preinfusion',
+    ]);
+    expect(poured(record)).toBe(false);
+    expect(summarizeShot(record).durationS).toBe(0);
+  });
+
+  it("a run stopped with the pour's first frame never poured; one stopped a frame later poured", () => {
+    for (const record of [asRecord(shot01), asRecord(shot07), asRecord(example), syntheticShotRecord(), mockShotRecord()]) {
+      expect(poured(stoppedAfter(record, 1))).toBe(false);
+      // Two samples of pour are a pour: a shot stopped early is still a shot.
+      expect(poured(stoppedAfter(record, 2))).toBe(true);
+      expect(poured(record)).toBe(true);
+    }
+  });
+
+  it('no samples, preheat alone, or a pour the machine reports done at once never poured', () => {
+    const record = syntheticShotRecord();
+    expect(poured({ measurements: [] })).toBe(false);
+    expect(poured({} as Pick<ShotRecord, 'measurements'>)).toBe(false);
+    expect(poured(stoppedAfter(record, 0))).toBe(false);
+    const preheat = record.measurements.findIndex((m) => m.machine.state.substate !== 'preparingForShot');
+    const doneAtOnce = record.measurements.slice(0, preheat + 2).map((m, i) =>
+      i === preheat + 1 ? { ...m, machine: { ...m.machine, state: { state: 'espresso', substate: 'pouringDone' } } } : m,
+    );
+    expect(poured({ measurements: doneAtOnce })).toBe(false);
+  });
+
+  it('a record without machine substates poured once it holds two samples', () => {
+    const record = syntheticShotRecord();
+    const bare = record.measurements.map((m) => ({ ...m, machine: { ...m.machine, state: { state: 'espresso', substate: '' } } }));
+    expect(poured({ measurements: bare.slice(0, 1) })).toBe(false);
+    expect(poured({ measurements: bare.slice(0, 2) })).toBe(true);
   });
 });
 

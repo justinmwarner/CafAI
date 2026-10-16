@@ -143,6 +143,19 @@ export function pourSeconds(rows: readonly ShotRow[]): number | null {
 }
 
 /**
+ * Whether a shot record holds a pour (D-SIMA-1): two samples of it or more,
+ * so time passed between its first sample after preheat and its last one
+ * before the pour is over. A record with no samples, with preheat alone, or
+ * with one sample of pour (the stop came with the pour's first frame) never
+ * poured: there is no shot to taste, and none to compare the next one with.
+ * Decaid keeps such a record when the stop lands just as the pour begins: on
+ * its simulator, and from a real DE1 (decaid-mcp's shot-09).
+ */
+export function poured(record: Pick<ShotRecord, 'measurements'>): boolean {
+  return (pourSeconds(shotRows(record)) ?? 0) > 0;
+}
+
+/**
  * Resample to whole seconds by timestamp (never by index: real sampling is
  * ~3.7 Hz and irregular), plus the final sample. Each value is the nearest
  * real sample within 0.6 s, rounded to 0.1; null when there is none. Machine

@@ -1,16 +1,45 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { CafaiMockWindow } from '../mock/browser.ts';
+import type { ShotRecord } from '../src/api/types.ts';
 import { TID } from '../src/ui/testIds.ts';
-import { decaidRequests, openApp, pullShot, pullShotOnMachine, saveApiKey, sendChat } from './helpers.ts';
+import { decaidRequests, machineRow, openApp, pullShot, pullShotOnMachine, saveApiKey, sendChat } from './helpers.ts';
 
 /**
  * D65: while CafAI asks Decaid for a just-finished shot (six tries over about
  * 15 s), the chat says so with a progress bar, updated on each try, until the
  * shot card or the warning takes its place. Retry searches again, visibly.
- * A cleaning profile's run is no shot, and CafAI looks for none (D193).
+ * A cleaning profile's run is no shot, and CafAI looks for none (D193); nor
+ * is a run that never poured, which gets one quiet line (D-SIMA-1).
  */
 
 const SEARCH = 'Looking for that shot in Decaid…';
+const NEVER_POURED = 'That shot stopped before it poured: nothing to taste.';
+
+/** The newest shot record in the mock Decaid. */
+async function latestShot(page: Page): Promise<ShotRecord | null> {
+  return page.evaluate(() => {
+    const state = (window as CafaiMockWindow).__CAFAI_MOCK__?.state;
+    const latest = state?.getLatestShot();
+    return state && latest ? state.getShot(latest.id) : null;
+  });
+}
+
+/** Resolves once the mock machine has been stopped on the next shot's first frame of pour, as on Decaid's simulator. */
+async function stopOnFirstPourFrame(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        const mock = (window as CafaiMockWindow).__CAFAI_MOCK__!;
+        const stop = mock.state.on('shotState', (event) => {
+          if (event.event !== 'state' || event.state !== 'pouring') return;
+          stop();
+          // Inside the frame's delivery: the next frame is the stop, so the record keeps this one frame of pour.
+          mock.player.stop();
+          resolve();
+        });
+      }),
+  );
+}
 
 async function loadFirstVersion(page: Page): Promise<void> {
   await openApp(page);
@@ -82,6 +111,56 @@ test('shows the search again on Retry after the machine dropped mid-shot', async
 
   await page.getByTestId(TID.retryButton).click();
   await expect(search).toBeVisible({ timeout: 10_000 });
+});
+
+test('Espresso then Stop at once is no shot: no card, no taste question, and the next shot is compared with the one before', async ({
+  page,
+}) => {
+  await loadFirstVersion(page);
+  await pullShot(page);
+  await expect(page.getByTestId(TID.shotCard)).toHaveCount(1, { timeout: 60_000 });
+  const tasteQuestions = page.getByText('How did it taste?', { exact: true });
+  await expect(tasteQuestions).toHaveCount(1);
+  const first = (await latestShot(page))!.id;
+  const shotIds = () => page.evaluate(() => (window as CafaiMockWindow).__CAFAI_MOCK__!.state.getShotIds());
+  const kept = (await shotIds()).length;
+
+  // Espresso, then Stop while the machine is still in its preheat (slowed, so the tap lands there however busy the
+  // page is): Decaid aborts the run and keeps no record of it, and CafAI looks for none.
+  await page.evaluate(() => (window as CafaiMockWindow).__CAFAI_MOCK__!.setSpeed(0.25));
+  await pullShot(page);
+  await machineRow(page).getByTestId(TID.stopButton).click();
+  await expect(page.getByText(NEVER_POURED)).toHaveCount(1, { timeout: 30_000 });
+  // The line is the run's outcome: the Shot view hands the screen back with it.
+  await expect(page).toHaveURL(/#\/$/, { timeout: 10_000 });
+  expect(await shotIds(), 'Decaid keeps no record of a run stopped in preheat').toHaveLength(kept);
+  await page.evaluate(() => (window as CafaiMockWindow).__CAFAI_MOCK__!.setSpeed(25));
+
+  // Stopped with the pour's first frame, as on Decaid's simulator: Decaid keeps a record with no pour in it.
+  const stopped = stopOnFirstPourFrame(page);
+  await pullShot(page);
+  await stopped;
+  await expect(page.getByText(NEVER_POURED)).toHaveCount(2, { timeout: 30_000 });
+  expect(await shotIds(), 'Decaid kept this one').toHaveLength(kept + 1);
+
+  // Neither run got a card, a taste question or a search; the first shot's question is still open.
+  await expect(page.getByTestId(TID.shotCard)).toHaveCount(1);
+  await expect(tasteQuestions).toHaveCount(1);
+  await expect(page.getByTestId(TID.optionChip('Sour / sharp'))).toBeEnabled();
+  await expect(page.getByText(SEARCH)).toHaveCount(0);
+  await expect(page.getByText(/Decaid has not saved it|Decaid has no record of it/)).toHaveCount(0);
+
+  // The next shot is compared with the shot before the stopped runs, on its card and in Decaid.
+  await pullShot(page);
+  await expect(page.getByTestId(TID.shotCard)).toHaveCount(2, { timeout: 60_000 });
+  const card = page.getByTestId(TID.shotCard).last();
+  await expect(card.getByRole('radiogroup', { name: 'Compared with your previous shot?' })).toBeVisible();
+  const same = card.getByRole('radio', { name: 'About the same', exact: true });
+  await expect(same).toBeEnabled();
+  await same.click();
+  await expect.poll(async () => (await latestShot(page))?.annotations?.extras?.cafai).toMatchObject({
+    comparedWith: { kind: 'previous', shotId: first },
+  });
 });
 
 test('a cleaning profile run is no shot: no search, no warning, no banner, no card', async ({ page }) => {
