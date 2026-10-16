@@ -15,9 +15,10 @@
  * text with the decimal keyboard (`inputmode="decimal"`), a comma read as a
  * point, the unit at its end; Enter (the keyboard's Done) or Save keeps it,
  * Cancel or Escape closes it, and the Escape stops there: the chat's message
- * around the card never takes it too. Leaving the field keeps the draft and does
- * nothing else: a tap on Save leaves the field first. As in the composer,
- * typing is never held while the coach works; saving is, as the rating is.
+ * around the card never takes it too. Leaving the field keeps the draft and
+ * does nothing else: a tap on Save leaves the field first. As in the
+ * composer, typing is never held while the coach works; saving is, as the
+ * rating is.
  */
 import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import Box from '@mui/material/Box';

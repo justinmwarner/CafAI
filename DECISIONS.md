@@ -2979,11 +2979,11 @@ fixes is a choice.
   bag's first card, the newest with Graph and "Last shot of Kiambu AA", left
   them 81, 51 and 11 px at 390, 360 and 320 px wide, against 155, 125 and 85
   without the key, and "Previous shot" cost about 30 px on every card. Now a
-  card under 372 px wide (`KEY_BESIDE_FROM` in
+  card under 372 px wide inside its padding (`KEY_BESIDE_FROM` in
   `src/ui/chat/parts/ShotSparkline.tsx`: 120 px of curves, the legend at its
-  widest, Graph and the gaps) puts the key on a line of its own under the
-  curves, its name with the card's width; a wider one keeps it in the legend
-  as before. The card measures itself (`useOwnLayout.ts`), and the rule
+  widest, Graph and the gaps; a 390 px phone's card has 332) puts the key on
+  a line of its own under the curves, its name with the card's width; a
+  wider one keeps it in the legend as before. The card measures itself (`useOwnLayout.ts`), and the rule
   counts Graph whether the card shows it or not, so the cards of a chat put
   the key in one place. Measured with Playwright at 390, 360 and 320 px
   (`e2e/shot-overlay.spec.ts`): the curves keep 155, 125 and 85 px, the name
