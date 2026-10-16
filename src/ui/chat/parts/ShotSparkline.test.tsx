@@ -13,7 +13,7 @@ import { previewTheme } from '../testing/previewTheme.ts';
 import { renderThemed, renderWithServices } from '../testing/render.tsx';
 import { sampleSeries, sampleSummary } from '../testing/fixtures.ts';
 import { ShotCard } from './ShotCard.tsx';
-import { ShotSparkline } from './ShotSparkline.tsx';
+import { KEY_BESIDE_FROM, ShotSparkline } from './ShotSparkline.tsx';
 
 const graph = previewTheme.palette.cafai.graph;
 
@@ -145,6 +145,40 @@ describe("a shot card's curves, with the shot its question names under them (D17
     renderThemed(<ShotSparkline summary={thisShot} baseline={PREVIOUS} />);
     expect(curves()).toHaveAccessibleName('Pressure and flow during the shot');
     expect(guide()).toBeNull();
+  });
+
+  // Its room on a real screen, and its name whole there, are e2e/shot-overlay.spec.ts's to measure.
+  it('puts the third key on a line of its own under the curves on a narrow card, so it never squeezes them; beside them on a wide one', () => {
+    const red: ShotBaseline = { kind: 'otherCoffee', shotId: 'shot-0', coffee: 'Red Brick' };
+    const legendOf = () => screen.getByText('Pressure').parentElement!.parentElement!;
+    const key = () => screen.getByTestId(TID.shotGuideKey);
+    for (const [width, under] of [
+      // A 320, 360 and 390 px phone upright; then the narrowest card that keeps it beside, and a tablet's.
+      [262, true],
+      [302, true],
+      [332, true],
+      [KEY_BESIDE_FROM - 1, true],
+      [KEY_BESIDE_FROM, false],
+      [654, false],
+    ] as const) {
+      // The Graph link counts either way, so every card of a chat puts its key in the same place.
+      for (const onOpenGraph of [vi.fn(), undefined]) {
+        vi.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(() => width);
+        const view = renderInChat(<ShotSparkline summary={thisShot} baseline={red} onOpenGraph={onOpenGraph} />, [card(previousShot), card(thisShot, red)]);
+        expect(screen.queryAllByTestId(TID.openShotGraph)).toHaveLength(onOpenGraph ? 1 : 0);
+        expect(key()).toHaveTextContent('Last shot of Red Brick');
+        if (under) {
+          // A line of its own after the row of the curves, the Pressure and Flow keys and Graph.
+          expect(legendOf()).not.toContainElement(key());
+          expect(key().previousElementSibling).toContainElement(curves());
+          expect(key().previousElementSibling).toContainElement(legendOf());
+        } else {
+          expect(legendOf()).toContainElement(key());
+        }
+        view.unmount();
+        vi.restoreAllMocks();
+      }
+    }
   });
 
   it("counts both shots from the pour's start, the time running to the longer one", () => {

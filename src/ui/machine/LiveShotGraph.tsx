@@ -26,6 +26,7 @@
  * plot.
  *
  * Before the first shot there is no time to show: the timer shows a dash.
+ * So it does after a shot stopped in its preheat, which left no frame.
  *
  * Under the shot, faint, the shot it is compared with (D178 to
  * D182): while it pulls the bag's previous shot, once its card is in the
@@ -333,7 +334,12 @@ export function LiveShotGraph({ minPlotHeight = 160, compact = false, narrow = f
       frame = null;
       plot.setData(buffer.data);
       const numbers = shownCard.current;
-      if (timer.current) timer.current.textContent = formatSeconds(numbers ? numbers.durationS : buffer.elapsedS());
+      // With no shot to show (none yet, or one stopped in its preheat), the dash React draws: the plot is
+      // still painted then, so a guide that went takes its band with it, but no time is written over the dash.
+      if (timer.current) {
+        timer.current.textContent =
+          trace.getState().phase === 'empty' ? DASH : formatSeconds(numbers ? numbers.durationS : buffer.elapsedS());
+      }
       const latest = buffer.latest();
       for (const item of READOUTS) {
         const node = readouts.current[item.key];
