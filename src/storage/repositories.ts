@@ -11,14 +11,7 @@
 import { DURABLE, SETTINGS_KEY, type CafaiDb, type CafaiDbSchema } from './db.ts';
 import { toStorageError } from './errors.ts';
 import { applySettingsPatch, normalizeSettings } from './settings.ts';
-import type {
-  BagRepository,
-  CareRepository,
-  ConversationRepository,
-  IterationRepository,
-  SettingsRepository,
-  VersionRepository,
-} from './types.ts';
+import type { BagRepository, ConversationRepository, IterationRepository, SettingsRepository, VersionRepository } from './types.ts';
 
 export interface RepositoryDeps {
   db: () => Promise<CafaiDb>;
@@ -27,16 +20,16 @@ export interface RepositoryDeps {
   defaultModel: string;
 }
 
+/** CafAI's own database; machine care's steps have theirs (careDb.ts). */
 export interface Repositories {
   bags: BagRepository;
   versions: VersionRepository;
   iterations: IterationRepository;
   conversations: ConversationRepository;
   settings: SettingsRepository;
-  care: CareRepository;
 }
 
-type RecordStore = 'bags' | 'versions' | 'iterations' | 'conversations' | 'care';
+type RecordStore = 'bags' | 'versions' | 'iterations' | 'conversations';
 
 /** Oldest first; the id breaks ties so the order never depends on the store. */
 export function byCreatedAt<T extends { createdAt: string; id: string }>(a: T, b: T): number {
@@ -119,10 +112,6 @@ export function createRepositories(deps: RepositoryDeps): Repositories {
           await Promise.all([tx.store.put(next, SETTINGS_KEY), tx.done]);
           return next;
         }),
-    },
-    care: {
-      list: () => read(async (db) => (await db.getAll('care')).sort(byId)),
-      put: (record) => put('care', record),
     },
   };
 }

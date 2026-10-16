@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { CafaiMockWindow } from '../mock/browser.ts';
 import { MOCK_STORE_KEY, MOCK_STORE_PREFIX, type MockStoreSnapshot } from '../mock/persist.ts';
+import { CARE_DB_NAME } from '../src/storage/careDb.ts';
 import { CAFAI_DB_NAME } from '../src/storage/db.ts';
 import { SECRETS_DB_NAME } from '../src/storage/secrets.ts';
 import { TID } from '../src/ui/testIds.ts';
@@ -63,12 +64,14 @@ test('a reload after lost browser storage restores bags, history and the chat fr
   expect(backup).toContain(INTAKE);
   await expect.poll(() => savedBackupIsCurrent(page), { message: 'the mock Decaid saved its store' }).toBe(true);
 
-  // 2. Lose the browser storage: both of CafAI's databases and its own
-  // localStorage keys, but not the mock Decaid's saved store.
-  const lost = await loseBrowserStorage(page, [CAFAI_DB_NAME, SECRETS_DB_NAME], MOCK_STORE_PREFIX);
-  expect(lost.databasesBefore).toEqual(expect.arrayContaining([CAFAI_DB_NAME, SECRETS_DB_NAME]));
-  expect(lost.deleted).toEqual({ [CAFAI_DB_NAME]: 'deleted', [SECRETS_DB_NAME]: 'deleted' });
+  // 2. Lose the browser storage: CafAI's databases (its data, machine care's
+  // steps and the key) and its own localStorage keys, but not the mock
+  // Decaid's saved store.
+  const lost = await loseBrowserStorage(page, [CAFAI_DB_NAME, CARE_DB_NAME, SECRETS_DB_NAME], MOCK_STORE_PREFIX);
+  expect(lost.databasesBefore).toEqual(expect.arrayContaining([CAFAI_DB_NAME, CARE_DB_NAME, SECRETS_DB_NAME]));
+  expect(lost.deleted).toEqual({ [CAFAI_DB_NAME]: 'deleted', [CARE_DB_NAME]: 'deleted', [SECRETS_DB_NAME]: 'deleted' });
   expect(lost.databasesAfter).not.toContain(CAFAI_DB_NAME);
+  expect(lost.databasesAfter).not.toContain(CARE_DB_NAME);
   expect(lost.databasesAfter).not.toContain(SECRETS_DB_NAME);
   expect(lost.removedKeys.length).toBeGreaterThan(0);
   expect(lost.keptKeys).toEqual([MOCK_STORE_KEY]);

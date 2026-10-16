@@ -15,6 +15,7 @@
  * address means someone has used it for real since (with a real Decaid and
  * the real coach), and their bags are no longer the demo's to replace.
  */
+import { CARE_DB_NAME, openCareDb } from '../../src/storage/careDb.ts';
 import { CAFAI_DB_NAME, createDbHandle, DATA_STORES, openCafaiDb, SETTINGS_KEY } from '../../src/storage/db.ts';
 import { openSecretStore, SECRETS_DB_NAME } from '../../src/storage/secrets.ts';
 import { TID } from '../../src/ui/testIds.ts';
@@ -35,6 +36,8 @@ export const MOCK_API_KEYS: readonly string[] = [DEMO_API_KEY, 'sk-ant-invalid',
 /** Where CafAI keeps its data; tests use their own names. */
 export interface DemoDbNames {
   dbName?: string;
+  /** Machine care's steps (src/storage/careDb.ts). */
+  careDbName?: string;
   secretsDbName?: string;
 }
 
@@ -58,11 +61,16 @@ export async function readStoredData(names: DemoDbNames = {}): Promise<StoredDat
     const db = await handle.get();
     for (const store of DATA_STORES) {
       if (store === 'settings') settings = (await db.get('settings', SETTINGS_KEY)) !== undefined;
-      else if (store === 'care') records += (await db.getAll('care')).filter((record) => record.doneAt !== null).length;
       else records += await db.count(store);
     }
   } finally {
     handle.close();
+  }
+  const careHandle = createDbHandle((onLost) => openCareDb(names.careDbName ?? CARE_DB_NAME, onLost));
+  try {
+    records += (await (await careHandle.get()).getAll('care')).filter((record) => record.doneAt !== null).length;
+  } finally {
+    careHandle.close();
   }
   const secrets = await openSecretStore(names.secretsDbName ?? SECRETS_DB_NAME);
   try {

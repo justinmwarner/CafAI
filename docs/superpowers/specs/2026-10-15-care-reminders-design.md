@@ -35,9 +35,10 @@ long overdue ever earns the alert under the top bar.
 - **Decaid's steam records**, new to CafAI: `GET /api/v1/steams/ids` and
   `GET /api/v1/steams/latest`, in the client, the readers, the mock and the
   contract checks.
-- **Storage**: a `care` store in IndexedDB (version 2), mirrored to
-  Decaid's store, in the export and the import; the water, the filter and
-  the switch are one `care` block in Settings.
+- **Storage**: an IndexedDB database of their own, `cafai-care`, mirrored to
+  Decaid's store, in the export and the import; CafAI's own database stays
+  at version 1. The water, the filter and the switch are one `care` block in
+  Settings.
 
 ## 3. The steps
 
@@ -158,11 +159,13 @@ brought into view.
 
 ## 8. Storage
 
-- **IndexedDB**: `CAFAI_DB_VERSION` 2 adds the `care` store (key `id`, the
-  step's id); the upgrade only adds it. A record: `id`, `doneAt` (null while
-  never marked), `by` (`tick`, `seen` or null), `countFrom` (the done time,
-  or the first look), `shotTotal` and `steamTotal` (Decaid's then, or null),
-  `updatedAt`.
+- **IndexedDB**: a database of their own, `cafai-care` (`careDb.ts`), with
+  one store, `care` (key `id`, the step's id). Not a store in CafAI's
+  database: that would be its version 2, which CafAI 0.1.2 cannot open
+  (IndexedDB's VersionError), so a tablet put back on it would never start.
+  A record: `id`, `doneAt` (null while never marked), `by` (`tick`, `seen`
+  or null), `countFrom` (the done time, or the first look), `shotTotal` and
+  `steamTotal` (Decaid's then, or null), `updatedAt`.
 - **Decaid's store**: one more key, `care`, in namespace `cafai`.
 - **Export and import**: an optional `care` list in the file, schema version
   1 still (an older CafAI drops it). A merge keeps the later `doneAt`; of two
@@ -193,10 +196,11 @@ brought into view.
 - Unit: the rules (every step, both gates, the water and the filter, the
   most overdue, counts that fell or were imported), the words, the cycle
   watch, the service against fake Decaid and storage (start, counts, marks,
-  undo, seen cycles, an older Decaid), storage (the upgrade from version 1
-  with data kept, the repository, the mirror, the export and the merge
-  rule), settings normalisation and merge, the readers, the mock's steam
-  routes and cleaning shots, the contract test, and the UI pieces.
+  undo, seen cycles, an older Decaid), storage (CafAI's database still at
+  version 1 for 0.1.2, the care database, the repository, the mirror, the
+  export and the merge rule), settings normalisation and merge, the
+  readers, the mock's steam routes and cleaning shots, the contract test,
+  and the UI pieces.
 - End to end (`e2e/care-reminders.spec.ts`, all five projects): a step
   marked done keeps its last time across a reload, with Undo before it; a
   week later (the page's clock moved on) with shots since, the Care screen

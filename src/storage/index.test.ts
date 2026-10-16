@@ -1,3 +1,4 @@
+import { openDB } from 'idb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { unexpectedReply } from '../api/readers.ts';
 import { GatewayError } from '../api/types.ts';
@@ -9,6 +10,7 @@ import {
   restoreFromMirrorIfEmpty,
   serializeExport,
   startLateRestore,
+  STORAGE_MESSAGES,
   type CreateIdbStorageOptions,
   type IdbStorage,
   type LateRestore,
@@ -76,7 +78,7 @@ function manualTimers() {
 }
 
 function names() {
-  return { dbName: uniqueDbName(), secretsDbName: uniqueDbName('secrets') };
+  return { dbName: uniqueDbName(), careDbName: uniqueDbName('care'), secretsDbName: uniqueDbName('secrets') };
 }
 
 async function open(kv: MemoryKv, where = names(), extra: Partial<CreateIdbStorageOptions> = {}): Promise<IdbStorage> {
@@ -194,6 +196,38 @@ describe('createIdbStorage', () => {
   it('says in plain words when the browser blocks storage', async () => {
     vi.stubGlobal('indexedDB', undefined);
     await expect(open(createMemoryKv())).rejects.toMatchObject({ name: 'StorageError', kind: 'unavailable' });
+  });
+
+  it("keeps machine care's steps in their own database, so CafAI 0.1.2 still opens its own at version 1 (D189)", async () => {
+    const where = names();
+    const storage = await open(createMemoryKv(), where);
+    await seed(storage);
+    await storage.care.put(makeCareRecord());
+    storage.close();
+
+    // 0.1.2 opens version 1 with no upgrade to run: a higher version stopped it at "CafAI could not start".
+    const cafai012 = await openDB(where.dbName, 1);
+    expect(cafai012.version).toBe(1);
+    expect([...cafai012.objectStoreNames].sort()).toEqual(['bags', 'conversations', 'iterations', 'settings', 'versions']);
+    expect(await cafai012.getAll('bags')).toEqual([makeBag()]);
+    cafai012.close();
+    const care = await openDB(where.careDbName);
+    expect(await care.getAll('care')).toEqual([makeCareRecord()]);
+    care.close();
+
+    // And back on this CafAI, everything is where it was.
+    const again = await open(createMemoryKv(), where);
+    expect(await again.bags.list()).toEqual([makeBag()]);
+    expect(await again.care.list()).toEqual([makeCareRecord()]);
+    expect((await again.porter.exportAll()).care).toEqual([makeCareRecord()]);
+  });
+
+  it('says a database a newer CafAI saved needs that CafAI, whichever of them it is', async () => {
+    for (const which of ['dbName', 'careDbName', 'secretsDbName'] as const) {
+      const where = names();
+      (await openDB(where[which], 5)).close();
+      await expect(open(createMemoryKv(), where), which).rejects.toMatchObject({ name: 'StorageError', kind: 'newer', message: STORAGE_MESSAGES.newer });
+    }
   });
 
   it('exports the porter helpers', () => {

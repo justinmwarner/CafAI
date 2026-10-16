@@ -2934,21 +2934,29 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
   that can wait days is neither, and on every screen, the Shot view's too, it
   would teach the barista to look past the alert. The stats card is where the
   machine is read, and it shows when a session starts.
-- **D189. Care's records are an IndexedDB store of their own, in
-  Decaid's backup and the export, merged by their last time.**
-  `CAFAI_DB_VERSION` 2 adds the `care` store, one record per step (`id`,
-  `doneAt`, `by`, `countFrom`, `shotTotal`, `steamTotal`, `updatedAt`); the
-  upgrade only adds it. The mirror writes the records as one more key,
-  `care`, in namespace `cafai`; the export carries an optional `care` list,
-  schema version 1 still, which an older CafAI drops. A merge (an import, a
-  restore) keeps the later last done, a step marked done over one never
-  marked, and of two never marked the earlier start (`careRecordWins` in
-  `src/storage/porter.ts`). Like the bags, they are the device's own: a phone
-  and the tablet each keep theirs, and Decaid's copy is the backup, not a
-  meeting place. Why: a step's last time is the barista's data, like a bag,
+- **D189. Care's records are an IndexedDB database of their own, in
+  Decaid's backup and the export, merged by their last time.** One record
+  per step (`id`, `doneAt`, `by`, `countFrom`, `shotTotal`, `steamTotal`,
+  `updatedAt`) in `cafai-care` (`src/storage/careDb.ts`), beside CafAI's own
+  database, which stays at version 1 (`CAFAI_DB_VERSION`), as CafAI 0.1.2
+  made it; `Storage.care` hides where they live. The mirror writes the
+  records as one more key, `care`, in namespace `cafai`; the export carries
+  an optional `care` list, schema version 1 still, which an older CafAI
+  drops; an import writes them in a transaction of their own, after CafAI's
+  records, with both databases open before anything is written. A merge (an
+  import, a restore) keeps the later last done, a step marked done over one
+  never marked, and of two never marked the earlier start (`careRecordWins`
+  in `src/storage/porter.ts`). Like the bags, they are the device's own: a
+  phone and the tablet each keep theirs, and Decaid's copy is the backup, not
+  a meeting place. Why: a step's last time is the barista's data, like a bag,
   and must survive what a bag survives; updatedAt cannot decide, since a
   device that lost its storage begins counting afresh, and its new records
-  must not outrank the ones the backup brings back.
+  must not outrank the ones the backup brings back. A database of its own,
+  not a store in CafAI's: a new store there is a new version of it, and
+  IndexedDB opens no database at a version lower than the one on disk, so a
+  tablet put back on 0.1.2 would stop at "CafAI could not start" on every
+  load, before ever reaching Decaid's backup. A store added later goes the
+  same way.
 - **D190. Counting starts the first time CafAI looks.** A step never
   marked done gets its record the first time CafAI counts it, with Decaid's
   totals then, so a new install is never due at once; the Care screen says
@@ -2965,3 +2973,21 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
   cleaning or calibrate is not saved. Why: the care reminders count steams
   and must not count a cleaning run, and the mock answers as Decaid's Dart
   does.
+
+### Fixes to care reminders (2026-10-15)
+
+The review of D183-D191, fixed the same day; the decisions it changed are
+updated in place above.
+
+- **D-FIX-CARE-1. A database a newer CafAI saved says so.** When IndexedDB
+  will not open one of CafAI's databases because its version on disk is
+  higher than this CafAI's (a VersionError), CafAI says "The data on this
+  device was saved by a newer version of CafAI. Install that version again
+  to keep using it." (`newer` in `src/storage/errors.ts`), whichever
+  database it is: CafAI's data, machine care's steps or the key's. A
+  connection that a newer CafAI in another window closed keeps its own
+  sentence, "A newer version of CafAI is open in another window. Reload this
+  page to keep working." Why: the VersionError was read as the second case,
+  so a CafAI put back on the tablet after a newer one said another window
+  held it, on every reload, where there was none; what helps is the newer
+  CafAI, as a newer export file says to update CafAI.

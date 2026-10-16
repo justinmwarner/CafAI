@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { openCareDb } from './careDb.ts';
 import { createDbHandle, openCafaiDb, SETTINGS_KEY } from './db.ts';
 import { buildMirrorEntries, exportFromMirror } from './mirror.ts';
 import { createDataPorter } from './porter.ts';
@@ -19,6 +20,12 @@ import { API_KEY, MODEL, makeSettings, uniqueDbName } from './testing/fixtures.t
 
 /** A made-up key, built at run time so no key-shaped literal sits in the source. */
 const PASTED_KEY = ['sk', 'ant', 'api03', 'nOtArEaLkEy0123456789', 'AbCdEfGhIjKlMnOpQrStUvWxYz_0123456789AA'].join('-');
+
+/** Machine care's own database (careDb.ts), which a porter opens beside CafAI's. */
+function careDbOfItsOwn() {
+  const handle = createDbHandle((onLost) => openCareDb(uniqueDbName('care'), onLost));
+  return () => handle.get();
+}
 
 describe('defaultSettings', () => {
   it('uses the default model and leaves everything else blank, the key-copy choice unmade', () => {
@@ -193,6 +200,7 @@ describe('a key in the settings never reaches storage, the backup or an import',
     const repos = createRepositories({ db, onWrite: () => undefined, defaultModel: MODEL });
     const porter = createDataPorter({
       db,
+      careDb: careDbOfItsOwn(),
       secrets: { getApiKey: async () => null },
       mirror: { schedulePush: () => undefined },
       appVersion: '1.2.3',
@@ -333,6 +341,7 @@ describe('the key-copy choice through an import (D99)', () => {
     const repos = createRepositories({ db, onWrite: () => undefined, defaultModel: MODEL });
     const porter = createDataPorter({
       db,
+      careDb: careDbOfItsOwn(),
       secrets: { getApiKey: async () => null },
       mirror: { schedulePush: () => undefined },
       appVersion: '1.2.3',
@@ -492,6 +501,7 @@ describe('the temperature unit (D172)', () => {
     const repos = createRepositories({ db, onWrite: () => undefined, defaultModel: MODEL });
     const porter = createDataPorter({
       db,
+      careDb: careDbOfItsOwn(),
       secrets: { getApiKey: async () => null },
       mirror: { schedulePush: () => undefined },
       appVersion: '1.2.3',

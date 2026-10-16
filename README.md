@@ -586,7 +586,10 @@ troubleshooting.
   settings**: exit to Decaid and open CafAI again (it can happen while
   Decaid replaces the skin's files during an update). When the page says
   instead "CafAI could not start on this device's browser engine" and "It
-  needs Chromium 91 or newer", see the previous point.
+  needs Chromium 91 or newer", see the previous point. When it says "The
+  data on this device was saved by a newer version of CafAI", a newer CafAI
+  ran here before: install it again (Decaid's **Skins** page, **Check for
+  updates**).
 - **Settings > About lists things Decaid sent that CafAI did not expect.**
   Your Decaid sends something in another shape than the Decaid CafAI was
   checked against (usually because it is newer). Tap **Copy report** and

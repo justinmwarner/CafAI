@@ -10,17 +10,32 @@ import {
   type LostReason,
 } from './db.ts';
 import { StorageError, STORAGE_MESSAGES, toStorageError } from './errors.ts';
-import { makeBag, makeCareRecord, makeConversation, makeIteration, makeSettings, makeVersion, uniqueDbName } from './testing/fixtures.ts';
+import { makeBag, makeConversation, makeIteration, makeSettings, makeVersion, uniqueDbName } from './testing/fixtures.ts';
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/** CafAI's database exactly as CafAI 0.1.2 opens it: version 1, its upgrade. */
+function openAsCafai012(name: string) {
+  return openDB(name, 1, {
+    upgrade(db) {
+      db.createObjectStore('bags', { keyPath: 'id' });
+      db.createObjectStore('versions', { keyPath: 'id' }).createIndex('bagId', 'bagId');
+      const iterations = db.createObjectStore('iterations', { keyPath: 'id' });
+      iterations.createIndex('bagId', 'bagId');
+      iterations.createIndex('createdAt', 'createdAt');
+      db.createObjectStore('conversations', { keyPath: 'id' });
+      db.createObjectStore('settings');
+    },
+  });
+}
+
 describe('openCafaiDb', () => {
-  it('creates the six stores with their key paths and indexes', async () => {
+  it('creates the five stores with their key paths and indexes', async () => {
     const db = await openCafaiDb(uniqueDbName());
-    expect([...db.objectStoreNames].sort()).toEqual(['bags', 'care', 'conversations', 'iterations', 'settings', 'versions']);
-    const tx = db.transaction(['bags', 'versions', 'iterations', 'conversations', 'settings', 'care']);
+    expect([...db.objectStoreNames].sort()).toEqual(['bags', 'conversations', 'iterations', 'settings', 'versions']);
+    const tx = db.transaction(['bags', 'versions', 'iterations', 'conversations', 'settings']);
     expect(tx.objectStore('bags').keyPath).toBe('id');
     expect(tx.objectStore('versions').keyPath).toBe('id');
     expect([...tx.objectStore('versions').indexNames]).toEqual(['bagId']);
@@ -29,26 +44,14 @@ describe('openCafaiDb', () => {
     expect(tx.objectStore('conversations').keyPath).toBe('id');
     // One settings record under a fixed key, so no key path.
     expect(tx.objectStore('settings').keyPath).toBeNull();
-    // Machine care's steps, by the step's id (D189).
-    expect(tx.objectStore('care').keyPath).toBe('id');
     await tx.done;
     db.close();
   });
 
-  it('upgrades a version-1 database by adding the care store, and keeps everything it held (D189)', async () => {
+  it('stays at version 1, so CafAI 0.1.2 opens what this CafAI saved and this one opens what 0.1.2 saved (D189)', async () => {
+    expect(CAFAI_DB_VERSION).toBe(1);
     const name = uniqueDbName();
-    // Version 1 exactly as CafAI 0.1.2 created it.
-    const old = await openDB(name, 1, {
-      upgrade(db) {
-        db.createObjectStore('bags', { keyPath: 'id' });
-        db.createObjectStore('versions', { keyPath: 'id' }).createIndex('bagId', 'bagId');
-        const iterations = db.createObjectStore('iterations', { keyPath: 'id' });
-        iterations.createIndex('bagId', 'bagId');
-        iterations.createIndex('createdAt', 'createdAt');
-        db.createObjectStore('conversations', { keyPath: 'id' });
-        db.createObjectStore('settings');
-      },
-    });
+    const old = await openAsCafai012(name);
     await old.put('bags', makeBag());
     await old.put('versions', makeVersion());
     await old.put('iterations', makeIteration());
@@ -57,17 +60,30 @@ describe('openCafaiDb', () => {
     old.close();
 
     const db = await openCafaiDb(name);
-    expect(db.version).toBe(CAFAI_DB_VERSION);
+    expect(db.version).toBe(1);
     const all = await readAll(db);
-    expect(all.bags).toEqual([makeBag()]);
-    expect(all.versions).toEqual([makeVersion()]);
-    expect(all.iterations).toEqual([makeIteration()]);
-    expect(all.conversations).toEqual([makeConversation()]);
-    expect(all.settings).toEqual(makeSettings({ grinderName: 'Niche Zero' }));
-    expect(all.care).toEqual([]);
-    await db.put('care', makeCareRecord());
-    expect((await readAll(db)).care).toEqual([makeCareRecord()]);
+    expect(all).toEqual({
+      bags: [makeBag()],
+      versions: [makeVersion()],
+      iterations: [makeIteration()],
+      conversations: [makeConversation()],
+      settings: makeSettings({ grinderName: 'Niche Zero' }),
+    });
+    await db.put('bags', makeBag({ id: 'bag_2' }));
     db.close();
+
+    // Put back on 0.1.2: it opens the database and reads it, where version 2 stopped it at a VersionError.
+    const back = await openAsCafai012(name);
+    expect(back.version).toBe(1);
+    expect((await back.getAll('bags')).map((bag) => bag.id).sort()).toEqual(['bag_2', 'bag_kiambu']);
+    back.close();
+  });
+
+  it('says a database a newer CafAI saved needs that CafAI, not that another window holds it', async () => {
+    const name = uniqueDbName();
+    (await openDB(name, CAFAI_DB_VERSION + 1)).close();
+    const handle = createDbHandle((onLost) => openCafaiDb(name, onLost));
+    await expect(handle.get()).rejects.toMatchObject({ name: 'StorageError', kind: 'newer', message: STORAGE_MESSAGES.newer, detail: 'VersionError' });
   });
 
   it('is called cafai unless told otherwise', async () => {
@@ -104,14 +120,12 @@ describe('readAll', () => {
     await db.put('iterations', makeIteration());
     await db.put('conversations', makeConversation());
     await db.put('settings', makeSettings({ grinderName: 'Niche Zero' }), SETTINGS_KEY);
-    await db.put('care', makeCareRecord());
     const all = await readAll(db);
     expect(all.bags).toEqual([makeBag()]);
     expect(all.versions).toEqual([makeVersion()]);
     expect(all.iterations).toEqual([makeIteration()]);
     expect(all.conversations).toEqual([makeConversation()]);
     expect(all.settings).toEqual(makeSettings({ grinderName: 'Niche Zero' }));
-    expect(all.care).toEqual([makeCareRecord()]);
     db.close();
   });
 });
@@ -190,6 +204,16 @@ describe('toStorageError', () => {
   it('passes a StorageError through unchanged', () => {
     const original = new StorageError('superseded', STORAGE_MESSAGES.superseded);
     expect(toStorageError(original, 'read')).toBe(original);
+  });
+
+  it('says a VersionError at open is data a newer CafAI saved, to install again, whatever the fallback', () => {
+    for (const fallback of ['unavailable', 'read', 'write'] as const) {
+      const error = toStorageError(new DOMException('The requested version (1) is less than the existing version (2).', 'VersionError'), fallback);
+      expect(error).toMatchObject({ name: 'StorageError', kind: 'newer', detail: 'VersionError' });
+    }
+    expect(STORAGE_MESSAGES.newer).toBe('The data on this device was saved by a newer version of CafAI. Install that version again to keep using it.');
+    // Another window's newer CafAI closing this page's connection keeps its own sentence.
+    expect(STORAGE_MESSAGES.superseded).toBe('A newer version of CafAI is open in another window. Reload this page to keep working.');
   });
 
   it('names the device, never a tablet: a phone keeps its own copy of CafAI too', () => {

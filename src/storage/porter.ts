@@ -3,8 +3,11 @@
  *
  * The export is the user's own backup and the way to move to another device,
  * so it holds the full records (series included). An import is validated
- * completely before anything is written, and then written in one transaction:
- * a damaged file or a failed write leaves the database exactly as it was.
+ * completely before anything is written, and then written in one transaction
+ * per database: CafAI's records and settings in one, machine care's steps
+ * (their own database, careDb.ts) in a second. A damaged file leaves both
+ * exactly as they were, and so does a failed write in the first; one in the
+ * second leaves the care steps as they were.
  *
  *   replace - clear the data stores and write the file's records and settings.
  *   merge   - add records missing here, take records whose updatedAt (for
@@ -16,8 +19,8 @@
  * never opens. The export only reads the key to blank it out wherever a user
  * pasted it into their data.
  */
-import type { IDBPTransaction } from 'idb';
-import { DATA_STORES, DURABLE, readAll, SETTINGS_KEY, type CafaiDb, type CafaiDbSchema } from './db.ts';
+import type { CareDb } from './careDb.ts';
+import { DATA_STORES, DURABLE, readAll, SETTINGS_KEY, type CafaiDb } from './db.ts';
 import { toStorageError } from './errors.ts';
 import { byCreatedAt, byId } from './repositories.ts';
 import { describePath, ExportSchema } from './schema.ts';
@@ -41,6 +44,8 @@ export class ImportError extends Error {
 
 export interface PorterDeps {
   db: () => Promise<CafaiDb>;
+  /** Machine care's own database (careDb.ts, D189). */
+  careDb: () => Promise<CareDb>;
   /** Read only to keep the key out of exports. */
   secrets: Pick<SecretStore, 'getApiKey'>;
   mirror: { schedulePush(): void; noteReplaced?(): void };
@@ -104,15 +109,15 @@ function isNewer(incoming: unknown, local: unknown): boolean {
   return incoming > local;
 }
 
-type WriteTx = IDBPTransaction<CafaiDbSchema, typeof DATA_STORES, 'readwrite'>;
-
 /**
- * Run the import's writes in one transaction. A write can throw synchronously
+ * Run an import's writes in one transaction. A write can throw synchronously
  * (an uncloneable value); IndexedDB does not abort the transaction for that,
  * so abort it here, or the clears of a replace would commit on their own.
  */
-async function inOneTransaction(db: CafaiDb, run: (tx: WriteTx, pending: Promise<unknown>[]) => Promise<void>): Promise<void> {
-  const tx = db.transaction(DATA_STORES, 'readwrite', DURABLE);
+async function inOneTransaction<T extends { done: Promise<void>; abort(): void }>(
+  tx: T,
+  run: (tx: T, pending: Promise<unknown>[]) => Promise<void>,
+): Promise<void> {
   const pending: Promise<unknown>[] = [];
   try {
     await run(tx, pending);
@@ -129,17 +134,24 @@ async function inOneTransaction(db: CafaiDb, run: (tx: WriteTx, pending: Promise
 }
 
 async function replaceAll(db: CafaiDb, data: CafaiExport, defaultModel: string): Promise<number> {
-  const care = data.care ?? [];
-  await inOneTransaction(db, async (tx, pending) => {
+  await inOneTransaction(db.transaction(DATA_STORES, 'readwrite', DURABLE), async (tx, pending) => {
     for (const name of DATA_STORES) pending.push(tx.objectStore(name).clear());
     for (const bag of data.bags) pending.push(tx.objectStore('bags').put(bag));
     for (const version of data.versions) pending.push(tx.objectStore('versions').put(version));
     for (const record of data.iterations) pending.push(tx.objectStore('iterations').put(record));
     for (const conversation of data.conversations) pending.push(tx.objectStore('conversations').put(conversation));
-    for (const record of care) pending.push(tx.objectStore('care').put(record));
     pending.push(tx.objectStore('settings').put(normalizeSettings(data.settings, defaultModel), SETTINGS_KEY));
   });
-  return data.bags.length + data.versions.length + data.iterations.length + data.conversations.length + care.length;
+  return data.bags.length + data.versions.length + data.iterations.length + data.conversations.length;
+}
+
+/** Replace takes the file's steps, none for a file made before them (D189). */
+async function replaceCare(db: CareDb, records: readonly CareRecord[]): Promise<number> {
+  await inOneTransaction(db.transaction('care', 'readwrite', DURABLE), async (tx, pending) => {
+    pending.push(tx.store.clear());
+    for (const record of records) pending.push(tx.store.put(record));
+  });
+  return records.length;
 }
 
 /**
@@ -169,7 +181,7 @@ async function putIfNewer<T extends { id: string }>(store: KeyedStore<T>, record
 
 async function mergeAll(db: CafaiDb, data: CafaiExport, defaultModel: string): Promise<number> {
   let imported = 0;
-  await inOneTransaction(db, async (tx) => {
+  await inOneTransaction(db.transaction(DATA_STORES, 'readwrite', DURABLE), async (tx) => {
     const count = (written: boolean) => {
       if (written) imported += 1;
     };
@@ -179,13 +191,6 @@ async function mergeAll(db: CafaiDb, data: CafaiExport, defaultModel: string): P
     for (const conversation of data.conversations) {
       count(await putIfNewer(tx.objectStore('conversations'), conversation, (r) => r.updatedAt));
     }
-    const care = tx.objectStore('care');
-    for (const record of data.care ?? []) {
-      const local = await care.get(record.id);
-      if (local !== undefined && !careRecordWins(record, local)) continue;
-      await care.put(record);
-      count(true);
-    }
     const settings = tx.objectStore('settings');
     const local = normalizeSettings(await settings.get(SETTINGS_KEY), defaultModel);
     const merged = fillBlankSettings(local, normalizeSettings(data.settings, defaultModel), defaultModel);
@@ -194,12 +199,29 @@ async function mergeAll(db: CafaiDb, data: CafaiExport, defaultModel: string): P
   return imported;
 }
 
+/** A merge takes a step's record when it wins (careRecordWins); a file without steps leaves them as they were. */
+async function mergeCare(db: CareDb, records: readonly CareRecord[]): Promise<number> {
+  if (records.length === 0) return 0;
+  let imported = 0;
+  await inOneTransaction(db.transaction('care', 'readwrite', DURABLE), async (tx) => {
+    for (const record of records) {
+      const local = await tx.store.get(record.id);
+      if (local !== undefined && !careRecordWins(record, local)) continue;
+      await tx.store.put(record);
+      imported += 1;
+    }
+  });
+  return imported;
+}
+
 export function createDataPorter(deps: PorterDeps): DataPorter {
   return {
     async exportAll() {
       let stored: Awaited<ReturnType<typeof readAll>>;
+      let care: CareRecord[];
       try {
         stored = await readAll(await deps.db());
+        care = await (await deps.careDb()).getAll('care');
       } catch (error) {
         throw toStorageError(error, 'read');
       }
@@ -213,7 +235,7 @@ export function createDataPorter(deps: PorterDeps): DataPorter {
         versions: stored.versions.sort(byCreatedAt),
         iterations: stored.iterations.sort(byCreatedAt),
         conversations: stored.conversations.sort(byCreatedAt),
-        care: stored.care.sort(byId),
+        care: care.sort(byId),
       };
       // The key is not part of any record; this only catches one pasted into a
       // note or the chat. If the key cannot be read, the export still goes
@@ -224,16 +246,25 @@ export function createDataPorter(deps: PorterDeps): DataPorter {
 
     async importAll(data, mode) {
       const incoming = parseCafaiExport(data);
-      let imported: number;
+      let records: number;
+      let care: number;
       try {
+        // Both open before anything is written: a care database that cannot be opened stops the import whole.
         const db = await deps.db();
-        imported = mode === 'replace' ? await replaceAll(db, incoming, deps.defaultModel) : await mergeAll(db, incoming, deps.defaultModel);
+        const careDb = await deps.careDb();
+        if (mode === 'replace') {
+          records = await replaceAll(db, incoming, deps.defaultModel);
+          care = await replaceCare(careDb, incoming.care ?? []);
+        } else {
+          records = await mergeAll(db, incoming, deps.defaultModel);
+          care = await mergeCare(careDb, incoming.care ?? []);
+        }
       } catch (error) {
         throw toStorageError(error, 'write');
       }
       if (mode === 'replace') deps.mirror.noteReplaced?.();
       deps.mirror.schedulePush();
-      return { imported };
+      return { imported: records + care };
     },
   };
 }

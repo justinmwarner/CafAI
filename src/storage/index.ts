@@ -9,6 +9,7 @@
  *   if (restore === 'unreachable') startLateRestore(storage, { onRestored });
  */
 import { GatewayError, type KvClient } from '../api/types.ts';
+import { CARE_DB_NAME, createCareRepository, openCareDb } from './careDb.ts';
 import { CAFAI_DB_NAME, createDbHandle, openCafaiDb, readAll, requestPersistentStorage } from './db.ts';
 import { toStorageError } from './errors.ts';
 import { createKeyBackup } from './keyBackup.ts';
@@ -26,6 +27,8 @@ export interface CreateIdbStorageOptions {
   defaultModel: string;
   /** IndexedDB name for CafAI's data; tests use a unique one. */
   dbName?: string;
+  /** IndexedDB name for machine care's steps (D189). */
+  careDbName?: string;
   /** IndexedDB name for the API key. */
   secretsDbName?: string;
   now?: () => Date;
@@ -42,34 +45,44 @@ export interface IdbStorage extends Storage {
    * screens read them again. Returns the unsubscribe.
    */
   onRestored(listener: () => void): () => void;
-  /** Stop the mirror's timers and close both databases. */
+  /** Stop the mirror's timers and close the databases. */
   close(): void;
 }
 
 /**
  * Open (creating on first use) CafAI's databases and wire the repositories,
  * secret store, porter and mirror. Rejects with a StorageError sentence when
- * the browser blocks IndexedDB.
+ * the browser blocks IndexedDB, or when a database was saved by a newer
+ * CafAI than this one.
  */
 export async function createIdbStorage(options: CreateIdbStorageOptions): Promise<IdbStorage> {
   const { kv, appVersion, defaultModel } = options;
   const now = options.now ?? (() => new Date());
   const dbName = options.dbName ?? CAFAI_DB_NAME;
+  const careDbName = options.careDbName ?? CARE_DB_NAME;
   const handle = createDbHandle((onLost) => openCafaiDb(dbName, onLost));
+  const careHandle = createDbHandle((onLost) => openCareDb(careDbName, onLost));
   const db = () => handle.get();
+  const careDb = () => careHandle.get();
+  const closeDbs = () => {
+    handle.close();
+    careHandle.close();
+  };
 
   let startedEmpty: boolean;
   try {
     startedEmpty = (await (await db()).count('bags')) === 0;
+    // At start-up, not at the first count, as the key's: machine care's steps must open too.
+    await careDb();
   } catch (error) {
-    handle.close();
+    closeDbs();
     throw toStorageError(error, 'unavailable');
   }
   let secrets: Awaited<ReturnType<typeof openSecretStore>>;
   try {
     secrets = await openSecretStore(options.secretsDbName ?? SECRETS_DB_NAME);
   } catch (error) {
-    handle.close();
+    closeDbs();
     throw error;
   }
   void requestPersistentStorage();
@@ -81,12 +94,13 @@ export async function createIdbStorage(options: CreateIdbStorageOptions): Promis
     now,
     debounceMs: options.debounceMs,
     source: {
-      read: async () => readAll(await db()),
+      read: async () => ({ ...(await readAll(await db())), care: await (await careDb()).getAll('care') }),
       apiKey: () => secrets.getApiKey(),
     },
   });
   const repositories = createRepositories({ db, defaultModel, onWrite: () => mirror.schedulePush() });
-  const porter = createDataPorter({ db, secrets, mirror, appVersion, defaultModel, now });
+  const care = createCareRepository({ db: careDb, onWrite: () => mirror.schedulePush() });
+  const porter = createDataPorter({ db, careDb, secrets, mirror, appVersion, defaultModel, now });
   const keyBackup = createKeyBackup(kv, secrets, secrets.keyCopy);
   const restoredListeners = new Set<() => void>();
 
@@ -112,6 +126,7 @@ export async function createIdbStorage(options: CreateIdbStorageOptions): Promis
 
   return {
     ...repositories,
+    care,
     secrets,
     porter,
     mirror,
@@ -122,7 +137,7 @@ export async function createIdbStorage(options: CreateIdbStorageOptions): Promis
     },
     close() {
       mirror.dispose();
-      handle.close();
+      closeDbs();
       secrets.close();
     },
   };
@@ -267,6 +282,7 @@ export function startLateRestore(storage: Storage, options: LateRestoreOptions):
 }
 
 export { createDbHandle, openCafaiDb, CAFAI_DB_NAME } from './db.ts';
+export { CARE_DB_NAME } from './careDb.ts';
 export { StorageError, STORAGE_MESSAGES, type StorageErrorKind } from './errors.ts';
 export {
   conversationKey,

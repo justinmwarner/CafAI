@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createCareRepository, openCareDb } from './careDb.ts';
 import { createDbHandle, openCafaiDb } from './db.ts';
 import { createRepositories } from './repositories.ts';
 import { openSecretStore, REDACTED } from './secrets.ts';
@@ -31,8 +32,10 @@ const NOW = new Date('2026-10-03T09:30:00.000Z');
 async function setup(secrets?: Pick<SecretStore, 'getApiKey'>) {
   const name = uniqueDbName();
   const handle = createDbHandle((onLost) => openCafaiDb(name, onLost));
+  const careHandle = createDbHandle((onLost) => openCareDb(uniqueDbName('care'), onLost));
   const db = () => handle.get();
-  const repos = createRepositories({ db, onWrite: () => undefined, defaultModel: MODEL });
+  const careDb = () => careHandle.get();
+  const repos = { ...createRepositories({ db, onWrite: () => undefined, defaultModel: MODEL }), care: createCareRepository({ db: careDb, onWrite: () => undefined }) };
   const mirror = {
     pushes: 0,
     replaced: 0,
@@ -45,13 +48,14 @@ async function setup(secrets?: Pick<SecretStore, 'getApiKey'>) {
   };
   const porter = createDataPorter({
     db,
+    careDb,
     secrets: secrets ?? { getApiKey: async () => null },
     mirror,
     appVersion: '1.2.3',
     defaultModel: MODEL,
     now: () => NOW,
   });
-  return { repos, porter, mirror };
+  return { repos, porter, mirror, careHandle };
 }
 
 const VERSION_2 = makeVersion({
@@ -388,6 +392,24 @@ describe("machine care's records (D189)", () => {
     await b.repos.care.put(makeCareRecord({ id: 'descale' }));
     expect(await b.porter.importAll(JSON.parse(serializeExport(file)), 'replace')).toEqual({ imported: 2 });
     expect(await b.repos.care.list()).toEqual(file.care);
+  });
+
+  it('live in their own database: one that cannot be opened stops an import before anything is written', async () => {
+    const name = uniqueDbName();
+    const handle = createDbHandle((onLost) => openCafaiDb(name, onLost));
+    const porter = createDataPorter({
+      db: () => handle.get(),
+      careDb: () => Promise.reject(new DOMException('The requested version (1) is less than the existing version (2).', 'VersionError')),
+      secrets: { getApiKey: async () => null },
+      mirror: { schedulePush: () => undefined },
+      appVersion: '1.2.3',
+      defaultModel: MODEL,
+      now: () => NOW,
+    });
+    await expect(porter.importAll(exportOf({ bags: [makeBag()], care: [makeCareRecord()] }), 'replace')).rejects.toMatchObject({ kind: 'newer' });
+    const db = await handle.get();
+    expect(await db.getAll('bags')).toEqual([]);
+    handle.close();
   });
 
   it('an older file, without them, imports and leaves the steps as they were on a merge', async () => {
