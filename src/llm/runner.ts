@@ -6,7 +6,9 @@
  * throws: once an assistant turn with tool calls is appended, every call gets
  * a tool_result (in one user message, in tool_use order), unless a UI call is
  * pending, in which case the caller sends the held results together with the
- * user's answers. A refused turn is never appended.
+ * user's answers. A refused turn is never appended, and a turn the server
+ * paused (`pause_turn`, its own web search, D203) only with the turn that
+ * finishes it.
  */
 import { refusalError, stuckError } from './errors.ts';
 import { unparsedToolInput } from './toolInput.ts';
@@ -27,9 +29,25 @@ import {
 export const DEFAULT_MAX_MODEL_CALLS = 6;
 export const CUT_OFF_MESSAGE = 'Your output was cut off; answer again more briefly.';
 
-/** The visible text of a turn. Text blocks can split mid-sentence, so they join with nothing. */
+/**
+ * The visible text of a turn. Text blocks next to each other join with nothing
+ * (citations split one mid-sentence); text with another block between (a web
+ * search, D203) starts a paragraph.
+ */
 export function contentText(content: readonly ContentBlock[]): string {
-  return content.map((block) => (block.type === 'text' ? block.text : '')).join('');
+  let text = '';
+  let apart = false;
+  for (const block of content) {
+    if (block.type !== 'text') {
+      apart = true;
+      continue;
+    }
+    if (block.text === '') continue;
+    if (apart && text !== '') text += '\n\n';
+    text += block.text;
+    apart = false;
+  }
+  return text;
 }
 
 function isToolUse(block: ContentBlock): block is ToolUseBlock {
@@ -78,22 +96,30 @@ async function streamTurn(run: RunRequest, messages: LlmMessage[]): Promise<LlmA
     messages: [...messages],
     tools: run.tools.map((tool) => tool.definition),
   };
+  if (run.serverTools !== undefined && run.serverTools.length > 0) request.serverTools = [...run.serverTools];
   if (run.maxTokens !== undefined) request.maxTokens = run.maxTokens;
   if (run.effort !== undefined) request.effort = run.effort;
   if (run.signal !== undefined) request.signal = run.signal;
 
   let turn: LlmAssistantTurn | null = null;
+  // As contentText joins them: a block between two texts (a web search) is a paragraph break.
+  let lastText = -1;
   for await (const event of run.provider.stream(request)) {
     if (event.type === 'message_start') run.onTurnStart?.();
-    else if (event.type === 'text_delta') run.onTextDelta?.(event.text);
-    else if (event.type === 'message_done') turn = event.turn;
+    else if (event.type === 'text_delta') {
+      if (lastText >= 0 && event.index > lastText + 1) run.onTextDelta?.('\n\n');
+      lastText = event.index;
+      run.onTextDelta?.(event.text);
+    } else if (event.type === 'message_done') turn = event.turn;
   }
   if (turn === null) throw new LlmError('protocol', "The coach's reply ended early. Try again.");
   return turn;
 }
 
-function finish(turn: LlmAssistantTurn, pendingUiCalls: PendingUiCall[], heldResults: ToolResultBlock[]): RunResult {
-  return { pendingUiCalls, heldResults, stopReason: turn.stopReason, finalText: contentText(turn.content) };
+/** `before`: what the turn's paused parts said (pause_turn), in order. */
+function finish(turn: LlmAssistantTurn, before: readonly LlmMessage[], pendingUiCalls: PendingUiCall[], heldResults: ToolResultBlock[]): RunResult {
+  const content = [...before.flatMap((message) => message.content), ...turn.content];
+  return { pendingUiCalls, heldResults, stopReason: turn.stopReason, finalText: contentText(content) };
 }
 
 export async function runConversation(run: RunRequest): Promise<RunResult> {
@@ -103,6 +129,8 @@ export async function runConversation(run: RunRequest): Promise<RunResult> {
   const maxCalls = run.maxModelCalls ?? DEFAULT_MAX_MODEL_CALLS;
   const tools = new Map(run.tools.map((tool) => [tool.definition.name, tool]));
   const messages = [...run.messages];
+  /** Parts of the turn the server paused, sent back but not yet appended. */
+  let paused: LlmMessage[] = [];
 
   for (let calls = 0; ; ) {
     if (calls >= maxCalls) throw stuckError();
@@ -114,10 +142,19 @@ export async function runConversation(run: RunRequest): Promise<RunResult> {
 
     const assistant: LlmMessage = { role: 'assistant', content: turn.content };
     messages.push(assistant);
+    const uses = turn.content.filter(isToolUse);
+    if (turn.stopReason === 'pause_turn' && uses.length === 0) {
+      // The server paused its own loop (a web search, D203): the turn goes back as it is, with no new user
+      // message, and the server goes on. Appended with the rest, so a failure leaves the user message last.
+      paused.push(assistant);
+      continue;
+    }
+    const before = paused;
+    paused = [];
+    for (const part of before) await run.onAppend(part);
     await run.onAppend(assistant);
 
-    const uses = turn.content.filter(isToolUse);
-    if (uses.length === 0) return finish(turn, [], []);
+    if (uses.length === 0) return finish(turn, before, [], []);
 
     const results: ToolResultBlock[] = [];
     const pending: PendingUiCall[] = [];
@@ -131,7 +168,7 @@ export async function runConversation(run: RunRequest): Promise<RunResult> {
       if ('pending' in handled) pending.push(handled.pending);
       else results.push(handled.result);
     }
-    if (pending.length > 0) return finish(turn, pending, results);
+    if (pending.length > 0) return finish(turn, before, pending, results);
 
     const answers: LlmMessage = { role: 'user', content: results };
     messages.push(answers);

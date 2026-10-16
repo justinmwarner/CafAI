@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { clone } from '../util/clone.ts';
-import { runConversation } from './runner.ts';
+import { contentText, runConversation } from './runner.ts';
 import { toToolDefinition, zodValidator } from './schema.ts';
 import { markUnparsedToolInput } from './toolInput.ts';
+import { WEB_SEARCH_TOOL } from './webSearch.ts';
 import {
   LlmError,
   type ContentBlock,
@@ -83,6 +84,8 @@ function start(turns: ScriptedTurn[], over: Partial<RunRequest> = {}) {
   const { provider, requests } = scriptedProvider(turns);
   const log: string[] = [];
   const appended: LlmMessage[] = [];
+  /** How many model calls had been made when each message was appended. */
+  const appendedAt: number[] = [];
   const deltas: string[] = [];
   let turnStarts = 0;
   const promise = runConversation({
@@ -94,6 +97,7 @@ function start(turns: ScriptedTurn[], over: Partial<RunRequest> = {}) {
     onAppend: (message) => {
       log.push(`append ${message.role}`);
       appended.push(message);
+      appendedAt.push(requests.length);
     },
     onTextDelta: (delta) => deltas.push(delta),
     onTurnStart: () => {
@@ -101,7 +105,7 @@ function start(turns: ScriptedTurn[], over: Partial<RunRequest> = {}) {
     },
     ...over,
   });
-  return { promise, requests, log, appended, deltas, turnStarts: () => turnStarts };
+  return { promise, requests, log, appended, appendedAt, deltas, turnStarts: () => turnStarts };
 }
 
 function errorResult(id: string, content: string) {
@@ -238,9 +242,96 @@ describe('runConversation', () => {
     expect(result).toMatchObject({ stopReason: 'max_tokens', finalText: 'A long answer that', pendingUiCalls: [] });
   });
 
-  it.each(['pause_turn', 'stop_sequence'])('returns at %s', async (stopReason) => {
-    const result = await start([turn(stopReason, text('Paused.'))]).promise;
-    expect(result.stopReason).toBe(stopReason);
+  it('returns at stop_sequence', async () => {
+    const result = await start([turn('stop_sequence', text('Stopped.'))]).promise;
+    expect(result.stopReason).toBe('stop_sequence');
+  });
+
+  describe('a web search (D203)', () => {
+    const SEARCH: ContentBlock = { type: 'server_tool_use', id: 'srvtoolu_1', name: 'web_search', input: { query: 'Onyx Coffee Lab' } };
+    const RESULTS: ContentBlock = {
+      type: 'web_search_tool_result',
+      tool_use_id: 'srvtoolu_1',
+      content: [{ type: 'web_search_result', url: 'https://onyxcoffeelab.com/pages/our-story', title: 'Our Story', encrypted_content: 'Eqgf==', page_age: null }],
+    };
+
+    it('passes the server tools on with every model call of the run', async () => {
+      const run = start([turn('tool_use', toolUse('t1', 'lookup', { shot: 'latest' })), turn('end_turn', text('Done.'))], {
+        serverTools: [WEB_SEARCH_TOOL],
+      });
+      await run.promise;
+      expect(run.requests.map((request) => request.serverTools)).toEqual([[WEB_SEARCH_TOOL], [WEB_SEARCH_TOOL]]);
+      expect(run.requests[1]?.tools.map((tool) => tool.name)).toEqual(['lookup', 'ask']);
+    });
+
+    it('sends none for a run without them', async () => {
+      const run = start([turn('end_turn', text('Hi'))], { serverTools: [] });
+      await run.promise;
+      expect(run.requests[0]).not.toHaveProperty('serverTools');
+    });
+
+    it('sends a paused turn back as it is, with no new user message, and appends it with the turn that finishes it', async () => {
+      const paused = turn('pause_turn', text("I'll look it up."), SEARCH);
+      const finished = turn('end_turn', RESULTS, text('Onyx publishes what it pays.'));
+      const run = start([paused, finished]);
+      const result = await run.promise;
+      expect(run.requests).toHaveLength(2);
+      expect(run.requests[1]?.messages).toEqual([USER, { role: 'assistant', content: paused.content }]);
+      expect(run.appended).toEqual([
+        { role: 'assistant', content: paused.content },
+        { role: 'assistant', content: finished.content },
+      ]);
+      // Only once the server finished the turn: a stored transcript never ends with a turn it must go on with.
+      expect(run.appendedAt).toEqual([2, 2]);
+      expect(result).toEqual({
+        pendingUiCalls: [],
+        heldResults: [],
+        stopReason: 'end_turn',
+        finalText: "I'll look it up.\n\nOnyx publishes what it pays.",
+      });
+      expect(run.turnStarts()).toBe(2);
+    });
+
+    it('counts each part against maxModelCalls, and appends nothing when it gives up', async () => {
+      const run = start(
+        Array.from({ length: 5 }, () => turn('pause_turn', SEARCH)),
+        { maxModelCalls: 3 },
+      );
+      await expect(run.promise).rejects.toMatchObject({ kind: 'protocol', message: 'The coach got stuck. Try again.' });
+      expect(run.requests).toHaveLength(3);
+      expect(run.requests[2]?.messages.map((message) => message.role)).toEqual(['user', 'assistant', 'assistant']);
+      expect(run.appended).toEqual([]);
+    });
+
+    it('appends nothing when the rest of the turn fails or is refused, so a retry asks again', async () => {
+      const overloaded = new LlmError('overloaded', 'Claude is overloaded right now.', 529, true);
+      const failed = start([turn('pause_turn', SEARCH), overloaded]);
+      await expect(failed.promise).rejects.toBe(overloaded);
+      expect(failed.appended).toEqual([]);
+      const refused = start([turn('pause_turn', SEARCH), turn('refusal', text('I cannot'))]);
+      await expect(refused.promise).rejects.toMatchObject({ kind: 'refusal' });
+      expect(refused.appended).toEqual([]);
+    });
+
+    it('handles a paused turn with client tool calls as tool_use', async () => {
+      const run = start([turn('pause_turn', SEARCH, toolUse('t1', 'lookup', { shot: 'latest' })), turn('end_turn', text('Done.'))]);
+      await run.promise;
+      expect(run.appended.map((message) => message.role)).toEqual(['assistant', 'user', 'assistant']);
+      expect(run.appended[1]).toEqual({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: '{"found":"latest"}' }] });
+      expect(run.requests[1]?.messages.at(-1)).toEqual(run.appended[1]);
+    });
+
+    it('streams a paragraph break where a search sits between text, and none inside text its citations split', async () => {
+      const cited: ContentBlock = {
+        type: 'text',
+        text: 'what it pays.',
+        citations: [{ type: 'web_search_result_location', url: 'https://onyxcoffeelab.com/pages/our-story', title: 'Our Story', encrypted_index: 'Eo8=', cited_text: 'price paid' }],
+      };
+      const run = start([turn('end_turn', text("I'll look it up."), SEARCH, RESULTS, text('Onyx publishes '), cited)]);
+      const result = await run.promise;
+      expect(run.deltas.join('')).toBe("I'll look it up.\n\nOnyx publishes what it pays.");
+      expect(result.finalText).toBe("I'll look it up.\n\nOnyx publishes what it pays.");
+    });
   });
 
   it('throws a refusal without appending the refused turn', async () => {
@@ -299,5 +390,15 @@ describe('runConversation', () => {
     });
     await expect(run.promise).rejects.toMatchObject({ kind: 'protocol' });
     expect(run.requests).toHaveLength(0);
+  });
+});
+
+describe('contentText', () => {
+  const SEARCH: ContentBlock = { type: 'server_tool_use', id: 'srvtoolu_1', name: 'web_search', input: {} };
+
+  it('joins text blocks next to each other with nothing, and text a block sits between as paragraphs', () => {
+    expect(contentText([THINKING, text('Hel'), text('lo.')])).toBe('Hello.');
+    expect(contentText([text('Looking.'), SEARCH, text(''), text('Found it.')])).toBe('Looking.\n\nFound it.');
+    expect(contentText([THINKING, SEARCH, text('Only this.')])).toBe('Only this.');
   });
 });

@@ -257,14 +257,20 @@ export function parseMessagesBody(body) {
       .join('\n\n');
   }
   const tools = [];
+  let webSearch = null;
   if (body.tools !== undefined) {
     if (!Array.isArray(body.tools)) return { ok: false, message: 'tools: must be a list.' };
     for (const tool of body.tools) {
       if (!tool || typeof tool.name !== 'string' || !TOOL_NAME.test(tool.name)) {
         return { ok: false, message: `tools: "${tool?.name}" is not a tool name CafAI Bridge can serve (letters, digits, _ and -, at most 52).` };
       }
-      // Server tools (web search and the like) have a `type` and no schema; Claude Code's tools are off.
-      if (tool.type && tool.type !== 'custom') continue;
+      // Server tools have a `type` and no schema. Anthropic's web search runs as Claude Code's own (D203); the rest are left out.
+      if (tool.type && tool.type !== 'custom') {
+        if (tool.name === 'web_search' && /^web_search_\d+$/.test(tool.type)) {
+          webSearch = { maxUses: Number.isInteger(tool.max_uses) && tool.max_uses > 0 ? tool.max_uses : null };
+        }
+        continue;
+      }
       tools.push({ name: tool.name, description: typeof tool.description === 'string' ? tool.description : '', input_schema: tool.input_schema });
     }
   }
@@ -273,7 +279,7 @@ export function parseMessagesBody(body) {
   return {
     ok: true,
     stream: body.stream === true,
-    request: { model: body.model.trim(), maxTokens, system, messages: body.messages, tools, effort },
+    request: { model: body.model.trim(), maxTokens, system, messages: body.messages, tools, effort, webSearch },
   };
 }
 
@@ -425,7 +431,8 @@ export async function startBridgeServer(options) {
     const sink = parsed.stream ? sseSink(res, pingMs) : jsonSink(res);
     const route = manager.handle(parsed.request, sink);
     res.on('close', () => {
-      log(`POST /v1/messages ${parsed.request.model}, ${parsed.request.messages.length} messages, ${route}, ${((Date.now() - started) / 1000).toFixed(1)} s`);
+      const { model, webSearch, messages: sent } = parsed.request;
+      log(`POST /v1/messages ${model}${webSearch ? ' with web search' : ''}, ${sent.length} messages, ${route}, ${((Date.now() - started) / 1000).toFixed(1)} s`);
     });
   }
 

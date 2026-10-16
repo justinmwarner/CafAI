@@ -298,9 +298,11 @@ export function childEnv(baseEnv = process.env, { allowApiKey = false } = {}) {
  * The flags for one conversation: stream-json both ways, Claude Code's own
  * prompt, tools, settings, hooks, plugins, skills and session files all off,
  * the coach's prompt from a file (Windows caps a command line at 32 767
- * characters) and the coach's tools from our MCP endpoint only.
+ * characters) and the coach's tools from our MCP endpoint only. A request
+ * that may search the web (`webSearch`) gets Claude Code's WebSearch, on and
+ * allowed, and no other of its tools (D203).
  */
-export function buildRunArgs({ model, effort = null, systemPromptFile, mcpConfigFile = null }) {
+export function buildRunArgs({ model, effort = null, systemPromptFile, mcpConfigFile = null, webSearch = false }) {
   const args = [
     '-p',
     '--input-format', 'stream-json',
@@ -308,7 +310,7 @@ export function buildRunArgs({ model, effort = null, systemPromptFile, mcpConfig
     '--verbose',
     '--include-partial-messages',
     '--model', model,
-    '--tools', '',
+    '--tools', webSearch ? 'WebSearch' : '',
     '--setting-sources', '',
     '--strict-mcp-config',
     '--no-session-persistence',
@@ -317,7 +319,10 @@ export function buildRunArgs({ model, effort = null, systemPromptFile, mcpConfig
     '--system-prompt-file', systemPromptFile,
   ];
   if (effort && EFFORTS.includes(effort)) args.push('--effort', effort);
-  if (mcpConfigFile) args.push('--mcp-config', mcpConfigFile, '--allowedTools', `mcp__${MCP_SERVER}`);
+  if (mcpConfigFile) args.push('--mcp-config', mcpConfigFile);
+  // dontAsk refuses whatever is not allowed here.
+  const allowed = [...(mcpConfigFile ? [`mcp__${MCP_SERVER}`] : []), ...(webSearch ? ['WebSearch'] : [])];
+  if (allowed.length > 0) args.push('--allowedTools', allowed.join(','));
   return args;
 }
 

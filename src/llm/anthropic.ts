@@ -119,8 +119,10 @@ export function buildAnthropicRequest(request: LlmRequest, apiKey: string, baseU
   if (request.system !== '') body.system = request.system;
   // Replayed verbatim: assistant turns are stored exactly as received.
   body.messages = request.messages;
-  if (request.tools.length > 0) {
-    body.tools = request.tools.map(toWireTool);
+  // The server's own tools (web search, D203) after ours, as given: the same list every turn keeps the cache.
+  const serverTools = request.serverTools ?? [];
+  if (request.tools.length > 0 || serverTools.length > 0) {
+    body.tools = [...request.tools.map(toWireTool), ...serverTools];
     // Opus 5.5 rejects forced tool use; strict schemas keep the inputs valid.
     body.tool_choice = { type: 'auto' };
   }
