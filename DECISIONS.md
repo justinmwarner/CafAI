@@ -2951,9 +2951,15 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
   (distilled, RO, very soft), 30 to 120 ppm, Over 120 ppm: the water page's
   TDS bands), **Intake filter** (Not sure, V1 (citric acid), V2 (baking soda))
   and **Remind me on the stats card** (on), each applied at once and kept in
-  one `care` block of the settings, left out while it holds the defaults, as
-  the key-copy choice is. Not sure reminds as 30 to 120 ppm, and as V1, the
-  more often of the two filters. The Care screen's descale and intake filter
+  one `care` block of the settings: absent until someone answers on the
+  device, and kept from then on, an answer put back to Not sure included, as
+  the key-copy choice is, so a merge takes the incoming block only where
+  there is none. A change saves only its own answer (`setSettings` sends the
+  patch, merged into the stored block in one transaction), so another tab's
+  answer to another question stays; a save that fails shows what is saved
+  again for its own answer alone, unless a later change of it is on its way.
+  Not sure reminds as 30 to 120 ppm, and as V1, the more often of the two
+  filters. The Care screen's descale and intake filter
   steps say what reminds them and link to Settings ("Set it in Settings",
   "Change it in Settings"), which brings the section into view. Why:
   settings live in Settings, and D152 made the section for this; the Care

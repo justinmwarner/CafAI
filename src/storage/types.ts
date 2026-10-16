@@ -191,11 +191,17 @@ export interface Settings {
   temperatureUnit?: TemperatureUnit;
   /**
    * Machine care's reminders (D187): the water, the intake filter and the
-   * stats card's line. Left out while it holds the defaults (DEFAULT_CARE in
-   * settings.ts), as the key-copy choice is: read `care ?? DEFAULT_CARE`.
+   * stats card's line. Absent until someone answers on this device, and read
+   * as DEFAULT_CARE (settings.ts): `care ?? DEFAULT_CARE`. Like
+   * keepKeyInDecaid, storage keeps the block once written, an answer put
+   * back to Not sure included, so a merge (an import, a restore) can tell
+   * answers given here, which it keeps, from none, which it may fill.
    */
   care?: CareSettings;
 }
+
+/** An edit of the settings: what it names changes, the care block field by field (D187). */
+export type SettingsPatch = Omit<Partial<Settings>, 'care'> & { care?: Partial<CareSettings> };
 
 /** How a care step's last time came about: marked done on the Care screen, or a cycle CafAI saw run (D186). */
 export type CareMark = 'tick' | 'seen';
@@ -254,7 +260,8 @@ export interface ConversationRepository {
 
 export interface SettingsRepository {
   get(): Promise<Settings>;
-  update(patch: Partial<Settings>): Promise<Settings>;
+  /** Read and written in one transaction, so concurrent edits (another tab's too) queue up rather than overwrite each other. */
+  update(patch: SettingsPatch): Promise<Settings>;
 }
 
 /**

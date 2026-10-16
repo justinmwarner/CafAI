@@ -29,7 +29,7 @@ function fakeSettingsRepo(initial: Settings, options: { hold?: boolean } = {}): 
     releases: [],
     fail: false,
     get: async () => settings,
-    async update(patch) {
+    async update(patch: Partial<Settings>) {
       repo.updates.push(patch);
       if (repo.fail) throw new Error('The disk is full.');
       settings = { ...settings, ...patch };

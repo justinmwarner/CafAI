@@ -484,6 +484,43 @@ describe('settings and reload (D187)', () => {
     again.dispose();
   });
 
+  it("sends only what changed, so another tab's answer to another question stays", async () => {
+    const { care, storage } = setup();
+    await care.start();
+    // Another tab answers the filter after this one read the settings.
+    await storage.settings.update({ care: { filter: 'v2' } });
+    const update = vi.spyOn(storage.settings, 'update');
+    await care.setSettings({ water: 'over120' });
+    expect(update).toHaveBeenCalledWith({ care: { water: 'over120' } });
+    expect((await storage.settings.get()).care).toEqual({ water: 'over120', filter: 'v2', reminders: true });
+    care.dispose();
+  });
+
+  it('a save that fails late puts back only its own field, to what is saved; a later change stands', async () => {
+    const { care, storage } = setup();
+    await care.start();
+    const update = storage.settings.update.bind(storage.settings);
+    let refuse: ((error: Error) => void) | null = null;
+    vi.spyOn(storage.settings, 'update').mockImplementationOnce(() => new Promise((_, reject) => (refuse = reject)));
+    // The water first, its save slow; then the filter, saved at once.
+    const water = care.setSettings({ water: 'over120' }).catch((error: unknown) => error);
+    await care.setSettings({ filter: 'v2' });
+    refuse!(new Error('The disk is full.'));
+    expect(await water).toBeInstanceOf(Error);
+    expect(care.getState().settings).toEqual({ water: null, filter: 'v2', reminders: true });
+    expect((await storage.settings.get()).care).toEqual({ water: null, filter: 'v2', reminders: true });
+
+    // The water changed again while its first save was still on its way: the later answer stands.
+    vi.spyOn(storage.settings, 'update').mockImplementationOnce(() => new Promise((_, reject) => (refuse = reject)));
+    const first = care.setSettings({ water: 'to120' }).catch((error: unknown) => error);
+    await care.setSettings({ water: 'under30' });
+    refuse!(new Error('The disk is full.'));
+    await first;
+    expect(care.getState().settings.water).toBe('under30');
+    expect((await update({})).care?.water).toBe('under30');
+    care.dispose();
+  });
+
   it('a reload takes the records an import brought, and forgets what Undo would have put back', async () => {
     const { care, storage } = setup();
     await care.start();

@@ -385,27 +385,40 @@ describe('machine care (D187)', () => {
     expect(normalizeCareSettings({ water: 'over120', filter: 'v2', reminders: false })).toEqual({ water: 'over120', filter: 'v2', reminders: false });
     expect(normalizeCareSettings({ water: 'hard', filter: 'v3', reminders: 'yes' })).toEqual(DEFAULT_CARE);
     expect(normalizeSettings({ ...makeSettings(), care: { water: 'to120' } }, MODEL).care).toEqual({ water: 'to120', filter: null, reminders: true });
-    // At its defaults the block is left out, as the key-copy choice: the settings of a CafAI that never set it stay as they were.
+    // Absent until someone answers, as the key-copy choice: the settings of a CafAI that never set it stay as they were.
     expect(normalizeSettings({ model: MODEL }, MODEL)).not.toHaveProperty('care');
-    expect(normalizeSettings({ ...makeSettings(), care: DEFAULT_CARE }, MODEL)).not.toHaveProperty('care');
+    // Once answered it stays, every answer at its default included: that is a choice too.
+    expect(normalizeSettings({ ...makeSettings(), care: DEFAULT_CARE }, MODEL).care).toEqual(DEFAULT_CARE);
   });
 
   it('a patch changes the care block field by field: the water never resets the filter', () => {
     const set = applySettingsPatch(makeSettings(), { care: { water: null, filter: 'v2', reminders: true } }, MODEL);
-    const next = applySettingsPatch(set, { care: { water: 'under30' } as never }, MODEL);
+    const next = applySettingsPatch(set, { care: { water: 'under30' } }, MODEL);
     expect(next.care).toEqual({ water: 'under30', filter: 'v2', reminders: true });
     expect(applySettingsPatch(next, { activeBagId: 'bag_1' }, MODEL).care).toEqual(next.care);
-    expect(applySettingsPatch(next, { care: { water: null, filter: null } as never }, MODEL)).not.toHaveProperty('care');
+    // A field left undefined is not part of the edit.
+    expect(applySettingsPatch(next, { care: { water: undefined, reminders: false } }, MODEL).care).toEqual({ water: 'under30', filter: 'v2', reminders: false });
+    // Put back to Not sure, the block stays: answered here.
+    expect(applySettingsPatch(next, { care: { water: null, filter: null } }, MODEL).care).toEqual(DEFAULT_CARE);
   });
 
-  it('a restore fills a blank answer and takes a switch still at its default; an answer given here wins', () => {
+  it("a merge takes the incoming answers only on a device that never answered, the block whole, as the key-copy choice", () => {
     const incoming = makeSettings({ care: { water: 'over120', filter: 'v1', reminders: false } });
     expect(fillBlankSettings(makeSettings(), incoming, MODEL).care).toEqual({ water: 'over120', filter: 'v1', reminders: false });
     const mine = makeSettings({ care: { water: 'under30', filter: null, reminders: true } });
-    expect(fillBlankSettings(mine, incoming, MODEL).care).toEqual({ water: 'under30', filter: 'v1', reminders: false });
+    expect(fillBlankSettings(mine, incoming, MODEL).care).toEqual({ water: 'under30', filter: null, reminders: true });
     const off = makeSettings({ care: { water: null, filter: 'v2', reminders: false } });
     expect(fillBlankSettings(off, makeSettings(), MODEL).care).toEqual({ water: null, filter: 'v2', reminders: false });
     expect(fillBlankSettings(makeSettings(), makeSettings(), MODEL)).not.toHaveProperty('care');
+  });
+
+  it('an answer put back to its default stays a choice: an older export merged in brings nothing back', () => {
+    let local = applySettingsPatch(normalizeSettings(null, MODEL), { care: { water: 'over120' } }, MODEL);
+    local = applySettingsPatch(local, { care: { water: null } }, MODEL);
+    expect(local.care).toEqual(DEFAULT_CARE);
+    // An export made before the water went back to Not sure, with the switch off then.
+    const older = normalizeSettings({ ...local, care: { water: 'over120', filter: null, reminders: false } }, MODEL);
+    expect(fillBlankSettings(local, older, MODEL).care).toEqual(DEFAULT_CARE);
   });
 });
 

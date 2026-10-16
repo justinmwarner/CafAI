@@ -187,8 +187,10 @@ brought into view.
   1 still (an older CafAI drops it). A merge keeps the later `doneAt`; of two
   never marked, the earlier `countFrom`. Replace takes the file's.
 - **Settings**: one `care` block, `{ water, filter, reminders }`, read
-  leniently; a merge fills a blank water or filter and takes the incoming
-  switch while this device's is still the default, as the look.
+  leniently, absent until someone answers on the device and kept from then
+  on, Not sure too, as the key-copy choice; a merge takes the incoming block
+  only where there is none. A change saves only its own answer, and a failed
+  save shows what is saved again for that answer alone.
 
 ## 9. Under the hood
 

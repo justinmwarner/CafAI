@@ -146,6 +146,12 @@ function sameRecord(a: CareRecord | undefined, b: CareRecord | undefined): boole
   );
 }
 
+function withField<K extends keyof CareSettings>(settings: CareSettings, field: K, value: CareSettings[K]): CareSettings {
+  const next = { ...settings };
+  next[field] = value;
+  return next;
+}
+
 function newestOf(record: { id: string; timestamp: string } | null | undefined): NewestRecord | null {
   return record ? { id: record.id, at: record.timestamp } : null;
 }
@@ -199,6 +205,9 @@ export function createCareService(deps: CareServiceDeps): CareService {
   let reachable = deps.telemetry.getState().sockets.devices === 'open';
   /** The stored records were read: only then may a count write a step's first record. */
   let recordsRead = false;
+  /** Settings > Machine care's changes, numbered, and the last to touch each field: a failed save puts back only its own. */
+  let settingsChanges = 0;
+  const lastChangeOf = new Map<keyof CareSettings, number>();
 
   function set(patch: Partial<CareState>): void {
     state = { ...state, ...patch };
@@ -499,13 +508,23 @@ export function createCareService(deps: CareServiceDeps): CareService {
       set({ records, undoable: new Set(before.keys()) });
     },
     async setSettings(patch) {
+      const ticket = ++settingsChanges;
+      const fields = (Object.keys(patch) as Array<keyof CareSettings>).filter((field) => patch[field] !== undefined);
       const previous = state.settings;
-      const next = { ...previous, ...patch };
-      set({ settings: next });
+      for (const field of fields) lastChangeOf.set(field, ticket);
+      set({ settings: { ...previous, ...patch } });
       try {
-        await deps.storage.settings.update({ care: next });
+        // Only what changed: another tab's answer to another question stays (D187).
+        await deps.storage.settings.update({ care: patch });
       } catch (error) {
-        set({ settings: previous });
+        // Each field this change was the last to touch shows what is saved again; a later change of it stands.
+        const saved = await deps.storage.settings.get().then(
+          (stored) => stored.care ?? DEFAULT_CARE,
+          () => previous,
+        );
+        let settings = state.settings;
+        for (const field of fields) if (lastChangeOf.get(field) === ticket) settings = withField(settings, field, saved[field]);
+        set({ settings });
         throw error;
       }
     },

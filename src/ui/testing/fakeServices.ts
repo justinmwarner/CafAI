@@ -40,6 +40,7 @@ import type {
   Settings,
   Storage,
 } from '../../storage/types.ts';
+import { DEFAULT_CARE } from '../../storage/settings.ts';
 
 export interface Call {
   method: string;
@@ -365,7 +366,12 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
     },
     settings: {
       get: async () => settings,
-      update: async (patch) => (settings = { ...settings, ...patch }),
+      // As the real one, the care block field by field (D187).
+      update: async ({ care: carePatch, ...patch }) => {
+        const careEdits = Object.entries(carePatch ?? {}).filter(([, value]) => value !== undefined);
+        settings = { ...settings, ...patch, ...(carePatch ? { care: { ...(settings.care ?? DEFAULT_CARE), ...Object.fromEntries(careEdits) } } : {}) };
+        return settings;
+      },
     },
     care: {
       list: async () => [...care.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).map((record) => clone(record)),
