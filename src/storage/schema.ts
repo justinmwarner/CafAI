@@ -14,6 +14,7 @@
  */
 import { z } from 'zod';
 import { ROAST_LEVELS, VARIABLES, type ProposeAdjustment } from '../coach/contract.ts';
+import type { FunFactsSource } from '../coach/facts/types.ts';
 import type { ProfileJson, ShotSummary } from '../coach/types.ts';
 import type { TemperatureUnit } from '../coach/temperature.ts';
 import type { LlmMessage } from '../llm/types.ts';
@@ -132,6 +133,8 @@ export const SettingsSchema = z.object({
   temperatureUnit: exact<TemperatureUnit>(z.unknown()).optional(),
   /** Machine care's reminders (D187); absent from exports made before them. Re-validated by normalizeCareSettings, as appearance is. */
   care: exact<CareSettings>(z.unknown()).optional(),
+  /** Where fun facts come from (D198); absent from exports made before them. Not shape-checked here, as temperatureUnit. */
+  funFacts: exact<FunFactsSource>(z.unknown()).optional(),
 });
 
 export const BagSchema = z.object({

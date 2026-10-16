@@ -79,6 +79,19 @@ export interface ToolDefinition {
   inputSchema: JsonSchema;
 }
 
+/**
+ * A tool the provider runs itself (Anthropic's server tools), sent as its
+ * wire object: Anthropic's web search for a fun fact (D203),
+ * `{type: 'web_search_20250305', name: 'web_search', max_uses: 1}`. Its
+ * calls and results come back as blocks of the assistant's own turn
+ * (`server_tool_use`, `web_search_tool_result`), kept and replayed unchanged.
+ */
+export interface ServerToolDefinition {
+  type: string;
+  name: string;
+  [field: string]: unknown;
+}
+
 export type Effort = 'low' | 'medium' | 'high';
 
 export interface LlmRequest {
@@ -87,6 +100,8 @@ export interface LlmRequest {
   system: string;
   messages: LlmMessage[];
   tools: ToolDefinition[];
+  /** Tools the provider runs itself, after the client tools; absent or empty for none (D203). */
+  serverTools?: ServerToolDefinition[];
   maxTokens?: number;
   /** Ignored for models that do not support effort (Haiku 4.5). */
   effort?: Effort;
@@ -204,6 +219,8 @@ export interface RunRequest {
   /** The append-only transcript so far; must end with a user message. */
   messages: LlmMessage[];
   tools: RunnerTool[];
+  /** Tools the provider runs itself, passed on with every model call of the run (D203). */
+  serverTools?: ServerToolDefinition[];
   signal?: AbortSignal;
   /**
    * Called once for every message the runner appends (assistant turns and
