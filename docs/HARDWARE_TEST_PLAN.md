@@ -635,6 +635,41 @@ in dark and in light.
    compares with, then reload CafAI. Expected: the card draws its own shot
    alone, with no message.
 
+## 19. Care reminders (D-CARE-1-D-CARE-9)
+
+Each care step beyond Daily keeps its last time, counted from Decaid's shot
+and steam totals, and the stats card says when one is due. The mock counts
+its own records; only a real Decaid shows which of its records a steam, a
+cleaning cycle or a flush leaves. CafAI open on the tablet, and a phone or a
+laptop on the same network for steps 4 and 5. Put any setting back after.
+
+1. **Counting from the first look.** A fresh CafAI, or Settings > Machine
+   care untouched: open Machine care > Cleaning guide > Weekly. Expected:
+   each step says "Not marked done yet", counting from today; nothing on
+   the stats card.
+2. **A shot counts.** Pull a shot, wait 10 s, open Weekly again. Expected:
+   the detergent clean counts 1 shot since today. Record how long after the
+   shot ended the count changed.
+3. **A steam counts.** Steam (water in a jug is fine), wait 10 s, open
+   Weekly. Expected: Rinza counts 1 steam. Record whether Decaid's
+   `GET /api/v1/steams/ids` lists it.
+4. **Streamline's Clean, seen.** With CafAI open on the phone, run Clean
+   from streamline on the tablet (blind basket in, detergent). Expected: on
+   the phone, within a minute of the cycle's end, Weekly's detergent clean
+   says "Done today" with "CafAI saw the machine's Clean". Record how long
+   the cycle ran and what CafAI's top bar showed meanwhile.
+5. **Streamline's Descale, seen** (only when the machine is due one; it
+   takes most of an hour). As in step 4, with Descale. Expected: the
+   descale step says "Done today". Record each state and substate the log
+   shows.
+6. **Forward Flush x5.** Run Decent's Cleaning/Forward Flush x5 from
+   streamline with a blind basket and water only. Expected: no new shot in
+   Decaid's shot list, and the detergent clean not marked done.
+7. **The line.** After a week with shots and no clean (or with the
+   tablet's date moved on a week), open the coach. Expected: the stats
+   card's line "Weekly clean due: … shots since …", and a tap opens Weekly
+   on that step.
+
 ## Results
 
 | Section | Step | Expected | Observed | Pass? |
@@ -710,6 +745,13 @@ in dark and in light.
 | 18 | 2 | The band under the live curves from the start, named; no stutter | | |
 | 18 | 3 | A bag's first shot draws the other coffee's last shot, named | | |
 | 18 | 4 | A shot deleted in Decaid: the card's own shot alone, no message | | |
+| 19 | 1 | Weekly: "Not marked done yet" from today; no line on the stats card | | |
+| 19 | 2 | A shot counted; how long it took | | |
+| 19 | 3 | A steam counted; in `/api/v1/steams/ids`? | | |
+| 19 | 4 | Streamline's Clean seen: "Done today"; how long it ran | | |
+| 19 | 5 | Streamline's Descale seen; its states and substates | | |
+| 19 | 6 | Forward Flush x5: no shot in Decaid, the clean not marked | | |
+| 19 | 7 | The stats card's line when due; a tap opens the step | | |
 
 Send back this table, the saved shot and profile JSON files, the `[CafAI]`
 lines from `/api/v1/webview/logs`, the output of `npm run test:decaid`, and,
