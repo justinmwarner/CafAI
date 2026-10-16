@@ -175,6 +175,17 @@ export const TID = {
   carePoster: 'care-poster',
   carePlayer: 'care-player',
   careWatch: 'care-watch',
+  // Machine care's reminders (D-CARE-1 to D-CARE-6): the stats card's line, a step's last time, Settings' fields
+  careDueLine: 'care-due-line',
+  careStepCare: (id: string) => `care-step-care-${slug(id)}`,
+  careStepLine: (id: string) => `care-step-line-${slug(id)}`,
+  careMarkDone: (id: string) => `care-mark-done-${slug(id)}`,
+  careUndo: (id: string) => `care-undo-${slug(id)}`,
+  /** The descale's and the intake filter's link to Settings > Machine care. */
+  careSetIn: (id: string) => `care-set-in-${slug(id)}`,
+  careWater: 'care-water',
+  careFilter: 'care-filter',
+  careReminders: 'care-reminders',
   keyInDecaid: 'key-in-decaid',
   aboutDecaid: 'about-decaid',
   driftReport: 'drift-report',

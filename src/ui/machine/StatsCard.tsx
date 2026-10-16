@@ -4,7 +4,8 @@
  * machine's and the scale's links, the state line (and how long until the
  * machine is ready, when Decaid's time-to-ready plugin can say), Group (with
  * its target), Steam, Water (Refill when low) and Scale, the profile on the
- * machine, and Tare and Sleep or Wake. Everything in it updates live.
+ * machine, and Tare and Sleep or Wake; under them, while a step of machine
+ * care is due, its line (CareDueLine.tsx). Everything in it updates live.
  *
  * Laid out for its own width, not the window's (useOwnLayout.ts): four
  * readouts in a row where the card has the room, two by two on a phone, and
@@ -20,6 +21,7 @@ import Typography from '@mui/material/Typography';
 import BedtimeRounded from '@mui/icons-material/BedtimeRounded';
 import WbSunnyRounded from '@mui/icons-material/WbSunnyRounded';
 import { useTelemetry } from '../../app/services.tsx';
+import { CareDueLine } from '../care/CareDueLine.tsx';
 import { TID } from '../testIds.ts';
 import { isHeatingUp } from './format.ts';
 import { LoadedProfile } from './LoadedProfile.tsx';
@@ -140,6 +142,8 @@ export function StatsCard() {
         <LoadedProfile onStepNames={setStepNames} />
         <CardButtons narrow={narrow} />
       </Box>
+      {/* Machine care's line, while a step is due (D-CARE-6). */}
+      <CareDueLine />
     </Paper>
   );
 }
