@@ -156,6 +156,13 @@ function newestOf(record: { id: string; timestamp: string } | null | undefined):
   return record ? { id: record.id, at: record.timestamp } : null;
 }
 
+/** Whether Decaid's newest now is the one the last total was read with, so the total still stands. */
+function sameNewest(total: number | null, then: NewestRecord | null, now: NewestRecord | null): boolean {
+  if (total === null) return false;
+  if (now === null) return then === null && total === 0;
+  return then !== null && now.id === then.id;
+}
+
 function withDeadline<T>(work: Promise<T>, ms: number, timers: CareTimers): Promise<T | null> {
   return new Promise((resolve) => {
     const handle = timers.setTimeout(() => resolve(null), ms);
@@ -249,7 +256,7 @@ export function createCareService(deps: CareServiceDeps): CareService {
     } catch {
       return unchanged;
     }
-    if (previous.shots !== null && newest?.id === previous.newestShot?.id) return { ...unchanged, fresh: true };
+    if (sameNewest(previous.shots, previous.newestShot, newest)) return { ...unchanged, fresh: true };
     let page: PaginatedShots;
     try {
       page = await deps.decaid.listShots({ limit: 1 });
@@ -277,7 +284,7 @@ export function createCareService(deps: CareServiceDeps): CareService {
       noSteams = true;
       return none;
     }
-    if (previous.steams !== null && newest?.id === previous.newestSteam?.id) return { ...unchanged, fresh: true };
+    if (sameNewest(previous.steams, previous.newestSteam, newest)) return { ...unchanged, fresh: true };
     try {
       return { total: (await deps.decaid.listSteamIds()).length, newest, fresh: true };
     } catch (error) {

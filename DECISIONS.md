@@ -2985,7 +2985,8 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
 - **D189. Care's records are an IndexedDB database of their own, in
   Decaid's backup and the export, merged by their last time.** One record
   per step (`id`, `doneAt`, `by`, `countFrom`, `shotTotal`, `steamTotal`,
-  `updatedAt`) in `cafai-care` (`src/storage/careDb.ts`), beside CafAI's own
+  `newestShotAt`, `newestSteamAt`, `updatedAt`; D185 says what the totals
+  and times are) in `cafai-care` (`src/storage/careDb.ts`), beside CafAI's own
   database, which stays at version 1 (`CAFAI_DB_VERSION`), as CafAI 0.1.2
   made it; `Storage.care` hides where they live. The mirror writes the
   records as one more key, `care`, in namespace `cafai`; the export carries

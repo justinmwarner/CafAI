@@ -481,8 +481,8 @@ troubleshooting.
   copy, any device on your network can read it there. Export it any time as
   JSON from History.
 - To count the shots and steams since a step of machine care, CafAI asks
-  Decaid how many it holds and when the newest began; it keeps those
-  numbers, never the shots themselves.
+  Decaid which shot and steam are its newest and when they began, and how
+  many it holds; it keeps those, never the shots themselves.
 - A photo of a bag goes to Anthropic once, in a request of its own, to read
   the bag's details. CafAI keeps no copy of the photo (not on the device,
   not in Decaid, not in the chat or an export), and with an API key the

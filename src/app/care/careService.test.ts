@@ -195,6 +195,17 @@ describe('start and counting (D185, D190)', () => {
     }
   });
 
+  it('reads a total kept without its newest again, as one from before the newest was kept', async () => {
+    // Every shot and steam deleted in Decaid since that page kept 5 and 2.
+    const { care, decaid } = setup({ shots: 0, steams: 0, cache: { shots: 5, steams: 2, newestShot: null, newestSteam: null } });
+    await care.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(calls(decaid, 'listShots')).toHaveLength(1);
+    expect(calls(decaid, 'listSteamIds')).toHaveLength(1);
+    expect(care.getState().totals).toEqual({ shots: 0, steams: 0, newestShot: null, newestSteam: null });
+    care.dispose();
+  });
+
   it('has the totals kept on this device from its first moment, before Decaid answers', () => {
     const { care } = setup({ cache: { shots: 90, steams: 20, newestShot: null, newestSteam: null } });
     expect(care.getState().totals).toMatchObject({ shots: 90, steams: 20 });
