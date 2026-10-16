@@ -23,6 +23,9 @@
  *   card and the iteration keep it with the EY worked out from the card's
  *   dose and yield, Decaid's record gets both, and the coach hears it with
  *   the next turn it is sent, as a verdict.
+ * - A run of a cleaning or calibration profile (the weekly clean's Forward
+ *   Flush x5) is no shot: Decaid saves none, so CafAI neither looks for one
+ *   nor says anything of it (D-FIX-1).
  * - A bag whose details were saved is added to Decaid's bean library in the
  *   background, and every load names its batch (D102).
  * - A new bag opens with "Which coffee is it?": a batch from Decaid's bean
@@ -437,6 +440,24 @@ class RecordReadFailed extends Error {
     this.name = 'RecordReadFailed';
     this.reason = reason;
   }
+}
+
+/**
+ * The beverage types whose runs Decaid never saves as shots: it gives such a
+ * run a shot id and shotState frames like a shot's, and then keeps no record
+ * of it (`_persistShotIfNeeded`, de1_state_manager.dart:835, 849, 911-917 at
+ * aab5f93). Decent's Forward Flush x5, the weekly clean's profile, is one.
+ */
+const UNSAVED_BEVERAGES: ReadonlySet<string> = new Set(['cleaning', 'calibrate']);
+
+/**
+ * Whether Decaid saves a run of this profile as a shot. Its beverage type is
+ * read as Decaid reads it: case aside, and none, or a name Decaid does not
+ * know, is espresso (profile.dart:146-153), which Decaid saves.
+ */
+function savedAsShot(profile: unknown): boolean {
+  const type = typeof profile === 'object' && profile !== null ? (profile as Record<string, unknown>).beverage_type : undefined;
+  return !(typeof type === 'string' && UNSAVED_BEVERAGES.has(type.toLowerCase()));
 }
 
 /** The CafAI version id a workflow context was tagged with at activation, if any. */
@@ -2054,6 +2075,22 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   // -------------------------------------------------------------------------
 
   /**
+   * Whether Decaid keeps a record of the run that just ended (D-FIX-1): false
+   * for a run of a cleaning or calibration profile, which is no shot. Read
+   * from Decaid's workflow as the run ends, the profile Decaid decides by then,
+   * so a profile loaded behind CafAI's back (D70) counts too. Null when Decaid
+   * did not answer: the run is then looked for as a shot, as before, so no
+   * shot is lost to a read that failed.
+   */
+  async function runSaved(): Promise<boolean | null> {
+    try {
+      return savedAsShot((await api.getWorkflow()).profile);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Decaid saves the record a moment after the shot ends. Ask again with a
    * doubling delay (0.5 s to 8 s by default, about 15 s in all), so a shot that
    * is never saved costs a handful of requests rather than a steady stream.
@@ -2087,9 +2124,17 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     }
   }
 
-  async function handleShotFinished(shotId: string | null, started: ShotStart | null = null): Promise<void> {
+  /**
+   * A run ended: credit its shot to the active version, or say why not.
+   * `saved` is runSaved()'s answer for this run, kept for its Retry, which
+   * looks again for the same run whatever the workflow holds by then.
+   */
+  async function handleShotFinished(shotId: string | null, started: ShotStart | null, saved: Promise<boolean | null>): Promise<void> {
     const s = session;
     if (!s) return;
+    // A cleaning or calibration profile's run (the weekly clean's Forward Flush x5, say) is no shot: Decaid keeps no
+    // record of it, so there is nothing to look for and nothing to say, and a problem on the banner stays (D-FIX-1).
+    if ((await saved) === false) return;
     const current = activeVersion(s);
     if (!current) {
       addMessage('system', [noticePart('info', 'Pick a starting profile first; that shot is not part of this dial-in.')]);
@@ -2105,14 +2150,20 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     state = { ...state, busy: true };
     emit();
     try {
-      await creditShot(s, current, shotId, started);
+      await creditShot(s, current, shotId, started, saved);
     } finally {
       state = { ...state, busy: false };
       emit();
     }
   }
 
-  async function creditShot(s: Session, current: ProfileVersion, shotId: string | null, started: ShotStart | null): Promise<void> {
+  async function creditShot(
+    s: Session,
+    current: ProfileVersion,
+    shotId: string | null,
+    started: ShotStart | null,
+    saved: Promise<boolean | null>,
+  ): Promise<void> {
     const record = await fetchShot(shotId);
     if (!record) {
       // Typically the machine dropped mid-shot. Decaid may still save the
@@ -2126,7 +2177,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
             : 'The shot finished, but Decaid has not saved it. Tap Retry to look again, or pull another shot.',
         ),
       ]);
-      replaceStanding({ kind: 'shot', message: SHOT_NOT_SAVED, retry: () => handleShotFinished(shotId, started) });
+      replaceStanding({ kind: 'shot', message: SHOT_NOT_SAVED, retry: () => handleShotFinished(shotId, started, saved) });
       await persistConversation(s);
       return;
     }
@@ -2931,7 +2982,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         const started = takeShotStart(event.shotId);
         // A new shot: a rating scale Decaid could not tell is asked once more (D101).
         scaleUnclear = false;
-        void enqueue(() => handleShotFinished(event.shotId, started));
+        // Asked now, as Decaid decides whether to keep the run, not once a reply the queue waits on is done (D-FIX-1).
+        const saved = runSaved();
+        void enqueue(() => handleShotFinished(event.shotId, started, saved));
       });
       // React only to reports that arrive while CafAI runs, not a stale one.
       let lastError = telemetry.getState().connectionError;

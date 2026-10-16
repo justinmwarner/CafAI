@@ -2515,6 +2515,107 @@ describe('coach engine', () => {
       expect(progressNotices()).toEqual([]);
       expect(engine.getState().error).toBe('Decaid has not saved that shot yet.');
     });
+
+    // D-FIX-1: Decaid gives a cleaning or calibration profile's run a shot id and saves no record of it.
+    /** Decent's Forward Flush x5 (or another profile of `beverageType`) as Decaid's workflow holds it, loaded in streamline. */
+    const cleaningProfile = (beverageType = 'cleaning'): ProfileJson => ({
+      ...baseProfile,
+      title: 'Cleaning/Forward Flush x5',
+      beverage_type: beverageType as ProfileJson['beverage_type'],
+    });
+    /** A run as Decaid reports it: its start and its end, with the id it gave the run. */
+    const run = (shotId: string) => {
+      telemetry.emitShot({ type: 'started', shotId });
+      telemetry.emitShot({ type: 'finished', shotId, stopReason: null });
+    };
+
+    it("says nothing of a cleaning or calibration profile's run: no search, no warning, no banner, no card", async () => {
+      await throughTemplatePick();
+      const seen = watchSearch();
+      const busy: boolean[] = [];
+      engine.subscribe(() => busy.push(engine.getState().busy));
+      const turns = requests.length;
+      const chat = engine.getState().messages;
+      // Loaded behind CafAI's back, as the weekly clean says (D70); the case Decaid reads aside.
+      for (const [shotId, type] of [['flush-1', 'cleaning'], ['flush-2', 'Cleaning'], ['calibration-1', 'calibrate']] as const) {
+        machine.loaded = cleaningProfile(type);
+        machine.missingShots.add(shotId);
+        run(shotId);
+        await drain();
+      }
+      expect(callsOf('getShot')).toEqual([]);
+      expect(seen).toEqual([]);
+      expect(engine.getState().messages).toEqual(chat);
+      expect(engine.getState().error).toBeNull();
+      expect(busy).not.toContain(true);
+      expect(await storage.iterations.listAll()).toEqual([]);
+      expect(requests).toHaveLength(turns);
+
+      // A shot of the bag's version after it is a shot again.
+      machine.loaded = callsOf('activateProfile').at(-1)!.args[0] as ProfileJson;
+      expect(await shotIsCredited('shot-1')).toBe(true);
+    });
+
+    it('says nothing of it before a starting profile is picked either, where a shot is told to pick one first', async () => {
+      await openBag();
+      const pickFirst = () => notices().filter((p) => p.text.startsWith('Pick a starting profile first'));
+      machine.loaded = cleaningProfile();
+      run('flush-1');
+      await drain();
+      expect(pickFirst()).toEqual([]);
+      machine.loaded = baseProfile;
+      run('shot-1');
+      await vi.waitFor(() => expect(pickFirst()).toHaveLength(1));
+    });
+
+    it('asks which profile ran as the run ends, not once a reply the engine is busy with is done', async () => {
+      await throughTemplateCards();
+      const v1 = () => callsOf('activateProfile').at(-1)!.args[0] as ProfileJson;
+      scripts.push(() => {
+        // The weekly clean ends while the coach replies, and the bag's version is back before the engine's turn comes.
+        machine.loaded = cleaningProfile();
+        machine.missingShots.add('flush-1');
+        run('flush-1');
+        machine.loaded = v1();
+        return [text('Loaded. Pull a shot.')];
+      });
+      await engine.pickTemplate('t-tpl', 'd-flow');
+      await drain();
+      expect(callsOf('getShot')).toEqual([]);
+      expect(engine.getState().error).toBeNull();
+      expect(notices().filter((p) => p.tone === 'warning')).toEqual([]);
+    });
+
+    it("keeps a lost shot's Retry on the banner through a cleaning run, and Retry still looks for that shot", async () => {
+      await throughTemplatePick();
+      machine.missingShots.add('shot-lost');
+      run('shot-lost');
+      await vi.waitFor(() => expect(engine.getState().error).toBe('Decaid has not saved that shot yet.'));
+      const looks = () => callsOf('getShot').filter((call) => call.args[0] === 'shot-lost').length;
+      const before = looks();
+
+      machine.loaded = cleaningProfile();
+      machine.missingShots.add('flush-1');
+      run('flush-1');
+      await drain();
+      expect(engine.getState().error).toBe('Decaid has not saved that shot yet.');
+      expect(callsOf('getShot').filter((call) => call.args[0] === 'flush-1')).toEqual([]);
+
+      // Whatever the machine holds now, Retry is for the shot that ran the bag's version.
+      await engine.retry();
+      expect(looks()).toBe(before + 6);
+      expect(engine.getState().error).toBe('Decaid has not saved that shot yet.');
+    });
+
+    it('looks for the run as a shot when Decaid does not say which profile it was, so no shot is lost to a failed read', async () => {
+      await throughTemplatePick();
+      machine.failWorkflowReads = 1;
+      scripts.push(() => [text('Got it.'), askTaste]);
+      run('shot-1');
+      await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+      expect(machine.failWorkflowReads).toBe(0);
+      expect(cardOf('shot-1')).toBeDefined();
+    });
   });
 
   // -------------------------------------------------------------------------
