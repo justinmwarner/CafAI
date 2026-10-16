@@ -5,8 +5,10 @@
  * demo wrote itself: after a successful seed it leaves a marker in
  * localStorage, and a later load under that marker seeds again, replacing
  * whatever the viewer added in the demo. "CafAI data" is any bag, version,
- * iteration or conversation, a saved settings record, or an API key other
- * than the demo's placeholder.
+ * iteration or conversation, a step of machine care someone marked done, a
+ * saved settings record, or an API key other than the demo's placeholder.
+ * The care records CafAI makes by itself the first time it opens (D-CARE-8)
+ * are not: they hold nothing anyone did.
  *
  * Under the marker, one thing still stops the seed: an API key the scripted
  * coach does not know. The demo never needs a real key, so one at this
@@ -56,6 +58,7 @@ export async function readStoredData(names: DemoDbNames = {}): Promise<StoredDat
     const db = await handle.get();
     for (const store of DATA_STORES) {
       if (store === 'settings') settings = (await db.get('settings', SETTINGS_KEY)) !== undefined;
+      else if (store === 'care') records += (await db.getAll('care')).filter((record) => record.doneAt !== null).length;
       else records += await db.count(store);
     }
   } finally {

@@ -87,6 +87,13 @@ holds: idle, its first step (98.5 °C for v4, whose fill runs hotter than its
 93 °C pour), and during a shot the step that runs (91 °C in v4's bloom), back
 to the idle target once the shot is done.
 
+Machine care is kept up (D-CARE-1): the weekly clean was done 8 days ago, so
+it is due, and the stats card's last line says "Weekly clean due: 6 shots
+since the last" (the dial-in's shots), opening the step on the Care screen.
+The rest are on time there: Rinza 3 days ago, the tank and tray 2, the intake
+filter 11 (due in 3 days), the group head's parts and the gasket 16, the
+descale 140; the steam tip and the transport were never marked done.
+
 ## Answering the open question
 
 The coach's replies come from the scripted coach (`mock/anthropic/`), in its
