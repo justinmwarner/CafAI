@@ -142,6 +142,8 @@ export function createCareService(deps: CareServiceDeps): CareService {
   let cycle: CycleWatch = NO_CYCLE;
   let steaming = false;
   let reachable = deps.telemetry.getState().sockets.devices === 'open';
+  /** The stored records were read: only then may a count write a step's first record. */
+  let recordsRead = false;
 
   function set(patch: Partial<CareState>): void {
     state = { ...state, ...patch };
@@ -196,7 +198,8 @@ export function createCareService(deps: CareServiceDeps): CareService {
     };
     const at = iso(now());
     const writes: CareRecord[] = [];
-    for (const step of TRACKED_STEPS) {
+    // Records that could not be read are left alone: a record written now could cover a real one.
+    for (const step of recordsRead ? TRACKED_STEPS : []) {
       const record = seen.get(step);
       if (!record) {
         // Counted from the first look (D-CARE-8).
@@ -297,14 +300,20 @@ export function createCareService(deps: CareServiceDeps): CareService {
     if (deps.visibility?.visible()) count();
   });
 
+  /** The stored records and settings; storage that cannot be read leaves the records as they were, and says so in recordsRead. */
   async function read(): Promise<Pick<CareState, 'records' | 'settings'>> {
     const [records, settings] = await Promise.all([
-      deps.storage.care.list().catch(() => [] as CareRecord[]),
+      deps.storage.care.list().then(
+        (listed) => listed,
+        () => null,
+      ),
       deps.storage.settings.get().then(
         (stored) => stored.care ?? DEFAULT_CARE,
-        () => DEFAULT_CARE,
+        () => state.settings,
       ),
     ]);
+    if (records === null) return { records: state.records, settings };
+    recordsRead = true;
     return { records: new Map(records.map((record) => [record.id, record])), settings };
   }
 

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { doneRecord, servicesWithCare } from '../testing/careServices.ts';
 import { renderWithServices } from '../testing/renderWithServices.tsx';
 import { TID } from '../testIds.ts';
@@ -74,6 +74,17 @@ describe("a step's last time on the Care screen (D-CARE-1, D-CARE-4)", () => {
     const services = await servicesWithCare({ settings: { filter: 'v2' } });
     renderWithServices(<StepCare stepId="intake-filter" title="Clean the intake filter" />, services);
     expect(screen.getByText('Your filter is V2: CafAI reminds you every month.')).toBeInTheDocument();
+    services.care.dispose();
+  });
+
+  it('a mark that could not be saved says so, and the step stays as it was', async () => {
+    const services = await servicesWithCare();
+    vi.spyOn(services.storage.care, 'put').mockRejectedValueOnce(new Error('disk full'));
+    renderWithServices(<StepCare stepId="gasket" title="Look at the group gasket" />, services);
+    await userEvent.click(screen.getByTestId(TID.careMarkDone('gasket')));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not save that. Try again.');
+    expect(screen.getByTestId(TID.careStepLine('gasket'))).toHaveTextContent(/^Not marked done since/);
+    expect(screen.getByTestId(TID.careMarkDone('gasket'))).toBeEnabled();
     services.care.dispose();
   });
 

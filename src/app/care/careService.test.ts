@@ -139,6 +139,23 @@ describe('start and counting (D-CARE-3, D-CARE-8)', () => {
     care.dispose();
   });
 
+  it('records it could not read are left alone: no first record is written over them', async () => {
+    const { care, storage } = setup();
+    vi.spyOn(storage.care, 'list').mockRejectedValueOnce(new Error('superseded'));
+    const put = vi.spyOn(storage.care, 'put');
+    await care.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(care.getState()).toMatchObject({ ready: true });
+    expect(care.getState().totals.shots).toBe(100);
+    expect(put).not.toHaveBeenCalled();
+    // Read again (an import, a restore): counted as usual.
+    await care.reload();
+    care.refresh();
+    await vi.advanceTimersByTimeAsync(MIN_COUNT_GAP_MS);
+    expect(put).toHaveBeenCalledTimes(TRACKED_STEPS.length);
+    care.dispose();
+  });
+
   it('a Decaid that does not answer leaves the last totals, and records counted from now with none', async () => {
     const { care, decaid, storage } = setup({ cache: { shots: 90, steams: 20, newestShotMs: null, newestSteamMs: null } });
     decaid.failNext('listShots', new GatewayError(0, '/api/v1/shots', 'Could not reach Decaid.', 'network'));

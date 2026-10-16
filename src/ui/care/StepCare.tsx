@@ -7,7 +7,7 @@
  * link to Settings > Machine care to change it. Nothing for Daily's steps,
  * and nothing where there is no care service (fakes, previews).
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
@@ -20,6 +20,8 @@ import { TID } from '../testIds.ts';
 import { requestReveal, revealInOwnColumn, takeReveal } from './careReveal.ts';
 import { filterLine, stepLine, waterLine } from './careWords.ts';
 import { useStepStatus } from './useCare.ts';
+
+const COULD_NOT_SAVE = 'Could not save that. Try again.';
 
 export interface StepCareProps {
   stepId: string;
@@ -52,6 +54,11 @@ function TrackedStepCare({ step, title }: { step: TrackedStepId; title: string }
   const { care } = useServices();
   const view = useStepStatus(step);
   const box = useRef<HTMLDivElement>(null);
+  const [failed, setFailed] = useState(false);
+  const save = (work: () => Promise<void>) => {
+    setFailed(false);
+    work().catch(() => setFailed(true));
+  };
 
   // The stats card's line opened this step: bring the whole step into view.
   useEffect(() => {
@@ -92,7 +99,7 @@ function TrackedStepCare({ step, title }: { step: TrackedStepId; title: string }
           {line.details.map((detail) => ` · ${detail}`).join('')}
         </Typography>
         {state.undoable.has(step) ? (
-          <Button variant="text" onClick={() => void care.undo(step)} data-testid={TID.careUndo(step)} aria-label={`Undo: ${title}`} sx={{ minHeight: 48 }}>
+          <Button variant="text" onClick={() => save(() => care.undo(step))} data-testid={TID.careUndo(step)} aria-label={`Undo: ${title}`} sx={{ minHeight: 48 }}>
             Undo
           </Button>
         ) : null}
@@ -101,7 +108,7 @@ function TrackedStepCare({ step, title }: { step: TrackedStepId; title: string }
           startIcon={<CheckRounded />}
           loading={marking}
           disabled={state.marking !== null && !marking}
-          onClick={() => void care.markDone(step)}
+          onClick={() => save(() => care.markDone(step))}
           aria-label={`Mark done: ${title}`}
           data-testid={TID.careMarkDone(step)}
           sx={{ minHeight: 48, px: 2, ml: 'auto' }}
@@ -109,6 +116,11 @@ function TrackedStepCare({ step, title }: { step: TrackedStepId; title: string }
           Mark done
         </Button>
       </Box>
+      {failed ? (
+        <Typography variant="body2" role="alert" sx={{ color: 'error.main', mt: 0.5 }}>
+          {COULD_NOT_SAVE}
+        </Typography>
+      ) : null}
     </Box>
   );
 }
