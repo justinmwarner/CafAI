@@ -3232,26 +3232,40 @@ wrong thing (its section 19.6).
   for 2.5 s, from the start or since it closed; a socket back sooner was a
   blip and changes nothing. The time does not count while the page is out
   of sight: back in view, the sockets reconnect at once and get the 2.5 s
-  first. It clears only when Decaid says again which devices are
-  connected: its devices frame, which Decaid replays on connect, or
-  `GET /api/v1/devices`, asked again as the socket opens and taken while
-  it stays open (then `GET /api/v1/machine/state` for a machine it says
-  is there). The real link comes in the same change, so a machine that
-  went away meanwhile has its own alert at once ("Not connected", or
-  Decaid's report of the disconnect), never a moment of a live row
-  (`MachineAlerts.tsx`: time with no word from Decaid counts as time
-  away). Until then, the link and the readings are Decaid's last word:
-  the stats card keeps them, under "Can't reach Decaid. Trying again…",
-  which says why. Why: the alert
-  needed the machine to read not connected as well, and only a devices
-  frame or the REST seed changes that, so a Decaid that went away while
-  the machine was connected showed nothing: no alert and four live starts
-  for 2 min 16 s on the simulator, the only sign a chat line after a
-  write. On a phone or a computer a Wi-Fi drop or a Decaid restart does
-  that; on the tablet, Decaid going away takes CafAI with it. Keeping the
-  last readings rather than blanking the card leaves everything else that
-  reads the link (the engine, the care counts, the drinks' views) as it
-  was through a short outage, and the alert explains the card.
+  first. A Decaid gone without a word never closes the socket: a tablet
+  that loses its power or its Wi-Fi sends no FIN or RST to a phone, and
+  neither side pings. So when the watchdog reopens a machine socket
+  silent for 20 s while devices says the machine is connected, it reopens
+  the devices socket with it; a gone Decaid's then counts as out of reach
+  2.5 s later, about 25 s in all, and a healthy one replays its devices on
+  connect well inside the 2.5 s, the link unchanged, so neither the alert
+  nor the row moves. `unreachable` clears only when Decaid says again
+  which devices are connected: its devices frame, which Decaid replays on
+  connect, or `GET /api/v1/devices`, asked again as the socket opens and
+  taken while it stays open (then `GET /api/v1/machine/state` for a
+  machine it says is there). The real link comes in the same change, so a
+  machine that went away meanwhile has its own alert at once ("Not
+  connected", or Decaid's report of the disconnect), never a moment of a
+  live row (`MachineAlerts.tsx`: time with no word from Decaid counts as
+  time away). Until then, the link and the readings are Decaid's last
+  word: the stats card keeps them, under "Can't reach Decaid. Trying
+  again…", which says why. The alert comes right after a failed command
+  (a Stop that did not get through, D207) and before Decaid's own device
+  error, which may be old: `scanFailed` stays (status_publisher.dart:31-45)
+  and `profileUploadFailed` lasts until an upload succeeds, so behind it
+  the strip would show an old error, with every command held and no word
+  of why. Why: the alert needed the machine to read not connected as
+  well, and only a devices frame or the REST seed changes that, so a
+  Decaid that went away while the machine was connected showed nothing:
+  no alert and four live starts for 2 min 16 s on the simulator, the only
+  sign a chat line after a write. On a phone or a computer a Wi-Fi drop or
+  a Decaid restart does that; on the tablet, Decaid going away takes
+  CafAI with it. Keeping the last readings rather than blanking the card
+  leaves everything else that reads the link (the engine, the care
+  counts, the drinks' views) as it was through a short outage, and the
+  alert explains the card. Left: with no machine connected the machine
+  socket is silent by right, so a Decaid gone without a word then is not
+  noticed; the alert already says the machine is not connected.
 - **D207. While Decaid is out of reach every command waits but
   Stop.** The starts, Sleep or Wake, Tare and the Shot view's Next step
   are held in their places (`src/ui/machine/commands.ts`, `ShotView.tsx`);

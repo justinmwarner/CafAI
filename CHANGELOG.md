@@ -68,7 +68,10 @@ workflow checks against it. Settings > About shows the version you run.
   phone, Decaid closed or restarting), CafAI now says "Can't reach Decaid.
   Trying again…" after 2.5 s, as it did only for a machine already
   disconnected, and holds the starts, Sleep, Wake, Tare and Next step until
-  Decaid answers; Stop stays. Before, the buttons stayed live and nothing
+  Decaid answers; Stop stays. A tablet that loses its power or its Wi-Fi
+  says nothing as it goes, so there it takes about 20 s more. The alert
+  comes before an error Decaid reported earlier, which could otherwise hide
+  why every button is held. Before, the buttons stayed live and nothing
   said why they did nothing. When Decaid is back, CafAI reads the machine
   again, so a machine that went away meanwhile shows its own alert at once.
 - Settings > Sleep and wake: "A wake time keeps the machine awake until
