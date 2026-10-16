@@ -1,6 +1,23 @@
 # Good morning: CafAI after your answers (2026-10-04)
 
-**Newest (2026-10-15, later):** the wake schedule, the next item of the
+**Newest (2026-10-15, evening):** four more items of the gap review, built
+side by side by four agents and merged on branch `feat/gap-review-batch`
+(D161-D196), then into `main`: overlaid shot curves, TDS and EY on the shot
+card, °F, and care reminders set by your water. You put off Clean, Descale
+and Transport from CafAI (D161): nothing in CafAI starts a cycle, and the
+cleaning guide's steps that need one say "From streamline:", without "for
+now". What each item does, and the calls of mine to check, are in the
+section after the status table. Three fresh reviewers then read the merged
+code and found 24 defects, none critical: 22 are fixed with tests, and the
+two left, both small, are recorded. On the final code: typecheck, lint,
+4286 unit tests, both builds and the release zip pass; Playwright passed
+all 469 tests (8 skipped by design); Chromium 91 runs the smoke and the
+coach loop; `npm run test:decaid` passed 43/43 against Decaid 0.8.8 on your
+simulator, the batch's new checks included, and `npm run e2e:real` passed.
+The README's pictures are retaken. Not yet seen on a real DE1 or tablet:
+sections 16 to 19 of `docs/HARDWARE_TEST_PLAN.md`.
+
+**Before that (2026-10-15, later):** the wake schedule, the next item of the
 gap review (D157-D160, branch `feat/wake-schedule`, merged into `main`).
 Settings > **Sleep and wake** edits what Decaid keeps and acts on while it
 runs, CafAI open or not: **Sleep when idle** with its minutes, and the
@@ -102,6 +119,120 @@ pushed.
 | Drift watch (`npm run decaid:watch`) | exit 4 on 2026-10-11: every check passes for v0.8.8 and Decaid's `main` (`af4e995`), whose spec changes are additions; files CafAI depends on changed on `main` (camera access for skins, the Visualizer plugin), so on GitHub it would open a `decaid-read` issue (D105) |
 | Live API test (`npm run test:live`) | skipped here (no key on this machine); its dry run against the scripted coach passes |
 | Fresh-eyes verifier | 2026-10-11, your list (D123-D128): one reviewer, no critical or high findings; 2 medium (an unknown verdict in a stored chat stopped the coach for that bag; the taste-wording guard missed common promises and read only `expectedEffect`) and 8 low, with nits; all fixed in `8720050` but the screenshot script's fake clock, which only its own pictures meet (they are made deterministic another way). 2026-10-10, Decaid alignment: three reviewers (update safety; engine and storage; UI) found 25 defects, 7 of them important, each verified with a test or Decaid's source; all fixed (`197520d`, brief `docs/briefs/verify-decaid-alignment.md`). 2026-10-08, the UX rework: 2 major, 5 minor and 8 polish; 13 fixed, 1 kept by design, 1 open (below). Chat first: not run yet (its brief is `docs/briefs/verify-chat-first.md`). Earlier rounds: all fixed |
+
+## New: four from the gap review (2026-10-15)
+
+Your pick of 2026-10-15: items 2 to 5 of the roadmap's machine care and
+gap review lists, one agent each in its own worktree from the same commit,
+merged by hand (the shared files were the shot card, the settings record,
+the coach's prompt and History) and their decisions numbered in merge order
+(D162-D191). Item 1, Clean, Descale and Transport from CafAI, waits (D161).
+
+- **Overlaid shot curves (D178-D182).** A shot's card draws the shot its
+  question asks about ("Compared with your previous shot?") faintly under
+  its own pressure and flow, a pale band in the same colours, with a key
+  that names it: "Previous shot", or "Last shot of Red Brick" on a bag's
+  first. The Shot view draws the bag's previous shot under a shot while it
+  pulls, named over the plot with its time and yield, and the card's once
+  it is done. A shot in the chat is drawn from its card with no request;
+  another coffee's is read from Decaid once. On a phone held upright the
+  key takes a line under the curves, so they keep their width.
+- **TDS and EY on the shot card (D162-D170).** Every card has a quiet
+  **TDS · Add**: type your refractometer's reading (a comma works) and the
+  card shows TDS and the EY worked out from its own dose and yield. Both go
+  to the shot in Decaid (`drinkTds`, `drinkEy`, so Visualizer gets them)
+  and to the coach with your next tap or message, told as a measurement,
+  never a taste, with your verdict outranking it. History's rows show them.
+- **°F (D171-D177).** Settings > Appearance > **Temperatures**. With °F,
+  every temperature you read or set turns °F: the stats card, the drinks'
+  views and their steppers, the change card, History, the cleaning guide's
+  60 °C, and the coach's words (1 °C hotter is 1.8 °F hotter). Decaid and
+  your profiles keep °C, and a stepper tap moves one whole °C, the step
+  Decaid keeps, so every value reads back as you set it.
+- **Care reminders (D183-D191).** Every care step beyond Daily shows its
+  last time ("Last done 9 days ago · 41 shots since") and **Mark done**,
+  with Undo. Five of them remind, with one quiet line on the stats card for
+  the most overdue ("Weekly clean due: 41 shots since the last"), which
+  opens it. Settings > Machine care asks your water, in Decent's bands, and
+  your intake filter, V1 or V2, which set the descale and filter intervals,
+  and has a switch for the line. Counts come from Decaid's shot and steam
+  records; a Clean or Descale CafAI sees the machine run for a minute counts
+  as done.
+
+**Look at first:** `npm run demo`: answer the open question, and the coach
+starts with the last shot's TDS; every card has the pale band of the shot
+before under its curves; the stats card says "Weekly clean due: 6 shots
+since the last" and opens the Weekly routine. Then Settings > Appearance >
+Temperatures on °F, and back.
+
+**Calls you may want to change**, each with its decision:
+- The shot under is the one the card asks about, your previous shot, not
+  the previous version's shot the roadmap named (D178): a grind move makes
+  no new version, so that shot could be several back, and the card would
+  ask about one shot and draw another.
+- Every card's curves now start at the pour, so the flat preheat stub is
+  gone (D182).
+- The TDS cell is on every card, with no setting to hide it (D162).
+- In °F a stepper tap moves one whole °C (2 °F, now and then 1 °F), since
+  Decaid keeps whole °C (D173); the coach is asked for changes to one
+  decimal, "1.8 °F", rather than the roadmap's "2 °F" (D175). Nothing in the
+  coach's words is rewritten until you choose a unit, so on the default you
+  see today's words exactly (D176).
+- Care's intervals (D184): the weekly clean and Rinza after 7 days, once a
+  shot or a steam happened since; the intake filter after 14 days (V1, or
+  not sure) or 30 (V2); the group head soak after 28 days; the descale by
+  your water: never under 30 ppm, a year or 1,500 shots at 30 to 120 ppm or
+  not sure, six months or 800 shots above 120 ppm.
+- A Clean or Descale CafAI sees run for 60 s counts as done (D186), and the
+  stats card's line is the only reminder, with no snooze and never the
+  alert under the top bar (D188).
+
+**Found after the merge**, each fixed with a test:
+- "Set it in Settings" opened Machine care a screen short: Sleep and wake
+  grew once Decaid answered, and the browser's scroll anchoring held the
+  wrong section. The target is now held in view while the screen settles.
+- The °F check against your simulator failed in CafAI's own harness, which
+  read the partial hot water and flush writes as wrong. Decaid deep-merges
+  them, so the runtime check now takes them, as the types already did.
+- The review (coach and engine, storage and Decaid, and the UI, one agent
+  each) found 24 defects, none critical: 2 high, 8 medium and 14 low, each
+  shown with a test or a probe before it was fixed.
+  - °F words: "up", "over" or "behind" after a temperature made it a change
+    (92 °C read 165.6 °F), an arrow range converted only its last number, a
+    cooled sample's 25 °C read as a change, and a °F the coach gave a
+    barista on °C who asked for it was rewritten. Now nothing is rewritten
+    until a unit is chosen (D176).
+  - A cleaning or calibration run, such as the weekly clean's Forward Flush
+    x5 from streamline, set off the lost-shot search and a Retry that
+    stayed (D193).
+  - Going back to CafAI 0.1.2 after this release would have stopped it at
+    a wrong "another window" message. Care's records now keep a database of
+    their own, CafAI's stays at version 1, and data a newer CafAI saved
+    says so (D189, D195).
+  - The care count could write over a Mark done or a restore that landed
+    while it wrote; it mixed Decaid's clock with the phone's; an import of
+    old shots into Decaid counted as shots pulled; a backup holding only
+    care said "your bags came from Decaid's backup"; an answer put back to
+    Not sure came back after a merge; a seen cycle was timed by any frame;
+    each count fetched every steam id; and a late failed save undid later
+    changes (D185-D189, D196).
+  - TDS: a TDS with no EY left another app's EY beside it, now cleared
+    (D165); a taste whose record could not be read took the TDS and the
+    verdict with it (D194); a reading the record came with was told to the
+    coach twice.
+  - The UI: Escape in the TDS field sent the focus to the whole message; a
+    phone card's third key squeezed its curves to 11 px at 320 px wide, and
+    now takes a line under them (D192); the Shot view's timer read 0.0 s
+    after a shot stopped in preheat.
+  - The demo's TDS line read as the coach ignoring its own number, now
+    followed by "Your taste still comes first." (D170); the °F prompt gave
+    a °C sentence as the thing to say (D175).
+  - Left, and recorded: an option's echo in the barista's bubble shows the
+    coach's own unit (D176); the scripted coach's "that shot" when a reading
+    rides with a later shot; a small import into Decaid still counts as
+    shots since (D185). And, not from the review: a cleaning run still takes
+    the Shot view, which shows "Reading the shot" for 8 s before it goes
+    back.
 
 ## New: your list after the alignment (2026-10-11)
 
