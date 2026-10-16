@@ -2611,10 +2611,12 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
   schema version 1 still, which an older CafAI drops. A merge (an import, a
   restore) keeps the later last done, a step marked done over one never
   marked, and of two never marked the earlier start (`careRecordWins` in
-  `src/storage/porter.ts`). Why: a step's last time is the barista's data,
-  like a bag, and must survive what a bag survives; updatedAt cannot decide,
-  since a device that lost its storage begins counting afresh, and its new
-  records must not outrank the ones the backup brings back.
+  `src/storage/porter.ts`). Like the bags, they are the device's own: a phone
+  and the tablet each keep theirs, and Decaid's copy is the backup, not a
+  meeting place. Why: a step's last time is the barista's data, like a bag,
+  and must survive what a bag survives; updatedAt cannot decide, since a
+  device that lost its storage begins counting afresh, and its new records
+  must not outrank the ones the backup brings back.
 - **D-CARE-8. Counting starts the first time CafAI looks.** A step never
   marked done gets its record the first time CafAI counts it, with Decaid's
   totals then, so a new install is never due at once; the Care screen says

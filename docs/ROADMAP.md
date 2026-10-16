@@ -69,7 +69,9 @@ second, wait (D161):
   overdue stays on the stats card: the alert under the top bar is for
   problems of the moment (D-CARE-6). Left: a cycle seen on a real DE1 and
   Forward Flush x5 left out of Decaid's shot list there
-  (`docs/HARDWARE_TEST_PLAN.md`), snoozing the line, and the water's LSI.
+  (`docs/HARDWARE_TEST_PLAN.md`), snoozing the line, the water's LSI, and
+  marks shared between devices, which each keep their own as they keep
+  their bags (D-CARE-7).
 
 ## More from the gap review (D151)
 

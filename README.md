@@ -364,10 +364,11 @@ with **Retry**; it never loads anything on the machine by itself.
   last", which opens it on the Care screen; never the alert under the top
   bar. The shots and steams are Decaid's own (any skin's count), counted
   from the first time CafAI looked, so a new install is never due at once.
-  A Clean or Descale CafAI sees the machine run for a minute (from
-  streamline, say, with CafAI open on a phone) marks its step done too;
-  Decent's Forward Flush x5 does not, as it is the daily water flush's
-  profile as well. In Settings > Machine care: **Your water**, in Decent's
+  A Clean or Descale CafAI sees the machine run for a minute, started
+  elsewhere while CafAI is open, marks its step done too; Decent's Forward
+  Flush x5 does not, as it is the daily water flush's profile as well. Each
+  device keeps its own last times, as it keeps its own bags: a step marked
+  done on a phone is not marked on the tablet. In Settings > Machine care: **Your water**, in Decent's
   bands (under 30 ppm never descale; up to 120 ppm once a year or 1,500
   shots; over 120 ppm every six months or 800 shots; Not sure is reminded as
   up to 120), **Intake filter** (V1, V2 or Not sure, reminded as V1) and

@@ -209,6 +209,10 @@ brought into view.
 
 - Snoozing a reminder: the line stays until the step is marked done or the
   switch is off.
+- Marks across devices: like the bags, each device keeps its own last
+  times, and Decaid's copy is a backup; a step marked done on a phone
+  reaches the tablet only through a restore. Merging them through Decaid's
+  store (the merge rule is ready, `careRecordWins`) would be its own item.
 - The LSI itself: CafAI asks Decent's TDS bands, not the water's LSI.
 - Litres, and the time-to-ready of a cycle.
 - The cycles from CafAI (D161).
