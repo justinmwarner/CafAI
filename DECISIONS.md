@@ -2917,7 +2917,10 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
   shot_dao.dart:192-204 and steam_dao.dart:58-70). Yet the ids of a busy
   café's year of steams come to over a megabyte, and a page of one parses
   that shot's measurements: on a slow tablet two rows a count, and a total
-  only after a shot or a steam, beat both every time.
+  only after a shot or a steam, beat both every time. The drift watch
+  (`WATCH` in `scripts/decaid-watch.mjs`) follows what this rests on: the
+  shot and steam DAOs and tables, the storage service, and build.yaml, whose
+  `store_date_time_values_as_text` is why a record's time has no zone.
 - **D186. A step starts over when it is marked done, or when CafAI saw
   the machine's own Clean or Descale run for a minute; Forward Flush x5
   never counts.** **Mark done** sets the step's last time to now, with
