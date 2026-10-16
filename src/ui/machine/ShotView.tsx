@@ -53,11 +53,11 @@ const SKIP_HOLD_MS = 1500;
 /**
  * Moves the shot on to the profile's next step, through the app's one
  * command sender, as the machine row's buttons do: held while any command is
- * in flight, sent once per tap, a failure shown in the machine alert. Only
- * while a step runs and the profile in Decaid's workflow (the shell's one
- * read) has another after it; it stays through skipStep, Decaid's name for
- * the moment the machine moves on. Its icon alone, named, where the room is
- * short, so the coach's note keeps its width.
+ * in flight or Decaid is out of reach, sent once per tap, a failure shown in
+ * the machine alert. Only while a step runs and the profile in Decaid's
+ * workflow (the shell's one read) has another after it; it stays through
+ * skipStep, Decaid's name for the moment the machine moves on. Its icon
+ * alone, named, where the room is short, so the coach's note keeps its width.
  *
  * Decaid answers the skip before a snapshot shows the next step, and unlike
  * Stop a second skip is not the same as one: it would take the step after.
@@ -68,6 +68,7 @@ function NextStep({ iconOnly }: { iconOnly: boolean }) {
   const { decaid } = useServices();
   const commands = useMemo(() => machineCommandsFor(decaid), [decaid]);
   const pending = useSyncExternalStore(commands.subscribe, () => commands.getState().pending);
+  const unreachable = useTelemetry((s) => s.unreachable);
   const steps = useSharedLoadedProfile()?.stepNames?.length ?? 0;
   const frame = useTelemetry((s) => (s.machineConnected ? (s.machine?.profileFrame ?? null) : null));
   /** The step the last tap skipped from, until the hold is over. */
@@ -97,7 +98,7 @@ function NextStep({ iconOnly }: { iconOnly: boolean }) {
       variant="tonal"
       aria-label={iconOnly ? 'Next step' : undefined}
       startIcon={iconOnly ? undefined : <SkipNextRounded />}
-      disabled={pending !== null || held}
+      disabled={pending !== null || held || unreachable}
       loading={pending === 'skipStep'}
       onClick={() => {
         setSkippedFrom(frame);

@@ -403,6 +403,144 @@ describe('watchdog', () => {
   });
 });
 
+describe('Decaid out of reach', () => {
+  /** Started, every socket open, and Decaid saying the machine and the scale are connected. */
+  function connected(rest: { devices?: unknown; machine?: unknown } = {}): Harness {
+    const h = harness({}, rest);
+    h.store.start();
+    h.open();
+    h.ws.latest(PATHS.devices).message(devicesFrame('connected'));
+    return h;
+  }
+
+  /** Decaid goes: every socket closes from its end, and the retries are never answered. */
+  function decaidGoes(h: Harness): void {
+    for (const path of Object.values(PATHS)) h.ws.latest(path).drop();
+  }
+
+  const unreachable = (h: Harness) => h.store.getState().unreachable;
+
+  it("is its devices socket down 2.5 s, whatever the machine was; Decaid's last word stays", async () => {
+    const h = connected();
+    decaidGoes(h);
+    await vi.advanceTimersByTimeAsync(2499);
+    expect(unreachable(h)).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(h.store.getState()).toMatchObject({ unreachable: true, machineConnected: true, scaleConnected: true });
+    // Retries come and go under it.
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(unreachable(h)).toBe(true);
+  });
+
+  it('a socket back within 2.5 s was never away, nor one that opens in time at start', async () => {
+    const h = connected();
+    const seen: boolean[] = [];
+    h.store.subscribe(() => seen.push(unreachable(h)));
+    h.ws.latest(PATHS.devices).drop();
+    await vi.advanceTimersByTimeAsync(1000);
+    h.ws.latest(PATHS.devices).open();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(seen).not.toContain(true);
+
+    const late = harness();
+    late.store.start();
+    await vi.advanceTimersByTimeAsync(2000);
+    late.ws.latest(PATHS.devices).open();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(unreachable(late), 'open, even before a frame').toBe(false);
+  });
+
+  it('counts from the start when the devices socket never opens', async () => {
+    const h = harness();
+    h.store.start();
+    await vi.advanceTimersByTimeAsync(2499);
+    expect(unreachable(h)).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(unreachable(h)).toBe(true);
+  });
+
+  it("is back only with Decaid's devices frame, the real link in the same change: never a moment of the old one", async () => {
+    const h = connected();
+    // GET /devices, asked again as the socket opens, never answers here.
+    h.client.getDevices.mockImplementation(() => new Promise(() => {}));
+    decaidGoes(h);
+    await vi.advanceTimersByTimeAsync(2500);
+    const states: Array<{ unreachable: boolean; machineConnected: boolean }> = [];
+    h.store.subscribe(() => states.push({ unreachable: unreachable(h), machineConnected: h.store.getState().machineConnected }));
+
+    h.ws.latest(PATHS.devices).open();
+    expect(h.store.getState().sockets.devices).toBe('open');
+    expect(unreachable(h), 'an open socket is not yet word from Decaid').toBe(true);
+    // Decaid replays its devices: the machine and the scale went away meanwhile.
+    h.ws.latest(PATHS.devices).message(devicesFrame('disconnected', 'disconnected'));
+    expect(h.store.getState()).toMatchObject({ unreachable: false, machineConnected: false, scaleConnected: false });
+    expect(states.filter((s) => !s.unreachable)).toEqual([{ unreachable: false, machineConnected: false }]);
+  });
+
+  it('or with GET /devices, asked again as the socket opens, and then GET /machine/state', async () => {
+    const snapshot = fixtures.machineState();
+    const h = connected({ devices: devicesFrame('connected').devices, machine: snapshot });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.client.getDevices).toHaveBeenCalledTimes(1);
+    decaidGoes(h);
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(h.client.getDevices).toHaveBeenCalledTimes(1);
+
+    const back = { ...snapshot, timestamp: '2026-10-03T08:05:00.000000' };
+    h.client.getMachineState.mockResolvedValue(back);
+    h.ws.latest(PATHS.devices).open();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.client.getDevices).toHaveBeenCalledTimes(2);
+    expect(h.store.getState()).toMatchObject({ unreachable: false, machineConnected: true, machine: back });
+  });
+
+  it("a devices frame that came first wins over GET /devices; an answer while the socket is down again keeps Decaid out of reach", async () => {
+    const h = connected();
+    decaidGoes(h);
+    await vi.advanceTimersByTimeAsync(2500);
+    let answer: (devices: unknown) => void = () => {};
+    h.client.getDevices.mockImplementation(() => new Promise((resolve) => (answer = resolve)));
+    h.ws.latest(PATHS.devices).open();
+    h.ws.latest(PATHS.devices).message(devicesFrame('disconnected'));
+    answer(devicesFrame('connected').devices);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.store.getState()).toMatchObject({ unreachable: false, machineConnected: false });
+
+    // Away again; the socket opens and drops before Decaid says anything, and REST answers after.
+    decaidGoes(h);
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(unreachable(h)).toBe(true);
+    h.ws.latest(PATHS.devices).open();
+    h.ws.latest(PATHS.devices).drop();
+    answer(devicesFrame('connected').devices);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.store.getState()).toMatchObject({ unreachable: true, machineConnected: true });
+  });
+
+  it('a page out of sight does not count the time: back in view, the reconnect gets its 2.5 s first', async () => {
+    const h = connected();
+    h.visibility.visibilityState = 'hidden';
+    h.visibility.fire();
+    decaidGoes(h);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(unreachable(h)).toBe(false);
+
+    h.visibility.visibilityState = 'visible';
+    h.visibility.fire();
+    await vi.advanceTimersByTimeAsync(2499);
+    expect(unreachable(h)).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(unreachable(h), 'still no Decaid').toBe(true);
+  });
+
+  it('a stopped store counts nothing', async () => {
+    const h = connected();
+    h.store.stop();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(unreachable(h)).toBe(false);
+  });
+});
+
 describe('shot lifecycle and live samples', () => {
   function shotHarness() {
     const h = harness();

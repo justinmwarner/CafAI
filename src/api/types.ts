@@ -688,6 +688,13 @@ export type SocketStatus = 'connecting' | 'open' | 'closed';
 /** Live state from the WebSockets, for UI. Replaced (not mutated) on change. */
 export interface TelemetryState {
   sockets: Record<'machine' | 'scale' | 'devices' | 'shotState' | 'waterLevels' | 'shotSettings', SocketStatus>;
+  /**
+   * Decaid out of reach: its devices socket has not been open for 2.5 s
+   * (from the start, or since it closed), and Decaid has not yet said again
+   * which devices are connected. Until it does, the link and the readings
+   * here are the last Decaid sent, not news.
+   */
+  unreachable: boolean;
   /** From ws/v1/devices only: a machine entry with state "connected". */
   machineConnected: boolean;
   /** From ws/v1/scale/snapshot status frames (or devices). */

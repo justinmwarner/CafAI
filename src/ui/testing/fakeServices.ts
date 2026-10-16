@@ -72,6 +72,7 @@ export const IDLE_TELEMETRY: TelemetryState = {
     waterLevels: 'open',
     shotSettings: 'open',
   },
+  unreachable: false,
   machineConnected: true,
   scaleConnected: true,
   machine: {

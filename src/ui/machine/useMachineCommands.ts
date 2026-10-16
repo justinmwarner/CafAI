@@ -7,7 +7,8 @@
  *
  * One command in flight for the whole app, not one per group of buttons: a
  * start in flight from the row holds the card's Sleep and Tare too, instead
- * of queueing presses. Stop is the exception: it is never blocked.
+ * of queueing presses. Stop is the exception: it is never blocked. While
+ * Decaid is out of reach the model holds every command but Stop (commands.ts).
  */
 import { useMemo, useSyncExternalStore } from 'react';
 import type { DecaidClient } from '../../api/types.ts';
@@ -125,10 +126,11 @@ export function useMachineCommands(): MachineCommandsView {
   const store = useCommandsStore();
   const { pending, error } = useSyncExternalStore(store.subscribe, store.getState);
   const connected = useTelemetry((s) => s.machineConnected);
+  const unreachable = useTelemetry((s) => s.unreachable);
   const state = useTelemetry((s) => s.machine?.state?.state ?? null);
   const scaleConnected = useTelemetry((s) => s.scaleConnected);
   const hasGhc = useHasGhc();
-  const model = machineControls({ connected, state, scaleConnected, hasGhc, pending });
+  const model = machineControls({ connected, unreachable, state, scaleConnected, hasGhc, pending });
   const wake = model.sleepWake.label === 'Wake';
   return {
     model,
