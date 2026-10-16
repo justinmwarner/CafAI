@@ -14,7 +14,8 @@
  * The field is CafAI's number field (AddGrinder.tsx's steps, DrinkFields.tsx):
  * text with the decimal keyboard (`inputmode="decimal"`), a comma read as a
  * point, the unit at its end; Enter (the keyboard's Done) or Save keeps it,
- * Cancel or Escape closes it. Leaving the field keeps the draft and does
+ * Cancel or Escape closes it, and the Escape stops there: the chat's message
+ * around the card never takes it too. Leaving the field keeps the draft and does
  * nothing else: a tap on Save leaves the field first. As in the composer,
  * typing is never held while the coach works; saving is, as the rating is.
  */
@@ -163,6 +164,10 @@ export function ShotTds({ summary, onSave, busy = false }: ShotTdsProps) {
   const onKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
     if (event.key !== 'Escape') return;
     event.preventDefault();
+    // The field's own Escape. In the chat the card sits in one of x-chat's messages, whose roving
+    // focus also takes an Escape from inside it (whether prevented or not) and moves the focus to
+    // the whole message, after close() has given it back to the cell.
+    event.stopPropagation();
     close();
   };
 
