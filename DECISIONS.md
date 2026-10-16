@@ -2529,11 +2529,12 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
   1,500 to 2,250 shots and six months with 800 to 1,200, and CafAI takes the
   earlier end of each. The guide's descale line, after the descaling page,
   says every year or two for 30 to 120 ppm; the reminder takes the water
-  page's year, the earlier of the two. Counts CafAI does not know let the days decide. Why,
-  the roadmap's first check: Decent's own intervals are in weeks, months and
-  shots; oils come with shots and milk with steam, so a week of neither needs
-  nothing; and litres cannot be counted: Decaid keeps no record of a flush or
-  of hot water, and CafAI sees only what runs while it is open.
+  page's year, the earlier of the two. Counts CafAI does not know let the
+  days decide. Why, the roadmap's first check: Decent's own intervals are in
+  weeks, months and shots; oils come with shots and milk with steam, so a
+  week of neither needs nothing; and litres cannot be counted: Decaid keeps
+  no record of a flush or of hot water, and CafAI sees only what runs while
+  it is open.
 - **D-CARE-3. Counts come from Decaid's totals, one request each, never by
   paging back.** Each step's record (D-CARE-7) keeps Decaid's shot total and
   steam total from when its count began, and the count since is the total

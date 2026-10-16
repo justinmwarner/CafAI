@@ -368,11 +368,11 @@ with **Retry**; it never loads anything on the machine by itself.
   elsewhere while CafAI is open, marks its step done too; Decent's Forward
   Flush x5 does not, as it is the daily water flush's profile as well. Each
   device keeps its own last times, as it keeps its own bags: a step marked
-  done on a phone is not marked on the tablet. In Settings > Machine care: **Your water**, in Decent's
-  bands (under 30 ppm never descale; up to 120 ppm once a year or 1,500
-  shots; over 120 ppm every six months or 800 shots; Not sure is reminded as
-  up to 120), **Intake filter** (V1, V2 or Not sure, reminded as V1) and
-  **Remind me on the stats card**.
+  done on a phone is not marked on the tablet. In Settings > Machine care:
+  **Your water**, in Decent's bands (under 30 ppm never descale; up to 120
+  ppm once a year or 1,500 shots; over 120 ppm every six months or 800
+  shots; Not sure is reminded as up to 120), **Intake filter** (V1, V2 or
+  Not sure, reminded as V1) and **Remind me on the stats card**.
 - **Settings > About**: CafAI's version, and the Decaid you run next to the
   one CafAI was checked against ("Decaid 0.9.0 (CafAI was verified with
   0.8.8)", with a note when yours is older); anything Decaid sent that
