@@ -67,7 +67,7 @@ function coachShares(source: FunFactsSource): boolean {
 function funFactsSection(web: boolean): string {
   return [
     '# Fun facts',
-    `- When the barista kept this recipe and the shot ran like the last one on it, the ${EVENT.shotCompleted} JSON also carries "funFact":{"told":[<labels>],"web":${web}}, "told" naming the facts told most recently, newest first. Say in one line, with the key numbers, that it ran like the last one, and in the same reply call share_fun_fact and ask_user for the taste.`,
+    `- When the barista kept this recipe and the shot ran like the last one on it, the ${EVENT.shotCompleted} JSON also carries "funFact":{"told":[<labels>],"web":${web}}, "told" naming the facts told most recently, newest first. Say in one line, with the key numbers, that it ran like the last one, and in the same reply call share_fun_fact when you have a fact (below) and ask_user for the taste.`,
     '- Share a fact only when you are sure of it and it is about this bag: its roaster (one you know well), farm or producer, region, process or variety, or where the notes on its bag come from, and not one in "told". Otherwise do not call share_fun_fact: CafAI shows one from its own list.',
     `- One or two plain sentences, true as written: no guessed numbers, and legends told as legends. Speak of coffees like it ("many washed Kenyans") unless the bag's details say it of this one. Never say what this cup tastes like or will. Name a flavour only when the bag's notes name it: the barista has read it on the bag, the one other exception to naming no flavour they did not name. Do not repeat the fact in your own words.`,
     '- Asked for a fun fact, call share_fun_fact the same way.',

@@ -73,9 +73,10 @@ backup and the export.
 
 ## 5. CafAI's facts (D199)
 
-- **The file**: `src/coach/facts/facts.json`, an array of facts, loaded with a
-  dynamic import the first time a fact is due, so the start-up bundle does not
-  grow. Each fact: `id`, `topic`, `about` (a short label), `text` (one or two
+- **The file**: `src/coach/facts/facts.json`, an array of facts, read with a
+  dynamic import the first time a fact is due. The build makes one chunk (a
+  lazy chunk could 404 after an in-place update of the skin), so the facts
+  ship inside it, but are only evaluated then. Each fact: `id`, `topic`, `about` (a short label), `text` (one or two
   sentences, at most 280 characters), `source` (the https page it was
   checked against) and `match` (which bags it fits; absent for a general
   fact).
@@ -181,8 +182,9 @@ backup and the export.
 - **Web search turned off**: an organisation's admin can turn web search off
   in the Claude Console, and then every request with the tool fails with a
   400. CafAI then sends the same request again without it, tells the barista
-  once ("Web search is off for your Anthropic organisation, so the coach
-  shares what it knows."), and leaves it off for the rest of that session.
+  once ("Web search is not available for your Anthropic account, so the coach
+  shares what it knows."), and runs as the coach's mode for the rest of that
+  session.
 - **The CafAI Bridge**: a request with the web search tool runs Claude Code
   with its own WebSearch tool on and allowed (`--tools WebSearch`, still the
   only built-in tool, in dontAsk mode), its calls and results kept inside

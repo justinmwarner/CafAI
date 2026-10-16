@@ -477,7 +477,9 @@ describe('buildSystemPrompt: fun facts (D198, D201, D203)', () => {
     expect(section).toContain(`the ${EVENT.shotCompleted} JSON also carries "funFact":{"told":[<labels>],"web":false}`);
     expect(section).toMatch(/When the barista kept this recipe and the shot ran like the last one on it/);
     expect(section).toMatch(/"told" naming the facts told most recently, newest first/);
-    expect(section).toMatch(/Say in one line, with the key numbers, that it ran like the last one, and in the same reply call share_fun_fact and ask_user for the taste/);
+    expect(section).toMatch(
+      /Say in one line, with the key numbers, that it ran like the last one, and in the same reply call share_fun_fact when you have a fact \(below\) and ask_user for the taste/,
+    );
     expect(section).toMatch(/Asked for a fun fact, call share_fun_fact the same way/);
   });
 
