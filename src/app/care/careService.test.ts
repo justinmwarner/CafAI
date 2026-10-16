@@ -48,7 +48,12 @@ function setup(options: { shots?: number; steams?: number; seed?: CareRecord[]; 
   return { decaid, storage, telemetry, cache, care };
 }
 
-const machine = (state: string): MachineFrame => ({ ...IDLE_TELEMETRY.machine!, state: { state, substate: 'idle' } });
+/** A machine frame, stamped by the machine at `atMs` (now by default), as Decaid writes it: local, no zone. */
+const machine = (state: string, atMs = Date.now()): MachineFrame => ({
+  ...IDLE_TELEMETRY.machine!,
+  timestamp: shotAt(atMs).timestamp,
+  state: { state, substate: 'idle' } as MachineFrame['state'],
+});
 const calls = (decaid: FakeDecaid, method: string) => decaid.calls.filter((call) => call.method === method);
 /** Every count asks for Decaid's newest shot first. */
 const counts = (decaid: FakeDecaid) => calls(decaid, 'getLatestShot').length;
@@ -417,6 +422,49 @@ describe('the machine’s own cycles, seen (D186)', () => {
     telemetry.setState({ machineConnected: false });
     await vi.advanceTimersByTimeAsync(0);
     expect(care.getState().records.get('descale')?.doneAt).toBeNull();
+    care.dispose();
+  });
+
+  it("is timed by the machine's frames: a Clean stopped after 10 s, its socket dropped and the scale still sending, is no Clean", async () => {
+    const { care, telemetry } = setup();
+    await care.start();
+    await vi.advanceTimersByTimeAsync(0);
+    const started = Date.now();
+    telemetry.setState({ machine: machine('cleaning', started) });
+    await vi.advanceTimersByTimeAsync(10_000);
+    const last = machine('cleaning', started + 10_000);
+    telemetry.setState({ machine: last });
+    // The machine's socket drops; its last frame stays in the store, and the scale's keep coming for a minute and more.
+    telemetry.setState({ sockets: { ...telemetry.getState().sockets, machine: 'closed' } });
+    for (let i = 0; i < 70; i += 1) {
+      await vi.advanceTimersByTimeAsync(1000);
+      telemetry.setState({ scale: { ...telemetry.getState().scale!, weight: i } });
+      // The same stale frame again is no frame.
+      telemetry.setState({ machine: last });
+    }
+    // A frame while the socket is closed (read from REST, say) is not the socket's either.
+    telemetry.setState({ machine: machine('cleaning') });
+    telemetry.setState({ sockets: { ...telemetry.getState().sockets, machine: 'open' }, machine: machine('idle') });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(care.getState().records.get('detergent-clean')?.by).toBeNull();
+    care.dispose();
+  });
+
+  it("counts the minute by the frames' own times, not by when they reached CafAI", async () => {
+    const { care, telemetry } = setup();
+    await care.start();
+    await vi.advanceTimersByTimeAsync(0);
+    // A Clean the machine ran for two minutes; CafAI got the frames bunched within 20 s.
+    const started = Date.now() - 100_000;
+    for (let s = 0; s <= 120; s += 10) {
+      telemetry.setState({ machine: machine('cleaning', started + s * 1000) });
+      await vi.advanceTimersByTimeAsync(1500);
+    }
+    const lastSeen = Date.now() - 1500;
+    telemetry.setState({ machine: machine('idle', started + 121_000) });
+    await vi.advanceTimersByTimeAsync(0);
+    // Done when CafAI saw it last running, by its own clock.
+    expect(care.getState().records.get('detergent-clean')).toMatchObject({ by: 'seen', doneAt: new Date(lastSeen).toISOString() });
     care.dispose();
   });
 });

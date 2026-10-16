@@ -2921,17 +2921,25 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
 - **D186. A step starts over when it is marked done, or when CafAI saw
   the machine's own Clean or Descale run for a minute; Forward Flush x5
   never counts.** **Mark done** sets the step's last time to now, with
-  Decaid's totals then (the last ones known after 3 s without an answer),
-  and **Undo** puts back the record it replaced, until the page reloads. A
-  `cleaning` or `descaling` state seen for at least a minute and then any
-  other state, started in streamline or on the machine while CafAI is open,
-  marks the weekly clean or the descale done at the last frame seen running
+  Decaid's totals then (the count running's, or one's started then; the last
+  ones known after 3 s without an answer), and **Undo** puts back the record
+  it replaced, until the page reloads. A `cleaning` or `descaling` state seen
+  for at least a minute and then any other state, started in streamline or
+  on the machine while CafAI is open, marks the weekly clean or the descale
+  done when CafAI got the last frame seen running
   (`src/app/care/cycleWatch.ts`): the firmware sends no end, a shorter run
   was stopped, and a frame CafAI could not see ends nothing; Undo works for
-  it too. A run of Decent's Cleaning/Forward Flush x5 counts for nothing, in
-  Decaid's shot list or live. Why: D161 put the cycles off, so CafAI starts
-  none, but a Clean or a Descale seen running is the machine saying so, at no
-  cost to the barista, and a minute keeps one stopped at once from counting.
+  it too. Only a new frame from the machine's socket, while it is open,
+  feeds the watch, and the minute is measured by the frames' own times: a
+  scale frame or a socket change beside the last frame kept from before is
+  no frame, and a stretch with the socket down counts as far as the frames
+  on either side of it say. A run of Decent's Cleaning/Forward Flush x5
+  counts for nothing, in Decaid's shot list or live. Why: D161 put the
+  cycles off, so CafAI starts none, but a Clean or a Descale seen running is
+  the machine saying so, at no cost to the barista, and a minute keeps one
+  stopped at once from counting; timed by any change CafAI saw, a Clean
+  stopped after 10 s, with its socket down and the scale still sending,
+  would have counted a minute later.
   The profile cannot say: Decaid never saves its run as a shot, and Decent's
   quick start uses the same profile for the daily flush with water only, so
   its run says nothing about detergent. Undo, because a mistaken tap on the

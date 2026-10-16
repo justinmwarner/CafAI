@@ -22,7 +22,7 @@
  */
 import { isShotMachineState } from '../../api/machineStates.ts';
 import { parseDecaidTimestamp } from '../../api/time.ts';
-import { GatewayError, type DecaidClient, type PaginatedShots, type TelemetryStore } from '../../api/types.ts';
+import { GatewayError, type DecaidClient, type MachineFrame, type PaginatedShots, type TelemetryStore } from '../../api/types.ts';
 import { DEFAULT_CARE } from '../../storage/settings.ts';
 import type { CareChange, CareMark, CareRecord, CareSettings, Storage } from '../../storage/types.ts';
 import {
@@ -194,6 +194,8 @@ export function createCareService(deps: CareServiceDeps): CareService {
   let noSteams = false;
   let cycle: CycleWatch = NO_CYCLE;
   let steaming = false;
+  /** The machine frame last taken: a change that brings no new one (a scale frame, a socket) is no frame. */
+  let lastFrame: MachineFrame | null = deps.telemetry.getState().machine;
   let reachable = deps.telemetry.getState().sockets.devices === 'open';
   /** The stored records were read: only then may a count write a step's first record. */
   let recordsRead = false;
@@ -396,22 +398,34 @@ export function createCareService(deps: CareServiceDeps): CareService {
     set({ records, undoable: new Set(before.keys()) });
   }
 
-  const stopTelemetry = deps.telemetry.subscribe(() => {
-    const telemetry = deps.telemetry.getState();
-    // Only a machine CafAI can see says anything: a frame from a machine gone away is stale.
-    const machineState = telemetry.machineConnected ? (telemetry.machine?.state.state ?? null) : null;
-    const step = watchCycle(cycle, machineState, now());
-    cycle = step.watch;
-    if (step.seen && state.ready) {
-      const seen = step.seen;
-      void totalsForMark()
-        .then((totals) => mark(seen.step, 'seen', seen.atMs, totals))
-        .catch(() => undefined);
+  /** A new frame from the machine, on its open socket (D186): the cycle watch, timed by the frame's own time, and a steam's end. */
+  function onMachineFrame(frame: MachineFrame): void {
+    const machineState = frame.state.state;
+    const atMs = parseDecaidTimestamp(frame.timestamp);
+    if (Number.isFinite(atMs)) {
+      const step = watchCycle(cycle, { state: machineState, atMs, seenMs: now() });
+      cycle = step.watch;
+      if (step.seen && state.ready) {
+        const seen = step.seen;
+        void totalsForMark()
+          .then((totals) => mark(seen.step, 'seen', seen.atMs, totals))
+          .catch(() => undefined);
+      }
     }
     if (machineState === 'steam') steaming = true;
-    else if (machineState !== null && steaming) {
+    else if (steaming) {
       steaming = false;
       schedule(AFTER_RUN_MS);
+    }
+  }
+
+  const stopTelemetry = deps.telemetry.subscribe(() => {
+    const telemetry = deps.telemetry.getState();
+    const frame = telemetry.machine;
+    if (frame !== null && frame !== lastFrame) {
+      lastFrame = frame;
+      // Only a machine CafAI can see, on a socket that is open, says anything: a frame kept from before is stale.
+      if (telemetry.machineConnected && telemetry.sockets.machine === 'open') onMachineFrame(frame);
     }
     const open = telemetry.sockets.devices === 'open';
     // Decaid may be back; a count it answered in the last 10 s (start-up's own, say) needs no other.

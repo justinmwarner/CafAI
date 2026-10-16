@@ -134,7 +134,9 @@ needs no detergent) and give the line its number.
   clean or the descale done at the last frame seen running: the firmware
   sends no end (streamline's maintenance-progress.js says the same). A
   shorter run (stopped at once) does not count; a socket gone quiet ends
-  nothing. Undo works for these too.
+  nothing. Only new frames from the machine's open socket count, and the
+  minute is the frames' own times, never how long CafAI happened to look.
+  Undo works for these too.
 - **Forward Flush x5 does not count**, in the list or live: Decaid never
   saves it as a shot, and Decent's quick start uses the same profile for the
   daily flush with water only, so its run says nothing about detergent.
