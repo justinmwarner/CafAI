@@ -143,16 +143,30 @@ describe('start and counting (D185, D190)', () => {
     const { care, storage } = setup();
     vi.spyOn(storage.care, 'list').mockRejectedValueOnce(new Error('superseded'));
     const put = vi.spyOn(storage.care, 'put');
+    const update = vi.spyOn(storage.care, 'update');
     await care.start();
     await vi.advanceTimersByTimeAsync(0);
     expect(care.getState()).toMatchObject({ ready: true });
     expect(care.getState().totals.shots).toBe(100);
     expect(put).not.toHaveBeenCalled();
-    // Read again (an import, a restore): counted as usual.
+    expect(update).not.toHaveBeenCalled();
+    // Read again (an import, a restore): counted as usual, every step in one write.
     await care.reload();
     care.refresh();
     await vi.advanceTimersByTimeAsync(MIN_COUNT_GAP_MS);
-    expect(put).toHaveBeenCalledTimes(TRACKED_STEPS.length);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect([...update.mock.calls[0]![0].keys()]).toEqual([...TRACKED_STEPS]);
+    expect(await storage.care.list()).toHaveLength(TRACKED_STEPS.length);
+    care.dispose();
+  });
+
+  it('a store that refuses the first look leaves it on screen, counted from now, until the next count', async () => {
+    const { care, storage } = setup();
+    vi.spyOn(storage.care, 'update').mockRejectedValueOnce(new Error('quota'));
+    await care.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await storage.care.list()).toEqual([]);
+    expect(care.getState().records.get('descale')).toMatchObject({ doneAt: null, shotTotal: 100, countFrom: '2026-10-01T08:00:00.000Z' });
     care.dispose();
   });
 

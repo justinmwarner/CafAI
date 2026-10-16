@@ -78,5 +78,40 @@ export function createCareRepository(deps: CareRepositoryDeps): CareRepository {
       }
       wrote();
     },
+    async update(changes) {
+      const after = new Map<string, CareRecord | undefined>();
+      if (changes.size === 0) return after;
+      let written = false;
+      try {
+        const tx = (await deps.db()).transaction('care', 'readwrite', DURABLE);
+        try {
+          for (const [id, change] of changes) {
+            const stored = await tx.store.get(id);
+            const next = change(stored);
+            if (next === undefined) {
+              after.set(id, stored);
+              continue;
+            }
+            await tx.store.put(next);
+            after.set(id, next);
+            written = true;
+          }
+        } catch (error) {
+          // A change that threw, or a write the store refused: nothing of this transaction is kept.
+          tx.done.catch(() => undefined);
+          try {
+            tx.abort();
+          } catch {
+            // Already aborted.
+          }
+          throw error;
+        }
+        await tx.done;
+      } catch (error) {
+        throw toStorageError(error, 'write');
+      }
+      if (written) wrote();
+      return after;
+    },
   };
 }

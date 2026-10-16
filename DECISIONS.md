@@ -2879,7 +2879,14 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
   steam ends, when Decaid answers again, when the page comes back into view
   and when the Care screen opens, at most once every 10 s and never during a
   shot, and keeps the last totals on the device (`cafai.care.counts` in
-  localStorage) for the stats card's first paint. Why: the roadmap's paging
+  localStorage) for the stats card's first paint. A count writes every
+  step's record in one transaction, compare and set
+  (`CareRepository.update`): a step's totals change only while its record is
+  still the one the count saw (the same last done and start), a first look
+  is written only while none is stored, and a step on screen takes what its
+  record is then unless it changed here meanwhile. So a mark, a cycle seen,
+  a restore's merge, an import or another tab's write that lands while a
+  count is on its way is never written over. Why: the roadmap's paging
   back to the last clean has nothing to stop at, since Decaid never saves a
   run of a cleaning profile as a shot (`_persistShotIfNeeded`,
   de1_state_manager.dart:911-917 at aab5f93, skips beverage types cleaning

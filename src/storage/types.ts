@@ -249,11 +249,26 @@ export interface SettingsRepository {
   update(patch: Partial<Settings>): Promise<Settings>;
 }
 
+/**
+ * A compare-and-set of one step's record: given what the store holds for it
+ * now (undefined: nothing), the record to store, or undefined to leave it as
+ * it is. It runs inside the store's transaction, so it must not wait for
+ * anything.
+ */
+export type CareChange = (stored: CareRecord | undefined) => CareRecord | undefined;
+
 /** Machine care's steps (D189), one record per step. */
 export interface CareRepository {
   /** By the step's id. */
   list(): Promise<CareRecord[]>;
   put(record: CareRecord): Promise<void>;
+  /**
+   * Each step's change against what the store holds then, all in one
+   * transaction, so a record written since the caller read it (a mark, a
+   * restore's merge, an import, another tab) is never written over by what
+   * the caller saw. Resolves with what each step holds afterwards.
+   */
+  update(changes: ReadonlyMap<string, CareChange>): Promise<Map<string, CareRecord | undefined>>;
 }
 
 /** The API key. Local to this device and origin only. */

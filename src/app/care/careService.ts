@@ -19,7 +19,7 @@ import { isShotMachineState } from '../../api/machineStates.ts';
 import { parseDecaidTimestamp } from '../../api/time.ts';
 import { GatewayError, type DecaidClient, type TelemetryStore } from '../../api/types.ts';
 import { DEFAULT_CARE } from '../../storage/settings.ts';
-import type { CareMark, CareRecord, CareSettings, Storage } from '../../storage/types.ts';
+import type { CareChange, CareMark, CareRecord, CareSettings, Storage } from '../../storage/types.ts';
 import { rebaseline, TRACKED_STEPS, UNKNOWN_TOTALS, type Totals, type TrackedStepId } from './careRules.ts';
 import { NO_CYCLE, watchCycle, type CycleWatch } from './cycleWatch.ts';
 
@@ -99,6 +99,20 @@ function startMs(timestamp: string | undefined): number | null {
 interface Reading {
   totals: Totals;
   fresh: { shots: boolean; steams: boolean };
+}
+
+/** The same record, field by field (undefined: none); a record read back from storage is a new object. */
+function sameRecord(a: CareRecord | undefined, b: CareRecord | undefined): boolean {
+  if (a === undefined || b === undefined) return a === b;
+  return (
+    a.id === b.id &&
+    a.doneAt === b.doneAt &&
+    a.by === b.by &&
+    a.countFrom === b.countFrom &&
+    a.shotTotal === b.shotTotal &&
+    a.steamTotal === b.steamTotal &&
+    a.updatedAt === b.updatedAt
+  );
 }
 
 function withDeadline<T>(work: Promise<T>, ms: number, timers: CareTimers): Promise<T | null> {
@@ -197,24 +211,29 @@ export function createCareService(deps: CareServiceDeps): CareService {
       newestSteamMs: fresh.steams ? totals.newestSteamMs : null,
     };
     const at = iso(now());
-    const writes: CareRecord[] = [];
+    const changes = new Map<string, CareChange>();
     // Records that could not be read are left alone: a record written now could cover a real one.
     for (const step of recordsRead ? TRACKED_STEPS : []) {
       const record = seen.get(step);
       if (!record) {
-        // Counted from the first look (D190).
-        writes.push({ id: step, doneAt: null, by: null, countFrom: at, shotTotal: freshTotals.shots, steamTotal: freshTotals.steams, updatedAt: at });
+        // Counted from the first look (D190), unless a record landed meanwhile (a mark, a restore, another tab).
+        const first: CareRecord = { id: step, doneAt: null, by: null, countFrom: at, shotTotal: freshTotals.shots, steamTotal: freshTotals.steams, updatedAt: at };
+        changes.set(step, (stored) => (stored === undefined ? first : undefined));
         continue;
       }
       const change = rebaseline(record, freshTotals);
-      if (change) writes.push({ ...record, ...change, updatedAt: at });
+      // Only the totals, and only on the record this count saw: a step marked done, merged or restored since keeps its own.
+      if (change) changes.set(step, (stored) => (stored && stored.doneAt === record.doneAt && stored.countFrom === record.countFrom ? { ...stored, ...change, updatedAt: at } : undefined));
     }
-    // A mark made meanwhile wins over what this count saw.
-    const kept = writes.filter((record) => state.records.get(record.id) === seen.get(record.id));
-    for (const record of kept) await deps.storage.care.put(record).catch(() => undefined);
+    // A store that refused leaves the records as this count would have them, here only, until the next count.
+    const unsaved = () => new Map([...changes].map(([id, change]): [string, CareRecord | undefined] => [id, change(seen.get(id))]));
+    const stored = changes.size === 0 ? new Map<string, CareRecord | undefined>() : await deps.storage.care.update(changes).catch(unsaved);
     if (disposed) return;
     const records = new Map(state.records);
-    for (const record of kept) records.set(record.id, record);
+    // A step on screen takes what its record is now, unless it changed here while the count ran (a mark, an undo, a reload).
+    for (const [id, record] of stored) {
+      if (record !== undefined && sameRecord(state.records.get(id), seen.get(id))) records.set(id, record);
+    }
     if (fresh.shots || fresh.steams) deps.cache?.save(totals);
     set({ records, totals });
   }

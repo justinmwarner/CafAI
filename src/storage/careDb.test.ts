@@ -67,6 +67,50 @@ describe('the care repository (D189)', () => {
     expect(writes.count).toBe(3);
   });
 
+  it('updates by compare and set, in one transaction: each change sees what is stored then, and says what each step holds after', async () => {
+    const { name, care, writes } = setup();
+    await care.put(makeCareRecord());
+    const seen = makeCareRecord({ doneAt: null, by: null });
+    const answer = await care.update(
+      new Map([
+        // Written over only while it is still the record the caller saw: it is not.
+        ['detergent-clean', (stored) => (stored?.doneAt === seen.doneAt ? { ...stored, shotTotal: 999 } : undefined)],
+        // Created only while none is stored.
+        ['rinza', (stored) => (stored === undefined ? makeCareRecord({ id: 'rinza', doneAt: null, by: null }) : undefined)],
+      ]),
+    );
+    expect(answer).toEqual(
+      new Map([
+        ['detergent-clean', makeCareRecord()],
+        ['rinza', makeCareRecord({ id: 'rinza', doneAt: null, by: null })],
+      ]),
+    );
+    expect(await readCommitted(name, (db) => db.getAll('care'))).toEqual([makeCareRecord(), makeCareRecord({ id: 'rinza', doneAt: null, by: null })]);
+    expect(writes.count).toBe(2);
+    // Nothing to write: no push.
+    expect(await care.update(new Map([['rinza', () => undefined]]))).toEqual(new Map([['rinza', makeCareRecord({ id: 'rinza', doneAt: null, by: null })]]));
+    expect(writes.count).toBe(2);
+  });
+
+  it('keeps nothing of an update whose change throws', async () => {
+    const { care, writes } = setup();
+    await care.put(makeCareRecord());
+    const update = care.update(
+      new Map([
+        ['detergent-clean', (stored) => (stored ? { ...stored, shotTotal: 1 } : undefined)],
+        [
+          'rinza',
+          () => {
+            throw new Error('a bug');
+          },
+        ],
+      ]),
+    );
+    await expect(update).rejects.toMatchObject({ name: 'StorageError', kind: 'write' });
+    expect(await care.list()).toEqual([makeCareRecord()]);
+    expect(writes.count).toBe(1);
+  });
+
   it('says what failed in plain words, and asks for no push after a failed write', async () => {
     const writes = { count: 0 };
     const care = createCareRepository({

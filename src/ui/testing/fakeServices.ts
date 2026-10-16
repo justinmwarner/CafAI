@@ -369,6 +369,17 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
     care: {
       list: async () => [...care.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).map((record) => clone(record)),
       put: async (record) => void care.set(record.id, clone(record)),
+      // As the real one: each change against what is held then, all at once.
+      update: async (changes) => {
+        const after = new Map<string, CareRecord | undefined>();
+        for (const [id, change] of changes) {
+          const held = care.get(id);
+          const next = change(held === undefined ? undefined : clone(held));
+          if (next !== undefined) care.set(id, clone(next));
+          after.set(id, next ?? (held === undefined ? undefined : clone(held)));
+        }
+        return after;
+      },
     },
     secrets: {
       getApiKey: async () => storage.apiKey,
