@@ -54,6 +54,14 @@ workflow checks against it. Settings > About shows the version you run.
 - A taste CafAI cannot add to the shot's record in Decaid (a record it
   cannot read) no longer loses the verdict and the TDS waiting with it:
   they still go, and the chat names only the taste.
+- A shot stopped before it poured (Espresso, then Stop at once) is no
+  longer a shot to taste: no card, no "How did it taste?", and the next
+  shot is compared with the last shot that poured. The chat says "That shot
+  stopped before it poured: nothing to taste." and the Shot view gives the
+  screen back at once; Decaid keeps no record of a run stopped in preheat,
+  so CafAI no longer looks for one and warns that it is missing. After a
+  shot cut off by the machine disconnecting, Retry's warning says so again,
+  rather than that the shot finished.
 
 ### Decaid
 

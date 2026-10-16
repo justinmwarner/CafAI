@@ -230,10 +230,12 @@ A shot counts only for the version the machine ran: a shot that ran another
 profile (another skin's, or one picked on the machine) is left out of the
 dial-in, and the chat says so. A run of a cleaning or calibration profile,
 such as Forward Flush x5 for the weekly clean, is no shot at all: Decaid
-keeps no record of it, and the chat says nothing. While the page is open,
-CafAI also looks at Decaid's loaded profile every 30 s and says so when it
-is not the bag's, with **Retry**; it never loads anything on the machine by
-itself.
+keeps no record of it, and the chat says nothing. Nor is a shot stopped
+before it poured (Espresso, then Stop at once): no card and no taste
+question, the next shot is compared with the last shot that poured, and the
+chat says so in one line. While the page is open, CafAI also looks at
+Decaid's loaded profile every 30 s and says so when it is not the bag's,
+with **Retry**; it never loads anything on the machine by itself.
 
 ## Screens and looks
 

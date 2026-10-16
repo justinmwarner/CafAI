@@ -3152,3 +3152,72 @@ updated in place above.
   the records it imported. Why: a device CafAI opened before any bag backs
   up the nine records of its first look (D190), and a phone that restores
   that backup has no bags to show.
+
+### Fixes from the simulator pre-run (2026-10-16)
+
+The pre-run of the hardware test plan on Decaid 0.8.8's simulator (MockDe1
+and Mock Scale) found two defects in the engine; their fixes are choices of
+their own.
+
+- **D-SIMA-1. A run that never poured is no shot: no card, no taste
+  question, nothing to compare with, and one quiet line.** On the
+  simulator, Espresso then Stop within 0.7 s made a card, "Shot 0.0 s",
+  asked "How did it taste?", and became the next card's "previous shot".
+  Decaid's sequencer starts the pour at the machine's first preinfusion or
+  pouring frame (shot_sequencer.dart:399-433 at aab5f93). A stop before it
+  is an abort, "Shot aborted during preheat, before the pour began", and
+  Decaid cleans the run up without saving it (de1_state_manager.dart:
+  854-864). A real DE1 preheats for 1 to 6.5 s in the real shots among
+  CafAI's test fixtures (`src/coach/__fixtures__/`), so a stop at once lands
+  there, and CafAI then looked for the run for 15 s and warned that Decaid
+  had not saved it, with a Retry that could find nothing. A stop with the
+  pour's first frame is saved with that one frame of pour: the simulator's
+  record (the pre-run's report read "0 measurements" from
+  `GET /shots/latest`, which never carries them; the record CafAI read had
+  its preheat and one preinfusion frame) and decaid-mcp's shot-09 from a
+  real DE1 on Decaid 0.8.6 (a second of preheat, then one frame of
+  preinfusion). So a record never poured when it holds fewer than two
+  samples of pour: no samples, preheat alone, or one (`poured` in
+  `src/coach/summary/summarize.ts`). With two samples or more it holds a
+  pour, however short, and stays a shot: a pour that chokes or is stopped
+  early is still something to dial in from. The engine
+  (`src/app/engine/engine.ts`) keeps Decaid's abort for the run from the
+  shotState frames (`noteDecision`) and then looks for no record, and it
+  reads a record that holds no pour and stops there. Either way there is no
+  card, no iteration and no shot event for the coach; the shot before keeps
+  its pending iteration and its open taste question, so the next card is
+  compared with it (D126, D178), and a bag's first shot still with the
+  other coffee's last. The chat gets one info line, "That shot stopped
+  before it poured: nothing to taste.", which also hands the Shot view back
+  at once rather than 8 s later (D85). A lost shot's Retry on the banner
+  stays through such a run; a Retry that finds its own shot with no pour in
+  it ends there. A cleaning profile's run still says nothing (D193 comes
+  first), and a run whose abort frame CafAI missed is looked for as before,
+  so no shot is lost to a missed frame. The mock Decaid saved a stop after
+  its last preheat frame and before its first pour frame as a shot of
+  preheat alone; it now aborts it, as Decaid's sequencer is still preheating
+  then, and keeps the record of a stop with the first pour frame
+  (`mock/decaid/shotPlayer.ts`). The live suite stops a shot at once on
+  Decaid's simulator and checks what CafAI relies on: the abort and no
+  record, or the record and how CafAI reads it
+  (`src/api/live/shot.decaid.ts`). Why: Decaid's own sequencer decides when
+  the pour begins; a record with no time of pour has nothing to taste, and
+  as the next card's baseline it asked the barista to compare a shot with
+  nothing. A line rather than silence, unlike a cleaning run: the barista
+  stopped a shot, on purpose or not, and one line says CafAI saw it and
+  that it does not count, and gives the screen back with it.
+- **D-SIMA-2. A lost shot's warning says how the shot ended, once, and
+  every Retry says the same.** The warning for a finished shot with no
+  record in Decaid chose its words by whether the machine was connected
+  after each search. On the simulator MockDe1 disconnected 9 s into a pour:
+  the first warning said "The machine disconnected during that shot…", and
+  Retry's, with the machine back, "The shot finished, but Decaid has not
+  saved it." Now the first warning settles how the shot ended and the run
+  keeps it (`ShotRun.cutOff` in `src/app/engine/engine.ts`): cut off when
+  Decaid tore the run down for a disconnect (its terminal decision,
+  reason `disconnected`, de1_state_manager.dart:965-985) or the machine is
+  still away after the search, else finished. Every Retry of that shot says
+  the same. Why: Retry looks again for the same shot, and how that shot
+  ended does not change when the machine comes back. Left: on Decaid 0.8.8
+  that teardown saves nothing, so a Retry after a disconnect cannot find
+  the shot, whatever the warning advises.
