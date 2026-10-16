@@ -7,7 +7,8 @@ import { decaidRequests, goTo, openApp } from './helpers.ts';
 /**
  * Settings > Sleep and wake (D157-D160), against the mock Decaid's presence
  * routes (mock/decaid/presence.ts), on the tablets and the phones: every
- * change reaches Decaid at once with only what changed, and the dialog's
+ * change reaches Decaid at once with only what changed, the keep-awake
+ * window's line follows Decaid after each one (D-SIMC-2), and the dialog's
  * seven days fit a phone.
  */
 
@@ -126,6 +127,56 @@ test('a wake time set elsewhere changes, turns off and goes, each at once', asyn
     { method: 'PUT', path, body: { time: '07:45' } },
     { method: 'PUT', path, body: { enabled: false } },
     { method: 'DELETE', path, body: null },
+  ]);
+});
+
+test("the keep-awake window's line follows Decaid after every change: the wake time changed and deleted, Sleep when idle off and on again (D-SIMC-2)", async ({ page }) => {
+  // The simulator's run (hardware test plan 15.3-15.7): Thursday 15 October 2026, 08:50, a wake time at
+  // 08:46 every day keeping the machine awake for 30 minutes, so Decaid holds it awake until 09:16.
+  await page.clock.setFixedTime(new Date(2026, 9, 15, 8, 50));
+  await openApp(page, '#/');
+  const id = await seedWake(page, { time: '08:46', daysOfWeek: [], enabled: true, keepAwakeFor: 30 });
+  await goTo(page, 'settings');
+  const section = await openSection(page);
+  const windowLine = section.getByText(/^A wake time keeps the machine awake until/);
+  await expect(windowLine).toHaveText('A wake time keeps the machine awake until 09:16.');
+  const reads = async () =>
+    (await decaidRequests(page)).filter((request) => request.method === 'GET' && request.path === '/api/v1/presence/settings').length;
+  expect(await reads()).toBe(1);
+
+  // A change of the wake time: an hour awake moves the window's end with it.
+  await section.getByTestId(TID.wakeEdit(id)).click();
+  const dialog = page.getByRole('dialog', { name: 'Change the wake time' });
+  await dialog.getByTestId(TID.wakeDialogKeepAwake).selectOption('60');
+  await dialog.getByTestId(TID.wakeDialogSave).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(windowLine).toHaveText('A wake time keeps the machine awake until 09:46.');
+
+  // Sleep when idle off: the window holds nothing off then, so the line goes (D158).
+  const toggle = page.getByTestId(TID.sleepWhenIdle);
+  await toggle.click();
+  await expect(toggle).not.toBeChecked();
+  await expect(windowLine).toHaveCount(0);
+
+  // The wake time deleted, and Sleep when idle back on with its 30 minutes: Decaid holds no window, nor does the line.
+  await section.getByTestId(TID.wakeEdit(id)).click();
+  await dialog.getByTestId(TID.wakeDialogDelete).click();
+  await expect(section.getByTestId(TID.wakeRow(id))).toHaveCount(0);
+  await toggle.click();
+  await expect(toggle).toBeChecked();
+  await expect(section.getByRole('spinbutton', { name: 'Sleep after' })).toHaveValue('30');
+  await expect(section.getByText('Using the machine, or CafAI, starts the time again.')).toBeVisible();
+  expect((await presence(page)).keepAwakeUntil).toBeNull();
+  await expect(windowLine).toHaveCount(0);
+
+  // Read again after each of the four changes, none of whose answers carries the window.
+  await expect.poll(reads).toBe(5);
+  const path = `/api/v1/presence/schedules/${encodeURIComponent(id)}`;
+  expect(await presenceWrites(page)).toEqual([
+    { method: 'PUT', path, body: { keepAwakeFor: 60 } },
+    { method: 'POST', path: '/api/v1/presence/settings', body: { sleepTimeoutMinutes: 0 } },
+    { method: 'DELETE', path, body: null },
+    { method: 'POST', path: '/api/v1/presence/settings', body: { userPresenceEnabled: true, sleepTimeoutMinutes: 30 } },
   ]);
 });
 

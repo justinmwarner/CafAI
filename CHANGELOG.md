@@ -56,6 +56,10 @@ workflow checks against it. Settings > About shows the version you run.
 - A taste CafAI cannot add to the shot's record in Decaid (a record it
   cannot read) no longer loses the verdict and the TDS waiting with it:
   they still go, and the chat names only the taste.
+- Settings > Sleep and wake: "A wake time keeps the machine awake until
+  09:16." now follows Decaid after every change you make there. Deleting
+  or changing the wake time, or turning a wake time off, no longer leaves
+  the old time showing until you leave Settings and come back.
 
 ### Decaid
 
