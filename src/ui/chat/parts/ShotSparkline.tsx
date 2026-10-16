@@ -12,8 +12,12 @@
  *
  * Both shots count from the pour's start, so they line up whatever their
  * preheat, and the time runs to the longer of the two.
+ *
+ * The third key never squeezes the curves: on a narrow card (a phone
+ * upright) it takes a line of its own under them, where its name has the
+ * card's width, and the curves keep the room they have without it.
  */
-import { useId, useMemo } from 'react';
+import { useId, useMemo, useRef, type ReactNode } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
@@ -25,6 +29,7 @@ import type { ShotSummary } from '../../../coach/types.ts';
 import { comparisonTarget, describeShot, pourCurve, underThem } from '../../compare/comparison.ts';
 import { GuideSwatch } from '../../compare/GuideKey.tsx';
 import { useComparisonSummary } from '../../compare/useComparison.ts';
+import { useOwnLayout } from '../../machine/useOwnLayout.ts';
 import { TID } from '../../testIds.ts';
 import { sparklinePath } from '../sparkline.ts';
 
@@ -34,6 +39,19 @@ const SPARK_HEIGHT = 48;
 const SPARK_Y_MAX = 12;
 /** The band of the shot under, in CSS px: two and a half times this shot's 2 px lines. */
 const GUIDE_WIDTH = 5;
+
+/**
+ * The narrowest card (its content box, in CSS px) that keeps the third key
+ * beside the curves: 120 px of curves, 12 px, the legend at its widest (the
+ * band, 6 px and a name cut at 9.5em of 13 px: 141.5 px), 12 px and the Graph
+ * link (85 px). A narrower card puts the key under the curves. The Graph link
+ * counts whether a card shows it or not, so every card of a chat puts its key
+ * in the same place.
+ */
+export const KEY_BESIDE_FROM = 372;
+
+/** Before a measurement (and in jsdom, which has no layout) the width is 0: the key stays beside. */
+const keyUnderCurves = (width: number): boolean => width > 0 && width < KEY_BESIDE_FROM;
 
 function LegendKey({ color, label }: { color: string; label: string }) {
   return (
@@ -46,15 +64,47 @@ function LegendKey({ color, label }: { color: string; label: string }) {
   );
 }
 
-/** The third key: the band's form, and the shot it stands for, cut short on a narrow card rather than squeezing the curves. */
-function GuideLegendKey({ name }: { name: string }) {
+/**
+ * The third key: the band's form, and the shot it stands for. Beside the
+ * curves its name is cut at 9.5em, so the legend never takes more than its
+ * share of the card; under them it has the card's width.
+ */
+function GuideLegendKey({ name, under }: { name: string; under: boolean }) {
   return (
-    <Stack direction="row" spacing={0.75} data-testid={TID.shotGuideKey} sx={{ alignItems: 'center', minWidth: 0 }}>
+    <Stack direction="row" spacing={0.75} data-testid={TID.shotGuideKey} sx={{ alignItems: 'center', minWidth: 0, mt: under ? 0.5 : 0 }}>
       <GuideSwatch />
-      <Typography variant="caption" noWrap sx={{ color: 'text.secondary', lineHeight: 1.3, maxWidth: '9.5em' }}>
+      <Typography variant="caption" noWrap sx={{ color: 'text.secondary', lineHeight: 1.3, maxWidth: under ? 'none' : '9.5em' }}>
         {name}
       </Typography>
     </Stack>
+  );
+}
+
+/**
+ * The curves, their keys and the Graph link, laid out for the card's own
+ * width (useOwnLayout.ts: the Chromium 91 WebView has no container queries).
+ * The curves take the room the keys and the link leave, up to 360 px; the
+ * third key sits under the Pressure and Flow keys on a wide card, and on a
+ * line of its own under the curves on a narrow one.
+ */
+function CurvesRow({ curves, guideName, graph }: { curves: ReactNode; guideName: string | null; graph: ReactNode }) {
+  const colors = useTheme().palette.cafai.graph;
+  const box = useRef<HTMLDivElement | null>(null);
+  const under = useOwnLayout(box, keyUnderCurves);
+  const guideKey = guideName === null ? null : <GuideLegendKey name={guideName} under={under} />;
+  return (
+    <Box ref={box} sx={{ mt: 1 }}>
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+        {curves}
+        <Stack spacing={0.25} sx={{ flexShrink: 0, minWidth: 0 }}>
+          <LegendKey color={colors.pressure} label="Pressure" />
+          <LegendKey color={colors.flow} label="Flow" />
+          {under ? null : guideKey}
+        </Stack>
+        {graph}
+      </Stack>
+      {under ? guideKey : null}
+    </Box>
   );
 }
 
@@ -87,8 +137,8 @@ export function ShotSparkline({ summary, baseline = null, onOpenGraph }: ShotSpa
   const guided = target !== null && previous !== null && (guidePressure !== '' || guideFlow !== '');
   const { graph } = theme.palette.cafai;
   const band = { fill: 'none', strokeWidth: GUIDE_WIDTH, vectorEffect: 'non-scaling-stroke', strokeLinejoin: 'round', strokeLinecap: 'round' } as const;
-  return (
-    <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mt: 1 }}>
+  const curves = (
+    <>
       <Box
         component="svg"
         role="img"
@@ -118,23 +168,19 @@ export function ShotSparkline({ summary, baseline = null, onOpenGraph }: ShotSpa
           {describeShot(target, previous)}
         </span>
       ) : null}
-      <Stack spacing={0.25} sx={{ flexShrink: 0, minWidth: 0 }}>
-        <LegendKey color={graph.pressure} label="Pressure" />
-        <LegendKey color={graph.flow} label="Flow" />
-        {guided ? <GuideLegendKey name={target.name} /> : null}
-      </Stack>
-      {onOpenGraph ? (
-        <Button
-          variant="text"
-          color="primary"
-          endIcon={<ChevronRightRoundedIcon />}
-          data-testid={TID.openShotGraph}
-          onClick={onOpenGraph}
-          sx={{ minHeight: 48, flexShrink: 0 }}
-        >
-          Graph
-        </Button>
-      ) : null}
-    </Stack>
+    </>
   );
+  const graphLink = onOpenGraph ? (
+    <Button
+      variant="text"
+      color="primary"
+      endIcon={<ChevronRightRoundedIcon />}
+      data-testid={TID.openShotGraph}
+      onClick={onOpenGraph}
+      sx={{ minHeight: 48, flexShrink: 0 }}
+    >
+      Graph
+    </Button>
+  ) : null;
+  return <CurvesRow curves={curves} guideName={guided ? target.name : null} graph={graphLink} />;
 }

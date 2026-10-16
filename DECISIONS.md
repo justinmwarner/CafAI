@@ -2965,3 +2965,32 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
   cleaning or calibrate is not saved. Why: the care reminders count steams
   and must not count a cleaning run, and the mock answers as Decaid's Dart
   does.
+
+### UI fixes from the review (2026-10-15)
+
+The code review of the batch merged on 2026-10-15 (TDS and EY, °F, the
+overlaid curves, the care reminders) found three UI defects; one of their
+fixes is a choice.
+
+- **D-FIX-UI-1. On a narrow card the third key takes a line under the
+  curves.** D180's key for the shot under sat in the card's legend, under
+  Pressure and Flow, with its name cut at 9.5em; the legend never shrank and
+  the curves took what was left. On a phone upright that squeezed them: a
+  bag's first card, the newest with Graph and "Last shot of Kiambu AA", left
+  them 81, 51 and 11 px at 390, 360 and 320 px wide, against 155, 125 and 85
+  without the key, and "Previous shot" cost about 30 px on every card. Now a
+  card under 372 px wide (`KEY_BESIDE_FROM` in
+  `src/ui/chat/parts/ShotSparkline.tsx`: 120 px of curves, the legend at its
+  widest, Graph and the gaps) puts the key on a line of its own under the
+  curves, its name with the card's width; a wider one keeps it in the legend
+  as before. The card measures itself (`useOwnLayout.ts`), and the rule
+  counts Graph whether the card shows it or not, so the cards of a chat put
+  the key in one place. Measured with Playwright at 390, 360 and 320 px
+  (`e2e/shot-overlay.spec.ts`): the curves keep 155, 125 and 85 px, the name
+  is whole. Why: the review's other way, a legend that shrinks while the
+  curves keep 120 px, cuts even "Previous shot" at 360 px and at 320 px has
+  no room for 120 px of curves beside Pressure, Flow and Graph at all;
+  under the curves the name has the card's width and the curves lose nothing.
+  The line costs a guided card about 21 px of height on a phone, where height
+  is cheaper than width; a tablet's card, which has the room beside, does not
+  grow.

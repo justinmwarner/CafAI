@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import type { CafaiMockWindow } from '../mock/browser.ts';
 import { TID } from '../src/ui/testIds.ts';
 import { decaidRequests, goTo, openApp, pullShot, saveApiKey, sendChat } from './helpers.ts';
@@ -8,7 +8,9 @@ import { decaidRequests, goTo, openApp, pullShot, saveApiKey, sendChat } from '.
  * asks about, drawn faintly under it, on its card and in the Shot view, and
  * the bag's previous shot under a shot while it pulls. A shot in the chat is
  * drawn from its card, with no request; another coffee's is read from Decaid
- * once; one Decaid no longer has leaves the card alone, saying nothing.
+ * once; one Decaid no longer has leaves the card alone, saying nothing. On an
+ * upright phone the card's key for the shot under takes a line under the
+ * curves, so they keep their room down to a 320 px screen.
  *
  * mockSpeed 10 plays a scripted shot in a few seconds; the live check slows
  * the mock to real time for a moment, so the shot is surely still pulling.
@@ -129,6 +131,55 @@ test("the demo's first Kiambu AA shot draws Santos's last shot, read from Decaid
   await cards.last().scrollIntoViewIfNeeded();
   expect(await readsOf(page, santos!.id)).toBe(1);
   for (const shot of ids.filter((other) => other.id !== santos!.id)) expect(await readsOf(page, shot.id), shot.title).toBe(0);
+});
+
+test("a bag's first shot card, the newest with Graph, keeps its curves' room: on an upright phone the key of the shot under takes a line under them", async ({ page }) => {
+  test.setTimeout(150_000);
+  await openApp(page, '#/', SPEED);
+  await saveApiKey(page);
+  await goTo(page, 'coach');
+  await startBag(page, 'Kiambu AA, light roast, washed, blackcurrant and grapefruit', 'blooming-espresso');
+  const cards = page.getByTestId(TID.shotCard);
+  await pullShot(page);
+  await expect(cards).toHaveCount(1, { timeout: 60_000 });
+  await coachIdle(page);
+  await startBag(page, 'Rwanda Huye, medium roast, natural', 'd-flow');
+  await pullShot(page);
+  await expect(cards).toHaveCount(1, { timeout: 60_000 });
+  const card = cards.first();
+  const key = card.getByTestId(TID.shotGuideKey);
+  // The longest key there is, beside Graph: the least room the curves get.
+  await expect(key).toHaveText('Last shot of Kiambu AA');
+  const graphLink = card.getByTestId(TID.openShotGraph);
+  await expect(graphLink).toBeVisible();
+  await coachIdle(page);
+
+  const curves = card.getByRole('img', { name: /^Pressure and flow during the shot, with/ });
+  const legend = card.getByText('Pressure', { exact: true }).locator('xpath=../..');
+  const box = async (locator: Locator) => (await locator.boundingBox())!;
+  const { width: ownWidth, height } = page.viewportSize()!;
+  // An upright phone, down to the narrowest CafAI supports; the tablets and a phone on its side as they are.
+  const upright = ownWidth < 600;
+  for (const width of upright ? [390, 360, 320] : [ownWidth]) {
+    await page.setViewportSize({ width, height });
+    await card.scrollIntoViewIfNeeded();
+    const placed = async () => {
+      const [k, c] = [await box(key), await box(curves)];
+      return k.y >= c.y + c.height ? 'under' : k.x >= c.x + c.width ? 'beside' : 'over';
+    };
+    await expect.poll(placed, { message: `the key at ${width} px` }).toBe(upright ? 'under' : 'beside');
+    const c = await box(curves);
+    if (upright) {
+      // A line of its own from the curves' left edge, the name whole; the curves keep every pixel Pressure, Flow and Graph leave them.
+      expect(Math.abs((await box(key)).x - c.x)).toBeLessThanOrEqual(1);
+      expect(await key.locator('.MuiTypography-root').evaluate((name) => name.scrollWidth <= name.clientWidth), `the name at ${width} px`).toBe(true);
+      const row = await box(curves.locator('xpath=..'));
+      const room = row.width - (await box(legend)).width - (await box(graphLink)).width - 2 * 12;
+      expect(Math.abs(c.width - room), `the curves at ${width} px: ${c.width} of ${room}`).toBeLessThanOrEqual(1);
+    } else {
+      expect(c.width, `the curves at ${width} px`).toBeGreaterThanOrEqual(120);
+    }
+  }
 });
 
 test("a bag's first shot whose comparison Decaid no longer has draws its own shot alone, and says nothing", async ({ page }) => {
