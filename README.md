@@ -300,12 +300,11 @@ with **Retry**; it never loads anything on the machine by itself.
   OKLCH, written out as plain hex for Chromium 91) and every pair of
   palette colours the screens use is tested for WCAG AA contrast at every
   hue; the shot graph keeps Decent's colours (pressure green, flow blue).
-  The look is saved with the other settings.
-  [DESIGN.md](DESIGN.md) describes the visual system. Last, **Temperatures**:
-  °C (the default) or °F. In °F every temperature CafAI shows or takes is in
-  °F (the stats card, the drinks' views and settings, the change card and
-  History, the cleaning guide), and the coach speaks °F; Decaid and your
-  profiles keep °C.
+  The look is saved with the other settings. Last, **Temperatures**: °C (the
+  default) or °F. In °F every temperature CafAI shows or takes is in °F (the
+  stats card, the drinks' views and settings, the change card and History,
+  the cleaning guide), and the coach speaks °F; Decaid and your profiles
+  keep °C. [DESIGN.md](DESIGN.md) describes the visual system.
 - **Settings > Where the coach runs**: **Anthropic API key** (the default)
   or **Claude on my computer** (CafAI Bridge's address and code, with
   **Find** and **Test**). The fields follow the choice: the API key's
