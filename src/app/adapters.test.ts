@@ -203,15 +203,30 @@ describe('createCoachPort', () => {
   it('builds one prompt per temperature unit, and reads the unit for every request (D175)', () => {
     let unit: TemperatureUnit = 'celsius';
     const port = createCoachPort({ temperatureUnit: () => unit });
-    const celsius = port.systemPrompt();
+    const celsius = port.systemPrompt('coach');
     expect(celsius).toBe(buildSystemPrompt(TEMPLATES));
-    expect(coach.systemPrompt()).toBe(celsius);
+    expect(coach.systemPrompt('coach')).toBe(celsius);
     unit = 'fahrenheit';
-    const fahrenheit = port.systemPrompt();
+    const fahrenheit = port.systemPrompt('coach');
     expect(fahrenheit).toContain(FAHRENHEIT_HEADING);
-    expect(port.systemPrompt()).toBe(fahrenheit);
+    expect(port.systemPrompt('coach')).toBe(fahrenheit);
     unit = 'celsius';
-    expect(port.systemPrompt()).toBe(celsius);
+    expect(port.systemPrompt('coach')).toBe(celsius);
+  });
+
+  it('builds one prompt per fun facts mode and unit, off and CafAI’s list sharing the plain one (D198)', () => {
+    let unit: TemperatureUnit = 'celsius';
+    const port = createCoachPort({ temperatureUnit: () => unit });
+    const plain = port.systemPrompt('off');
+    expect(plain).toBe(buildSystemPrompt(TEMPLATES, { funFacts: 'off' }));
+    expect(port.systemPrompt('list')).toBe(plain);
+    expect(plain).not.toContain(TOOL.shareFunFact);
+    expect(port.systemPrompt('coach')).toContain(TOOL.shareFunFact);
+    expect(port.systemPrompt('web')).toBe(buildSystemPrompt(TEMPLATES, { funFacts: 'web' }));
+    expect(port.systemPrompt('web')).toContain('web_search');
+    unit = 'fahrenheit';
+    expect(port.systemPrompt('list')).toBe(buildSystemPrompt(TEMPLATES, { funFacts: 'list', temperatureUnit: 'fahrenheit' }));
+    expect(port.systemPrompt('web')).toContain(FAHRENHEIT_HEADING);
   });
 
   it("builds v1 from the dose with the coach's own rules (D57)", () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TOOL, TOOL_INPUTS, type ToolName } from '../../src/coach/contract.ts';
+import type { FunFact } from '../../src/coach/facts/types.ts';
 import { buildSystemPrompt } from '../../src/coach/prompt.ts';
 import { TEMPLATES } from '../../src/coach/templates/index.ts';
 import {
@@ -176,6 +177,18 @@ describe('request checks', () => {
     expect(errorOf(call([INTAKE], { over: { tool_choice: undefined } })).message).toContain('tool_choice');
     const loose = TOOLS.map((t, i) => (i === 3 ? { ...t, strict: false } : t));
     expect(errorOf(call([INTAKE], { over: { tools: loose } })).message).toContain('strict');
+  });
+
+  it('takes the web search server tool beside the strict tools, with no strict of its own, and never searches (D203)', () => {
+    const tools = [...TOOLS, { type: 'web_search_20250305', name: 'web_search', max_uses: 1 }];
+    const reply = ok(call([INTAKE], { over: { tools } }));
+    expect(reply.tools.map((t) => t.name)).toEqual([TOOL.saveBagDetails, TOOL.proposeTemplates]);
+    expect(reply.content.map((b) => b.type)).not.toContain('server_tool_use');
+    // A client tool still needs strict: a tool of another type, or one with a schema, is none of Anthropic's searches.
+    expect(errorOf(call([INTAKE], { over: { tools: [...tools, { type: 'bash_20250124', name: 'bash' }] } })).message).toContain('strict');
+    expect(errorOf(call([INTAKE], { over: { tools: [...TOOLS, { type: 'web_search_20250305', name: 'web_search', input_schema: {} }] } })).message).toContain(
+      'strict',
+    );
   });
 
   it('answers 400 when a tool_use is not answered in the next user message', () => {
@@ -518,6 +531,101 @@ describe('scripted replies', () => {
       ],
     ]);
     expect(reply.stopReason).toBe('tool_use');
+  });
+
+  describe('rule 4a: a shot due a fun fact (D201)', () => {
+    const fact = (id: string, over: Partial<FunFact> = {}): FunFact => ({
+      id,
+      topic: 'origin',
+      about: `About ${id}`,
+      text: `A fact about ${id}.`,
+      source: `https://example.org/${id}`,
+      ...over,
+    });
+    const FACTS = [
+      fact('ethiopia-forest', { match: { origins: ['ethiopia'] } }),
+      fact('crema-co2', { topic: 'science' }),
+      // Its notes are not on this bag: it does not fit.
+      fact('kenya-blackcurrant', { topic: 'flavour', match: { origins: ['kenya'], notes: ['blackcurrant'] } }),
+      fact('square-mile-roaster', { topic: 'roaster', match: { roasters: ['square mile'] } }),
+      fact('kenya-auction', { match: { origins: ['kenya'] } }),
+      fact('kenya-sl28', { topic: 'variety', match: { origins: ['kenya'], varieties: ['sl28'] } }),
+    ];
+    const KENYAN = { name: 'Kiambu AA', roaster: 'Square Mile', origin: 'Kenya, Kiambu', roastLevel: 'light', process: 'washed', notes: 'grapefruit, brown sugar', roastDate: null };
+    const savedAs = (bag: Record<string, unknown>) =>
+      assistant(text('Lovely.'), toolUse('t_save', TOOL.saveBagDetails, bag), toolUse('t_tpl', TOOL.proposeTemplates, { suggestions: [] }));
+    const dueShot = (told: string[] = []) =>
+      user(
+        text(
+          '[event:shot_completed]\n' +
+            JSON.stringify({
+              shotRef: 'latest',
+              shotId: 'shot-2',
+              version: 1,
+              templateId: 'blooming-espresso',
+              levers: BLOOMING_LEVERS,
+              doseG: 18,
+              targetYieldG: 36,
+              summary: { shotId: 'shot-2', durationS: 28.4, yieldG: 36.2, doseG: 18 },
+              funFact: { told, web: false },
+            }),
+        ),
+      );
+    const described = (shotTurn: Message, bag: Record<string, unknown> = KENYAN) => [INTAKE, savedAs(bag), PICKED, LOADED_REPLY, shotTurn];
+    const reply = (messages: Message[], facts: readonly FunFact[] = FACTS, voice: 'terse' | 'demo' = 'terse') =>
+      ok(respond(request(messages), new Headers(HEADERS), createScenarioMemory({ session: 't' }), { facts, voice }));
+    const names = (result: ReturnType<typeof ok>) => result.content.filter((b) => b.type !== 'thinking').map((b) => (b.type === 'tool_use' ? b.name : b.type));
+
+    it("shares the first of CafAI's facts that fits the bag's origin as its own, between its words and the taste question", () => {
+      const result = reply(described(dueShot()));
+      expect(result.text).toBe('Got it: 28.4 s, 36.2 g out.');
+      expect(names(result)).toEqual(['text', TOOL.shareFunFact, TOOL.askUser]);
+      expect(result.tools[0]!.input).toEqual({ topic: 'origin', about: 'About kenya-auction', fact: 'A fact about kenya-auction.', source: null });
+      expectValidInputs(result.tools);
+      expect(result.stopReason).toBe('tool_use');
+      // The demo voice words the shot its own way and calls the same tools.
+      const demo = reply(described(dueShot()), FACTS, 'demo');
+      expect(names(demo)).toEqual(['text', TOOL.shareFunFact, TOOL.askUser]);
+      expect(demo.tools[0]!.input).toEqual(result.tools[0]!.input);
+    });
+
+    it('skips a fact told already, by its label, and shares the next', () => {
+      expect(reply(described(dueShot(['About kenya-auction']))).tools[0]).toMatchObject({ name: TOOL.shareFunFact, input: { about: 'About kenya-sl28', topic: 'variety' } });
+      // The coach's own labels are told in lower case.
+      expect(reply(described(dueShot(['about kenya-auction']))).tools[0]).toMatchObject({ input: { about: 'About kenya-sl28' } });
+    });
+
+    it('shares nothing when no fact fits the origin untold, or none is due: CafAI shows one of its own', () => {
+      expect(names(reply(described(dueShot(['About kenya-auction', 'About kenya-sl28']))))).toEqual(['text', TOOL.askUser]);
+      // A roaster's fact fits too, but the scripted coach shares by origin only.
+      expect(names(reply(described(dueShot(), { ...KENYAN, origin: 'Colombia, Huila' })))).toEqual(['text', TOOL.askUser]);
+      expect(names(reply(described(dueShot()), []))).toEqual(['text', TOOL.askUser]);
+      expect(names(reply(described(shot(BLOOMING_LEVERS))))).toEqual(['text', TOOL.askUser]);
+    });
+
+    it('reads the bag as last saved: a correction, or the bag CafAI saved itself (6.1)', () => {
+      const corrected = [
+        ...described(user(text('It is from Ethiopia, actually.'))),
+        assistant(text('Noted.'), toolUse('t_fix', TOOL.saveBagDetails, { ...KENYAN, origin: 'Ethiopia, Guji' })),
+        user(toolResult('t_fix', { saved: true })),
+        assistant(text('Saved.')),
+        dueShot(),
+      ];
+      expect(reply(corrected).tools[0]).toMatchObject({ name: TOOL.shareFunFact, input: { about: 'About ethiopia-forest' } });
+
+      const picked = user(
+        text("The user picked Kiambu AA by Square Mile from Decaid's bean library: Kenya, Kiambu; washed; light roast."),
+        text(`[context]\n${JSON.stringify({ grinder: { name: null, setting: null, settingType: null, step: null, values: null, linked: false }, scaleConnected: true, doseG: 18, bag: KENYAN, roast: null })}`),
+      );
+      const fromLibrary = [
+        picked,
+        assistant(text('Lovely.'), toolUse('t_tpl', TOOL.proposeTemplates, { suggestions: [] })),
+        user(toolResult('t_tpl', { picked: 'blooming-espresso', version: 1, title: 'Kiambu AA v1', uploaded: true, note: null })),
+        LOADED_REPLY,
+        dueShot(),
+      ];
+      expect(reply(fromLibrary).tools[0]).toMatchObject({ name: TOOL.shareFunFact, input: { about: 'About kenya-auction' } });
+    });
   });
 
   it('rule 3: a taste answer leads to the pressure curve', () => {

@@ -4,7 +4,7 @@ import { createCoachEngine, type CoachEngine, type EngineDeps, type PageVisibili
 import type { OutboxTimers } from './outbox.ts';
 import type { ApiPort, ChangePlan, CoachPort, LlmPort, ProposalContext } from './ports.ts';
 import { message, NEW_BAG_PROMPT, progressNoticePart } from './uiMessages.ts';
-import { OTHER_OPTION, TOOL, type OfferGrinder, type ProposeAdjustment } from '../../coach/contract.ts';
+import { EVENT, OTHER_OPTION, TOOL, type OfferGrinder, type ProposeAdjustment } from '../../coach/contract.ts';
 import { DOSE_RULES, knownDose, REFERENCE_DOSE_G } from '../../coach/dose.ts';
 import { roastLine } from '../../coach/prompt.ts';
 import { createShotSource, runQueryTool } from '../../coach/queries.ts';
@@ -25,7 +25,10 @@ import {
   type Workflow,
   type WorkflowContext,
 } from '../../api/types.ts';
-import { LlmError, type ContentBlock, type LlmMessage, type PendingUiCall, type RunResult, type ToolResultBlock } from '../../llm/types.ts';
+import { LlmError, type ContentBlock, type LlmMessage, type PendingUiCall, type RunRequest, type RunResult, type ToolResultBlock } from '../../llm/types.ts';
+import { WEB_SEARCH_TOOL } from '../../llm/webSearch.ts';
+import { createToldList, type ToldList } from '../../coach/facts/told.ts';
+import type { FunFact, FunFactsSource } from '../../coach/facts/types.ts';
 import type { Bag } from '../../storage/types.ts';
 import type { CoachUiPart, ShotVerdict } from '../types.ts';
 import { createFakeStorage, createFakeTelemetry, SAMPLE_WORKFLOW, type FakeStorage, type FakeTelemetry } from '../../ui/testing/fakeServices.ts';
@@ -159,7 +162,8 @@ function plan(input: ProposeAdjustment, profile: ProfileJson): ChangePlan {
 const coach: CoachPort = {
   templates: TEMPLATES,
   getTemplate: (id) => TEMPLATES.find((t) => t.id === id),
-  systemPrompt: () => 'SYSTEM',
+  // The fun facts mode it was asked for (D198), so a test can tell the prompts apart.
+  systemPrompt: (funFacts) => `SYSTEM ${funFacts}`,
   toolDescription: (name) => `desc ${name}`,
   readLeverValues: (_t, p) => ({ temp: p.steps[0]!.temperature }),
   validateProposal(input, context) {
@@ -602,8 +606,9 @@ type Script = () => ContentBlock[];
 /**
  * A faithful miniature of runConversation: streams the scripted text,
  * appends the turn, runs auto tools and loops, stops on valid UI calls.
+ * `runs` gets every run's request: its prompt, tools and server tools.
  */
-function makeLlm(scripts: Script[], requests: LlmMessage[][]): LlmPort {
+function makeLlm(scripts: Script[], requests: LlmMessage[][], runs: RunRequest[] = []): LlmPort {
   return {
     provider: {
       id: 'fake',
@@ -623,6 +628,7 @@ function makeLlm(scripts: Script[], requests: LlmMessage[][]): LlmPort {
       return reader.answer;
     },
     async run(request): Promise<RunResult> {
+      runs.push(request);
       let messages = request.messages;
       for (;;) {
         requests.push(messages);
@@ -637,7 +643,12 @@ function makeLlm(scripts: Script[], requests: LlmMessage[][]): LlmPort {
         const results: ToolResultBlock[] = [];
         for (const block of content) {
           if (block.type !== 'tool_use') continue;
-          const tool = request.tools.find((t) => t.definition.name === block.name)!;
+          const tool = request.tools.find((t) => t.definition.name === block.name);
+          // As the runner answers a tool the run does not offer.
+          if (!tool) {
+            results.push({ type: 'tool_result', tool_use_id: block.id, content: `Unknown tool "${block.name}".`, is_error: true });
+            continue;
+          }
           const validation = tool.validate(block.input);
           if (!validation.ok) {
             results.push({ type: 'tool_result', tool_use_id: block.id, content: validation.error, is_error: true });
@@ -719,6 +730,8 @@ describe('coach engine', () => {
   let telemetry: FakeTelemetry;
   let apiCalls: ApiCall[];
   let requests: LlmMessage[][];
+  /** Every model run the engine asked for, with its prompt and tools. */
+  let runs: RunRequest[];
   let scripts: Script[];
   let engine: CoachEngine;
   let timers: ReturnType<typeof manualTimers>;
@@ -737,7 +750,7 @@ describe('coach engine', () => {
       telemetry,
       api: makeApi(apiCalls),
       coach,
-      llm: makeLlm(scripts, requests),
+      llm: makeLlm(scripts, requests, runs),
       clock: { now: () => new Date(nowMs), sleep: async () => {} },
       newId: (prefix) => `${prefix}-${++counter}-${Math.random().toString(16).slice(2, 6)}`,
       timers: timers.timers,
@@ -754,6 +767,7 @@ describe('coach engine', () => {
     telemetry = createFakeTelemetry();
     apiCalls = [];
     requests = [];
+    runs = [];
     scripts = [];
     timers = manualTimers();
     checks = manualTimers();
@@ -3844,6 +3858,337 @@ describe('coach engine', () => {
       await engine.confirmChange('t-adj');
       expect(card('t-adj')).toMatchObject({ status: 'pending' });
       expect(engine.getState().phase).toBe('awaiting_confirmation');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // D197-D203: a fun fact on a dialed-in shot
+  // -------------------------------------------------------------------------
+
+  describe('fun facts (D197-D203)', () => {
+    const KENYA: FunFact = {
+      id: 'kenya-auction',
+      topic: 'origin',
+      about: "Kenya's coffee auction",
+      text: 'Most Kenyan coffee is sold at the weekly auction of the Nairobi Coffee Exchange.',
+      source: 'https://www.nce.co.ke/about',
+      match: { origins: ['kenya'] },
+    };
+    const CREMA: FunFact = {
+      id: 'crema-co2',
+      topic: 'science',
+      about: 'Crema and carbon dioxide',
+      text: 'Crema is mostly carbon dioxide from the roast, held in a foam of oils.',
+      source: 'https://sca.coffee/research/crema',
+    };
+    const KIAMBU_SOIL = 'Kiambu farms sit on red volcanic soil north of Nairobi.';
+    const NO_SEARCH = 'Web search is not available for your Anthropic account, so the coach shares what it knows.';
+    const keepRecipe = toolUse('t-keep', TOOL.proposeAdjustment, {
+      variable: 'none',
+      lever: null,
+      value: null,
+      grind: null,
+      summary: 'Keep this recipe',
+      rationale: 'You found it balanced and sweet.',
+      expectedEffect: 'Nothing changes at the machine.',
+      tips: [],
+    });
+    const askTasteAs = (id: string) => toolUse(id, TOOL.askUser, { question: 'How did it taste?', options: ['Sour', 'Bitter', 'other'], multiSelect: false });
+    const shareFact = (id: string, over: Record<string, unknown> = {}) =>
+      toolUse(id, TOOL.shareFunFact, { topic: 'origin', about: 'Kiambu growers', fact: KIAMBU_SOIL, source: null, ...over });
+
+    /** The device's own storage, where the told list lives. */
+    let toldItems: Map<string, string>;
+    let told: ToldList;
+    /** How often the engine read CafAI's facts. */
+    let factReads: number;
+
+    /** The engine again, on the same storage and told list, with CafAI's two facts. */
+    async function rebuild(extra: Partial<EngineDeps> = {}) {
+      engine.dispose();
+      engine = build({
+        told,
+        facts: async () => {
+          factReads += 1;
+          return [KENYA, CREMA];
+        },
+        ...extra,
+      });
+      await engine.start();
+    }
+
+    beforeEach(async () => {
+      toldItems = new Map();
+      told = createToldList({ getItem: (key) => toldItems.get(key) ?? null, setItem: (key, value) => void toldItems.set(key, value) });
+      factReads = 0;
+      await rebuild();
+    });
+
+    /** Settings > Coach > Fun facts, saved, then coach.refresh() as the Settings screen does. */
+    async function chooseFunFacts(funFacts: FunFactsSource) {
+      await storage.settings.update({ funFacts });
+      await engine.refresh();
+    }
+
+    /** Shot 1 tasted "Balanced, sweet", and the barista kept the recipe. */
+    async function throughKept() {
+      await throughShot();
+      scripts.push(() => [text('That is the cup.'), keepRecipe]);
+      await engine.answerOptions('t-ask', ['Balanced, sweet'], null);
+      scripts.push(() => [text('Locked in.')]);
+      await engine.confirmChange('t-keep');
+    }
+
+    /** Another shot of the open bag a minute later, answered by the coach's `turns`. */
+    async function pull(shotId: string, ...turns: Script[]) {
+      nowMs += 60_000;
+      scripts.push(...turns);
+      telemetry.emitShot({ type: 'finished', shotId, stopReason: 'targetWeight' });
+      await drain();
+      expect(cardOf(shotId)).toBeDefined();
+    }
+
+    /** A shot whose reply fails: Anthropic did not answer. */
+    async function pullFailing(shotId: string) {
+      nowMs += 60_000;
+      scripts.push(() => {
+        throw new LlmError('overloaded', 'The coach is busy. Try again.', 529);
+      });
+      telemetry.emitShot({ type: 'finished', shotId, stopReason: 'targetWeight' });
+      await drain();
+    }
+
+    /** The latest shot event the coach heard. */
+    function shotEvent(): Record<string, unknown> {
+      const messages = requests[requests.length - 1]!;
+      for (let i = messages.length - 1; i >= 0; i -= 1) {
+        const block = messages[i]!.content.find((b) => b.type === 'text' && b.text.startsWith(EVENT.shotCompleted));
+        if (block?.type === 'text') return JSON.parse(block.text.split('\n')[1]!) as Record<string, unknown>;
+      }
+      throw new Error('No shot event was sent.');
+    }
+
+    const factParts = () => allParts().filter((p): p is Extract<CoachUiPart, { kind: 'fact' }> => p.kind === 'fact');
+    /** The kinds of the last `count` messages' parts, oldest first. */
+    const lastKinds = (count: number) =>
+      engine
+        .getState()
+        .messages.slice(-count)
+        .map((m) => m.parts.map((p) => p.kind).join('+'));
+    const toldKeys = () => told.entries().map((entry) => entry.key);
+    const resultFor = (id: string) => lastUserTurn(requests).find((b) => b.type === 'tool_result' && b.tool_use_id === id);
+    const lastRun = () => runs[runs.length - 1]!;
+    const offered = (run: RunRequest) => run.tools.map((tool) => tool.definition.name);
+
+    it("shows the coach's fact between its words and its taste question, and keeps it on the told list (D201, D202)", async () => {
+      await throughKept();
+      await pull('shot-2', () => [text('Same as the last one: 30 s, 50.2 g.'), shareFact('t-fact'), askTasteAs('t-ask-2')]);
+      expect(shotEvent().funFact).toEqual({ told: [], web: false });
+      expect(offered(lastRun())).toContain(TOOL.shareFunFact);
+      expect(lastRun().system).toBe('SYSTEM coach');
+      expect(lastKinds(3)).toEqual(['text', 'fact', 'options']);
+      expect(factParts()).toEqual([{ kind: 'fact', text: KIAMBU_SOIL, topic: 'origin', source: null }]);
+      const bag = engine.getState().activeBag!;
+      expect(told.entries()).toEqual([{ key: 'coach:kiambu growers', bagId: bag.id, at: new Date(nowMs).toISOString() }]);
+      // On the device, never with the bag's records; the block stays in the chat.
+      expect(JSON.parse(toldItems.get('cafai.facts.told')!)).toEqual(told.entries());
+      const stored = await storage.conversations.get(bag.conversationId);
+      expect(stored!.uiMessages.flatMap((m) => m.parts).filter((p) => p.kind === 'fact')).toHaveLength(1);
+      // CafAI showed none of its own beside it.
+      expect(factParts()).toHaveLength(1);
+
+      // The coach hears that it was shown with the taste answer.
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask-2', ['Sour'], null);
+      expect(resultFor('t-fact')).toEqual({ type: 'tool_result', tool_use_id: 't-fact', content: '{"shown":true}' });
+    });
+
+    it("shows CafAI's own fact in the same place when the coach shares none, and tells the coach what was told (D200, D201)", async () => {
+      await throughKept();
+      await pull('shot-2', () => [text('Same as the last one.'), askTasteAs('t-ask-2')]);
+      expect(lastKinds(3)).toEqual(['text', 'fact', 'options']);
+      expect(factParts()).toEqual([{ kind: 'fact', text: KENYA.text, topic: 'origin', source: 'nce.co.ke' }]);
+      expect(toldKeys()).toEqual(['kenya-auction']);
+
+      // Shot 3 runs like shot 2, whose question it sets aside: the coach hears what was told, and CafAI's next is a general one.
+      await pull('shot-3', () => [text('Same again.'), askTasteAs('t-ask-3')]);
+      expect(shotEvent().funFact).toEqual({ told: ["Kenya's coffee auction"], web: false });
+      expect(factParts().map((part) => part.text)).toEqual([KENYA.text, CREMA.text]);
+      expect(toldKeys()).toEqual(['kenya-auction', 'crema-co2']);
+    });
+
+    it("tells the coach nothing of facts in CafAI's facts mode, and shows CafAI's (D198)", async () => {
+      await chooseFunFacts('list');
+      await throughKept();
+      await pull('shot-2', () => [text('Same as the last one.'), askTasteAs('t-ask-2')]);
+      expect(shotEvent()).not.toHaveProperty('funFact');
+      expect(offered(lastRun())).not.toContain(TOOL.shareFunFact);
+      expect(lastRun().system).toBe('SYSTEM list');
+      expect(lastRun().serverTools).toBeUndefined();
+      expect(lastKinds(3)).toEqual(['text', 'fact', 'options']);
+      expect(factParts()).toEqual([expect.objectContaining({ text: KENYA.text })]);
+    });
+
+    it('answers a share_fun_fact the coach is not offered as the runner does any unknown tool, and shows nothing of it', async () => {
+      await chooseFunFacts('list');
+      await throughKept();
+      await pull('shot-2', () => [text('Same as the last one.'), shareFact('t-fact'), askTasteAs('t-ask-2')]);
+      expect(factParts().map((part) => part.text)).toEqual([KENYA.text]);
+    });
+
+    it('does nothing about facts when they are off (D198)', async () => {
+      await chooseFunFacts('off');
+      await throughKept();
+      await pull('shot-2', () => [text('Same as the last one.'), askTasteAs('t-ask-2')]);
+      expect(shotEvent()).not.toHaveProperty('funFact');
+      expect(runs.map(offered).some((names) => names.includes(TOOL.shareFunFact))).toBe(false);
+      expect(lastRun().system).toBe('SYSTEM off');
+      expect(factParts()).toEqual([]);
+      expect(told.entries()).toEqual([]);
+      expect(factReads).toBe(0);
+    });
+
+    it('shows none for a shot after a change: the recipe was not kept (D197)', async () => {
+      await throughProposal();
+      scripts.push(() => [text('Done.')]);
+      await engine.confirmChange('t-adj');
+      await pull('shot-2', () => [text('Got it.'), askTasteAs('t-ask-2')]);
+      expect(shotEvent()).not.toHaveProperty('funFact');
+      expect(factParts()).toEqual([]);
+    });
+
+    it('shows none for a shot of a kept recipe that ran differently: that is for the coach to explain (D197)', async () => {
+      await rebuild({ coach: { ...coach, summarizeShot: (record) => (record.id === 'shot-2' ? { ...summary, durationS: 34 } : summary) } });
+      await throughKept();
+      await pull('shot-2', () => [text('That one ran long.'), askTasteAs('t-ask-2')]);
+      expect(shotEvent()).not.toHaveProperty('funFact');
+      expect(factParts()).toEqual([]);
+      expect(factReads).toBe(0);
+    });
+
+    it('shows one fun fact per reply: a second is sent back, unshown', async () => {
+      await throughKept();
+      await pull('shot-2', () => [
+        text('Two for you.'),
+        shareFact('t-fact'),
+        shareFact('t-fact-2', { about: 'Nairobi', fact: 'Nairobi grew up around a railway depot in 1899.' }),
+        askTasteAs('t-ask-2'),
+      ]);
+      expect(factParts().map((part) => part.text)).toEqual([KIAMBU_SOIL]);
+      expect(toldKeys()).toEqual(['coach:kiambu growers']);
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask-2', ['Sour'], null);
+      expect(resultFor('t-fact-2')).toEqual({ type: 'tool_result', tool_use_id: 't-fact-2', content: 'One fun fact per reply.', is_error: true });
+    });
+
+    it("sends back a fact that says how the barista's cup tastes, and shows the one the coach writes instead (D199)", async () => {
+      await throughKept();
+      await pull(
+        'shot-2',
+        () => [shareFact('t-fact', { fact: 'This cup should taste of blackcurrant, as Kiambu coffees do.' })],
+        () => [text('Same as the last one.'), shareFact('t-fact-2'), askTasteAs('t-ask-2')],
+      );
+      // Within the same run, naming the words.
+      expect(lastUserTurn(requests)[0]).toMatchObject({ tool_use_id: 't-fact', is_error: true, content: expect.stringContaining('("This cup")') });
+      expect(factParts().map((part) => part.text)).toEqual([KIAMBU_SOIL]);
+      expect(toldKeys()).toEqual(['coach:kiambu growers']);
+    });
+
+    it('answers a fact found unanswered after a reload as not shown again, and shows it once', async () => {
+      await throughKept();
+      await pull('shot-2', () => [text('Same as the last one.'), shareFact('t-fact'), askTasteAs('t-ask-2')]);
+      await rebuild();
+      expect(engine.getState().phase).toBe('awaiting_feedback');
+      expect(factParts()).toHaveLength(1);
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask-2', ['Sour'], null);
+      expect(parsed(resultFor('t-fact'))).toEqual({ shown: false, note: 'CafAI reloaded before answering this call; the fact is not shown again.' });
+      expect(factParts()).toHaveLength(1);
+      expect(toldKeys()).toEqual(['coach:kiambu growers']);
+    });
+
+    it('keeps the fact due for the retry of a reply that failed', async () => {
+      await throughKept();
+      await pullFailing('shot-2');
+      expect(engine.getState().error).toBe('The coach is busy. Try again.');
+      expect(factParts()).toEqual([]);
+      scripts.push(() => [text('Same as the last one.'), askTasteAs('t-ask-2')]);
+      await engine.retry();
+      expect(lastKinds(3)).toEqual(['text', 'fact', 'options']);
+      expect(toldKeys()).toEqual(['kenya-auction']);
+    });
+
+    it('drops the fact due to a shot whose reply failed once another shot comes', async () => {
+      await rebuild({ coach: { ...coach, summarizeShot: (record) => (record.id === 'shot-3' ? { ...summary, durationS: 40 } : summary) } });
+      await throughKept();
+      await pullFailing('shot-2');
+      await pull('shot-3', () => [text('That one ran long.'), askTasteAs('t-ask-3')]);
+      expect(factParts()).toEqual([]);
+    });
+
+    it('shows the fact the coach shares when the barista asks for one, due or not', async () => {
+      await throughTemplatePick();
+      scripts.push(() => [shareFact('t-fact')], () => [text('There you go.')]);
+      await engine.sendText('Tell me a fun fact about this coffee.');
+      expect(factParts()).toEqual([expect.objectContaining({ text: KIAMBU_SOIL })]);
+      expect(toldKeys()).toEqual(['coach:kiambu growers']);
+    });
+
+    it("searches the web in the web mode: the server tool on every request, and the page's site on the block (D203)", async () => {
+      await chooseFunFacts('web');
+      await throughKept();
+      await pull('shot-2', () => [
+        text('Same as the last one.'),
+        shareFact('t-fact', { source: 'https://www.onyxcoffeelab.com/pages/about' }),
+        askTasteAs('t-ask-2'),
+      ]);
+      expect(runs.map((run) => run.serverTools)).toEqual(runs.map(() => [WEB_SEARCH_TOOL]));
+      expect(lastRun().system).toBe('SYSTEM web');
+      expect(shotEvent().funFact).toEqual({ told: [], web: true });
+      expect(factParts()).toEqual([expect.objectContaining({ text: KIAMBU_SOIL, source: 'onyxcoffeelab.com' })]);
+    });
+
+    it("leaves out the coach's page without a web search", async () => {
+      await throughKept();
+      await pull('shot-2', () => [text('Same.'), shareFact('t-fact', { source: 'https://www.onyxcoffeelab.com/pages/about' }), askTasteAs('t-ask-2')]);
+      expect(factParts()).toEqual([expect.objectContaining({ source: null })]);
+      expect(runs.some((run) => run.serverTools !== undefined)).toBe(false);
+    });
+
+    it('asks again at once without the web search when Anthropic refuses it, says so once, and leaves it off for the session (D203)', async () => {
+      await chooseFunFacts('web');
+      await engine.newBag();
+      scripts.push(() => {
+        throw new LlmError('bad_request', 'Web search is not enabled for this organization.', 400);
+      });
+      scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);
+      await engine.sendText('Kiambu AA, light, washed');
+      expect(engine.getState().error).toBeNull();
+      expect(engine.getState().phase).toBe('choosing_template');
+      expect(runs.map((run) => [run.system, run.serverTools])).toEqual([
+        ['SYSTEM web', [WEB_SEARCH_TOOL]],
+        ['SYSTEM coach', undefined],
+      ]);
+      expect(offered(runs[1]!)).toContain(TOOL.shareFunFact);
+      expect(notices().filter((p) => p.text === NO_SEARCH)).toEqual([{ kind: 'notice', tone: 'info', text: NO_SEARCH }]);
+
+      scripts.push(() => [text('Loaded. Pull a shot.')]);
+      await engine.pickTemplate('t-tpl', 'd-flow');
+      expect(lastRun().serverTools).toBeUndefined();
+      expect(lastRun().system).toBe('SYSTEM coach');
+      expect(notices().filter((p) => p.text === NO_SEARCH)).toHaveLength(1);
+    });
+
+    it('keeps any other refused request an error, with its Retry', async () => {
+      await chooseFunFacts('web');
+      await engine.newBag();
+      scripts.push(() => {
+        throw new LlmError('bad_request', 'max_tokens: must be at most 128000', 400);
+      });
+      await engine.sendText('Kiambu AA, light, washed');
+      expect(engine.getState().error).toBe('max_tokens: must be at most 128000');
+      expect(runs).toHaveLength(1);
+      expect(notices().some((p) => p.text === NO_SEARCH)).toBe(false);
     });
   });
 

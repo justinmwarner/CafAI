@@ -5,6 +5,7 @@ import {
   bagConfirmPart,
   beanPickerPart,
   diffPart,
+  factPart,
   filledBeanCard,
   grinderOfferPart,
   isLoadingBeanCard,
@@ -110,6 +111,13 @@ describe('cards', () => {
     const linked = setGrinderOfferStatus(failedNow, 'tu-grinder', 'existing', { linkedName: 'Niche Zero (63 mm conical)' });
     expect(linked[0]!.parts[0]).toEqual({ ...offer, status: 'existing', error: null, linkedName: 'Niche Zero (63 mm conical)' });
     expect(setGrinderOfferStatus(messages, 'tu-other', 'declined')).toEqual(messages);
+  });
+
+  it('makes a fun fact a part of its own, with the site it came from, and never sets it aside (D202)', () => {
+    const fact = factPart('Kiambu farms sit on red volcanic soil.', 'origin', 'nce.co.ke');
+    expect(fact).toEqual({ kind: 'fact', text: 'Kiambu farms sit on red volcanic soil.', topic: 'origin', source: 'nce.co.ke' });
+    expect(factPart('Crema is mostly carbon dioxide.', 'science', null)).toMatchObject({ source: null });
+    expect(setAside(fact, 'shot')).toBe(fact);
   });
 
   it("puts the bean card up before Decaid's batches are read, open, then fills it, answered or not (6.1)", () => {

@@ -6,11 +6,13 @@ import {
   GRINDER_OFFER_LIMITS,
   OfferGrinderInput,
   SaveBagDetailsInput,
+  ShareFunFactInput,
   TOOL,
   TOOL_INPUTS,
   UI_TOOLS,
   toRoastLevel,
 } from './contract.ts';
+import { FACT_TOPICS } from './facts/types.ts';
 
 const KIAMBU = { name: 'Kiambu AA', roaster: 'Square Mile', origin: 'Kenya', roastLevel: 'light', process: 'washed', notes: null };
 
@@ -81,6 +83,35 @@ describe('offer_grinder (D125)', () => {
 
   it("keeps the limits of Settings' Add a grinder", () => {
     expect(GRINDER_OFFER_LIMITS).toEqual(GRINDER_LIMITS);
+  });
+});
+
+describe('share_fun_fact (D201)', () => {
+  const FACT = { topic: 'variety', about: "Kenya's SL28", fact: 'SL28 was selected in Kenya in the 1930s.', source: null };
+
+  it('is an automatic tool: CafAI shows the fact and answers at once', () => {
+    expect(TOOL.shareFunFact).toBe('share_fun_fact');
+    expect(AUTO_TOOLS).toContain(TOOL.shareFunFact);
+    expect(UI_TOOLS).not.toContain(TOOL.shareFunFact);
+    expect(TOOL_INPUTS[TOOL.shareFunFact]).toBe(ShareFunFactInput);
+  });
+
+  it('takes one of the fact topics, a label of at most 80 characters, the fact in at most 280 and its page or null', () => {
+    expect(ShareFunFactInput.safeParse(FACT)).toMatchObject({ success: true, data: FACT });
+    expect(ShareFunFactInput.safeParse({ ...FACT, source: 'https://varieties.worldcoffeeresearch.org/varieties/sl28' }).success).toBe(true);
+    expect(ShareFunFactInput.safeParse({ ...FACT, about: '  SL28  ' })).toMatchObject({ success: true, data: { about: 'SL28' } });
+    for (const topic of FACT_TOPICS) expect(ShareFunFactInput.safeParse({ ...FACT, topic }).success, topic).toBe(true);
+    for (const bad of [
+      { topic: 'gossip' },
+      { about: ' ' },
+      { about: 'x'.repeat(81) },
+      { fact: '' },
+      { fact: 'x'.repeat(281) },
+      { source: 'x'.repeat(401) },
+      { source: undefined },
+    ]) {
+      expect(ShareFunFactInput.safeParse({ ...FACT, ...bad }).success, JSON.stringify(bad)).toBe(false);
+    }
   });
 });
 

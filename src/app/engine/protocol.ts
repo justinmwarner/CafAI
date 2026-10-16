@@ -133,6 +133,13 @@ export interface ShotCompletedPayload {
   /** The day of the shot where the user is, "YYYY-MM-DD": a roast date said in words after it counts from here, not from intake. */
   today: string;
   summary: Omit<ShotSummary, 'series'>;
+  /**
+   * A fun fact is due (D197, D201): the barista kept this recipe and the shot
+   * ran like the last one. `told` names the 40 facts told most recently, any
+   * bag's, newest first; `web` is true when the coach may search for one
+   * (D203). Only in the coach's modes and only when due; absent otherwise.
+   */
+  funFact?: { told: string[]; web: boolean };
 }
 
 export function summaryForModel(summary: ShotSummary): Omit<ShotSummary, 'series'> {
@@ -178,6 +185,13 @@ export interface ShotMeasuredPayload {
 export function shotMeasuredBlock(payload: ShotMeasuredPayload): TextBlock {
   return textBlock(`${EVENT.shotMeasured}\n${JSON.stringify(payload)}`);
 }
+
+/** The share_fun_fact result once the fact is in the chat (D201). */
+export const FACT_SHOWN = { shown: true } as const;
+/** A second share_fun_fact in one model run: sent back, never shown. */
+export const ONE_FACT_PER_REPLY = 'One fun fact per reply.';
+/** A share_fun_fact found unanswered after a reload: shown before it or never, it is not shown again. */
+export const FACT_NOT_SHOWN_AGAIN = { shown: false, note: 'CafAI reloaded before answering this call; the fact is not shown again.' } as const;
 
 export function undoBlock(payload: { from: number; to: number; title: string }): TextBlock {
   return textBlock(`${EVENT.undo}\n${JSON.stringify(payload)}`);

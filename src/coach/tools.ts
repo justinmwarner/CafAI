@@ -4,6 +4,7 @@
  * call is right the first time instead of bouncing back as an error.
  */
 import { TEMPLATE_IDS, TOOL, type ToolName } from './contract.ts';
+import { FACT_TOPICS } from './facts/types.ts';
 import { DOSE_RULES, GRIND_MAX_STEPS } from './validator.ts';
 
 const SHOT_REF = 'shot: "latest", "previous", or a shotId from get_bag_history.';
@@ -58,5 +59,9 @@ export const COACH_TOOL_SPECS: Record<ToolName, { description: string; kind: 'ui
     kind: 'auto',
     description:
       'Setups DYE2 (a Decaid plugin) recorded for this coffee: its batch in Decaid\'s bean library and earlier batches of the same bean, else its name and roaster. Answers {"available":true,"setups":[{"kind","sameBatch","profileTitle","grindSetting","doseG","yieldG","rpm","basket","date"}],"equipment":[...],"baskets":[...]} (null where DYE2 recorded nothing; equipment and basket names DYE2 knows), or {"available":false} without DYE2. kind "recent" is one DYE2 saw used lately, which says nothing about how it tasted; "favourite" and "recipe" are ones the user saved. sameBatch is false for an earlier batch of the same bean, null when unknown. Read-only. Call it at intake when the coffee came from Decaid\'s bean library or was brewed before; for a bag described in words, after save_bag_details, as it has no name to match before.',
+  },
+  [TOOL.shareFunFact]: {
+    kind: 'auto',
+    description: `Share one fun fact about this bag, shown in a quiet block of its own under your reply: topic (${FACT_TOPICS.join(', ')}), about (a short label, at most 80 characters, e.g. "Kenya's SL28"), fact (one or two plain sentences, at most 280 characters, true as written) and source (the https address of the page you read it on, else null). Only when you are sure of it and it is about this bag; never what this cup tastes like or will. CafAI sends back a fact that says how the cup tastes, with the reason. Answers {"shown":true}; at most one per reply.`,
   },
 };

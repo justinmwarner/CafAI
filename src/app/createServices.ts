@@ -9,6 +9,7 @@ import {
   detectHost,
 } from '../api/index.ts';
 import { createPluginDirectory, watchPlugins } from '../api/plugins.ts';
+import { createToldList } from '../coach/facts/told.ts';
 import { DEFAULT_MODEL, MODELS } from '../llm/index.ts';
 import { createIdbStorage, restoreFromMirrorIfEmpty, startLateRestore } from '../storage/index.ts';
 import { openCoachSourceStore } from '../storage/coachSource.ts';
@@ -96,6 +97,8 @@ export async function createServices(win: Window): Promise<AppServices> {
     restoredFromBackup: restore === 'restored',
     // DYE2's setups for the coach and the Visualizer link on shot cards, while those plugins run (D103).
     plugins,
+    // The fun facts told, in the device's own storage beside the care counts' cache: never mirrored or exported (D200).
+    told: createToldList(deviceStorage),
   });
 
   telemetry.start();

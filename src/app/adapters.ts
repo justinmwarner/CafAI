@@ -29,6 +29,7 @@ import {
   versionTitle,
   withOther,
 } from '../coach/index.ts';
+import type { FunFactsSource } from '../coach/facts/types.ts';
 import { DEFAULT_TEMPERATURE_UNIT, type TemperatureUnit } from '../coach/temperature.ts';
 import type { GrinderInfo } from '../coach/types.ts';
 import { extractBag, resolveModel, runConversation, toToolDefinition, zodValidator } from '../llm/index.ts';
@@ -46,14 +47,17 @@ export interface CoachPortOptions {
 }
 
 export function createCoachPort(options: CoachPortOptions = {}): CoachPort {
-  // One prompt per unit, each built once: the system prompt must stay byte-identical across turns so it caches.
-  const prompts = new Map<TemperatureUnit, string>();
-  const systemPrompt = (): string => {
+  // One prompt per unit and fun facts mode, each built once: the system prompt must stay byte-identical across turns so it caches.
+  const prompts = new Map<string, string>();
+  const systemPrompt = (funFacts: FunFactsSource): string => {
     const unit = options.temperatureUnit?.() ?? DEFAULT_TEMPERATURE_UNIT;
-    let prompt = prompts.get(unit);
+    // Off and CafAI's list alone tell the coach nothing of facts: the same prompt (D198).
+    const mode = funFacts === 'off' ? 'list' : funFacts;
+    const key = `${unit} ${mode}`;
+    let prompt = prompts.get(key);
     if (prompt === undefined) {
-      prompt = buildSystemPrompt(TEMPLATES, { temperatureUnit: unit });
-      prompts.set(unit, prompt);
+      prompt = buildSystemPrompt(TEMPLATES, { temperatureUnit: unit, funFacts: mode });
+      prompts.set(key, prompt);
     }
     return prompt;
   };
