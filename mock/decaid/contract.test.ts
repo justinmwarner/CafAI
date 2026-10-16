@@ -508,8 +508,9 @@ describe('the mock against the spec', () => {
       await attempt(() =>
         client.updateShot(latest.id, { annotations: { espressoNotes, enjoyment: 7, extras: { [EXTRAS_KEY]: { notes: line, ...rating } } } }),
       );
-      // As CafAI writes a TDS and its EY (D165), then clears both with null.
+      // As CafAI writes a TDS and its EY (D165), a TDS it has no EY for (the EY cleared), then clears both with null.
       await attempt(() => client.updateShot(latest.id, { annotations: { drinkTds: 9.25, drinkEy: 20.8 } }));
+      await attempt(() => client.updateShot(latest.id, { annotations: { drinkTds: 9.4, drinkEy: null } }));
       await attempt(() => client.updateShot(latest.id, { annotations: { drinkTds: null, drinkEy: null } }));
     }
     await attempt(() => client.probeEnjoymentScale());

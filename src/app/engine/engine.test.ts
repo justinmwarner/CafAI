@@ -2380,6 +2380,20 @@ describe('coach engine', () => {
       expect(lastUserTurn(requests).filter((block) => block.type === 'text')).toEqual([measured(8.5, 23.7)]);
     });
 
+    it("tells a reading the shot's record came with in the shot's own event alone, never again as a reading", async () => {
+      // Its record came with a TDS (another app, or an import): the card shows it, and the event's summary carries it.
+      vi.spyOn(coach, 'summarizeShot').mockReturnValue({ ...summary, tdsPct: 9.25, eyPct: 25.8 });
+      await throughShot();
+      expect(cardOf('shot-1')!.summary).toMatchObject({ tdsPct: 9.25, eyPct: 25.8 });
+      const turn = lastUserTurn(requests);
+      expect(turn.map((block) => (block.type === 'text' ? block.text.split('\n')[0] : block.type))).toEqual(['[event:shot_completed]']);
+      expect(JSON.parse((turn[0] as { text: string }).text.split('\n')[1]!).summary).toMatchObject({ tdsPct: 9.25, eyPct: 25.8 });
+      // Heard once: the next turn does not tell it either.
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      expect(lastUserTurn(requests).filter((block) => block.type === 'text')).toEqual([]);
+    });
+
     it('says nothing of a reading removed before the coach heard it', async () => {
       await throughShot();
       await engine.setShotTds('shot-1', 9);
@@ -2394,13 +2408,17 @@ describe('coach engine', () => {
       expect(machine.annotations.get('shot-1')).toMatchObject({ drinkTds: null, drinkEy: null });
     });
 
-    it('keeps a TDS without an EY when the card has no yield: drinkTds alone goes to Decaid', async () => {
+    it('keeps a TDS without an EY when the card has no yield, and clears the EY another app left in Decaid from another TDS', async () => {
       await throughShot();
+      // Another app's reading on the record: its EY was worked out from a TDS that is not this one.
+      machine.annotations.set('shot-1', { drinkTds: 8.1, drinkEy: 22.6 } as ShotAnnotations);
       await asStoredBefore((part) => ({ ...part, summary: { ...part.summary, yieldG: null, ratio: null } }));
       await engine.setShotTds('shot-1', 8.5);
       expect(cardOf('shot-1')!.summary).toMatchObject({ tdsPct: 8.5, eyPct: null });
       await vi.waitFor(() => expect(callsOf('updateShot')).toHaveLength(1));
-      expect(callsOf('updateShot')[0]!.args).toEqual(['shot-1', { annotations: { drinkTds: 8.5 } }]);
+      expect(callsOf('updateShot')[0]!.args).toEqual(['shot-1', { annotations: { drinkTds: 8.5, drinkEy: null } }]);
+      // Decaid's deep merge writes the null, so its record, and Visualizer's, has the TDS alone, as the card does.
+      expect(machine.annotations.get('shot-1')).toMatchObject({ drinkTds: 8.5, drinkEy: null });
     });
 
     it('ignores a TDS out of range, a shot no card shows, and the reading the card already has', async () => {
@@ -2514,6 +2532,107 @@ describe('coach engine', () => {
       expect(seen.map((s) => s.label)).toEqual(['Try 2 of 6', 'Try 3 of 6', 'Try 4 of 6', 'Try 5 of 6', 'Try 6 of 6']);
       expect(progressNotices()).toEqual([]);
       expect(engine.getState().error).toBe('Decaid has not saved that shot yet.');
+    });
+
+    // D-FIX-1: Decaid gives a cleaning or calibration profile's run a shot id and saves no record of it.
+    /** Decent's Forward Flush x5 (or another profile of `beverageType`) as Decaid's workflow holds it, loaded in streamline. */
+    const cleaningProfile = (beverageType = 'cleaning'): ProfileJson => ({
+      ...baseProfile,
+      title: 'Cleaning/Forward Flush x5',
+      beverage_type: beverageType as ProfileJson['beverage_type'],
+    });
+    /** A run as Decaid reports it: its start and its end, with the id it gave the run. */
+    const run = (shotId: string) => {
+      telemetry.emitShot({ type: 'started', shotId });
+      telemetry.emitShot({ type: 'finished', shotId, stopReason: null });
+    };
+
+    it("says nothing of a cleaning or calibration profile's run: no search, no warning, no banner, no card", async () => {
+      await throughTemplatePick();
+      const seen = watchSearch();
+      const busy: boolean[] = [];
+      engine.subscribe(() => busy.push(engine.getState().busy));
+      const turns = requests.length;
+      const chat = engine.getState().messages;
+      // Loaded behind CafAI's back, as the weekly clean says (D70); the case Decaid reads aside.
+      for (const [shotId, type] of [['flush-1', 'cleaning'], ['flush-2', 'Cleaning'], ['calibration-1', 'calibrate']] as const) {
+        machine.loaded = cleaningProfile(type);
+        machine.missingShots.add(shotId);
+        run(shotId);
+        await drain();
+      }
+      expect(callsOf('getShot')).toEqual([]);
+      expect(seen).toEqual([]);
+      expect(engine.getState().messages).toEqual(chat);
+      expect(engine.getState().error).toBeNull();
+      expect(busy).not.toContain(true);
+      expect(await storage.iterations.listAll()).toEqual([]);
+      expect(requests).toHaveLength(turns);
+
+      // A shot of the bag's version after it is a shot again.
+      machine.loaded = callsOf('activateProfile').at(-1)!.args[0] as ProfileJson;
+      expect(await shotIsCredited('shot-1')).toBe(true);
+    });
+
+    it('says nothing of it before a starting profile is picked either, where a shot is told to pick one first', async () => {
+      await openBag();
+      const pickFirst = () => notices().filter((p) => p.text.startsWith('Pick a starting profile first'));
+      machine.loaded = cleaningProfile();
+      run('flush-1');
+      await drain();
+      expect(pickFirst()).toEqual([]);
+      machine.loaded = baseProfile;
+      run('shot-1');
+      await vi.waitFor(() => expect(pickFirst()).toHaveLength(1));
+    });
+
+    it('asks which profile ran as the run ends, not once a reply the engine is busy with is done', async () => {
+      await throughTemplateCards();
+      const v1 = () => callsOf('activateProfile').at(-1)!.args[0] as ProfileJson;
+      scripts.push(() => {
+        // The weekly clean ends while the coach replies, and the bag's version is back before the engine's turn comes.
+        machine.loaded = cleaningProfile();
+        machine.missingShots.add('flush-1');
+        run('flush-1');
+        machine.loaded = v1();
+        return [text('Loaded. Pull a shot.')];
+      });
+      await engine.pickTemplate('t-tpl', 'd-flow');
+      await drain();
+      expect(callsOf('getShot')).toEqual([]);
+      expect(engine.getState().error).toBeNull();
+      expect(notices().filter((p) => p.tone === 'warning')).toEqual([]);
+    });
+
+    it("keeps a lost shot's Retry on the banner through a cleaning run, and Retry still looks for that shot", async () => {
+      await throughTemplatePick();
+      machine.missingShots.add('shot-lost');
+      run('shot-lost');
+      await vi.waitFor(() => expect(engine.getState().error).toBe('Decaid has not saved that shot yet.'));
+      const looks = () => callsOf('getShot').filter((call) => call.args[0] === 'shot-lost').length;
+      const before = looks();
+
+      machine.loaded = cleaningProfile();
+      machine.missingShots.add('flush-1');
+      run('flush-1');
+      await drain();
+      expect(engine.getState().error).toBe('Decaid has not saved that shot yet.');
+      expect(callsOf('getShot').filter((call) => call.args[0] === 'flush-1')).toEqual([]);
+
+      // Whatever the machine holds now, Retry is for the shot that ran the bag's version.
+      await engine.retry();
+      expect(looks()).toBe(before + 6);
+      expect(engine.getState().error).toBe('Decaid has not saved that shot yet.');
+    });
+
+    it('looks for the run as a shot when Decaid does not say which profile it was, so no shot is lost to a failed read', async () => {
+      await throughTemplatePick();
+      machine.failWorkflowReads = 1;
+      scripts.push(() => [text('Got it.'), askTaste]);
+      run('shot-1');
+      await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+      expect(machine.failWorkflowReads).toBe(0);
+      expect(cardOf('shot-1')).toBeDefined();
     });
   });
 
@@ -4768,6 +4887,78 @@ describe('coach engine', () => {
       expect(notSaved()[0]).toEqual({ kind: 'notice', tone: 'warning', text: 'CafAI could not save the taste for this shot.' });
       expect(logged).toHaveBeenCalledWith('CafAI could not save the taste for this shot:', "Decaid sent a reply CafAI doesn't recognise.");
       expect(callsOf('updateShot')).toEqual([]);
+      expect(timers.delays()).toEqual([]);
+    });
+
+    it('still sends a reading and a verdict that wait with the taste when the record cannot be read, and names the taste alone', async () => {
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+      await throughShot();
+      // A reading and a verdict Decaid could not take wait in the outbox; the taste answer joins them.
+      machine.failShotUpdates = 2;
+      await engine.setShotTds('shot-1', 8.5);
+      await engine.rateShot('shot-1', 'better');
+      await vi.waitFor(() => expect(machine.failShotUpdates).toBe(0));
+      await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
+      machine.unreadableRecords = true;
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+
+      const notSaved = () => notices().filter((p) => p.text.startsWith('CafAI could not save'));
+      await vi.waitFor(() => expect(notSaved()).toHaveLength(1));
+      expect(notSaved()[0]).toEqual({ kind: 'notice', tone: 'warning', text: 'CafAI could not save the taste for this shot.' });
+      expect(logged).toHaveBeenCalledWith('CafAI could not save the taste for this shot:', "Decaid sent a reply CafAI doesn't recognise.");
+      // The TDS write needs no read, nor does the verdict: both went, without the taste's notes.
+      expect(callsOf('updateShot')).toHaveLength(1);
+      expect(callsOf('updateShot')[0]!.args).toEqual([
+        'shot-1',
+        { annotations: { drinkTds: 8.5, drinkEy: 23.7, enjoyment: 5, extras: { cafai: { verdict: 'better', comparedWith: { kind: 'usual' } } } } },
+      ]);
+      // Nothing waits, and nothing is said again.
+      expect(timers.delays()).toEqual([]);
+      decaidBack();
+      await drain();
+      expect(callsOf('updateShot')).toHaveLength(1);
+      expect(notSaved()).toHaveLength(1);
+    });
+
+    it('keeps a verdict waiting for the rating scale when the taste cannot be read, and sends it once Decaid says the scale', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      await throughShot();
+      // Decaid has not said its rating scale yet (D101): the verdict waits for it.
+      machine.enjoymentScale = null;
+      await engine.rateShot('shot-1', 'better');
+      await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
+      machine.unreadableRecords = true;
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      const notSaved = () => notices().filter((p) => p.text.startsWith('CafAI could not save'));
+      await vi.waitFor(() => expect(notSaved().map((p) => p.text)).toEqual(['CafAI could not save the taste for this shot.']));
+      expect(callsOf('updateShot')).toEqual([]);
+      expect(timers.delays()).toEqual([30_000]);
+
+      machine.enjoymentScale = 10;
+      timers.fire();
+      await vi.waitFor(() => expect(callsOf('updateShot')).toHaveLength(1));
+      expect(callsOf('updateShot')[0]!.args).toEqual(['shot-1', { annotations: { enjoyment: 5, extras: { cafai: { verdict: 'better', comparedWith: { kind: 'usual' } } } } }]);
+      await drain();
+      expect(notSaved()).toHaveLength(1);
+    });
+
+    it('names the taste and the TDS in one notice when Decaid no longer has the shot to take either', async () => {
+      await throughShot();
+      machine.failShotUpdates = 1;
+      await engine.setShotTds('shot-1', 8.5);
+      await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
+      // The shot is gone from Decaid: its record is not found, and a write to it is refused.
+      machine.missingShots.add('shot-1');
+      machine.shotRefusal = new GatewayError(404, '/api/v1/shots/shot-1', 'Shot not found', 'http', { error: 'Shot not found' });
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      await vi.waitFor(() => expect(refusals()).toHaveLength(1));
+      expect(refusals()[0]!.text).toBe('Decaid would not save the taste and the TDS for this shot: Shot not found.');
+      expect(drift()).toContainEqual(['PUT /api/v1/shots/{id}', 'annotations: refused (HTTP 404)']);
+      await drain();
+      expect(refusals()).toHaveLength(1);
       expect(timers.delays()).toEqual([]);
     });
 

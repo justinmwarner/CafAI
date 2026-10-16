@@ -2556,13 +2556,18 @@ Numbered D-TDS-n until the merge numbers them from D162 on.
   shot: …"). A change sends both again; Remove sends `null` for both, which
   Decaid's deep merge writes and `ShotAnnotations.toJson` then leaves out
   (`ShotAnnotationsPatch` in `src/api/types.ts`; the pinned spec says
-  nullable); a TDS without an EY sends `drinkTds` alone, leaving a
-  `drinkEy` another app wrote. No notes line and no extras: the two fields
-  are Decaid's own. Decaid's Visualizer plugin uploads them with the shot
-  and, on Decaid's main (af4e995), sends a later edit of either as it sends
-  later notes and ratings; not yet seen at the pin or on a real upload. Why:
-  one path for everything CafAI writes to a shot, and nothing it did not
-  write is touched.
+  nullable); a TDS CafAI has no EY for (the card has no yield or no dose)
+  sends `drinkEy: null` beside it, which clears an EY already on the record.
+  Changed after the review (2026-10-15): such a TDS first went alone, so as
+  to leave a `drinkEy` another app wrote, but that EY was worked out from
+  another TDS, and Decaid and Visualizer then showed a TDS beside an EY that
+  did not go with it. No notes line and no extras: the two fields are
+  Decaid's own. Decaid's Visualizer plugin uploads them with the shot and,
+  on Decaid's main (af4e995), sends a later edit of either as it sends later
+  notes and ratings; not yet seen at the pin or on a real upload. Why: one
+  path for everything CafAI writes to a shot; a TDS and the EY beside it
+  are one reading, so CafAI writes them together, and touches nothing else
+  it did not write.
 - **D166. The reading lives in the shot's summary, on the card and the
   iteration.** `ShotSummary.tdsPct` and `eyPct`, absent without a reading:
   the engine's `setShotTds` writes them into the card's summary in the chat
@@ -3012,3 +3017,52 @@ fixes is a choice.
   The line costs a guided card about 21 px of height on a phone, where height
   is cheaper than width; a tablet's card, which has the room beside, does not
   grow.
+
+### Engine fixes from the review (2026-10-15)
+
+The code review of the batch above found three defects in the engine, one
+of them with two gaps. A TDS without an EY changed D165 in place; a
+cleaning profile's run (D-FIX-1) and a taste whose record cannot be read
+(D-FIX-2) are decisions of their own. The third defect, a shot whose record
+came with a TDS being told to the coach twice in its own turn, now keeps
+ENGINE_PROTOCOL rule 10 as written ("counts as sent"), with no decision of
+its own: the readings and verdicts the coach has not heard are read from
+the transcript with the turn's own blocks in it (`sendUser` in
+`src/app/engine/engine.ts`).
+
+- **D-FIX-1. A cleaning or calibration profile's run is no shot, and CafAI
+  says nothing of it.** Decaid gives every run in the espresso state a shot
+  id and its shotState frames, and saves no record of a run whose profile's
+  `beverage_type` is `cleaning` or `calibrate` (de1_state_manager.dart:835,
+  849, 911-917 at aab5f93). So a run of Decent's Forward Flush x5, which the
+  weekly clean says to run from streamline (`src/ui/care/careGuide.ts`),
+  set off the lost-shot search (D65), its warning and the standing Retry,
+  or, before any version, "Pick a starting profile first". Now, as each run
+  ends, the engine reads Decaid's workflow (`runSaved` in
+  `src/app/engine/engine.ts`): the profile Decaid decides by, read fresh, so
+  one loaded behind CafAI's back (D70) counts, and read at once rather than
+  when the engine's queue reaches the run, so a profile loaded after it
+  does not. For a cleaning or calibration profile the engine stops there:
+  no search, no warning, no banner and no card, and a problem already on
+  the banner stays, so Retry for an earlier lost shot still looks for that
+  shot. When Decaid does not answer the read, the run is looked for as a
+  shot, as before: a read that failed never loses a shot. The Shot view
+  still shows the run while it lasts and gives the screen back 8 s after it
+  ends, with nothing in the chat (D85), and the 30 s look still says when
+  the machine holds another profile than the bag's (D70). Why: Decaid's own
+  rule decides which runs are shots, and for a run it keeps no record of,
+  its workflow is the one place CafAI can read the rule's input; the
+  shotState frames name no profile, and the 30 s look can be 30 s behind.
+- **D-FIX-2. A taste whose record cannot be read costs the taste alone.**
+  The taste is the one part of a shot write that reads the record first,
+  to keep notes a person wrote (D61); the TDS and the rating need no read.
+  When that read fails for good (a record CafAI cannot read, or one Decaid
+  refuses), the write still sends the rest, the TDS with its EY and the
+  rating (once Decaid has said its rating scale, D101), and the chat says
+  once what was lost: "CafAI could not save the taste for this shot.", or
+  Decaid's reason for a read it refused. Before, the whole write was
+  dropped, and the chat said "the taste and the TDS". A read that may still
+  go through (no answer, a 5xx) keeps the whole write waiting, as before
+  (D64), and when the rest is refused too, as for a shot Decaid no longer
+  has, one notice names all of it, as before. Why: a write must lose only
+  what could not be written, and say only that.

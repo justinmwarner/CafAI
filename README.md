@@ -228,9 +228,12 @@ never change pump type, step order or count, sensors, or exit types.
 
 A shot counts only for the version the machine ran: a shot that ran another
 profile (another skin's, or one picked on the machine) is left out of the
-dial-in, and the chat says so. While the page is open, CafAI also looks at
-Decaid's loaded profile every 30 s and says so when it is not the bag's,
-with **Retry**; it never loads anything on the machine by itself.
+dial-in, and the chat says so. A run of a cleaning or calibration profile,
+such as Forward Flush x5 for the weekly clean, is no shot at all: Decaid
+keeps no record of it, and the chat says nothing. While the page is open,
+CafAI also looks at Decaid's loaded profile every 30 s and says so when it
+is not the bag's, with **Retry**; it never loads anything on the machine by
+itself.
 
 ## Screens and looks
 

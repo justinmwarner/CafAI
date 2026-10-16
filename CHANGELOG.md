@@ -22,10 +22,13 @@ workflow checks against it. Settings > About shows the version you run.
   among its numbers and type the reading (a comma works too). CafAI works
   out the extraction yield (EY) from the card's own dose and yield, shows
   both on the card and in History, and writes them to the shot's record in
-  Decaid, so Visualizer gets them. The coach hears the reading with your
-  next tap or message, even one typed after it suggested a change, and is
-  told what TDS and EY are and how far to trust them: a number about
-  extraction, never a taste. Change or remove a reading the same way.
+  Decaid, so Visualizer gets them. A card with no yield (no scale) or no
+  dose keeps the TDS alone, and so does Decaid's record: an EY another app
+  left there goes, as it was worked out from another TDS. The coach hears
+  the reading with your next tap or message, even one typed after it
+  suggested a change, and is told what TDS and EY are and how far to trust
+  them: a number about extraction, never a taste. Change or remove a
+  reading the same way.
 - °F: with Settings > Appearance > Temperatures on °F, every temperature
   reads in °F (the stats card, the drinks' views and settings, the change
   card, History and the cleaning guide) and the coach speaks °F (1 °C
@@ -41,6 +44,14 @@ workflow checks against it. Settings > About shows the version you run.
   care with a switch for the line. A Clean or Descale CafAI sees the
   machine run counts too. The last times are kept in Decaid's backup and the
   export.
+- A run of a cleaning or calibration profile, such as Decent's Forward
+  Flush x5 for the weekly clean, run from streamline while CafAI is open,
+  no longer sets off "Looking for that shot in Decaid…", a warning that
+  Decaid has not saved it and a Retry that stays: Decaid keeps no record of
+  such a run, and CafAI now says nothing of it.
+- A taste CafAI cannot add to the shot's record in Decaid (a record it
+  cannot read) no longer loses the verdict and the TDS waiting with it:
+  they still go, and the chat names only the taste.
 
 ### Decaid
 

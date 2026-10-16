@@ -317,8 +317,11 @@ describe('shots', () => {
     const read = mock.updateShot(id, { annotations: { drinkTds: 9.25, drinkEy: 20.8 } });
     expect(read.annotations).toMatchObject({ drinkTds: 9.25, drinkEy: 20.8 });
     expect(mock.getShot(id).annotations).toMatchObject({ drinkTds: 9.25, drinkEy: 20.8 });
-    // A TDS alone leaves the EY that is there.
+    // A TDS alone leaves the EY that is there; a TDS with a null EY, as CafAI sends one it has no EY for, clears it.
     expect(mock.updateShot(id, { annotations: { drinkTds: 9.5 } }).annotations).toMatchObject({ drinkTds: 9.5, drinkEy: 20.8 });
+    const alone = mock.updateShot(id, { annotations: { drinkTds: 9.4, drinkEy: null } }).annotations ?? {};
+    expect(alone.drinkTds).toBe(9.4);
+    expect('drinkEy' in alone).toBe(false);
     const cleared = mock.updateShot(id, { annotations: { drinkTds: null, drinkEy: null } });
     expect('drinkTds' in (cleared.annotations ?? {})).toBe(false);
     expect('drinkEy' in (cleared.annotations ?? {})).toBe(false);

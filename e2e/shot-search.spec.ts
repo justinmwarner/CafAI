@@ -1,12 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { CafaiMockWindow } from '../mock/browser.ts';
 import { TID } from '../src/ui/testIds.ts';
-import { openApp, pullShot, saveApiKey, sendChat } from './helpers.ts';
+import { decaidRequests, openApp, pullShot, pullShotOnMachine, saveApiKey, sendChat } from './helpers.ts';
 
 /**
  * D65: while CafAI asks Decaid for a just-finished shot (six tries over about
  * 15 s), the chat says so with a progress bar, updated on each try, until the
  * shot card or the warning takes its place. Retry searches again, visibly.
+ * A cleaning profile's run is no shot, and CafAI looks for none (D-FIX-1).
  */
 
 const SEARCH = 'Looking for that shot in Decaid…';
@@ -81,4 +82,47 @@ test('shows the search again on Retry after the machine dropped mid-shot', async
 
   await page.getByTestId(TID.retryButton).click();
   await expect(search).toBeVisible({ timeout: 10_000 });
+});
+
+test('a cleaning profile run is no shot: no search, no warning, no banner, no card', async ({ page }) => {
+  await loadFirstVersion(page);
+  // The weekly clean (Settings > Machine care): Decent's Forward Flush x5, loaded and run in streamline, behind
+  // CafAI's back. Decaid gives the run a shot id and keeps no record of it, and so does the mock (D191).
+  await page.evaluate(() => {
+    const state = (window as CafaiMockWindow).__CAFAI_MOCK__!.state;
+    const { profile } = state.getWorkflow();
+    state.updateWorkflow({ profile: { ...profile, title: 'Cleaning/Forward Flush x5', beverage_type: 'cleaning' } });
+  });
+  const ended = page.evaluate(
+    () =>
+      new Promise<{ shotId: string | null; at: number }>((resolve) => {
+        const state = (window as CafaiMockWindow).__CAFAI_MOCK__!.state;
+        let shotId: string | null = null;
+        const stop = state.on('shotState', (event) => {
+          shotId ??= event.shotId;
+          if (event.state !== 'finished') return;
+          stop();
+          resolve({ shotId, at: state.clock.now() });
+        });
+      }),
+  );
+  await pullShotOnMachine(page);
+  const run = await ended;
+  expect(run.shotId, 'Decaid gives the run a shot id').toBeTruthy();
+  expect(await page.evaluate((id) => (window as CafaiMockWindow).__CAFAI_MOCK__!.state.getShotIds().includes(id), run.shotId!)).toBe(false);
+
+  // CafAI asks Decaid which profile ran as the run ends...
+  await expect
+    .poll(async () => (await decaidRequests(page)).some((request) => request.method === 'GET' && request.path === '/api/v1/workflow' && request.at >= run.at))
+    .toBe(true);
+  // ...and the Shot view the run took gives the screen back by itself, with no shot to wait for, while the
+  // old search (about 15 s) would still be under way.
+  await expect(page).toHaveURL(/#\/$/, { timeout: 20_000 });
+  await expect(page.getByTestId(TID.chat)).toBeVisible();
+  const looked = (await decaidRequests(page)).filter((request) => request.method === 'GET' && request.path === `/api/v1/shots/${run.shotId}`);
+  expect(looked, 'CafAI never looked for the run in Decaid').toEqual([]);
+  await expect(page.getByText(SEARCH)).toHaveCount(0);
+  await expect(page.getByText(/Decaid has not saved it|Decaid has no record of it|Pick a starting profile first/)).toHaveCount(0);
+  await expect(page.getByTestId(TID.shotCard)).toHaveCount(0);
+  await expect(page.getByText('Decaid has not saved that shot yet.')).toHaveCount(0);
 });
