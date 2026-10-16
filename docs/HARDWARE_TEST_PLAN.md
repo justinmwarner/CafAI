@@ -554,7 +554,11 @@ minutes, and put every setting back after.
    every day, After waking: Stay awake for 30 min. Expected: within 30
    seconds of that minute the DE1 wakes and heats. Record what CafAI's top
    bar and the stats card show while it does, and how long it takes to be
-   ready.
+   ready. Also save `/api/v1/machine/state` every few seconds while it
+   warms: Decaid's simulator wakes a machine as `schedIdle`, and CafAI shows
+   Heating only for `idle` and `preparingForShot`, so a DE1 that warms in
+   `schedIdle` would read "Ready" with a cold group (the simulator pre-run
+   of 2026-10-16).
 4. **The window.** Still at 5 minutes, leave it alone after that wake.
    Expected: Settings says "A wake time keeps the machine awake until …",
    the DE1 stays awake past 5 minutes, and sleeps within 5 minutes of the
@@ -733,7 +737,7 @@ laptop on the same network for steps 4 and 5. Put any setting back after.
 | 14 | 7 | Flush with the video open keeps Care; without it, the flush view and Go back to Machine care | | |
 | 15 | 1 | Sleep when idle and the wake times as Decaid's own page has them | | |
 | 15 | 2 | Asleep about 5 min after the last use; how long it took | | |
-| 15 | 3 | Woken within 30 s of the minute; what the top bar and stats card show; time to ready | | |
+| 15 | 3 | Woken within 30 s of the minute; what the top bar and stats card show; time to ready; the state and substate while it warms (`schedIdle`?) | | |
 | 15 | 4 | Kept awake through the window, asleep within 5 min of its end | | |
 | 15 | 5 | Off in CafAI: Decaid's switch on, Sleep 0, the wake time listed | | |
 | 15 | 6 | Screen off: does the DE1 still wake? | | |
