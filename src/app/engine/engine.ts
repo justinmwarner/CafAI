@@ -29,7 +29,7 @@
  * - A run that never poured is no shot either: stopped in preheat, Decaid
  *   aborts it and keeps no record, so CafAI looks for none; stopped with the
  *   pour's first frame, its record holds no pour. No card, no taste question,
- *   nothing to compare the next shot with; one quiet line says so (D-SIMA-1).
+ *   nothing to compare the next shot with; one quiet line says so (D204).
  * - A bag whose details were saved is added to Decaid's bean library in the
  *   background, and every load names its batch (D102).
  * - A new bag opens with "Which coffee is it?": a batch from Decaid's bean
@@ -274,11 +274,11 @@ interface ShotRun {
   started: ShotStart | null;
   /** runSaved()'s answer, asked as the run ended (D193). */
   saved: Promise<boolean | null>;
-  /** Decaid aborted the run before its pour began, and so keeps no record of it (D-SIMA-1). */
+  /** Decaid aborted the run before its pour began, and so keeps no record of it (D204). */
   aborted: boolean;
-  /** Decaid tore the run down mid-shot because the machine disconnected (D-SIMA-2). */
+  /** Decaid tore the run down mid-shot because the machine disconnected (D205). */
   disconnected: boolean;
-  /** Whether the machine cut the shot off: settled at its first notice, and every notice of it says the same (D-SIMA-2). */
+  /** Whether the machine cut the shot off: settled at its first notice, and every notice of it says the same (D205). */
   cutOff: boolean | null;
 }
 
@@ -334,11 +334,11 @@ const STREAM_EMIT_MS = 50;
 /** The banner while a finished shot has no record in Decaid (Retry looks again). */
 const SHOT_NOT_SAVED = 'Decaid has not saved that shot yet.';
 const SEARCH_NOTICE = 'Looking for that shot in Decaid…';
-/** The chat's warning when a shot has no record in Decaid, by how the shot ended (D-SIMA-2). */
+/** The chat's warning when a shot has no record in Decaid, by how the shot ended (D205). */
 const CUT_OFF_NOTICE =
   'The machine disconnected during that shot, and Decaid has no record of it. When the machine is back, tap Retry to look again, or pull another shot.';
 const NOT_SAVED_NOTICE = 'The shot finished, but Decaid has not saved it. Tap Retry to look again, or pull another shot.';
-/** The one line for a run that stopped before it poured (D-SIMA-1): no shot to taste, none to compare with. */
+/** The one line for a run that stopped before it poured (D204): no shot to taste, none to compare with. */
 const NEVER_POURED = 'That shot stopped before it poured: nothing to taste.';
 /**
  * Decaid answers the barrier 500 ms after the machine acknowledged the
@@ -594,8 +594,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   /**
    * What Decaid's shotState decisions said of its newest run, by the run's
    * shot id: that it aborted the run before the pour began, and so keeps no
-   * record of it (D-SIMA-1), or tore it down because the machine disconnected
-   * (D-SIMA-2). The frame that says so comes before the one that ends the
+   * record of it (D204), or tore it down because the machine disconnected
+   * (D205). The frame that says so comes before the one that ends the
    * run, so it is known by the time the run's end is handled.
    */
   let runDecisions: { shotId: string; aborted: boolean; disconnected: boolean } | null = null;
@@ -2221,7 +2221,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     }
   }
 
-  /** The one quiet line for a run that never poured (D-SIMA-1). */
+  /** The one quiet line for a run that never poured (D204). */
   async function sayNeverPoured(s: Session): Promise<void> {
     addMessage('system', [noticePart('info', NEVER_POURED)]);
     await persistConversation(s);
@@ -2240,7 +2240,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     // record of it, so there is nothing to look for and nothing to say, and a problem on the banner stays (D193).
     if ((await run.saved) === false) return;
     // Stopped before the pour began: Decaid aborted the run and keeps no record of it, so there is nothing to look
-    // for, and a problem on the banner stays (D-SIMA-1).
+    // for, and a problem on the banner stays (D204).
     if (run.aborted) return sayNeverPoured(s);
     const current = activeVersion(s);
     if (!current) {
@@ -2271,7 +2271,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       // Typically the machine dropped mid-shot, or Decaid is slow to save the
       // record, so Retry looks for it again. How the shot ended is settled at
       // its first notice, and Retry's say the same, whether the machine is
-      // back by then or not (D-SIMA-2): cut off when Decaid tore the run down
+      // back by then or not (D205): cut off when Decaid tore the run down
       // as the machine dropped (Decaid 0.8.8 then saves nothing), or when the
       // machine is still away after the search (that frame can be missed).
       run.cutOff ??= run.disconnected || !telemetry.getState().machineConnected;
@@ -2284,7 +2284,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (iterations.some((i) => i.shotId === record.id)) return;
     if (!poured(record)) {
       // Stopped with the pour's first frame: Decaid kept a record with no pour in it. No card, no taste question, and
-      // the pending iteration and the next card's comparison stay with the shot before (D-SIMA-1). Another shot's hunt
+      // the pending iteration and the next card's comparison stay with the shot before (D204). Another shot's hunt
       // comes back to the banner; this run's own, ended by its Retry, does not.
       if (hunt && hunt.run !== run && standing === null) standing = hunt;
       await sayNeverPoured(s);
@@ -3100,7 +3100,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       let shotFrame = telemetry.getState().shotState;
       unsubscribeTelemetry = telemetry.subscribe(() => {
         const now = telemetry.getState();
-        // Each new shotState frame: what Decaid decided of a run (D-SIMA-1, D-SIMA-2).
+        // Each new shotState frame: what Decaid decided of a run (D204, D205).
         if (now.shotState !== shotFrame) {
           shotFrame = now.shotState;
           noteDecision(shotFrame);

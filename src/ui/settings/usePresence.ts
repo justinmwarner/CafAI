@@ -22,7 +22,7 @@
  * The keep-awake window ("A wake time keeps the machine awake until 07:30.")
  * is Decaid's keepAwakeUntil, which it works out afresh from the wake times
  * on every read and which no write's answer carries: after each change that
- * Decaid took, the settings are read again for it (D-SIMC-2).
+ * Decaid took, the settings are read again for it (D209).
  */
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -124,7 +124,7 @@ export function usePresence(): PresenceView {
   }, [decaid, reads]);
 
   /**
-   * Decaid's keep-awake window after a change it took (D-SIMC-2). No write's
+   * Decaid's keep-awake window after a change it took (D209). No write's
    * answer carries keepAwakeUntil (presence_handler.dart:98-101, 182, 267
    * and 294 at aab5f93), and Decaid works it out afresh from the wake times
    * on every read, so the settings are read again for it. Only the window is

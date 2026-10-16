@@ -23,8 +23,8 @@ import {
  * is the barista's choice (5.6, D99); the rating scale is asked, not assumed
  * (5.14, D101); About says which Decaid runs and what it sent that CafAI
  * did not expect (4.6, D96); and a Decaid that goes away is said to be out
- * of reach, with the commands that need it held until it is back (D-SIMB-1,
- * D-SIMB-2). Each is checked against what the mock Decaid received and holds.
+ * of reach, with the commands that need it held until it is back (D206,
+ * D207). Each is checked against what the mock Decaid received and holds.
  */
 
 /** The mock answers GET /api/v1/info as a 0.8.6 field build. */

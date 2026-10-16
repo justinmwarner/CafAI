@@ -2432,7 +2432,7 @@ The wake schedule item of D151, built on branch `feat/wake-schedule`.
   (`src/ui/settings/SleepWakeSection.tsx`, its reads and writes in
   `usePresence.ts`) reads `GET /api/v1/presence/settings` each time
   Settings opens, and again after each change for the keep-awake window
-  (D-SIMC-2), and writes Decaid's presence routes at once, with no Save
+  (D209), and writes Decaid's presence routes at once, with no Save
   (`src/api/client.ts`). CafAI keeps no copy: Decaid stores them and acts on
   them (presence_controller.dart at aab5f93), as for its own Sleep & Wake
   page and streamline's Presence page. No machine is needed to change them,
@@ -3064,7 +3064,7 @@ fixes is a choice.
   widest, Graph and the gaps; a 390 px phone's card has 332) puts the key on
   a line of its own under the curves, its name with the card's width; a
   wider one keeps it in the legend as before, while its whole name fits
-  there (D-SIMC-1). The card measures itself, and the rule counts Graph
+  there (D208). The card measures itself, and the rule counts Graph
   whether the card shows it or not, so a card's key keeps its place as Graph
   moves on to the newest card. Measured with Playwright at 390, 360 and
   320 px (`e2e/shot-overlay.spec.ts`): the curves keep 155, 125 and 85 px,
@@ -3076,7 +3076,7 @@ fixes is a choice.
   nothing. The line costs a guided card about 21 px of height on a phone,
   where height is cheaper than width; a tablet's card, which has the room
   beside, does not grow, but for a coffee's name too long for the legend
-  (D-SIMC-1).
+  (D208).
 
 ### Engine fixes from the review (2026-10-15)
 
@@ -3164,7 +3164,7 @@ What the pre-run of docs/HARDWARE_TEST_PLAN.md on Decaid 0.8.8's simulator
 day: five defects in CafAI, below, and a step of the plan that expected the
 wrong thing (its section 19.6).
 
-- **D-SIMA-1. A run that never poured is no shot: no card, no taste
+- **D204. A run that never poured is no shot: no card, no taste
   question, nothing to compare with, and one quiet line.** On the
   simulator, Espresso then Stop within 0.7 s made a card, "Shot 0.0 s",
   asked "How did it taste?", and became the next card's "previous shot".
@@ -3211,7 +3211,7 @@ wrong thing (its section 19.6).
   nothing. A line rather than silence, unlike a cleaning run: the barista
   stopped a shot, on purpose or not, and one line says CafAI saw it and
   that it does not count, and gives the screen back with it.
-- **D-SIMA-2. A lost shot's warning says how the shot ended, once, and
+- **D205. A lost shot's warning says how the shot ended, once, and
   every Retry says the same.** The warning for a finished shot with no
   record in Decaid chose its words by whether the machine was connected
   after each search. On the simulator MockDe1 disconnected 9 s into a pour:
@@ -3226,7 +3226,7 @@ wrong thing (its section 19.6).
   ended does not change when the machine comes back. Left: on Decaid 0.8.8
   that teardown saves nothing, so a Retry after a disconnect cannot find
   the shot, whatever the warning advises.
-- **D-SIMB-1. Decaid out of reach is its devices socket down 2.5 s,
+- **D206. Decaid out of reach is its devices socket down 2.5 s,
   whatever the machine was.** The telemetry store sets `unreachable`
   (`src/api/telemetry.ts`) once Decaid's devices socket has not been open
   for 2.5 s, from the start or since it closed; a socket back sooner was a
@@ -3252,7 +3252,7 @@ wrong thing (its section 19.6).
   last readings rather than blanking the card leaves everything else that
   reads the link (the engine, the care counts, the drinks' views) as it
   was through a short outage, and the alert explains the card.
-- **D-SIMB-2. While Decaid is out of reach every command waits but
+- **D207. While Decaid is out of reach every command waits but
   Stop.** The starts, Sleep or Wake, Tare and the Shot view's Next step
   are held in their places (`src/ui/machine/commands.ts`, `ShotView.tsx`);
   the row's starts and Tare tell a screen reader "Can't reach Decaid.", and
@@ -3265,7 +3265,7 @@ wrong thing (its section 19.6).
   why). The alert keeps its plain words and makes no claim about Stop.
   Why: a start, Sleep or Tare sent into an outage could only fail, after a
   tap on a button that looked live; Stop is the one command worth the try.
-- **D-SIMC-1. The third key takes a line under the curves whenever its
+- **D208. The third key takes a line under the curves whenever its
   whole name is wider than the legend's 9.5em.** On a tablet a bag's first
   card keyed the band "Last shot of Huila Pi…": the name needs 182 px and
   had D180's 124 (9.5em of 13 px), with no tooltip, though the question
@@ -3295,7 +3295,7 @@ wrong thing (its section 19.6).
   only a bag's first card, the one that names another coffee, pays for it.
   Measured without a width to keep to, the name measures the same wherever
   the key sits, so the key cannot swing between its places.
-- **D-SIMC-2. Sleep and wake's window line reads Decaid again after every
+- **D209. Sleep and wake's window line reads Decaid again after every
   change.** "A wake time keeps the machine awake until 09:16." stayed for
   over 10 s after the wake time was deleted, Sleep when idle off and then on
   again at 30 minutes, though Decaid said `keepAwakeUntil: null`; it went

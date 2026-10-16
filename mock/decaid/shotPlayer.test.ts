@@ -289,7 +289,7 @@ describe('createShotSimulation', () => {
     return { simulation, frames };
   }
 
-  it('a stop after the last preheat frame, before the first pour frame, aborts too: the sequencer is still preheating (D-SIMA-1)', () => {
+  it('a stop after the last preheat frame, before the first pour frame, aborts too: the sequencer is still preheating (D204)', () => {
     const { simulation, frames } = stoppedAt(10);
     expect(frames.slice(0, 10).every((frame) => frame.machine.state.substate === 'preparingForShot')).toBe(true);
     expect(simulation.aborted).toBe(true);
@@ -297,7 +297,7 @@ describe('createShotSimulation', () => {
     expect(events(frames).some((e) => e.state === 'pouring' || e.state === 'finished')).toBe(false);
   });
 
-  it("a stop right after the pour's first frame keeps a record with one frame of pour, which never poured (D-SIMA-1)", () => {
+  it("a stop right after the pour's first frame keeps a record with one frame of pour, which never poured (D204)", () => {
     const { simulation, frames } = stoppedAt(11);
     expect(simulation.aborted).toBe(false);
     expect(simulation.stopReason).toBe('apiStop');
@@ -557,7 +557,7 @@ describe('createShotPlayer', () => {
     expect(shotStates.at(-1)!.state).toBe('idle');
   });
 
-  it('idle on the last preheat frame aborts and records nothing; idle on the first pour frame keeps a record that never poured (D-SIMA-1)', async () => {
+  it('idle on the last preheat frame aborts and records nothing; idle on the first pour frame keeps a record that never poured (D204)', async () => {
     const { state, player, shotStates } = setup();
     let preheat = 0;
     const stopAfterPreheat = state.on('machine', (frame) => {

@@ -106,7 +106,7 @@ let lastProposalContext: ProposalContext | null = null;
 
 /** The samples of a shot that poured: every record holds them unless a test says otherwise (the summary is the stub's). */
 const POURED: ShotSnapshot[] = syntheticShotRecord({ endS: 12 }).measurements;
-/** A real DE1's run stopped with the pour's first frame: four frames of preheat, one of preinfusion (D-SIMA-1). */
+/** A real DE1's run stopped with the pour's first frame: four frames of preheat, one of preinfusion (D204). */
 const FIRST_FRAME_ONLY: ShotSnapshot[] = (shot09 as unknown as ShotRecord).measurements;
 /** A run Decaid kept with preheat alone. */
 const PREHEAT_ONLY: ShotSnapshot[] = POURED.filter((sample) => sample.machine.state.substate === 'preparingForShot');
@@ -230,7 +230,7 @@ const machine = {
   missingShots: new Set<string>(),
   /** Shots Decaid saves late: how many more GETs answer 404. */
   shotMisses: new Map<string, number>(),
-  /** The samples a shot's record holds, when not a pour's (D-SIMA-1). */
+  /** The samples a shot's record holds, when not a pour's (D204). */
   samples: new Map<string, ShotSnapshot[]>(),
   /** The profile as the last workflow PUT answered it (a copy, as over the wire). */
   returned: null as WireProfile | null,
@@ -2654,7 +2654,7 @@ describe('coach engine', () => {
   });
 
   // -------------------------------------------------------------------------
-  // D-SIMA-1: a run that never poured is no shot. D-SIMA-2: a shot's notices keep how it ended.
+  // D204: a run that never poured is no shot. D205: a shot's notices keep how it ended.
   // -------------------------------------------------------------------------
 
   /** A shotState frame as Decaid sends it for the run `shotId`; null names none, as the idle frame after a run. */
@@ -2677,7 +2677,7 @@ describe('coach engine', () => {
   const NOT_SAVED = 'The shot finished, but Decaid has not saved it. Tap Retry to look again, or pull another shot.';
   const SHOT_NOT_SAVED = 'Decaid has not saved that shot yet.';
 
-  describe('a run that never poured (D-SIMA-1)', () => {
+  describe('a run that never poured (D204)', () => {
     /**
      * Espresso, then Stop in preheat, as Decaid 0.8.8 reports it: preheating,
      * its abort ("Shot aborted during preheat, before the pour began"), the
@@ -2818,7 +2818,7 @@ describe('coach engine', () => {
     });
   });
 
-  describe("a lost shot's notices keep how it ended, Retry's too (D-SIMA-2)", () => {
+  describe("a lost shot's notices keep how it ended, Retry's too (D205)", () => {
     /** Every warning the chat holds about a lost shot. */
     const lostShotWarnings = () => notices().filter((p) => p.text === CUT_OFF || p.text === NOT_SAVED).map((p) => p.text);
 

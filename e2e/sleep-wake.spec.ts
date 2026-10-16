@@ -8,7 +8,7 @@ import { decaidRequests, goTo, openApp } from './helpers.ts';
  * Settings > Sleep and wake (D157-D160), against the mock Decaid's presence
  * routes (mock/decaid/presence.ts), on the tablets and the phones: every
  * change reaches Decaid at once with only what changed, the keep-awake
- * window's line follows Decaid after each one (D-SIMC-2), and the dialog's
+ * window's line follows Decaid after each one (D209), and the dialog's
  * seven days fit a phone.
  */
 
@@ -130,7 +130,7 @@ test('a wake time set elsewhere changes, turns off and goes, each at once', asyn
   ]);
 });
 
-test("the keep-awake window's line follows Decaid after every change: the wake time changed and deleted, Sleep when idle off and on again (D-SIMC-2)", async ({ page }) => {
+test("the keep-awake window's line follows Decaid after every change: the wake time changed and deleted, Sleep when idle off and on again (D209)", async ({ page }) => {
   // The simulator's run (hardware test plan 15.3-15.7): Thursday 15 October 2026, 08:50, a wake time at
   // 08:46 every day keeping the machine awake for 30 minutes, so Decaid holds it awake until 09:16.
   await page.clock.setFixedTime(new Date(2026, 9, 15, 8, 50));

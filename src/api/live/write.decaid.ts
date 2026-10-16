@@ -241,7 +241,7 @@ describeDecaid('write', ({ url }) => {
     expect(live.problems()).toEqual([]);
   });
 
-  it("sleep and wake: a wake schedule's window running now is keepAwakeUntil, and goes with the schedule's delete (D-SIMC-2)", async () => {
+  it("sleep and wake: a wake schedule's window running now is keepAwakeUntil, and goes with the schedule's delete (D209)", async () => {
     const client = live.client;
     // Decaid holds a window only while a machine is connected (presence_controller.dart:58-69 at aab5f93).
     if (!links.machine) assert.fail('The simulated machine is not connected.');

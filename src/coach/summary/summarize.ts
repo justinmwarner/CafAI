@@ -143,7 +143,7 @@ export function pourSeconds(rows: readonly ShotRow[]): number | null {
 }
 
 /**
- * Whether a shot record holds a pour (D-SIMA-1): two samples of it or more,
+ * Whether a shot record holds a pour (D204): two samples of it or more,
  * so time passed between its first sample after preheat and its last one
  * before the pour is over. A record with no samples, with preheat alone, or
  * with one sample of pour (the stop came with the pour's first frame) never

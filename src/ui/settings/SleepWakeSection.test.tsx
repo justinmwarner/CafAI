@@ -138,7 +138,7 @@ describe('Sleep when idle', () => {
   });
 });
 
-describe("the keep-awake window follows Decaid after every change (D-SIMC-2)", () => {
+describe("the keep-awake window follows Decaid after every change (D209)", () => {
   // Thursday 15 October 2026, 07:00: the 06:30 weekday wake keeps the machine awake until 07:30.
   const DURING = new Date(2026, 9, 15, 7, 0);
   const UNTIL_0730 = '2026-10-15T07:30:00.000';
@@ -325,7 +325,7 @@ describe('the wake times', () => {
     await user.click(screen.getByTestId(TID.wakeSwitch('w1')));
     await waitFor(() => expect(screen.getByTestId(TID.wakeSwitch('w1'))).toBeChecked());
     expect(calls('updatePresenceSettings')).toEqual([[{ userPresenceEnabled: true, sleepTimeoutMinutes: 0 }]]);
-    // Then the keep-awake window is read again (D-SIMC-2).
+    // Then the keep-awake window is read again (D209).
     expect(services.decaid.calls.map((call) => call.method).slice(-3)).toEqual(['updatePresenceSettings', 'updateWakeSchedule', 'getPresenceSettings']);
     // The machine still does not sleep by itself.
     expect(sleepSwitch()).not.toBeChecked();

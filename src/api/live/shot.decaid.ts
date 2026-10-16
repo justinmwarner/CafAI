@@ -4,7 +4,7 @@
  * sequence, the shot record read and summarised by CafAI's summariser, notes
  * and a rating written and read back, a TDS and its EY written, read back and
  * cleared, then idle; then espresso and idle at once, a run Decaid aborts
- * before its pour (D-SIMA-1). Every reply and every frame of the shot is checked against the
+ * before its pour (D204). Every reply and every frame of the shot is checked against the
  * pinned spec and for drift. A simulator only (D104): it refuses to run unless
  * Decaid simulates the machine and no real machine is connected, because
  * espresso moves water. `npm test` never runs it.
@@ -205,7 +205,7 @@ describeDecaid('shot', ({ url, require }) => {
     expect(live.problems()).toEqual([]);
   });
 
-  it('espresso, then idle at once: Decaid aborts the run before its pour and keeps no record, or keeps one CafAI reads as it poured (D-SIMA-1)', async () => {
+  it('espresso, then idle at once: Decaid aborts the run before its pour and keeps no record, or keeps one CafAI reads as it poured (D204)', async () => {
     const shotState = watches.find((watch) => watch.path === SHOT_STATE);
     if (!shotState) throw new Error('shotState is not being listened to.');
     const client = live.client;

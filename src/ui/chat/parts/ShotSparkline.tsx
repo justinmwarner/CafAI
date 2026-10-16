@@ -57,7 +57,7 @@ export const NAME_BESIDE_EM = 9.5;
 /**
  * Whether the third key takes a line under the curves: on a card too narrow
  * to keep them 120 px beside the widest legend (D192), and on any card when
- * its whole name, set on one line, is wider than NAME_BESIDE_EM (D-SIMC-1),
+ * its whole name, set on one line, is wider than NAME_BESIDE_EM (D208),
  * so beside them the name is never cut. `nameWidth` is that natural width
  * and `fontSize` the name's, both in CSS px. Before a measurement, and in
  * jsdom, which has no layout, the card's width is 0: the key stays beside.

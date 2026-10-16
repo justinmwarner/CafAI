@@ -258,7 +258,7 @@ describe('summarizeShot: the time is the pour, the yield what is in the cup', ()
   });
 });
 
-describe('poured: a record that holds a pour, or a run that never poured (D-SIMA-1)', () => {
+describe('poured: a record that holds a pour, or a run that never poured (D204)', () => {
   /** A record's preheat and the first `pourSamples` samples after it, as Decaid keeps a run stopped then. */
   function stoppedAfter(record: ShotRecord, pourSamples: number): ShotRecord {
     const preheat = record.measurements.findIndex((m) => m.machine.state.substate !== 'preparingForShot');

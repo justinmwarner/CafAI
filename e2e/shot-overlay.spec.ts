@@ -12,7 +12,7 @@ import { decaidRequests, goTo, openApp, pullShot, saveApiKey, sendChat } from '.
  * upright phone the card's key for the shot under takes a line under the
  * curves, so they keep their room down to a 320 px screen (D192); on any
  * card, so does a key whose name is wider than the legend's 9.5em, so the
- * other coffee's name reads whole (D-SIMC-1).
+ * other coffee's name reads whole (D208).
  *
  * mockSpeed 10 plays a scripted shot in a few seconds; the live check slows
  * the mock to real time for a moment, so the shot is surely still pulling.
@@ -63,7 +63,7 @@ function nameWidths(name: Locator): Promise<{ natural: number; cap: number }> {
   }, NAME_BESIDE_EM);
 }
 
-/** Where the key goes (D192, D-SIMC-1): under the curves on a narrow card, or when its whole name is wider than 9.5em. */
+/** Where the key goes (D192, D208): under the curves on a narrow card, or when its whole name is wider than 9.5em. */
 async function expectedPlace(card: Locator): Promise<'under' | 'beside'> {
   const { natural, cap } = await nameWidths(card.getByTestId(TID.shotGuideKey).locator('.MuiTypography-root'));
   return (await cardWidth(card)) < KEY_BESIDE_FROM || natural > cap ? 'under' : 'beside';

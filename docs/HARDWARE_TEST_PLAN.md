@@ -223,17 +223,17 @@ credits. Nothing to judge on the spot: send the files.
    about 15 s, then a warning that the machine disconnected during that
    shot, with Retry. Switch the machine on and tap Retry: the progress shows
    again, and the warning after it still says the machine disconnected
-   (D-SIMA-2). Note whether Decaid saved the shot (the newest entry in
+   (D205). Note whether Decaid saved the shot (the newest entry in
    `/api/v1/shots`): the simulator's Decaid saves none for a shot cut off by
    a disconnect.
 2. Optional: restart Decaid while CafAI is open and confirm a grind move
    meanwhile. Expected: within about 3 s "Can't reach Decaid. Trying
    again…", with the starts, Sleep or Wake and Tare greyed until Decaid is
-   back, and Stop still live while a drink runs (D-SIMB-1, D-SIMB-2). Once
+   back, and Stop still live while a drink runs (D206, D207). Once
    Decaid is back the alert goes, and `/api/v1/workflow` ->
    `context.grinderSetting` has the new setting within about 30 s.
 3. Tap Espresso, then Stop (it takes Espresso's place in the top bar)
-   within half a second (still preheating). Expected (D-SIMA-1): no
+   within half a second (still preheating). Expected (D204): no
    "Looking for that shot in Decaid…" and no warning; one line in the chat,
    "That shot stopped before it poured: nothing to taste.", and the coach
    back at once; no card and no "How did it taste?", and the next shot's

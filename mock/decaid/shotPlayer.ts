@@ -421,7 +421,7 @@ export function createShotSimulation(input: ShotSimulationInput): ShotSimulation
    * aborts the run, and its state manager cleans up without saving it
    * (shot_sequencer.dart:399-408, de1_state_manager.dart:854-864 at aab5f93).
    * So also for a stop after the last preheat frame, before the first pour
-   * frame (D-SIMA-1).
+   * frame (D204).
    */
   function abortBeforePour(atMs: number, reason: string): SimFrame {
     flow = 0;
@@ -466,7 +466,7 @@ export function createShotSimulation(input: ShotSimulationInput): ShotSimulation
     if (stopRequest === 'apiStop') {
       // REST idle stops the machine; the sequencer sees an idle sample. A
       // stop right after the pour's first frame keeps a record with one
-      // frame of pour in it, as Decaid does (D-SIMA-1).
+      // frame of pour in it, as Decaid does (D204).
       physics(null);
       const temperatures = temperaturesFor(null);
       const machine = snapshot(atMs, 'idle', 'idle', lastTargets, Math.min(stepIndex, steps.length - 1), temperatures.targetMix, temperatures.targetGroup);
