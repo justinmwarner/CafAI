@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseDecaidTimestamp } from '../../src/api/time.ts';
 import type { MachineSnapshot, ShotStateEvent } from '../../src/api/types.ts';
+import { poured } from '../../src/coach/summary/summarize.ts';
 import blooming from '../../src/coach/templates/source/Blooming_espresso.json';
 import dflow from '../../src/coach/templates/source/D-Flow____default.json';
 import gentle from '../../src/coach/templates/source/Gentle_and_sweet1.json';
@@ -274,6 +275,44 @@ describe('createShotSimulation', () => {
     expect(events(frames).some((e) => e.state === 'finished')).toBe(false);
   });
 
+  /** A Blooming shot asked to stop before its frame `stopAt` (frames 0-9 are preheat). */
+  function stoppedAt(stopAt: number): { simulation: ReturnType<typeof createShotSimulation>; frames: SimFrame[] } {
+    const simulation = createShotSimulation(input(blooming));
+    const frames: SimFrame[] = [];
+    for (let i = 0; i < 400; i += 1) {
+      if (i === stopAt) simulation.requestStop('apiStop');
+      const frame = simulation.next();
+      if (!frame) break;
+      frames.push(frame);
+      if (frame.done) break;
+    }
+    return { simulation, frames };
+  }
+
+  it('a stop after the last preheat frame, before the first pour frame, aborts too: the sequencer is still preheating (D-SIMA-1)', () => {
+    const { simulation, frames } = stoppedAt(10);
+    expect(frames.slice(0, 10).every((frame) => frame.machine.state.substate === 'preparingForShot')).toBe(true);
+    expect(simulation.aborted).toBe(true);
+    expect(events(frames).find((e) => e.decision?.kind === 'abort')).toMatchObject({ state: 'preheating', decision: { reason: 'apiStop' } });
+    expect(events(frames).some((e) => e.state === 'pouring' || e.state === 'finished')).toBe(false);
+  });
+
+  it("a stop right after the pour's first frame keeps a record with one frame of pour, which never poured (D-SIMA-1)", () => {
+    const { simulation, frames } = stoppedAt(11);
+    expect(simulation.aborted).toBe(false);
+    expect(simulation.stopReason).toBe('apiStop');
+    // Nothing in the cup yet, so no stopping phase: finished at once.
+    expect(events(frames).filter((e) => e.event === 'state').map((e) => e.state)).toEqual(['preheating', 'pouring', 'finished']);
+    const measurements = recorded(frames).map((frame) => ({ machine: frame.machine, scale: frame.scale, volume: frame.volume }));
+    expect(measurements.map((m) => m.machine.state.substate)).toEqual([...Array<string>(10).fill('preparingForShot'), 'preinfusion']);
+    expect(poured({ measurements })).toBe(false);
+
+    // A frame later, the record holds a pour: a shot stopped early is a shot.
+    const later = recorded(stoppedAt(12).frames).map((frame) => ({ machine: frame.machine, scale: frame.scale, volume: frame.volume }));
+    expect(later).toHaveLength(12);
+    expect(poured({ measurements: later })).toBe(true);
+  });
+
   it('a stop during the pour is an apiStop', () => {
     const simulation = createShotSimulation(input(londonium));
     const frames: SimFrame[] = [];
@@ -516,6 +555,33 @@ describe('createShotPlayer', () => {
     expect(state.getShotIds()).toEqual([]);
     expect(shotStates.some((e) => e.decision?.kind === 'abort')).toBe(true);
     expect(shotStates.at(-1)!.state).toBe('idle');
+  });
+
+  it('idle on the last preheat frame aborts and records nothing; idle on the first pour frame keeps a record that never poured (D-SIMA-1)', async () => {
+    const { state, player, shotStates } = setup();
+    let preheat = 0;
+    const stopAfterPreheat = state.on('machine', (frame) => {
+      if (player.activity === 'espresso' && frame.state.substate === 'preparingForShot' && (preheat += 1) === 10) player.command('idle');
+    });
+    player.start();
+    await vi.advanceTimersByTimeAsync(2000);
+    stopAfterPreheat();
+    expect(player.activity).toBeNull();
+    expect(state.getShotIds()).toEqual([]);
+    expect(shotStates.find((e) => e.decision?.kind === 'abort')).toMatchObject({ shotId: player.lastShotId, state: 'preheating' });
+
+    // The stop with the pour's first frame, as the simulator's run on 2026-10-16: Decaid keeps the record.
+    const stopOnPour = state.on('shotState', (event) => {
+      if (event.state === 'pouring' && event.event === 'state') player.command('idle');
+    });
+    player.start();
+    await vi.advanceTimersByTimeAsync(2000);
+    stopOnPour();
+    const record = state.getShot(player.lastShotId!);
+    expect(record.stopReason).toBe('apiStop');
+    expect(record.measurements.at(-1)!.machine.state.substate).toBe('preinfusion');
+    expect(record.measurements.filter((m) => m.machine.state.substate !== 'preparingForShot')).toHaveLength(1);
+    expect(poured(record)).toBe(false);
   });
 
   /** Seconds of data time the frames in `substate` of `state` cover (each frame is FRAME_MS). */

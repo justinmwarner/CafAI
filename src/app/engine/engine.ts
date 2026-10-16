@@ -26,6 +26,10 @@
  * - A run of a cleaning or calibration profile (the weekly clean's Forward
  *   Flush x5) is no shot: Decaid saves none, so CafAI neither looks for one
  *   nor says anything of it (D193).
+ * - A run that never poured is no shot either: stopped in preheat, Decaid
+ *   aborts it and keeps no record, so CafAI looks for none; stopped with the
+ *   pour's first frame, its record holds no pour. No card, no taste question,
+ *   nothing to compare the next shot with; one quiet line says so (D-SIMA-1).
  * - A bag whose details were saved is added to Decaid's bean library in the
  *   background, and every load names its batch (D102).
  * - A new bag opens with "Which coffee is it?": a batch from Decaid's bean
@@ -62,6 +66,7 @@ import {
 } from '../../coach/contract.ts';
 import { isTds, readingOf, roundTds, withTds } from '../../coach/extraction.ts';
 import { todayOf, writtenDate, type FreezerDates } from '../../coach/roastAge.ts';
+import { poured } from '../../coach/summary/summarize.ts';
 import { reportDrift } from '../../api/drift.ts';
 import { describeValue } from '../../api/frames.ts';
 import { grinderRequest, NO_GRINDER_LIBRARY } from '../../api/grinders.ts';
@@ -76,6 +81,7 @@ import {
   type EnjoymentScale,
   type ShotAnnotationsPatch,
   type ShotRecord,
+  type ShotStateEvent,
   type TelemetryStore,
   type WireProfile,
   type Workflow,
@@ -258,6 +264,33 @@ interface ShotStart {
   early: { versionId: string; status: LoadStatus; at: number } | null;
 }
 
+/**
+ * A run of the machine that ended, as handleShotFinished reads it. Its Retry
+ * looks again for the same object, so what was settled about the run holds
+ * for every notice of it.
+ */
+interface ShotRun {
+  shotId: string | null;
+  started: ShotStart | null;
+  /** runSaved()'s answer, asked as the run ended (D193). */
+  saved: Promise<boolean | null>;
+  /** Decaid aborted the run before its pour began, and so keeps no record of it (D-SIMA-1). */
+  aborted: boolean;
+  /** Decaid tore the run down mid-shot because the machine disconnected (D-SIMA-2). */
+  disconnected: boolean;
+  /** Whether the machine cut the shot off: settled at its first notice, and every notice of it says the same (D-SIMA-2). */
+  cutOff: boolean | null;
+}
+
+/** A problem that outlives other errors and chat turns: see `standing`. */
+interface Standing {
+  kind: 'load' | 'shot';
+  message: string;
+  retry: () => Promise<void>;
+  /** A lost shot's run, which its Retry looks for. */
+  run?: ShotRun;
+}
+
 /** What CafAI writes to a shot record's annotations (D61): notes and extras.cafai. */
 interface TasteNote {
   bagId: string;
@@ -301,6 +334,12 @@ const STREAM_EMIT_MS = 50;
 /** The banner while a finished shot has no record in Decaid (Retry looks again). */
 const SHOT_NOT_SAVED = 'Decaid has not saved that shot yet.';
 const SEARCH_NOTICE = 'Looking for that shot in Decaid…';
+/** The chat's warning when a shot has no record in Decaid, by how the shot ended (D-SIMA-2). */
+const CUT_OFF_NOTICE =
+  'The machine disconnected during that shot, and Decaid has no record of it. When the machine is back, tap Retry to look again, or pull another shot.';
+const NOT_SAVED_NOTICE = 'The shot finished, but Decaid has not saved it. Tap Retry to look again, or pull another shot.';
+/** The one line for a run that stopped before it poured (D-SIMA-1): no shot to taste, none to compare with. */
+const NEVER_POURED = 'That shot stopped before it poured: nothing to taste.';
 /**
  * Decaid answers the barrier 500 ms after the machine acknowledged the
  * profile's last write (its profileDownloadGuard), so a shot that started in
@@ -523,10 +562,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
    * emit() puts it on the banner, with its own Retry, whenever nothing else
    * is there.
    */
-  let standing: { kind: 'load' | 'shot'; message: string; retry: () => Promise<void> } | null = null;
+  let standing: Standing | null = null;
 
   /** Set (or clear) the standing problem; the banner follows when it shows the old one. */
-  function replaceStanding(next: typeof standing): void {
+  function replaceStanding(next: Standing | null): void {
     if (standing && state.error === standing.message) setError(null);
     standing = next;
   }
@@ -552,6 +591,14 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   let barrierSupported = true;
   /** The shot being pulled, as it started. */
   let shotStart: ShotStart | null = null;
+  /**
+   * What Decaid's shotState decisions said of its newest run, by the run's
+   * shot id: that it aborted the run before the pour began, and so keeps no
+   * record of it (D-SIMA-1), or tore it down because the machine disconnected
+   * (D-SIMA-2). The frame that says so comes before the one that ends the
+   * run, so it is known by the time the run's end is handled.
+   */
+  let runDecisions: { shotId: string; aborted: boolean; disconnected: boolean } | null = null;
   /**
    * The grinder linked in Settings, as Decaid's grinder library last
    * described it (D62), with the id it was read for: info is null when
@@ -2083,6 +2130,29 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     return start;
   }
 
+  /**
+   * A shotState frame: keep what its decision says of the run it names.
+   * Decaid aborts a run stopped before the pour began and cleans it up
+   * without saving it (shot_sequencer.dart:399-408, de1_state_manager.dart:
+   * 854-864 at aab5f93), and tears a run down with a terminal decision when
+   * the machine disconnects mid-shot (de1_state_manager.dart:965-985).
+   */
+  function noteDecision(frame: ShotStateEvent | null): void {
+    const decision = frame?.decision ?? null;
+    if (!frame?.shotId || !decision || (decision.kind !== 'abort' && decision.kind !== 'terminal')) return;
+    const decided =
+      runDecisions !== null && runDecisions.shotId === frame.shotId ? runDecisions : { shotId: frame.shotId, aborted: false, disconnected: false };
+    if (decision.kind === 'abort') decided.aborted = true;
+    else if (decision.reason === 'disconnected') decided.disconnected = true;
+    runDecisions = decided;
+  }
+
+  /** The run that just ended, with what Decaid decided of it; `saved` is asked now (D193). */
+  function endedRun(shotId: string | null, started: ShotStart | null, saved: Promise<boolean | null>): ShotRun {
+    const decided = shotId !== null && runDecisions?.shotId === shotId ? runDecisions : null;
+    return { shotId, started, saved, aborted: decided?.aborted ?? false, disconnected: decided?.disconnected ?? false, cutOff: null };
+  }
+
   /** True when a shot started before the machine had the version (D55). */
   function startedBeforeLoad(start: ShotStart | null, version: ProfileVersion): boolean {
     const early = start?.early;
@@ -2151,17 +2221,27 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     }
   }
 
+  /** The one quiet line for a run that never poured (D-SIMA-1). */
+  async function sayNeverPoured(s: Session): Promise<void> {
+    addMessage('system', [noticePart('info', NEVER_POURED)]);
+    await persistConversation(s);
+    emit();
+  }
+
   /**
-   * A run ended: credit its shot to the active version, or say why not.
-   * `saved` is runSaved()'s answer for this run, kept for its Retry, which
-   * looks again for the same run whatever the workflow holds by then.
+   * A run ended: credit its shot to the active version, or say why not. Its
+   * Retry hands the same run back, so it looks for the same shot whatever the
+   * workflow holds by then, and says what its first notice said.
    */
-  async function handleShotFinished(shotId: string | null, started: ShotStart | null, saved: Promise<boolean | null>): Promise<void> {
+  async function handleShotFinished(run: ShotRun): Promise<void> {
     const s = session;
     if (!s) return;
     // A cleaning or calibration profile's run (the weekly clean's Forward Flush x5, say) is no shot: Decaid keeps no
     // record of it, so there is nothing to look for and nothing to say, and a problem on the banner stays (D193).
-    if ((await saved) === false) return;
+    if ((await run.saved) === false) return;
+    // Stopped before the pour began: Decaid aborted the run and keeps no record of it, so there is nothing to look
+    // for, and a problem on the banner stays (D-SIMA-1).
+    if (run.aborted) return sayNeverPoured(s);
     const current = activeVersion(s);
     if (!current) {
       addMessage('system', [noticePart('info', 'Pick a starting profile first; that shot is not part of this dial-in.')]);
@@ -2171,45 +2251,45 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     }
     // Decaid just reported a shot: writes that wait go out now (D64).
     void outbox.flush();
-    // A new shot (or Retry) replaces the hunt for the previous one.
+    // A new shot (or Retry) replaces the hunt for the previous one; a run that turns out to hold no pour gives it back.
+    const hunt = standing?.kind === 'shot' ? standing : null;
     clearStanding('shot');
     if (state.error === SHOT_NOT_SAVED) setError(null);
     state = { ...state, busy: true };
     emit();
     try {
-      await creditShot(s, current, shotId, started, saved);
+      await creditShot(s, current, run, hunt);
     } finally {
       state = { ...state, busy: false };
       emit();
     }
   }
 
-  async function creditShot(
-    s: Session,
-    current: ProfileVersion,
-    shotId: string | null,
-    started: ShotStart | null,
-    saved: Promise<boolean | null>,
-  ): Promise<void> {
-    const record = await fetchShot(shotId);
+  async function creditShot(s: Session, current: ProfileVersion, run: ShotRun, hunt: Standing | null): Promise<void> {
+    const record = await fetchShot(run.shotId);
     if (!record) {
-      // Typically the machine dropped mid-shot. Decaid may still save the
-      // record later (after a reconnect), so Retry looks for it again.
-      const dropped = !telemetry.getState().machineConnected;
-      addMessage('system', [
-        noticePart(
-          'warning',
-          dropped
-            ? 'The machine disconnected during that shot, and Decaid has no record of it. When the machine is back, tap Retry to look again, or pull another shot.'
-            : 'The shot finished, but Decaid has not saved it. Tap Retry to look again, or pull another shot.',
-        ),
-      ]);
-      replaceStanding({ kind: 'shot', message: SHOT_NOT_SAVED, retry: () => handleShotFinished(shotId, started, saved) });
+      // Typically the machine dropped mid-shot, or Decaid is slow to save the
+      // record, so Retry looks for it again. How the shot ended is settled at
+      // its first notice, and Retry's say the same, whether the machine is
+      // back by then or not (D-SIMA-2): cut off when Decaid tore the run down
+      // as the machine dropped (Decaid 0.8.8 then saves nothing), or when the
+      // machine is still away after the search (that frame can be missed).
+      run.cutOff ??= run.disconnected || !telemetry.getState().machineConnected;
+      addMessage('system', [noticePart('warning', run.cutOff ? CUT_OFF_NOTICE : NOT_SAVED_NOTICE)]);
+      replaceStanding({ kind: 'shot', message: SHOT_NOT_SAVED, retry: () => handleShotFinished(run), run });
       await persistConversation(s);
       return;
     }
     const iterations = await bagIterations(s);
     if (iterations.some((i) => i.shotId === record.id)) return;
+    if (!poured(record)) {
+      // Stopped with the pour's first frame: Decaid kept a record with no pour in it. No card, no taste question, and
+      // the pending iteration and the next card's comparison stay with the shot before (D-SIMA-1). Another shot's hunt
+      // comes back to the banner; this run's own, ended by its Retry, does not.
+      if (hunt && hunt.run !== run && standing === null) standing = hunt;
+      await sayNeverPoured(s);
+      return;
+    }
     // A record that does not say which profile ran is credited as before; the
     // chat says so with the shot card (5.10).
     const ran: unknown = record.workflow?.profile;
@@ -2240,7 +2320,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       await persistConversation(s);
       return;
     }
-    if (startedBeforeLoad(started, current)) {
+    if (startedBeforeLoad(run.started, current)) {
       // Decaid's workflow (and so the record) names the version, but the
       // machine was still taking it when the shot started.
       addMessage('system', [
@@ -3010,15 +3090,21 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         // A new shot: a rating scale Decaid could not tell is asked once more (D101).
         scaleUnclear = false;
         // Asked now, as Decaid decides whether to keep the run, not once a reply the queue waits on is done (D193).
-        const saved = runSaved();
-        void enqueue(() => handleShotFinished(event.shotId, started, saved));
+        const run = endedRun(event.shotId, started, runSaved());
+        void enqueue(() => handleShotFinished(run));
       });
       // React only to reports that arrive while CafAI runs, not a stale one.
       let lastError = telemetry.getState().connectionError;
       let machineWasConnected = telemetry.getState().machineConnected;
       let devicesSocket = telemetry.getState().sockets.devices;
+      let shotFrame = telemetry.getState().shotState;
       unsubscribeTelemetry = telemetry.subscribe(() => {
         const now = telemetry.getState();
+        // Each new shotState frame: what Decaid decided of a run (D-SIMA-1, D-SIMA-2).
+        if (now.shotState !== shotFrame) {
+          shotFrame = now.shotState;
+          noteDecision(shotFrame);
+        }
         const error = now.connectionError;
         if (error !== lastError) {
           const fresh = error !== null && (lastError === null || error.timestamp !== lastError.timestamp || error.kind !== lastError.kind);

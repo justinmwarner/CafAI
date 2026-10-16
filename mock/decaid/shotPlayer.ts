@@ -16,7 +16,8 @@
  * workflow profile's target_volume, exactly like shot_sequencer.dart. The
  * shotState frames, the
  * decision bodies and the persisted ShotRecord (a copy of the workflow at
- * shot end; none for a cleaning or calibration profile) follow
+ * shot end; none for a run stopped before its first pour frame, or for a
+ * cleaning or calibration profile) follow
  * shot_sequencer.dart / de1_state_manager.dart, and each steaming leaves a
  * steam record as steam_sequencer.dart does (steams.ts). Wall-clock
  * playback can be compressed with `speed`; data timestamps stay realistic.
@@ -414,17 +415,26 @@ export function createShotSimulation(input: ShotSimulationInput): ShotSimulation
     return { atMs, machine, scale: weight(atMs), volume, events, recorded, done };
   }
 
+  /**
+   * Stopped before the pour began: Decaid's sequencer, still preheating until
+   * a preinfusion or pouring frame, sees the machine leave espresso and
+   * aborts the run, and its state manager cleans up without saving it
+   * (shot_sequencer.dart:399-408, de1_state_manager.dart:854-864 at aab5f93).
+   * So also for a stop after the last preheat frame, before the first pour
+   * frame (D-SIMA-1).
+   */
+  function abortBeforePour(atMs: number, reason: string): SimFrame {
+    flow = 0;
+    const machine = snapshot(atMs, 'idle', 'idle', lastTargets, input.staleFrame, 18.19921875, steps[0]!.temperature);
+    aborted = true;
+    stopReason = null;
+    phase = 'done';
+    const abort: ShotDecision = { kind: 'abort', reason, details: 'Shot aborted during preheat, before the pour began', data: null };
+    return frame(atMs, machine, [event('decision', 'preheating', machine, abort)], false, true);
+  }
+
   function preheatFrame(atMs: number): SimFrame {
-    if (stopRequest) {
-      // Stopped before the pour: Decaid aborts and persists nothing.
-      flow = 0;
-      const machine = snapshot(atMs, 'idle', 'idle', lastTargets, input.staleFrame, 18.19921875, steps[0]!.temperature);
-      aborted = true;
-      stopReason = null;
-      phase = 'done';
-      const abort: ShotDecision = { kind: 'abort', reason: stopRequest, details: 'Shot aborted during preheat, before the pour began', data: null };
-      return frame(atMs, machine, [event('decision', 'preheating', machine, abort)], false, true);
-    }
+    if (stopRequest) return abortBeforePour(atMs, stopRequest);
     flow = approach(flow, 0.27, 0.3);
     mix = approach(mix, steps[0]!.temperature - 0.4, 4);
     const machine = snapshot(atMs, 'espresso', 'preparingForShot', lastTargets, input.staleFrame, 18.19921875, steps[0]!.temperature);
@@ -449,14 +459,17 @@ export function createShotSimulation(input: ShotSimulationInput): ShotSimulation
 
   function stepsFrame(atMs: number): SimFrame {
     const events: ShotStateEvent[] = [];
+    // No pour frame yet: the sequencer is still preheating.
+    if (stopRequest && maxFrameSeen < 0) return abortBeforePour(atMs, stopRequest);
     if (pourStartMs === null) pourStartMs = atMs;
 
     if (stopRequest === 'apiStop') {
-      // REST idle stops the machine; the sequencer sees an idle sample.
+      // REST idle stops the machine; the sequencer sees an idle sample. A
+      // stop right after the pour's first frame keeps a record with one
+      // frame of pour in it, as Decaid does (D-SIMA-1).
       physics(null);
       const temperatures = temperaturesFor(null);
       const machine = snapshot(atMs, 'idle', 'idle', lastTargets, Math.min(stepIndex, steps.length - 1), temperatures.targetMix, temperatures.targetGroup);
-      if (maxFrameSeen < 0) events.push(event('state', 'pouring', machine));
       return enterStopping(atMs, machine, stopDecision('apiStop', 'Shot stopped via REST API request'), events);
     }
 
