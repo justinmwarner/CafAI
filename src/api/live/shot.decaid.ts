@@ -16,7 +16,7 @@ import { afterAll, assert, beforeAll, beforeEach, expect, it } from 'vitest';
 import { MIDDLE_SCORE, SCORE_STEP, enjoymentFromScore } from '../../app/engine/shotRating.ts';
 import { summarizeShot } from '../../coach/index.ts';
 import { deviceConnections, parseShotStateFrame } from '../frames.ts';
-import { GatewayError, type ShotStateEvent } from '../types.ts';
+import { GatewayError, type DeviceEntry, type ShotStateEvent } from '../types.ts';
 import { describeDecaid, openDecaid, type LiveDecaid } from './env.ts';
 import { channelName, checkFrames, createUndoList, simulatorProblem, waitUntil, watchChannel, type ChannelWatch } from './harness.ts';
 
@@ -53,11 +53,23 @@ describeDecaid('shot', ({ url, require }) => {
 
   beforeAll(async () => {
     live = await openDecaid(url);
-    const [settings, devices] = await Promise.all([live.client.getSettings(), live.client.getDevices()]);
+    // The write suite's scan (D111) can leave the simulated scale reconnecting for a few seconds: give it 20.
+    const connected = (devices: DeviceEntry[]) => {
+      const links = deviceConnections({ devices });
+      return Boolean(links?.machine && links.scale);
+    };
+    const settings = await live.client.getSettings();
+    const devices = await waitUntil(
+      async () => {
+        const now = await live.client.getDevices();
+        return connected(now) ? now : null;
+      },
+      20_000,
+      'the simulated machine and scale',
+    ).catch(() => live.client.getDevices());
     const problem = simulatorProblem(settings, devices);
     if (problem) throw new Error(`DECAID_SIM=1 runs only against Decaid's simulator (D104), and ${problem}.`);
-    const links = deviceConnections({ devices });
-    if (!links?.machine || !links.scale) {
+    if (!connected(devices)) {
       throw new Error('DECAID_SIM=1 needs the simulated machine and scale connected (docs/SIMULATOR.md part 2, or scripts/decaid-ci.sh).');
     }
     if (settings.gatewayMode === 'full') {
