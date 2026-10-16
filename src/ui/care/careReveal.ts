@@ -27,9 +27,22 @@ export function takeReveal(target: RevealTarget): boolean {
 }
 
 /**
+ * How long the target is held in view after the scroll. A section above it
+ * can still be waiting for Decaid (Sleep and wake grows by its settings once
+ * they come), and the browser's own scroll anchoring cannot help: the margin
+ * leaves that section showing at the top, so it is the anchor that grows.
+ */
+export const HOLD_MS = 2000;
+
+/** The barista taking over: from then on the column is theirs. */
+const TAKE_OVER = ['pointerdown', 'touchstart', 'wheel', 'keydown'] as const;
+
+/**
  * Scroll the element's own scrolling column, never the page (the page never
  * scrolls, and Element.scrollIntoView would move every scrollable ancestor;
- * src/ui/settings/reveal.ts), once the screen has laid itself out.
+ * src/ui/settings/reveal.ts), once the screen has laid itself out, and keep
+ * it there while the column's content still changes size: for HOLD_MS, or
+ * until the barista touches, scrolls or types.
  */
 export function revealInOwnColumn(element: HTMLElement): void {
   requestAnimationFrame(() => {
@@ -37,8 +50,25 @@ export function revealInOwnColumn(element: HTMLElement): void {
       const overflow = getComputedStyle(parent).overflowY;
       if ((overflow === 'auto' || overflow === 'scroll') && parent.scrollHeight > parent.clientHeight) {
         revealInColumn(parent, element);
+        holdInView(parent, element);
         return;
       }
     }
   });
+}
+
+function holdInView(column: HTMLElement, element: HTMLElement): void {
+  if (typeof ResizeObserver !== 'function') return;
+  const observer = new ResizeObserver(() => {
+    if (element.isConnected) revealInColumn(column, element);
+    else release();
+  });
+  const timer = window.setTimeout(release, HOLD_MS);
+  function release() {
+    observer.disconnect();
+    window.clearTimeout(timer);
+    for (const type of TAKE_OVER) column.removeEventListener(type, release);
+  }
+  for (const child of Array.from(column.children)) observer.observe(child);
+  for (const type of TAKE_OVER) column.addEventListener(type, release, { passive: true });
 }
