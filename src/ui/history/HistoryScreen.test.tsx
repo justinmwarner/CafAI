@@ -188,7 +188,8 @@ describe('HistoryScreen export and import', () => {
 
   it('imports a file in merge mode and reports the count', async () => {
     const services = seeded();
-    const importAll = vi.spyOn(services.storage.porter, 'importAll').mockResolvedValue({ imported: 7 });
+    // Machine care's records count among them: they are the barista's records too.
+    const importAll = vi.spyOn(services.storage.porter, 'importAll').mockResolvedValue({ imported: 7, care: 2 });
     renderHistory(null, services);
     const data = { format: 'cafai-export', schemaVersion: 1, bags: [] };
     const file = new File([JSON.stringify(data)], 'cafai.json', { type: 'application/json' });
@@ -204,7 +205,7 @@ describe('HistoryScreen export and import', () => {
 
   it('says when an import brings nothing new, on whatever device it runs', async () => {
     const services = seeded();
-    vi.spyOn(services.storage.porter, 'importAll').mockResolvedValue({ imported: 0 });
+    vi.spyOn(services.storage.porter, 'importAll').mockResolvedValue({ imported: 0, care: 0 });
     renderHistory(null, services);
     await userEvent.upload(screen.getByTestId(TID.importData), new File(['{}'], 'x.json', { type: 'application/json' }));
     expect(await screen.findByText('Nothing new to import: this device already has everything in that file.')).toBeInTheDocument();

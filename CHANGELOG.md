@@ -42,8 +42,10 @@ workflow checks against it. Settings > About shows the version you run.
   steams Decaid recorded since; the descale goes by your water, in Decent's
   bands, and the intake filter by its kind, both set in Settings > Machine
   care with a switch for the line. A Clean or Descale CafAI sees the
-  machine run counts too. The last times are kept in Decaid's backup and the
-  export.
+  machine run counts too. The counts go by Decaid's own clock, so a phone in
+  another time zone counts as the tablet does, and old shots brought into
+  Decaid (de1app's history) are not taken for shots pulled. The last times
+  are kept in Decaid's backup and the export.
 - A run of a cleaning or calibration profile, such as Decent's Forward
   Flush x5 for the weekly clean, run from streamline while CafAI is open,
   no longer sets off "Looking for that shot in Decaid…", a warning that
@@ -55,11 +57,13 @@ workflow checks against it. Settings > About shows the version you run.
 
 ### Decaid
 
-- CafAI reads Decaid's steam records (`GET /api/v1/steams/ids` and
-  `/api/v1/steams/latest`) for the care counts, and writes a shot's
-  `drinkTds` and `drinkEy`. The mock Decaid answers both as Decaid does,
-  keeps steam records and saves no shot for a cleaning profile, and the
-  contract checks cover them.
+- CafAI reads Decaid's steam records for the care counts, and writes a
+  shot's `drinkTds` and `drinkEy`. A count asks Decaid's newest shot and
+  steam (`GET /api/v1/shots/latest`, `/api/v1/steams/latest`, which read no
+  measurements) and its totals only after a new one
+  (`/api/v1/shots?limit=1`, `/api/v1/steams/ids`). The mock Decaid answers
+  both as Decaid does, keeps steam records and saves no shot for a cleaning
+  profile, and the contract checks cover them.
 
 ## 0.1.2 (2026-10-15)
 

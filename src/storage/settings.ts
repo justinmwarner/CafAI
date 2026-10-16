@@ -19,15 +19,16 @@
  */
 import { isTemperatureUnit } from '../coach/temperature.ts';
 import { containsKeyLike, redactKeyLike } from './redact.ts';
-import type { Appearance, AppearanceMode, CareSettings, IntakeFilter, Settings, WaterBand } from './types.ts';
+import type { Appearance, AppearanceMode, CareSettings, IntakeFilter, Settings, SettingsPatch, WaterBand } from './types.ts';
 
 /** Today's look. */
 export const DEFAULT_APPEARANCE: Appearance = { mode: 'dark', tint: 'crema' };
 
 /**
  * Machine care before anyone answers (D187): the water and the filter not
- * said, the stats card's line on. Settings hold the block only once it
- * differs from this, as the key-copy choice: read `settings.care ?? DEFAULT_CARE`.
+ * said, the stats card's line on. Settings hold the block once someone
+ * answered on this device, kept from then on, these values too, as the
+ * key-copy choice is: read `settings.care ?? DEFAULT_CARE`.
  */
 export const DEFAULT_CARE: CareSettings = { water: null, filter: null, reminders: true };
 
@@ -110,24 +111,6 @@ export function normalizeCareSettings(raw: unknown): CareSettings {
   };
 }
 
-export function sameCareSettings(a: CareSettings, b: CareSettings): boolean {
-  return a.water === b.water && a.filter === b.filter && a.reminders === b.reminders;
-}
-
-/** The block as settings keep it: left out at its defaults. */
-function careField(care: CareSettings): Pick<Settings, 'care'> {
-  return sameCareSettings(care, DEFAULT_CARE) ? {} : { care };
-}
-
-/** Like the look: an answer given here wins; a blank, or a switch still at its default, takes the incoming one. */
-function fillBlankCare(local: CareSettings, incoming: CareSettings): CareSettings {
-  return {
-    water: local.water ?? incoming.water,
-    filter: local.filter ?? incoming.filter,
-    reminders: local.reminders === DEFAULT_CARE.reminders ? incoming.reminders : local.reminders,
-  };
-}
-
 export function sameAppearance(a: Appearance, b: Appearance): boolean {
   if (a.mode !== b.mode) return false;
   if (typeof a.tint === 'string' || typeof b.tint === 'string') return a.tint === b.tint;
@@ -151,7 +134,9 @@ export function normalizeSettings(raw: unknown, defaultModel: string): Settings 
   if (typeof raw['keepKeyInDecaid'] === 'boolean') settings.keepKeyInDecaid = raw['keepKeyInDecaid'];
   // The temperature unit (D172), the same way: one this build does not know reads as none chosen, so °C.
   if (isTemperatureUnit(raw['temperatureUnit'])) settings.temperatureUnit = raw['temperatureUnit'];
-  return { ...settings, ...careField(normalizeCareSettings(raw['care'])) };
+  // Machine care's answers (D187), the same way: the block once someone answered, an answer put back to Not sure included.
+  if (isRecord(raw['care'])) settings.care = normalizeCareSettings(raw['care']);
+  return settings;
 }
 
 const FIELDS: ReadonlyArray<keyof Settings> = [
@@ -167,14 +152,17 @@ const FIELDS: ReadonlyArray<keyof Settings> = [
 ];
 
 /** `undefined` means "not part of this edit", never "clear it"; clearing takes an explicit null. */
-export function applySettingsPatch(current: Settings, patch: Partial<Settings>, defaultModel: string): Settings {
+export function applySettingsPatch(current: Settings, patch: SettingsPatch, defaultModel: string): Settings {
   const next: Record<string, unknown> = { ...current };
   for (const field of FIELDS) {
     const value = (patch as Record<string, unknown>)[field];
     if (value !== undefined) next[field] = value;
   }
   // The care block changes field by field: an edit of the water never resets the filter (D187).
-  if (isRecord(patch.care)) next['care'] = { ...(current.care ?? DEFAULT_CARE), ...patch.care };
+  if (isRecord(patch.care)) {
+    const edits = Object.entries(patch.care).filter(([, value]) => value !== undefined);
+    next['care'] = { ...(current.care ?? DEFAULT_CARE), ...Object.fromEntries(edits) };
+  }
   return normalizeSettings(next, defaultModel);
 }
 
@@ -194,7 +182,8 @@ function isBlank(value: string | null | undefined): boolean {
  * The appearance, like the model, is adopted only while it is still the default.
  * The key's copy in Decaid (D99) is the user's choice wherever this device
  * holds one, off as much as on; only a device that never chose takes it.
- * The temperature unit (D172) follows the same rule.
+ * The temperature unit (D172) and machine care's answers (D187) follow the
+ * same rule, the care block whole.
  */
 export function fillBlankSettings(local: Settings, incoming: Settings, defaultModel: string): Settings {
   const pick = (mine: string | null, theirs: string | null) => (isBlank(mine) && !isBlank(theirs) ? theirs : mine);
@@ -217,5 +206,8 @@ export function fillBlankSettings(local: Settings, incoming: Settings, defaultMo
   // The temperature unit (D172): a choice made here wins, °C as much as °F; a device that never chose takes the incoming one.
   const unit = local.temperatureUnit ?? incoming.temperatureUnit;
   if (unit !== undefined) merged.temperatureUnit = unit;
-  return { ...merged, ...careField(fillBlankCare(local.care ?? DEFAULT_CARE, incoming.care ?? DEFAULT_CARE)) };
+  // Machine care (D187): answers given here win whole, Not sure and the switch's default too; a device that never answered takes the incoming ones.
+  const care = local.care ?? incoming.care;
+  if (care !== undefined) merged.care = care;
+  return merged;
 }

@@ -30,7 +30,7 @@ function fakeSettingsRepo(initial: Settings, options: { hold?: boolean } = {}): 
     updates,
     releases,
     get: async () => settings,
-    async update(patch) {
+    async update(patch: Partial<Settings>) {
       updates.push(patch);
       settings = { ...settings, ...patch };
       const saved = settings;

@@ -650,7 +650,12 @@ interface ShotAnnotations {
 
 ### Latest, ids, by id
 
-- `/latest` returns the summary, or `null`.
+- `/latest` returns the summary, or `null`. It reads one row without its
+  measurements (`getLatestShotMeta` selects `'[]' AS measurements_json`:
+  lib/src/services/database/daos/shot_dao.dart:192-204 at af4e995, Decaid's
+  `main` read on 2026-10-15; the pin's spec says the same, rest:1820-1833),
+  so it is the cheap way to the newest shot: the care counts ask it first
+  and read the total only when the newest changed (D185).
 - `/ids` returns an unordered `string[]`.
 - `/{id}` returns the full record.
 
@@ -678,7 +683,7 @@ elapsed = Date.parse(m.machine.timestamp) - Date.parse(measurements[0].machine.t
 
 ### What a list costs Decaid
 
-Cited at aab5f93. Every page of `GET /api/v1/shots` reads each shot's row whole and parses its measurements before dropping them (`ShotMapper.fromRows`, `fromRow`: lib/src/services/database/mappers/shot_mapper.dart:14-49), so a page of 100 parses 100 measurement series; `total` is a separate `COUNT` (lib/src/services/database/daos/shot_dao.dart:111-159). `limit=1` is the cheap way to the total.
+Cited at aab5f93. Every page of `GET /api/v1/shots` reads each shot's row whole and parses its measurements before dropping them (`ShotMapper.fromRows`, `fromRow`: lib/src/services/database/mappers/shot_mapper.dart:14-49), so a page of 100 parses 100 measurement series; `total` is a separate `COUNT` (lib/src/services/database/daos/shot_dao.dart:111-159). `limit=1` is the cheap way to the total, and it parses the newest shot's series; `/latest` parses none (above). The care counts read a page of more only when the total jumps by more than one shot a minute could have, 20 at most (D185).
 
 ### Steam records
 
@@ -686,7 +691,7 @@ Cited at aab5f93 (web/steams_handler.dart; ctl/steam_sequencer.dart; data/steam_
 
 - **One per steaming.** A record opens on the first frame in `steam` (the heater's warm-up included) with a UUID v4, the time then and the workflow as it stands, collects a `SteamSnapshot` `{machine, milkTemperature}` per frame, and is saved on the first frame in neither `steam` nor the `pouring` substate. A machine that changes mid-steam discards it (ctl/steam_sequencer.dart:72-122, 178-198).
 - **The routes.** `GET /api/v1/steams` lists every record, newest first, without measurements; `/ids` and `/latest` as in §1; `/{id}` the whole record, 404 `{error:"Steam record not found"}`; `PUT /{id}` changes its annotations only; `DELETE /{id}` answers `{success, id}` (web/steams_handler.dart:17-120).
-- **What a list costs.** `GET /api/v1/steams` reads and parses every record's measurements before dropping them (`getAllSteams`, `SteamMapper.fromRow`: lib/src/services/database/daos/steam_dao.dart:23-27, lib/src/services/database/mappers/steam_mapper.dart:11-30) and sends each record's workflow; `/ids` reads only the ids (steam_dao.dart:11-15).
+- **What a list costs.** `GET /api/v1/steams` reads and parses every record's measurements before dropping them (`getAllSteams`, `SteamMapper.fromRow`: lib/src/services/database/daos/steam_dao.dart:23-27, lib/src/services/database/mappers/steam_mapper.dart:11-30) and sends each record's workflow; `/ids` reads only the ids (steam_dao.dart:11-15), but sends every one (a busy café's year of steams is over a megabyte); `/latest` reads one row without its measurements (`getLatestSteamMeta`, steam_dao.dart:58-70 at af4e995). The care counts ask `/latest` first and `/ids` only when the newest changed (D185).
 
 ### Update
 

@@ -40,6 +40,7 @@ import type {
   Settings,
   Storage,
 } from '../../storage/types.ts';
+import { DEFAULT_CARE } from '../../storage/settings.ts';
 
 export interface Call {
   method: string;
@@ -156,7 +157,7 @@ export interface FakeDecaid extends DecaidClient {
   failNext(method: string, error: Error): void;
   /** Decaid's sleep and wake settings as this fake holds them; tests may set them before rendering. */
   presence: PresenceSettings;
-  /** What listShots answers, whatever it is asked (the care reminders read its total). */
+  /** What listShots answers, whatever it is asked (the care reminders read its total); its first item is the newest shot. */
   shotPage: PaginatedShots;
   /** Decaid's steam records as the care reminders count them: their ids and the newest. */
   steams: { ids: string[]; latest: SteamRecordSummary | null };
@@ -288,7 +289,8 @@ export function createFakeDecaid(): FakeDecaid {
     listShots: (options) => call('listShots', [options], clone(fake.shotPage)),
     listSteamIds: () => call('listSteamIds', [], [...fake.steams.ids]),
     getLatestSteam: () => call('getLatestSteam', [], fake.steams.latest === null ? null : clone(fake.steams.latest)),
-    getLatestShot: () => call('getLatestShot', [], null),
+    // The newest of the page listShots answers (none by default), as Decaid's newest-first list has it.
+    getLatestShot: () => call('getLatestShot', [], fake.shotPage.items[0] === undefined ? null : clone(fake.shotPage.items[0])),
     getShot: (id) => call('getShot', [id], Promise.reject(new Error('not found')) as never),
     updateShot: (id, patch) => call('updateShot', [id, patch], Promise.reject(new Error('unsupported')) as never),
     probeEnjoymentScale: () => call<EnjoymentScale | null>('probeEnjoymentScale', [], 10),
@@ -364,11 +366,27 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
     },
     settings: {
       get: async () => settings,
-      update: async (patch) => (settings = { ...settings, ...patch }),
+      // As the real one, the care block field by field (D187).
+      update: async ({ care: carePatch, ...patch }) => {
+        const careEdits = Object.entries(carePatch ?? {}).filter(([, value]) => value !== undefined);
+        settings = { ...settings, ...patch, ...(carePatch ? { care: { ...(settings.care ?? DEFAULT_CARE), ...Object.fromEntries(careEdits) } } : {}) };
+        return settings;
+      },
     },
     care: {
       list: async () => [...care.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).map((record) => clone(record)),
       put: async (record) => void care.set(record.id, clone(record)),
+      // As the real one: each change against what is held then, all at once.
+      update: async (changes) => {
+        const after = new Map<string, CareRecord | undefined>();
+        for (const [id, change] of changes) {
+          const held = care.get(id);
+          const next = change(held === undefined ? undefined : clone(held));
+          if (next !== undefined) care.set(id, clone(next));
+          after.set(id, next ?? (held === undefined ? undefined : clone(held)));
+        }
+        return after;
+      },
     },
     secrets: {
       getApiKey: async () => storage.apiKey,
@@ -388,7 +406,7 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
         conversations: [...conversations.values()],
         care: [...care.values()],
       }),
-      importAll: async () => ({ imported: 0 }),
+      importAll: async () => ({ imported: 0, care: 0 }),
     },
     mirror: {
       schedulePush() {},

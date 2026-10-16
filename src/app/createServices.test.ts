@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFakeWebSocket, type FakeWebSocketFactory } from '../api/testing/fakeWebSocket.ts';
 import { buildMirrorEntries } from '../storage/mirror.ts';
 import { KEY_NAME, KEY_NAMESPACE } from '../storage/keyBackup.ts';
-import { API_KEY, MODEL, makeBag, makeConversation, makeSettings, makeVersion } from '../storage/testing/fixtures.ts';
+import { API_KEY, MODEL, makeBag, makeCareRecord, makeConversation, makeSettings, makeVersion } from '../storage/testing/fixtures.ts';
 import type { IdbStorage } from '../storage/index.ts';
 import { createServices, type AppServices } from './createServices.ts';
 
@@ -50,6 +50,11 @@ function fakeDecaid() {
         iterations: [],
         conversations: [makeConversation({ apiMessages: [] })],
       };
+      for (const [key, text] of buildMirrorEntries(snapshot, null, MODEL).entries) space('cafai').set(key, JSON.parse(text));
+    },
+    /** A backup holding machine care's last times and no bag: a device CafAI counted on before any bag (D190). */
+    backUpCare() {
+      const snapshot = { settings: makeSettings(), bags: [], versions: [], iterations: [], conversations: [], care: [makeCareRecord({ id: 'gasket' })] };
       for (const [key, text] of buildMirrorEntries(snapshot, null, MODEL).entries) space('cafai').set(key, JSON.parse(text));
     },
     keepKey(key: string) {
@@ -103,6 +108,25 @@ describe('createServices: bags and the key back from Decaid (D99, D100)', () => 
     await vi.waitFor(() => expect(notices()).toContain("Your bags are back from Decaid's backup."));
     expect(services.coach.getState()).toMatchObject({ restoredFromBackup: true, activeBag: { id: 'bag_kiambu' } });
     await vi.waitFor(() => expect(services!.appearance.get()).toEqual({ mode: 'light', tint: { hue: 200 } }));
+  });
+
+  it("brings machine care's last times back at start, from a backup with no bag, without saying the bags came back (D189)", async () => {
+    decaid.backUpCare();
+    services = await createServices(window);
+    expect(services.coach.getState()).toMatchObject({ restoredFromBackup: false, bags: [] });
+    expect(services.care!.getState().records.get('gasket')).toMatchObject({ by: 'tick', doneAt: makeCareRecord().doneAt });
+  });
+
+  it("brings them back once Decaid answers too, over the first look counted meanwhile, with no note of bags (D189)", async () => {
+    decaid.backUpCare();
+    decaid.state.down = true;
+    services = await createServices(window);
+    await vi.waitFor(() => expect(services!.care!.getState().records.get('gasket')).toMatchObject({ doneAt: null }));
+    decaid.state.down = false;
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.waitFor(() => expect(services!.care!.getState().records.get('gasket')).toMatchObject({ by: 'tick', doneAt: makeCareRecord().doneAt }));
+    expect(notices()).not.toContain("Your bags are back from Decaid's backup.");
+    expect(services.coach.getState().restoredFromBackup).toBe(false);
   });
 
   it("tries again at once when Decaid's devices socket opens", async () => {

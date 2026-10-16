@@ -191,11 +191,17 @@ export interface Settings {
   temperatureUnit?: TemperatureUnit;
   /**
    * Machine care's reminders (D187): the water, the intake filter and the
-   * stats card's line. Left out while it holds the defaults (DEFAULT_CARE in
-   * settings.ts), as the key-copy choice is: read `care ?? DEFAULT_CARE`.
+   * stats card's line. Absent until someone answers on this device, and read
+   * as DEFAULT_CARE (settings.ts): `care ?? DEFAULT_CARE`. Like
+   * keepKeyInDecaid, storage keeps the block once written, an answer put
+   * back to Not sure included, so a merge (an import, a restore) can tell
+   * answers given here, which it keeps, from none, which it may fill.
    */
   care?: CareSettings;
 }
+
+/** An edit of the settings: what it names changes, the care block field by field (D187). */
+export type SettingsPatch = Omit<Partial<Settings>, 'care'> & { care?: Partial<CareSettings> };
 
 /** How a care step's last time came about: marked done on the Care screen, or a cycle CafAI saw run (D186). */
 export type CareMark = 'tick' | 'seen';
@@ -217,6 +223,14 @@ export interface CareRecord {
   shotTotal: number | null;
   /** Decaid's steam total (its steam records) at countFrom; null while unknown. */
   steamTotal: number | null;
+  /**
+   * When Decaid's newest shot and newest steam began, at countFrom, as Decaid
+   * wrote it (local, no zone): what tells old records imported since from
+   * new ones, by Decaid's clock alone (D185). Null while unknown, or when it
+   * had none.
+   */
+  newestShotAt: string | null;
+  newestSteamAt: string | null;
   updatedAt: IsoDateTime;
 }
 
@@ -246,14 +260,30 @@ export interface ConversationRepository {
 
 export interface SettingsRepository {
   get(): Promise<Settings>;
-  update(patch: Partial<Settings>): Promise<Settings>;
+  /** Read and written in one transaction, so concurrent edits (another tab's too) queue up rather than overwrite each other. */
+  update(patch: SettingsPatch): Promise<Settings>;
 }
+
+/**
+ * A compare-and-set of one step's record: given what the store holds for it
+ * now (undefined: nothing), the record to store, or undefined to leave it as
+ * it is. It runs inside the store's transaction, so it must not wait for
+ * anything.
+ */
+export type CareChange = (stored: CareRecord | undefined) => CareRecord | undefined;
 
 /** Machine care's steps (D189), one record per step. */
 export interface CareRepository {
   /** By the step's id. */
   list(): Promise<CareRecord[]>;
   put(record: CareRecord): Promise<void>;
+  /**
+   * Each step's change against what the store holds then, all in one
+   * transaction, so a record written since the caller read it (a mark, a
+   * restore's merge, an import, another tab) is never written over by what
+   * the caller saw. Resolves with what each step holds afterwards.
+   */
+  update(changes: ReadonlyMap<string, CareChange>): Promise<Map<string, CareRecord | undefined>>;
 }
 
 /** The API key. Local to this device and origin only. */
@@ -280,8 +310,13 @@ export interface CafaiExport {
 
 export interface DataPorter {
   exportAll(): Promise<CafaiExport>;
-  /** Validates with a schema first; `merge` keeps existing records with newer updatedAt. */
-  importAll(data: unknown, mode: 'merge' | 'replace'): Promise<{ imported: number }>;
+  /**
+   * Validates with a schema first; `merge` keeps existing records with newer
+   * updatedAt. `imported` counts every record written, machine care's among
+   * them; `care` how many of those were machine care's (D189), so that a
+   * restore of nothing else is not taken for bags back.
+   */
+  importAll(data: unknown, mode: 'merge' | 'replace'): Promise<{ imported: number; care: number }>;
 }
 
 /** Mirror of non-secret data into Decaid's key-value store. */

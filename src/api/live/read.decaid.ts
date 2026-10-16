@@ -15,6 +15,7 @@ import { deviceConnections, parseMachineFrame, type DeviceConnections, type Pars
 import { listGrinders } from '../grinders.ts';
 import { readDye2, visualizerIdFor, type PluginReads } from '../pluginData.ts';
 import { PLUGIN } from '../plugins.ts';
+import { parseDecaidTimestamp } from '../time.ts';
 import { GatewayError } from '../types.ts';
 import { describeDecaid, openDecaid, type LiveDecaid } from './env.ts';
 import { captureChannels, channelName, checkFrames, openedChannels, telemetryChannels, waitUntil, type ChannelWatch } from './harness.ts';
@@ -178,14 +179,22 @@ describeDecaid('read', ({ url }) => {
     expect(live.problems()).toEqual([]);
   });
 
-  it('GET /api/v1/shots?limit=1 and the steam records: what the care reminders count (D185)', async () => {
+  it('the newest shot and steam, then their totals: what the care reminders count (D185)', async () => {
+    // The newest of each first, as every count asks: neither reads measurements. A Decaid that never steamed answers 200 null.
+    const latestShot = await live.client.getLatestShot();
+    const latestSteam = await live.client.getLatestSteam();
+    // The total, read once the newest is one CafAI has not counted with: its page of one is that newest.
     const page = await live.client.listShots({ limit: 1 });
     expect(page.total, 'the shot total').toBeGreaterThanOrEqual(page.items.length);
-    // A Decaid that never steamed answers [] and 200 null.
+    expect(page.items[0]?.id ?? null, 'the page of one holds the newest shot').toBe(latestShot?.id ?? null);
+    // A total that jumps is checked against a page of the newest 20: the newest first, by the shots' own times.
+    const newest = await live.client.listShots({ limit: 20 });
+    const starts = newest.items.map((item) => parseDecaidTimestamp(item.timestamp));
+    expect(starts.every(Number.isFinite), "every shot's start reads").toBe(true);
+    expect(starts, 'newest first').toEqual([...starts].sort((a, b) => b - a));
     const ids = await live.client.listSteamIds();
-    const latest = await live.client.getLatestSteam();
-    if (ids.length > 0) expect(ids, 'the newest steam is one of the ids').toContain(latest?.id);
-    else expect(latest).toBeNull();
+    if (ids.length > 0) expect(ids, 'the newest steam is one of the ids').toContain(latestSteam?.id);
+    else expect(latestSteam).toBeNull();
     expect(live.problems()).toEqual([]);
   });
 

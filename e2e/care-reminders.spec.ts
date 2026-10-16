@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { CafaiMockWindow } from '../mock/browser.ts';
 import { MOCK_STORE_KEY, MOCK_STORE_PREFIX } from '../mock/persist.ts';
+import { CARE_DB_NAME } from '../src/storage/careDb.ts';
 import { CAFAI_DB_NAME } from '../src/storage/db.ts';
 import { SECRETS_DB_NAME } from '../src/storage/secrets.ts';
 import { TID } from '../src/ui/testIds.ts';
@@ -166,10 +167,16 @@ test("a step's last time comes back from Decaid's backup after the browser stora
   // The mock Decaid has kept its store, as a real one keeps it on disk.
   await expect.poll(() => savedBackupHolds(page, '"id":"gasket","doneAt":"'), { message: 'the mock Decaid saved its store' }).toBe(true);
 
-  const lost = await loseBrowserStorage(page, [CAFAI_DB_NAME, SECRETS_DB_NAME], MOCK_STORE_PREFIX);
-  expect(lost.deleted).toEqual({ [CAFAI_DB_NAME]: 'deleted', [SECRETS_DB_NAME]: 'deleted' });
+  // Machine care's steps have a database of their own, beside CafAI's (D189).
+  const lost = await loseBrowserStorage(page, [CAFAI_DB_NAME, CARE_DB_NAME, SECRETS_DB_NAME], MOCK_STORE_PREFIX);
+  expect(lost.databasesBefore).toEqual(expect.arrayContaining([CAFAI_DB_NAME, CARE_DB_NAME, SECRETS_DB_NAME]));
+  expect(lost.deleted).toEqual({ [CAFAI_DB_NAME]: 'deleted', [CARE_DB_NAME]: 'deleted', [SECRETS_DB_NAME]: 'deleted' });
 
   await openAppWithSwitches(page, { mockPersist: '1' }, '#/care/monthly');
   await expect(page.getByTestId(TID.careStepLine('gasket'))).toHaveText('Done today');
   await expect(page.getByTestId(TID.careStepLine('group-parts'))).toHaveText(/^Not marked done yet/);
+  // The backup held machine care's last times and no bag: the coach does not say the bags came back (D189).
+  await goTo(page, 'coach');
+  await expect(page.getByRole('heading', { name: 'Add your Anthropic API key to start coaching' })).toBeVisible();
+  await expect(page.getByText("Your bags came from Decaid's backup.")).toHaveCount(0);
 });

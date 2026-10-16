@@ -4,8 +4,15 @@
  * done is only "seen, then gone", as streamline's maintenance-progress.js
  * reads it: a cycle seen for at least a minute, then any other state, marks
  * its step done at the last frame seen running. A shorter one was stopped,
- * not run; a frame CafAI could not see (no machine, a socket gone quiet) ends
- * nothing. Pure: the care service feeds it the machine's frames.
+ * not run.
+ *
+ * Pure: the care service feeds it each new frame from the machine's socket
+ * while it is open, and nothing else, so a scale frame or a socket change
+ * beside a stale frame is no frame at all. The minute is measured by the
+ * frames' own times (the machine's, through Decaid), never by when CafAI
+ * happened to look; a stretch CafAI could not see (no machine, a socket gone
+ * quiet) ends nothing, and counts only as far as the frames on either side
+ * of it say.
  */
 import type { TrackedStepId } from './careRules.ts';
 
@@ -19,16 +26,28 @@ export const CYCLE_MIN_MS = 60_000;
 
 export interface CycleWatch {
   cycle: Cycle | null;
-  /** The first and the last frame seen in it, epoch ms. */
+  /** The first and the last frame seen in it, by the frames' own times, epoch ms: what the minute is measured by. */
   firstMs: number;
   lastMs: number;
+  /** When CafAI got that last frame, by its own clock, epoch ms: the step's last time. */
+  lastSeenMs: number;
 }
 
-export const NO_CYCLE: CycleWatch = { cycle: null, firstMs: 0, lastMs: 0 };
+export const NO_CYCLE: CycleWatch = { cycle: null, firstMs: 0, lastMs: 0, lastSeenMs: 0 };
+
+/** One machine frame as the watch reads it. */
+export interface CycleFrame {
+  /** The machine's state. */
+  state: string;
+  /** The frame's own time (its timestamp), epoch ms. */
+  atMs: number;
+  /** When CafAI got it, by its own clock, epoch ms. */
+  seenMs: number;
+}
 
 export interface CycleSeen {
   step: (typeof CYCLE_STEPS)[Cycle];
-  /** When it was last seen running, epoch ms: its step's last time. */
+  /** When it was last seen running, by CafAI's clock, epoch ms: its step's last time. */
   atMs: number;
 }
 
@@ -38,18 +57,14 @@ function isCycle(state: string): state is Cycle {
 
 function ended(watch: CycleWatch): CycleSeen | null {
   if (watch.cycle === null || watch.lastMs - watch.firstMs < CYCLE_MIN_MS) return null;
-  return { step: CYCLE_STEPS[watch.cycle], atMs: watch.lastMs };
+  return { step: CYCLE_STEPS[watch.cycle], atMs: watch.lastSeenMs };
 }
 
-/**
- * One frame: the machine's state, or null when CafAI cannot see it. Answers
- * the watch after it, and the cycle it saw run and end, if this frame ended one.
- */
-export function watchCycle(watch: CycleWatch, state: string | null, atMs: number): { watch: CycleWatch; seen: CycleSeen | null } {
-  if (state === null) return { watch, seen: null };
-  if (isCycle(state)) {
-    if (watch.cycle === state) return { watch: { ...watch, lastMs: atMs }, seen: null };
-    return { watch: { cycle: state, firstMs: atMs, lastMs: atMs }, seen: ended(watch) };
+/** One new frame: the watch after it, and the cycle it saw run and end, if this frame ended one. */
+export function watchCycle(watch: CycleWatch, frame: CycleFrame): { watch: CycleWatch; seen: CycleSeen | null } {
+  if (isCycle(frame.state)) {
+    if (watch.cycle === frame.state) return { watch: { ...watch, lastMs: frame.atMs, lastSeenMs: frame.seenMs }, seen: null };
+    return { watch: { cycle: frame.state, firstMs: frame.atMs, lastMs: frame.atMs, lastSeenMs: frame.seenMs }, seen: ended(watch) };
   }
   return { watch: NO_CYCLE, seen: ended(watch) };
 }

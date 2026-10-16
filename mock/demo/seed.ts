@@ -2,14 +2,15 @@
  * Writing a built demo (mock/demo/build.ts) where the app will find it.
  *
  * CafAI's storage is replaced through its own porter (importAll 'replace':
- * the export schema checks every record, and one transaction writes them),
- * the placeholder key goes into its own secrets database, and both
- * connections are closed before createServices() opens its own. The mock
+ * the export schema checks every record, and each database takes them in one
+ * transaction), the placeholder key goes into its own secrets database, and
+ * every connection is closed before createServices() opens its own. The mock
  * Decaid gets the story's shots, CafAI's profiles and the workflow through
  * the restore its ?mockPersist uses (mock/persist.ts), so only its public API
  * is touched.
  */
 import { DEFAULT_MODEL } from '../../src/llm/models.ts';
+import { CARE_DB_NAME, openCareDb } from '../../src/storage/careDb.ts';
 import { CAFAI_DB_NAME, createDbHandle, openCafaiDb } from '../../src/storage/db.ts';
 import { createDataPorter } from '../../src/storage/porter.ts';
 import { openSecretStore, SECRETS_DB_NAME } from '../../src/storage/secrets.ts';
@@ -31,9 +32,11 @@ export async function writeDemoStorage(data: CafaiExport, names: DemoDbNames = {
     secrets.close();
   }
   const handle = createDbHandle((onLost) => openCafaiDb(names.dbName ?? CAFAI_DB_NAME, onLost));
+  const careHandle = createDbHandle((onLost) => openCareDb(names.careDbName ?? CARE_DB_NAME, onLost));
   try {
     const porter = createDataPorter({
       db: () => handle.get(),
+      careDb: () => careHandle.get(),
       secrets: { getApiKey: async () => DEMO_API_KEY },
       // The app's own mirror backs the records up to the mock Decaid once it runs.
       mirror: { schedulePush() {} },
@@ -44,6 +47,7 @@ export async function writeDemoStorage(data: CafaiExport, names: DemoDbNames = {
     await porter.importAll(data, 'replace');
   } finally {
     handle.close();
+    careHandle.close();
   }
 }
 

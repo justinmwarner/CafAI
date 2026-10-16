@@ -484,8 +484,8 @@ troubleshooting.
   copy, any device on your network can read it there. Export it any time as
   JSON from History.
 - To count the shots and steams since a step of machine care, CafAI asks
-  Decaid how many it holds and when the newest began; it keeps those
-  numbers, never the shots themselves.
+  Decaid which shot and steam are its newest and when they began, and how
+  many it holds; it keeps those, never the shots themselves.
 - A photo of a bag goes to Anthropic once, in a request of its own, to read
   the bag's details. CafAI keeps no copy of the photo (not on the device,
   not in Decaid, not in the chat or an export), and with an API key the
@@ -589,7 +589,10 @@ troubleshooting.
   settings**: exit to Decaid and open CafAI again (it can happen while
   Decaid replaces the skin's files during an update). When the page says
   instead "CafAI could not start on this device's browser engine" and "It
-  needs Chromium 91 or newer", see the previous point.
+  needs Chromium 91 or newer", see the previous point. When it says "The
+  data on this device was saved by a newer version of CafAI", a newer CafAI
+  ran here before: install it again (Decaid's **Skins** page, **Check for
+  updates**).
 - **Settings > About lists things Decaid sent that CafAI did not expect.**
   Your Decaid sends something in another shape than the Decaid CafAI was
   checked against (usually because it is newer). Tap **Copy report** and

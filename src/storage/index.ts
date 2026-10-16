@@ -9,6 +9,7 @@
  *   if (restore === 'unreachable') startLateRestore(storage, { onRestored });
  */
 import { GatewayError, type KvClient } from '../api/types.ts';
+import { CARE_DB_NAME, createCareRepository, openCareDb } from './careDb.ts';
 import { CAFAI_DB_NAME, createDbHandle, openCafaiDb, readAll, requestPersistentStorage } from './db.ts';
 import { toStorageError } from './errors.ts';
 import { createKeyBackup } from './keyBackup.ts';
@@ -26,6 +27,8 @@ export interface CreateIdbStorageOptions {
   defaultModel: string;
   /** IndexedDB name for CafAI's data; tests use a unique one. */
   dbName?: string;
+  /** IndexedDB name for machine care's steps (D189). */
+  careDbName?: string;
   /** IndexedDB name for the API key. */
   secretsDbName?: string;
   now?: () => Date;
@@ -39,37 +42,49 @@ export interface IdbStorage extends Storage {
   /**
    * Calls `listener` when the first push of a store that started empty merged
    * records from Decaid's backup in (5.4): they came back after start, so the
-   * screens read them again. Returns the unsubscribe.
+   * screens read them again. `records`: bags, versions, iterations or chats
+   * came back; false when machine care's last times alone did (D189), which
+   * are no bags to announce. Returns the unsubscribe.
    */
-  onRestored(listener: () => void): () => void;
-  /** Stop the mirror's timers and close both databases. */
+  onRestored(listener: (restored: { records: boolean }) => void): () => void;
+  /** Stop the mirror's timers and close the databases. */
   close(): void;
 }
 
 /**
  * Open (creating on first use) CafAI's databases and wire the repositories,
  * secret store, porter and mirror. Rejects with a StorageError sentence when
- * the browser blocks IndexedDB.
+ * the browser blocks IndexedDB, or when a database was saved by a newer
+ * CafAI than this one.
  */
 export async function createIdbStorage(options: CreateIdbStorageOptions): Promise<IdbStorage> {
   const { kv, appVersion, defaultModel } = options;
   const now = options.now ?? (() => new Date());
   const dbName = options.dbName ?? CAFAI_DB_NAME;
+  const careDbName = options.careDbName ?? CARE_DB_NAME;
   const handle = createDbHandle((onLost) => openCafaiDb(dbName, onLost));
+  const careHandle = createDbHandle((onLost) => openCareDb(careDbName, onLost));
   const db = () => handle.get();
+  const careDb = () => careHandle.get();
+  const closeDbs = () => {
+    handle.close();
+    careHandle.close();
+  };
 
   let startedEmpty: boolean;
   try {
     startedEmpty = (await (await db()).count('bags')) === 0;
+    // At start-up, not at the first count, as the key's: machine care's steps must open too.
+    await careDb();
   } catch (error) {
-    handle.close();
+    closeDbs();
     throw toStorageError(error, 'unavailable');
   }
   let secrets: Awaited<ReturnType<typeof openSecretStore>>;
   try {
     secrets = await openSecretStore(options.secretsDbName ?? SECRETS_DB_NAME);
   } catch (error) {
-    handle.close();
+    closeDbs();
     throw error;
   }
   void requestPersistentStorage();
@@ -81,14 +96,15 @@ export async function createIdbStorage(options: CreateIdbStorageOptions): Promis
     now,
     debounceMs: options.debounceMs,
     source: {
-      read: async () => readAll(await db()),
+      read: async () => ({ ...(await readAll(await db())), care: await (await careDb()).getAll('care') }),
       apiKey: () => secrets.getApiKey(),
     },
   });
   const repositories = createRepositories({ db, defaultModel, onWrite: () => mirror.schedulePush() });
-  const porter = createDataPorter({ db, secrets, mirror, appVersion, defaultModel, now });
+  const care = createCareRepository({ db: careDb, onWrite: () => mirror.schedulePush() });
+  const porter = createDataPorter({ db, careDb, secrets, mirror, appVersion, defaultModel, now });
   const keyBackup = createKeyBackup(kv, secrets, secrets.keyCopy);
-  const restoredListeners = new Set<() => void>();
+  const restoredListeners = new Set<(restored: { records: boolean }) => void>();
 
   // A store that started this session empty (first run, or browser storage
   // lost) must not overwrite a backup it has not seen: if the start-up
@@ -99,19 +115,21 @@ export async function createIdbStorage(options: CreateIdbStorageOptions): Promis
     mirror.setGate(async () => {
       const remote = await mirror.pull();
       if (remote === null) return;
-      let imported = 0;
+      let merged = { imported: 0, care: 0 };
       try {
-        imported = (await porter.importAll(remote, 'merge')).imported;
+        merged = await porter.importAll(remote, 'merge');
       } catch (error) {
         // A backup this version cannot read is no backup; do not block on it.
         if (!(error instanceof ImportError)) throw error;
       }
-      if (imported > 0) for (const listener of [...restoredListeners]) listener();
+      const restored = { records: merged.imported > merged.care };
+      if (merged.imported > 0) for (const listener of [...restoredListeners]) listener(restored);
     });
   }
 
   return {
     ...repositories,
+    care,
     secrets,
     porter,
     mirror,
@@ -122,7 +140,7 @@ export async function createIdbStorage(options: CreateIdbStorageOptions): Promis
     },
     close() {
       mirror.dispose();
-      handle.close();
+      closeDbs();
       secrets.close();
     },
   };
@@ -130,7 +148,11 @@ export async function createIdbStorage(options: CreateIdbStorageOptions): Promis
 
 /**
  * What a restore from Decaid's backup found (5.3, 5.4):
- * - `restored`: records came back;
+ * - `restored`: records came back: bags, versions, iterations or chats
+ *   (machine care's last times with them, maybe);
+ * - `care`: machine care's last times came back, and nothing else (D189):
+ *   the device's first look was backed up, say, before any bag. No bags to
+ *   say are back;
  * - `nothing`: nothing to restore (this device has bags, Decaid holds no
  *   backup, or nothing in it is new here);
  * - `unreachable`: Decaid did not answer (no answer, a timeout, busy), so it
@@ -138,7 +160,7 @@ export async function createIdbStorage(options: CreateIdbStorageOptions): Promis
  * - `unreadable`: Decaid answered something CafAI cannot read (the reader
  *   reported it as drift); never taken for an empty backup.
  */
-export type RestoreResult = 'restored' | 'nothing' | 'unreachable' | 'unreadable';
+export type RestoreResult = 'restored' | 'care' | 'nothing' | 'unreachable' | 'unreadable';
 
 function restoreFailure(error: unknown): 'unreachable' | 'unreadable' {
   if (!(error instanceof GatewayError)) return 'unreadable';
@@ -154,8 +176,9 @@ export async function restoreFromMirror(storage: Storage): Promise<RestoreResult
   try {
     const remote = await storage.mirror.pull();
     if (remote === null) return 'nothing';
-    const { imported } = await storage.porter.importAll(remote, 'merge');
-    return imported > 0 ? 'restored' : 'nothing';
+    const { imported, care } = await storage.porter.importAll(remote, 'merge');
+    if (imported > care) return 'restored';
+    return care > 0 ? 'care' : 'nothing';
   } catch (error) {
     // A backup this version cannot read is no backup, as for the first push.
     return error instanceof ImportError ? 'nothing' : restoreFailure(error);
@@ -184,8 +207,12 @@ export const LATE_RESTORE_MAX_MS = 30_000;
 export const LATE_RESTORE_FOR_MS = 10 * 60_000;
 
 export interface LateRestoreOptions {
-  /** Records came back (`records`), or the API key from its copy in Decaid (`key`). */
-  onRestored(restored: { records: boolean; key: boolean }): void;
+  /**
+   * Records came back (`records`: bags, versions, iterations or chats),
+   * machine care's last times alone (`care`), or the API key from its copy
+   * in Decaid (`key`).
+   */
+  onRestored(restored: { records: boolean; care: boolean; key: boolean }): void;
   timers?: RestoreTimers;
   now?: () => number;
 }
@@ -237,8 +264,8 @@ export function startLateRestore(storage: Storage, options: LateRestoreOptions):
       storage.keyBackup.restoreIfMissing().catch(() => false),
     ]);
     if (done) return;
-    if (records === 'restored' || records === 'nothing') done = true;
-    if (records === 'restored' || key) options.onRestored({ records: records === 'restored', key });
+    if (records === 'restored' || records === 'care' || records === 'nothing') done = true;
+    if (records === 'restored' || records === 'care' || key) options.onRestored({ records: records === 'restored', care: records === 'care', key });
     schedule();
   }
 
@@ -267,6 +294,7 @@ export function startLateRestore(storage: Storage, options: LateRestoreOptions):
 }
 
 export { createDbHandle, openCafaiDb, CAFAI_DB_NAME } from './db.ts';
+export { CARE_DB_NAME } from './careDb.ts';
 export { StorageError, STORAGE_MESSAGES, type StorageErrorKind } from './errors.ts';
 export {
   conversationKey,

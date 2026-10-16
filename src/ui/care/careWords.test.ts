@@ -10,10 +10,10 @@ const day = (n: number) => FROM + n * DAY_MS;
 
 function record(overrides: Partial<CareRecord> = {}): CareRecord {
   const at = new Date(FROM).toISOString();
-  return { id: 'detergent-clean', doneAt: at, by: 'tick', countFrom: at, shotTotal: 100, steamTotal: 30, updatedAt: at, ...overrides };
+  return { id: 'detergent-clean', doneAt: at, by: 'tick', countFrom: at, shotTotal: 100, steamTotal: 30, newestShotAt: null, newestSteamAt: null, updatedAt: at, ...overrides };
 }
 
-const totals = (overrides: Partial<Totals> = {}): Totals => ({ shots: 100, steams: 30, newestShotMs: null, newestSteamMs: null, ...overrides });
+const totals = (overrides: Partial<Totals> = {}): Totals => ({ shots: 100, steams: 30, newestShot: null, newestSteam: null, ...overrides });
 const NEVER = { doneAt: null, by: null } as const;
 
 describe('numbers and time', () => {

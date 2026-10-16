@@ -5,6 +5,7 @@
  * the most overdue. Pure: the service (careService.ts) keeps the records and
  * Decaid's totals, the screens say it in words (src/ui/care/careWords.ts).
  */
+import { parseDecaidTimestamp } from '../../api/time.ts';
 import type { CareRecord, CareSettings, WaterBand } from '../../storage/types.ts';
 
 /**
@@ -82,18 +83,42 @@ export function reminderFor(step: TrackedStepId, settings: CareSettings): Remind
   }
 }
 
+/** Decaid's newest record of a kind, as Decaid gave it: its id, and when it began (local, no zone). */
+export interface NewestRecord {
+  id: string;
+  at: string;
+}
+
 /** Decaid's totals as CafAI last read them (D185). */
 export interface Totals {
-  /** Every shot Decaid keeps (GET /api/v1/shots?limit=1, its total); null while unknown. */
+  /** Every shot Decaid keeps (its shot list's total); null while unknown. */
   shots: number | null;
   /** Every steam record Decaid keeps (GET /api/v1/steams/ids); null while unknown, or on a Decaid without them. */
   steams: number | null;
-  /** When the newest shot and the newest steam began, epoch ms; null while unknown, or without one. */
-  newestShotMs: number | null;
-  newestSteamMs: number | null;
+  /** The newest shot and the newest steam (GET /api/v1/shots/latest, /steams/latest); null without one, or while its total is unknown. */
+  newestShot: NewestRecord | null;
+  newestSteam: NewestRecord | null;
 }
 
-export const UNKNOWN_TOTALS: Totals = { shots: null, steams: null, newestShotMs: null, newestSteamMs: null };
+export const UNKNOWN_TOTALS: Totals = { shots: null, steams: null, newestShot: null, newestSteam: null };
+
+/** What a step's record keeps of Decaid's totals (D185): the totals, and the newest records' times, from when its count began. */
+export type CareBaselines = Pick<CareRecord, 'shotTotal' | 'steamTotal' | 'newestShotAt' | 'newestSteamAt'>;
+
+/** A record's baselines from totals read now. */
+export function baselinesOf(totals: Totals): CareBaselines {
+  return { shotTotal: totals.shots, steamTotal: totals.steams, newestShotAt: totals.newestShot?.at ?? null, newestSteamAt: totals.newestSteam?.at ?? null };
+}
+
+/**
+ * Old shots Decaid took in between two readings (de1app's history, say),
+ * among the ones pulled: baselines at or under `upTo`, the shot total of the
+ * reading before, move up by `count` (D185).
+ */
+export interface ImportedShots {
+  count: number;
+  upTo: number;
+}
 
 /** Shots (or steams) since a step's count began: the total now less the one then; null while either is unknown. */
 export function countSince(baseline: number | null, total: number | null): number | null {
@@ -102,24 +127,51 @@ export function countSince(baseline: number | null, total: number | null): numbe
 }
 
 /**
- * A baseline brought up to date with fresh totals, or the same one: filled in
- * while unknown; started again from now when the total fell (shots deleted,
- * another Decaid) or when every record that is new since is older than the
- * count's start (old ones imported).
+ * Whether Decaid's newest record now began after the one it had then, both
+ * Decaid's times, read alike on this device; null when either is unknown.
+ * Never against CafAI's own clock: a phone in another zone, or a tablet whose
+ * date is off, would read Decaid's times as earlier or later than they are.
  */
-function rebased(baseline: number | null, total: number | null, newestMs: number | null, fromMs: number): number | null {
+function newerThan(now: NewestRecord | null, then: string | null): boolean | null {
+  if (now === null || then === null) return null;
+  const nowMs = parseDecaidTimestamp(now.at);
+  const thenMs = parseDecaidTimestamp(then);
+  return Number.isFinite(nowMs) && Number.isFinite(thenMs) ? nowMs > thenMs : null;
+}
+
+interface Baseline {
+  total: number | null;
+  newestAt: string | null;
+}
+
+/**
+ * A baseline brought up to date with fresh totals, or the same one: filled in
+ * while unknown; started again from now when the total fell (records
+ * deleted, another Decaid), or when records were added and none began after
+ * Decaid's newest when the count began (old ones imported); moved up by the
+ * old ones imported among new ones.
+ */
+function rebased(baseline: Baseline, total: number | null, newest: NewestRecord | null, imported: ImportedShots | null): Baseline {
   if (total === null) return baseline;
-  if (baseline === null || total < baseline) return total;
-  if (total > baseline && newestMs !== null && newestMs < fromMs) return total;
-  return baseline;
+  const now = { total, newestAt: newest?.at ?? null };
+  if (baseline.total === null || total < baseline.total) return now;
+  const moved = imported !== null && imported.count > 0 && baseline.total <= imported.upTo ? Math.min(total, baseline.total + imported.count) : baseline.total;
+  if (total > moved && newerThan(newest, baseline.newestAt) === false) return now;
+  return { total: moved, newestAt: baseline.newestAt };
 }
 
 /** A record's baselines with fresh totals (D185), or null when they need no change. */
-export function rebaseline(record: CareRecord, totals: Totals): Pick<CareRecord, 'shotTotal' | 'steamTotal'> | null {
-  const fromMs = Date.parse(record.countFrom);
-  const shotTotal = rebased(record.shotTotal, totals.shots, totals.newestShotMs, fromMs);
-  const steamTotal = rebased(record.steamTotal, totals.steams, totals.newestSteamMs, fromMs);
-  return shotTotal === record.shotTotal && steamTotal === record.steamTotal ? null : { shotTotal, steamTotal };
+export function rebaseline(record: CareRecord, totals: Totals, importedShots: ImportedShots | null = null): CareBaselines | null {
+  const shots = rebased({ total: record.shotTotal, newestAt: record.newestShotAt }, totals.shots, totals.newestShot, importedShots);
+  // Decaid's de1app import brings shots only; steams come in only with a backup of a whole Decaid (D185).
+  const steams = rebased({ total: record.steamTotal, newestAt: record.newestSteamAt }, totals.steams, totals.newestSteam, null);
+  const next: CareBaselines = { shotTotal: shots.total, steamTotal: steams.total, newestShotAt: shots.newestAt, newestSteamAt: steams.newestAt };
+  const same =
+    next.shotTotal === record.shotTotal &&
+    next.steamTotal === record.steamTotal &&
+    next.newestShotAt === record.newestShotAt &&
+    next.newestSteamAt === record.newestSteamAt;
+  return same ? null : next;
 }
 
 /** A step as it stands now. */

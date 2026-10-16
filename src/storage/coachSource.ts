@@ -13,7 +13,7 @@
  */
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { closeEventTarget, createDbHandle, DURABLE, type LostReason } from './db.ts';
-import { StorageError } from './errors.ts';
+import { isVersionError, StorageError } from './errors.ts';
 
 export const COACH_SOURCE_DB_NAME = 'cafai-coach-source';
 const COACH_SOURCE_DB_VERSION = 1;
@@ -73,7 +73,7 @@ function openCoachSourceDb(name: string, onLost: (reason: LostReason) => void): 
 }
 
 function sourceError(error: unknown, action: 'read' | 'save'): StorageError {
-  if (error instanceof StorageError && error.kind === 'superseded') return error;
+  if (isVersionError(error)) return error;
   const name = typeof error === 'object' && error !== null && 'name' in error ? String(error.name) : null;
   if (name === 'QuotaExceededError') {
     return new StorageError('quota', 'This device is out of storage space, so where the coach runs was not saved.', name);

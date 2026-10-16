@@ -8,10 +8,10 @@ import { createFakeServices, type FakeServices } from './fakeServices.ts';
 
 export const DAY = 24 * 60 * 60 * 1000;
 
-/** A step's record, marked done `daysAgo` days ago with Decaid's totals then. */
+/** A step's record, marked done `daysAgo` days ago with Decaid's totals then (its newest records' times unknown). */
 export function doneRecord(id: string, daysAgo: number, overrides: Partial<CareRecord> = {}): CareRecord {
   const at = new Date(Date.now() - daysAgo * DAY).toISOString();
-  return { id, doneAt: at, by: 'tick', countFrom: at, shotTotal: 100, steamTotal: 30, updatedAt: at, ...overrides };
+  return { id, doneAt: at, by: 'tick', countFrom: at, shotTotal: 100, steamTotal: 30, newestShotAt: null, newestSteamAt: null, updatedAt: at, ...overrides };
 }
 
 export interface CareServices extends FakeServices {

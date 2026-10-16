@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createCareRepository, openCareDb } from './careDb.ts';
 import { createDbHandle, openCafaiDb } from './db.ts';
 import { createRepositories } from './repositories.ts';
 import { openSecretStore, REDACTED } from './secrets.ts';
@@ -31,8 +32,10 @@ const NOW = new Date('2026-10-03T09:30:00.000Z');
 async function setup(secrets?: Pick<SecretStore, 'getApiKey'>) {
   const name = uniqueDbName();
   const handle = createDbHandle((onLost) => openCafaiDb(name, onLost));
+  const careHandle = createDbHandle((onLost) => openCareDb(uniqueDbName('care'), onLost));
   const db = () => handle.get();
-  const repos = createRepositories({ db, onWrite: () => undefined, defaultModel: MODEL });
+  const careDb = () => careHandle.get();
+  const repos = { ...createRepositories({ db, onWrite: () => undefined, defaultModel: MODEL }), care: createCareRepository({ db: careDb, onWrite: () => undefined }) };
   const mirror = {
     pushes: 0,
     replaced: 0,
@@ -45,13 +48,14 @@ async function setup(secrets?: Pick<SecretStore, 'getApiKey'>) {
   };
   const porter = createDataPorter({
     db,
+    careDb,
     secrets: secrets ?? { getApiKey: async () => null },
     mirror,
     appVersion: '1.2.3',
     defaultModel: MODEL,
     now: () => NOW,
   });
-  return { repos, porter, mirror };
+  return { repos, porter, mirror, careHandle };
 }
 
 const VERSION_2 = makeVersion({
@@ -287,7 +291,7 @@ describe('importAll replace', () => {
     await seed(a.repos);
     const exported = await a.porter.exportAll();
     const b = await setup();
-    expect(await b.porter.importAll(exported, 'replace')).toEqual({ imported: 5 });
+    expect(await b.porter.importAll(exported, 'replace')).toEqual({ imported: 5, care: 0 });
     expect(b.mirror).toMatchObject({ pushes: 1, replaced: 1 });
   });
 
@@ -307,7 +311,7 @@ describe('importAll merge', () => {
     await seed(a.repos);
     const exported = await a.porter.exportAll();
     const b = await setup();
-    expect(await b.porter.importAll(serializeExport(exported), 'merge')).toEqual({ imported: 5 });
+    expect(await b.porter.importAll(serializeExport(exported), 'merge')).toEqual({ imported: 5, care: 0 });
     expect(await b.porter.exportAll()).toEqual(exported);
   });
 
@@ -315,7 +319,7 @@ describe('importAll merge', () => {
     const { repos, porter } = await setup();
     await repos.bags.put(makeBag({ id: 'bag_local' }));
     const result = await porter.importAll(exportOf({ bags: [makeBag()], iterations: [makeIteration()] }), 'merge');
-    expect(result).toEqual({ imported: 2 });
+    expect(result).toEqual({ imported: 2, care: 0 });
     expect((await repos.bags.list()).map((bag) => bag.id).sort()).toEqual(['bag_kiambu', 'bag_local']);
   });
 
@@ -337,7 +341,7 @@ describe('importAll merge', () => {
       }),
       'merge',
     );
-    expect(result).toEqual({ imported: 0 });
+    expect(result).toEqual({ imported: 0, care: 0 });
     expect((await repos.bags.get('bag_kiambu'))?.name).toBe('local');
     expect((await repos.conversations.get('conv_kiambu'))?.apiMessages).toHaveLength(3);
   });
@@ -386,8 +390,26 @@ describe("machine care's records (D189)", () => {
 
     const b = await setup();
     await b.repos.care.put(makeCareRecord({ id: 'descale' }));
-    expect(await b.porter.importAll(JSON.parse(serializeExport(file)), 'replace')).toEqual({ imported: 2 });
+    expect(await b.porter.importAll(JSON.parse(serializeExport(file)), 'replace')).toEqual({ imported: 2, care: 2 });
     expect(await b.repos.care.list()).toEqual(file.care);
+  });
+
+  it('live in their own database: one that cannot be opened stops an import before anything is written', async () => {
+    const name = uniqueDbName();
+    const handle = createDbHandle((onLost) => openCafaiDb(name, onLost));
+    const porter = createDataPorter({
+      db: () => handle.get(),
+      careDb: () => Promise.reject(new DOMException('The requested version (1) is less than the existing version (2).', 'VersionError')),
+      secrets: { getApiKey: async () => null },
+      mirror: { schedulePush: () => undefined },
+      appVersion: '1.2.3',
+      defaultModel: MODEL,
+      now: () => NOW,
+    });
+    await expect(porter.importAll(exportOf({ bags: [makeBag()], care: [makeCareRecord()] }), 'replace')).rejects.toMatchObject({ kind: 'newer' });
+    const db = await handle.get();
+    expect(await db.getAll('bags')).toEqual([]);
+    handle.close();
   });
 
   it('an older file, without them, imports and leaves the steps as they were on a merge', async () => {
@@ -403,9 +425,9 @@ describe("machine care's records (D189)", () => {
     const { repos, porter } = await setup();
     await repos.care.put(makeCareRecord({ doneAt: '2026-10-08T08:00:00.000Z', updatedAt: '2026-10-08T08:00:00.000Z' }));
     const older = makeCareRecord({ doneAt: '2026-10-01T08:00:00.000Z', updatedAt: '2026-10-12T08:00:00.000Z' });
-    expect(await porter.importAll(exportOf({ care: [older] }), 'merge')).toEqual({ imported: 0 });
+    expect(await porter.importAll(exportOf({ care: [older] }), 'merge')).toEqual({ imported: 0, care: 0 });
     const later = makeCareRecord({ doneAt: '2026-10-11T08:00:00.000Z', shotTotal: 180 });
-    expect(await porter.importAll(exportOf({ care: [later, makeCareRecord({ id: 'rinza' })] }), 'merge')).toEqual({ imported: 2 });
+    expect(await porter.importAll(exportOf({ care: [later, makeCareRecord({ id: 'rinza' })] }), 'merge')).toEqual({ imported: 2, care: 2 });
     expect(await repos.care.list()).toEqual([later, makeCareRecord({ id: 'rinza' })]);
   });
 

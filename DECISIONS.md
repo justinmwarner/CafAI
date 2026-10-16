@@ -2887,43 +2887,85 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
   week of neither needs nothing; and litres cannot be counted: Decaid keeps
   no record of a flush or of hot water, and CafAI sees only what runs while
   it is open.
-- **D185. Counts come from Decaid's totals, one request each, never by
-  paging back.** Each step's record (D189) keeps Decaid's shot total and
-  steam total from when its count began, and the count since is the total
-  now less that (`countSince`, `rebaseline`): `GET /api/v1/shots?limit=1`
-  answers the total with the newest shot, `GET /api/v1/steams/ids` the
-  steams and `GET /api/v1/steams/latest` the newest steam (`listSteamIds` and
-  `getLatestSteam` in `src/api/client.ts`, new to CafAI, with their readers,
-  the mock and the contract checks). A total that fell (shots deleted,
-  another Decaid) starts that step's count again from now, and so does a
-  newest record older than the step's start (old ones imported); a Decaid
-  without steam records (404) counts Rinza by days alone. The care service
+- **D185. Counts come from Decaid's totals, read when its newest record is
+  new, never by paging back.** Each step's record (D189) keeps Decaid's shot
+  total and steam total from when its count began, and when Decaid's newest
+  shot and newest steam began then, as Decaid wrote it (`newestShotAt`,
+  `newestSteamAt`); the count since is the total now less the one then
+  (`countSince`, `rebaseline`). A count asks for the newest of each first,
+  `GET /api/v1/shots/latest` and `GET /api/v1/steams/latest`, which read no
+  measurements (`getLatestShot`, `getLatestSteam` in `src/api/client.ts`),
+  and for a total only when that newest is one it has not counted with:
+  `GET /api/v1/shots?limit=1` (the total, with that newest) and
+  `GET /api/v1/steams/ids` (the steams as ids; `listSteamIds` and
+  `getLatestSteam` are new to CafAI, with their readers, the mock and the
+  contract checks). A total that fell (records deleted, another Decaid)
+  starts that step's count again from now, and so do records added when none
+  began after Decaid's newest then (old ones imported). Decaid's times are
+  compared with Decaid's only, never with CafAI's clock: a phone in another
+  zone, or a tablet with its date off, reads them hours or a year away. When
+  the shot total grows by more than one shot a minute could have, between
+  the newest of the reading before and the newest now, a page of the 20
+  newest shots tells the ones that began after the newest then from the old
+  ones, and every baseline from before moves up by the old ones (de1app's
+  history brought into Decaid among new shots); a page that ends before the
+  newest then cannot tell, and the count stands. A Decaid without steam
+  records (404) counts Rinza by days alone. The care service
   (`src/app/care/careService.ts`) counts at start, 5 s after a shot or a
-  steam ends, when Decaid answers again, when the page comes back into view
-  and when the Care screen opens, at most once every 10 s and never during a
-  shot, and keeps the last totals on the device (`cafai.care.counts` in
-  localStorage) for the stats card's first paint. Why: the roadmap's paging
-  back to the last clean has nothing to stop at, since Decaid never saves a
-  run of a cleaning profile as a shot (`_persistShotIfNeeded`,
-  de1_state_manager.dart:911-917 at aab5f93, skips beverage types cleaning
-  and calibrate); and each page of the shot list makes Decaid parse every
-  shot's measurements (shot_mapper.dart:14-49), as `GET /api/v1/steams` does
-  every steam's (steam_mapper.dart:11-30), where a total is one COUNT and the
-  ids one column. On a slow tablet one small request beats pages of curves.
+  steam ends, when Decaid answers again unless a count it answered ran in
+  the last 10 s, when the page comes back into view and when the Care screen
+  opens, at most once every 10 s and never during a shot; Mark done and a
+  cycle seen take the totals of the count running, or of one started then.
+  It keeps the last totals, with the newest records, on the device
+  (`cafai.care.counts` in localStorage) for the stats card's first paint and
+  the next page's first count. A count writes every step's record in one
+  transaction, compare and set (`CareRepository.update`): a step's totals
+  change only while its record is still the one the count saw (the same last
+  done and start), a first look is written only while none is stored, and a
+  step on screen takes what its record is then unless it changed here
+  meanwhile. So a mark, a cycle seen, a restore's merge, an import or
+  another tab's write that lands while a count is on its way is never
+  written over. Left: old shots imported in fewer than one a minute would
+  have pulled since the newest of the reading before count as shots since,
+  and so do steam records Decaid takes in from another Decaid's backup (its
+  de1app import brings shots only, and its steam list has no page to check
+  against). Why: the roadmap's paging back to the last clean has nothing to
+  stop at, since Decaid never saves a run of a cleaning profile as a shot
+  (`_persistShotIfNeeded`, de1_state_manager.dart:911-917 at aab5f93, skips
+  beverage types cleaning and calibrate); and each page of the shot list
+  makes Decaid parse every shot's measurements (shot_mapper.dart:14-49), as
+  `GET /api/v1/steams` does every steam's (steam_mapper.dart:11-30), where a
+  total is one COUNT, the ids one column and the newest one row without its
+  measurements (`getLatestShotMeta` and `getLatestSteamMeta`,
+  shot_dao.dart:192-204 and steam_dao.dart:58-70). Yet the ids of a busy
+  café's year of steams come to over a megabyte, and a page of one parses
+  that shot's measurements: on a slow tablet two rows a count, and a total
+  only after a shot or a steam, beat both every time. The drift watch
+  (`WATCH` in `scripts/decaid-watch.mjs`) follows what this rests on: the
+  shot and steam DAOs and tables, the storage service, and build.yaml, whose
+  `store_date_time_values_as_text` is why a record's time has no zone.
 - **D186. A step starts over when it is marked done, or when CafAI saw
   the machine's own Clean or Descale run for a minute; Forward Flush x5
   never counts.** **Mark done** sets the step's last time to now, with
-  Decaid's totals then (the last ones known after 3 s without an answer),
-  and **Undo** puts back the record it replaced, until the page reloads. A
-  `cleaning` or `descaling` state seen for at least a minute and then any
-  other state, started in streamline or on the machine while CafAI is open,
-  marks the weekly clean or the descale done at the last frame seen running
+  Decaid's totals then (the count running's, or one's started then; the last
+  ones known after 3 s without an answer), and **Undo** puts back the record
+  it replaced, until the page reloads. A `cleaning` or `descaling` state seen
+  for at least a minute and then any other state, started in streamline or
+  on the machine while CafAI is open, marks the weekly clean or the descale
+  done when CafAI got the last frame seen running
   (`src/app/care/cycleWatch.ts`): the firmware sends no end, a shorter run
   was stopped, and a frame CafAI could not see ends nothing; Undo works for
-  it too. A run of Decent's Cleaning/Forward Flush x5 counts for nothing, in
-  Decaid's shot list or live. Why: D161 put the cycles off, so CafAI starts
-  none, but a Clean or a Descale seen running is the machine saying so, at no
-  cost to the barista, and a minute keeps one stopped at once from counting.
+  it too. Only a new frame from the machine's socket, while it is open,
+  feeds the watch, and the minute is measured by the frames' own times: a
+  scale frame or a socket change beside the last frame kept from before is
+  no frame, and a stretch with the socket down counts as far as the frames
+  on either side of it say. A run of Decent's Cleaning/Forward Flush x5
+  counts for nothing, in Decaid's shot list or live. Why: D161 put the
+  cycles off, so CafAI starts none, but a Clean or a Descale seen running is
+  the machine saying so, at no cost to the barista, and a minute keeps one
+  stopped at once from counting; timed by any change CafAI saw, a Clean
+  stopped after 10 s, with its socket down and the scale still sending,
+  would have counted a minute later.
   The profile cannot say: Decaid never saves its run as a shot, and Decent's
   quick start uses the same profile for the daily flush with water only, so
   its run says nothing about detergent. Undo, because a mistaken tap on the
@@ -2935,9 +2977,15 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
   (distilled, RO, very soft), 30 to 120 ppm, Over 120 ppm: the water page's
   TDS bands), **Intake filter** (Not sure, V1 (citric acid), V2 (baking soda))
   and **Remind me on the stats card** (on), each applied at once and kept in
-  one `care` block of the settings, left out while it holds the defaults, as
-  the key-copy choice is. Not sure reminds as 30 to 120 ppm, and as V1, the
-  more often of the two filters. The Care screen's descale and intake filter
+  one `care` block of the settings: absent until someone answers on the
+  device, and kept from then on, an answer put back to Not sure included, as
+  the key-copy choice is, so a merge takes the incoming block only where
+  there is none. A change saves only its own answer (`setSettings` sends the
+  patch, merged into the stored block in one transaction), so another tab's
+  answer to another question stays; a save that fails shows what is saved
+  again for its own answer alone, unless a later change of it is on its way.
+  Not sure reminds as 30 to 120 ppm, and as V1, the more often of the two
+  filters. The Care screen's descale and intake filter
   steps say what reminds them and link to Settings ("Set it in Settings",
   "Change it in Settings"), which brings the section into view. Why:
   settings live in Settings, and D152 made the section for this; the Care
@@ -2957,21 +3005,30 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
   that can wait days is neither, and on every screen, the Shot view's too, it
   would teach the barista to look past the alert. The stats card is where the
   machine is read, and it shows when a session starts.
-- **D189. Care's records are an IndexedDB store of their own, in
-  Decaid's backup and the export, merged by their last time.**
-  `CAFAI_DB_VERSION` 2 adds the `care` store, one record per step (`id`,
-  `doneAt`, `by`, `countFrom`, `shotTotal`, `steamTotal`, `updatedAt`); the
-  upgrade only adds it. The mirror writes the records as one more key,
-  `care`, in namespace `cafai`; the export carries an optional `care` list,
-  schema version 1 still, which an older CafAI drops. A merge (an import, a
-  restore) keeps the later last done, a step marked done over one never
-  marked, and of two never marked the earlier start (`careRecordWins` in
-  `src/storage/porter.ts`). Like the bags, they are the device's own: a phone
-  and the tablet each keep theirs, and Decaid's copy is the backup, not a
-  meeting place. Why: a step's last time is the barista's data, like a bag,
+- **D189. Care's records are an IndexedDB database of their own, in
+  Decaid's backup and the export, merged by their last time.** One record
+  per step (`id`, `doneAt`, `by`, `countFrom`, `shotTotal`, `steamTotal`,
+  `newestShotAt`, `newestSteamAt`, `updatedAt`; D185 says what the totals
+  and times are) in `cafai-care` (`src/storage/careDb.ts`), beside CafAI's own
+  database, which stays at version 1 (`CAFAI_DB_VERSION`), as CafAI 0.1.2
+  made it; `Storage.care` hides where they live. The mirror writes the
+  records as one more key, `care`, in namespace `cafai`; the export carries
+  an optional `care` list, schema version 1 still, which an older CafAI
+  drops; an import writes them in a transaction of their own, after CafAI's
+  records, with both databases open before anything is written. A merge (an
+  import, a restore) keeps the later last done, a step marked done over one
+  never marked, and of two never marked the earlier start (`careRecordWins`
+  in `src/storage/porter.ts`). Like the bags, they are the device's own: a
+  phone and the tablet each keep theirs, and Decaid's copy is the backup, not
+  a meeting place. Why: a step's last time is the barista's data, like a bag,
   and must survive what a bag survives; updatedAt cannot decide, since a
   device that lost its storage begins counting afresh, and its new records
-  must not outrank the ones the backup brings back.
+  must not outrank the ones the backup brings back. A database of its own,
+  not a store in CafAI's: a new store there is a new version of it, and
+  IndexedDB opens no database at a version lower than the one on disk, so a
+  tablet put back on 0.1.2 would stop at "CafAI could not start" on every
+  load, before ever reaching Decaid's backup. A store added later goes the
+  same way.
 - **D190. Counting starts the first time CafAI looks.** A step never
   marked done gets its record the first time CafAI counts it, with Decaid's
   totals then, so a new install is never due at once; the Care screen says
@@ -3066,3 +3123,33 @@ the transcript with the turn's own blocks in it (`sendUser` in
   (D64), and when the rest is refused too, as for a shot Decaid no longer
   has, one notice names all of it, as before. Why: a write must lose only
   what could not be written, and say only that.
+
+### Fixes to care reminders (2026-10-15)
+
+The review of D183-D191, fixed the same day; the decisions it changed are
+updated in place above.
+
+- **D-FIX-CARE-1. A database a newer CafAI saved says so.** When IndexedDB
+  will not open one of CafAI's databases because its version on disk is
+  higher than this CafAI's (a VersionError), CafAI says "The data on this
+  device was saved by a newer version of CafAI. Install that version again
+  to keep using it." (`newer` in `src/storage/errors.ts`), whichever
+  database it is: CafAI's data, machine care's steps or the key's. A
+  connection that a newer CafAI in another window closed keeps its own
+  sentence, "A newer version of CafAI is open in another window. Reload this
+  page to keep working." Why: the VersionError was read as the second case,
+  so a CafAI put back on the tablet after a newer one said another window
+  held it, on every reload, where there was none; what helps is the newer
+  CafAI, as a newer export file says to update CafAI.
+- **D-FIX-CARE-2. A restore that brings back machine care's last times and
+  no bag says nothing of bags.** The porter counts machine care's records
+  apart (`importAll` answers `{ imported, care }`, `src/storage/porter.ts`),
+  and a restore that brought back those alone is `care`, not `restored`
+  (`restoreFromMirror` in `src/storage/index.ts`); so is the first push's
+  merge and the late restore's. The key card then does not say "Your bags
+  came from Decaid's backup", nor the chat "Your bags are back from Decaid's
+  backup", while the Care screen reads its last times again
+  (`src/app/createServices.ts`). History > Import still counts them among
+  the records it imported. Why: a device CafAI opened before any bag backs
+  up the nine records of its first look (D190), and a phone that restores
+  that backup has no bags to show.

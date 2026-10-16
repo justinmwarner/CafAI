@@ -105,6 +105,17 @@ export function createMemoryStorage(options: MemoryStorageOptions): MemoryStorag
     care: {
       list: async () => care.all().sort(byId),
       put: care.put,
+      // Compare and set, as the care database's: each change against what is held then.
+      update: async (changes) => {
+        const after = new Map<string, CareRecord | undefined>();
+        for (const [id, change] of changes) {
+          const held = await care.get(id);
+          const next = change(held);
+          if (next !== undefined) await care.put(next);
+          after.set(id, next ?? held);
+        }
+        return after;
+      },
     },
     secrets: {
       getApiKey: async () => apiKey,
