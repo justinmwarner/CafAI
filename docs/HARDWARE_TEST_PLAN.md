@@ -564,6 +564,55 @@ minutes, and put every setting back after.
 7. **Delete.** Delete the test wake times and set the minutes back.
    Expected: Decaid's page shows them gone.
 
+## 16. TDS and EY on the shot card (D-TDS-1-D-TDS-9)
+
+A refractometer reading typed on a shot's card goes to Decaid's record and
+to the coach. The mock shows the field and the coach; only the tablet shows
+its keyboard, and only a real upload shows Visualizer taking the numbers.
+Without a refractometer, type a made-up reading (9.25).
+
+1. **The field.** Pull a shot. On its card, tap **TDS · Add**. Expected:
+   the keyboard opens with digits and a decimal point (a comma on some
+   locales), and the field stays in view above it.
+2. **A reading.** Type it the way the keyboard offers ("9,25" or "9.25")
+   and tap the keyboard's Done. Expected: the card shows TDS 9.25 % and an
+   EY of TDS × the card's yield ÷ its dose. Record both.
+3. **The coach.** Answer the taste. Expected: the coach's reply uses the
+   reading as a measurement, and names no taste for it.
+4. **Decaid's record.** In Decaid's shot history, or
+   `GET /api/v1/shots/{id}`: `drinkTds` 9.25 and `drinkEy` as on the card.
+5. **Visualizer.** With Decaid's Visualizer plugin set up, once with the
+   reading typed a minute after the shot (after the upload) and once before
+   the upload. Expected: visualizer.coffee shows the TDS and EY both times.
+   Record which went through.
+6. **Change and remove.** Change the reading, then Remove it. Expected:
+   Decaid's record follows, both fields gone after Remove, and so does
+   Visualizer.
+7. **Offline.** With Decaid out of reach (on a phone, Wi-Fi off), save a
+   reading. Expected: it reaches Decaid once Decaid is back.
+
+## 17. °F (D-TEMP-1-D-TEMP-7)
+
+Settings > Appearance > Temperatures shows °F; Decaid and the profiles keep
+°C. Set it to °F for this section, and back to °C at its end.
+
+1. **Readouts.** Expected: the stats card's Group and Steam read °F and
+   follow the machine live; Group's target is the profile's in °F (93 °C
+   reads "target 199.4").
+2. **Steppers.** Settings > Steam, hot water and flush: set the steam
+   temperature to 300 °F. Expected: Decaid's own steam screen shows 149 °C
+   and the DE1 steams at it; a reload of CafAI still reads 300 °F. Tap More
+   once: 302 °F, and 150 °C in Decaid. The same for hot water (167 °F is
+   75 °C) and the flush (194 °F is 90 °C). Put the three back after.
+3. **The drinks' views.** Steam, pour hot water, then flush from the top
+   bar. Expected: each view's temperature reads °F.
+4. **The coach.** With the real coach (an API key or CafAI Bridge), answer
+   "Sour / sharp". Expected: a change card in °F ("+1.8 °F") and the
+   coach's words in °F, never "33.8 °F hotter". Then type "try 200 °F":
+   the proposal is 93.5 °C, shown as 200.3 °F.
+5. **Back to °C.** Expected: every screen, the chat and History read °C
+   again.
+
 ## Results
 
 | Section | Step | Expected | Observed | Pass? |
@@ -623,6 +672,18 @@ minutes, and put every setting back after.
 | 15 | 5 | Off in CafAI: Decaid's switch on, Sleep 0, the wake time listed | | |
 | 15 | 6 | Screen off: does the DE1 still wake? | | |
 | 15 | 7 | Deleted from Decaid too | | |
+| 16 | 1 | TDS · Add: the decimal keyboard, the field above it | | |
+| 16 | 2 | TDS and EY on the card; EY = TDS × yield ÷ dose | | |
+| 16 | 3 | The coach's reply uses the reading, with no taste for it | | |
+| 16 | 4 | `drinkTds` and `drinkEy` in Decaid's record | | |
+| 16 | 5 | On visualizer.coffee, typed after and before the upload | | |
+| 16 | 6 | Changed, then removed: Decaid and Visualizer follow | | |
+| 16 | 7 | Saved offline, in Decaid once it is back | | |
+| 17 | 1 | Group and Steam in °F, live; the target in °F | | |
+| 17 | 2 | 300 °F kept as 149 °C, read back as 300; More gives 302 (150 °C); hot water and flush the same | | |
+| 17 | 3 | Each drink's view in °F | | |
+| 17 | 4 | Change card "+1.8 °F", the coach in °F; 200 °F proposed as 93.5 °C (200.3 °F) | | |
+| 17 | 5 | °C everywhere again | | |
 
 Send back this table, the saved shot and profile JSON files, the `[CafAI]`
 lines from `/api/v1/webview/logs`, the output of `npm run test:decaid`, and,
