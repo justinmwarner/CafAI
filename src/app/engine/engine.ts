@@ -85,7 +85,7 @@ import { isShotRunning as shotInProgress } from '../../api/workflow.ts';
 import { redactKeyLike } from '../../storage/redact.ts';
 import type { GrinderInfo, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
 import type { BagPhoto, ExtractedBag } from '../../llm/extractBag.ts';
-import type { ContentBlock, Effort, PendingUiCall, RunnerTool, ToolResultBlock, ToolValidation } from '../../llm/types.ts';
+import type { ContentBlock, Effort, LlmMessage, PendingUiCall, RunnerTool, ToolResultBlock, ToolValidation } from '../../llm/types.ts';
 import type {
   AppliedChange,
   Bag,
@@ -1759,8 +1759,11 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     s.held = [];
     if (results.length === 0 && extra.length === 0) return;
     // A verdict comes after the shot's own event left, so it rides with the next turn; so does a TDS reading (D167).
-    const rated = untoldRatings(s.conversation.apiMessages, state.messages).map(shotRatedBlock);
-    const measured = untoldReadings(s.conversation.apiMessages, state.messages).map(shotMeasuredBlock);
+    // Untold means untold by this turn too: a shot's own event in `extra` tells the reading its record came with
+    // (ENGINE_PROTOCOL rule 10), so the turn never carries that reading twice.
+    const heard: LlmMessage[] = [...s.conversation.apiMessages, { role: 'user', content: extra }];
+    const rated = untoldRatings(heard, state.messages).map(shotRatedBlock);
+    const measured = untoldReadings(heard, state.messages).map(shotMeasuredBlock);
     const blocks: ContentBlock[] = [...results, ...rated, ...measured, ...extra];
     s.conversation = {
       ...s.conversation,

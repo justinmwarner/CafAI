@@ -2380,6 +2380,20 @@ describe('coach engine', () => {
       expect(lastUserTurn(requests).filter((block) => block.type === 'text')).toEqual([measured(8.5, 23.7)]);
     });
 
+    it("tells a reading the shot's record came with in the shot's own event alone, never again as a reading", async () => {
+      // Its record came with a TDS (another app, or an import): the card shows it, and the event's summary carries it.
+      vi.spyOn(coach, 'summarizeShot').mockReturnValue({ ...summary, tdsPct: 9.25, eyPct: 25.8 });
+      await throughShot();
+      expect(cardOf('shot-1')!.summary).toMatchObject({ tdsPct: 9.25, eyPct: 25.8 });
+      const turn = lastUserTurn(requests);
+      expect(turn.map((block) => (block.type === 'text' ? block.text.split('\n')[0] : block.type))).toEqual(['[event:shot_completed]']);
+      expect(JSON.parse((turn[0] as { text: string }).text.split('\n')[1]!).summary).toMatchObject({ tdsPct: 9.25, eyPct: 25.8 });
+      // Heard once: the next turn does not tell it either.
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      expect(lastUserTurn(requests).filter((block) => block.type === 'text')).toEqual([]);
+    });
+
     it('says nothing of a reading removed before the coach heard it', async () => {
       await throughShot();
       await engine.setShotTds('shot-1', 9);
