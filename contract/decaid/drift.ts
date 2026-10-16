@@ -349,6 +349,17 @@ export const SPEC_EXCEPTIONS: readonly SpecException[] = [
       '(lib/src/services/webserver/steams_handler.dart:49-50).',
   },
   {
+    where: 'PUT /api/v1/workflow',
+    keyword: 'required',
+    schemaPath: /^rest_v1\.yml#\/components\/schemas\/(HotWaterData|RinseData)\/required$/,
+    instancePath: /^\/(hotWaterData|rinseData)$/,
+    why:
+      'SPEC DRIFT: WorkflowPatch reuses the full HotWaterData and RinseData, every field required, but the PUT ' +
+      'deep-merges the patch into the workflow before parsing it (lib/src/models/data/json_utils.dart:3-29), so a ' +
+      'partial object is valid. CafAI sends only the setting a barista changed (src/ui/settings/useDrinkPresets.ts), ' +
+      'as WorkflowWrite records for the types.',
+  },
+  {
     where: 'any',
     keyword: 'enum',
     schemaPath: MACHINE_STATE('rest'),
