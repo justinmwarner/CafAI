@@ -28,6 +28,14 @@ import {
 
 export const DEFAULT_MAX_MODEL_CALLS = 6;
 export const CUT_OFF_MESSAGE = 'Your output was cut off; answer again more briefly.';
+/**
+ * The answer to a card the coach called beside a web search still waiting
+ * (D203): the API runs such a search only once that card's result comes
+ * back, in a message of tool results alone, which a tap and the verdicts and
+ * readings riding with it could never be. So the card is never shown: it
+ * goes back at once, the search runs, and the coach asks again.
+ */
+export const SEARCH_FIRST_MESSAGE = 'Not shown: a web search was still waiting beside this call. Let the search finish on its own first, then call this tool again.';
 
 /**
  * The visible text of a turn. Text blocks next to each other join with nothing
@@ -48,6 +56,16 @@ export function contentText(content: readonly ContentBlock[]): string {
     apart = false;
   }
   return text;
+}
+
+/** True when a server tool call of the turn (a web search) has no result in it yet: one called beside a client tool (D203). */
+export function waitsOnServerTool(content: readonly ContentBlock[]): boolean {
+  const answered = new Set<string>();
+  for (const block of content) {
+    const result = block as { type: string; tool_use_id?: unknown };
+    if (result.type !== 'tool_result' && result.type.endsWith('_tool_result') && typeof result.tool_use_id === 'string') answered.add(result.tool_use_id);
+  }
+  return content.some((block) => block.type === 'server_tool_use' && !answered.has(block.id));
 }
 
 function isToolUse(block: ContentBlock): block is ToolUseBlock {
@@ -88,7 +106,12 @@ async function handleToolUse(use: ToolUseBlock, tools: Map<string, RunnerTool>):
   }
 }
 
-async function streamTurn(run: RunRequest, messages: LlmMessage[]): Promise<LlmAssistantTurn> {
+/**
+ * `paused`: parts of this turn the server paused (pause_turn, D203). Its rest
+ * streams on in the same bubble: no new turn start, and a paragraph break
+ * first when those parts said something.
+ */
+async function streamTurn(run: RunRequest, messages: LlmMessage[], paused: readonly LlmMessage[]): Promise<LlmAssistantTurn> {
   const request: LlmRequest = {
     model: run.model,
     system: run.system,
@@ -104,10 +127,12 @@ async function streamTurn(run: RunRequest, messages: LlmMessage[]): Promise<LlmA
   let turn: LlmAssistantTurn | null = null;
   // As contentText joins them: a block between two texts (a web search) is a paragraph break.
   let lastText = -1;
+  const spokeBefore = contentText(paused.flatMap((message) => message.content)) !== '';
   for await (const event of run.provider.stream(request)) {
-    if (event.type === 'message_start') run.onTurnStart?.();
-    else if (event.type === 'text_delta') {
-      if (lastText >= 0 && event.index > lastText + 1) run.onTextDelta?.('\n\n');
+    if (event.type === 'message_start') {
+      if (paused.length === 0) run.onTurnStart?.();
+    } else if (event.type === 'text_delta') {
+      if (lastText >= 0 ? event.index > lastText + 1 : spokeBefore) run.onTextDelta?.('\n\n');
       lastText = event.index;
       run.onTextDelta?.(event.text);
     } else if (event.type === 'message_done') turn = event.turn;
@@ -136,7 +161,7 @@ export async function runConversation(run: RunRequest): Promise<RunResult> {
     if (calls >= maxCalls) throw stuckError();
     calls += 1;
 
-    const turn = await streamTurn(run, messages);
+    const turn = await streamTurn(run, messages, paused);
     // Refused output is discarded, never stored or replayed.
     if (turn.stopReason === 'refusal') throw refusalError();
 
@@ -156,6 +181,8 @@ export async function runConversation(run: RunRequest): Promise<RunResult> {
 
     if (uses.length === 0) return finish(turn, before, [], []);
 
+    // A search waiting beside a card would wait for the tap (D203): the card goes back unshown instead.
+    const searchWaits = waitsOnServerTool(turn.content);
     const results: ToolResultBlock[] = [];
     const pending: PendingUiCall[] = [];
     for (const use of uses) {
@@ -165,8 +192,9 @@ export async function runConversation(run: RunRequest): Promise<RunResult> {
         continue;
       }
       const handled = await handleToolUse(use, tools);
-      if ('pending' in handled) pending.push(handled.pending);
-      else results.push(handled.result);
+      if (!('pending' in handled)) results.push(handled.result);
+      else if (searchWaits) results.push(toolResult(use.id, SEARCH_FIRST_MESSAGE, true));
+      else pending.push(handled.pending);
     }
     if (pending.length > 0) return finish(turn, before, pending, results);
 

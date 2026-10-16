@@ -16,11 +16,18 @@ export const WEB_SEARCH_TOOL: ServerToolDefinition = { type: 'web_search_2025030
 
 /**
  * A request refused for its web search: an organisation whose admin turned
- * web search off (or that cannot use it) gets a 400 for every request that
- * carries the tool. CafAI then asks again without it.
+ * web search off (or a model that cannot use it) gets a 400 for every
+ * request that carries the tool. CafAI then asks again without it. Not a
+ * 400 about a search the transcript holds without its result: asking without
+ * the tool would only be refused again.
  */
 export function webSearchUnavailable(error: unknown): boolean {
-  return error instanceof LlmError && error.kind === 'bad_request' && /web[ _-]?search/i.test(error.message);
+  if (!(error instanceof LlmError) || error.kind !== 'bad_request') return false;
+  const { message } = error;
+  return (
+    /web[ _-]?search/i.test(message) &&
+    /\b(not (been )?(enabled|supported|available|allowed|permitted)|disabled|unavailable|unsupported)\b/i.test(message)
+  );
 }
 
 /** The site of a page, as the fact block shows it: "onyxcoffeelab.com" for https://www.onyxcoffeelab.com/pages/about. Null for anything but an http(s) address. */

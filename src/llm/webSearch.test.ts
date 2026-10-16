@@ -14,6 +14,13 @@ describe('webSearchUnavailable', () => {
     expect(webSearchUnavailable(new LlmError('bad_request', 'tools.0: web_search_20250305 is not supported on this model', 400))).toBe(true);
   });
 
+  it('is not a search the transcript left without its result, which asking without the tool would only repeat', () => {
+    const unanswered = '`web_search` tool use with id srvtoolu_1 was found without a corresponding `web_search_tool_result` block';
+    const missing = 'messages.3: a `server_tool_use` is waiting, but no `web_search` tool was provided';
+    expect(webSearchUnavailable(new LlmError('bad_request', unanswered, 400))).toBe(false);
+    expect(webSearchUnavailable(new LlmError('bad_request', missing, 400))).toBe(false);
+  });
+
   it('is nothing else', () => {
     expect(webSearchUnavailable(new LlmError('bad_request', 'max_tokens: must be at most 128000', 400))).toBe(false);
     expect(webSearchUnavailable(new LlmError('server', 'web search failed', 500))).toBe(false);

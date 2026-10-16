@@ -183,11 +183,22 @@ backup and the export.
   400. CafAI then sends the same request again without it, tells the barista
   once ("Web search is off for your Anthropic organisation, so the coach
   shares what it knows."), and leaves it off for the rest of that session.
-- **The CafAI Bridge**: Claude Code's own web search (its WebSearch tool)
-  turned on for the run when the request has the web search tool, its calls
-  and results kept inside Claude Code, and the coach's words and tools passed
-  on to CafAI as now. If that cannot be done safely, the web mode through the
-  Bridge works as the coach's mode, and Settings says so.
+- **The CafAI Bridge**: a request with the web search tool runs Claude Code
+  with its own WebSearch tool on and allowed (`--tools WebSearch`, still the
+  only built-in tool, in dontAsk mode), its calls and results kept inside
+  Claude Code: a message made only of them does not end the reply, and the
+  next one goes on in the same CafAI turn. Its search blocks are dropped, as
+  its thinking is (they are bound to the plan's organisation), so a
+  transcript made through the Bridge holds none and stays valid on the API.
+  Claude Code has no per-tool cap: the prompt asks for one search a fact.
+  Settings says it searches on the owner's Claude plan, with nothing to pay
+  per search.
+- **A search beside a card**: a search called in the same group as a card
+  would wait for the barista's tap, and the API wants the answer to come in a
+  message of tool results alone, which a tap with its verdicts and readings
+  could not always be. So the runner never shows such a card: it answers it
+  at once ("Not shown: a web search was still waiting..."), the search runs,
+  and the coach asks again.
 
 ## 9. In the chat (D202)
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { clone } from '../util/clone.ts';
-import { contentText, runConversation } from './runner.ts';
+import { contentText, runConversation, SEARCH_FIRST_MESSAGE, waitsOnServerTool } from './runner.ts';
 import { toToolDefinition, zodValidator } from './schema.ts';
 import { markUnparsedToolInput } from './toolInput.ts';
 import { WEB_SEARCH_TOOL } from './webSearch.ts';
@@ -289,7 +289,6 @@ describe('runConversation', () => {
         stopReason: 'end_turn',
         finalText: "I'll look it up.\n\nOnyx publishes what it pays.",
       });
-      expect(run.turnStarts()).toBe(2);
     });
 
     it('counts each part against maxModelCalls, and appends nothing when it gives up', async () => {
@@ -319,6 +318,39 @@ describe('runConversation', () => {
       expect(run.appended.map((message) => message.role)).toEqual(['assistant', 'user', 'assistant']);
       expect(run.appended[1]).toEqual({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: '{"found":"latest"}' }] });
       expect(run.requests[1]?.messages.at(-1)).toEqual(run.appended[1]);
+    });
+
+    it('sends back a card called beside a search still waiting, to be asked again once the search ran', async () => {
+      // The API runs a search called beside a client tool only once that tool's result comes back, and that
+      // message must hold tool results alone: a card waiting for a tap there would leave the chat stuck.
+      const beside = turn('tool_use', text('Let me check.'), SEARCH, toolUse('t1', 'lookup', { shot: 'latest' }), toolUse('t2', 'ask', { question: 'How did it taste?', options: ['Sour', 'Sweet'] }));
+      const after = turn('tool_use', RESULTS, toolUse('t3', 'ask', { question: 'How did it taste?', options: ['Sour', 'Sweet'] }));
+      const run = start([beside, after]);
+      const result = await run.promise;
+      expect(run.appended[1]).toEqual({
+        role: 'user',
+        content: [
+          { type: 'tool_result', tool_use_id: 't1', content: '{"found":"latest"}' },
+          errorResult('t2', SEARCH_FIRST_MESSAGE),
+        ],
+      });
+      expect(run.requests[1]?.messages.at(-1)).toEqual(run.appended[1]);
+      expect(result.pendingUiCalls).toEqual([{ id: 't3', name: 'ask', input: { question: 'How did it taste?', options: ['Sour', 'Sweet'] } }]);
+    });
+
+    it('lets a card wait for its tap when the turn has the search result', async () => {
+      const done = turn('tool_use', SEARCH, RESULTS, toolUse('t1', 'ask', { question: 'How did it taste?', options: ['Sour', 'Sweet'] }));
+      const result = await start([done]).promise;
+      expect(result.pendingUiCalls.map((call) => call.id)).toEqual(['t1']);
+      expect(waitsOnServerTool(done.content)).toBe(false);
+      expect(waitsOnServerTool([SEARCH])).toBe(true);
+    });
+
+    it('keeps a paused turn in one bubble: no new turn start for the rest, and a paragraph break before its text', async () => {
+      const run = start([turn('pause_turn', text("I'll look it up."), SEARCH), turn('end_turn', RESULTS, text('Onyx began in Arkansas.'))]);
+      await run.promise;
+      expect(run.turnStarts()).toBe(1);
+      expect(run.deltas.join('')).toBe("I'll look it up.\n\nOnyx began in Arkansas.");
     });
 
     it('streams a paragraph break where a search sits between text, and none inside text its citations split', async () => {

@@ -33,11 +33,16 @@ export const FUN_FACTS_CHOICES: readonly FunFactsChoice[] = [
   },
 ];
 
-/** Said after the web search's line while the coach runs through the CafAI Bridge (D203). */
-export const FUN_FACTS_BRIDGE_LINE = 'Through the CafAI Bridge the coach shares what it knows, without a search.';
+/**
+ * The web search's line while the coach runs through the CafAI Bridge (D203):
+ * Claude Code searches there, on the owner's plan, so there is nothing to pay
+ * per search, and no way to hold it to one search a fact but by asking.
+ */
+export const FUN_FACTS_WEB_BRIDGE_LINE =
+  "The coach may also look the roaster, farm or producer up on the web, once per fact. Through the CafAI Bridge, Claude Code searches on your Claude plan: nothing to pay per search, though it counts toward the plan's limits.";
 
-/** The line under the field for `source`; the web search's takes the Bridge's after it while the coach runs there. */
+/** The line under the field for `source`; the web search's says what the Bridge does while the coach runs there. */
 export function funFactsLine(source: FunFactsSource, onComputer: boolean): string {
-  const line = FUN_FACTS_CHOICES.find((choice) => choice.value === source)?.line ?? '';
-  return source === 'web' && onComputer ? `${line} ${FUN_FACTS_BRIDGE_LINE}` : line;
+  if (source === 'web' && onComputer) return FUN_FACTS_WEB_BRIDGE_LINE;
+  return FUN_FACTS_CHOICES.find((choice) => choice.value === source)?.line ?? '';
 }

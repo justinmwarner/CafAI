@@ -18,7 +18,8 @@ const LIST = "From CafAI's own list of about 500 checked facts, picked for the b
 const COACH = "The coach shares a fact about this bag when it knows one for sure; the rest come from CafAI's list.";
 const WEB =
   'The coach may also look the roaster, farm or producer up on the web: one search per fact, about one US cent each, plus a few cents for the pages it reads.';
-const BRIDGE = 'Through the CafAI Bridge the coach shares what it knows, without a search.';
+const WEB_BRIDGE =
+  "The coach may also look the roaster, farm or producer up on the web, once per fact. Through the CafAI Bridge, Claude Code searches on your Claude plan: nothing to pay per search, though it counts toward the plan's limits.";
 
 const select = () => screen.getByTestId(TID.funFacts);
 
@@ -53,9 +54,9 @@ describe('FunFactsRow (D198)', () => {
     }
   });
 
-  it('adds what the CafAI Bridge does to the web search while the coach runs on the computer, and only there', () => {
+  it('says what the CafAI Bridge does with the web search while the coach runs on the computer, and only there', () => {
     const { rerender } = renderThemed(<FunFactsRow value="web" onComputer onChange={vi.fn()} />);
-    expect(select()).toHaveAccessibleDescription(`${WEB} ${BRIDGE}`);
+    expect(select()).toHaveAccessibleDescription(WEB_BRIDGE);
     rerender(<FunFactsRow value="coach" onComputer onChange={vi.fn()} />);
     expect(select()).toHaveAccessibleDescription(COACH);
     rerender(<FunFactsRow value="web" onComputer={false} onChange={vi.fn()} />);
@@ -155,8 +156,8 @@ describe('SettingsScreen > Coach > Fun facts (D198)', () => {
     expect((await services.storage.settings.get()).funFacts).toBe('list');
   });
 
-  it('adds what the CafAI Bridge does under the web search while the coach runs on the computer', async () => {
+  it('says what the CafAI Bridge does with the web search while the coach runs on the computer', async () => {
     renderSettings({ ...BASE, funFacts: 'web' }, { kind: 'computer', address: '192.168.1.20:8877', code: 'ABCDEFGH' });
-    await waitFor(() => expect(select()).toHaveAccessibleDescription(`${WEB} ${BRIDGE}`));
+    await waitFor(() => expect(select()).toHaveAccessibleDescription(WEB_BRIDGE));
   });
 });
