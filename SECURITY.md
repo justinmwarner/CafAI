@@ -84,7 +84,9 @@ is the first).
 - It never reads, stores or forwards your Claude credentials (it asks Claude
   Code only whether you are signed in, and with which plan). Coach runs use
   none of your Claude Code settings, hooks, plugins, skills, CLAUDE.md files
-  or built-in tools. Its log holds times, message counts, durations, model
+  or built-in tools, except WebSearch while CafAI's Fun facts includes a web
+  search (D203): it searches the web and nothing else, with no file, shell or
+  fetch access. Its log holds times, message counts, durations, model
   names and its own events (the address of a device that sent a wrong code,
   Claude Code's version and error output), never what you or the coach
   wrote and never the code.

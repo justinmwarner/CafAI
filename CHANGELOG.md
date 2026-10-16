@@ -6,6 +6,25 @@ workflow checks against it. Settings > About shows the version you run.
 
 ## Unreleased
 
+### The coach
+
+- Fun facts: once you have kept a recipe, a shot that runs like the last
+  one gets a fun fact in a quiet card of its own, between the coach's line
+  and the taste question, instead of only "it ran the same". The coach
+  shares one about your bag when it is sure of it (the roaster, the region,
+  the process, the variety, where the notes on the bag come from), and
+  otherwise CafAI picks one from its own list of about 500 researched facts,
+  each checked against the page it came from (the bag's first, then
+  roasting, growing, fermenting, espresso science, history, milk and latte
+  art, and cleaning), shown with its site. A fact never says what your cup
+  tastes like, and names a flavour only when your bag's notes do. Facts told
+  are kept on the device so they do not come back soon. **Settings > Coach >
+  Fun facts**: Off, CafAI's facts, CafAI's and the coach's (the default), or
+  with a web search too, where the coach may look the roaster, farm or
+  producer up, once per fact, at about one US cent a search plus the pages
+  it reads (through CafAI Bridge, Claude Code searches on your plan
+  instead). Ask the coach for a fun fact any time.
+
 ### The everyday skin
 
 - A shot's card draws the shot its question asks about faintly under its

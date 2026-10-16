@@ -223,6 +223,20 @@ no API key ([docs/DEMO.md](docs/DEMO.md)).
    chat) and grind moves come with the new setting worked out on its own
    steps.
 
+7. **Fun facts.** Once you have kept a recipe, a shot that runs like the
+   last one on it (pour time within 3 s, yield within 1.5 g, peak pressure
+   within 1 bar, first drop within 3 s, no new channeling flag) gets one fun
+   fact, in a quiet card of its own between the coach's line and the taste
+   question. The coach shares one about the bag when it is sure of it (its
+   roaster, region, process, variety, or where the notes on the bag come
+   from); otherwise CafAI picks one from its own list of researched facts,
+   each checked against the page it came from: the bag's first, then
+   roasting, growing, fermenting, espresso science, history, milk and latte
+   art, and cleaning. A fact never says what your cup tastes like, and
+   names a flavour only when your bag's notes do. CafAI keeps the facts it
+   told on the device so they do not come back soon; **Settings > Coach >
+   Fun facts** chooses where they come from, or turns them off.
+
 The model can only move declared template levers within their bounds; it can
 never change pump type, step order or count, sensors, or exit types.
 
@@ -330,8 +344,13 @@ itself.
   means). A key pasted into the chat or another field is taken out, with a
   note.
 - **Settings > Coach**: the model (Opus 5.5 by default, Opus 5, Sonnet 5,
-  Haiku 4.5 or Fable 5.1, each with its price per million tokens) and your
-  grinder, from Decaid's grinder library. **Add a grinder** adds one the
+  Haiku 4.5 or Fable 5.1, each with its price per million tokens), **Fun
+  facts** (Off; CafAI's facts, from its own checked list, free; CafAI's and
+  the coach's, the default, where the coach adds facts about the bag it is
+  sure of; or CafAI's, the coach's and a web search, where the coach may
+  look the roaster, farm or producer up on the web, once per fact, at about
+  one US cent a search plus the pages it reads, or on your Claude plan
+  through CafAI Bridge) and your grinder, from Decaid's grinder library. **Add a grinder** adds one the
   library lacks (its burrs and its dial: a numbered dial with its steps, or
   a list of settings, finest first) and picks it; **Edit grinders in
   DYE2**, while Decaid runs its DYE2 plugin, opens DYE2's Grinders page,
@@ -534,7 +553,13 @@ troubleshooting.
   code. It never reads or stores your Claude credentials (it asks Claude
   Code only whether you are signed in, and with which plan), and coach
   turns run with Claude Code's settings and built-in tools off, in an empty
-  folder, so your hooks, plugins and CLAUDE.md stay out of them.
+  folder, so your hooks, plugins and CLAUDE.md stay out of them. The one
+  exception is Claude Code's WebSearch, on for coach turns while Fun facts
+  includes a web search, and only then.
+- With Fun facts on a web search, the coach's searches (the roaster, farm or
+  producer of the bag you are dialing in) go to Anthropic's web search, or,
+  through CafAI Bridge, to Claude Code's. The facts CafAI told stay in the
+  device's own storage, never in Decaid's backup or an export.
 - The report in Settings > About names Decaid's routes and fields and what
   was wrong with them, never your notes, your coffee or the key.
 - Settings > Log keeps the last 1000 entries (requests, replies, frames)
