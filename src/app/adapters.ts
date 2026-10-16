@@ -29,6 +29,7 @@ import {
   versionTitle,
   withOther,
 } from '../coach/index.ts';
+import { DEFAULT_TEMPERATURE_UNIT, type TemperatureUnit } from '../coach/temperature.ts';
 import type { GrinderInfo } from '../coach/types.ts';
 import { extractBag, resolveModel, runConversation, toToolDefinition, zodValidator } from '../llm/index.ts';
 import { DEFAULT_COACH_SOURCE, type CoachSourceStore } from '../storage/coachSource.ts';
@@ -39,13 +40,27 @@ import type { ApiPort, CoachPort, LlmPort, ShotSource } from './engine/ports.ts'
 /** Shot reference fields in the query tools' inputs. */
 const SHOT_REF_KEYS = ['shot', 'shotA', 'shotB'] as const;
 
-export function createCoachPort(): CoachPort {
-  // Built once: the system prompt must stay byte-identical across turns so it caches.
-  const systemPrompt = buildSystemPrompt(TEMPLATES);
+export interface CoachPortOptions {
+  /** The barista's temperature unit, read for every request (D-TEMP-5); °C without it. */
+  temperatureUnit?: () => TemperatureUnit;
+}
+
+export function createCoachPort(options: CoachPortOptions = {}): CoachPort {
+  // One prompt per unit, each built once: the system prompt must stay byte-identical across turns so it caches.
+  const prompts = new Map<TemperatureUnit, string>();
+  const systemPrompt = (): string => {
+    const unit = options.temperatureUnit?.() ?? DEFAULT_TEMPERATURE_UNIT;
+    let prompt = prompts.get(unit);
+    if (prompt === undefined) {
+      prompt = buildSystemPrompt(TEMPLATES, { temperatureUnit: unit });
+      prompts.set(unit, prompt);
+    }
+    return prompt;
+  };
   return {
     templates: TEMPLATES,
     getTemplate,
-    systemPrompt: () => systemPrompt,
+    systemPrompt,
     toolDescription: (name) => COACH_TOOL_SPECS[name].description,
     readLeverValues,
     validateProposal,

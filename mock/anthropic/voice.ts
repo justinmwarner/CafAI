@@ -12,6 +12,7 @@
  * machine is its effect, and no voice says how a shot will taste.
  */
 import type { RoastLevel, TemplateId } from '../../src/coach/contract.ts';
+import { changeIn, type TemperatureUnit } from '../../src/coach/temperature.ts';
 
 export type VoiceName = 'terse' | 'demo';
 
@@ -101,6 +102,8 @@ export interface ChangeFacts {
   channelingFlags: string[] | null;
   /** This change replaces one CafAI rejected. */
   afterRejection: boolean;
+  /** The unit the prompt asks for (D-TEMP-7): its "Temperatures in °F" section, or °C. */
+  temperatureUnit: TemperatureUnit;
 }
 
 export interface AppliedFacts {
@@ -163,12 +166,21 @@ function formatNumber(value: number | null): string {
 }
 
 /**
+ * A change of brew temperature as the prompt asks for it (D-TEMP-7): "1 °C",
+ * or in °F "1.8 °F", a change converted without the 32, to one decimal as the
+ * change card shows it. The proposal itself stays in °C.
+ */
+export function brewChange(celsius: number, unit: TemperatureUnit): string {
+  return unit === 'fahrenheit' ? `${changeIn(celsius, unit).toFixed(1)} °F` : `${celsius} °C`;
+}
+
+/**
  * The barista's taste words are the reason; what the change does at the
  * machine is the effect, never a taste to expect (D127).
  */
 const TERSE_CHANGES: Record<ChangeKind, (change: ChangeFacts) => ProposalText> = {
-  warmer: () => ({
-    summary: 'Raise brew temperature by 1 °C',
+  warmer: ({ temperatureUnit }) => ({
+    summary: `Raise brew temperature by ${brewChange(1, temperatureUnit)}`,
     rationale: 'You found it sour, which usually means under-extraction. A little more heat extracts more.',
     expectedEffect: 'More extraction at the same flow and time.',
   }),
@@ -177,8 +189,8 @@ const TERSE_CHANGES: Record<ChangeKind, (change: ChangeFacts) => ProposalText> =
     rationale: 'You found it sour and the temperature is already at the top of this profile, so a longer ratio extracts a little more.',
     expectedEffect: '2 g more water through the same coffee.',
   }),
-  cooler: () => ({
-    summary: 'Lower brew temperature by 1 °C',
+  cooler: ({ temperatureUnit }) => ({
+    summary: `Lower brew temperature by ${brewChange(1, temperatureUnit)}`,
     rationale: 'You found it bitter, which usually means over-extraction. A little less heat extracts less.',
     expectedEffect: 'Less extraction at the same flow and time.',
   }),

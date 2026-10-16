@@ -2617,3 +2617,117 @@ Numbered D-TDS-n until the merge numbers them from D162 on.
   last shot carries a reading (TDS 9.10 %, EY 20.4 %), untold until the
   viewer answers its open question (docs/DEMO.md). Why: mock mode, the demo
   and the e2e can then see a reading reach the coach.
+
+### °F (2026-10-15)
+
+The °F item of D151 (`docs/superpowers/specs/2026-10-15-fahrenheit-design.md`).
+
+- **D-TEMP-1. °F is a display unit: Decaid, the profiles, the coach's tools
+  and CafAI's records stay in °C.** CafAI converts only where a person reads
+  or types a temperature: the stats card, the steam and flush views, the
+  drinks' steppers, the change card, the chat, History and the cleaning guide
+  (`src/coach/temperature.ts`). What CafAI sends (workflow writes, profiles,
+  the coach's shot summary and tool results) is °C, and what it keeps (diff
+  lines, the chat, exports, Decaid's backup) is °C or the words as they were
+  written; nothing is converted on its way in or out. A temperature converts
+  as °C × 1.8 + 32, a change of one as × 1.8, without the 32: 1 °C hotter is
+  1.8 °F hotter. Why: streamline and MSL do the same (`units.js`: "Celsius on
+  the wire... a pure display-layer conversion"; MSL's "Units are
+  display-only", docs/verified/01-platform.md), and with one unit in the data
+  a switch of units changes no record, and an export, a backup or a version
+  reads the same on any device.
+- **D-TEMP-2. Settings > Appearance > Temperatures, °C for everyone until
+  changed.** A row after the custom hue, drawn as the Mode control, **°C
+  Celsius** and **°F Fahrenheit**, over "Readouts, settings and the coach use
+  it. Decaid and your profiles keep °C."; it applies at once
+  (`TemperatureUnitRow.tsx`, its live state `src/app/temperatureUnit.ts`). It
+  is kept in Settings as `temperatureUnit`, absent until someone chooses on
+  the device and read as °C, as `keepKeyInDecaid` is (D99), so the mirror and
+  exports carry it, and an import or a restore fills it only on a device that
+  never chose. Decaid has no unit setting to follow (streamline keeps its
+  own, docs/audit/2026-10-09/streamline.md). No default from the locale: a
+  tablet's language says little about the unit its barista brews in,
+  streamline starts in °C too, and a guess would change what existing users
+  see. Why in Appearance: it is how
+  CafAI shows itself, it applies at once as the rest of that section does,
+  and it is the first section a barista opens; a section of its own for one
+  control would add an eleventh card to Settings.
+- **D-TEMP-3. A stepper in °F shows whole °F and moves one whole °C, the
+  smallest step Decaid keeps.** Decaid keeps the steam, hot water and flush
+  temperatures as whole °C: each is an `int` in its `workflow.dart`, read
+  with `parseInt`, which truncates a fraction (`models/data/utils.dart`), the
+  pinned spec says `type: integer`, and the DE1 packs steam and hot water
+  into a byte. So in °F a field shows round(°C × 1.8 + 32); a tap, Up or Down
+  moves one whole °C, which reads as 2 °F, or 1 °F one time in five (275,
+  277, 279, 280…); a typed °F becomes the nearest whole °C, and the field
+  shows what Decaid keeps (276 shows 277; a typed value is never more than
+  1 °F from what shows after); the bounds are the °C bounds in whole °F,
+  which a screen reader hears too: steam 275-320 °F (329 on a Bengle), hot
+  water and the flush 34-212 °F (`src/ui/settings/drinkUnits.ts`). Why not
+  the 1 °F or 2 °F step the roadmap asked about: whole °C are 1.8 °F apart.
+  A 1 °F step gets stuck (from 280 °F, 138 °C, 281 °F rounds back to 138 °C,
+  so More would do nothing there), and a 2 °F step always moves one °C
+  anyway while promising 2 °F; an unrounded °C would be truncated by Decaid
+  (300 °F, 148.9 °C, kept as 148, reads back 298 °F). Tested for every value
+  of every range, through a Decaid that truncates as Decaid does
+  (`drinkUnits.test.ts`, `DrinkFieldsFahrenheit.test.tsx`) and in e2e
+  through the mock Decaid; the write suite (`write.decaid.ts`) checks each
+  end against a running Decaid.
+- **D-TEMP-4. The readouts keep their °C precision in °F.** The group and
+  its target to one decimal ("198.3 °F", "target 198.5"), steam and its
+  setting in whole degrees ("284 °F", "set 302"), on the stats card
+  (`MachineStatus.tsx`) and in the steam and flush views (`drinkModel.ts`).
+  Hot water shows no temperature (D148), and the Shot view and its graph,
+  the live strip, the shot card and the steam view's dial (its time) show
+  none, so nothing changed there. Why: the same digits keep each readout's
+  look and width, as streamline's `formatTemp` keeps its decimals in either
+  unit.
+- **D-TEMP-5. The coach is told in its system prompt, one prompt per
+  unit.** In °F the prompt's "Use °C" line points to a section after "How you
+  talk", "Temperatures in °F" (`src/coach/fahrenheitPrompt.ts`): what it is
+  given and sends stays °C (the catalog, the heuristics, the shot summary,
+  every tool, propose_adjustment's value); everything it writes for the
+  barista is °F, never °C and never both (replies, ask_user's question and
+  options, and propose_adjustment's summary, rationale, expectedEffect and
+  tips); a temperature converts × 1.8 + 32 and a change × 1.8, with worked
+  examples ("never 33.8 °F hotter"); a change to one decimal, as the change
+  card shows it; a temperature the barista gives in °F goes to the tools in
+  °C on the lever's steps (200 °F is 93.3 °C, which a lever in 0.5 °C steps
+  takes as 93.5 °C, 200.3 °F); and each template's temperature lever with
+  its bounds, step, largest change and starting value in °F, worked out by
+  CafAI. `createCoachPort` reads the unit for every request and builds each
+  prompt once, so it stays the same while the unit does and still caches; a
+  switch costs one request without the cache. In °C the prompt is byte for
+  byte what it was (`prompt.test.ts`). Why: the system prompt is the one
+  thing the model reads on every turn, and the levers' bounds in °F are what
+  "the coach's levers and their bounds said in °F" asks for, without asking
+  the model to do the arithmetic.
+- **D-TEMP-6. A temperature in the other unit is rewritten where it shows,
+  never sent back to the coach.** Where the coach's words show (the chat,
+  the change card's title, why and what it changes, the starting profiles'
+  reasons, a question and its answers, History), and on CafAI's own change
+  lines and the cleaning guide, `inTemperatureUnit` writes a temperature in
+  the other unit in the barista's, as precisely as it was written (93 °C
+  reads 199 °F, 92.5 °C reads 198.5 °F). It reads as a change, converted
+  without the 32, when it has a sign ("+1.0 °C"), follows "by", comes before
+  a comparative ("hotter", "cooler", "under", "per"…), or is small (under
+  30 °C or 50 °F, which no brew, steam or hot water temperature is);
+  otherwise, and always beside a change line's arrow, it is a temperature.
+  A range converts both ends
+  ("1-3 °C under its target" reads "1.8-5.4 °F under"); "93 °C (199 °F)"
+  keeps the barista's half, and a conversion the barista asked for, "200 °F
+  is 93.3 °C", stays as written. It works both ways, so the coach's °F words
+  read in °C after a switch back. The answer a question sends is still the
+  coach's own option; what the barista typed, Decaid's own words and the log
+  stay as written. Why: unlike a taste promise (D127), a unit is arithmetic
+  CafAI can do itself, so a second turn of the model, at the moment the
+  barista waits for a change, would buy nothing; and the coach's text
+  streams onto the screen, where nothing can be sent back.
+- **D-TEMP-7. The scripted coach follows the °F prompt.** `mock/anthropic`
+  reads the request's system prompt for the "Temperatures in °F" section
+  (`promptTemperatureUnit` in `scenario.ts`) and words its temperature
+  changes in °F ("Raise brew temperature by 1.8 °F", the demo's "Brew 1.8 °F
+  hotter"), its proposals still in °C, as a coach that follows its prompt
+  would. Why: mock mode, the demo and the e2e specs then show °F the way a
+  barista would see it from the real coach; the rewriting of D-TEMP-6 is
+  tested on its own (`temperature.test.ts`, `temperatureWords.test.tsx`).

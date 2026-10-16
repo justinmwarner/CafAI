@@ -12,6 +12,7 @@
  */
 import type { ProfileJson, ShotSummary } from '../coach/types.ts';
 import type { ProposeAdjustment, RoastLevel } from '../coach/contract.ts';
+import type { TemperatureUnit } from '../coach/temperature.ts';
 import type { LlmMessage } from '../llm/types.ts';
 import type { CoachUiMessage } from '../app/types.ts';
 import type { KeyBackup } from './keyBackup.ts';
@@ -163,6 +164,15 @@ export interface Settings {
    * exist right now.
    */
   keepKeyInDecaid?: boolean;
+  /**
+   * The unit CafAI shows and takes temperatures in, and the coach speaks in
+   * (D-TEMP-1, D-TEMP-2); Decaid and the profiles keep °C whatever it is.
+   * Absent until someone chooses on this device, and read as °C: like
+   * keepKeyInDecaid, storage never writes it as a default, so a merge (an
+   * import, a restore) can tell a choice made here, which it keeps, from
+   * none, which it may fill.
+   */
+  temperatureUnit?: TemperatureUnit;
 }
 
 export interface BagRepository {

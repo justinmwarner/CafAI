@@ -11,6 +11,7 @@
  * the snapshot's mixTemperature is not the water's (Decaid's spec).
  */
 import type { MachineFrame, ShotSettings, Workflow } from '../../api/types.ts';
+import { temperatureIn, type TemperatureUnit } from '../../coach/temperature.ts';
 import { DASH, formatSeconds, formatTemperature, formatWeight } from '../machine/format.ts';
 import type { DrinkRun } from './drinkTrace.ts';
 import type { DrinkKind } from './kinds.ts';
@@ -130,6 +131,8 @@ export interface ReadoutInput {
   shotSettings: ShotSettings | null;
   presets: DrinkPresets | null;
   run: DrinkRun | null;
+  /** The barista's unit for the steam and group temperatures (D-TEMP-4); °C when absent. */
+  unit?: TemperatureUnit;
 }
 
 /** The mean of a series over the frames the drink worked in; null with none. */
@@ -158,18 +161,21 @@ const setCaption = (value: number | null | undefined): string => (finite(value) 
 
 export function drinkReadouts(kind: DrinkKind, input: ReadoutInput): Readout[] {
   const { frame, run, presets } = input;
+  const unit = input.unit ?? 'celsius';
   const done = run !== null && !run.live;
   if (kind === 'steam') {
     const set = steamTemperatureSet(input.shotSettings, presets);
+    // Decaid keeps it in whole °C; in °F it reads whole too, as the stepper shows it (D-TEMP-3).
+    const setText = set === null ? '' : `set ${unit === 'celsius' ? set : Math.round(temperatureIn(set, unit))}`;
     if (done) {
       return [
-        { key: 'steam', label: 'Steam', value: formatTemperature(lastOf(run.steamTemperature, run.working), 0), caption: 'at the end', swatch: null },
+        { key: 'steam', label: 'Steam', value: formatTemperature(lastOf(run.steamTemperature, run.working), 0, unit), caption: 'at the end', swatch: null },
         { key: 'pressure', label: 'Pressure', value: oneDecimal(average(run.pressure, run.working), 'bar'), caption: 'average', swatch: 'pressure' },
         { key: 'flow', label: 'Flow', value: oneDecimal(average(run.flow, run.working), 'ml/s'), caption: 'average', swatch: 'flow' },
       ];
     }
     return [
-      { key: 'steam', label: 'Steam', value: formatTemperature(frame?.steamTemperature, 0), caption: set === null ? '' : `set ${set}`, swatch: null },
+      { key: 'steam', label: 'Steam', value: formatTemperature(frame?.steamTemperature, 0, unit), caption: setText, swatch: null },
       { key: 'pressure', label: 'Pressure', value: oneDecimal(frame?.pressure, 'bar'), caption: '', swatch: 'pressure' },
       { key: 'flow', label: 'Flow', value: oneDecimal(frame?.flow, 'ml/s'), caption: setCaption(presets?.steamSettings?.flow), swatch: 'flow' },
     ];
@@ -194,18 +200,18 @@ export function drinkReadouts(kind: DrinkKind, input: ReadoutInput): Readout[] {
     ];
   }
   const target = done ? run.latest?.targetGroupTemperature : frame?.targetGroupTemperature;
-  const groupCaption = finite(target) ? `target ${target.toFixed(1)}` : '';
+  const groupCaption = finite(target) ? `target ${temperatureIn(target, unit).toFixed(1)}` : '';
   if (done) {
     return [
       { key: 'water', label: 'Water', value: `${Math.round(run.waterMl)} ml`, caption: 'through the group', swatch: null },
       { key: 'flow', label: 'Flow', value: oneDecimal(average(run.flow, run.working), 'ml/s'), caption: 'average', swatch: 'flow' },
-      { key: 'group', label: 'Group', value: formatTemperature(lastOf(run.groupTemperature)), caption: groupCaption, swatch: null },
+      { key: 'group', label: 'Group', value: formatTemperature(lastOf(run.groupTemperature), 1, unit), caption: groupCaption, swatch: null },
     ];
   }
   return [
     { key: 'water', label: 'Water', value: run === null ? DASH : `${Math.round(run.waterMl)} ml`, caption: run === null ? '' : 'so far', swatch: null },
     { key: 'flow', label: 'Flow', value: oneDecimal(frame?.flow, 'ml/s'), caption: setCaption(presets?.rinseData?.flow), swatch: 'flow' },
-    { key: 'group', label: 'Group', value: formatTemperature(frame?.groupTemperature), caption: groupCaption, swatch: null },
+    { key: 'group', label: 'Group', value: formatTemperature(frame?.groupTemperature, 1, unit), caption: groupCaption, swatch: null },
   ];
 }
 

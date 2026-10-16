@@ -10,7 +10,7 @@
 import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import { useServices } from '../../app/services.tsx';
+import { useServices, useTemperatureUnit } from '../../app/services.tsx';
 import { splitUnit } from '../machine/format.ts';
 import { TID } from '../testIds.ts';
 import { drinkReadouts, type DrinkPresets, type Readout, type Swatch } from './drinkModel.ts';
@@ -26,6 +26,7 @@ const SWATCH: Record<Swatch, string> = {
 /** The readouts now: the same array until something on show changes. */
 export function useDrinkReadouts(kind: DrinkKind, run: DrinkRun | null, presets: DrinkPresets | null): readonly Readout[] {
   const { telemetry } = useServices();
+  const unit = useTemperatureUnit();
   const trace = useMemo(() => drinkTraceFor(telemetry), [telemetry]);
   const last = useRef<{ key: string; readouts: Readout[] } | null>(null);
   const subscribe = useCallback(
@@ -48,6 +49,7 @@ export function useDrinkReadouts(kind: DrinkKind, run: DrinkRun | null, presets:
       shotSettings: now.shotSettings,
       presets,
       run,
+      unit,
     });
     const key = readouts.map((r) => `${r.key}=${r.value}|${r.caption}|${r.swatch ?? ''}`).join(';');
     if (last.current?.key !== key) last.current = { key, readouts };

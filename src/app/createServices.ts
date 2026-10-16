@@ -18,6 +18,7 @@ import { createApiPort, createCoachPort, createLlmPort } from './adapters.ts';
 import { createAppearanceStore } from './appearance.ts';
 import { withCoachCredential } from './coachAccess.ts';
 import { createCoachEngine, type CoachEngine } from './engine/engine.ts';
+import { createTemperatureUnitStore } from './temperatureUnit.ts';
 import type { Services } from './types.ts';
 
 export const APP_VERSION: string = typeof __CAFAI_VERSION__ === 'string' ? __CAFAI_VERSION__ : '0.0.0';
@@ -55,13 +56,15 @@ export async function createServices(win: Window): Promise<AppServices> {
   const [restore] = await Promise.all([restoreFromMirrorIfEmpty(storage), storage.keyBackup.restoreIfMissing()]);
 
   const appearance = createAppearanceStore(storage.settings, (await storage.settings.get()).appearance);
+  // °C or °F (D-TEMP-2): the screens read it, and so does every request's prompt (D-TEMP-5).
+  const temperatureUnit = createTemperatureUnitStore(storage.settings, (await storage.settings.get()).temperatureUnit);
 
   const coach = createCoachEngine({
     // Its "is a key stored" means "has what the selected source needs".
     storage: withCoachCredential(storage, coachSource),
     telemetry,
     api: createApiPort(decaid),
-    coach: createCoachPort(),
+    coach: createCoachPort({ temperatureUnit: temperatureUnit.get }),
     llm: createLlmPort(storage.secrets, coachSource),
     clock: { now: () => new Date(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
     newId,
@@ -84,6 +87,7 @@ export async function createServices(win: Window): Promise<AppServices> {
   const landed = () => {
     void coach.restored();
     void appearance.reload();
+    void temperatureUnit.reload();
   };
   const stopRestoredWatch = storage.onRestored(landed);
   // Decaid did not answer the start-up restore (it may still be starting up,
@@ -140,6 +144,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     models: MODELS,
     appVersion: APP_VERSION,
     appearance,
+    temperatureUnit,
     plugins,
     coachSource,
     dispose() {

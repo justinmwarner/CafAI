@@ -211,7 +211,9 @@ no API key ([docs/DEMO.md](docs/DEMO.md)).
    refuses is dropped, and the chat says so once.
 6. **One change.** The coach proposes the next version or a manual step such
    as grind, changing one variable at a time, and explains it by what it
-   does at the machine, with your own words as the reason. You see a
+   does at the machine, with your own words as the reason. With °F chosen
+   in Settings > Appearance it speaks °F (1 °C hotter is 1.8 °F hotter),
+   while the change itself goes to the machine in °C. You see a
    plain-language diff and confirm it before anything is uploaded. Undo
    returns to the previous version. Link your grinder from Decaid's grinder
    library in **Settings > Coach** (add it there if the library lacks it,
@@ -306,8 +308,11 @@ with **Retry**; it never loads anything on the machine by itself.
   OKLCH, written out as plain hex for Chromium 91) and every pair of
   palette colours the screens use is tested for WCAG AA contrast at every
   hue; the shot graph keeps Decent's colours (pressure green, flow blue).
-  The look is saved with the other settings.
-  [DESIGN.md](DESIGN.md) describes the visual system.
+  The look is saved with the other settings. Last, **Temperatures**: °C (the
+  default) or °F. In °F every temperature CafAI shows or takes is in °F (the
+  stats card, the drinks' views and settings, the change card and History,
+  the cleaning guide), and the coach speaks °F; Decaid and your profiles
+  keep °C. [DESIGN.md](DESIGN.md) describes the visual system.
 - **Settings > Where the coach runs**: **Anthropic API key** (the default)
   or **Claude on my computer** (CafAI Bridge's address and code, with
   **Find** and **Test**). The fields follow the choice: the API key's
@@ -331,7 +336,10 @@ with **Retry**; it never loads anything on the machine by itself.
   flush temperature, time and flow): side by side on a tablet, one row per
   setting on a phone. Each has a stepper (Up and Down on a keyboard too),
   within what the DE1 can hold (hot water at most 255 ml; steam 135-160 °C,
-  165 on a Bengle). A value goes to Decaid only when you change it, never
+  165 on a Bengle). In °F a temperature shows in whole degrees and a tap
+  moves it one whole °C, the step Decaid keeps (2 °F, or 1 °F one time in
+  five); one typed in °F is set to the nearest whole °C, and the field shows
+  what Decaid keeps. A value goes to Decaid only when you change it, never
   while the machine runs, and never without a DE1 connected; until Decaid
   answers, the fields show a dash, and a write that fails says why under
   its setting. Steam that is off in Decaid (below 135 °C) reads "Off in

@@ -104,6 +104,8 @@ export const TID = {
   appearanceMode: (mode: string) => `appearance-mode-${mode}`,
   tintSwatch: (id: string) => `tint-${id}`,
   tintHue: 'tint-hue',
+  /** Settings > Appearance > Temperatures (D-TEMP-2): 'celsius' or 'fahrenheit'. */
+  temperatureUnit: (unit: string) => `temperature-unit-${unit}`,
   apiKeyInput: 'api-key-input',
   apiKeySave: 'api-key-save',
   forgetKey: 'forget-key',

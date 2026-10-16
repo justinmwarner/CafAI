@@ -23,6 +23,7 @@ import type {
   Workflow,
 } from '../../api/types.ts';
 import { createAppearanceStore, type AppearanceStore } from '../../app/appearance.ts';
+import { createTemperatureUnitStore, type TemperatureUnitStore } from '../../app/temperatureUnit.ts';
 import { clone } from '../../util/clone.ts';
 import type { CoachController, CoachState, Services } from '../../app/types.ts';
 import type { PluginDirectory } from '../../api/plugins.ts';
@@ -506,6 +507,8 @@ export interface FakeServices extends Services {
   host: HostEnvironment & { exits: number };
   /** The real store, over the fake settings repository above. */
   appearance: AppearanceStore;
+  /** The real store too: `storage.settings.temperatureUnit` starts it (D-TEMP-2). */
+  temperatureUnit: TemperatureUnitStore;
   plugins: FakePluginDirectory;
 }
 
@@ -544,6 +547,7 @@ export function createFakeServices(options: {
     models: FAKE_MODELS,
     appVersion: '0.1.0-test',
     appearance: createAppearanceStore(storage.settings, options.storage?.settings?.appearance),
+    temperatureUnit: createTemperatureUnitStore(storage.settings, options.storage?.settings?.temperatureUnit),
     plugins: createFakePluginDirectory(),
   };
 }

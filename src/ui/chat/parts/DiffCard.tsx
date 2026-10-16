@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import LinearProgress from '@mui/material/LinearProgress';
@@ -9,6 +10,8 @@ import BackHandIcon from '@mui/icons-material/BackHandOutlined';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineOutlined';
 import UndoIcon from '@mui/icons-material/Undo';
+import { useTemperatureUnit } from '../../../app/services.tsx';
+import { inTemperatureUnit } from '../../../coach/temperature.ts';
 import { TID } from '../../testIds.ts';
 import { setAsideNote, splitDiffLine } from '../format.ts';
 import type { DiffPart } from './types.ts';
@@ -22,6 +25,21 @@ export interface DiffCardProps {
   onConfirm(): void;
   onDecline(): void;
   onUndo(): void;
+}
+
+/** The card's words with every temperature in the barista's unit (D-TEMP-6); the part as it was in °C. */
+function useInTemperatureUnit(part: DiffPart): DiffPart {
+  const unit = useTemperatureUnit();
+  return useMemo(() => {
+    const words = (text: string) => inTemperatureUnit(text, unit);
+    return {
+      ...part,
+      summary: words(part.summary),
+      lines: part.lines.map(words),
+      rationale: words(part.rationale),
+      expectedEffect: words(part.expectedEffect),
+    };
+  }, [part, unit]);
 }
 
 // '&&' doubles the class so these lists beat the chat bubble's own ul/ol
@@ -124,9 +142,11 @@ function StatusLine({ part, showUndo, disabled, onUndo }: Pick<DiffCardProps, 'p
 
 /**
  * One proposed change as a plain-language diff. Nothing reaches the machine
- * until the barista taps Confirm.
+ * until the barista taps Confirm. Its temperatures read in the barista's unit
+ * (D-TEMP-6): CafAI's lines are kept in °C, the coach's words as it wrote them.
  */
-export function DiffCard({ part, disabled = false, showUndo, onConfirm, onDecline, onUndo }: DiffCardProps) {
+export function DiffCard({ part: kept, disabled = false, showUndo, onConfirm, onDecline, onUndo }: DiffCardProps) {
+  const part = useInTemperatureUnit(kept);
   const pending = part.status === 'pending';
   return (
     <Paper

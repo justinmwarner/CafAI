@@ -25,6 +25,7 @@ import RemoveRounded from '@mui/icons-material/RemoveRounded';
 import ShowerRounded from '@mui/icons-material/ShowerRounded';
 import WaterDropRounded from '@mui/icons-material/WaterDropRounded';
 import type { Workflow } from '../../api/types.ts';
+import { useTemperatureUnit } from '../../app/services.tsx';
 import type { DrinkKind } from '../drinks/kinds.ts';
 import { DASH } from '../machine/format.ts';
 import {
@@ -36,6 +37,7 @@ import {
   steamFields,
   type DrinkFieldSpec,
 } from './drinkSettings.ts';
+import { fieldView } from './drinkUnits.ts';
 
 const UNREADABLE = "CafAI could not read Decaid's value.";
 const SAVING = 'Saving…';
@@ -239,6 +241,8 @@ interface DrinkFieldProps {
 export function DrinkField({ spec, value, loaded, disabled, saving, error, layout, onCommit }: DrinkFieldProps) {
   const inputId = useId();
   const noteId = useId();
+  // What the barista reads and types: Decaid's own value, or a temperature in °F, which Decaid keeps in whole °C (D-TEMP-3).
+  const view = fieldView(spec, useTemperatureUnit());
   /** What is being typed, until it is sent or left; otherwise the field shows Decaid's value (or the one on its way). */
   const [draft, setDraft] = useState<string | null>(null);
   const slow = useHeldFor(saving, SAVING_AFTER_MS);
@@ -256,12 +260,12 @@ export function DrinkField({ spec, value, loaded, disabled, saving, error, layou
     if (value === null || off) return;
     const trimmed = raw.trim();
     // Nothing typed: never clamp or re-send a value nobody touched, even one outside this field's range.
-    if (trimmed === String(value)) {
+    if (trimmed === String(view.shown(value))) {
       setDraft(null);
       return;
     }
     const parsed = trimmed === '' ? Number.NaN : Number(trimmed);
-    const next = clampDrinkField(spec, Number.isFinite(parsed) ? parsed : value);
+    const next = clampDrinkField(spec, Number.isFinite(parsed) ? view.fromShown(parsed) : value);
     if (next === value) setDraft(null);
     else send(next);
   };
@@ -276,11 +280,11 @@ export function DrinkField({ spec, value, loaded, disabled, saving, error, layou
     if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
     event.preventDefault();
     const typed = draft === null || draft.trim() === '' ? Number.NaN : Number(draft.trim());
-    nudge(event.key === 'ArrowUp' ? 1 : -1, Number.isFinite(typed) ? typed : value);
+    nudge(event.key === 'ArrowUp' ? 1 : -1, Number.isFinite(typed) ? view.fromShown(typed) : value);
   };
 
   const offText = spec.offText ?? 'Off';
-  const shown = off ? offText : (draft ?? (value === null ? DASH : String(value)));
+  const shown = off ? offText : (draft ?? (value === null ? DASH : String(view.shown(value))));
   // Only a value Decaid gave can be stepped: a dash between a minus and a plus would read as a third minus.
   const stepping = !off && !unknown;
   const button = (direction: 1 | -1) =>
@@ -321,7 +325,7 @@ export function DrinkField({ spec, value, loaded, disabled, saving, error, layou
           <>
             {stepping ? (
               <Box component="span" className="stepper-unit" aria-hidden>
-                {spec.unit}
+                {view.unit}
               </Box>
             ) : null}
             <span className="stepper-gap" />
@@ -332,10 +336,10 @@ export function DrinkField({ spec, value, loaded, disabled, saving, error, layou
           input: {
             role: 'spinbutton',
             'aria-label': spec.label,
-            'aria-valuenow': off || unknown ? undefined : value,
-            'aria-valuemin': off || unknown ? undefined : spec.range.min,
-            'aria-valuemax': off || unknown ? undefined : spec.range.max,
-            'aria-valuetext': off ? offText : unknown ? 'Unknown' : `${value} ${spec.spokenUnit}`,
+            'aria-valuenow': off || unknown ? undefined : view.shown(value),
+            'aria-valuemin': off || unknown ? undefined : view.range.min,
+            'aria-valuemax': off || unknown ? undefined : view.range.max,
+            'aria-valuetext': off ? offText : unknown ? 'Unknown' : `${view.shown(value)} ${view.spokenUnit}`,
             'aria-describedby': note ? noteId : undefined,
             'aria-busy': saving || undefined,
             inputMode: spec.integer ? 'numeric' : 'decimal',

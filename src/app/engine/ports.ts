@@ -76,7 +76,11 @@ export interface ShotSource {
 export interface CoachPort {
   templates: readonly Template[];
   getTemplate(id: string): Template | undefined;
-  /** Stable for the whole session (prompt caching). */
+  /**
+   * The same for every request while the barista's temperature unit stays
+   * (prompt caching): one prompt per unit (D-TEMP-5), so a switch costs one
+   * request without the cache.
+   */
   systemPrompt(): string;
   toolDescription(name: ToolName): string;
   readLeverValues(template: Template, profile: ProfileJson): LeverValues;

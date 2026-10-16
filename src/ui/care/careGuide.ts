@@ -229,7 +229,7 @@ export function routineOf(id: RoutineId): CareRoutine {
 }
 
 /** The units the guide's sentences use, as they follow a number. */
-const UNIT_AFTER_NUMBER = /(\d) (g|ml|°C|ppm|litres|minutes|seconds)(?=[\s.,;:)]|$)/g;
+const UNIT_AFTER_NUMBER = /(\d) (g|ml|°C|°F|ppm|litres|minutes|seconds)(?=[\s.,;:)]|$)/g;
 
 /**
  * A number and its unit never part at a line's end ("60 °C", "500 ml"): the

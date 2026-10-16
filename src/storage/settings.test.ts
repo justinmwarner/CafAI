@@ -447,3 +447,89 @@ describe('appearance', () => {
     expect(restored?.settings.appearance).toEqual({ mode: 'light', tint: { hue: 200 } });
   });
 });
+
+describe('the temperature unit (D-TEMP-2)', () => {
+  function setup() {
+    const handle = createDbHandle((onLost) => openCafaiDb(uniqueDbName(), onLost));
+    const db = () => handle.get();
+    const repos = createRepositories({ db, onWrite: () => undefined, defaultModel: MODEL });
+    const porter = createDataPorter({
+      db,
+      secrets: { getApiKey: async () => null },
+      mirror: { schedulePush: () => undefined },
+      appVersion: '1.2.3',
+      defaultModel: MODEL,
+      now: () => new Date('2026-10-15T09:30:00.000Z'),
+    });
+    return { db, repos, porter };
+  }
+  const exportWith = (settings: unknown): CafaiExport =>
+    ({
+      format: 'cafai-export',
+      schemaVersion: 1,
+      exportedAt: '2026-10-15T09:00:00.000Z',
+      appVersion: '1.2.3',
+      settings,
+      bags: [],
+      versions: [],
+      iterations: [],
+      conversations: [],
+    }) as CafaiExport;
+
+  it('is absent until chosen, so a record saved before it, or by a device that never chose, is unchanged', () => {
+    expect(defaultSettings(MODEL)).not.toHaveProperty('temperatureUnit');
+    expect(normalizeSettings(makeSettings(), MODEL)).not.toHaveProperty('temperatureUnit');
+    expect(applySettingsPatch(makeSettings(), { activeBagId: 'bag_1' }, MODEL)).not.toHaveProperty('temperatureUnit');
+  });
+
+  it('keeps °C or °F as chosen, and reads anything else as none chosen', () => {
+    expect(normalizeSettings(makeSettings({ temperatureUnit: 'fahrenheit' }), MODEL)).toHaveProperty('temperatureUnit', 'fahrenheit');
+    expect(normalizeSettings(makeSettings({ temperatureUnit: 'celsius' }), MODEL)).toHaveProperty('temperatureUnit', 'celsius');
+    for (const other of ['F', 'Fahrenheit', 'kelvin', 7, null, {}]) {
+      expect(normalizeSettings({ ...makeSettings(), temperatureUnit: other }, MODEL), String(other)).not.toHaveProperty('temperatureUnit');
+    }
+  });
+
+  it('is patched like any other setting, and kept across other edits', () => {
+    const next = applySettingsPatch(makeSettings(), { temperatureUnit: 'fahrenheit' }, MODEL);
+    expect(next.temperatureUnit).toBe('fahrenheit');
+    expect(applySettingsPatch(next, { grinderSetting: '14' }, MODEL).temperatureUnit).toBe('fahrenheit');
+    expect(applySettingsPatch(next, { temperatureUnit: 'celsius' }, MODEL).temperatureUnit).toBe('celsius');
+  });
+
+  it('keeps a choice made on this device, °C as much as °F, and fills only a device that never chose', () => {
+    const f = makeSettings({ temperatureUnit: 'fahrenheit' });
+    const c = makeSettings({ temperatureUnit: 'celsius' });
+    expect(fillBlankSettings(c, f, MODEL).temperatureUnit).toBe('celsius');
+    expect(fillBlankSettings(f, c, MODEL).temperatureUnit).toBe('fahrenheit');
+    expect(fillBlankSettings(makeSettings(), f, MODEL).temperatureUnit).toBe('fahrenheit');
+    expect(fillBlankSettings(makeSettings(), makeSettings(), MODEL)).not.toHaveProperty('temperatureUnit');
+  });
+
+  it('is stored, exported and imported with the other settings', async () => {
+    const { db, repos, porter } = setup();
+    await repos.settings.update({ temperatureUnit: 'fahrenheit' });
+    expect(((await (await db()).get('settings', SETTINGS_KEY)) as Settings).temperatureUnit).toBe('fahrenheit');
+    const exported = await porter.exportAll();
+    expect(exported.settings.temperatureUnit).toBe('fahrenheit');
+    for (const mode of ['replace', 'merge'] as const) {
+      const other = setup();
+      await other.porter.importAll(exportWith(exported.settings), mode);
+      expect((await other.repos.settings.get()).temperatureUnit, mode).toBe('fahrenheit');
+    }
+  });
+
+  it("imports a file from a newer CafAI with a unit this one does not know, without the unit", async () => {
+    const { repos, porter } = setup();
+    await porter.importAll(exportWith({ ...makeSettings(), temperatureUnit: 'kelvin' }), 'replace');
+    expect(await repos.settings.get()).not.toHaveProperty('temperatureUnit');
+  });
+
+  it('survives the Decaid mirror round trip', () => {
+    const settings = makeSettings({ temperatureUnit: 'fahrenheit' });
+    const { entries } = buildMirrorEntries({ settings, bags: [], versions: [], iterations: [], conversations: [] }, null, MODEL);
+    const data = Object.fromEntries([...entries].map(([key, text]) => [key, JSON.parse(text)]));
+    const restored = exportFromMirror(data, { appVersion: '1.2.3', defaultModel: MODEL, now: () => new Date(0) });
+    expect(restored?.settings.temperatureUnit).toBe('fahrenheit');
+  });
+});

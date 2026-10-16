@@ -14,6 +14,12 @@ workflow checks against it. Settings > About shows the version you run.
   next tap or message, even one typed after it suggested a change, and is
   told what TDS and EY are and how far to trust them: a number about
   extraction, never a taste. Change or remove a reading the same way.
+- °F: with Settings > Appearance > Temperatures on °F, every temperature
+  reads in °F (the stats card, the drinks' views and settings, the change
+  card, History and the cleaning guide) and the coach speaks °F (1 °C
+  hotter is 1.8 °F hotter), while Decaid and your profiles keep °C. A
+  steam, hot water or flush temperature set in °F is kept as the nearest
+  whole °C, so it reads back as you set it.
 
 ## 0.1.2 (2026-10-15)
 

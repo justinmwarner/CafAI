@@ -22,18 +22,22 @@
 import { EVENT, TOOL } from './contract.ts';
 import { formatLeverValue } from './diff.ts';
 import { REFERENCE_DOSE_G } from './dose.ts';
+import { fahrenheitSection } from './fahrenheitPrompt.ts';
 import { COACH_HEURISTICS, type CoachHeuristics } from './heuristics.ts';
 import { decimalsOf, readLeverValue } from './levers.ts';
 import { freezerDays, roastAgeDays, writtenDate, type FreezerDates } from './roastAge.ts';
 import { startingYield, startRatioOf } from './start.ts';
 import { CHANNELING_THRESHOLDS } from './summary/analysis.ts';
 import { HIGH_STALL_BAR, LOW_STALL_BAR } from './summary/phases.ts';
+import type { TemperatureUnit } from './temperature.ts';
 import type { Lever, Template } from './types.ts';
 import { DOSE_RULES, GRIND_MAX_STEPS } from './validator.ts';
 
 export interface SystemPromptOptions {
   /** The coffee heuristics block; defaults to the placeholder in heuristics.ts. */
   heuristics?: CoachHeuristics;
+  /** The barista's unit (D-TEMP-5): °F adds its section after "How you talk"; °C, the default, is today's prompt. */
+  temperatureUnit?: TemperatureUnit;
 }
 
 const number = (lever: Lever, value: number) => value.toFixed(decimalsOf(lever.granularity));
@@ -108,6 +112,7 @@ export function roastLine(roastDate: string | null | undefined, today: Date, bat
 export function buildSystemPrompt(templates: readonly Template[], options: SystemPromptOptions = {}): string {
   const heuristics = options.heuristics ?? COACH_HEURISTICS;
   const tools = Object.values(TOOL).join(', ');
+  const fahrenheit = options.temperatureUnit === 'fahrenheit';
 
   const sections = [
     'You are CafAI, an espresso coach for a Decent DE1 espresso machine, running in a tablet app next to the machine. You help the user dial in one bag of coffee at a time: pick a starting profile template, then improve it one change per shot, from what the machine recorded and how the shot tasted.',
@@ -117,8 +122,10 @@ export function buildSystemPrompt(templates: readonly Template[], options: Syste
       '- The user reads you on a tablet at the machine, often mid-task. Write short plain sentences a barista can act on, at most about 120 words per reply.',
       '- No tables and no headings. A short list is fine when it helps.',
       '- Say what you saw in the shot in one line, then what to do next.',
-      '- Use °C, g, bar, ml/s and seconds.',
+      fahrenheit ? '- Use °F for temperatures (see "Temperatures in °F" below), g, bar, ml/s and seconds.' : '- Use °C, g, bar, ml/s and seconds.',
     ].join('\n'),
+
+    ...(fahrenheit ? [fahrenheitSection(templates)] : []),
 
     [
       '# The loop',

@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { EVENT, TOOL, TEMPLATE_IDS } from './contract.ts';
+import { FAHRENHEIT_HEADING, fahrenheitSection } from './fahrenheitPrompt.ts';
 import { COACH_HEURISTICS } from './heuristics.ts';
 import { formatLeverValue } from './diff.ts';
 import { readLeverValue } from './levers.ts';
@@ -439,5 +440,68 @@ describe('buildSystemPrompt: a refractometer reading (D-TDS-6, D-TDS-7)', () => 
 
   it('leaves a proposal already made alone when a reading comes late', () => {
     expect(section).toContain('does not reopen the proposal');
+  });
+});
+
+describe('buildSystemPrompt: °F (D-TEMP-5)', () => {
+  const fahrenheit = buildSystemPrompt(TEMPLATES, { temperatureUnit: 'fahrenheit' });
+  const section = fahrenheitSection(TEMPLATES);
+  const USE_C = '- Use °C, g, bar, ml/s and seconds.';
+  const USE_F = '- Use °F for temperatures (see "Temperatures in °F" below), g, bar, ml/s and seconds.';
+
+  it('leaves the °C prompt as it was: °C is the default, and it names no °F', () => {
+    expect(buildSystemPrompt(TEMPLATES, { temperatureUnit: 'celsius' })).toBe(prompt);
+    expect(prompt).toContain(USE_C);
+    expect(prompt).not.toContain('°F');
+    expect(prompt).not.toContain(FAHRENHEIT_HEADING);
+  });
+
+  it('differs from the °C prompt by its one line and its one section, and nothing else', () => {
+    expect(fahrenheit).toContain(USE_F);
+    expect(fahrenheit).not.toContain(USE_C);
+    expect(fahrenheit.replace(`${section}\n\n`, '').replace(USE_F, USE_C)).toBe(prompt);
+  });
+
+  it('puts the section right after "How you talk", before the loop', () => {
+    const talk = fahrenheit.indexOf('# How you talk');
+    const own = fahrenheit.indexOf(FAHRENHEIT_HEADING);
+    expect(talk).toBeGreaterThanOrEqual(0);
+    expect(own).toBeGreaterThan(talk);
+    expect(own).toBeLessThan(fahrenheit.indexOf('# The loop'));
+  });
+
+  it('keeps the tools and proposals in °C, and asks for °F in every word for the barista', () => {
+    expect(section).toContain("What you send stays in °C: a temperature lever's value in propose_adjustment is °C");
+    expect(section).toContain('the catalog, the heuristics, the shot summary and every tool result');
+    expect(section).toContain('Write every temperature for the user in °F, never in °C and never both');
+    expect(section).toContain("ask_user's question and options, and propose_adjustment's summary, rationale, expectedEffect and tips");
+  });
+
+  it('says how a temperature and a change convert, the change without the 32', () => {
+    expect(section).toContain('°F = °C × 1.8 + 32: 92 °C is 197.6 °F');
+    expect(section).toContain('without the 32: 0.5 °C is 0.9 °F, 1 °C is 1.8 °F, 1.5 °C is 2.7 °F, 2 °C is 3.6 °F');
+    expect(section).toContain('never 33.8 °F hotter');
+    expect(section).toContain('200 °F is 93.3 °C, which a lever in steps of 0.5 °C takes as 93.5 °C (200.3 °F)');
+  });
+
+  it("gives every template's temperature lever in °F, worked out from its °C bounds", () => {
+    const f = (c: number) => (c * 1.8 + 32).toFixed(1);
+    const temperatureLevers = TEMPLATES.flatMap((t) => t.levers.filter((l) => l.unit === '°C').map((l) => ({ t, l })));
+    expect(temperatureLevers.length).toBe(TEMPLATES.length);
+    for (const { t, l } of temperatureLevers) {
+      const start = readLeverValue(t, t.profile, l.id);
+      expect(section, t.id).toContain(
+        `  - ${t.id} \`${l.id}\` ${l.label}: ${f(l.min)}-${f(l.max)} °F, steps of ${(l.granularity * 1.8).toFixed(1)} °F, ` +
+          `at most ${(l.maxDelta * 1.8).toFixed(1)} °F per change; template value ${f(start)} °F.`,
+      );
+    }
+    expect(section).toContain(
+      '  - blooming-espresso `temp` Brew temperature: 186.8-201.2 °F, steps of 0.9 °F, at most 3.6 °F per change; template value 197.6 °F.',
+    );
+  });
+
+  it('is byte-identical on every call too, with no runs of blank lines', () => {
+    expect(buildSystemPrompt(TEMPLATES, { temperatureUnit: 'fahrenheit' })).toBe(fahrenheit);
+    expect(fahrenheit).not.toMatch(/\n\n\n/);
   });
 });

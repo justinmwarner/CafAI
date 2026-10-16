@@ -17,6 +17,7 @@
  * Every read and write passes through here, so a record saved before that
  * rule is cleaned when it is read.
  */
+import { isTemperatureUnit } from '../coach/temperature.ts';
 import { containsKeyLike, redactKeyLike } from './redact.ts';
 import type { Appearance, AppearanceMode, Settings } from './types.ts';
 
@@ -110,6 +111,8 @@ export function normalizeSettings(raw: unknown, defaultModel: string): Settings 
   };
   // Only a choice someone made: never written as a default, so a merge can tell "off" from "not chosen here".
   if (typeof raw['keepKeyInDecaid'] === 'boolean') settings.keepKeyInDecaid = raw['keepKeyInDecaid'];
+  // The temperature unit (D-TEMP-2), the same way: one this build does not know reads as none chosen, so °C.
+  if (isTemperatureUnit(raw['temperatureUnit'])) settings.temperatureUnit = raw['temperatureUnit'];
   return settings;
 }
 
@@ -121,6 +124,7 @@ const FIELDS: ReadonlyArray<keyof Settings> = [
   'activeBagId',
   'appearance',
   'keepKeyInDecaid',
+  'temperatureUnit',
 ];
 
 /** `undefined` means "not part of this edit", never "clear it"; clearing takes an explicit null. */
@@ -149,6 +153,7 @@ function isBlank(value: string | null | undefined): boolean {
  * The appearance, like the model, is adopted only while it is still the default.
  * The key's copy in Decaid (D99) is the user's choice wherever this device
  * holds one, off as much as on; only a device that never chose takes it.
+ * The temperature unit (D-TEMP-2) follows the same rule.
  */
 export function fillBlankSettings(local: Settings, incoming: Settings, defaultModel: string): Settings {
   const pick = (mine: string | null, theirs: string | null) => (isBlank(mine) && !isBlank(theirs) ? theirs : mine);
@@ -168,5 +173,8 @@ export function fillBlankSettings(local: Settings, incoming: Settings, defaultMo
   // A device whose storage was lost has no choice of its own, and a copy in Decaid means it was on somewhere.
   const keep = local.keepKeyInDecaid ?? incoming.keepKeyInDecaid;
   if (keep !== undefined) merged.keepKeyInDecaid = keep;
+  // The temperature unit (D-TEMP-2): a choice made here wins, °C as much as °F; a device that never chose takes the incoming one.
+  const unit = local.temperatureUnit ?? incoming.temperatureUnit;
+  if (unit !== undefined) merged.temperatureUnit = unit;
   return merged;
 }
