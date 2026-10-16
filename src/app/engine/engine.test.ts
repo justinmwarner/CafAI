@@ -2268,10 +2268,10 @@ describe('coach engine', () => {
   });
 
   // -------------------------------------------------------------------------
-  // D-TDS: the barista's refractometer reading, and the EY CafAI works out
+  // D162-D170: the barista's refractometer reading, and the EY CafAI works out
   // -------------------------------------------------------------------------
 
-  describe('a TDS reading on a shot (D-TDS)', () => {
+  describe('a TDS reading on a shot (D162-D170)', () => {
     /** The shot's iteration as CafAI stored it. */
     const iterationOf = async (shotId: string) => (await storage.iterations.listAll()).find((i) => i.shotId === shotId);
     /** The reading event as the coach hears it, for the fake coach's summary: 18 g in, 50.2 g out. */
@@ -2534,7 +2534,7 @@ describe('coach engine', () => {
       expect(engine.getState().error).toBe('Decaid has not saved that shot yet.');
     });
 
-    // D-FIX-1: Decaid gives a cleaning or calibration profile's run a shot id and saves no record of it.
+    // D193: Decaid gives a cleaning or calibration profile's run a shot id and saves no record of it.
     /** Decent's Forward Flush x5 (or another profile of `beverageType`) as Decaid's workflow holds it, loaded in streamline. */
     const cleaningProfile = (beverageType = 'cleaning'): ProfileJson => ({
       ...baseProfile,

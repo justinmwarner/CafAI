@@ -8,7 +8,7 @@ this spec's first draft once the card was looked at, the cell's height (it
 no longer grows the card) and typing while the coach works (allowed, as in
 the composer); section 3 has both. After the review (2026-10-15), a TDS
 without an EY clears the EY on Decaid's record (section 4, D165), and a
-taste whose record cannot be read no longer takes the TDS with it (D-FIX-2).
+taste whose record cannot be read no longer takes the TDS with it (D194).
 The item on the roadmap ([ROADMAP.md](../../ROADMAP.md), "More from the gap
 review (D151)").
 

@@ -7,7 +7,7 @@ import { decaidRequests, openApp, pullShot, pullShotOnMachine, saveApiKey, sendC
  * D65: while CafAI asks Decaid for a just-finished shot (six tries over about
  * 15 s), the chat says so with a progress bar, updated on each try, until the
  * shot card or the warning takes its place. Retry searches again, visibly.
- * A cleaning profile's run is no shot, and CafAI looks for none (D-FIX-1).
+ * A cleaning profile's run is no shot, and CafAI looks for none (D193).
  */
 
 const SEARCH = 'Looking for that shot in Decaid…';

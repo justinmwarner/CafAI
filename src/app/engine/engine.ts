@@ -25,7 +25,7 @@
  *   the next turn it is sent, as a verdict.
  * - A run of a cleaning or calibration profile (the weekly clean's Forward
  *   Flush x5) is no shot: Decaid saves none, so CafAI neither looks for one
- *   nor says anything of it (D-FIX-1).
+ *   nor says anything of it (D193).
  * - A bag whose details were saved is added to Decaid's bean library in the
  *   background, and every load names its batch (D102).
  * - A new bag opens with "Which coffee is it?": a batch from Decaid's bean
@@ -912,7 +912,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
    * reading go on without it. Only the taste reads the record first (its
    * notes as they are now): a record CafAI cannot read, or one Decaid
    * refuses, costs the taste alone, and the reading and the rating still go
-   * (D-FIX-2).
+   * (D194).
    */
   async function writeShot(shotId: string): Promise<void> {
     const write = shotWrites.get(shotId);
@@ -990,7 +990,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
    * Say what of a shot write was not saved (`lost`: whichever of its taste,
    * rating and reading it names), in the shot's own bag's chat: all of a
    * write that was dropped, or the taste alone when its read failed and the
-   * rest went (D-FIX-2).
+   * rest went (D194).
    */
   function shotWriteLost(bagId: string | null, lost: Pick<ShotWrite, 'taste' | 'rating' | 'reading'> | undefined, error: unknown): void {
     const readFailed = error instanceof RecordReadFailed;
@@ -2102,7 +2102,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   // -------------------------------------------------------------------------
 
   /**
-   * Whether Decaid keeps a record of the run that just ended (D-FIX-1): false
+   * Whether Decaid keeps a record of the run that just ended (D193): false
    * for a run of a cleaning or calibration profile, which is no shot. Read
    * from Decaid's workflow as the run ends, the profile Decaid decides by then,
    * so a profile loaded behind CafAI's back (D70) counts too. Null when Decaid
@@ -2160,7 +2160,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     const s = session;
     if (!s) return;
     // A cleaning or calibration profile's run (the weekly clean's Forward Flush x5, say) is no shot: Decaid keeps no
-    // record of it, so there is nothing to look for and nothing to say, and a problem on the banner stays (D-FIX-1).
+    // record of it, so there is nothing to look for and nothing to say, and a problem on the banner stays (D193).
     if ((await saved) === false) return;
     const current = activeVersion(s);
     if (!current) {
@@ -3009,7 +3009,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         const started = takeShotStart(event.shotId);
         // A new shot: a rating scale Decaid could not tell is asked once more (D101).
         scaleUnclear = false;
-        // Asked now, as Decaid decides whether to keep the run, not once a reply the queue waits on is done (D-FIX-1).
+        // Asked now, as Decaid decides whether to keep the run, not once a reply the queue waits on is done (D193).
         const saved = runSaved();
         void enqueue(() => handleShotFinished(event.shotId, started, saved));
       });

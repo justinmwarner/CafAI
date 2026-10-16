@@ -2503,7 +2503,6 @@ The wake schedule item of D151, built on branch `feat/wake-schedule`.
 
 The TDS and EY item of D151, built alongside the overlaid curves, °F and the
 care reminders (`docs/superpowers/specs/2026-10-15-tds-ey-design.md`).
-Numbered D-TDS-n until the merge numbers them from D162 on.
 
 - **D162. A quiet TDS cell on every shot card, and no setting.** The
   card's grid of numbers gets a fifth cell, "TDS" over "+ Add"
@@ -3052,7 +3051,7 @@ The code review of the batch merged on 2026-10-15 (TDS and EY, °F, the
 overlaid curves, the care reminders) found three UI defects; one of their
 fixes is a choice.
 
-- **D-FIX-UI-1. On a narrow card the third key takes a line under the
+- **D192. On a narrow card the third key takes a line under the
   curves.** D180's key for the shot under sat in the card's legend, under
   Pressure and Flow, with its name cut at 9.5em; the legend never shrank and
   the curves took what was left. On a phone upright that squeezed them: a
@@ -3079,15 +3078,15 @@ fixes is a choice.
 
 The code review of the batch above found three defects in the engine, one
 of them with two gaps. A TDS without an EY changed D165 in place; a
-cleaning profile's run (D-FIX-1) and a taste whose record cannot be read
-(D-FIX-2) are decisions of their own. The third defect, a shot whose record
+cleaning profile's run (D193) and a taste whose record cannot be read
+(D194) are decisions of their own. The third defect, a shot whose record
 came with a TDS being told to the coach twice in its own turn, now keeps
 ENGINE_PROTOCOL rule 10 as written ("counts as sent"), with no decision of
 its own: the readings and verdicts the coach has not heard are read from
 the transcript with the turn's own blocks in it (`sendUser` in
 `src/app/engine/engine.ts`).
 
-- **D-FIX-1. A cleaning or calibration profile's run is no shot, and CafAI
+- **D193. A cleaning or calibration profile's run is no shot, and CafAI
   says nothing of it.** Decaid gives every run in the espresso state a shot
   id and its shotState frames, and saves no record of a run whose profile's
   `beverage_type` is `cleaning` or `calibrate` (de1_state_manager.dart:835,
@@ -3110,7 +3109,7 @@ the transcript with the turn's own blocks in it (`sendUser` in
   rule decides which runs are shots, and for a run it keeps no record of,
   its workflow is the one place CafAI can read the rule's input; the
   shotState frames name no profile, and the 30 s look can be 30 s behind.
-- **D-FIX-2. A taste whose record cannot be read costs the taste alone.**
+- **D194. A taste whose record cannot be read costs the taste alone.**
   The taste is the one part of a shot write that reads the record first,
   to keep notes a person wrote (D61); the TDS and the rating need no read.
   When that read fails for good (a record CafAI cannot read, or one Decaid
@@ -3129,7 +3128,7 @@ the transcript with the turn's own blocks in it (`sendUser` in
 The review of D183-D191, fixed the same day; the decisions it changed are
 updated in place above.
 
-- **D-FIX-CARE-1. A database a newer CafAI saved says so.** When IndexedDB
+- **D195. A database a newer CafAI saved says so.** When IndexedDB
   will not open one of CafAI's databases because its version on disk is
   higher than this CafAI's (a VersionError), CafAI says "The data on this
   device was saved by a newer version of CafAI. Install that version again
@@ -3141,7 +3140,7 @@ updated in place above.
   so a CafAI put back on the tablet after a newer one said another window
   held it, on every reload, where there was none; what helps is the newer
   CafAI, as a newer export file says to update CafAI.
-- **D-FIX-CARE-2. A restore that brings back machine care's last times and
+- **D196. A restore that brings back machine care's last times and
   no bag says nothing of bags.** The porter counts machine care's records
   apart (`importAll` answers `{ imported, care }`, `src/storage/porter.ts`),
   and a restore that brought back those alone is `care`, not `restored`
