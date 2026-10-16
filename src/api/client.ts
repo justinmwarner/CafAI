@@ -28,10 +28,12 @@ import {
   readPresenceSettings,
   readProfileRecord,
   readProfileRecords,
+  readRecordIds,
   readSettings,
   readShot,
   readShotPage,
   readShotSummary,
+  readSteamSummary,
   readWakeSchedule,
   readWorkflow,
   unexpectedReply,
@@ -269,6 +271,14 @@ export function createDecaidClient(options: DecaidClientOptions): GatewayClient 
       reportDrift(PROBE_SOURCE, `enjoyment probe: unexpected ${status}`);
       throw unexpectedReply(PROBE_SOURCE, path);
     },
+    /**
+     * Steam records' ids alone, to count them (D185): GET /api/v1/steams
+     * itself makes Decaid read and parse every record's measurements
+     * (getAllSteams, SteamMapper.fromRow at aab5f93) and sends each one's workflow.
+     */
+    listSteamIds: () => requestList(transport, '/api/v1/steams/ids', { read: readRecordIds }),
+    /** Decaid answers 200 null while it has no steam record (steams_handler.dart:47-50 at aab5f93). */
+    getLatestSteam: () => requestJson(transport, '/api/v1/steams/latest', { read: readSteamSummary }),
     listBeans: () => requestList(transport, '/api/v1/beans', { read: readBeans }),
     listBatches: (beanId) =>
       requestList(transport, `/api/v1/beans/${id(beanId)}/batches`, { read: readBatches, source: 'GET /api/v1/beans/{id}/batches' }),

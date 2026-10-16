@@ -45,7 +45,9 @@ The coach screen, on the bag **Kiambu AA** (Kenya, washed, light roast) with
    asked for again, loaded, and undone ("Back on Kiambu AA v2."). A middle
    way, v4 at 2.0 ml/s, is loaded and keeps its Undo.
 7. Shot four, a few minutes ago, not rated ("Compared with your previous
-   shot?" waits for a word), and the open question.
+   shot?" waits for a word), measured with a refractometer since (TDS
+   9.10 %, so an EY of 20.4 % from its 18.0 g dose and 40.4 g yield,
+   D162), and the open question.
 
 Every puck is its own, as at a real grinder, so no two shots share their
 numbers. A shot's time is the pour (D78), and every other time on its card
@@ -87,13 +89,23 @@ holds: idle, its first step (98.5 °C for v4, whose fill runs hotter than its
 93 °C pour), and during a shot the step that runs (91 °C in v4's bloom), back
 to the idle target once the shot is done.
 
+Machine care is kept up (D183): the weekly clean was done 8 days ago, so
+it is due, and the stats card's last line says "Weekly clean due: 6 shots
+since the last" (the dial-in's shots), opening the step on the Care screen.
+The rest are on time there: Rinza 3 days ago, the tank and tray 2, the intake
+filter 11 (due in 3 days), the group head's parts and the gasket 16, the
+descale 140; the steam tip and the transport were never marked done.
+
 ## Answering the open question
 
 The coach's replies come from the scripted coach (`mock/anthropic/`), in its
-demo voice: about 1.5 s of "Thinking…", then text at reading pace. It always
-looks at the pressure curve first (it quotes the peak as the shot card shows
-it, counted from the start of the pour: "5.4 bar, 60 s in"), then proposes
-one change:
+demo voice: about 1.5 s of "Thinking…", then text at reading pace. Your
+answer carries shot four's TDS, which the coach had not heard yet, so its
+reply starts with it ("Thanks for measuring: TDS 9.10 % puts that shot's
+extraction at **20.4 %**. Your taste still comes first."; D167, D170).
+Then it looks at the pressure curve
+(it quotes the peak as the shot card shows it, counted from the start of
+the pour: "5.4 bar, 60 s in") and proposes one change:
 
 | You answer | The coach proposes |
 |---|---|

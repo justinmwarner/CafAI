@@ -82,6 +82,14 @@ export type _shot = Assert<
   >
 >;
 
+/**
+ * client.ts listSteamIds and getLatestSteam, for the care reminders (D185): 200 is the answer. A Decaid older
+ * than the pin, without the routes, answers shelf's plain 404, and Rinza counts by days alone.
+ */
+export type _steams = Assert<
+  Exactly<Lacks<'/api/v1/steams/ids', 'get', 200, 'the ids'> | Lacks<'/api/v1/steams/latest', 'get', 200, 'the newest, or null'>, never>
+>;
+
 /** grinders.ts getGrinder: 404 is "no longer in Decaid's library". */
 export type _grinder = Assert<Exactly<Lacks<'/api/v1/grinders/{id}', 'get', 404, 'a deleted grinder'>, never>>;
 

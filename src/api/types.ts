@@ -378,8 +378,33 @@ export interface PaginatedShots {
   offset: number;
 }
 
+/**
+ * Annotations as a shot update sends them: what is given changes, and the
+ * TDS and EY take null, which clears each (Decaid's deep merge writes the
+ * null, and ShotAnnotations.toJson then leaves the key out: D165).
+ */
+export type ShotAnnotationsPatch = Omit<ShotAnnotations, 'drinkTds' | 'drinkEy'> & {
+  /** %, to 0.01; null clears it. */
+  drinkTds?: number | null;
+  /** %, to 0.1; null clears it. */
+  drinkEy?: number | null;
+};
+
 export interface ShotUpdateRequest {
-  annotations?: ShotAnnotations | null;
+  annotations?: ShotAnnotationsPatch | null;
+}
+
+/**
+ * A steam record without its measurements (GET /api/v1/steams/latest): one
+ * per steaming, opened when the machine enters steam and kept when it leaves
+ * (steam_sequencer.dart at aab5f93). Only what CafAI reads: the care
+ * reminders count steams (D185).
+ */
+export interface SteamRecordSummary {
+  id: string;
+  /** When the steaming began: local, no zone. */
+  timestamp: string;
+  [key: string]: unknown;
 }
 
 // ---------------------------------------------------------------------------
@@ -638,6 +663,15 @@ export interface DecaidClient {
    * `unexpected_reply` GatewayError.
    */
   probeEnjoymentScale(): Promise<EnjoymentScale | null>;
+
+  /**
+   * GET /api/v1/steams/ids: every steam record's id, to count them (the care
+   * reminders, D185). A Decaid older than the pin, without steam
+   * records, answers 404.
+   */
+  listSteamIds(): Promise<string[]>;
+  /** The newest steam record, without its measurements; null when there is none. */
+  getLatestSteam(): Promise<SteamRecordSummary | null>;
 
   listBeans(): Promise<Bean[]>;
   listBatches(beanId: string): Promise<BeanBatch[]>;

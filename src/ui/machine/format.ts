@@ -7,6 +7,7 @@
  */
 import { isShotMachineState } from '../../api/machineStates.ts';
 import type { WaterLevels } from '../../api/types.ts';
+import { formatTemperatureIn, type TemperatureUnit } from '../../coach/temperature.ts';
 
 /** What a readout shows for a value the machine has not given: never a 0, never a unit alone. */
 export const DASH = '—';
@@ -96,8 +97,9 @@ export function describeMachineState(
 const finite = (value: number | null | undefined): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
-export function formatTemperature(celsius: number | null | undefined, digits = 1): string {
-  return finite(celsius) ? `${celsius.toFixed(digits)} °C` : DASH;
+/** A reading in °C as the barista reads it: "97.7 °C", or in °F "207.9 °F" (D174); a dash for none. */
+export function formatTemperature(celsius: number | null | undefined, digits = 1, unit: TemperatureUnit = 'celsius'): string {
+  return finite(celsius) ? formatTemperatureIn(celsius, unit, digits) : DASH;
 }
 
 export function formatWeight(grams: number | null | undefined): string {

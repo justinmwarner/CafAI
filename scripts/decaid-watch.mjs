@@ -70,6 +70,19 @@ export const WATCH = [
   'lib/src/settings/sleep_timeout_preference.dart',
   'lib/src/settings/settings_controller.dart',
   'lib/src/settings/presence_settings_page.dart',
+  // The care reminders (D185, D186): which runs Decaid saves as shots (none for a cleaning profile),
+  // when a steam record opens and closes, and what the shot and steam lists cost Decaid to read:
+  // the newest without its measurements, a total as one COUNT, the ids as one column, the rows behind
+  // them, and build.yaml's store_date_time_values_as_text, why a record's time comes with no zone.
+  'lib/src/controllers/de1_state_manager.dart',
+  'lib/src/controllers/steam_sequencer.dart',
+  'lib/src/services/database/mappers/',
+  'lib/src/services/database/daos/shot_dao.dart',
+  'lib/src/services/database/daos/steam_dao.dart',
+  'lib/src/services/database/tables/shot_tables.dart',
+  'lib/src/services/database/tables/steam_tables.dart',
+  'lib/src/services/storage/drift_storage_service.dart',
+  'build.yaml',
   'lib/src/skin_feature/',
   'lib/src/webui_support/',
   'assets/plugins/visualizer.reaplugin/',

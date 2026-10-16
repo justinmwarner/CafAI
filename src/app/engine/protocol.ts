@@ -160,6 +160,25 @@ export function shotRatedBlock(payload: ShotRatedPayload): TextBlock {
   return textBlock(`${EVENT.shotRated}\n${JSON.stringify(payload)}`);
 }
 
+/**
+ * The barista's refractometer reading of a shot (D167): the TDS they
+ * typed on its card and the EY CafAI worked out from it with the card's dose
+ * and yield (null without either), or `tdsPct` null when they removed the
+ * reading. Like a verdict, it goes with the next user turn after the reading
+ * was given, changed or removed.
+ */
+export interface ShotMeasuredPayload {
+  shotId: string;
+  tdsPct: number | null;
+  eyPct: number | null;
+  doseG: number | null;
+  yieldG: number | null;
+}
+
+export function shotMeasuredBlock(payload: ShotMeasuredPayload): TextBlock {
+  return textBlock(`${EVENT.shotMeasured}\n${JSON.stringify(payload)}`);
+}
+
 export function undoBlock(payload: { from: number; to: number; title: string }): TextBlock {
   return textBlock(`${EVENT.undo}\n${JSON.stringify(payload)}`);
 }

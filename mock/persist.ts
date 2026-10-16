@@ -6,8 +6,9 @@
  *
  * With it, the mock keeps what a real Decaid keeps on disk: the `cafai`
  * key-value namespace (CafAI's backup) and the `cafai-key` one (D99's
- * optional copy of the API key), the shot records, the workflow (profile
- * and context), the profiles CafAI created, and the bean library (D4/D10):
+ * optional copy of the API key), the shot records, the steam records
+ * (without their measurements, which nothing reads; D191), the workflow
+ * (profile and context), the profiles CafAI created, and the bean library (D4/D10):
  * the two seeded beans and batches, and any CafAI added. Live state starts
  * fresh, as after a Decaid restart: machine and scale links, frames, the shot
  * player, faults and the request log. So a test can empty CafAI's own browser
@@ -29,7 +30,7 @@
  *
  * It saves after every request that may have changed the store (anything but
  * GET, HEAD or OPTIONS in the mock's request log, checked every 250 ms), after
- * the shot player recorded a shot, and on `pagehide`. A change made directly
+ * the shot player recorded a shot or a steam, and on `pagehide`. A change made directly
  * on `window.__CAFAI_MOCK__.state` is saved with the next such request or on
  * `pagehide`.
  *
@@ -47,6 +48,7 @@ import type { Bean, BeanBatch, ShotRecord, Workflow, WorkflowContext } from '../
 import type { DecaidProfileRecord } from './decaid/profiles.ts';
 import { isPlainObject } from './decaid/json.ts';
 import type { MockDecaid, MockRequestLog } from './decaid/state.ts';
+import type { MockSteamRecord } from './decaid/steams.ts';
 
 export const MOCK_PERSIST_PARAM = 'mockPersist';
 /** Every localStorage key of the mock starts with this; CafAI's own keys start with `cafai.`. */
@@ -72,6 +74,8 @@ export interface MockStoreSnapshot {
   kv: Record<string, Record<string, unknown>>;
   /** Full records, measurements included, in the mock's order. */
   shots: ShotRecord[];
+  /** The steam records, measurements left out; absent from a store saved before the mock kept them. */
+  steams?: MockSteamRecord[];
   workflow: Workflow;
   /** Every profile record that is not a bundled default: visible, hidden or deleted. */
   profiles: DecaidProfileRecord[];
@@ -100,6 +104,7 @@ export function snapshotStore(state: MockDecaid): MockStoreSnapshot {
     clockMs: state.clock.now(),
     kv,
     shots: state.getShotIds().map((id) => state.getShot(id)),
+    steams: state.getSteamIds().map((id) => ({ ...state.getSteam(id), measurements: [] })),
     workflow: state.getWorkflow(),
     profiles: state.listProfiles({ includeHidden: true }).filter((record) => !record.isDefault),
     beans: state.listBeans({ includeArchived: true }),
@@ -135,6 +140,7 @@ export function restoreStore(state: MockDecaid, snapshot: MockStoreSnapshot): Re
   // The saved set exactly, in its order: a shot deleted before the save stays deleted.
   for (const id of state.getShotIds()) attempt(`shot ${id}`, () => void state.deleteShot(id));
   for (const shot of snapshot.shots) attempt(`shot ${shot.id}`, () => state.addShot(shot));
+  for (const steam of snapshot.steams ?? []) attempt(`steam ${steam.id}`, () => state.addSteam(steam));
 
   // Beans and batches are a straight upsert by id (D4/D10): the fresh mock's two seeded ones
   // are already in the saved set under the same fixed ids, so this never duplicates them, and
@@ -249,6 +255,7 @@ export function parseSnapshot(text: string | null | undefined): MockStoreSnapsho
   const kv = raw.kv;
   if (!isPlainObject(kv) || !Object.values(kv).every(isPlainObject)) return null;
   if (!Array.isArray(raw.shots) || !raw.shots.every(isShotRecord)) return null;
+  if (raw.steams !== undefined && (!Array.isArray(raw.steams) || !raw.steams.every(isSteamRecord))) return null;
   if (!isWorkflow(raw.workflow)) return null;
   if (!Array.isArray(raw.profiles) || !raw.profiles.every(isProfileRecord)) return null;
   if (!Array.isArray(raw.beans) || !raw.beans.every(isBeanRecord)) return null;
@@ -280,6 +287,10 @@ function isShotRecord(value: unknown): boolean {
     isPlainObject(workflow) &&
     isPlainObject(workflow.profile)
   );
+}
+
+function isSteamRecord(value: unknown): boolean {
+  return isPlainObject(value) && isText(value.id) && typeof value.timestamp === 'string' && Array.isArray(value.measurements) && isPlainObject(value.workflow);
 }
 
 function isProfileRecord(value: unknown): boolean {
@@ -410,12 +421,14 @@ export function startMockPersistence(state: MockDecaid, env: MockPersistenceEnv 
   };
 
   let lastSeen = state.requests[state.requests.length - 1];
-  let shotIds = state.getShotIds().join('\n');
+  // The shot player records shots and steams with no request: a change in either is a change to keep.
+  const recordIds = () => [...state.getShotIds(), ...state.getSteamIds()].join('\n');
+  let shotIds = recordIds();
   const check = () => {
     const log = state.requests;
     const fresh = entriesAfter(log, lastSeen);
     lastSeen = log[log.length - 1] ?? lastSeen;
-    const ids = state.getShotIds().join('\n');
+    const ids = recordIds();
     const shotsChanged = ids !== shotIds;
     shotIds = ids;
     if (shotsChanged || fresh.some((entry) => !READ_METHODS.has(entry.method.toUpperCase()))) save();

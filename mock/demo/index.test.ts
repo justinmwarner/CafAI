@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Bag } from '../../src/storage/types.ts';
 import { TID } from '../../src/ui/testIds.ts';
+import { openCareDb, type CareDb } from '../../src/storage/careDb.ts';
 import { createDbHandle, openCafaiDb, readAll, SETTINGS_KEY, type CafaiDb } from '../../src/storage/db.ts';
 import { createRepositories } from '../../src/storage/repositories.ts';
 import { openSecretStore } from '../../src/storage/secrets.ts';
@@ -13,7 +14,7 @@ import { SHOTS } from './story.ts';
 
 const NOW = Date.UTC(2026, 9, 6, 9, 30, 0);
 let run = 0;
-let names: { dbName: string; secretsDbName: string };
+let names: { dbName: string; careDbName: string; secretsDbName: string };
 let state: MockDecaid;
 let host: DemoHost & { location: { hash: string; replaced: string[] }; storage: Map<string, string> };
 
@@ -42,6 +43,16 @@ function fakeHost(hash = '#/history'): typeof host {
 
 async function withDb<T>(work: (db: CafaiDb) => Promise<T>): Promise<T> {
   const handle = createDbHandle((onLost) => openCafaiDb(names.dbName, onLost));
+  try {
+    return await work(await handle.get());
+  } finally {
+    handle.close();
+  }
+}
+
+/** Machine care's own database (src/storage/careDb.ts). */
+async function withCareDb<T>(work: (db: CareDb) => Promise<T>): Promise<T> {
+  const handle = createDbHandle((onLost) => openCareDb(names.careDbName, onLost));
   try {
     return await work(await handle.get());
   } finally {
@@ -98,11 +109,11 @@ async function saveOwnSettings(): Promise<void> {
   });
 }
 
-const everything = () => withDb((db) => readAll(db));
+const everything = async () => ({ ...(await withDb((db) => readAll(db))), care: await withCareDb((db) => db.getAll('care')) });
 
 beforeEach(() => {
   run += 1;
-  names = { dbName: `cafai-demo-test-${run}`, secretsDbName: `cafai-demo-secrets-${run}` };
+  names = { dbName: `cafai-demo-test-${run}`, careDbName: `cafai-demo-care-${run}`, secretsDbName: `cafai-demo-secrets-${run}` };
   state = createMockDecaid({ seedExamples: false, uploadMs: 0 });
   host = fakeHost();
   document.head.innerHTML = '';
@@ -124,6 +135,8 @@ describe('startDemo on an address with no CafAI data', () => {
     expect(stored.versions).toHaveLength(5);
     expect(stored.iterations).toHaveLength(5);
     expect(stored.settings).toMatchObject({ grinderName: 'Niche Zero', grinderSetting: '14.5' });
+    // Machine care's last times, in their own database (D189).
+    expect(stored.care.filter((record) => record.doneAt !== null)).toHaveLength(7);
     expect(await storedKey()).toBe(DEMO_API_KEY);
 
     expect(host.location.hash).toBe('#/');
@@ -246,6 +259,23 @@ describe('startDemo on an address with CafAI data of its own', () => {
     note.querySelector<HTMLButtonElement>('button[aria-label="Dismiss"]')!.click();
     expect(document.body.querySelector('[role="status"]')).toBeNull();
     expect(getComputedStyle(app).top).toBe('0px');
+  });
+
+  it("seeds over the care records CafAI makes by itself on opening, but not over a step someone marked done (D190)", async () => {
+    const at = new Date(NOW - 3_600_000).toISOString();
+    const counted = { id: 'descale', doneAt: null, by: null, countFrom: at, shotTotal: 0, steamTotal: 0, newestShotAt: null, newestSteamAt: null, updatedAt: at };
+    await withCareDb((db) => db.put('care', counted));
+    expect((await startDemo(state, host, { ...names, now: NOW })).seeded).toBe(true);
+
+    // Another address, where a step was marked done.
+    names = { dbName: `${names.dbName}-marked`, careDbName: `${names.careDbName}-marked`, secretsDbName: `${names.secretsDbName}-marked` };
+    await withCareDb((db) => db.put('care', { ...counted, doneAt: at, by: 'tick' }));
+    const other = createMockDecaid({ seedExamples: false, uploadMs: 0 });
+    try {
+      expect((await startDemo(other, fakeHost(), { ...names, now: NOW })).seeded).toBe(false);
+    } finally {
+      other.dispose();
+    }
   });
 
   it('reads a saved settings record as data, even with every field blank', async () => {

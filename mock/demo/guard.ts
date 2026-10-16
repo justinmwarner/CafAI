@@ -5,14 +5,17 @@
  * demo wrote itself: after a successful seed it leaves a marker in
  * localStorage, and a later load under that marker seeds again, replacing
  * whatever the viewer added in the demo. "CafAI data" is any bag, version,
- * iteration or conversation, a saved settings record, or an API key other
- * than the demo's placeholder.
+ * iteration or conversation, a step of machine care someone marked done, a
+ * saved settings record, or an API key other than the demo's placeholder.
+ * The care records CafAI makes by itself the first time it opens (D190)
+ * are not: they hold nothing anyone did.
  *
  * Under the marker, one thing still stops the seed: an API key the scripted
  * coach does not know. The demo never needs a real key, so one at this
  * address means someone has used it for real since (with a real Decaid and
  * the real coach), and their bags are no longer the demo's to replace.
  */
+import { CARE_DB_NAME, openCareDb } from '../../src/storage/careDb.ts';
 import { CAFAI_DB_NAME, createDbHandle, DATA_STORES, openCafaiDb, SETTINGS_KEY } from '../../src/storage/db.ts';
 import { openSecretStore, SECRETS_DB_NAME } from '../../src/storage/secrets.ts';
 import { TID } from '../../src/ui/testIds.ts';
@@ -33,6 +36,8 @@ export const MOCK_API_KEYS: readonly string[] = [DEMO_API_KEY, 'sk-ant-invalid',
 /** Where CafAI keeps its data; tests use their own names. */
 export interface DemoDbNames {
   dbName?: string;
+  /** Machine care's steps (src/storage/careDb.ts). */
+  careDbName?: string;
   secretsDbName?: string;
 }
 
@@ -60,6 +65,12 @@ export async function readStoredData(names: DemoDbNames = {}): Promise<StoredDat
     }
   } finally {
     handle.close();
+  }
+  const careHandle = createDbHandle((onLost) => openCareDb(names.careDbName ?? CARE_DB_NAME, onLost));
+  try {
+    records += (await (await careHandle.get()).getAll('care')).filter((record) => record.doneAt !== null).length;
+  } finally {
+    careHandle.close();
   }
   const secrets = await openSecretStore(names.secretsDbName ?? SECRETS_DB_NAME);
   try {

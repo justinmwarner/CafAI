@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { TOOL, TOOL_INPUTS, type ToolName } from '../../src/coach/contract.ts';
-import { BAG_PHOTO_ANSWER, createScenarioMemory, respond, type ScenarioMemory, type ScenarioResponse } from './scenario.ts';
+import { buildSystemPrompt } from '../../src/coach/prompt.ts';
+import { TEMPLATES } from '../../src/coach/templates/index.ts';
+import {
+  BAG_PHOTO_ANSWER,
+  createScenarioMemory,
+  promptTemperatureUnit,
+  respond,
+  type ScenarioMemory,
+  type ScenarioResponse,
+} from './scenario.ts';
 
 type Block = Record<string, unknown>;
 type Message = { role: 'user' | 'assistant'; content: Block[] };
@@ -519,6 +528,39 @@ describe('scripted replies', () => {
     ]);
   });
 
+  it('rule 0b: a reply to a turn carrying a TDS reading starts with what it heard, and the rule decides as before (D170)', () => {
+    const measured = (tdsPct: number | null, eyPct: number | null) =>
+      text(`[event:shot_measured]\n${JSON.stringify({ shotId: 'shot-1', tdsPct, eyPct, doseG: 18, yieldG: 40.4 })}`);
+    const tasted = (...readings: Block[]) =>
+      ok(call([...UP_TO_SHOT, shot(BLOOMING_LEVERS), SHOT_REPLY, user(toolResult('t_ask', { selected: ['Sour / sharp'], other: null }), ...readings)]));
+
+    const reply = tasted(measured(9.25, 20.8));
+    expect(reply.text).toBe('Noted: TDS 9.25 %, EY 20.8 %. Thanks. Let me look at the pressure curve.');
+    expect(reply.tools.map((t) => t.name)).toEqual([TOOL.getShotSeries]);
+    expect(tasted(measured(9.25, null)).text).toBe('Noted: TDS 9.25 %, no EY. Thanks. Let me look at the pressure curve.');
+    expect(tasted(measured(null, null)).text).toBe('Noted: no TDS reading for that shot. Thanks. Let me look at the pressure curve.');
+    expect(tasted(measured(9, 20), measured(9.5, 21.1)).text).toBe('Noted: TDS 9.00 %, EY 20.0 %. Noted: TDS 9.50 %, EY 21.1 %. Thanks. Let me look at the pressure curve.');
+
+    // A reading after a proposal comes with its decision: the confirmation, and the reading first.
+    const confirmed = ok(
+      call([
+        ...UP_TO_SHOT,
+        shot(BLOOMING_LEVERS),
+        SHOT_REPLY,
+        answer(['Sour / sharp']),
+        ANSWER_REPLY,
+        SERIES,
+        ADJUST_REPLY,
+        user(toolResult('t_adj', { applied: true, variable: 'profile', version: 2, title: 'Kiambu AA v2', onMachine: true, loadError: null }), measured(9.25, 20.8)),
+      ]),
+    );
+    expect(confirmed.text).toBe('Noted: TDS 9.25 %, EY 20.8 %. Done. v2 is on the machine. Pull another shot and tell me how it tastes.');
+    // A reply that has no words of its own gets the line alone, before its tool call.
+    const proposal = ok(call([...UP_TO_SHOT, shot(BLOOMING_LEVERS), SHOT_REPLY, answer(['Sour / sharp']), ANSWER_REPLY, user(...SERIES.content, measured(9.25, 20.8))]));
+    expect(proposal.content.filter((b) => b.type !== 'thinking').map((b) => b.type)).toEqual(['text', 'tool_use']);
+    expect(proposal.text).toBe('Noted: TDS 9.25 %, EY 20.8 %.');
+  });
+
   it('rule 2: sour raises the temperature by 1 °C', () => {
     expect(adjustmentFor(['Sour / sharp'])).toMatchObject({ variable: 'profile', lever: 'temp', value: 93, grind: null });
   });
@@ -863,5 +905,43 @@ describe('scripted replies', () => {
     const reply = ok(call([...UP_TO_SHOT, user(text('It smells amazing'))]));
     expect(reply.text).toBe('Got it. Pull a shot when you are ready, or tell me more about the coffee.');
     expect(reply.tools).toEqual([]);
+  });
+});
+
+describe('the scripted coach follows the °F prompt (D177)', () => {
+  const FAHRENHEIT_PROMPT = buildSystemPrompt(TEMPLATES, { temperatureUnit: 'fahrenheit' });
+  const conversation = (taste: string) => [...UP_TO_SHOT, shot(BLOOMING_LEVERS, 'blooming-espresso', 1), SHOT_REPLY, answer([taste]), ANSWER_REPLY, SERIES];
+  const proposal = (result: ScenarioResponse) => ok(result).tools[0]?.input as Record<string, unknown>;
+
+  it('reads the unit from the system prompt', () => {
+    expect(promptTemperatureUnit(FAHRENHEIT_PROMPT)).toBe('fahrenheit');
+    expect(promptTemperatureUnit([{ type: 'text', text: FAHRENHEIT_PROMPT }])).toBe('fahrenheit');
+    expect(promptTemperatureUnit(buildSystemPrompt(TEMPLATES))).toBe('celsius');
+    for (const other of [undefined, null, '', 'You are an espresso coach.', 42]) expect(promptTemperatureUnit(other)).toBe('celsius');
+  });
+
+  it('writes its change in °F, while the proposal itself stays in °C', () => {
+    const sour = proposal(call(conversation('Sour / sharp'), { over: { system: FAHRENHEIT_PROMPT } }));
+    expect(sour).toMatchObject({ variable: 'profile', lever: 'temp', value: 93, summary: 'Raise brew temperature by 1.8 °F' });
+    const bitter = proposal(call(conversation('Bitter / harsh'), { over: { system: FAHRENHEIT_PROMPT } }));
+    expect(bitter).toMatchObject({ lever: 'temp', value: 91, summary: 'Lower brew temperature by 1.8 °F' });
+    expect(JSON.stringify([sour, bitter])).not.toContain('°C');
+  });
+
+  it('the demo voice too, in its words before the card', () => {
+    const headers = new Headers(HEADERS);
+    const result = respond(request(conversation('Sour / sharp'), { system: FAHRENHEIT_PROMPT }), headers, createScenarioMemory({ session: 'f' }), {
+      voice: 'demo',
+    });
+    const reply = ok(result);
+    expect(reply.text).toContain("I'd raise the **brew temperature** by 1.8 °F");
+    expect(reply.tools[0]?.input).toMatchObject({ lever: 'temp', value: 93, summary: 'Brew 1.8 °F hotter' });
+    expect(reply.text).not.toContain('°C');
+  });
+
+  it('in °C it says what it always said', () => {
+    expect(proposal(call(conversation('Sour / sharp'), { over: { system: buildSystemPrompt(TEMPLATES) } }))).toMatchObject({
+      summary: 'Raise brew temperature by 1 °C',
+    });
   });
 });

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { createCareRepository, openCareDb } from './careDb.ts';
 import { createDbHandle, openCafaiDb } from './db.ts';
 import { createRepositories } from './repositories.ts';
 import { openSecretStore, REDACTED } from './secrets.ts';
 import {
+  careRecordWins,
   createDataPorter,
   exportFileName,
   ImportError,
@@ -16,6 +18,7 @@ import {
   API_KEY,
   MODEL,
   makeBag,
+  makeCareRecord,
   makeConversation,
   makeIteration,
   makeSettings,
@@ -29,8 +32,10 @@ const NOW = new Date('2026-10-03T09:30:00.000Z');
 async function setup(secrets?: Pick<SecretStore, 'getApiKey'>) {
   const name = uniqueDbName();
   const handle = createDbHandle((onLost) => openCafaiDb(name, onLost));
+  const careHandle = createDbHandle((onLost) => openCareDb(uniqueDbName('care'), onLost));
   const db = () => handle.get();
-  const repos = createRepositories({ db, onWrite: () => undefined, defaultModel: MODEL });
+  const careDb = () => careHandle.get();
+  const repos = { ...createRepositories({ db, onWrite: () => undefined, defaultModel: MODEL }), care: createCareRepository({ db: careDb, onWrite: () => undefined }) };
   const mirror = {
     pushes: 0,
     replaced: 0,
@@ -43,13 +48,14 @@ async function setup(secrets?: Pick<SecretStore, 'getApiKey'>) {
   };
   const porter = createDataPorter({
     db,
+    careDb,
     secrets: secrets ?? { getApiKey: async () => null },
     mirror,
     appVersion: '1.2.3',
     defaultModel: MODEL,
     now: () => NOW,
   });
-  return { repos, porter, mirror };
+  return { repos, porter, mirror, careHandle };
 }
 
 const VERSION_2 = makeVersion({
@@ -88,6 +94,7 @@ function exportOf(overrides: Partial<CafaiExport> = {}): CafaiExport {
     versions: [],
     iterations: [],
     conversations: [],
+    care: [],
     ...overrides,
   };
 }
@@ -204,6 +211,15 @@ describe('import validation', () => {
     expect(() => parseCafaiExport(exportOf({ iterations: [makeIteration({ visualizerUrl: 42 as never })] }))).toThrow(ImportError);
   });
 
+  it("keeps a shot's TDS and EY in its summary, and refuses numbers that are not numbers (D166)", () => {
+    const measured = { ...makeSummary(), tdsPct: 9.25, eyPct: 20.8 };
+    const noEy = { ...makeSummary(), tdsPct: 9.25, eyPct: null };
+    const parsed = parseCafaiExport(exportOf({ iterations: [makeIteration({ summary: measured }), makeIteration({ id: 'iter_no_ey', summary: noEy })] }));
+    expect(parsed.iterations[0]?.summary).toEqual(measured);
+    expect(parsed.iterations[1]?.summary).toEqual(noEy);
+    expect(() => parseCafaiExport(exportOf({ iterations: [makeIteration({ summary: { ...makeSummary(), tdsPct: '9.25' as never } })] }))).toThrow(ImportError);
+  });
+
   it('accepts iterations without summary.series, as restored from the mirror', () => {
     const { series: _series, ...summary } = makeSummary();
     const parsed = parseCafaiExport(exportOf({ iterations: [makeIteration({ summary: summary as never })] }));
@@ -275,7 +291,7 @@ describe('importAll replace', () => {
     await seed(a.repos);
     const exported = await a.porter.exportAll();
     const b = await setup();
-    expect(await b.porter.importAll(exported, 'replace')).toEqual({ imported: 5 });
+    expect(await b.porter.importAll(exported, 'replace')).toEqual({ imported: 5, care: 0 });
     expect(b.mirror).toMatchObject({ pushes: 1, replaced: 1 });
   });
 
@@ -295,7 +311,7 @@ describe('importAll merge', () => {
     await seed(a.repos);
     const exported = await a.porter.exportAll();
     const b = await setup();
-    expect(await b.porter.importAll(serializeExport(exported), 'merge')).toEqual({ imported: 5 });
+    expect(await b.porter.importAll(serializeExport(exported), 'merge')).toEqual({ imported: 5, care: 0 });
     expect(await b.porter.exportAll()).toEqual(exported);
   });
 
@@ -303,7 +319,7 @@ describe('importAll merge', () => {
     const { repos, porter } = await setup();
     await repos.bags.put(makeBag({ id: 'bag_local' }));
     const result = await porter.importAll(exportOf({ bags: [makeBag()], iterations: [makeIteration()] }), 'merge');
-    expect(result).toEqual({ imported: 2 });
+    expect(result).toEqual({ imported: 2, care: 0 });
     expect((await repos.bags.list()).map((bag) => bag.id).sort()).toEqual(['bag_kiambu', 'bag_local']);
   });
 
@@ -325,7 +341,7 @@ describe('importAll merge', () => {
       }),
       'merge',
     );
-    expect(result).toEqual({ imported: 0 });
+    expect(result).toEqual({ imported: 0, care: 0 });
     expect((await repos.bags.get('bag_kiambu'))?.name).toBe('local');
     expect((await repos.conversations.get('conv_kiambu'))?.apiMessages).toHaveLength(3);
   });
@@ -359,5 +375,76 @@ describe('importAll merge', () => {
     const { porter, mirror } = await setup();
     await porter.importAll(exportOf({ bags: [makeBag()] }), 'merge');
     expect(mirror).toMatchObject({ pushes: 1, replaced: 0 });
+  });
+});
+
+describe("machine care's records (D189)", () => {
+  const NEVER = { doneAt: null, by: null } as const;
+
+  it('travel in the export and back, and a replace takes the file’s', async () => {
+    const a = await setup();
+    await a.repos.care.put(makeCareRecord({ id: 'rinza' }));
+    await a.repos.care.put(makeCareRecord());
+    const file = await a.porter.exportAll();
+    expect(file.care?.map((record) => record.id)).toEqual(['detergent-clean', 'rinza']);
+
+    const b = await setup();
+    await b.repos.care.put(makeCareRecord({ id: 'descale' }));
+    expect(await b.porter.importAll(JSON.parse(serializeExport(file)), 'replace')).toEqual({ imported: 2, care: 2 });
+    expect(await b.repos.care.list()).toEqual(file.care);
+  });
+
+  it('live in their own database: one that cannot be opened stops an import before anything is written', async () => {
+    const name = uniqueDbName();
+    const handle = createDbHandle((onLost) => openCafaiDb(name, onLost));
+    const porter = createDataPorter({
+      db: () => handle.get(),
+      careDb: () => Promise.reject(new DOMException('The requested version (1) is less than the existing version (2).', 'VersionError')),
+      secrets: { getApiKey: async () => null },
+      mirror: { schedulePush: () => undefined },
+      appVersion: '1.2.3',
+      defaultModel: MODEL,
+      now: () => NOW,
+    });
+    await expect(porter.importAll(exportOf({ bags: [makeBag()], care: [makeCareRecord()] }), 'replace')).rejects.toMatchObject({ kind: 'newer' });
+    const db = await handle.get();
+    expect(await db.getAll('bags')).toEqual([]);
+    handle.close();
+  });
+
+  it('an older file, without them, imports and leaves the steps as they were on a merge', async () => {
+    const { repos, porter } = await setup();
+    await repos.care.put(makeCareRecord());
+    const { care: _care, ...older } = exportOf({ bags: [makeBag()] });
+    await porter.importAll(older, 'merge');
+    expect(await repos.care.list()).toEqual([makeCareRecord()]);
+    expect(parseCafaiExport(older).care).toBeUndefined();
+  });
+
+  it('a merge keeps the later last time, whatever the records’ updatedAt says', async () => {
+    const { repos, porter } = await setup();
+    await repos.care.put(makeCareRecord({ doneAt: '2026-10-08T08:00:00.000Z', updatedAt: '2026-10-08T08:00:00.000Z' }));
+    const older = makeCareRecord({ doneAt: '2026-10-01T08:00:00.000Z', updatedAt: '2026-10-12T08:00:00.000Z' });
+    expect(await porter.importAll(exportOf({ care: [older] }), 'merge')).toEqual({ imported: 0, care: 0 });
+    const later = makeCareRecord({ doneAt: '2026-10-11T08:00:00.000Z', shotTotal: 180 });
+    expect(await porter.importAll(exportOf({ care: [later, makeCareRecord({ id: 'rinza' })] }), 'merge')).toEqual({ imported: 2, care: 2 });
+    expect(await repos.care.list()).toEqual([later, makeCareRecord({ id: 'rinza' })]);
+  });
+
+  it('a record marked done outranks one never marked, and of two never marked the earlier start wins', () => {
+    const done = makeCareRecord();
+    const fresh = makeCareRecord({ ...NEVER, countFrom: '2026-10-14T08:00:00.000Z', updatedAt: '2026-10-14T08:00:00.000Z' });
+    const earlier = makeCareRecord({ ...NEVER, countFrom: '2026-09-20T08:00:00.000Z' });
+    expect(careRecordWins(done, fresh)).toBe(true);
+    expect(careRecordWins(fresh, done)).toBe(false);
+    expect(careRecordWins(earlier, fresh)).toBe(true);
+    expect(careRecordWins(fresh, earlier)).toBe(false);
+    expect(careRecordWins(done, done)).toBe(false);
+  });
+
+  it('reads what it cannot use as unknown, so a file from a newer CafAI still imports; a record without its step or times is damage', () => {
+    const odd = { ...makeCareRecord(), by: 'machine', shotTotal: -3, steamTotal: 'many', extra: true };
+    expect(parseCafaiExport(exportOf({ care: [odd as never] })).care).toEqual([makeCareRecord({ by: null, shotTotal: null, steamTotal: null })]);
+    expect(() => parseCafaiExport(exportOf({ care: [{ ...makeCareRecord(), countFrom: '' }] }))).toThrow(IMPORT_MESSAGES.damaged('care[0].countFrom'));
   });
 });

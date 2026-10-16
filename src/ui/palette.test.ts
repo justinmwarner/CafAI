@@ -75,6 +75,17 @@ describe('buildPalette', () => {
     expect(buildPalette('dark', namedTint('matcha')).background).not.toBe(buildPalette('dark', namedTint('cherry')).background);
   });
 
+  it('washes pressure and flow toward the page for the shot drawn under another, and the muted ink for its key (D180)', () => {
+    for (const [mode, share] of [['dark', 0.45], ['light', 0.5]] as const) {
+      for (const tint of [namedTint('crema'), namedTint('matcha'), customTint(300)]) {
+        const p = buildPalette(mode, tint);
+        expect(p.graph.pressureGuide).toBe(blend(p.graph.pressure, p.background, share));
+        expect(p.graph.flowGuide).toBe(blend(p.graph.flow, p.background, share));
+        expect(p.graph.guide).toBe(blend(p.inkMuted, p.background, share));
+      }
+    }
+  });
+
   it('washes the flow blue and the ink over the page for the dial', () => {
     const dark = buildPalette('dark', namedTint('crema'));
     expect(dark.waterWash).toBe(blend(dark.graph.flow, dark.background, 0.22));
@@ -127,6 +138,30 @@ const PAIRS: readonly (readonly [string, number, (p: Palette) => readonly (reado
       [p.graph.pressure, p.graph.flow, p.graph.weightFlow, p.graph.weight].flatMap(
         (c) => [[c, p.background], [c, p.surface]] as const,
       ),
+  ],
+  // The shot drawn faintly under another (D180): wide bands, faint by
+  // design, so below a series' 3:1, but seen on the page and the card; and
+  // this shot's line, where it runs over its own band, still stands out.
+  // In light mode a series is about 4.5:1 against the page, which leaves
+  // about 2:1 each way for a band between them.
+  [
+    "the shot under: its bands and its key's swatch on background and surface",
+    1.9,
+    (p) => [p.graph.pressureGuide, p.graph.flowGuide, p.graph.guide].flatMap((c) => [[c, p.background], [c, p.surface]] as const),
+  ],
+  ["this shot's pressure and flow over their own bands", 2, (p) => [[p.graph.pressure, p.graph.pressureGuide], [p.graph.flow, p.graph.flowGuide]]],
+  // Lines that cross the other band: weight flow runs along the flow band for
+  // most of a pour. They differ from it in hue too (orange, tan or green on
+  // blue, blue on green), and light mode leaves weight flow, about 3.5:1
+  // against the page, about 1.65:1 against the flow band.
+  [
+    "this shot's lines crossing the other bands",
+    1.6,
+    (p) => [
+      [p.graph.pressure, p.graph.flowGuide],
+      [p.graph.flow, p.graph.pressureGuide],
+      ...[p.graph.weight, p.graph.weightFlow].flatMap((c) => [[c, p.graph.pressureGuide], [c, p.graph.flowGuide]] as const),
+    ],
   ],
   // The steam, hot water and flush dial (D149): its number in ink and its
   // "of" line in ink-muted sit over the water and the milk inside the ring.

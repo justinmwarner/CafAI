@@ -15,7 +15,7 @@ tablet and a phone layout, and a look of your own. It follows the
 patterns of Decent's own skin, streamline.js, and began as a port of Crema's
 logic; see [Influences and thanks](#influences-and-thanks).
 
-![The coach on a 1280x800 tablet: the barista tapped "Sour / sharp", the coach read the pressure curve and proposes one change, 1 °C hotter, to confirm](docs/images/tablet-coach.png)
+![The coach on a 1280x800 tablet: the barista measured the last shot's TDS and tapped "Sour / sharp"; the coach gives the extraction it works out, reads the pressure curve and proposes one change, 1 °C hotter, to confirm](docs/images/tablet-coach.png)
 
 - Skin id: `cafai` (never changes; it fixes the skin's install folder, port
   and origin in Decaid, and so its saved data)
@@ -63,11 +63,11 @@ From the built-in demo (`npm run demo`, no machine needed);
 
 | The big shot graph, from a shot's card | History: every version, its change and its shots |
 |---|---|
-| ![The shot view on a tablet: pressure, flow, weight and weight flow over a 60 s Blooming Espresso shot](docs/images/tablet-shot.png) | ![History on a tablet: Kiambu AA's versions v4 (active), v3 (undone) and v2, each with its change and shots](docs/images/tablet-history.png) |
+| ![The shot view on a tablet: pressure, flow, weight and weight flow over a 60 s Blooming Espresso shot, the previous shot faint under it and named over the plot](docs/images/tablet-shot.png) | ![History on a tablet: Kiambu AA's versions v4 (active), v3 (undone) and v2, each with its change and shots, the last with its TDS and EY](docs/images/tablet-history.png) |
 | **Settings > Appearance: Light, in Matcha** | **On a phone: the coach and the shot** |
-| ![Settings on a tablet in the Light mode with the Matcha tint: the mode, seven tints and a custom hue](docs/images/tablet-settings.png) | <img src="docs/images/phone-coach.png" width="49%" alt="The coach on a phone, proposing one change"> <img src="docs/images/phone-shot.png" width="49%" alt="The shot graph on a phone"> |
+| ![Settings on a tablet in the Light mode with the Matcha tint: the mode, seven tints, a custom hue and the temperatures in °C or °F](docs/images/tablet-settings.png) | <img src="docs/images/phone-coach.png" width="49%" alt="The coach on a phone, proposing one change"> <img src="docs/images/phone-shot.png" width="49%" alt="The shot graph on a phone, the previous shot faint under it"> |
 | **Settings > Machine care: Decent's cleaning routine, by how often** | **Settings > Sleep and wake: warm at 06:30 on weekdays** |
-| ![Machine care on a tablet: the Weekly routine's steps, each with its time in Decent's video, beside the video's card](docs/images/tablet-care.png) | <img src="docs/images/phone-sleep-wake.png" width="49%" alt="Sleep and wake on a phone: Sleep when idle after 30 minutes, held off until 10:00 by a wake time, and two wake times, weekdays at 06:30 for an hour and weekends at 08:00 for two, with the next wake over them"> |
+| ![Machine care on a tablet: the Weekly routine's steps, each with its time in Decent's video, the detergent clean due with 6 shots since it was last done and Mark done, beside the video's card](docs/images/tablet-care.png) | <img src="docs/images/phone-sleep-wake.png" width="49%" alt="Sleep and wake on a phone: Sleep when idle after 30 minutes, held off until 10:00 by a wake time, and two wake times, weekdays at 06:30 for an hour and weekends at 08:00 for two, with the next wake over them"> |
 
 ## What you need
 
@@ -191,19 +191,31 @@ no API key ([docs/DEMO.md](docs/DEMO.md)).
    nothing is sent until you send), and **Need help?** explains how to
    taste. If you like, also say how the shot compared with your previous
    one: Much worse, Worse, About the same, Better or Much better (a bag's
-   first shot is compared with your last shot of another coffee). The
+   first shot is compared with your last shot of another coffee). The card
+   draws that shot faintly under its own pressure and flow, a pale band in
+   the same colours, so the change the coach made shows on the curve. The
    coach hears your words, and both go to the shot's record in Decaid, so
    they show there and in Visualizer; the comparison becomes a running
    score in `enjoyment`, on the rating scale your Decaid keeps (0-10, or
    0-100 on older builds): CafAI asks it. When Decaid's Visualizer plugin
    has uploaded the shot, its card links to the shot's page (**On
-   Visualizer**), and History keeps the link. A taste, rating or grinder
-   setting Decaid did not take is tried again every 30 s until it goes
-   through (a reload drops what waits); one Decaid refuses is dropped, and
-   the chat says so once.
+   Visualizer**), and History keeps the link. With a refractometer, tap
+   **TDS · Add** among the card's numbers and type its reading (0.01-25 %;
+   a comma works too): CafAI works out the extraction yield (EY) from the
+   card's own dose and yield, so the EY is the TDS times the ratio, shows
+   both on the card and in History, and writes them to the shot's record in
+   Decaid (`drinkTds`, `drinkEy`), which Visualizer reads. The coach hears
+   the reading with your next tap or message, even one typed after it
+   suggested a change, and is told it is a number about extraction, never a
+   taste. A shot with no yield (no scale) keeps its TDS without an EY. A
+   taste, rating, TDS or grinder setting Decaid did not take is tried again
+   every 30 s until it goes through (a reload drops what waits); one Decaid
+   refuses is dropped, and the chat says so once.
 6. **One change.** The coach proposes the next version or a manual step such
    as grind, changing one variable at a time, and explains it by what it
-   does at the machine, with your own words as the reason. You see a
+   does at the machine, with your own words as the reason. With °F chosen
+   in Settings > Appearance it speaks °F (1 °C hotter is 1.8 °F hotter),
+   while the change itself goes to the machine in °C. You see a
    plain-language diff and confirm it before anything is uploaded. Undo
    returns to the previous version. Link your grinder from Decaid's grinder
    library in **Settings > Coach** (add it there if the library lacks it,
@@ -216,9 +228,12 @@ never change pump type, step order or count, sensors, or exit types.
 
 A shot counts only for the version the machine ran: a shot that ran another
 profile (another skin's, or one picked on the machine) is left out of the
-dial-in, and the chat says so. While the page is open, CafAI also looks at
-Decaid's loaded profile every 30 s and says so when it is not the bag's,
-with **Retry**; it never loads anything on the machine by itself.
+dial-in, and the chat says so. A run of a cleaning or calibration profile,
+such as Forward Flush x5 for the weekly clean, is no shot at all: Decaid
+keeps no record of it, and the chat says nothing. While the page is open,
+CafAI also looks at Decaid's loaded profile every 30 s and says so when it
+is not the bag's, with **Retry**; it never loads anything on the machine by
+itself.
 
 ## Screens and looks
 
@@ -227,13 +242,15 @@ with **Retry**; it never loads anything on the machine by itself.
   and Hot water; the one running turns into Stop in its place; Wake alone
   while the machine sleeps), Decaid settings and Exit, and the coach across
   the whole width under it. The chat opens with the live stats card (state,
-  temperatures, water, scale with Tare, the loaded profile, Sleep); it goes
-  once the chat moves on, and
-  **Stats** above the composer brings it back. Shot opens the graph. When a
+  temperatures, water, scale with Tare, the loaded profile, Sleep, and a
+  line when a step of machine care is due); it goes once the chat moves on,
+  and **Stats** above the composer brings it back. Shot opens the graph. When a
   shot starts, the screen becomes the Shot view by itself: a big timer,
-  pressure, flow, weight and weight flow, the graph, and a note from the
-  coach saying it is watching. When the shot's card reaches the chat, the
-  coach comes back by itself; the top bar and Stop never move. Steam, hot
+  pressure, flow, weight and weight flow, the graph, with the bag's previous
+  shot faintly under it ("Previous shot · 28.1 s · 36.2 g" over the plot),
+  and a note from the coach saying it is watching. When the shot's card
+  reaches the chat, the coach comes back by itself (the graph then draws
+  the shot the card asks about); the top bar and Stop never move. Steam, hot
   water and flush take the screen the same way while they run, whoever
   started them (unless you are typing, or following Decent's cleaning video
   in Settings > Machine care): a dial fills toward the time or volume set
@@ -298,8 +315,11 @@ with **Retry**; it never loads anything on the machine by itself.
   OKLCH, written out as plain hex for Chromium 91) and every pair of
   palette colours the screens use is tested for WCAG AA contrast at every
   hue; the shot graph keeps Decent's colours (pressure green, flow blue).
-  The look is saved with the other settings.
-  [DESIGN.md](DESIGN.md) describes the visual system.
+  The look is saved with the other settings. Last, **Temperatures**: °C (the
+  default) or °F. In °F every temperature CafAI shows or takes is in °F (the
+  stats card, the drinks' views and settings, the change card and History,
+  the cleaning guide), and the coach speaks °F; Decaid and your profiles
+  keep °C. [DESIGN.md](DESIGN.md) describes the visual system.
 - **Settings > Where the coach runs**: **Anthropic API key** (the default)
   or **Claude on my computer** (CafAI Bridge's address and code, with
   **Find** and **Test**). The fields follow the choice: the API key's
@@ -323,7 +343,10 @@ with **Retry**; it never loads anything on the machine by itself.
   flush temperature, time and flow): side by side on a tablet, one row per
   setting on a phone. Each has a stepper (Up and Down on a keyboard too),
   within what the DE1 can hold (hot water at most 255 ml; steam 135-160 °C,
-  165 on a Bengle). A value goes to Decaid only when you change it, never
+  165 on a Bengle). In °F a temperature shows in whole degrees and a tap
+  moves it one whole °C, the step Decaid keeps (2 °F, or 1 °F one time in
+  five); one typed in °F is set to the nearest whole °C, and the field shows
+  what Decaid keeps. A value goes to Decaid only when you change it, never
   while the machine runs, and never without a DE1 connected; until Decaid
   answers, the fields show a dash, and a write that fails says why under
   its setting. Steam that is off in Decaid (below 135 °C) reads "Off in
@@ -350,9 +373,29 @@ with **Retry**; it never loads anything on the machine by itself.
   YouTube at that time instead (Decaid would not let it play in place).
   While the video is open, a drink you start (the flush a step asks for,
   say) leaves the guide on screen rather than taking it over. The steps are
-  CafAI's own words and work offline. CafAI cannot start the DE1's
-  Clean, Descale or Transport yet; the steps that need them say to use
-  streamline, the skin Decaid comes with, for now.
+  CafAI's own words and work offline. CafAI does not start the DE1's
+  Clean, Descale or Transport; the steps that need them say to use
+  streamline, the skin Decaid comes with.
+- **Machine care's reminders**: every step beyond Daily says when it was
+  last done ("Last done 9 days ago · 41 shots since"), with **Mark done**
+  (and **Undo** until the page reloads). Five come due by themselves and
+  say **Due**: the weekly clean, a week after the last once a shot was
+  pulled; Rinza, a week after once the wand steamed; the intake filter,
+  every two weeks (V1) or month (V2); the group head's soak, every four
+  weeks; and the descale by your water. The stats card then has one quiet
+  line for the step most overdue, "Weekly clean due: 41 shots since the
+  last", which opens it on the Care screen; never the alert under the top
+  bar. The shots and steams are Decaid's own (any skin's count), counted
+  from the first time CafAI looked, so a new install is never due at once.
+  A Clean or Descale CafAI sees the machine run for a minute, started
+  elsewhere while CafAI is open, marks its step done too; Decent's Forward
+  Flush x5 does not, as it is the daily water flush's profile as well. Each
+  device keeps its own last times, as it keeps its own bags: a step marked
+  done on a phone is not marked on the tablet. In Settings > Machine care:
+  **Your water**, in Decent's bands (under 30 ppm never descale; up to 120
+  ppm once a year or 1,500 shots; over 120 ppm every six months or 800
+  shots; Not sure is reminded as up to 120), **Intake filter** (V1, V2 or
+  Not sure, reminded as V1) and **Remind me on the stats card**.
 - **Settings > About**: CafAI's version, and the Decaid you run next to the
   one CafAI was checked against ("Decaid 0.9.0 (CafAI was verified with
   0.8.8)", with a note when yours is older); anything Decaid sent that
@@ -435,10 +478,14 @@ troubleshooting.
   key) as soon as Decaid is back, and a forgotten key never comes back from a
   copy.
 - Coach data (bags, versions, shot summaries without their curves,
-  feedback, each bag's chat and your settings) is stored in the skin's
-  IndexedDB and copied to Decaid's key-value store (namespace `cafai`) so it
-  survives a browser-storage reset. Like the key's copy, any device on your
-  network can read it there. Export it any time as JSON from History.
+  feedback, each bag's chat, machine care's last times and your settings)
+  is stored in the skin's IndexedDB and copied to Decaid's key-value store
+  (namespace `cafai`) so it survives a browser-storage reset. Like the key's
+  copy, any device on your network can read it there. Export it any time as
+  JSON from History.
+- To count the shots and steams since a step of machine care, CafAI asks
+  Decaid which shot and steam are its newest and when they began, and how
+  many it holds; it keeps those, never the shots themselves.
 - A photo of a bag goes to Anthropic once, in a request of its own, to read
   the bag's details. CafAI keeps no copy of the photo (not on the device,
   not in Decaid, not in the chat or an export), and with an API key the
@@ -465,11 +512,11 @@ troubleshooting.
   coffee (profile, grind, dose, yield, rpm, basket and date, and DYE2's
   equipment and basket names), which then go to Anthropic with the rest of
   the conversation. CafAI never writes DYE2's data.
-- Your taste answer for a shot, and how it compared with the shot before,
-  are also written to that shot's record in Decaid (notes, a running score
-  as enjoyment, and CafAI's own extras), which Decaid may upload to
-  Visualizer if you set that up. Notes you wrote yourself are never
-  overwritten.
+- Your taste answer for a shot, how it compared with the shot before, and
+  a TDS you type with its EY, are also written to that shot's record in
+  Decaid (notes, a running score as enjoyment, `drinkTds` and `drinkEy`, and
+  CafAI's own extras), which Decaid may upload to Visualizer if you set that
+  up. Notes you wrote yourself are never overwritten.
 - Settings > Machine care loads nothing from YouTube until you tap play or
   one of the video's moments. Then YouTube's player comes from
   `youtube-nocookie.com` (YouTube's privacy-enhanced mode), and YouTube,
@@ -542,7 +589,10 @@ troubleshooting.
   settings**: exit to Decaid and open CafAI again (it can happen while
   Decaid replaces the skin's files during an update). When the page says
   instead "CafAI could not start on this device's browser engine" and "It
-  needs Chromium 91 or newer", see the previous point.
+  needs Chromium 91 or newer", see the previous point. When it says "The
+  data on this device was saved by a newer version of CafAI", a newer CafAI
+  ran here before: install it again (Decaid's **Skins** page, **Check for
+  updates**).
 - **Settings > About lists things Decaid sent that CafAI did not expect.**
   Your Decaid sends something in another shape than the Decaid CafAI was
   checked against (usually because it is newer). Tap **Copy report** and

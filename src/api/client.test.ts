@@ -170,6 +170,27 @@ describe('replies are read, not trusted', () => {
     );
   });
 
+  it('reads the steam records the care reminders count (D185): ids kept when they are ids, the newest by its id', async () => {
+    expect(await answering(['a', 'b']).listSteamIds()).toEqual(['a', 'b']);
+    expect(await answering(['a', 7, '']).listSteamIds()).toEqual(['a']);
+    await expect(answering(null).listSteamIds()).rejects.toMatchObject({ code: 'unexpected_reply' });
+    expect(await answering(null).getLatestSteam()).toBeNull();
+    expect(await answering({ id: 'steam-1', timestamp: '2026-10-03T08:15:02.725000', workflow: {} }).getLatestSteam()).toMatchObject({
+      id: 'steam-1',
+      timestamp: '2026-10-03T08:15:02.725000',
+    });
+    // A time CafAI cannot read is unknown, never a made-up one.
+    expect((await answering({ id: 'steam-1', timestamp: 3 }).getLatestSteam())?.timestamp).toBe('');
+    await expect(answering({ timestamp: '2026-10-03T08:15:02.725000' }).getLatestSteam()).rejects.toMatchObject({ code: 'unexpected_reply' });
+    expect(drift()).toEqual([
+      { source: 'GET /api/v1/steams/ids', problem: '[]: expected string, got number' },
+      { source: 'GET /api/v1/steams/ids', problem: '[]: empty' },
+      { source: 'GET /api/v1/steams/ids', problem: 'reply: expected array, got null' },
+      { source: 'GET /api/v1/steams/latest', problem: 'timestamp: expected string, got number' },
+      { source: 'GET /api/v1/steams/latest', problem: 'id: missing' },
+    ]);
+  });
+
   it('reads the machine state like a snapshot frame: a missing reading is null, never 0 (5.8)', async () => {
     const { groupTemperature: _group, ...state } = fixtures.machineState();
     expect((await answering(state).getMachineState()).groupTemperature).toBeNull();
@@ -737,6 +758,18 @@ describe('against the mock Decaid', () => {
     expect(updated.annotations?.extras).toEqual(shot.annotations?.extras);
     const bad = await client.updateShot(shot.id, { annotations: { enjoyment: 12 } }).catch((e: unknown) => e);
     expect(bad).toMatchObject({ status: 400, message: 'annotations.enjoyment must be between 0 and 10, got 12' });
+  });
+
+  it('counts shots in one request, and reads the steam records, null before the first (D185)', async () => {
+    const page = await client.listShots({ limit: 1 });
+    expect(page).toMatchObject({ total: 1, limit: 1 });
+    expect(page.items).toHaveLength(1);
+    expect(await client.listSteamIds()).toEqual([]);
+    expect(await client.getLatestSteam()).toBeNull();
+    const workflow = mock.state.getWorkflow();
+    mock.state.addSteam({ id: 'steam-1', timestamp: '2026-10-03T08:15:02.725000', measurements: [], workflow });
+    expect(await client.listSteamIds()).toEqual(['steam-1']);
+    expect(await client.getLatestSteam()).toMatchObject({ id: 'steam-1', timestamp: '2026-10-03T08:15:02.725000' });
   });
 
   it('getLatestShot is null when there are no shots', async () => {

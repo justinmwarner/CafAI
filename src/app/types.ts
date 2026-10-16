@@ -15,6 +15,8 @@ import type { ModelInfo } from '../llm/types.ts';
 import type { CoachSourceStore } from '../storage/coachSource.ts';
 import type { Bag, ProfileVersion, Storage } from '../storage/types.ts';
 import type { AppearanceStore } from './appearance.ts';
+import type { TemperatureUnitStore } from './temperatureUnit.ts';
+import type { CareService } from './care/careService.ts';
 
 /** Everything the UI needs, provided once through ServicesProvider (src/app/services.tsx). */
 export interface Services {
@@ -30,12 +32,20 @@ export interface Services {
   plugins: PluginDirectory;
   /** How CafAI looks: the appearance setting as live state. */
   appearance: AppearanceStore;
+  /** °C or °F where the barista reads or sets a temperature (D172), as live state. */
+  temperatureUnit: TemperatureUnitStore;
   /**
    * Where the coach runs: Anthropic, or CafAI Bridge on the user's computer
    * (src/app/coachAccess.ts). Optional: fakes and previews leave it out, and
    * Settings then offers only the API key.
    */
   coachSource?: CoachSourceStore;
+  /**
+   * Machine care's steps, their counts and marks (D183-D190,
+   * src/app/care/careService.ts). Optional: fakes and previews leave it out,
+   * and then no step shows a last time and the stats card no line.
+   */
+  care?: CareService;
 }
 
 export type UiRole = 'user' | 'assistant' | 'system';
@@ -358,6 +368,14 @@ export interface CoachController {
    * (D101), and the coach hears the verdict with the next message it is sent.
    */
   rateShot(shotId: string, verdict: ShotVerdict): Promise<void>;
+  /**
+   * The barista's TDS from a refractometer on a shot's card, in % (D162),
+   * or null to remove it. The card and the shot's iteration keep it with the
+   * EY CafAI works out from the card's dose and yield; both go to the shot's
+   * record in Decaid (drinkTds, drinkEy); the coach hears it with the next
+   * turn it is sent. A TDS outside 0.01-25 % is ignored.
+   */
+  setShotTds(shotId: string, tdsPct: number | null): Promise<void>;
   /**
    * The bean card (6.1): fill the bag from a batch of Decaid's bean library,
    * link it, and start the coach's intake with it.

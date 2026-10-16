@@ -22,6 +22,7 @@
  *   bags            Bag[], oldest first
  *   versions        ProfileVersion[], oldest first
  *   iterations      IterationRecord[], oldest first, without summary.series
+ *   care            CareRecord[], machine care's steps by id (D189)
  *   bags.1, ...     further pages of a list, only when one passes 256 KiB
  *   conv.<bagId>    the bag's ConversationRecord, skipped over 512 KiB
  * Characters of a bag id outside [a-z0-9_-] are written as ".xxxx" (UTF-16
@@ -29,11 +30,11 @@
  * key. `meta.skipped` lists the keys left out for size.
  */
 import type { KvClient } from '../api/types.ts';
-import { byCreatedAt } from './repositories.ts';
-import { BagSchema, ConversationSchema, IterationSchema, VersionSchema } from './schema.ts';
+import { byCreatedAt, byId } from './repositories.ts';
+import { BagSchema, CareRecordSchema, ConversationSchema, IterationSchema, VersionSchema } from './schema.ts';
 import { redactSecret } from './secrets.ts';
 import { normalizeSettings } from './settings.ts';
-import type { Bag, CafaiExport, ConversationRecord, IterationRecord, KvMirror, ProfileVersion } from './types.ts';
+import type { Bag, CafaiExport, CareRecord, ConversationRecord, IterationRecord, KvMirror, ProfileVersion } from './types.ts';
 
 export const KV_NAMESPACE = 'cafai';
 export const MIRROR_SCHEMA_VERSION = 1;
@@ -57,6 +58,8 @@ export interface MirrorSnapshot {
   versions: ProfileVersion[];
   iterations: IterationRecord[];
   conversations: ConversationRecord[];
+  /** Machine care's steps (D189); none when left out. */
+  care?: CareRecord[];
 }
 
 export interface MirrorSource {
@@ -105,7 +108,7 @@ function isRemovableKey(key: string): boolean {
 }
 
 function isMirrorKey(key: string): boolean {
-  return key === 'meta' || key === 'settings' || /^(bags|versions|iterations)(\.[0-9]+)?$/.test(key) || key.startsWith('conv.');
+  return key === 'meta' || key === 'settings' || key === 'care' || /^(bags|versions|iterations)(\.[0-9]+)?$/.test(key) || key.startsWith('conv.');
 }
 
 const encoder = new TextEncoder();
@@ -181,6 +184,8 @@ export function buildMirrorEntries(snapshot: MirrorSnapshot, apiKey: string | nu
   const toText = (value: unknown) => redactSecret(JSON.stringify(value), apiKey);
 
   entries.set('settings', toText(normalizeSettings(snapshot.settings, defaultModel)));
+  // A few hundred bytes a step: one key, never paged.
+  entries.set('care', toText([...(snapshot.care ?? [])].sort(byId)));
 
   const lists: Record<ListKey, unknown[]> = {
     bags: [...snapshot.bags].sort(byCreatedAt),
@@ -245,6 +250,12 @@ export function exportFromMirror(
     const result = ConversationSchema.safeParse(data[key]);
     if (result.success && bagIds.has(result.data.bagId)) conversations.push(result.data);
   }
+  // Absent from a backup made before machine care's records; a record that no longer validates is dropped alone.
+  const care: CareRecord[] = [];
+  for (const item of Array.isArray(data['care']) ? data['care'] : []) {
+    const result = CareRecordSchema.safeParse(item);
+    if (result.success) care.push(result.data);
+  }
   return {
     format: 'cafai-export',
     schemaVersion: 1,
@@ -255,6 +266,7 @@ export function exportFromMirror(
     versions,
     iterations,
     conversations,
+    care,
   };
 }
 

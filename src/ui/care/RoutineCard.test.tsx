@@ -102,7 +102,7 @@ describe('RoutineCard', () => {
     const step = screen.getByTestId(TID.careStep('descale'));
     expect(step).toHaveTextContent('Sooner if the steam starts to pulse.');
     expect(step).toHaveTextContent('Citric acid only.');
-    expect(step).toHaveTextContent('From streamline for now: Settings > Maintenance > Machine Descaling.');
+    expect(step).toHaveTextContent('From streamline: Settings > Maintenance > Machine Descaling.');
     expect(step).toHaveTextContent("Decent's pages say every year or two.");
     expect(within(step).getByRole('link', { name: "Decent's descaling steps" })).toHaveAttribute(
       'href',

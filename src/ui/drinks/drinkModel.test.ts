@@ -229,6 +229,41 @@ describe('drinkReadouts once it is done', () => {
   });
 });
 
+describe('drinkReadouts in °F (D174)', () => {
+  const fahrenheit = (overrides: Partial<ReadoutInput> = {}) => input({ unit: 'fahrenheit', ...overrides });
+
+  it('steam: the heater and its setting in whole °F, the rest as in °C', () => {
+    expect(drinkReadouts('steam', fahrenheit())).toEqual([
+      { key: 'steam', label: 'Steam', value: '306 °F', caption: 'set 302', swatch: null },
+      { key: 'pressure', label: 'Pressure', value: '1.9 bar', caption: '', swatch: 'pressure' },
+      { key: 'flow', label: 'Flow', value: '0.8 ml/s', caption: 'set 0.8', swatch: 'flow' },
+    ]);
+    // The machine's own setting first, as in °C: 155 °C.
+    expect(drinkReadouts('steam', fahrenheit({ shotSettings: SHOT_SETTINGS }))[0]?.caption).toBe('set 311');
+  });
+
+  it('flush: the group and its target to one decimal of °F, running and done', () => {
+    const flush = fahrenheit({ frame: machine('flush', 'pouring', { flow: 6.02, groupTemperature: 91.84, targetGroupTemperature: 93 }), run: run({ kind: 'flush', waterMl: 16.4 }) });
+    expect(drinkReadouts('flush', flush)[2]).toEqual({ key: 'group', label: 'Group', value: '197.3 °F', caption: 'target 199.4', swatch: null });
+    const done = run({ kind: 'flush', live: false, groupTemperature: [91, 92.4], latest: machine('idle', 'idle', { targetGroupTemperature: 93 }) });
+    expect(drinkReadouts('flush', fahrenheit({ run: done }))[2]).toEqual({ key: 'group', label: 'Group', value: '198.3 °F', caption: 'target 199.4', swatch: null });
+  });
+
+  it('steam once done: the heater at the end in °F', () => {
+    const done = run({ live: false, t: [0, 1], working: [true, false], steamTemperature: [148, 150] });
+    expect(drinkReadouts('steam', fahrenheit({ run: done }))[0]?.value).toBe('298 °F');
+  });
+
+  it('hot water has no temperature readout, so nothing changes', () => {
+    const hot = { frame: machine('hotWater', 'pouring', { flow: 7.96 }), run: run({ kind: 'hotWater', elapsedS: 18.47 }) };
+    expect(drinkReadouts('hotWater', fahrenheit(hot))).toEqual(drinkReadouts('hotWater', input(hot)));
+  });
+
+  it('a reading nobody gave is still a dash', () => {
+    expect(drinkReadouts('steam', fahrenheit({ frame: null })).map((r) => r.value)).toEqual(['—', '—', '—']);
+  });
+});
+
 describe('the trace', () => {
   it("runs to the time set, the hot water's limit, or the run's own time, whichever is longest", () => {
     expect(traceSpan(run({ t: [0, 10] }), 50)).toBe(50);

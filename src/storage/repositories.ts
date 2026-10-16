@@ -11,13 +11,7 @@
 import { DURABLE, SETTINGS_KEY, type CafaiDb, type CafaiDbSchema } from './db.ts';
 import { toStorageError } from './errors.ts';
 import { applySettingsPatch, normalizeSettings } from './settings.ts';
-import type {
-  BagRepository,
-  ConversationRepository,
-  IterationRepository,
-  SettingsRepository,
-  VersionRepository,
-} from './types.ts';
+import type { BagRepository, ConversationRepository, IterationRepository, SettingsRepository, VersionRepository } from './types.ts';
 
 export interface RepositoryDeps {
   db: () => Promise<CafaiDb>;
@@ -26,6 +20,7 @@ export interface RepositoryDeps {
   defaultModel: string;
 }
 
+/** CafAI's own database; machine care's steps have theirs (careDb.ts). */
 export interface Repositories {
   bags: BagRepository;
   versions: VersionRepository;
@@ -39,6 +34,11 @@ type RecordStore = 'bags' | 'versions' | 'iterations' | 'conversations';
 /** Oldest first; the id breaks ties so the order never depends on the store. */
 export function byCreatedAt<T extends { createdAt: string; id: string }>(a: T, b: T): number {
   if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+/** By id: machine care's records, one per step (D189). */
+export function byId<T extends { id: string }>(a: T, b: T): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 

@@ -4,9 +4,9 @@ Ranked by the cost of a wrong guess (most expensive first). Each says what
 CafAI assumes now and what would change if the guess is wrong. Questions 1-8
 came out of the morning session of 2026-10-04, 9-13 out of the Decaid
 alignment of 2026-10-09, 14-16 out of Claude on your computer of
-2026-10-11, and 17 out of your list of 2026-10-11 (each ranked the same
-way, in its own section); the questions you answered are in "Answered" at
-the end.
+2026-10-11, 17 out of your list of 2026-10-11, and 18-21 out of the gap
+review's four items of 2026-10-15 (each ranked the same way, in its own
+section); the questions you answered are in "Answered" at the end.
 
 1. **Does Decaid's barrier behave on a real DE1 the way its source says?**
    CafAI now waits for `POST /api/v1/machine/profile` after every load and
@@ -182,6 +182,36 @@ the end.
     the word, and a changed word moves only its own shot's number. If you
     would rather the first shot's word counted (Much worse than Red Brick =
     3), or later shots followed a changed one, each is a small change.
+
+## From the gap review's four items (2026-10-15)
+
+18. **Are the care reminders' intervals right for your machine and
+    habits (D184)?** CafAI takes the earlier end of Decent's ranges but
+    one: the weekly clean and Rinza after 7 days (once a shot or a steam
+    happened since); the intake filter after 14 days for V1 or not sure, 30
+    for V2; the group head soak after 28 days, the later end of Decent's
+    "every two to four weeks"; the descale by your water (never under 30 ppm,
+    a year or 1,500 shots at 30 to 120 ppm or not sure, six months or 800
+    shots above 120 ppm). Too early and the stats card's line nags; too
+    late and a descale is missed. Each is one number in
+    `src/app/care/careRules.ts`.
+19. **Should a cleaning cycle CafAI sees count as done (D186)?** When CafAI
+    is open while the machine runs its own Clean or Descale (from streamline,
+    since CafAI starts none: D161) for at least 60 s, it marks that step
+    done, "CafAI saw the machine's Clean". So a Clean stopped after a
+    minute counts too. Nobody has timed a real cycle yet
+    (`docs/HARDWARE_TEST_PLAN.md` section 19, steps 4 and 5). If you would
+    rather always tick it yourself, or want another threshold, say so.
+20. **Which shot belongs under a shot's curves (D178)?** The roadmap said
+    the bag's previous version's shot; CafAI draws the shot the card's
+    question names, your previous shot (on a bag's first, your last shot of
+    another coffee), so the card never asks about one shot and draws
+    another. After a grind move, which makes no new version, the two
+    differ: the previous version's shot can be several shots back.
+21. **TDS on every card, or behind a setting (D162)?** Every shot card has
+    a quiet "TDS · Add" cell, even for a barista with no refractometer. A
+    setting would hide it from those who have one until they find it; on a
+    tablet it fills an empty column, on a phone it takes a short row.
 
 ## Answered
 

@@ -6,13 +6,21 @@
  * survives restarts and same-id updates. It can still be hidden (temporary
  * fallback origin, changed app-data path), which is why the non-secret data is
  * also mirrored to Decaid's key-value store (mirror.ts). The API key is not
- * here at all: it lives in its own database (secrets.ts).
+ * here at all: it lives in its own database (secrets.ts), and so do machine
+ * care's steps (careDb.ts), which keeps this one at the version every
+ * CafAI so far opens.
  */
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Bag, ConversationRecord, IterationRecord, ProfileVersion, Settings } from './types.ts';
 import { StorageError, toStorageError } from './errors.ts';
 
 export const CAFAI_DB_NAME = 'cafai';
+/**
+ * 1, as CafAI 0.1.2 made it. IndexedDB opens no database at a version lower
+ * than the one on disk (a VersionError), so a higher one here would leave an
+ * older CafAI, put back on the tablet, unable to start: a new store goes into
+ * a database of its own instead, as machine care's did (careDb.ts, D189).
+ */
 export const CAFAI_DB_VERSION = 1;
 /** The settings store holds exactly one record, under this key. */
 export const SETTINGS_KEY = 'current';

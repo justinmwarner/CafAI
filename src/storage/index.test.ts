@@ -1,3 +1,4 @@
+import { openDB } from 'idb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { unexpectedReply } from '../api/readers.ts';
 import { GatewayError } from '../api/types.ts';
@@ -9,6 +10,7 @@ import {
   restoreFromMirrorIfEmpty,
   serializeExport,
   startLateRestore,
+  STORAGE_MESSAGES,
   type CreateIdbStorageOptions,
   type IdbStorage,
   type LateRestore,
@@ -21,6 +23,7 @@ import {
   API_KEY,
   MODEL,
   makeBag,
+  makeCareRecord,
   makeConversation,
   makeIteration,
   makeSettings,
@@ -75,7 +78,7 @@ function manualTimers() {
 }
 
 function names() {
-  return { dbName: uniqueDbName(), secretsDbName: uniqueDbName('secrets') };
+  return { dbName: uniqueDbName(), careDbName: uniqueDbName('care'), secretsDbName: uniqueDbName('secrets') };
 }
 
 async function open(kv: MemoryKv, where = names(), extra: Partial<CreateIdbStorageOptions> = {}): Promise<IdbStorage> {
@@ -195,6 +198,38 @@ describe('createIdbStorage', () => {
     await expect(open(createMemoryKv())).rejects.toMatchObject({ name: 'StorageError', kind: 'unavailable' });
   });
 
+  it("keeps machine care's steps in their own database, so CafAI 0.1.2 still opens its own at version 1 (D189)", async () => {
+    const where = names();
+    const storage = await open(createMemoryKv(), where);
+    await seed(storage);
+    await storage.care.put(makeCareRecord());
+    storage.close();
+
+    // 0.1.2 opens version 1 with no upgrade to run: a higher version stopped it at "CafAI could not start".
+    const cafai012 = await openDB(where.dbName, 1);
+    expect(cafai012.version).toBe(1);
+    expect([...cafai012.objectStoreNames].sort()).toEqual(['bags', 'conversations', 'iterations', 'settings', 'versions']);
+    expect(await cafai012.getAll('bags')).toEqual([makeBag()]);
+    cafai012.close();
+    const care = await openDB(where.careDbName);
+    expect(await care.getAll('care')).toEqual([makeCareRecord()]);
+    care.close();
+
+    // And back on this CafAI, everything is where it was.
+    const again = await open(createMemoryKv(), where);
+    expect(await again.bags.list()).toEqual([makeBag()]);
+    expect(await again.care.list()).toEqual([makeCareRecord()]);
+    expect((await again.porter.exportAll()).care).toEqual([makeCareRecord()]);
+  });
+
+  it('says a database a newer CafAI saved needs that CafAI, whichever of them it is', async () => {
+    for (const which of ['dbName', 'careDbName', 'secretsDbName'] as const) {
+      const where = names();
+      (await openDB(where[which], 5)).close();
+      await expect(open(createMemoryKv(), where), which).rejects.toMatchObject({ name: 'StorageError', kind: 'newer', message: STORAGE_MESSAGES.newer });
+    }
+  });
+
   it('exports the porter helpers', () => {
     expect(exportFileName(new Date(2026, 9, 3))).toBe('cafai-export-2026-10-03.json');
   });
@@ -219,6 +254,36 @@ describe('restoreFromMirrorIfEmpty', () => {
     };
     expect(iteration).toEqual({ ...makeIteration(), summary } as IterationRecord);
     expect(await fresh.settings.get()).toEqual(makeSettings({ grinderName: 'Niche Zero', grinderSetting: '14', activeBagId: 'bag_kiambu' }));
+  });
+
+  it("brings machine care's last times back, over the counts a fresh device began meanwhile (D189)", async () => {
+    const kv = createMemoryKv();
+    const original = await open(kv);
+    await seed(original);
+    await original.care.put(makeCareRecord());
+    await original.mirror.pushNow();
+
+    const fresh = await open(kv);
+    // The fresh device began counting before the backup came back.
+    await fresh.care.put(makeCareRecord({ doneAt: null, by: null, countFrom: '2026-10-14T08:00:00.000Z', updatedAt: '2026-10-14T08:00:00.000Z' }));
+    expect(await restoreFromMirrorIfEmpty(fresh)).toBe('restored');
+    expect(await fresh.care.list()).toEqual([makeCareRecord()]);
+  });
+
+  it("says a backup holding machine care's last times and no bag brought back care, not bags (D189)", async () => {
+    const kv = createMemoryKv();
+    // CafAI opened once on the tablet, no bag yet: its first count's records went to the backup (D190).
+    const tablet = await open(kv);
+    await tablet.care.put(makeCareRecord());
+    await tablet.care.put(makeCareRecord({ id: 'rinza', doneAt: null, by: null }));
+    await tablet.mirror.pushNow();
+
+    const phone = await open(kv);
+    expect(await restoreFromMirrorIfEmpty(phone)).toBe('care');
+    expect(await phone.care.list()).toEqual([makeCareRecord(), makeCareRecord({ id: 'rinza', doneAt: null, by: null })]);
+    expect(await phone.bags.list()).toEqual([]);
+    // Nothing new the second time.
+    expect(await restoreFromMirror(phone)).toBe('nothing');
   });
 
   it('only fills blank settings, keeping the ones already set here', async () => {
@@ -326,7 +391,7 @@ describe('startLateRestore (5.4)', () => {
     clock.fire();
     await late.settled();
     expect(onRestored).toHaveBeenCalledTimes(1);
-    expect(onRestored).toHaveBeenCalledWith({ records: true, key: false });
+    expect(onRestored).toHaveBeenCalledWith({ records: true, care: false, key: false });
     expect(await fresh.bags.list()).toEqual([makeBag()]);
     expect(clock.delays()).toEqual([]);
   });
@@ -367,7 +432,7 @@ describe('startLateRestore (5.4)', () => {
     expect(clock.delays()).toEqual([4000]);
     clock.fire();
     await late.settled();
-    expect(onRestored).toHaveBeenCalledWith({ records: true, key: false });
+    expect(onRestored).toHaveBeenCalledWith({ records: true, care: false, key: false });
   });
 
   it('stops the timed tries after 10 minutes, but still restores when told Decaid is back later', async () => {
@@ -389,7 +454,7 @@ describe('startLateRestore (5.4)', () => {
     kv.failNext('getAll', 0);
     late.retryNow();
     await late.settled();
-    expect(onRestored).toHaveBeenCalledWith({ records: true, key: false });
+    expect(onRestored).toHaveBeenCalledWith({ records: true, care: false, key: false });
   });
 
   it('brings the API key back from its copy in Decaid in the same tries, and writes nothing to Decaid (D99)', async () => {
@@ -406,9 +471,29 @@ describe('startLateRestore (5.4)', () => {
 
     clock.fire();
     await late.settled();
-    expect(onRestored).toHaveBeenCalledWith({ records: false, key: true });
+    expect(onRestored).toHaveBeenCalledWith({ records: false, care: false, key: true });
     expect(await fresh.secrets.getApiKey()).toBe(API_KEY);
     expect(kv.writes()).toEqual([]);
+  });
+
+  it("reports machine care's last times alone as care, not records, and stops (D189)", async () => {
+    const kv = createMemoryKv();
+    const tablet = await open(kv);
+    await tablet.care.put(makeCareRecord());
+    await tablet.mirror.pushNow();
+    tablet.close();
+    const fresh = await open(kv);
+    const clock = manualTimers();
+    kv.failNext('getAll', 1, away());
+    const { late, onRestored } = start(fresh, clock);
+    clock.fire();
+    await late.settled();
+    expect(onRestored).not.toHaveBeenCalled();
+    clock.fire();
+    await late.settled();
+    expect(onRestored).toHaveBeenCalledWith({ records: false, care: true, key: false });
+    expect(await fresh.care.list()).toEqual([makeCareRecord()]);
+    expect(clock.delays()).toEqual([]);
   });
 
   it('stops when told to', async () => {
@@ -453,6 +538,7 @@ describe('backup safety', () => {
     expect(kv.values()['conv.bag_kiambu']).toEqual(makeConversation());
     // The records the first push merged in came back after start: the screens are told (5.4).
     expect(restored).toHaveBeenCalledTimes(1);
+    expect(restored).toHaveBeenCalledWith({ records: true });
   });
 
   it('an empty store never pushes while Decaid answers something CafAI cannot read (5.3)', async () => {
@@ -471,6 +557,23 @@ describe('backup safety', () => {
     expect(kv.writes()).toHaveLength(before);
     expect(bagIds(kv.values()['bags'])).toEqual(['bag_kiambu']);
     expect(fresh.mirror.lastError).toBe("Could not back up to Decaid: Decaid sent a reply CafAI doesn't recognise.");
+  });
+
+  it("tells the screens a first push merged machine care's last times alone in, as no records (D189)", async () => {
+    const kv = createMemoryKv();
+    const tablet = await open(kv);
+    await tablet.care.put(makeCareRecord());
+    await tablet.mirror.pushNow();
+
+    kv.failNext('getAll', 1, away());
+    const fresh = await open(kv);
+    const restored = vi.fn();
+    fresh.onRestored(restored);
+    expect(await restoreFromMirrorIfEmpty(fresh)).toBe('unreachable');
+    await fresh.care.put(makeCareRecord({ id: 'rinza', doneAt: null, by: null }));
+    await fresh.mirror.pushNow();
+    expect(restored).toHaveBeenCalledWith({ records: false });
+    expect((await fresh.care.list()).map((record) => record.id)).toEqual(['detergent-clean', 'rinza']);
   });
 
   it('says nothing when the first push finds nothing new in the backup', async () => {

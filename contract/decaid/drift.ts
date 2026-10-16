@@ -92,6 +92,9 @@ export type ShotRead<P extends string = ''> =
   | MachineSnapshotGap<`${P}measurements[].machine.`>
   | WeightSnapshotGap<`${P}measurements[].scale.`>;
 
+/** SPEC GAP: SteamRecord has no `required`; toJsonWithoutMeasurements always sends id and timestamp (lib/src/models/data/steam_record.dart:30-37). */
+export type SteamSummaryRead<P extends string = ''> = Opt<P, 'id' | 'timestamp'>;
+
 /** The record's profile, as everywhere (CafAI reads a parentId it cannot read as unknown, so its type has it optional). */
 export type ProfileRecordRead<P extends string = ''> = ProfileGap<`${P}profile.`>;
 
@@ -335,6 +338,26 @@ export const SPEC_EXCEPTIONS: readonly SpecException[] = [
     why:
       'SPEC DRIFT: the reply is a ShotRecordSummary, but Dart answers 200 null when there is no shot ' +
       '(lib/src/services/webserver/shots_handler.dart:171).',
+  },
+  {
+    where: 'GET /api/v1/steams/latest',
+    keyword: 'type',
+    instancePath: /^$/,
+    values: [null],
+    why:
+      'SPEC DRIFT: the reply is a SteamRecord, but Dart answers 200 null when there is no steam record ' +
+      '(lib/src/services/webserver/steams_handler.dart:49-50).',
+  },
+  {
+    where: 'PUT /api/v1/workflow',
+    keyword: 'required',
+    schemaPath: /^rest_v1\.yml#\/components\/schemas\/(HotWaterData|RinseData)\/required$/,
+    instancePath: /^\/(hotWaterData|rinseData)$/,
+    why:
+      'SPEC DRIFT: WorkflowPatch reuses the full HotWaterData and RinseData, every field required, but the PUT ' +
+      'deep-merges the patch into the workflow before parsing it (lib/src/models/data/json_utils.dart:3-29), so a ' +
+      'partial object is valid. CafAI sends only the setting a barista changed (src/ui/settings/useDrinkPresets.ts), ' +
+      'as WorkflowWrite records for the types.',
   },
   {
     where: 'any',

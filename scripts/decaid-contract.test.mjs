@@ -376,6 +376,24 @@ describe('decaid-watch', () => {
     expect(watchedFiles(files).map((file) => file.filename)).toEqual(['lib/src/models/data/workflow_context.dart', 'assets/api/rest_v1.yml']);
   });
 
+  it('keeps what the care counts rely on: the shot and steam rows, how Decaid reads them, and why their times have no zone (D185)', () => {
+    const relied = [
+      'lib/src/services/database/daos/shot_dao.dart',
+      'lib/src/services/database/daos/steam_dao.dart',
+      'lib/src/services/database/tables/shot_tables.dart',
+      'lib/src/services/database/tables/steam_tables.dart',
+      'lib/src/services/storage/drift_storage_service.dart',
+      'build.yaml',
+    ];
+    const files = [...relied, 'lib/src/services/database/daos/bean_dao.dart', 'lib/src/services/database/tables/bean_tables.dart'].map((filename) => ({
+      filename,
+      status: 'modified',
+      additions: 1,
+      deletions: 1,
+    }));
+    expect(watchedFiles(files).map((file) => file.filename)).toEqual(relied);
+  });
+
   it("keeps Decaid's agent skill and API notes, which contract/decaid has at the pin", () => {
     const files = [
       { filename: '.agents/skills/decent-app/scenarios/firmware.md', status: 'modified', additions: 3, deletions: 1 },

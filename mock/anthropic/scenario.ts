@@ -13,7 +13,9 @@
  * tool calls.
  */
 import { EVENT, TEMPLATE_IDS, TOOL, toRoastLevel, type ProposeAdjustment, type RoastLevel } from '../../src/coach/contract.ts';
+import { FAHRENHEIT_HEADING } from '../../src/coach/fahrenheitPrompt.ts';
 import { resolveGrindMove } from '../../src/coach/grinder.ts';
+import type { TemperatureUnit } from '../../src/coach/temperature.ts';
 import { pourTime } from '../../src/coach/summary/pourClock.ts';
 import type { GrinderInfo } from '../../src/coach/types.ts';
 import type { StopReason, TextBlock, ToolUseBlock } from '../../src/llm/types.ts';
@@ -27,6 +29,7 @@ import {
   type ChangeKind,
   type PickFacts,
   type ProposalText,
+  type ReadingFacts,
   type ShotStop,
   type Taste,
   type Voice,
@@ -343,6 +346,15 @@ interface Script {
   messages: Message[];
   newToolId(): string;
   voice: Voice;
+  /** The unit the system prompt asks the coach to write in (D177). */
+  temperatureUnit: TemperatureUnit;
+}
+
+/** °F when the system prompt has CafAI's "Temperatures in °F" section, as a coach that follows its prompt would write. */
+export function promptTemperatureUnit(system: unknown): TemperatureUnit {
+  const blocks = Array.isArray(system) ? system : [system];
+  const text = blocks.map((block) => (typeof block === 'string' ? block : isRecord(block) ? String(block.text ?? '') : '')).join('\n');
+  return text.includes(FAHRENHEIT_HEADING) ? 'fahrenheit' : 'celsius';
 }
 
 /** tool_use id -> tool name, from the assistant turn just before message `index`. */
@@ -614,7 +626,13 @@ function peakOf(messages: Message[], results: NamedResult[]): { bar: number | nu
 }
 
 /** What a voice may say about a change: the taste, the roast, the peak, how the shot ended and the latest shot's channeling flags. */
-function changeFacts(messages: Message[], change: Change, results: NamedResult[], afterRejection: boolean): ChangeFacts {
+function changeFacts(
+  messages: Message[],
+  change: Change,
+  results: NamedResult[],
+  afterRejection: boolean,
+  temperatureUnit: TemperatureUnit,
+): ChangeFacts {
   const peak = peakOf(messages, results);
   const shot = latestShot(messages);
   const summary = shot?.summary;
@@ -629,6 +647,7 @@ function changeFacts(messages: Message[], change: Change, results: NamedResult[]
     stop: stopOf(shot),
     channelingFlags: flags?.filter((flag): flag is string => typeof flag === 'string') ?? null,
     afterRejection,
+    temperatureUnit,
   };
 }
 
@@ -795,6 +814,30 @@ function readsPhoto(messages: Message[]): boolean {
   return messages.some((message) => message.content.some((block) => block.type === 'image'));
 }
 
+/** The TDS readings a user message carries (D167): each [event:shot_measured] payload's TDS and EY. */
+function readingsIn(message: Message | undefined): ReadingFacts[] {
+  return textsOf(message)
+    .filter((t) => t.startsWith(EVENT.shotMeasured))
+    .map((t) => {
+      const payload = eventPayload(t);
+      return { tdsPct: num(payload?.tdsPct), eyPct: num(payload?.eyPct) };
+    });
+}
+
+/**
+ * Rule 0b: a reply to a turn that carries TDS readings starts by saying what
+ * it heard, one line per reading, before its own words; the rules decide as
+ * they would without them (D170).
+ */
+function acknowledgeReadings(reply: Reply, messages: Message[], voice: Voice): Reply {
+  const readings = readsPhoto(messages) ? [] : readingsIn(messages[messages.length - 1]);
+  if (readings.length === 0) return reply;
+  const line = readings.map((reading) => voice.measured(reading)).join(' ');
+  const [first, ...rest] = reply.blocks;
+  if (first?.type === 'text') return { ...reply, blocks: [{ type: 'text', text: `${line} ${first.text}` }, ...rest] };
+  return { ...reply, blocks: [{ type: 'text', text: line }, ...reply.blocks] };
+}
+
 function decide(script: Script): Reply {
   const { messages, voice } = script;
   // 0. A photo of the bag: the canned bag's details, as JSON.
@@ -816,7 +859,7 @@ function decide(script: Script): Reply {
     const rejected = toolUses(messages[lastIndex - 1]).find((b) => b.name === TOOL.proposeAdjustment);
     const wasGrind = isRecord(rejected?.input) && rejected.input.variable === 'grind';
     const next: Change = wasGrind ? { kind: 'keepAfterRejectedGrind', input: NO_CHANGE, tips: SAME_PREP } : grindMove(messages, 'finer');
-    const facts = changeFacts(messages, next, [], true);
+    const facts = changeFacts(messages, next, [], true, script.temperatureUnit);
     return {
       blocks: [
         { type: 'text', text: voice.rejected(facts) },
@@ -834,7 +877,7 @@ function decide(script: Script): Reply {
   // 2. A query came back: propose one change.
   if (results.some((r) => r.name !== null && QUERY_TOOLS.includes(r.name))) {
     const change = chooseChange(messages);
-    const facts = changeFacts(messages, change, results, false);
+    const facts = changeFacts(messages, change, results, false, script.temperatureUnit);
     const lead = voice.proposalLead(facts);
     const proposal: ToolUseBlock = {
       type: 'tool_use',
@@ -958,11 +1001,17 @@ export function respond(
   memory.counter += 1;
   const turn = memory.counter;
   let toolCount = 0;
-  const reply = decide({
+  const voice = options.voice === 'demo' ? DEMO_VOICE : TERSE_VOICE;
+  const reply = acknowledgeReadings(
+    decide({
+      messages,
+      newToolId: () => `toolu_mock_${memory.session}_${turn}_${++toolCount}`,
+      voice,
+      temperatureUnit: promptTemperatureUnit(requestBody.system),
+    }),
     messages,
-    newToolId: () => `toolu_mock_${memory.session}_${turn}_${++toolCount}`,
-    voice: options.voice === 'demo' ? DEMO_VOICE : TERSE_VOICE,
-  });
+    voice,
+  );
 
   const signature = `mock-sig-${memory.session}-${turn}-${hash(JSON.stringify(reply.blocks))}`;
   const encoded = encodeAssistantTurn(reply.blocks, {

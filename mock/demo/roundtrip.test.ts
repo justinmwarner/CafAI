@@ -64,7 +64,7 @@ function pendingChange(): Extract<CoachUiPart, { kind: 'diff' }> {
 
 beforeEach(async () => {
   run += 1;
-  const names = { dbName: `cafai-roundtrip-${run}`, secretsDbName: `cafai-roundtrip-secrets-${run}` };
+  const names = { dbName: `cafai-roundtrip-${run}`, careDbName: `cafai-roundtrip-care-${run}`, secretsDbName: `cafai-roundtrip-secrets-${run}` };
   resetAnthropicMock();
   mock = createMockServer(anthropicHandlers({ speed: Infinity }), { seedExamples: false, uploadMs: 0 });
   mock.server.listen({ onUnhandledRequest: 'error' });

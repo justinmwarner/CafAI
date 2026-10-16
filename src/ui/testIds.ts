@@ -49,6 +49,9 @@ export const TID = {
   tareButton: 'tare-button',
   liveGraph: 'live-graph',
   shotTimer: 'shot-timer',
+  /** The shot drawn faintly under another (D180): its bands on a shot card, and its key on the card and over the Shot view's plot. */
+  shotGuide: 'shot-guide',
+  shotGuideKey: 'shot-guide-key',
 
   // Coach / chat
   newBag: 'new-bag',
@@ -84,6 +87,14 @@ export const TID = {
   tasteHelpDialog: 'taste-help-dialog',
   errorBanner: 'error-banner',
   retryButton: 'retry-button',
+  /** A shot card's TDS (D162): its cell (Add, or the reading), its EY, the field with Save, Remove and Cancel, and the line under the numbers. */
+  tdsCell: 'shot-tds',
+  tdsEy: 'shot-ey',
+  tdsInput: 'tds-input',
+  tdsSave: 'tds-save',
+  tdsRemove: 'tds-remove',
+  tdsCancel: 'tds-cancel',
+  tdsNote: 'tds-note',
 
   // History
   historyBag: (bagId: string) => `history-bag-${bagId}`,
@@ -96,6 +107,8 @@ export const TID = {
   appearanceMode: (mode: string) => `appearance-mode-${mode}`,
   tintSwatch: (id: string) => `tint-${id}`,
   tintHue: 'tint-hue',
+  /** Settings > Appearance > Temperatures (D172): 'celsius' or 'fahrenheit'. */
+  temperatureUnit: (unit: string) => `temperature-unit-${unit}`,
   apiKeyInput: 'api-key-input',
   apiKeySave: 'api-key-save',
   forgetKey: 'forget-key',
@@ -175,6 +188,17 @@ export const TID = {
   carePoster: 'care-poster',
   carePlayer: 'care-player',
   careWatch: 'care-watch',
+  // Machine care's reminders (D183-D188): the stats card's line, a step's last time, Settings' fields
+  careDueLine: 'care-due-line',
+  careStepCare: (id: string) => `care-step-care-${slug(id)}`,
+  careStepLine: (id: string) => `care-step-line-${slug(id)}`,
+  careMarkDone: (id: string) => `care-mark-done-${slug(id)}`,
+  careUndo: (id: string) => `care-undo-${slug(id)}`,
+  /** The descale's and the intake filter's link to Settings > Machine care. */
+  careSetIn: (id: string) => `care-set-in-${slug(id)}`,
+  careWater: 'care-water',
+  careFilter: 'care-filter',
+  careReminders: 'care-reminders',
   keyInDecaid: 'key-in-decaid',
   aboutDecaid: 'about-decaid',
   driftReport: 'drift-report',

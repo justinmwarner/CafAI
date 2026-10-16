@@ -12,7 +12,8 @@ commands stop at espresso, steam, hot water, flush, sleep and the next step
 else starts them. Decaid's own screens have none of them, so today an owner
 switches to streamline to descale. No skin for Decaid keeps reminders, and
 until CafAI's guide none showed how to clean; Decent's video and docs do.
-Three items, each building on the one before:
+Three items: the guide and the reminders are built, and the cycles, the
+second, wait (D161):
 
 - **A cleaning guide, with Decent's video: built on 2026-10-15** (D152-D155,
   `docs/superpowers/specs/2026-10-15-machine-care-design.md`). Settings >
@@ -25,7 +26,10 @@ Three items, each building on the one before:
   plays in place only in a browser and on Android, and is a link to the
   moment elsewhere in Decaid. Left: the check on a Decent tablet and an
   iPad (`docs/HARDWARE_TEST_PLAN.md` section 14).
-- **Clean, Descale and Transport from CafAI.** Decaid takes
+- **Clean, Descale and Transport from CafAI: put off on 2026-10-15**
+  (D161). Not built, and nothing in CafAI starts a cycle; the guide's
+  steps send the barista to streamline. What follows is kept for when it
+  comes back. Decaid takes
   `PUT /api/v1/machine/state/cleaning`, `descaling` and `airPurge`, and
   streamline's pages are the model
   (`.ref/streamline-js/src/settings/categories/maintenance.js`,
@@ -47,48 +51,72 @@ Three items, each building on the one before:
   fill, the flush and most of a descale into one, `cleaningGroup`), how
   long each cycle runs, and whether Decaid saves the flush as a shot, which
   would put it in its shot list and on Visualizer.
-- **Care reminders, set by the water.** A quiet line on the stats card
-  when a step is due ("Weekly clean due: 41 shots since the last"), and
-  each step's last time on the Care screen. Counts come from Decaid's shots
-  (newest first; the list has no date filter, so CafAI pages back to the
-  last clean) and its steam records (`/api/v1/steams`); a step starts over
-  when CafAI sees its cycle end or the barista ticks it done, kept with
-  CafAI's data in IndexedDB and Decaid's store. One question, the water's
-  hardness, sets the descale interval from Decent's water page: below
-  30 ppm never; 30-120 ppm yearly; above 120 ppm at least twice a year
-  (its LSI table, keyed to the water's LSI rather than its ppm, runs from
-  every 100 to every 2,250 shots); the intake filter weekly
-  or fortnightly (V1, citric acid) or monthly (V2, baking soda). Models:
-  de1app's Maintenance Tracker plugin (days, shots or ml, in green, amber
-  and red, reset when the app's Clean or Descale runs) and GaggiMate's
-  every-so-many-shots interval. Check first: whether shots and days are
-  enough or litres matter too, and whether a step long overdue ever earns
-  the alert under the top bar, which today is for problems only.
+- **Care reminders, set by the water: built on 2026-10-15** (D183-D191,
+  `docs/superpowers/specs/2026-10-15-care-reminders-design.md`).
+  Every step beyond Daily has its last time and **Mark done** on the Care
+  screen, with Undo; five of them remind (the weekly clean, Rinza, the
+  intake filter, the group head's soak, the descale), and the stats card
+  carries one quiet line for the most overdue: "Weekly clean due: 41 shots
+  since the last". Days decide; shots and steams gate and count; litres are
+  not counted, as Decaid keeps no record of a flush or of hot water
+  (D184). The counts are Decaid's totals, one request each, since
+  Decaid never saves a cleaning profile's run as a shot and the list has
+  nothing to page back to (D185). A step starts over when it is marked
+  done, or when CafAI sees the machine's own Clean or Descale run for a
+  minute; Forward Flush x5 never counts, being the daily water flush's
+  profile too (D186). Settings > Machine care asks the water in
+  Decent's TDS bands and the filter, V1 or V2 (D187). A step long
+  overdue stays on the stats card: the alert under the top bar is for
+  problems of the moment (D188). Left: a cycle seen on a real DE1 and
+  Forward Flush x5 left out of Decaid's shot list there
+  (`docs/HARDWARE_TEST_PLAN.md`), snoozing the line, the water's LSI, and
+  marks shared between devices, which each keep their own as they keep
+  their bags (D189).
 
 ## More from the gap review (D151)
 
-- **Overlaid shot curves.** A shot's card and the Shot view draw one shot,
-  and "Compared with your previous shot?" is words only
-  (`src/ui/chat/parts/ShotCard.tsx`). Draw the bag's previous version's
-  shot faintly under this one, so the change the coach made shows on the
-  curve, as Visualizer, Liquid Aqua, Crema and DSx do. CafAI keeps shot
-  summaries without their curves, so both shots come from Decaid
-  (`GET /api/v1/shots/{id}`). Check first: how the graph tells the two
-  shots apart in every tint and both modes, by more than colour.
-- **TDS and EY on the shot card.** An optional TDS field for a barista
-  with a refractometer: CafAI works out EY from the TDS, the yield and the
-  dose, writes both to the shot's record (`drinkTds` and `drinkEy`, already
-  in Decaid's annotations, so Visualizer gets them), and gives them to the
-  coach, the one measure of extraction it cannot read off the curves.
-  Check first: which yield (`actualYield`) and dose (`actualDoseWeight` or
-  the workflow's) the EY uses, and that a reading typed after the taste
-  answer still reaches the coach.
-- **°F.** CafAI writes °C everywhere (`src/ui/machine/format.ts`,
-  `src/ui/settings/drinkSettings.ts`). A setting shows °F on the readouts,
-  the steppers and in the coach's words ("2 °F hotter"), with Decaid and
-  the profiles still in °C, as streamline does. Check first: the steppers'
-  step in °F, rounding so a value read back shows what was set, and the
-  coach's levers and their bounds said in °F.
+- **Overlaid shot curves: built on 2026-10-15** (D178-D182,
+  `docs/superpowers/specs/2026-10-15-shot-overlay-design.md`). A shot's card
+  draws the shot its question asks about faintly under its own curves: the
+  previous shot, or for a bag's first shot the last shot of another coffee,
+  rather than the previous version's shot, which a grind move (no new
+  version) would skip. The Shot view draws the bag's previous shot under a
+  shot while it pulls, and the card's once it is done. The shot under is a
+  pale band in each line's own hue, wider than the line and under it, with
+  a key that names it, checked in every tint and both modes. The curves
+  were kept after all: each card in the chat holds its ~1 Hz series, so
+  only a shot not in the chat is read from Decaid, once. Left: choosing
+  another shot to compare with, the shot under in History, its weight and
+  weight flow, and the band seen on a Decent tablet in daylight.
+- **TDS and EY on the shot card: built on 2026-10-15** (D162-D170,
+  `docs/superpowers/specs/2026-10-15-tds-ey-design.md`). Every
+  shot card's numbers have a quiet TDS cell, "+ Add", that opens a field with
+  the decimal keyboard (0.01-25 %, a comma read as a point); the reading
+  shows as TDS and EY, the EY worked out from the card's own dose and yield
+  (Decaid's `actualDoseWeight` or the workflow's dose, and its settled
+  `actualYield` or the scale's last weight), so EY = TDS × ratio. Both go to
+  the shot's record (`drinkTds`, `drinkEy`) through the queue the taste and
+  the rating use, the card and the shot's iteration keep them, and the
+  coach hears each reading with its next turn, as a verdict, so one typed
+  after it proposed a change comes with Confirm or the next message; the
+  prompt says what TDS and EY are and how far to trust them. A shot with no
+  yield keeps its TDS without an EY. Left: a TDS from a refractometer Decaid
+  connects (it lists a DiFluid R2 on main), a reading added in Visualizer
+  coming back to the card, and a later reading reaching visualizer.coffee
+  on a real upload (`docs/HARDWARE_TEST_PLAN.md`).
+- **°F: built on 2026-10-15** (D171-D177,
+  `docs/superpowers/specs/2026-10-15-fahrenheit-design.md`). Settings >
+  Appearance > Temperatures turns every temperature a barista reads or sets
+  into °F, the coach's words too, with Decaid, the profiles and the coach's
+  tools still in °C, as streamline does. The steppers show whole °F and move
+  one whole °C a tap, the step Decaid keeps, since a 1 °F step would get
+  stuck and an unrounded °C comes back truncated; every value reads back as
+  set (D173). The coach is told in its prompt, its temperature levers and
+  their bounds worked out in °F (D175), and a °C it still writes reads in
+  °F where it shows, a change without the 32 (D176). Left: a real coach
+  in °F over a real dial-in, the drink temperatures on a real DE1, and
+  Decaid's own words (a device error naming a temperature), which stay in
+  Decaid's unit (`docs/HARDWARE_TEST_PLAN.md`).
 - **Wake schedule: built on 2026-10-15** (D157-D160). Settings > Sleep and
   wake edits what Decaid keeps and acts on: Sleep when idle with its
   minutes, and the wake times, each a time, its days and how long it keeps

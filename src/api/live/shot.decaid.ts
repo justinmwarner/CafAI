@@ -2,7 +2,8 @@
  * A simulated shot through CafAI's own client and parsers (spec 4.4,
  * DECAID_SIM=1): espresso, Next step once mid-shot (D113), the shotState
  * sequence, the shot record read and summarised by CafAI's summariser, notes
- * and a rating written and read back, then idle. Every reply and every frame of the shot is checked against the
+ * and a rating written and read back, a TDS and its EY written, read back and
+ * cleared, then idle. Every reply and every frame of the shot is checked against the
  * pinned spec and for drift. A simulator only (D104): it refuses to run unless
  * Decaid simulates the machine and no real machine is connected, because
  * espresso moves water. `npm test` never runs it.
@@ -15,7 +16,7 @@ import { afterAll, assert, beforeAll, beforeEach, expect, it } from 'vitest';
 import { MIDDLE_SCORE, SCORE_STEP, enjoymentFromScore } from '../../app/engine/shotRating.ts';
 import { summarizeShot } from '../../coach/index.ts';
 import { deviceConnections, parseShotStateFrame } from '../frames.ts';
-import { GatewayError, type ShotStateEvent } from '../types.ts';
+import { GatewayError, type DeviceEntry, type ShotStateEvent } from '../types.ts';
 import { describeDecaid, openDecaid, type LiveDecaid } from './env.ts';
 import { channelName, checkFrames, createUndoList, simulatorProblem, waitUntil, watchChannel, type ChannelWatch } from './harness.ts';
 
@@ -52,11 +53,23 @@ describeDecaid('shot', ({ url, require }) => {
 
   beforeAll(async () => {
     live = await openDecaid(url);
-    const [settings, devices] = await Promise.all([live.client.getSettings(), live.client.getDevices()]);
+    // The write suite's scan (D111) can leave the simulated scale reconnecting for a few seconds: give it 20.
+    const connected = (devices: DeviceEntry[]) => {
+      const links = deviceConnections({ devices });
+      return Boolean(links?.machine && links.scale);
+    };
+    const settings = await live.client.getSettings();
+    const devices = await waitUntil(
+      async () => {
+        const now = await live.client.getDevices();
+        return connected(now) ? now : null;
+      },
+      20_000,
+      'the simulated machine and scale',
+    ).catch(() => live.client.getDevices());
     const problem = simulatorProblem(settings, devices);
     if (problem) throw new Error(`DECAID_SIM=1 runs only against Decaid's simulator (D104), and ${problem}.`);
-    const links = deviceConnections({ devices });
-    if (!links?.machine || !links.scale) {
+    if (!connected(devices)) {
       throw new Error('DECAID_SIM=1 needs the simulated machine and scale connected (docs/SIMULATOR.md part 2, or scripts/decaid-ci.sh).');
     }
     if (settings.gatewayMode === 'full') {
@@ -150,6 +163,28 @@ describeDecaid('shot', ({ url, require }) => {
     const annotations = (await live.client.getShot(id)).annotations;
     expect(annotations?.espressoNotes, 'espressoNotes').toBe(NOTES);
     expect(annotations?.enjoyment, `enjoyment on the 0-${scale} scale`).toBe(enjoyment);
+    expect(live.problems()).toEqual([]);
+  });
+
+  it('a TDS and its EY are written and read back, a TDS without an EY clears the EY, then both are cleared with null (D165)', async ({ skip }) => {
+    const id = shotId;
+    if (id === null) return require ? assert.fail(NO_SHOT) : skip(NO_SHOT);
+    await live.client.updateShot(id, { annotations: { drinkTds: 9.25, drinkEy: 20.8 } });
+    const read = (await live.client.getShot(id)).annotations;
+    expect(read?.drinkTds, 'drinkTds').toBe(9.25);
+    expect(read?.drinkEy, 'drinkEy').toBe(20.8);
+    // As CafAI writes a TDS it has no EY for (a card with no yield or no dose): the EY of the other TDS goes with it.
+    await live.client.updateShot(id, { annotations: { drinkTds: 9.4, drinkEy: null } });
+    const alone = (await live.client.getShot(id)).annotations ?? {};
+    expect(alone.drinkTds, 'drinkTds without an EY').toBe(9.4);
+    expect('drinkEy' in alone, 'drinkEy after a TDS without one').toBe(false);
+    // As CafAI removes a reading: Decaid's deep merge writes the nulls, and its toJson leaves the keys out.
+    await live.client.updateShot(id, { annotations: { drinkTds: null, drinkEy: null } });
+    const cleared = (await live.client.getShot(id)).annotations ?? {};
+    expect('drinkTds' in cleared, 'drinkTds after null').toBe(false);
+    expect('drinkEy' in cleared, 'drinkEy after null').toBe(false);
+    // The notes and the rating the check above wrote stay.
+    expect(cleared.espressoNotes, 'espressoNotes').toBe(NOTES);
     expect(live.problems()).toEqual([]);
   });
 

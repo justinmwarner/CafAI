@@ -10,10 +10,12 @@
  */
 import { beforeAll, beforeEach, expect, it } from 'vitest';
 import { profileId, summarizeShot } from '../../coach/index.ts';
+import { createComparisonShots } from '../../ui/compare/comparisonShots.ts';
 import { deviceConnections, parseMachineFrame, type DeviceConnections, type ParsedScaleFrame } from '../frames.ts';
 import { listGrinders } from '../grinders.ts';
 import { readDye2, visualizerIdFor, type PluginReads } from '../pluginData.ts';
 import { PLUGIN } from '../plugins.ts';
+import { parseDecaidTimestamp } from '../time.ts';
 import { GatewayError } from '../types.ts';
 import { describeDecaid, openDecaid, type LiveDecaid } from './env.ts';
 import { captureChannels, channelName, checkFrames, openedChannels, telemetryChannels, waitUntil, type ChannelWatch } from './harness.ts';
@@ -27,7 +29,7 @@ const WHILE_MACHINE = new Set(['/ws/v1/machine/snapshot', '/ws/v1/machine/waterL
 const SCALE = '/ws/v1/scale/snapshot';
 /** A bean id no Decaid has: its batches are an empty list. */
 const NO_BEAN = 'cafai-contract-test-no-bean';
-/** A shot id no Decaid has: Visualizer never uploaded it. */
+/** A shot id no Decaid has: Visualizer never uploaded it, and no card can draw it under another. */
 const NO_SHOT = 'cafai-contract-test-no-shot';
 /** Decaid loads its plugins in the background after it serves the skin (D103): how long a check waits for one. */
 const PLUGIN_WAIT_MS = 20_000;
@@ -161,6 +163,38 @@ describeDecaid('read', ({ url }) => {
       expect(shot.id).toBe(latest.id);
       expect(summarizeShot(shot).shotId).toBe(latest.id);
     }
+    expect(live.problems()).toEqual([]);
+  });
+
+  it('GET /api/v1/shots/{id} for a shot Decaid does not have: 404, so a card draws its own shot alone (D181)', async () => {
+    const error = await live.client.getShot(NO_SHOT).then(
+      () => null,
+      (caught: unknown) => caught,
+    );
+    expect(error instanceof GatewayError ? error.status : error, 'a shot Decaid does not have').toBe(404);
+    // The overlay's own read keeps it as none, and never asks again this session.
+    const shots = createComparisonShots(live.client);
+    expect(await shots.load(NO_SHOT)).toBeNull();
+    expect(shots.peek(NO_SHOT)).toBeNull();
+    expect(live.problems()).toEqual([]);
+  });
+
+  it('the newest shot and steam, then their totals: what the care reminders count (D185)', async () => {
+    // The newest of each first, as every count asks: neither reads measurements. A Decaid that never steamed answers 200 null.
+    const latestShot = await live.client.getLatestShot();
+    const latestSteam = await live.client.getLatestSteam();
+    // The total, read once the newest is one CafAI has not counted with: its page of one is that newest.
+    const page = await live.client.listShots({ limit: 1 });
+    expect(page.total, 'the shot total').toBeGreaterThanOrEqual(page.items.length);
+    expect(page.items[0]?.id ?? null, 'the page of one holds the newest shot').toBe(latestShot?.id ?? null);
+    // A total that jumps is checked against a page of the newest 20: the newest first, by the shots' own times.
+    const newest = await live.client.listShots({ limit: 20 });
+    const starts = newest.items.map((item) => parseDecaidTimestamp(item.timestamp));
+    expect(starts.every(Number.isFinite), "every shot's start reads").toBe(true);
+    expect(starts, 'newest first').toEqual([...starts].sort((a, b) => b - a));
+    const ids = await live.client.listSteamIds();
+    if (ids.length > 0) expect(ids, 'the newest steam is one of the ids').toContain(latestSteam?.id);
+    else expect(latestSteam).toBeNull();
     expect(live.problems()).toEqual([]);
   });
 

@@ -3,7 +3,8 @@
  * (a named one from palette.ts, or any hue from the slider). A change shows
  * on every screen at once and is saved with the other settings
  * (AppearanceStore, src/app/appearance.ts); the slider shows each hue as it
- * moves and saves only where it stops.
+ * moves and saves only where it stops. Last, the temperatures: °C or °F
+ * (TemperatureUnitRow.tsx, D172).
  */
 import { useId, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement } from 'react';
 import Alert from '@mui/material/Alert';
@@ -26,6 +27,7 @@ import { DEFAULT_TINT_ID, TINTS } from '../palette.ts';
 import { usePrefersDark } from '../platform/usePrefersDark.ts';
 import { TID } from '../testIds.ts';
 import { Section } from './Section.tsx';
+import { TemperatureUnitRow } from './TemperatureUnitRow.tsx';
 
 // The test id goes on the slider's range input, the one element a test (or a
 // keyboard) can focus and drive.
@@ -362,6 +364,7 @@ export function AppearanceSection() {
             The tint colours the buttons and tints the backgrounds. Shot graph colours never change: pressure green, flow blue.
           </Typography>
         </Stack>
+        <TemperatureUnitRow />
         {error ? (
           <Alert severity="error" onClose={() => setError(null)}>
             {error}

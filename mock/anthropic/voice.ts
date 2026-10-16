@@ -12,6 +12,7 @@
  * machine is its effect, and no voice says how a shot will taste.
  */
 import type { RoastLevel, TemplateId } from '../../src/coach/contract.ts';
+import { changeIn, type TemperatureUnit } from '../../src/coach/temperature.ts';
 
 export type VoiceName = 'terse' | 'demo';
 
@@ -101,6 +102,8 @@ export interface ChangeFacts {
   channelingFlags: string[] | null;
   /** This change replaces one CafAI rejected. */
   afterRejection: boolean;
+  /** The unit the prompt asks for (D177): its "Temperatures in °F" section, or °C. */
+  temperatureUnit: TemperatureUnit;
 }
 
 export interface AppliedFacts {
@@ -108,6 +111,14 @@ export interface AppliedFacts {
   status: 'loaded' | 'notConfirmed' | 'offline' | 'manual' | 'kept';
   version: number | null;
   title: string | null;
+}
+
+/** A TDS reading from an [event:shot_measured] payload (D167): the TDS and its EY, null when the request had none. */
+export interface ReadingFacts {
+  /** Null: the barista removed the reading. */
+  tdsPct: number | null;
+  /** Null without a dose or a yield, or with no reading. */
+  eyPct: number | null;
 }
 
 /** propose_adjustment's free text. */
@@ -142,10 +153,25 @@ export interface Voice {
   undo(back: { to: number; title: string | null }): string;
   /** Rule 8. */
   fallback(): string;
+  /** Rule 0b: the line a reply to a turn carrying a TDS reading starts with (D170). */
+  measured(reading: ReadingFacts): string;
 }
+
+/** A TDS as CafAI writes it, to 0.01 ("9.25"); an EY to 0.1 ("20.8"). */
+export const tdsText = (tdsPct: number) => tdsPct.toFixed(2);
+export const eyText = (eyPct: number) => (Math.round(eyPct * 10) / 10).toFixed(1);
 
 function formatNumber(value: number | null): string {
   return value === null ? '?' : String(Math.round(value * 10) / 10);
+}
+
+/**
+ * A change of brew temperature as the prompt asks for it (D177): "1 °C",
+ * or in °F "1.8 °F", a change converted without the 32, to one decimal as the
+ * change card shows it. The proposal itself stays in °C.
+ */
+export function brewChange(celsius: number, unit: TemperatureUnit): string {
+  return unit === 'fahrenheit' ? `${changeIn(celsius, unit).toFixed(1)} °F` : `${celsius} °C`;
 }
 
 /**
@@ -153,8 +179,8 @@ function formatNumber(value: number | null): string {
  * machine is the effect, never a taste to expect (D127).
  */
 const TERSE_CHANGES: Record<ChangeKind, (change: ChangeFacts) => ProposalText> = {
-  warmer: () => ({
-    summary: 'Raise brew temperature by 1 °C',
+  warmer: ({ temperatureUnit }) => ({
+    summary: `Raise brew temperature by ${brewChange(1, temperatureUnit)}`,
     rationale: 'You found it sour, which usually means under-extraction. A little more heat extracts more.',
     expectedEffect: 'More extraction at the same flow and time.',
   }),
@@ -163,8 +189,8 @@ const TERSE_CHANGES: Record<ChangeKind, (change: ChangeFacts) => ProposalText> =
     rationale: 'You found it sour and the temperature is already at the top of this profile, so a longer ratio extracts a little more.',
     expectedEffect: '2 g more water through the same coffee.',
   }),
-  cooler: () => ({
-    summary: 'Lower brew temperature by 1 °C',
+  cooler: ({ temperatureUnit }) => ({
+    summary: `Lower brew temperature by ${brewChange(1, temperatureUnit)}`,
     rationale: 'You found it bitter, which usually means over-extraction. A little less heat extracts less.',
     expectedEffect: 'Less extraction at the same flow and time.',
   }),
@@ -228,4 +254,8 @@ export const TERSE_VOICE: Voice = {
   declined: ({ version }) => `OK, we keep v${version} as it is. Tell me what you would like to try instead.`,
   undo: ({ to }) => `Back on v${to}. Pull a shot when you are ready.`,
   fallback: () => 'Got it. Pull a shot when you are ready, or tell me more about the coffee.',
+  measured({ tdsPct, eyPct }) {
+    if (tdsPct === null) return 'Noted: no TDS reading for that shot.';
+    return eyPct === null ? `Noted: TDS ${tdsText(tdsPct)} %, no EY.` : `Noted: TDS ${tdsText(tdsPct)} %, EY ${eyText(eyPct)} %.`;
+  },
 };

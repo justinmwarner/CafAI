@@ -5,7 +5,7 @@
  */
 import type { ProfileJson, ShotSummary } from '../../coach/types.ts';
 import { DEFAULT_APPEARANCE } from '../settings.ts';
-import type { Bag, ConversationRecord, IterationRecord, ProfileVersion, Settings } from '../types.ts';
+import type { Bag, CareRecord, ConversationRecord, IterationRecord, ProfileVersion, Settings } from '../types.ts';
 import { newId } from '../../util/id.ts';
 
 export const MODEL = 'claude-opus-5-5';
@@ -24,6 +24,22 @@ export function makeSettings(overrides: Partial<Settings> = {}): Settings {
     grinderId: null,
     activeBagId: null,
     appearance: DEFAULT_APPEARANCE,
+    ...overrides,
+  };
+}
+
+/** Machine care's weekly clean, marked done on the Care screen with 120 shots in Decaid, the newest pulled before (D189). */
+export function makeCareRecord(overrides: Partial<CareRecord> = {}): CareRecord {
+  return {
+    id: 'detergent-clean',
+    doneAt: '2026-10-01T08:00:00.000Z',
+    by: 'tick',
+    countFrom: '2026-10-01T08:00:00.000Z',
+    shotTotal: 120,
+    steamTotal: 40,
+    newestShotAt: '2026-10-01T09:42:17.123456',
+    newestSteamAt: '2026-09-30T16:05:00.000000',
+    updatedAt: '2026-10-01T08:00:00.000Z',
     ...overrides,
   };
 }

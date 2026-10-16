@@ -26,7 +26,9 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import type { Bag, IterationRecord, ProfileVersion } from '../../storage/types.ts';
 import { OTHER_OPTION } from '../../coach/contract.ts';
-import { useCoach, useServices } from '../../app/services.tsx';
+import { formatEy, formatTds, readingOf } from '../../coach/extraction.ts';
+import { inTemperatureUnit } from '../../coach/temperature.ts';
+import { useCoach, useServices, useWordsTemperatureUnit } from '../../app/services.tsx';
 import { TID } from '../testIds.ts';
 import {
   describeChannelingFlag,
@@ -126,10 +128,18 @@ function BagList({ bags, shotCounts, onSelect }: { bags: Bag[]; shotCounts: Map<
 
 const STATUS_COLOR = { active: 'success', superseded: 'default', undone: 'warning' } as const;
 
+/** A change's words with their temperatures in the barista's unit (D176): kept as written, read in °C or °F. */
+function useWords(): (text: string) => string {
+  const unit = useWordsTemperatureUnit();
+  return (text) => inTemperatureUnit(text, unit);
+}
+
 function ChangeLines({ lines }: { lines: string[] }) {
+  const words = useWords();
   return (
     <Box component="ul" sx={{ listStyle: 'none', p: 0, m: 0, display: 'grid', gap: 0.25 }}>
-      {lines.map((line, i) => {
+      {lines.map((kept, i) => {
+        const line = words(kept);
         const parts = splitDiffLine(line);
         return (
           <Typography key={i} component="li" variant="body2">
@@ -159,11 +169,15 @@ function ChangeLines({ lines }: { lines: string[] }) {
 function shotLine(record: IterationRecord): string {
   const s = record.summary;
   if (!s) return 'No shot data';
+  // The barista's refractometer reading, and its EY when there is one (D166).
+  const reading = readingOf(s);
+  const measured = reading ? [`TDS ${formatTds(reading.tdsPct)}`, ...(reading.eyPct === null ? [] : [`EY ${formatEy(reading.eyPct)}`])] : [];
   return [
     formatSeconds(s.durationS),
     `${formatGrams(s.doseG)} → ${formatGrams(s.yieldG)}`,
     formatRatio(shotRatio(s)),
     `peak ${formatBar(s.peakPressureBar)}`,
+    ...measured,
   ].join(' · ');
 }
 
@@ -176,6 +190,7 @@ function feedbackText(record: IterationRecord): string | null {
 }
 
 function IterationRow({ record }: { record: IterationRecord }) {
+  const words = useWords();
   const feedback = feedbackText(record);
   const flags = record.summary?.channelingFlags ?? [];
   return (
@@ -207,7 +222,7 @@ function IterationRow({ record }: { record: IterationRecord }) {
           <Box component="span" sx={{ color: 'text.secondary' }}>
             Proposed:{' '}
           </Box>
-          {record.proposal.summary}
+          {words(record.proposal.summary)}
         </Typography>
       ) : null}
       <Typography variant="body2" sx={{ color: record.outcome === 'applied' ? 'success.main' : 'text.secondary' }}>
@@ -220,6 +235,7 @@ function IterationRow({ record }: { record: IterationRecord }) {
 }
 
 function VersionCard({ version, iterations }: { version: ProfileVersion; iterations: IterationRecord[] }) {
+  const words = useWords();
   return (
     <Paper
       variant="outlined"
@@ -256,7 +272,7 @@ function VersionCard({ version, iterations }: { version: ProfileVersion; iterati
       {version.change ? (
         <Box sx={{ mt: 1 }}>
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            {version.change.summary}
+            {words(version.change.summary)}
           </Typography>
           <ChangeLines lines={version.change.diffLines} />
         </Box>
@@ -417,7 +433,7 @@ function ExportDialog({ result, onClose }: { result: ExportResult; onClose(): vo
 type ListData = { bags: Bag[]; shotCounts: Map<string, number> };
 
 export function HistoryScreen({ bagId, onSelectBag = hashNavigate }: HistoryScreenProps) {
-  const { storage, coach, host, appearance } = useServices();
+  const { storage, coach, host, appearance, temperatureUnit, care } = useServices();
   const [coachBags, coachVersions, coachPhase, coachBusy] = useCoachCommits();
   const [reloads, setReloads] = useState(0);
   const [list, setList] = useState<ListData | null>(null);
@@ -502,13 +518,17 @@ export function HistoryScreen({ bagId, onSelectBag = hashNavigate }: HistoryScre
         coach.refresh().catch(() => undefined);
         // An import can bring a look along (a device still on the default takes it).
         appearance.reload().catch(() => undefined);
+        // And a temperature unit, on a device that never chose one (D172).
+        temperatureUnit.reload().catch(() => undefined);
+        // And machine care's last times (D189).
+        care?.reload().catch(() => undefined);
       } catch (error) {
         setMessage({ tone: 'error', text: `Import failed: ${errorText(error)}` });
       } finally {
         setWorking(null);
       }
     },
-    [storage, coach, appearance],
+    [storage, coach, appearance, temperatureUnit, care],
   );
 
   const current = bagId === null ? list : detail?.id === bagId ? detail : null;

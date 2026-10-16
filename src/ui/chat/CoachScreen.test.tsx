@@ -326,6 +326,13 @@ describe('CoachScreen', () => {
     expect(services.coach.calls).toEqual([{ method: 'rateShot', args: ['shot-1', 'muchBetter'] }]);
   });
 
+  it('passes a TDS saved on a shot card to the controller (D162)', async () => {
+    const services = renderCoach(coachStateFor('options'));
+    await userEvent.click(screen.getByRole('button', { name: 'Add TDS' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'TDS' }), '9,3{Enter}');
+    expect(services.coach.calls).toEqual([{ method: 'setShotTds', args: ['shot-1', 9.3] }]);
+  });
+
   it('shows Graph on the finished shot card, and opens the shot route from it', async () => {
     const services = createFakeServices({ coach: coachStateFor('shot') });
     renderWithServices(<CoachScreen />, services);

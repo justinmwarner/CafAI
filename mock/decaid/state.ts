@@ -64,6 +64,7 @@ import {
   type PresenceSeed,
 } from './presence.ts';
 import { buildProfileRecord, normalizeProfile, profileHash, type DecaidProfileRecord } from './profiles.ts';
+import { newestSteamsFirst, steamNotFound, steamWithoutMeasurements, type MockSteamRecord, type MockSteamSummary } from './steams.ts';
 import { normalizeWorkflow, validateWorkflowPatch } from './workflow.ts';
 
 export type MockChannel = 'machine' | 'scale' | 'devices' | 'shotState' | 'waterLevels' | 'shotSettings' | 'timeToReady';
@@ -278,6 +279,18 @@ export interface MockDecaid {
   updateShot(id: string, body: unknown): ShotRecord;
   deleteShot(id: string): { success: true; id: string };
   addShot(record: ShotRecord): void;
+
+  // Steam records (steams.ts, steams_handler.dart): the shot player keeps one per steaming
+  /** GET /steams: newest first, without measurements. */
+  listSteams(): MockSteamSummary[];
+  /** GET /steams/ids. */
+  getSteamIds(): string[];
+  /** GET /steams/latest: null while there is none. */
+  getLatestSteam(): MockSteamSummary | null;
+  /** GET /steams/{id}, measurements included; 404 {error} for an unknown id. */
+  getSteam(id: string): MockSteamRecord;
+  /** A raw upsert by id, like addShot (the shot player, the saved store, tests). */
+  addSteam(record: MockSteamRecord): void;
 
   // Grinders (Decaid's grinder library, grinders.ts)
   /** Newest edit first; archived ones only with includeArchived "true". */
@@ -496,6 +509,7 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
     if (record.isDefault || options.seedExamples !== false) profiles.set(record.id, record);
   }
   let shots: ShotRecord[] = options.seedExamples === false ? [] : [fixtures.shotRecord()];
+  let steams: MockSteamRecord[] = [];
   const grinders = new Map<string, GrinderRecord>();
   if (options.seedGrinders !== false) for (const grinder of seedGrinders()) grinders.set(grinder.id, grinder);
   const beans = new Map<string, Bean>();
@@ -1273,6 +1287,22 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
     },
     addShot(record) {
       shots = [...shots.filter((shot) => shot.id !== record.id), clone(record)];
+    },
+
+    // ---- steam records ---------------------------------------------------------------
+    listSteams: () => newestSteamsFirst(steams).map(steamWithoutMeasurements),
+    getSteamIds: () => steams.map((steam) => steam.id),
+    getLatestSteam() {
+      const [latest] = newestSteamsFirst(steams);
+      return latest ? steamWithoutMeasurements(latest) : null;
+    },
+    getSteam(id) {
+      const record = steams.find((steam) => steam.id === id);
+      if (!record) throw steamNotFound();
+      return clone(record);
+    },
+    addSteam(record) {
+      steams = [...steams.filter((steam) => steam.id !== record.id), clone(record)];
     },
 
     // ---- grinders -----------------------------------------------------------------------

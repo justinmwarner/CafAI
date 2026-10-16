@@ -16,8 +16,10 @@ import { rememberSecret } from '../traffic/recorder.ts';
 import { newId } from '../util/id.ts';
 import { createApiPort, createCoachPort, createLlmPort } from './adapters.ts';
 import { createAppearanceStore } from './appearance.ts';
+import { createCareService, localTotalsCache } from './care/careService.ts';
 import { withCoachCredential } from './coachAccess.ts';
 import { createCoachEngine, type CoachEngine } from './engine/engine.ts';
+import { createTemperatureUnitStore } from './temperatureUnit.ts';
 import type { Services } from './types.ts';
 
 export const APP_VERSION: string = typeof __CAFAI_VERSION__ === 'string' ? __CAFAI_VERSION__ : '0.0.0';
@@ -55,13 +57,32 @@ export async function createServices(win: Window): Promise<AppServices> {
   const [restore] = await Promise.all([restoreFromMirrorIfEmpty(storage), storage.keyBackup.restoreIfMissing()]);
 
   const appearance = createAppearanceStore(storage.settings, (await storage.settings.get()).appearance);
+  // °C or °F (D172): the screens read it, and so does every request's prompt (D175).
+  const temperatureUnit = createTemperatureUnitStore(storage.settings, (await storage.settings.get()).temperatureUnit);
+
+  // Machine care's steps (D183-D190): read now, counted from Decaid's totals behind the start.
+  const visibility = {
+    visible: () => win.document.visibilityState !== 'hidden',
+    subscribe(listener: () => void) {
+      win.document.addEventListener('visibilitychange', listener);
+      return () => win.document.removeEventListener('visibilitychange', listener);
+    },
+  };
+  let deviceStorage: globalThis.Storage | null = null;
+  try {
+    deviceStorage = win.localStorage;
+  } catch {
+    // Storage blocked: every page counts afresh.
+  }
+  const care = createCareService({ storage, decaid, telemetry, cache: localTotalsCache(deviceStorage), visibility });
+  await care.start();
 
   const coach = createCoachEngine({
     // Its "is a key stored" means "has what the selected source needs".
     storage: withCoachCredential(storage, coachSource),
     telemetry,
     api: createApiPort(decaid),
-    coach: createCoachPort(),
+    coach: createCoachPort({ temperatureUnit: temperatureUnit.get }),
     llm: createLlmPort(storage.secrets, coachSource),
     clock: { now: () => new Date(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
     newId,
@@ -80,10 +101,13 @@ export async function createServices(win: Window): Promise<AppServices> {
   telemetry.start();
   await coach.start();
 
-  // Records that came back after start (D100): the chat and the look read them again.
-  const landed = () => {
-    void coach.restored();
+  // Records that came back after start (D100): the chat, the look and machine care read them again.
+  // The chat says the bags are back only when bags came back, not for machine care's last times alone (D189).
+  const landed = ({ records }: { records: boolean }) => {
+    if (records) void coach.restored();
     void appearance.reload();
+    void temperatureUnit.reload();
+    void care.reload();
   };
   const stopRestoredWatch = storage.onRestored(landed);
   // Decaid did not answer the start-up restore (it may still be starting up,
@@ -91,9 +115,9 @@ export async function createServices(win: Window): Promise<AppServices> {
   const late =
     restore === 'unreachable'
       ? startLateRestore(storage, {
-          onRestored({ records }) {
-            if (records) landed();
-            else void coach.refresh();
+          onRestored({ records, care: careAlone, key }) {
+            if (records || careAlone) landed({ records });
+            if (key && !records) void coach.refresh();
           },
         })
       : null;
@@ -140,8 +164,10 @@ export async function createServices(win: Window): Promise<AppServices> {
     models: MODELS,
     appVersion: APP_VERSION,
     appearance,
+    temperatureUnit,
     plugins,
     coachSource,
+    care,
     dispose() {
       win.document.removeEventListener('visibilitychange', onVisibility);
       stopPluginWatch();
@@ -150,6 +176,7 @@ export async function createServices(win: Window): Promise<AppServices> {
       stopRestoredWatch();
       stopCodeWatch?.();
       coach.dispose();
+      care.dispose();
       telemetry.stop();
     },
   };

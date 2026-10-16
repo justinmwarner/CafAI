@@ -2,8 +2,9 @@
  * REST replies CafAI reads: Diff<the spec's reply, CafAI's type>, which must
  * equal the exceptions recorded in drift.ts. Covers every reply in
  * docs/audit/2026-10-09/cafai.md section 1.2 and section 1.6, and the ones
- * the Decaid features read (settings, plugins, beans, batches, and the sleep
- * and wake settings with their schedules).
+ * the Decaid features read (settings, plugins, beans, batches, the sleep and
+ * wake settings with their schedules, and the steam records the care
+ * reminders count).
  */
 import type { Assert, Diff, Exactly, Res, Rest } from '../helpers.ts';
 import type * as X from '../drift.ts';
@@ -36,6 +37,12 @@ export type _shots = Assert<Exactly<Diff<Res<'/api/v1/shots', 'get'>, C.Paginate
 export type _shots_latest = Assert<Exactly<Diff<{ v: Res<'/api/v1/shots/latest', 'get'> }, { v: C.ShotRecordSummary | null }>, X.ShotSummaryRead<'v.'>>>;
 export type _shot = Assert<Exactly<Diff<Res<'/api/v1/shots/{id}', 'get'>, C.ShotRecord>, X.ShotRead>>;
 export type _shot_put = Assert<Exactly<Diff<Res<'/api/v1/shots/{id}', 'put'>, C.ShotRecord>, X.ShotRead>>;
+
+// ---- Steam records (the care reminders count them, D185) -----------------------------------
+/** client.ts listSteamIds: the ids alone, counted. */
+export type _steam_ids = Assert<Exactly<Diff<{ list: Res<'/api/v1/steams/ids', 'get'> }, { list: string[] }>, never>>;
+/** client.ts getLatestSteam: CafAI reads `null` as "no steam yet" (Decaid's 200 null; schema.ts records it for the runtime check). */
+export type _steams_latest = Assert<Exactly<Diff<{ v: Res<'/api/v1/steams/latest', 'get'> }, { v: C.SteamRecordSummary | null }>, X.SteamSummaryRead<'v.'>>>;
 
 // ---- Grinders, beans, batches -----------------------------------------------------------------------
 export type _grinders = Assert<Exactly<Diff<{ list: Res<'/api/v1/grinders', 'get'> }, { list: Grinder[] }>, X.GrinderRead<'list[].'>>>;

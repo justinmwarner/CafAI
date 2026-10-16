@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { openCareDb } from './careDb.ts';
 import { createDbHandle, openCafaiDb, SETTINGS_KEY } from './db.ts';
 import { buildMirrorEntries, exportFromMirror } from './mirror.ts';
 import { createDataPorter } from './porter.ts';
@@ -6,9 +7,11 @@ import { createRepositories } from './repositories.ts';
 import {
   applySettingsPatch,
   DEFAULT_APPEARANCE,
+  DEFAULT_CARE,
   defaultSettings,
   fillBlankSettings,
   normalizeAppearance,
+  normalizeCareSettings,
   normalizeSettings,
   sameAppearance,
 } from './settings.ts';
@@ -17,6 +20,12 @@ import { API_KEY, MODEL, makeSettings, uniqueDbName } from './testing/fixtures.t
 
 /** A made-up key, built at run time so no key-shaped literal sits in the source. */
 const PASTED_KEY = ['sk', 'ant', 'api03', 'nOtArEaLkEy0123456789', 'AbCdEfGhIjKlMnOpQrStUvWxYz_0123456789AA'].join('-');
+
+/** Machine care's own database (careDb.ts), which a porter opens beside CafAI's. */
+function careDbOfItsOwn() {
+  const handle = createDbHandle((onLost) => openCareDb(uniqueDbName('care'), onLost));
+  return () => handle.get();
+}
 
 describe('defaultSettings', () => {
   it('uses the default model and leaves everything else blank, the key-copy choice unmade', () => {
@@ -29,6 +38,7 @@ describe('defaultSettings', () => {
       appearance: DEFAULT_APPEARANCE,
     });
     expect(defaultSettings(MODEL)).not.toHaveProperty('keepKeyInDecaid');
+    expect(defaultSettings(MODEL)).not.toHaveProperty('care');
   });
 });
 
@@ -69,10 +79,14 @@ describe('normalizeSettings', () => {
   });
 
   it('never carries fields outside Settings, such as an API key', () => {
-    const normalized = normalizeSettings({ ...makeSettings({ keepKeyInDecaid: true }), apiKey: API_KEY, theme: 'dark' }, MODEL);
+    const normalized = normalizeSettings(
+      { ...makeSettings({ keepKeyInDecaid: true, care: { water: 'to120', filter: null, reminders: true } }), apiKey: API_KEY, theme: 'dark' },
+      MODEL,
+    );
     expect(Object.keys(normalized).sort()).toEqual([
       'activeBagId',
       'appearance',
+      'care',
       'grinderId',
       'grinderName',
       'grinderSetting',
@@ -186,6 +200,7 @@ describe('a key in the settings never reaches storage, the backup or an import',
     const repos = createRepositories({ db, onWrite: () => undefined, defaultModel: MODEL });
     const porter = createDataPorter({
       db,
+      careDb: careDbOfItsOwn(),
       secrets: { getApiKey: async () => null },
       mirror: { schedulePush: () => undefined },
       appVersion: '1.2.3',
@@ -326,6 +341,7 @@ describe('the key-copy choice through an import (D99)', () => {
     const repos = createRepositories({ db, onWrite: () => undefined, defaultModel: MODEL });
     const porter = createDataPorter({
       db,
+      careDb: careDbOfItsOwn(),
       secrets: { getApiKey: async () => null },
       mirror: { schedulePush: () => undefined },
       appVersion: '1.2.3',
@@ -360,6 +376,49 @@ describe('the key-copy choice through an import (D99)', () => {
     await repos.settings.update({ activeBagId: 'bag_1', grinderName: 'Niche Zero' });
     await porter.importAll(exportWith(makeSettings({ keepKeyInDecaid: true })), 'merge');
     expect(await repos.settings.get()).toMatchObject({ keepKeyInDecaid: true, activeBagId: 'bag_1', grinderName: 'Niche Zero' });
+  });
+});
+
+describe('machine care (D187)', () => {
+  it('reads the water, the filter and the switch leniently: an answer it does not know is not said, the switch on', () => {
+    expect(normalizeCareSettings(undefined)).toEqual(DEFAULT_CARE);
+    expect(normalizeCareSettings({ water: 'over120', filter: 'v2', reminders: false })).toEqual({ water: 'over120', filter: 'v2', reminders: false });
+    expect(normalizeCareSettings({ water: 'hard', filter: 'v3', reminders: 'yes' })).toEqual(DEFAULT_CARE);
+    expect(normalizeSettings({ ...makeSettings(), care: { water: 'to120' } }, MODEL).care).toEqual({ water: 'to120', filter: null, reminders: true });
+    // Absent until someone answers, as the key-copy choice: the settings of a CafAI that never set it stay as they were.
+    expect(normalizeSettings({ model: MODEL }, MODEL)).not.toHaveProperty('care');
+    // Once answered it stays, every answer at its default included: that is a choice too.
+    expect(normalizeSettings({ ...makeSettings(), care: DEFAULT_CARE }, MODEL).care).toEqual(DEFAULT_CARE);
+  });
+
+  it('a patch changes the care block field by field: the water never resets the filter', () => {
+    const set = applySettingsPatch(makeSettings(), { care: { water: null, filter: 'v2', reminders: true } }, MODEL);
+    const next = applySettingsPatch(set, { care: { water: 'under30' } }, MODEL);
+    expect(next.care).toEqual({ water: 'under30', filter: 'v2', reminders: true });
+    expect(applySettingsPatch(next, { activeBagId: 'bag_1' }, MODEL).care).toEqual(next.care);
+    // A field left undefined is not part of the edit.
+    expect(applySettingsPatch(next, { care: { water: undefined, reminders: false } }, MODEL).care).toEqual({ water: 'under30', filter: 'v2', reminders: false });
+    // Put back to Not sure, the block stays: answered here.
+    expect(applySettingsPatch(next, { care: { water: null, filter: null } }, MODEL).care).toEqual(DEFAULT_CARE);
+  });
+
+  it("a merge takes the incoming answers only on a device that never answered, the block whole, as the key-copy choice", () => {
+    const incoming = makeSettings({ care: { water: 'over120', filter: 'v1', reminders: false } });
+    expect(fillBlankSettings(makeSettings(), incoming, MODEL).care).toEqual({ water: 'over120', filter: 'v1', reminders: false });
+    const mine = makeSettings({ care: { water: 'under30', filter: null, reminders: true } });
+    expect(fillBlankSettings(mine, incoming, MODEL).care).toEqual({ water: 'under30', filter: null, reminders: true });
+    const off = makeSettings({ care: { water: null, filter: 'v2', reminders: false } });
+    expect(fillBlankSettings(off, makeSettings(), MODEL).care).toEqual({ water: null, filter: 'v2', reminders: false });
+    expect(fillBlankSettings(makeSettings(), makeSettings(), MODEL)).not.toHaveProperty('care');
+  });
+
+  it('an answer put back to its default stays a choice: an older export merged in brings nothing back', () => {
+    let local = applySettingsPatch(normalizeSettings(null, MODEL), { care: { water: 'over120' } }, MODEL);
+    local = applySettingsPatch(local, { care: { water: null } }, MODEL);
+    expect(local.care).toEqual(DEFAULT_CARE);
+    // An export made before the water went back to Not sure, with the switch off then.
+    const older = normalizeSettings({ ...local, care: { water: 'over120', filter: null, reminders: false } }, MODEL);
+    expect(fillBlankSettings(local, older, MODEL).care).toEqual(DEFAULT_CARE);
   });
 });
 
@@ -445,5 +504,92 @@ describe('appearance', () => {
     const data = Object.fromEntries([...entries].map(([key, text]) => [key, JSON.parse(text)]));
     const restored = exportFromMirror(data, { appVersion: '1.2.3', defaultModel: MODEL, now: () => new Date(0) });
     expect(restored?.settings.appearance).toEqual({ mode: 'light', tint: { hue: 200 } });
+  });
+});
+
+describe('the temperature unit (D172)', () => {
+  function setup() {
+    const handle = createDbHandle((onLost) => openCafaiDb(uniqueDbName(), onLost));
+    const db = () => handle.get();
+    const repos = createRepositories({ db, onWrite: () => undefined, defaultModel: MODEL });
+    const porter = createDataPorter({
+      db,
+      careDb: careDbOfItsOwn(),
+      secrets: { getApiKey: async () => null },
+      mirror: { schedulePush: () => undefined },
+      appVersion: '1.2.3',
+      defaultModel: MODEL,
+      now: () => new Date('2026-10-15T09:30:00.000Z'),
+    });
+    return { db, repos, porter };
+  }
+  const exportWith = (settings: unknown): CafaiExport =>
+    ({
+      format: 'cafai-export',
+      schemaVersion: 1,
+      exportedAt: '2026-10-15T09:00:00.000Z',
+      appVersion: '1.2.3',
+      settings,
+      bags: [],
+      versions: [],
+      iterations: [],
+      conversations: [],
+    }) as CafaiExport;
+
+  it('is absent until chosen, so a record saved before it, or by a device that never chose, is unchanged', () => {
+    expect(defaultSettings(MODEL)).not.toHaveProperty('temperatureUnit');
+    expect(normalizeSettings(makeSettings(), MODEL)).not.toHaveProperty('temperatureUnit');
+    expect(applySettingsPatch(makeSettings(), { activeBagId: 'bag_1' }, MODEL)).not.toHaveProperty('temperatureUnit');
+  });
+
+  it('keeps °C or °F as chosen, and reads anything else as none chosen', () => {
+    expect(normalizeSettings(makeSettings({ temperatureUnit: 'fahrenheit' }), MODEL)).toHaveProperty('temperatureUnit', 'fahrenheit');
+    expect(normalizeSettings(makeSettings({ temperatureUnit: 'celsius' }), MODEL)).toHaveProperty('temperatureUnit', 'celsius');
+    for (const other of ['F', 'Fahrenheit', 'kelvin', 7, null, {}]) {
+      expect(normalizeSettings({ ...makeSettings(), temperatureUnit: other }, MODEL), String(other)).not.toHaveProperty('temperatureUnit');
+    }
+  });
+
+  it('is patched like any other setting, and kept across other edits', () => {
+    const next = applySettingsPatch(makeSettings(), { temperatureUnit: 'fahrenheit' }, MODEL);
+    expect(next.temperatureUnit).toBe('fahrenheit');
+    expect(applySettingsPatch(next, { grinderSetting: '14' }, MODEL).temperatureUnit).toBe('fahrenheit');
+    expect(applySettingsPatch(next, { temperatureUnit: 'celsius' }, MODEL).temperatureUnit).toBe('celsius');
+  });
+
+  it('keeps a choice made on this device, °C as much as °F, and fills only a device that never chose', () => {
+    const f = makeSettings({ temperatureUnit: 'fahrenheit' });
+    const c = makeSettings({ temperatureUnit: 'celsius' });
+    expect(fillBlankSettings(c, f, MODEL).temperatureUnit).toBe('celsius');
+    expect(fillBlankSettings(f, c, MODEL).temperatureUnit).toBe('fahrenheit');
+    expect(fillBlankSettings(makeSettings(), f, MODEL).temperatureUnit).toBe('fahrenheit');
+    expect(fillBlankSettings(makeSettings(), makeSettings(), MODEL)).not.toHaveProperty('temperatureUnit');
+  });
+
+  it('is stored, exported and imported with the other settings', async () => {
+    const { db, repos, porter } = setup();
+    await repos.settings.update({ temperatureUnit: 'fahrenheit' });
+    expect(((await (await db()).get('settings', SETTINGS_KEY)) as Settings).temperatureUnit).toBe('fahrenheit');
+    const exported = await porter.exportAll();
+    expect(exported.settings.temperatureUnit).toBe('fahrenheit');
+    for (const mode of ['replace', 'merge'] as const) {
+      const other = setup();
+      await other.porter.importAll(exportWith(exported.settings), mode);
+      expect((await other.repos.settings.get()).temperatureUnit, mode).toBe('fahrenheit');
+    }
+  });
+
+  it("imports a file from a newer CafAI with a unit this one does not know, without the unit", async () => {
+    const { repos, porter } = setup();
+    await porter.importAll(exportWith({ ...makeSettings(), temperatureUnit: 'kelvin' }), 'replace');
+    expect(await repos.settings.get()).not.toHaveProperty('temperatureUnit');
+  });
+
+  it('survives the Decaid mirror round trip', () => {
+    const settings = makeSettings({ temperatureUnit: 'fahrenheit' });
+    const { entries } = buildMirrorEntries({ settings, bags: [], versions: [], iterations: [], conversations: [] }, null, MODEL);
+    const data = Object.fromEntries([...entries].map(([key, text]) => [key, JSON.parse(text)]));
+    const restored = exportFromMirror(data, { appVersion: '1.2.3', defaultModel: MODEL, now: () => new Date(0) });
+    expect(restored?.settings.temperatureUnit).toBe('fahrenheit');
   });
 });

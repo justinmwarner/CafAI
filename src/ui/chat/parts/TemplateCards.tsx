@@ -5,8 +5,10 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import { useWordsTemperatureUnit } from '../../../app/services.tsx';
 import type { SetAsideReason, TemplateCardItem } from '../../../app/types.ts';
 import type { Confidence } from '../../../coach/contract.ts';
+import { inTemperatureUnit } from '../../../coach/temperature.ts';
 import { TID } from '../../testIds.ts';
 import { confidenceLabel, setAsideNote } from '../format.ts';
 
@@ -31,6 +33,8 @@ export interface TemplateCardsProps {
 /** The model's starting-profile suggestions. Tapping "Use this" creates and loads v1. */
 export function TemplateCards({ items, pickedTemplateId, disabled = false, expired = false, setAsideReason, onPick }: TemplateCardsProps) {
   const locked = pickedTemplateId !== null || expired;
+  // The coach's reasons with their temperatures in the barista's unit (D176).
+  const unit = useWordsTemperatureUnit();
   return (
     <Stack spacing={1} role="list" aria-label="Suggested starting profiles" sx={{ my: 0.5 }}>
       {expired && pickedTemplateId === null ? (
@@ -77,7 +81,7 @@ export function TemplateCards({ items, pickedTemplateId, disabled = false, expir
                   {item.style} · {item.shape}
                 </Typography>
                 <Typography variant="body2" sx={{ mt: 0.75 }}>
-                  {item.reason}
+                  {inTemperatureUnit(item.reason, unit)}
                 </Typography>
               </Box>
               {picked ? (

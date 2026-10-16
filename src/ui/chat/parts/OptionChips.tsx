@@ -7,8 +7,10 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import CheckIcon from '@mui/icons-material/Check';
 import EditIcon from '@mui/icons-material/Edit';
+import { useWordsTemperatureUnit } from '../../../app/services.tsx';
 import type { SetAsideReason } from '../../../app/types.ts';
 import { OTHER_OPTION } from '../../../coach/contract.ts';
+import { inTemperatureUnit } from '../../../coach/temperature.ts';
 import { TID } from '../../testIds.ts';
 import { setAsideNote } from '../format.ts';
 
@@ -49,6 +51,9 @@ export function OptionChips({
   const [otherOpen, setOtherOpen] = useState(false);
   const [otherText, setOtherText] = useState('');
   const questionId = useId();
+  // The coach's words with their temperatures in the barista's unit (D176).
+  const unit = useWordsTemperatureUnit();
+  const words = (text: string) => inTemperatureUnit(text, unit);
 
   // The engine already appends "Other" last; keep it last even if it did not.
   const listed = options.filter((o) => o !== OTHER_OPTION);
@@ -100,7 +105,7 @@ export function OptionChips({
   return (
     <Box component="form" onSubmit={send} sx={{ my: 0.5 }} aria-labelledby={questionId}>
       <Typography id={questionId} variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-        {question}
+        {words(question)}
       </Typography>
       <Stack
         direction="row"
@@ -116,7 +121,8 @@ export function OptionChips({
           return (
             <Chip
               key={option}
-              label={option}
+              // What the barista reads; the answer sent is the coach's own option.
+              label={words(option)}
               data-testid={TID.optionChip(option)}
               role={multiSelect || isOther ? 'checkbox' : 'radio'}
               aria-checked={chosen}

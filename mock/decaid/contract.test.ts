@@ -88,8 +88,9 @@ describe('the spec validator', () => {
     expect(spec.frame('ws/v1/machine/snapshot', { ...machineState, state: { state: 'schedIdle', substate: 'idle' } })).toEqual([]);
     // KV writes answer 200 {}, not 204 (SPEC DRIFT).
     expect(spec.response('POST', '/api/v1/store/cafai/meta', 200, {})).toEqual([]);
-    // No shot yet: 200 null (SPEC DRIFT), on that route only.
+    // No shot yet: 200 null (SPEC DRIFT), on that route only; and no steam yet, on its own.
     expect(spec.response('GET', '/api/v1/shots/latest', 200, null)).toEqual([]);
+    expect(spec.response('GET', '/api/v1/steams/latest', 200, null)).toEqual([]);
     expect(spec.response('GET', '/api/v1/machine/state', 200, null)).toEqual(['(root): must be object']);
   });
 
@@ -294,6 +295,8 @@ const ROUTES: ReadonlyArray<[Method, RegExp]> = [
   ['GET', /^\/api\/v1\/shots\/(?!latest)[^/?]+$/],
   ['PUT', /^\/api\/v1\/shots\/(?!cafai-probe)[^/?]+$/],
   ['PUT', PROBE],
+  ['GET', /^\/api\/v1\/steams\/ids$/],
+  ['GET', /^\/api\/v1\/steams\/latest$/],
   ['GET', /^\/api\/v1\/grinders$/],
   ['GET', /^\/api\/v1\/grinders\?includeArchived=true$/],
   ['GET', /^\/api\/v1\/grinders\/[^/?]+$/],
@@ -482,6 +485,18 @@ describe('the mock against the spec', () => {
     await mock.player.whenIdle();
     mock.setSpeed(1);
 
+    // The care reminders count shots and steams (D185): the total, the newest steam before there is one
+    // (200 null), then a steaming, its id and itself.
+    await attempt(() => client.listShots({ limit: 1 }));
+    await attempt(() => client.getLatestSteam());
+    mock.setSpeed(500);
+    await attempt(() => client.setMachineState('steam'));
+    await mock.player.whenIdle();
+    mock.setSpeed(1);
+    const steamIds = await attempt(() => client.listSteamIds());
+    expect(steamIds, 'the steaming left a steam record').toHaveLength(1);
+    await attempt(() => client.getLatestSteam());
+
     await attempt(() => client.listShots({ limit: 5 }));
     const latest = await attempt(() => client.getLatestShot());
     if (latest) {
@@ -493,6 +508,10 @@ describe('the mock against the spec', () => {
       await attempt(() =>
         client.updateShot(latest.id, { annotations: { espressoNotes, enjoyment: 7, extras: { [EXTRAS_KEY]: { notes: line, ...rating } } } }),
       );
+      // As CafAI writes a TDS and its EY (D165), a TDS it has no EY for (the EY cleared), then clears both with null.
+      await attempt(() => client.updateShot(latest.id, { annotations: { drinkTds: 9.25, drinkEy: 20.8 } }));
+      await attempt(() => client.updateShot(latest.id, { annotations: { drinkTds: 9.4, drinkEy: null } }));
+      await attempt(() => client.updateShot(latest.id, { annotations: { drinkTds: null, drinkEy: null } }));
     }
     await attempt(() => client.probeEnjoymentScale());
 

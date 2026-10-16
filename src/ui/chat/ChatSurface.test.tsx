@@ -332,6 +332,69 @@ describe('ChatSurface', () => {
     expect(within(screen.getByTestId(TID.shotCard)).getByRole('radio', { name: 'Better' })).toBeDisabled();
   });
 
+  it('reports a TDS saved on a card with the shot id, and offers no Add without a handler (D162)', async () => {
+    const onShotTds = vi.fn();
+    const { rerender } = renderSurface({ messages: conversation('options'), onShotTds });
+    const card = screen.getByTestId(TID.shotCard);
+    await userEvent.click(within(card).getByRole('button', { name: 'Add TDS' }));
+    await userEvent.type(within(card).getByRole('textbox', { name: 'TDS' }), '9.25{Enter}');
+    expect(onShotTds).toHaveBeenCalledWith('shot-1', 9.25);
+    rerender({ messages: conversation('options'), onShotTds: undefined });
+    expect(within(screen.getByTestId(TID.shotCard)).queryByRole('button', { name: 'Add TDS' })).toBeNull();
+  });
+
+  // x-chat's messages keep a roving focus: an Escape from inside one moves the focus to the whole message.
+  describe("a card's TDS field keeps its keys inside x-chat's message (D164)", () => {
+    const article = (card: HTMLElement) => card.closest<HTMLElement>('[role="article"]')!;
+
+    it('closes on Escape and gives the focus back to the TDS cell, from the field or its buttons, when a keyboard opened it', async () => {
+      const user = userEvent.setup();
+      const onShotTds = vi.fn();
+      renderSurface({ messages: conversation('options'), onShotTds });
+      const card = screen.getByTestId(TID.shotCard);
+      const cell = within(card).getByTestId(TID.tdsCell);
+      cell.focus();
+      await user.keyboard('{Enter}');
+      expect(within(card).getByTestId(TID.tdsInput)).toHaveFocus();
+      await user.keyboard('9.3{Escape}');
+      expect(within(card).queryByTestId(TID.tdsInput)).toBeNull();
+      expect(cell).toHaveFocus();
+      expect(article(card)).not.toHaveFocus();
+
+      // From Save, a Tab away from the field.
+      await user.keyboard('{Enter}');
+      await user.tab();
+      expect(within(card).getByTestId(TID.tdsSave)).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(within(card).queryByTestId(TID.tdsInput)).toBeNull();
+      expect(cell).toHaveFocus();
+      expect(onShotTds).not.toHaveBeenCalled();
+    });
+
+    it('saves on Enter and gives the focus back to the TDS cell', async () => {
+      const user = userEvent.setup();
+      const onShotTds = vi.fn();
+      renderSurface({ messages: conversation('options'), onShotTds });
+      const card = screen.getByTestId(TID.shotCard);
+      within(card).getByTestId(TID.tdsCell).focus();
+      await user.keyboard('{Enter}');
+      await user.keyboard('9.3{Enter}');
+      expect(onShotTds).toHaveBeenCalledWith('shot-1', 9.3);
+      expect(within(screen.getByTestId(TID.shotCard)).getByTestId(TID.tdsCell)).toHaveFocus();
+    });
+
+    it('opened by a tap, closes on Escape with the focus on nothing: no focus ring lands on the cell or the message', async () => {
+      const user = userEvent.setup();
+      renderSurface({ messages: conversation('options'), onShotTds: vi.fn() });
+      const card = screen.getByTestId(TID.shotCard);
+      await user.click(within(card).getByTestId(TID.tdsCell));
+      expect(within(card).getByTestId(TID.tdsInput)).toHaveFocus();
+      await user.keyboard('{Escape}');
+      expect(within(card).queryByTestId(TID.tdsInput)).toBeNull();
+      expect(document.body).toHaveFocus();
+    });
+  });
+
   it('shows the verdict a shot was given, under the question naming what it was compared with', () => {
     renderSurface({ messages: conversation('rated') });
     expect(screen.getByRole('radiogroup', { name: 'Compared with your last shot of Brazil Santos?' })).toBeInTheDocument();

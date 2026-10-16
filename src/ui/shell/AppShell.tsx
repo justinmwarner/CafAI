@@ -54,6 +54,7 @@ import { LoadedProfileProvider } from '../machine/LoadedProfileContext.tsx';
 import { MachineAlerts } from '../machine/MachineAlerts.tsx';
 import { MachineRow } from '../machine/MachineRow.tsx';
 import { shotTraceFor } from '../machine/shotTrace.ts';
+import { useShotViewComparison } from '../compare/useComparison.ts';
 import { ShotView } from '../machine/ShotView.tsx';
 import { useScaleRevive } from '../machine/useScaleRevive.ts';
 import { dismissEngineWarning, engineWarning, isEngineWarningDismissed, readEngineCheck } from '../platform/engineCheck.ts';
@@ -586,6 +587,8 @@ function Shell({ route, onNavigate, children }: AppShellProps) {
   // creates it, every later one finds it), so whichever graph opens mid-shot
   // has the shot from its first frame.
   shotTraceFor(telemetry);
+  // The shot the Shot view draws under it follows the chat from the start too (D179).
+  useShotViewComparison();
   // And its one recording of steam, hot water and flush, for the same reason (D148).
   drinkTraceFor(telemetry);
   const { awaitingOutcome, guardUntil: shotGuard } = useShotFocus(route);

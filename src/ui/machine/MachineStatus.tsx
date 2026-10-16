@@ -9,7 +9,8 @@
  */
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import { useTelemetry } from '../../app/services.tsx';
+import { useTelemetry, useTemperatureUnit } from '../../app/services.tsx';
+import { temperatureIn } from '../../coach/temperature.ts';
 import { TID } from '../testIds.ts';
 import {
   DASH,
@@ -143,18 +144,21 @@ function Readout({ testId, label, value, detail, warn }: ReadoutProps) {
 }
 
 function GroupTemperature() {
+  // In the barista's unit (D174); Decaid sends °C.
+  const unit = useTemperatureUnit();
   // A reading Decaid did not send is null: the dash, and no target line (5.8).
-  const value = useTelemetry((s) => (s.machineConnected && s.machine ? formatTemperature(s.machine.groupTemperature) : DASH));
+  const value = useTelemetry((s) => (s.machineConnected && s.machine ? formatTemperature(s.machine.groupTemperature, 1, unit) : DASH));
   const target = useTelemetry((s) => {
     const celsius = s.machineConnected ? s.machine?.targetGroupTemperature : null;
-    return typeof celsius === 'number' && Number.isFinite(celsius) ? celsius.toFixed(1) : null;
+    return typeof celsius === 'number' && Number.isFinite(celsius) ? temperatureIn(celsius, unit).toFixed(1) : null;
   });
   return <Readout testId={TID.groupTemp} label="Group" value={value} detail={target ? `target ${target}` : null} />;
 }
 
 function SteamTemperature() {
+  const unit = useTemperatureUnit();
   const value = useTelemetry((s) =>
-    s.machineConnected && s.machine ? formatTemperature(s.machine.steamTemperature, 0) : DASH,
+    s.machineConnected && s.machine ? formatTemperature(s.machine.steamTemperature, 0, unit) : DASH,
   );
   return <Readout testId={TID.steamTemp} label="Steam" value={value} />;
 }

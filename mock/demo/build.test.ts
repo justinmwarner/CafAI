@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { ShotRecord } from '../../src/api/types.ts';
+import { allStatuses, mostOverdue, UNKNOWN_TOTALS } from '../../src/app/care/careRules.ts';
 import { NEW_BAG_PROMPT } from '../../src/app/engine/uiMessages.ts';
 import { EXTRAS_KEY } from '../../src/app/engine/shotNotes.ts';
 import type { CoachUiMessage, CoachUiPart } from '../../src/app/types.ts';
@@ -8,6 +9,7 @@ import { getTemplate, profileId, readLeverValues } from '../../src/coach/index.t
 import { pourTime } from '../../src/coach/summary/pourClock.ts';
 import { parseTimestampMicros } from '../../src/coach/summary/time.ts';
 import { parseCafaiExport } from '../../src/storage/porter.ts';
+import { DEFAULT_CARE } from '../../src/storage/settings.ts';
 import { DEFAULT_PUCK_RESISTANCE } from '../decaid/shotPlayer.ts';
 import { createMockDecaid } from '../decaid/state.ts';
 import { buildDemo, conversationOf, type DemoBuild } from './build.ts';
@@ -82,6 +84,15 @@ describe('the demo story, played through the coach engine', () => {
     // Data times move; the shots themselves are the same.
     const summary = (build: DemoBuild) => build.data.iterations.map((record) => ({ ...record.summary, timestamp: null }));
     expect(summary(later)).toEqual(summary(demo));
+  });
+
+  it("keeps up with machine care: the weekly clean due with the dial-in's shots since it, the rest on time (D183)", () => {
+    const records = new Map((demo.data.care ?? []).map((record) => [record.id, record]));
+    expect([...records.keys()]).toEqual(['descale', 'detergent-clean', 'gasket', 'group-parts', 'intake-filter', 'rinza', 'tank-tray']);
+    const totals = { ...UNKNOWN_TOTALS, shots: demo.decaid.shots.length, steams: 0 };
+    const due = mostOverdue(allStatuses(records, DEFAULT_CARE, totals, NOW));
+    expect(due).toMatchObject({ step: 'detergent-clean', shots: demo.decaid.shots.length });
+    expect(allStatuses(records, DEFAULT_CARE, totals, NOW).filter((status) => status.due).map((status) => status.step)).toEqual(['detergent-clean']);
   });
 
   it('started about a day ago, and the last shot was a few minutes ago', () => {
@@ -411,8 +422,19 @@ describe('the mock Decaid after the story', () => {
       },
     });
     expect(shotRecord(SHOTS.santos.id).annotations).toMatchObject({ enjoyment: 5, espressoNotes: 'Taste: Balanced, sweet. Santos v1 (CafAI)' });
-    // Not rated and not answered yet: only what Decaid wrote itself.
-    expect(Object.keys(shotRecord(SHOTS.kiambu4.id).annotations ?? {}).sort()).toEqual(['actualDoseWeight', 'actualYield']);
+    // Not rated and not answered yet: what Decaid wrote itself, and the TDS measured meanwhile with its EY (D165).
+    const kiambu4 = shotRecord(SHOTS.kiambu4.id).annotations ?? {};
+    expect(Object.keys(kiambu4).sort()).toEqual(['actualDoseWeight', 'actualYield', 'drinkEy', 'drinkTds']);
+    // 9.10 % x 40.4 g / 18.0 g = 20.4 %, the card's own numbers.
+    expect(kiambu4).toMatchObject({ drinkTds: 9.1, drinkEy: 20.4 });
+  });
+
+  it("carries the last shot's TDS and EY on its card, untold until the viewer answers (D167)", async () => {
+    const { untoldReadings } = await import('../../src/app/engine/shotReading.ts');
+    const last = parts('shot').find((card) => card.shotId === SHOTS.kiambu4.id)!;
+    expect(last.summary).toMatchObject({ doseG: 18, yieldG: 40.4, tdsPct: 9.1, eyPct: 20.4 });
+    const { apiMessages, uiMessages } = conversationOf(demo, 'Kiambu AA');
+    expect(untoldReadings(apiMessages, uiMessages)).toEqual([{ shotId: SHOTS.kiambu4.id, tdsPct: 9.1, eyPct: 20.4, doseG: 18, yieldG: 40.4 }]);
   });
 
   it('summarizes each shot card from its record', async () => {

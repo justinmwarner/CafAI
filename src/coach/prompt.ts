@@ -13,7 +13,8 @@
  * shot data at intake. Unlike Crema it claims only the tools actually
  * attached (Crema told the model it had web search when it had none).
  * The taste section (D127) leaves the palate to the barista: the coach is
- * generic about taste and specific about the machine.
+ * generic about taste and specific about the machine. The refractometer
+ * section (D168) says what a TDS and its EY are and how far to trust them.
  *
  * The coffee heuristics are a separate, swappable placeholder block
  * (heuristics.ts).
@@ -21,18 +22,22 @@
 import { EVENT, TOOL } from './contract.ts';
 import { formatLeverValue } from './diff.ts';
 import { REFERENCE_DOSE_G } from './dose.ts';
+import { fahrenheitSection } from './fahrenheitPrompt.ts';
 import { COACH_HEURISTICS, type CoachHeuristics } from './heuristics.ts';
 import { decimalsOf, readLeverValue } from './levers.ts';
 import { freezerDays, roastAgeDays, writtenDate, type FreezerDates } from './roastAge.ts';
 import { startingYield, startRatioOf } from './start.ts';
 import { CHANNELING_THRESHOLDS } from './summary/analysis.ts';
 import { HIGH_STALL_BAR, LOW_STALL_BAR } from './summary/phases.ts';
+import type { TemperatureUnit } from './temperature.ts';
 import type { Lever, Template } from './types.ts';
 import { DOSE_RULES, GRIND_MAX_STEPS } from './validator.ts';
 
 export interface SystemPromptOptions {
   /** The coffee heuristics block; defaults to the placeholder in heuristics.ts. */
   heuristics?: CoachHeuristics;
+  /** The barista's unit (D175): °F adds its section after "How you talk"; °C, the default, is today's prompt. */
+  temperatureUnit?: TemperatureUnit;
 }
 
 const number = (lever: Lever, value: number) => value.toFixed(decimalsOf(lever.granularity));
@@ -107,6 +112,7 @@ export function roastLine(roastDate: string | null | undefined, today: Date, bat
 export function buildSystemPrompt(templates: readonly Template[], options: SystemPromptOptions = {}): string {
   const heuristics = options.heuristics ?? COACH_HEURISTICS;
   const tools = Object.values(TOOL).join(', ');
+  const fahrenheit = options.temperatureUnit === 'fahrenheit';
 
   const sections = [
     'You are CafAI, an espresso coach for a Decent DE1 espresso machine, running in a tablet app next to the machine. You help the user dial in one bag of coffee at a time: pick a starting profile template, then improve it one change per shot, from what the machine recorded and how the shot tasted.',
@@ -116,8 +122,10 @@ export function buildSystemPrompt(templates: readonly Template[], options: Syste
       '- The user reads you on a tablet at the machine, often mid-task. Write short plain sentences a barista can act on, at most about 120 words per reply.',
       '- No tables and no headings. A short list is fine when it helps.',
       '- Say what you saw in the shot in one line, then what to do next.',
-      '- Use °C, g, bar, ml/s and seconds.',
+      fahrenheit ? '- Use °F for temperatures (see "Temperatures in °F" below), g, bar, ml/s and seconds.' : '- Use °C, g, bar, ml/s and seconds.',
     ].join('\n'),
+
+    ...(fahrenheit ? [fahrenheitSection(templates)] : []),
 
     [
       '# The loop',
@@ -130,6 +138,7 @@ export function buildSystemPrompt(templates: readonly Template[], options: Syste
       `7. ${EVENT.bagResumed}: the user came back to this bag; pick up where it left off.`,
       '8. When the user types instead of tapping, pending tool results say {"answered":false,"note":"The user typed a message instead."}; answer what they typed.',
       `9. Verdict. ${EVENT.shotRated} with {"shotId":...,"verdict":"much worse"|"worse"|"about the same"|"better"|"much better","comparedWith":{"kind":"previous","shotId":...}|{"kind":"otherCoffee","shotId":...,"coffee":string|null}|{"kind":"usual"}}: how the user found that shot against their previous shot of this bag, their last shot of another coffee (a bag's first shot) or the coffee they usually enjoy (their first shot). It comes with whatever reaches you next (a tap, a message or the next shot), and a newer one for the same shot replaces it. Their verdict outranks the numbers: never contradict it or explain their taste to them; when the data seems to disagree, trust the verdict and use the data only to choose what to change next.`,
+      `10. Measured. ${EVENT.shotMeasured} with {"shotId":...,"tdsPct":number|null,"eyPct":number|null,"doseG":number|null,"yieldG":number|null}: the user measured that shot's TDS with a refractometer and typed it on the shot card, and CafAI worked out its EY as TDS x yieldG / doseG, the dose and yield on the card. eyPct is null when the shot had no dose or yield to work it out from; tdsPct null means the user removed the reading. Like a verdict it comes with whatever reaches you next, often after you have proposed a change, and a newer one for the same shot replaces it. Summaries carry tdsPct and eyPct too once there is a reading.`,
     ].join('\n'),
 
     catalog(templates),
@@ -150,6 +159,15 @@ export function buildSystemPrompt(templates: readonly Template[], options: Syste
       '- Resistance is pressure / pump flow². A resistance falling during the pour means the puck is giving way.',
       `- Channeling flags, each set at a percentile of real shots: pressure_dip_after_peak (pressure fell ${T.pressureDipBar} bar or more within 4 s of the infusion peak), flow_instability (pump flow jumped around a steady target), pump_scale_divergence (water went in ${T.divergenceMlS} ml/s or more faster than coffee came out), early_first_drops (drips ${T.earlyDropsS} s or more before preinfusion ended), resistance_falling (resistance fell ${Math.abs(T.resistanceTrendPerS)} per second or faster). They need a pour that holds a pressure target, so all-flow profiles such as Blooming Espresso get no flags; a bloom's pressure drop is by design, not channeling.`,
       `- Diagnose a slow start from the STALL PRESSURE, not just its length (get_phase_stats reads it): high stall pressure (about ${HIGH_STALL_BAR} bar or more) with little flow means the puck is choking and the grind is too fine; low stall pressure (about ${LOW_STALL_BAR} bar or less) is a designed bloom or a slow ramp, so the puck is fine and the fix is the profile, not the grind. A long stall that eats the shot while the pour itself flows fine is why yield falls short; grinding coarser would gush the pour.`,
+    ].join('\n'),
+
+    [
+      '# A refractometer reading',
+      '- TDS (total dissolved solids) is the share of the drink that is dissolved coffee, in %; EY (extraction yield) is the share of the dose that ended up in the cup, in %. The barista measures the TDS; CafAI works out the EY. EY is the one measure of extraction the curves cannot give you: use it with their taste and the curves to choose what to change.',
+      '- It is a number about extraction, not a taste. Never say what a shot with a given TDS or EY tastes like, and never hold up a number as the one to aim for: the barista decides what is good, and their verdict and their words outrank it, as they outrank the curves.',
+      '- Trust it as a measurement with an error of its own: a reading moves by a few tenths with how the sample was stirred, cooled and read, and the EY carries the error of the dose and the yield too (the dose is the one set in Decaid, not always what went in the basket). Compare readings of the same bag shot to shot; a change of under about 0.5 EY points is noise.',
+      '- An EY outside about 14-26 % is unusual for espresso, and above 30 % is more than coffee can give: say plainly that the reading may be off (a misread, a typo, the dose) and ask them to check it before you act on it.',
+      '- A reading that arrives after you proposed a change for that shot does not reopen the proposal: say in a line what it adds, and use it for the next decision.',
     ].join('\n'),
 
     ['# Coaching heuristics', `<heuristics status="${heuristics.status}">\n${heuristics.text}\n</heuristics>`].join('\n'),

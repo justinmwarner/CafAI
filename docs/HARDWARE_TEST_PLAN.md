@@ -6,7 +6,11 @@ session on a DE1 with Decaid. It covers what the owner's answers leave open
 (QUESTIONS #1, #4 and #9), every check an answer deferred to the machine
 (#3, #7, #8), and what the Decaid alignment of 2026-10-09 and 10 added, the
 bag photo, the Visualizer link and DYE2 included (section 12, QUESTIONS #10).
-Allow 2 to 2.5 hours and about 14 shots.
+Allow 2 to 2.5 hours and about 14 shots. Sections 13 to 19, added since
+(the drinks' views, machine care, sleep and wake, and the gap review's four
+items of 2026-10-15), add about an hour and a few shots; a Descale from
+streamline (section 19, step 5) takes most of an hour of its own, so run it
+only when the machine is due one.
 
 For each step, write what you saw in the results table at the end (pass,
 fail, or a note). The saved JSON files and log excerpts matter as much as the
@@ -564,6 +568,115 @@ minutes, and put every setting back after.
 7. **Delete.** Delete the test wake times and set the minutes back.
    Expected: Decaid's page shows them gone.
 
+## 16. TDS and EY on the shot card (D162-D170)
+
+A refractometer reading typed on a shot's card goes to Decaid's record and
+to the coach. The mock shows the field and the coach; only the tablet shows
+its keyboard, and only a real upload shows Visualizer taking the numbers.
+Without a refractometer, type a made-up reading (9.25).
+
+1. **The field.** Pull a shot. On its card, tap **TDS · Add**. Expected:
+   the keyboard opens with digits and a decimal point (a comma on some
+   locales), and the field stays in view above it.
+2. **A reading.** Type it the way the keyboard offers ("9,25" or "9.25")
+   and tap the keyboard's Done. Expected: the card shows TDS 9.25 % and an
+   EY of TDS × the card's yield ÷ its dose. Record both.
+3. **The coach.** Answer the taste. Expected: the coach's reply uses the
+   reading as a measurement, and names no taste for it.
+4. **Decaid's record.** In Decaid's shot history, or
+   `GET /api/v1/shots/{id}`: `drinkTds` 9.25 and `drinkEy` as on the card.
+5. **Visualizer.** With Decaid's Visualizer plugin set up, once with the
+   reading typed a minute after the shot (after the upload) and once before
+   the upload. Expected: visualizer.coffee shows the TDS and EY both times.
+   Record which went through.
+6. **Change and remove.** Change the reading, then Remove it. Expected:
+   Decaid's record follows, both fields gone after Remove, and so does
+   Visualizer.
+7. **Offline.** With Decaid out of reach (on a phone, Wi-Fi off), save a
+   reading. Expected: it reaches Decaid once Decaid is back.
+
+## 17. °F (D171-D177)
+
+Settings > Appearance > Temperatures shows °F; Decaid and the profiles keep
+°C. Set it to °F for this section, and back to °C at its end.
+
+1. **Readouts.** Expected: the stats card's Group and Steam read °F and
+   follow the machine live; Group's target is the profile's in °F (93 °C
+   reads "target 199.4").
+2. **Steppers.** Settings > Steam, hot water and flush: set the steam
+   temperature to 300 °F. Expected: Decaid's own steam screen shows 149 °C
+   and the DE1 steams at it; a reload of CafAI still reads 300 °F. Tap More
+   once: 302 °F, and 150 °C in Decaid. The same for hot water (167 °F is
+   75 °C) and the flush (194 °F is 90 °C). Put the three back after.
+3. **The drinks' views.** Steam, pour hot water, then flush from the top
+   bar. Expected: each view's temperature reads °F.
+4. **The coach.** With the real coach (an API key or CafAI Bridge), answer
+   "Sour / sharp". Expected: a change card in °F ("+1.8 °F") and the
+   coach's words in °F, never "33.8 °F hotter". Then type "try 200 °F":
+   the proposal is 93.5 °C, shown as 200.3 °F.
+5. **Back to °C.** Expected: every screen, the chat and History read °C
+   again.
+
+## 18. Overlaid shot curves (D178-D182)
+
+A shot's card and the Shot view draw the shot the card asks about faintly
+under this one. The mock shows where and what; only the tablet shows
+whether the band reads in daylight and whether a slow tablet keeps up. Look
+in dark and in light.
+
+1. **The card.** Pull two shots of one bag, the second a step finer.
+   Expected: the second card shows the first as a pale band under its
+   lines; at arm's length, in daylight, the band is seen and the line on it
+   stays readable.
+2. **While it pulls.** Pull a third shot and watch the Shot view. Expected:
+   the second shot's band is under the live curves from the start, the line
+   over the plot names it with its time and yield, and the live graph does
+   not stutter (the timer keeps time, the curves keep up).
+3. **Another coffee.** Start a new bag and pull its first shot. Expected:
+   once its card is in, the card and the Shot view draw the last shot of
+   the other bag, named by its coffee.
+4. **A deleted shot.** In Decaid's own shot history, delete a shot a card
+   compares with, then reload CafAI. Expected: the card draws its own shot
+   alone, with no message.
+
+## 19. Care reminders (D183-D191)
+
+Each care step beyond Daily keeps its last time, counted from Decaid's shot
+and steam totals, and the stats card says when one is due. The mock counts
+its own records; only a real Decaid shows which of its records a steam, a
+cleaning cycle or a flush leaves. CafAI open on the tablet, and a phone or a
+laptop on the same network for steps 4 and 5. Put any setting back after.
+
+1. **Counting from the first look.** A fresh CafAI, or Settings > Machine
+   care untouched: open Machine care > Cleaning guide > Weekly. Expected:
+   each step says "Not marked done yet", counting from today; nothing on
+   the stats card.
+2. **A shot counts.** Pull a shot, wait 10 s, open Weekly again. Expected:
+   the detergent clean counts 1 shot since today. Record how long after the
+   shot ended the count changed.
+3. **A steam counts.** Steam (water in a jug is fine), wait 10 s, open
+   Weekly. Expected: Rinza counts 1 steam. Record whether Decaid's
+   `GET /api/v1/steams/ids` lists it.
+4. **Streamline's Clean, seen.** With CafAI open on the phone, run Clean
+   from streamline on the tablet (blind basket in, detergent). Expected: on
+   the phone, within a minute of the cycle's end, Weekly's detergent clean
+   says "Done today" with "CafAI saw the machine's Clean". Record how long
+   the cycle ran and what CafAI's top bar showed meanwhile.
+5. **Streamline's Descale, seen** (only when the machine is due one; it
+   takes most of an hour). As in step 4, with Descale. Expected: the
+   descale step says "Done today". Record each state and substate the log
+   shows.
+6. **Forward Flush x5.** Run Decent's Cleaning/Forward Flush x5 from
+   streamline with a blind basket and water only, CafAI open on the phone.
+   Expected: no new shot in Decaid's shot list; nothing in CafAI's chat (no
+   "Looking for that shot in Decaid…", no Retry, D193); and the detergent
+   clean not marked done. Record what the Shot view shows during the run
+   and after it.
+7. **The line.** After a week with shots and no clean (or with the
+   tablet's date moved on a week), open the coach. Expected: the stats
+   card's line "Weekly clean due: … shots since …", and a tap opens Weekly
+   on that step.
+
 ## Results
 
 | Section | Step | Expected | Observed | Pass? |
@@ -623,6 +736,29 @@ minutes, and put every setting back after.
 | 15 | 5 | Off in CafAI: Decaid's switch on, Sleep 0, the wake time listed | | |
 | 15 | 6 | Screen off: does the DE1 still wake? | | |
 | 15 | 7 | Deleted from Decaid too | | |
+| 16 | 1 | TDS · Add: the decimal keyboard, the field above it | | |
+| 16 | 2 | TDS and EY on the card; EY = TDS × yield ÷ dose | | |
+| 16 | 3 | The coach's reply uses the reading, with no taste for it | | |
+| 16 | 4 | `drinkTds` and `drinkEy` in Decaid's record | | |
+| 16 | 5 | On visualizer.coffee, typed after and before the upload | | |
+| 16 | 6 | Changed, then removed: Decaid and Visualizer follow | | |
+| 16 | 7 | Saved offline, in Decaid once it is back | | |
+| 17 | 1 | Group and Steam in °F, live; the target in °F | | |
+| 17 | 2 | 300 °F kept as 149 °C, read back as 300; More gives 302 (150 °C); hot water and flush the same | | |
+| 17 | 3 | Each drink's view in °F | | |
+| 17 | 4 | Change card "+1.8 °F", the coach in °F; 200 °F proposed as 93.5 °C (200.3 °F) | | |
+| 17 | 5 | °C everywhere again | | |
+| 18 | 1 | The first shot's band under the second's lines, readable in daylight | | |
+| 18 | 2 | The band under the live curves from the start, named; no stutter | | |
+| 18 | 3 | A bag's first shot draws the other coffee's last shot, named | | |
+| 18 | 4 | A shot deleted in Decaid: the card's own shot alone, no message | | |
+| 19 | 1 | Weekly: "Not marked done yet" from today; no line on the stats card | | |
+| 19 | 2 | A shot counted; how long it took | | |
+| 19 | 3 | A steam counted; in `/api/v1/steams/ids`? | | |
+| 19 | 4 | Streamline's Clean seen: "Done today"; how long it ran | | |
+| 19 | 5 | Streamline's Descale seen; its states and substates | | |
+| 19 | 6 | Forward Flush x5: no shot in Decaid, nothing in the chat, the clean not marked; what the Shot view showed | | |
+| 19 | 7 | The stats card's line when due; a tap opens the step | | |
 
 Send back this table, the saved shot and profile JSON files, the `[CafAI]`
 lines from `/api/v1/webview/logs`, the output of `npm run test:decaid`, and,

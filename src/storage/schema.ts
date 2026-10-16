@@ -15,9 +15,10 @@
 import { z } from 'zod';
 import { ROAST_LEVELS, VARIABLES, type ProposeAdjustment } from '../coach/contract.ts';
 import type { ProfileJson, ShotSummary } from '../coach/types.ts';
+import type { TemperatureUnit } from '../coach/temperature.ts';
 import type { LlmMessage } from '../llm/types.ts';
 import type { CoachUiMessage } from '../app/types.ts';
-import type { Appearance, AppliedChange, Feedback } from './types.ts';
+import type { Appearance, AppliedChange, CareSettings, Feedback } from './types.ts';
 
 /** Checked against `shape`, but the original value is kept, untouched. */
 function exact<T>(shape: z.ZodType) {
@@ -74,6 +75,9 @@ const SummaryShape = z.looseObject({
   channelingFlags: z.array(text),
   phases: z.array(z.unknown()),
   series: z.looseObject({ tS: z.array(z.number()) }).optional(),
+  /** The barista's refractometer reading and its EY (D166); absent on a shot without one. */
+  tdsPct: z.number().optional(),
+  eyPct: z.number().nullable().optional(),
 });
 
 const FeedbackShape = z.looseObject({
@@ -120,6 +124,14 @@ export const SettingsSchema = z.object({
   appearance: exact<Appearance>(z.unknown()).optional(),
   /** Absent from exports made before D99; read as off (settings.ts), same treatment as appearance above. */
   keepKeyInDecaid: z.boolean().optional(),
+  /**
+   * The temperature unit (D172); absent from exports made before it, or from a device that never chose,
+   * and read as °C. Not shape-checked here, as appearance: settings.ts keeps only a unit it knows, so a file
+   * from a newer CafAI with another one still imports.
+   */
+  temperatureUnit: exact<TemperatureUnit>(z.unknown()).optional(),
+  /** Machine care's reminders (D187); absent from exports made before them. Re-validated by normalizeCareSettings, as appearance is. */
+  care: exact<CareSettings>(z.unknown()).optional(),
 });
 
 export const BagSchema = z.object({
@@ -183,6 +195,24 @@ export const ConversationSchema = z.object({
   updatedAt: timestamp,
 });
 
+/**
+ * A care step's record (D189). How it was marked, the totals and Decaid's
+ * newest records' times, read leniently: one this build cannot read (or a
+ * record from before the times) is unknown (null), so a file from a newer
+ * CafAI still imports; the step and the times are needed.
+ */
+export const CareRecordSchema = z.object({
+  id,
+  doneAt: nullableText,
+  by: z.enum(['tick', 'seen']).nullable().catch(null),
+  countFrom: timestamp,
+  shotTotal: z.number().int().min(0).nullable().catch(null),
+  steamTotal: z.number().int().min(0).nullable().catch(null),
+  newestShotAt: z.string().min(1).nullable().catch(null),
+  newestSteamAt: z.string().min(1).nullable().catch(null),
+  updatedAt: timestamp,
+});
+
 export const ExportSchema = z.object({
   format: z.literal('cafai-export'),
   schemaVersion: z.literal(1),
@@ -193,6 +223,8 @@ export const ExportSchema = z.object({
   versions: z.array(VersionSchema),
   iterations: z.array(IterationSchema),
   conversations: z.array(ConversationSchema),
+  /** Absent from files made before machine care's records (D189). */
+  care: z.array(CareRecordSchema).optional(),
 });
 
 /** "bags[2].name" for a zod issue path. */

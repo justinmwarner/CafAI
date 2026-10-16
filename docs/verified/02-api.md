@@ -80,6 +80,8 @@ Unless stated, every body is JSON and every route sits under `http://<host>:8080
 | GET | `/api/v1/shots/{id}` | – | `ShotRecord` with `measurements` | 404 `{error:"Shot not found"}`. | rest:1835-1870; web/shots_handler.dart:178-190 |
 | PUT | `/api/v1/shots/{id}` | partial record, normally `{annotations}` | `ShotRecord` | Deep merge. 400 for forbidden fields or for `enjoyment` outside 0-10. | rest:1872-1947; web/shots_handler.dart:192-266 |
 | DELETE | `/api/v1/shots/{id}` | – | `{success, id}` | | rest:1949-1989; web/shots_handler.dart:268-280 |
+| GET | `/api/v1/steams/ids` | – | `string[]`, unordered | Every steam record's id: what the care reminders count. See §8, Steam records. | rest:2011-2024; web/steams_handler.dart:19, 37-45 (at aab5f93) |
+| GET | `/api/v1/steams/latest` | – | `SteamRecord` without `measurements`, or `null` if there are none | `{id, timestamp, workflow}`, `annotations` only when set. | rest:2025-2036; web/steams_handler.dart:20, 47-55; data/steam_record.dart:30-37 (at aab5f93) |
 | GET | `/api/v1/store/{ns}` (`?full=1`) | – | `string[]` (or `{k: v}` with an ETag) | | rest:2935-2980; web/kv_store_handler.dart:7-16 |
 | GET | `/api/v1/store/{ns}/{key}` | – | The stored JSON value. **A missing key gives 200 `null`.** | The spec says 404. | rest:2982-3005; web/kv_store_handler.dart:18-25 |
 | POST | `/api/v1/store/{ns}/{key}` | any JSON, up to 1 MiB | 200 `{}` | The spec says 204. Invalid JSON gives a plain-text 500. | rest:3007-3029; web/kv_store_handler.dart:37-54 |
@@ -648,7 +650,12 @@ interface ShotAnnotations {
 
 ### Latest, ids, by id
 
-- `/latest` returns the summary, or `null`.
+- `/latest` returns the summary, or `null`. It reads one row without its
+  measurements (`getLatestShotMeta` selects `'[]' AS measurements_json`:
+  lib/src/services/database/daos/shot_dao.dart:192-204 at af4e995, Decaid's
+  `main` read on 2026-10-15; the pin's spec says the same, rest:1820-1833),
+  so it is the cheap way to the newest shot: the care counts ask it first
+  and read the total only when the newest changed (D185).
 - `/ids` returns an unordered `string[]`.
 - `/{id}` returns the full record.
 
@@ -674,6 +681,18 @@ elapsed = Date.parse(m.machine.timestamp) - Date.parse(measurements[0].machine.t
 - Scale timestamps are separate, typically 0-150 ms before the machine timestamp. Use the machine timestamp as the time base.
 - Pour start is the first sample whose substate is `preinfusion` or `pouring`.
 
+### What a list costs Decaid
+
+Cited at aab5f93. Every page of `GET /api/v1/shots` reads each shot's row whole and parses its measurements before dropping them (`ShotMapper.fromRows`, `fromRow`: lib/src/services/database/mappers/shot_mapper.dart:14-49), so a page of 100 parses 100 measurement series; `total` is a separate `COUNT` (lib/src/services/database/daos/shot_dao.dart:111-159). `limit=1` is the cheap way to the total, and it parses the newest shot's series; `/latest` parses none (above). The care counts read a page of more only when the total jumps by more than one shot a minute could have, 20 at most (D185).
+
+### Steam records
+
+Cited at aab5f93 (web/steams_handler.dart; ctl/steam_sequencer.dart; data/steam_record.dart).
+
+- **One per steaming.** A record opens on the first frame in `steam` (the heater's warm-up included) with a UUID v4, the time then and the workflow as it stands, collects a `SteamSnapshot` `{machine, milkTemperature}` per frame, and is saved on the first frame in neither `steam` nor the `pouring` substate. A machine that changes mid-steam discards it (ctl/steam_sequencer.dart:72-122, 178-198).
+- **The routes.** `GET /api/v1/steams` lists every record, newest first, without measurements; `/ids` and `/latest` as in §1; `/{id}` the whole record, 404 `{error:"Steam record not found"}`; `PUT /{id}` changes its annotations only; `DELETE /{id}` answers `{success, id}` (web/steams_handler.dart:17-120).
+- **What a list costs.** `GET /api/v1/steams` reads and parses every record's measurements before dropping them (`getAllSteams`, `SteamMapper.fromRow`: lib/src/services/database/daos/steam_dao.dart:23-27, lib/src/services/database/mappers/steam_mapper.dart:11-30) and sends each record's workflow; `/ids` reads only the ids (steam_dao.dart:11-15), but sends every one (a busy café's year of steams is over a megabyte); `/latest` reads one row without its measurements (`getLatestSteamMeta`, steam_dao.dart:58-70 at af4e995). The care counts ask `/latest` first and `/ids` only when the newest changed (D185).
+
 ### Update
 
 `PUT /api/v1/shots/{id}` is not PATCH; there is no PATCH route anywhere (web/shots_handler.dart:192-266).
@@ -687,6 +706,7 @@ elapsed = Date.parse(m.machine.timestamp) - Date.parse(measurements[0].machine.t
 | Anything else | `_deepMerge(existing.toJson(), patch)`: maps merge recursively, so **`annotations.extras` merges per key**; lists and scalars replace. |
 
 - **Clearing.** `null` on a canonical field clears it. `annotations: null` clears all annotations. Legacy `shotNotes`/`metadata` map onto `espressoNotes`/`extras`; canonical fields win (`:298-351`; Skins.md:793-795).
+- **TDS and EY.** `annotations.drinkTds` and `drinkEy` are percentages, `double?` (data/shot_annotations.dart:8-9), read with `parseOptionalDouble` (`:30-31`; it takes a numeric string too, data/utils.dart:7-12) and left out of `toJson` when null (`:49-50`), so `null` in a PUT clears each. Decaid never fills them itself; Visualizer's plugin uploads them as `drink_tds` and `drink_ey`. CafAI writes numbers, the TDS to 0.01 and the EY to 0.1, and clears both with `null` (D165). Read at af4e995 (2026-10-15); the pinned spec (aab5f93) has both as nullable numbers.
 - **Not validated.** Top-level `timestamp`, `workflow` and `stopReason` are mutable; this is issue #913, and the spec's `ShotUpdateRequest` lists only annotations, stopReason, shotNotes and metadata.
 - **`updatedAt`.** It changes only when the content changes, ignoring the bookkeeping extras keys (`:239-248`).
 - **Response.** The full updated `ShotRecord`.

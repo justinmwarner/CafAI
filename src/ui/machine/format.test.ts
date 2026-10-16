@@ -101,6 +101,11 @@ describe('readouts', () => {
   it('formats temperatures', () => {
     expect(formatTemperature(92.44)).toBe('92.4 °C');
     expect(formatTemperature(140, 0)).toBe('140 °C');
+    // In °F (D174): the same precision, converted.
+    expect(formatTemperature(92.44, 1, 'fahrenheit')).toBe('198.4 °F');
+    expect(formatTemperature(140, 0, 'fahrenheit')).toBe('284 °F');
+    expect(formatTemperature(null, 1, 'fahrenheit')).toBe('—');
+    expect(splitUnit(formatTemperature(148, 0, 'fahrenheit'))).toEqual({ value: '298', unit: '°F' });
     expect(formatTemperature(null)).toBe('—');
     expect(formatTemperature(Number.NaN)).toBe('—');
   });

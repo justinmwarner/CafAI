@@ -113,6 +113,28 @@ describe('summarizeShot: the verified example record', () => {
     });
   });
 
+  it('has no TDS or EY when the record has no reading', () => {
+    expect(summary).not.toHaveProperty('tdsPct');
+    expect(summary).not.toHaveProperty('eyPct');
+  });
+
+  it("reads Decaid's drinkTds, and works the EY out from the summary's own dose and yield, not Decaid's drinkEy (D166)", () => {
+    const record = asRecord(example);
+    const read = summarizeShot({ ...record, annotations: { ...record.annotations, drinkTds: 9.254, drinkEy: 12 } });
+    // 9.25 x 36.3 / 18 = 18.65: the card's own numbers, so EY = TDS x ratio.
+    expect(read).toMatchObject({ doseG: 18, yieldG: 36.3, tdsPct: 9.25, eyPct: 18.7 });
+    const noYield = summarizeShot({
+      ...record,
+      measurements: record.measurements.map((m) => ({ ...m, scale: null })),
+      annotations: { actualDoseWeight: 18, drinkTds: 9.25 },
+    });
+    expect(noYield).toMatchObject({ yieldG: null, tdsPct: 9.25, eyPct: null });
+    // A TDS CafAI does not take (an import's 0, a number out of range) is no reading.
+    for (const drinkTds of [0, 31, Number.NaN]) {
+      expect(summarizeShot({ ...record, annotations: { ...record.annotations, drinkTds } })).not.toHaveProperty('tdsPct');
+    }
+  });
+
   it('times first drops and the end of preinfusion from shot start', () => {
     expect(summary.timeToFirstDropS).toBe(12.1);
     expect(summary.preinfusionEndS).toBe(12.1);

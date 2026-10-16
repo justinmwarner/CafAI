@@ -23,7 +23,7 @@ export interface CareStep {
   /** When, where the routine alone does not say: "After the day's last shot". */
   when?: string;
   how: string;
-  /** Where to run what CafAI cannot run yet: "From streamline for now: …". */
+  /** Where to run what CafAI does not run: "From streamline: …". */
   where?: string;
   /** Where the video and Decent's pages differ, or a thing worth knowing. */
   note?: string;
@@ -120,7 +120,7 @@ export const ROUTINES: readonly CareRoutine[] = [
         id: 'detergent-clean',
         title: 'Clean the group head with detergent',
         how: '3 g (half a teaspoon) of espresso machine detergent in the blind basket, then the Forward Flush x5 profile. Portafilter off, Flush until the water runs clear; rinse the basket and run the profile again without detergent. Last, Flush for 20 seconds. Never put detergent in the tank.',
-        where: 'From streamline for now: the profile, or its Clean (Settings > Maintenance).',
+        where: 'From streamline: the profile, or its Clean (Settings > Maintenance).',
         note: "Decent's quick start says a tablespoon; the profile's notes and the video, half a teaspoon.",
         moment: 473,
       },
@@ -194,7 +194,7 @@ export const ROUTINES: readonly CareRoutine[] = [
         title: 'Descale',
         when: 'Water under 30 ppm: never. 30 to 120 ppm: every year or two. Over 120 ppm: twice a year or more. Sooner if the steam starts to pulse.',
         how: "Citric acid only. Steam heater off until it's down to 60 °C (up to an hour), steam tip off, then the DE1's Descale with 80 g of citric acid in 1.5 litres of water. Rinse well: plan on 7 to 8 litres.",
-        where: 'From streamline for now: Settings > Maintenance > Machine Descaling.',
+        where: 'From streamline: Settings > Maintenance > Machine Descaling.',
         note: "The video says water of 60 to 120 ppm hardly needs it; Decent's pages say every year or two.",
         link: { label: "Decent's descaling steps", url: DESCALING_PAGE },
         moment: 1296,
@@ -218,7 +218,7 @@ export const ROUTINES: readonly CareRoutine[] = [
         title: 'Empty the machine to move it',
         when: 'Before a move, or a long time unused',
         how: "The DE1's Transport: with the water tank pulled forward, it empties its water into the tank in a minute or two. Then turn it off.",
-        where: 'From streamline for now: Settings > Maintenance > Transport Mode.',
+        where: 'From streamline: Settings > Maintenance > Transport Mode.',
       },
     ],
   },
@@ -229,7 +229,7 @@ export function routineOf(id: RoutineId): CareRoutine {
 }
 
 /** The units the guide's sentences use, as they follow a number. */
-const UNIT_AFTER_NUMBER = /(\d) (g|ml|°C|ppm|litres|minutes|seconds)(?=[\s.,;:)]|$)/g;
+const UNIT_AFTER_NUMBER = /(\d) (g|ml|°C|°F|ppm|litres|minutes|seconds)(?=[\s.,;:)]|$)/g;
 
 /**
  * A number and its unit never part at a line's end ("60 °C", "500 ml"): the

@@ -17,7 +17,7 @@
  */
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { closeEventTarget, createDbHandle, DURABLE, type LostReason } from './db.ts';
-import { StorageError } from './errors.ts';
+import { isVersionError, StorageError } from './errors.ts';
 import type { KeyCopyState, KeyCopyStore } from './keyBackup.ts';
 import type { SecretStore } from './types.ts';
 import { REDACTED, redactKeyLike } from './redact.ts';
@@ -56,7 +56,7 @@ function openSecretsDb(name: string, onLost: (reason: LostReason) => void): Prom
 }
 
 function secretError(error: unknown, action: 'read' | 'save' | 'remove'): StorageError {
-  if (error instanceof StorageError && error.kind === 'superseded') return error;
+  if (isVersionError(error)) return error;
   const name = typeof error === 'object' && error !== null && 'name' in error ? String(error.name) : null;
   if (name === 'QuotaExceededError') {
     return new StorageError('quota', 'This device is out of storage space, so the API key was not saved.', name);

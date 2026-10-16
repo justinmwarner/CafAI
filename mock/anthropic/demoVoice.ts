@@ -12,8 +12,20 @@
  * judge. Deterministic: the same facts, the same words.
  */
 import type { TemplateId } from '../../src/coach/contract.ts';
+import { EY_MAX_PCT } from '../../src/coach/extraction.ts';
 import { TEMPLATES } from '../../src/coach/templates/index.ts';
-import type { AppliedFacts, BagFacts, ChangeFacts, ChangeKind, PickFacts, ProposalText, Voice } from './voice.ts';
+import {
+  brewChange,
+  eyText,
+  tdsText,
+  type AppliedFacts,
+  type BagFacts,
+  type ChangeFacts,
+  type ChangeKind,
+  type PickFacts,
+  type ProposalText,
+  type Voice,
+} from './voice.ts';
 
 /** One decimal at most, as CafAI shows measurements: 28.44 -> "28.4", 18 -> "18". */
 const n1 = (value: number) => String(Math.round(value * 10) / 10);
@@ -56,7 +68,7 @@ function leadFor(change: ChangeFacts): string[] {
   switch (change.kind) {
     case 'warmer':
       return [
-        `I'd raise the ${bold('brew temperature')} by 1 °C and keep the grind and dose as they are.`,
+        `I'd raise the ${bold('brew temperature')} by ${brewChange(1, change.temperatureUnit)} and keep the grind and dose as they are.`,
         'Hotter water extracts more in the same time, without changing how the shot flows.',
       ];
     case 'longerForSour':
@@ -66,7 +78,7 @@ function leadFor(change: ChangeFacts): string[] {
       ];
     case 'cooler':
       return [
-        `I'd lower the ${bold('brew temperature')} by 1 °C and keep the grind and dose as they are.`,
+        `I'd lower the ${bold('brew temperature')} by ${brewChange(1, change.temperatureUnit)} and keep the grind and dose as they are.`,
         'Cooler water extracts a little less in the same time.',
       ];
     case 'shorter':
@@ -160,8 +172,8 @@ function finerWhy(change: ChangeFacts): string {
 }
 
 const CHANGE_TEXT: Record<ChangeKind, (change: ChangeFacts) => ProposalText> = {
-  warmer: ({ roastLevel }) => ({
-    summary: 'Brew 1 °C hotter',
+  warmer: ({ roastLevel, temperatureUnit }) => ({
+    summary: `Brew ${brewChange(1, temperatureUnit)} hotter`,
     rationale: `You found it sour${onRoast(roastLevel)}, which usually means under-extraction. A little more heat extracts more from the same grind and dose.`,
     expectedEffect: 'Hotter water extracts more in the same time; the flow and the shot time stay about the same.',
   }),
@@ -170,8 +182,8 @@ const CHANGE_TEXT: Record<ChangeKind, (change: ChangeFacts) => ProposalText> = {
     rationale: "You found it sour and the temperature is already at this profile's top, so a slightly longer ratio is the next way to extract more.",
     expectedEffect: 'More water through the same coffee: the shot runs a little longer and extracts a little more.',
   }),
-  cooler: () => ({
-    summary: 'Brew 1 °C cooler',
+  cooler: ({ temperatureUnit }) => ({
+    summary: `Brew ${brewChange(1, temperatureUnit)} cooler`,
     rationale: 'You found it bitter and harsh, which usually means over-extraction. A little less heat extracts less from the same grind and dose.',
     expectedEffect: 'Cooler water extracts less in the same time; the flow and the shot time stay about the same.',
   }),
@@ -313,4 +325,16 @@ export const DEMO_VOICE: Voice = {
     `No harm done: we're back on ${title ? bold(title) : bold(`v${to}`)}. Pull a shot when you're ready and tell me how it tastes; we'll pick up from there.`,
 
   fallback: () => "Noted. Pull a shot when you're ready and I'll read its curves with you, or tell me more about the coffee.",
+
+  // What the reading is, never what it tastes like (D127, D168).
+  measured({ tdsPct, eyPct }) {
+    if (tdsPct === null) return "Got it: I'll leave that TDS reading out.";
+    const tds = `${tdsText(tdsPct)} %`;
+    if (eyPct === null) return `Thanks for measuring: TDS ${tds}. That shot has no dose or yield to go with it, so I can't work out its extraction.`;
+    if (eyPct > EY_MAX_PCT) {
+      return `Thanks for measuring, but TDS ${tds} works out to an extraction of ${eyText(eyPct)} %, more than coffee can give: check the reading, and the dose in Decaid.`;
+    }
+    // The verdict outranks the number (D168): whatever the taste, what follows reads from it, not against the EY.
+    return `Thanks for measuring: TDS ${tds} puts that shot's extraction at ${bold(`${eyText(eyPct)} %`)}. Your taste still comes first.`;
+  },
 };

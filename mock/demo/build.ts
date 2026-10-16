@@ -24,6 +24,7 @@ import type { CafaiExport } from '../../src/storage/types.ts';
 import { createFakeTelemetry } from '../../src/ui/testing/fakeServices.ts';
 import { createMockDecaid } from '../decaid/state.ts';
 import { snapshotStore, type MockStoreSnapshot } from '../persist.ts';
+import { demoCare } from './care.ts';
 import { mockDecaidPort } from './decaidPort.ts';
 import { createMemoryStorage } from './memoryStorage.ts';
 import { pullShot } from './shots.ts';
@@ -213,6 +214,11 @@ export async function buildDemo(nowMs: number): Promise<DemoBuild> {
           await engine.rateShot(card.shotId, step.verdict);
           break;
         }
+        case 'measure': {
+          const card = lastPart(engine, 'shot', () => true);
+          await engine.setShotTds(card.shotId, step.tdsPct);
+          break;
+        }
         case 'answer': {
           model.expect(step.coach);
           const question = lastPart(engine, 'options', (part) => part.answer === null && !part.expired);
@@ -240,6 +246,8 @@ export async function buildDemo(nowMs: number): Promise<DemoBuild> {
     }
     // The outbox keeps nothing: every note and rating reached Decaid.
     await settle();
+    // Machine care's last times, the weekly clean due (mock/demo/care.ts).
+    for (const record of demoCare(nowMs)) await storage.care.put(record);
     const exportedAt = new Date(nowMs).toISOString();
     return { data: storage.snapshot(exportedAt, DEMO_APP_VERSION), decaid: snapshotStore(decaid) };
   } finally {

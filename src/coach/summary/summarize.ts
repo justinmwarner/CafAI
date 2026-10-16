@@ -19,9 +19,12 @@
  * Dose is annotations.actualDoseWeight ?? workflow.context.targetDoseWeight;
  * yield is annotations.actualYield (Decaid's weight once the cup has settled
  * after the stop) ?? the last scale weight; the target yield is
- * workflow.context.targetYield (0 = stop-at-weight off).
+ * workflow.context.targetYield (0 = stop-at-weight off). A TDS is
+ * annotations.drinkTds when the record has one, its EY worked out from that
+ * dose and yield (extraction.ts, D166); Decaid's own drinkEy is not read.
  */
 import type { ShotRecord } from '../../api/types.ts';
+import { extractionYield, isTds, roundTds } from '../extraction.ts';
 import type { ProfileStep, ShotPhase, ShotSeries, ShotSummary } from '../types.ts';
 import { analyseShot, shotRows, type ShotRow } from './analysis.ts';
 
@@ -197,6 +200,13 @@ const RESISTANCE_TREND: Record<string, ShotSummary['resistanceTrend']> = {
   rising: 'rising',
 };
 
+/** Decaid's drinkTds, when the record has one CafAI takes, with its EY from the summary's dose and yield; nothing otherwise. */
+function recordedReading(drinkTds: unknown, doseG: number | null, yieldG: number | null): Pick<ShotSummary, 'tdsPct' | 'eyPct'> {
+  if (!isTds(drinkTds)) return {};
+  const tdsPct = roundTds(drinkTds);
+  return { tdsPct, eyPct: extractionYield(tdsPct, doseG, yieldG) };
+}
+
 /** The summary without its series: the `summary` of an [event:shot_completed] payload. */
 export function summaryForModel(summary: ShotSummary): Omit<ShotSummary, 'series'> {
   const { series: _series, ...rest } = summary;
@@ -225,6 +235,7 @@ export function summarizeShot(record: ShotRecord): ShotSummary {
     doseG: r1(doseG),
     yieldG: r1(yieldG),
     ratio: doseG !== null && yieldG !== null ? r2(yieldG / doseG) : null,
+    ...recordedReading(annotations.drinkTds, r1(doseG), r1(yieldG)),
     targetYieldG: r1(positive(context.targetYield)),
     timeToFirstDropS: r1(metrics.timeToFirstDropS),
     preinfusionEndS: r1(metrics.preinfusionEndS),
