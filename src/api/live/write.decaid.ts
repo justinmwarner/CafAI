@@ -257,15 +257,15 @@ describeDecaid('write', ({ url }) => {
     const end = new Date(start.getTime() + 30 * 60_000);
     const hhmm = (at: Date) => `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
     const added = await client.addWakeSchedule({ time: hhmm(start), daysOfWeek: [], enabled: true, keepAwakeFor: 30 });
-    try {
-      expect((await client.getPresenceSettings()).keepAwakeUntil, 'while its window runs').toMatch(new RegExp(`T${hhmm(end)}:00`));
-      // Decaid's answer to the delete carries no window: CafAI reads the settings again for it.
-      await client.deleteWakeSchedule(added.id);
-      expect((await client.getPresenceSettings()).keepAwakeUntil, 'after deleting it').toBeNull();
-    } finally {
-      // As found, whatever failed above: the test schedule gone.
+    // On, unlike the schedule above, so it must not stay whatever fails below: afterAll retries this and names it.
+    const deleteNow = undo.add('the test wake schedule (D209)', async () => {
       if ((await client.getPresenceSettings()).schedules.some((schedule) => schedule.id === added.id)) await client.deleteWakeSchedule(added.id);
-    }
+    });
+    expect((await client.getPresenceSettings()).keepAwakeUntil, 'while its window runs').toMatch(new RegExp(`T${hhmm(end)}:00`));
+    // Decaid's answer to the delete carries no window: CafAI reads the settings again for it.
+    await client.deleteWakeSchedule(added.id);
+    expect((await client.getPresenceSettings()).keepAwakeUntil, 'after deleting it').toBeNull();
+    await deleteNow();
     expect((await client.getPresenceSettings()).schedules, 'the wake schedules as found').toEqual(before.schedules);
     expect(live.problems()).toEqual([]);
   });

@@ -116,7 +116,10 @@ export function usePresence(): PresenceView {
         setSettings((now) => (now !== null && number !== windowReads.current ? { ...read, keepAwakeUntil: now.keepAwakeUntil } : read));
       })
       .catch((caught: unknown) => {
-        if (live) setLoadError(`Could not read Decaid's sleep and wake settings: ${errorText(caught)}`);
+        if (!live) return;
+        setLoadError(`Could not read Decaid's sleep and wake settings: ${errorText(caught)}`);
+        // The newest read of the window failed: a window Decaid may no longer hold does not stay (D209).
+        if (number === windowReads.current) setSettings((now) => now && { ...now, keepAwakeUntil: null });
       });
     return () => {
       live = false;

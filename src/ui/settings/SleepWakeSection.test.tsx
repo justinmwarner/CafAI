@@ -234,6 +234,18 @@ describe("the keep-awake window follows Decaid after every change (D209)", () =>
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
+  it('takes the line away when the full read after a wake time deleted elsewhere fails', async () => {
+    const { services, user } = renderDuring();
+    await loaded();
+    expect(windowLine()).not.toBeNull();
+    // Decaid answers 404 for a wake time deleted elsewhere, and the section reads everything again: that read fails.
+    services.decaid.failNext('updateWakeSchedule', new GatewayError(404, '/api/v1/presence/schedules/w1', 'Schedule not found'));
+    services.decaid.failNext('getPresenceSettings', new Error('Could not reach Decaid.'));
+    await user.click(screen.getByTestId(TID.wakeSwitch('w1')));
+    expect(await screen.findByText(/^Could not read Decaid's sleep and wake settings/)).toBeInTheDocument();
+    expect(windowLine()).toBeNull();
+  });
+
   it('is set by the newest read alone, when an older one answers last', async () => {
     const { services, user } = renderDuring();
     await loaded();
