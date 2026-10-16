@@ -12,8 +12,8 @@ commands stop at espresso, steam, hot water, flush, sleep and the next step
 else starts them. Decaid's own screens have none of them, so today an owner
 switches to streamline to descale. No skin for Decaid keeps reminders, and
 until CafAI's guide none showed how to clean; Decent's video and docs do.
-Three items; the cycles, the second, wait (D161), and the reminders go
-ahead without them:
+Three items: the guide and the reminders are built, and the cycles, the
+second, wait (D161):
 
 - **A cleaning guide, with Decent's video: built on 2026-10-15** (D152-D155,
   `docs/superpowers/specs/2026-10-15-machine-care-design.md`). Settings >
@@ -51,23 +51,27 @@ ahead without them:
   fill, the flush and most of a descale into one, `cleaningGroup`), how
   long each cycle runs, and whether Decaid saves the flush as a shot, which
   would put it in its shot list and on Visualizer.
-- **Care reminders, set by the water.** A quiet line on the stats card
-  when a step is due ("Weekly clean due: 41 shots since the last"), and
-  each step's last time on the Care screen. Counts come from Decaid's shots
-  (newest first; the list has no date filter, so CafAI pages back to the
-  last clean) and its steam records (`/api/v1/steams`); a step starts over
-  when CafAI sees its cycle end or the barista ticks it done, kept with
-  CafAI's data in IndexedDB and Decaid's store. One question, the water's
-  hardness, sets the descale interval from Decent's water page: below
-  30 ppm never; 30-120 ppm yearly; above 120 ppm at least twice a year
-  (its LSI table, keyed to the water's LSI rather than its ppm, runs from
-  every 100 to every 2,250 shots); the intake filter weekly
-  or fortnightly (V1, citric acid) or monthly (V2, baking soda). Models:
-  de1app's Maintenance Tracker plugin (days, shots or ml, in green, amber
-  and red, reset when the app's Clean or Descale runs) and GaggiMate's
-  every-so-many-shots interval. Check first: whether shots and days are
-  enough or litres matter too, and whether a step long overdue ever earns
-  the alert under the top bar, which today is for problems only.
+- **Care reminders, set by the water: built on 2026-10-15** (D-CARE-1 to
+  D-CARE-9, `docs/superpowers/specs/2026-10-15-care-reminders-design.md`).
+  Every step beyond Daily has its last time and **Mark done** on the Care
+  screen, with Undo; five of them remind (the weekly clean, Rinza, the
+  intake filter, the group head's soak, the descale), and the stats card
+  carries one quiet line for the most overdue: "Weekly clean due: 41 shots
+  since the last". Days decide; shots and steams gate and count; litres are
+  not counted, as Decaid keeps no record of a flush or of hot water
+  (D-CARE-2). The counts are Decaid's totals, one request each, since
+  Decaid never saves a cleaning profile's run as a shot and the list has
+  nothing to page back to (D-CARE-3). A step starts over when it is marked
+  done, or when CafAI sees the machine's own Clean or Descale run for a
+  minute; Forward Flush x5 never counts, being the daily water flush's
+  profile too (D-CARE-4). Settings > Machine care asks the water in
+  Decent's TDS bands and the filter, V1 or V2 (D-CARE-5). A step long
+  overdue stays on the stats card: the alert under the top bar is for
+  problems of the moment (D-CARE-6). Left: a cycle seen on a real DE1 and
+  Forward Flush x5 left out of Decaid's shot list there
+  (`docs/HARDWARE_TEST_PLAN.md`), snoozing the line, the water's LSI, and
+  marks shared between devices, which each keep their own as they keep
+  their bags (D-CARE-7).
 
 ## More from the gap review (D151)
 

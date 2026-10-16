@@ -12,8 +12,9 @@
  * Machine writes queue behind each other as on Decaid's DE1 write queue
  * (machine.ts): POST /machine/profile and every state request but idle wait
  * for a profile upload in flight. The grinder routes follow
- * grinders_handler.dart (grinders.ts), and the sleep and wake routes
- * presence_handler.dart (presence.ts).
+ * grinders_handler.dart (grinders.ts), the sleep and wake routes
+ * presence_handler.dart (presence.ts), and the steam records'
+ * steams_handler.dart (steams.ts).
  */
 import { http, HttpResponse, type HttpHandler } from 'msw';
 import type { MachineStateName } from '../../src/api/types.ts';
@@ -394,6 +395,12 @@ export function decaidHttpHandlers(state: MockDecaid, player: ShotPlayer): HttpH
       return json(state.updateShot(params.id ?? '', body));
     }),
     route('delete', '/shots/:id', ({ params }) => json(state.deleteShot(params.id ?? ''))),
+
+    // ---- steam records (steams_handler.dart; specific routes before :id) --------------------
+    route('get', '/steams', () => json(state.listSteams())),
+    route('get', '/steams/ids', () => json(state.getSteamIds())),
+    route('get', '/steams/latest', () => json(state.getLatestSteam())),
+    route('get', '/steams/:id', ({ params }) => json(state.getSteam(params.id ?? ''))),
 
     // ---- grinder library -------------------------------------------------------------------
     route('get', '/grinders', ({ request, url }) =>

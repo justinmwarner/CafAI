@@ -3,7 +3,8 @@
  * name and how often, its own part of Decent's video, then its steps in
  * order (numbered on a wide screen): what, when, how, where to run it for
  * now, the note where the video and Decent's pages differ, a link to
- * Decent's page, and the step's moment. The sources close it.
+ * Decent's page, and the step's moment; a step beyond Daily ends with its
+ * last time and Mark done (StepCare.tsx, D-CARE-1). The sources close it.
  */
 import { useMemo } from 'react';
 import Box from '@mui/material/Box';
@@ -17,6 +18,7 @@ import { TID } from '../testIds.ts';
 import { CARE_SOURCES, keepUnits, type CareRoutine, type CareStep } from './careGuide.ts';
 import { routineInUnit } from './careUnits.ts';
 import { MomentButton } from './MomentButton.tsx';
+import { StepCare } from './StepCare.tsx';
 
 export interface RoutineCardProps {
   routine: CareRoutine;
@@ -124,6 +126,7 @@ function Step({ step, number, props }: { step: CareStep; number: number; props: 
             {step.link.label}
           </Button>
         ) : null}
+        <StepCare stepId={step.id} title={step.title} />
       </Box>
       {step.moment === undefined ? null : (
         // A flex box, so the button's nudge is a margin like any other.

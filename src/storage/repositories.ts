@@ -13,6 +13,7 @@ import { toStorageError } from './errors.ts';
 import { applySettingsPatch, normalizeSettings } from './settings.ts';
 import type {
   BagRepository,
+  CareRepository,
   ConversationRepository,
   IterationRepository,
   SettingsRepository,
@@ -32,13 +33,19 @@ export interface Repositories {
   iterations: IterationRepository;
   conversations: ConversationRepository;
   settings: SettingsRepository;
+  care: CareRepository;
 }
 
-type RecordStore = 'bags' | 'versions' | 'iterations' | 'conversations';
+type RecordStore = 'bags' | 'versions' | 'iterations' | 'conversations' | 'care';
 
 /** Oldest first; the id breaks ties so the order never depends on the store. */
 export function byCreatedAt<T extends { createdAt: string; id: string }>(a: T, b: T): number {
   if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+/** By id: machine care's records, one per step (D-CARE-7). */
+export function byId<T extends { id: string }>(a: T, b: T): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
@@ -112,6 +119,10 @@ export function createRepositories(deps: RepositoryDeps): Repositories {
           await Promise.all([tx.store.put(next, SETTINGS_KEY), tx.done]);
           return next;
         }),
+    },
+    care: {
+      list: () => read(async (db) => (await db.getAll('care')).sort(byId)),
+      put: (record) => put('care', record),
     },
   };
 }

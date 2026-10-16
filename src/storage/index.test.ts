@@ -21,6 +21,7 @@ import {
   API_KEY,
   MODEL,
   makeBag,
+  makeCareRecord,
   makeConversation,
   makeIteration,
   makeSettings,
@@ -219,6 +220,19 @@ describe('restoreFromMirrorIfEmpty', () => {
     };
     expect(iteration).toEqual({ ...makeIteration(), summary } as IterationRecord);
     expect(await fresh.settings.get()).toEqual(makeSettings({ grinderName: 'Niche Zero', grinderSetting: '14', activeBagId: 'bag_kiambu' }));
+  });
+
+  it("brings machine care's last times back, over the counts a fresh device began meanwhile (D-CARE-7)", async () => {
+    const kv = createMemoryKv();
+    const original = await open(kv);
+    await original.care.put(makeCareRecord());
+    await original.mirror.pushNow();
+
+    const fresh = await open(kv);
+    // The fresh device began counting before the backup came back.
+    await fresh.care.put(makeCareRecord({ doneAt: null, by: null, countFrom: '2026-10-14T08:00:00.000Z', updatedAt: '2026-10-14T08:00:00.000Z' }));
+    expect(await restoreFromMirrorIfEmpty(fresh)).toBe('restored');
+    expect(await fresh.care.list()).toEqual([makeCareRecord()]);
   });
 
   it('only fills blank settings, keeping the ones already set here', async () => {

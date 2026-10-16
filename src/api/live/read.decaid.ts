@@ -178,6 +178,17 @@ describeDecaid('read', ({ url }) => {
     expect(live.problems()).toEqual([]);
   });
 
+  it('GET /api/v1/shots?limit=1 and the steam records: what the care reminders count (D-CARE-3)', async () => {
+    const page = await live.client.listShots({ limit: 1 });
+    expect(page.total, 'the shot total').toBeGreaterThanOrEqual(page.items.length);
+    // A Decaid that never steamed answers [] and 200 null.
+    const ids = await live.client.listSteamIds();
+    const latest = await live.client.getLatestSteam();
+    if (ids.length > 0) expect(ids, 'the newest steam is one of the ids').toContain(latest?.id);
+    else expect(latest).toBeNull();
+    expect(live.problems()).toEqual([]);
+  });
+
   it('GET /api/v1/store/cafai?full=1: CafAI’s backup namespace', async () => {
     const all = await live.client.kv.getAll('cafai');
     expect(all.notModified, 'a first read').toBe(false);

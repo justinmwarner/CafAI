@@ -14,9 +14,11 @@ import type {
   Heartbeat,
   HostEnvironment,
   LiveSample,
+  PaginatedShots,
   PluginInfo,
   PresenceSettings,
   ShotLifecycleEvent,
+  SteamRecordSummary,
   TelemetryState,
   TelemetryStore,
   WakeSchedule,
@@ -31,6 +33,7 @@ import type { ModelInfo } from '../../llm/types.ts';
 import type {
   Bag,
   CafaiExport,
+  CareRecord,
   ConversationRecord,
   IterationRecord,
   ProfileVersion,
@@ -153,6 +156,10 @@ export interface FakeDecaid extends DecaidClient {
   failNext(method: string, error: Error): void;
   /** Decaid's sleep and wake settings as this fake holds them; tests may set them before rendering. */
   presence: PresenceSettings;
+  /** What listShots answers, whatever it is asked (the care reminders read its total). */
+  shotPage: PaginatedShots;
+  /** Decaid's steam records as the care reminders count them: their ids and the newest. */
+  steams: { ids: string[]; latest: SteamRecordSummary | null };
 }
 
 export function createFakeDecaid(): FakeDecaid {
@@ -185,6 +192,8 @@ export function createFakeDecaid(): FakeDecaid {
     failNext: (method, error) => void failures.set(method, error),
     // Decaid's own defaults (settings_controller.dart:64-66 at aab5f93).
     presence: { userPresenceEnabled: true, sleepTimeoutMinutes: 30, schedules: [], keepAwakeUntil: null },
+    shotPage: { items: [], total: 0, limit: 20, offset: 0 },
+    steams: { ids: [], latest: null },
     getPresenceSettings: () => act('getPresenceSettings', [], () => clone(fake.presence)),
     updatePresenceSettings: (patch) =>
       act('updatePresenceSettings', [patch], () => {
@@ -276,7 +285,9 @@ export function createFakeDecaid(): FakeDecaid {
         metadata: request.metadata ?? null,
       }),
     updateProfile: (id, body) => call('updateProfile', [id, body], Promise.reject(new Error('unsupported')) as never),
-    listShots: (options) => call('listShots', [options], { items: [], total: 0, limit: 20, offset: 0 }),
+    listShots: (options) => call('listShots', [options], clone(fake.shotPage)),
+    listSteamIds: () => call('listSteamIds', [], [...fake.steams.ids]),
+    getLatestSteam: () => call('getLatestSteam', [], fake.steams.latest === null ? null : clone(fake.steams.latest)),
     getLatestShot: () => call('getLatestShot', [], null),
     getShot: (id) => call('getShot', [id], Promise.reject(new Error('not found')) as never),
     updateShot: (id, patch) => call('updateShot', [id, patch], Promise.reject(new Error('unsupported')) as never),
@@ -320,6 +331,7 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
   const versions = new Map<string, ProfileVersion>((seed.versions ?? []).map((v) => [v.id, v]));
   const iterations = new Map<string, IterationRecord>((seed.iterations ?? []).map((i) => [i.id, i]));
   const conversations = new Map<string, ConversationRecord>((seed.conversations ?? []).map((c) => [c.id, c]));
+  const care = new Map<string, CareRecord>((seed.care ?? []).map((record) => [record.id, record]));
   let settings: Settings = seed.settings ?? {
     model: 'claude-opus-5-5',
     grinderName: null,
@@ -354,6 +366,10 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
       get: async () => settings,
       update: async (patch) => (settings = { ...settings, ...patch }),
     },
+    care: {
+      list: async () => [...care.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).map((record) => clone(record)),
+      put: async (record) => void care.set(record.id, clone(record)),
+    },
     secrets: {
       getApiKey: async () => storage.apiKey,
       setApiKey: async (key) => void (storage.apiKey = key),
@@ -370,6 +386,7 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
         versions: [...versions.values()],
         iterations: [...iterations.values()],
         conversations: [...conversations.values()],
+        care: [...care.values()],
       }),
       importAll: async () => ({ imported: 0 }),
     },

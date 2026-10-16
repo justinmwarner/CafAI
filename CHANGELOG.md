@@ -30,6 +30,15 @@ workflow checks against it. Settings > About shows the version you run.
   drawn from its card, with no request; another coffee's is read from
   Decaid once; one Decaid no longer has is left out, quietly. A card's
   curves now start at the pour, as its times do.
+- Machine care reminds you, quietly: each step beyond Daily shows when it
+  was last done, with **Mark done** (and **Undo**), and the stats card has
+  one line for the step most overdue, "Weekly clean due: 41 shots since the
+  last", which opens it. The weekly clean and Rinza count the shots and
+  steams Decaid recorded since; the descale goes by your water, in Decent's
+  bands, and the intake filter by its kind, both set in Settings > Machine
+  care with a switch for the line. A Clean or Descale CafAI sees the
+  machine run counts too. The last times are kept in Decaid's backup and the
+  export.
 
 ## 0.1.2 (2026-10-15)
 

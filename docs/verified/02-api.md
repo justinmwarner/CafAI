@@ -80,6 +80,8 @@ Unless stated, every body is JSON and every route sits under `http://<host>:8080
 | GET | `/api/v1/shots/{id}` | – | `ShotRecord` with `measurements` | 404 `{error:"Shot not found"}`. | rest:1835-1870; web/shots_handler.dart:178-190 |
 | PUT | `/api/v1/shots/{id}` | partial record, normally `{annotations}` | `ShotRecord` | Deep merge. 400 for forbidden fields or for `enjoyment` outside 0-10. | rest:1872-1947; web/shots_handler.dart:192-266 |
 | DELETE | `/api/v1/shots/{id}` | – | `{success, id}` | | rest:1949-1989; web/shots_handler.dart:268-280 |
+| GET | `/api/v1/steams/ids` | – | `string[]`, unordered | Every steam record's id: what the care reminders count. See §8, Steam records. | rest:2011-2024; web/steams_handler.dart:19, 37-45 (at aab5f93) |
+| GET | `/api/v1/steams/latest` | – | `SteamRecord` without `measurements`, or `null` if there are none | `{id, timestamp, workflow}`, `annotations` only when set. | rest:2025-2036; web/steams_handler.dart:20, 47-55; data/steam_record.dart:30-37 (at aab5f93) |
 | GET | `/api/v1/store/{ns}` (`?full=1`) | – | `string[]` (or `{k: v}` with an ETag) | | rest:2935-2980; web/kv_store_handler.dart:7-16 |
 | GET | `/api/v1/store/{ns}/{key}` | – | The stored JSON value. **A missing key gives 200 `null`.** | The spec says 404. | rest:2982-3005; web/kv_store_handler.dart:18-25 |
 | POST | `/api/v1/store/{ns}/{key}` | any JSON, up to 1 MiB | 200 `{}` | The spec says 204. Invalid JSON gives a plain-text 500. | rest:3007-3029; web/kv_store_handler.dart:37-54 |
@@ -673,6 +675,18 @@ elapsed = Date.parse(m.machine.timestamp) - Date.parse(measurements[0].machine.t
 - Both values are local and zone-less with microseconds, so parse them with a tolerant ISO parser.
 - Scale timestamps are separate, typically 0-150 ms before the machine timestamp. Use the machine timestamp as the time base.
 - Pour start is the first sample whose substate is `preinfusion` or `pouring`.
+
+### What a list costs Decaid
+
+Cited at aab5f93. Every page of `GET /api/v1/shots` reads each shot's row whole and parses its measurements before dropping them (`ShotMapper.fromRows`, `fromRow`: lib/src/services/database/mappers/shot_mapper.dart:14-49), so a page of 100 parses 100 measurement series; `total` is a separate `COUNT` (lib/src/services/database/daos/shot_dao.dart:111-159). `limit=1` is the cheap way to the total.
+
+### Steam records
+
+Cited at aab5f93 (web/steams_handler.dart; ctl/steam_sequencer.dart; data/steam_record.dart).
+
+- **One per steaming.** A record opens on the first frame in `steam` (the heater's warm-up included) with a UUID v4, the time then and the workflow as it stands, collects a `SteamSnapshot` `{machine, milkTemperature}` per frame, and is saved on the first frame in neither `steam` nor the `pouring` substate. A machine that changes mid-steam discards it (ctl/steam_sequencer.dart:72-122, 178-198).
+- **The routes.** `GET /api/v1/steams` lists every record, newest first, without measurements; `/ids` and `/latest` as in §1; `/{id}` the whole record, 404 `{error:"Steam record not found"}`; `PUT /{id}` changes its annotations only; `DELETE /{id}` answers `{success, id}` (web/steams_handler.dart:17-120).
+- **What a list costs.** `GET /api/v1/steams` reads and parses every record's measurements before dropping them (`getAllSteams`, `SteamMapper.fromRow`: lib/src/services/database/daos/steam_dao.dart:23-27, lib/src/services/database/mappers/steam_mapper.dart:11-30) and sends each record's workflow; `/ids` reads only the ids (steam_dao.dart:11-15).
 
 ### Update
 

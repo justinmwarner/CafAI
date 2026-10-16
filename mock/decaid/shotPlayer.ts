@@ -16,7 +16,9 @@
  * workflow profile's target_volume, exactly like shot_sequencer.dart. The
  * shotState frames, the
  * decision bodies and the persisted ShotRecord (a copy of the workflow at
- * shot end) follow shot_sequencer.dart / de1_state_manager.dart. Wall-clock
+ * shot end; none for a cleaning or calibration profile) follow
+ * shot_sequencer.dart / de1_state_manager.dart, and each steaming leaves a
+ * steam record as steam_sequencer.dart does (steams.ts). Wall-clock
  * playback can be compressed with `speed`; data timestamps stay realistic.
  */
 import type {
@@ -31,12 +33,21 @@ import type {
 } from '../../src/api/types.ts';
 import type { ProfileStep } from '../../src/coach/types.ts';
 import { parseDecaidTimestamp } from '../../src/api/time.ts';
+import { clone } from '../../src/util/clone.ts';
 import { newId } from '../../src/util/id.ts';
 import { formatLocalTimestamp, formatUtcTimestamp } from './clock.ts';
 import { dartDouble } from './json.ts';
 import { idleTemperature } from './machine.ts';
 import { PLUGIN_IDS } from './plugins.ts';
 import type { MockDecaid } from './state.ts';
+import type { MockSteamRecord } from './steams.ts';
+
+/**
+ * Decaid saves no shot for a profile of these beverage types: a cleaning
+ * profile (Forward Flush x5) or a calibration (_persistShotIfNeeded,
+ * de1_state_manager.dart:911-917 at aab5f93).
+ */
+const UNSAVED_BEVERAGES: ReadonlySet<string> = new Set(['cleaning', 'calibrate']);
 
 /** One frame every 200 ms of data time (5 Hz). */
 export const FRAME_MS = 200;
@@ -716,6 +727,8 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
   let activityFrame = 0;
   let activityStop = false;
   let drinkRun: DrinkRunState = { frame: 0, workS: 0, waterMl: 0, purge: 0 };
+  /** The steam record of the steaming now, kept once it ends (D-CARE-9). */
+  let openSteam: MockSteamRecord | null = null;
   let idleTick = 0;
   const waiters: Array<() => void> = [];
   let ttrTimer: ReturnType<typeof setTimeout> | null = null;
@@ -865,6 +878,7 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
   function persist(sim: ShotSimulation): void {
     if (sim.aborted || measurements.length === 0 || !shotId) return;
     const workflow = state.getWorkflow();
+    if (UNSAVED_BEVERAGES.has(workflow.profile.beverage_type)) return;
     let provenance: Record<string, unknown> = { provenanceStatus: 'unavailable' };
     try {
       const info = state.getMachineInfo();
@@ -1038,6 +1052,8 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
   function drinkTick(name: MockDrink): void {
     timer = null;
     if (!state.isMachineConnected()) {
+      // Decaid discards a steam record the machine left mid-way (steam_sequencer.dart:72-77).
+      openSteam = null;
       settle();
       return;
     }
@@ -1045,6 +1061,8 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
     const at = Math.max(state.clock.now(), parseDecaidTimestamp(current.timestamp) + FRAME_MS);
     const workflow = state.getWorkflow();
     const run = drinkRun;
+    // Decaid opens a steam record on the first frame in steam, with the workflow as it stands then.
+    if (name === 'steam' && run.frame === 0) openSteam = { id: newId(), timestamp: formatLocalTimestamp(at), measurements: [], workflow: clone(workflow) };
     const warming = run.frame < DRINK_WARMUP_FRAMES[name];
     const k = run.frame - DRINK_WARMUP_FRAMES[name];
     const steamSet = workflow.steamSettings.targetTemperature ?? 150;
@@ -1103,7 +1121,7 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
       // The water still on its way lands: the cup holds all that was poured.
       if (name === 'hotWater') weighWater(run.waterMl, 0, at);
     }
-    state.setMachineSnapshot({
+    const frame: MachineSnapshot = {
       ...current,
       timestamp: formatLocalTimestamp(at),
       state: { state: finished ? 'idle' : name, substate },
@@ -1114,7 +1132,16 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
       mixTemperature: quantize(mix, 256),
       groupTemperature: quantize(group, 65536),
       steamTemperature,
-    });
+    };
+    state.setMachineSnapshot(frame);
+    if (openSteam) {
+      // A sample per frame while it steams; the first frame out of steam keeps the record (steam_sequencer.dart:94-112).
+      if (!finished) openSteam.measurements.push({ machine: clone(frame), milkTemperature: null });
+      else {
+        state.addSteam(openSteam);
+        openSteam = null;
+      }
+    }
     state.clock.advanceTo(at + 1);
     run.frame += 1;
     if (finished) {
@@ -1167,6 +1194,7 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
     activityFrame = 0;
     activityStop = false;
     drinkRun = { frame: 0, workS: 0, waterMl: 0, purge: 0 };
+    openSteam = null;
     activityTick();
   }
 

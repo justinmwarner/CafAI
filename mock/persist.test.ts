@@ -148,6 +148,25 @@ describe('snapshotStore + restoreStore', () => {
     expect(bundled(fresh)).toEqual(bundled(createMockDecaid()));
   });
 
+  it('keeps the steam records, without their measurements, which nothing reads (D-CARE-9)', () => {
+    const state = createMockDecaid();
+    const machine = state.getMachineSnapshot();
+    state.addSteam({ id: 'steam-1', timestamp: '2026-10-04T08:30:00.000000', measurements: [{ machine, milkTemperature: null }], workflow: state.getWorkflow() });
+    const snapshot = roundTrip(snapshotStore(state));
+    expect(snapshot.steams?.map((steam) => steam.measurements)).toEqual([[]]);
+    const fresh = createMockDecaid();
+    expect(restoreStore(fresh, snapshot).skipped).toEqual([]);
+    expect(fresh.getSteamIds()).toEqual(['steam-1']);
+    expect(fresh.getLatestSteam()).toEqual(state.getLatestSteam());
+  });
+
+  it('restores a store saved before the mock kept steam records', () => {
+    const { steams: _steams, ...older } = snapshotStore(usedStore());
+    const fresh = createMockDecaid();
+    expect(restoreStore(fresh, older).skipped).toEqual([]);
+    expect(fresh.getSteamIds()).toEqual([]);
+  });
+
   it('restores the shot set exactly: a shot deleted before the save stays deleted', () => {
     const state = createMockDecaid();
     state.deleteShot(EXAMPLE_SHOT);
@@ -206,6 +225,8 @@ describe('parseSnapshot', () => {
     ['shots not a list', text({ shots: {} })],
     ['a shot without an id', text({ shots: [{ ...fixtures.shotRecord(), id: '' }] })],
     ['a shot without its workflow', text({ shots: [{ ...fixtures.shotRecord(), workflow: null }] })],
+    ['steams not a list', text({ steams: {} })],
+    ['a steam without an id', text({ steams: [{ id: '', timestamp: '2026-10-04T08:30:00.000000', measurements: [], workflow: valid.workflow }] })],
     ['no workflow', text({ workflow: null })],
     ['a workflow without a profile', text({ workflow: { ...valid.workflow, profile: 'D-Flow' } })],
     ['a profile without content', text({ profiles: [{ ...valid.profiles[0], profile: null }] })],
@@ -344,6 +365,17 @@ describe('startMockPersistence', () => {
     state.addShot({ ...fixtures.shotRecord(), id: 'shot-new' });
     await vi.advanceTimersByTimeAsync(250);
     expect(saved(storage)?.shots.map((shot) => shot.id)).toContain('shot-new');
+    persistence?.stop();
+  });
+
+  it('saves a steam record the player recorded without a request', async () => {
+    vi.useFakeTimers();
+    const state = createMockDecaid();
+    const { storage, env } = setup('?mockPersist=1');
+    const persistence = startMockPersistence(state, env);
+    state.addSteam({ id: 'steam-new', timestamp: '2026-10-04T08:30:00.000000', measurements: [], workflow: state.getWorkflow() });
+    await vi.advanceTimersByTimeAsync(250);
+    expect(saved(storage)?.steams?.map((steam) => steam.id)).toEqual(['steam-new']);
     persistence?.stop();
   });
 

@@ -433,7 +433,7 @@ function ExportDialog({ result, onClose }: { result: ExportResult; onClose(): vo
 type ListData = { bags: Bag[]; shotCounts: Map<string, number> };
 
 export function HistoryScreen({ bagId, onSelectBag = hashNavigate }: HistoryScreenProps) {
-  const { storage, coach, host, appearance, temperatureUnit } = useServices();
+  const { storage, coach, host, appearance, temperatureUnit, care } = useServices();
   const [coachBags, coachVersions, coachPhase, coachBusy] = useCoachCommits();
   const [reloads, setReloads] = useState(0);
   const [list, setList] = useState<ListData | null>(null);
@@ -520,13 +520,15 @@ export function HistoryScreen({ bagId, onSelectBag = hashNavigate }: HistoryScre
         appearance.reload().catch(() => undefined);
         // And a temperature unit, on a device that never chose one (D-TEMP-2).
         temperatureUnit.reload().catch(() => undefined);
+        // And machine care's last times (D-CARE-7).
+        care?.reload().catch(() => undefined);
       } catch (error) {
         setMessage({ tone: 'error', text: `Import failed: ${errorText(error)}` });
       } finally {
         setWorking(null);
       }
     },
-    [storage, coach, appearance, temperatureUnit],
+    [storage, coach, appearance, temperatureUnit, care],
   );
 
   const current = bagId === null ? list : detail?.id === bagId ? detail : null;

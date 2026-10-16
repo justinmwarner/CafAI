@@ -16,6 +16,7 @@ import { rememberSecret } from '../traffic/recorder.ts';
 import { newId } from '../util/id.ts';
 import { createApiPort, createCoachPort, createLlmPort } from './adapters.ts';
 import { createAppearanceStore } from './appearance.ts';
+import { createCareService, localTotalsCache } from './care/careService.ts';
 import { withCoachCredential } from './coachAccess.ts';
 import { createCoachEngine, type CoachEngine } from './engine/engine.ts';
 import { createTemperatureUnitStore } from './temperatureUnit.ts';
@@ -59,6 +60,23 @@ export async function createServices(win: Window): Promise<AppServices> {
   // °C or °F (D-TEMP-2): the screens read it, and so does every request's prompt (D-TEMP-5).
   const temperatureUnit = createTemperatureUnitStore(storage.settings, (await storage.settings.get()).temperatureUnit);
 
+  // Machine care's steps (D-CARE-1 to D-CARE-8): read now, counted from Decaid's totals behind the start.
+  const visibility = {
+    visible: () => win.document.visibilityState !== 'hidden',
+    subscribe(listener: () => void) {
+      win.document.addEventListener('visibilitychange', listener);
+      return () => win.document.removeEventListener('visibilitychange', listener);
+    },
+  };
+  let deviceStorage: globalThis.Storage | null = null;
+  try {
+    deviceStorage = win.localStorage;
+  } catch {
+    // Storage blocked: every page counts afresh.
+  }
+  const care = createCareService({ storage, decaid, telemetry, cache: localTotalsCache(deviceStorage), visibility });
+  await care.start();
+
   const coach = createCoachEngine({
     // Its "is a key stored" means "has what the selected source needs".
     storage: withCoachCredential(storage, coachSource),
@@ -83,11 +101,12 @@ export async function createServices(win: Window): Promise<AppServices> {
   telemetry.start();
   await coach.start();
 
-  // Records that came back after start (D100): the chat and the look read them again.
+  // Records that came back after start (D100): the chat, the look and machine care read them again.
   const landed = () => {
     void coach.restored();
     void appearance.reload();
     void temperatureUnit.reload();
+    void care.reload();
   };
   const stopRestoredWatch = storage.onRestored(landed);
   // Decaid did not answer the start-up restore (it may still be starting up,
@@ -147,6 +166,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     temperatureUnit,
     plugins,
     coachSource,
+    care,
     dispose() {
       win.document.removeEventListener('visibilitychange', onVisibility);
       stopPluginWatch();
@@ -155,6 +175,7 @@ export async function createServices(win: Window): Promise<AppServices> {
       stopRestoredWatch();
       stopCodeWatch?.();
       coach.dispose();
+      care.dispose();
       telemetry.stop();
     },
   };

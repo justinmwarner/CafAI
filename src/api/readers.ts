@@ -43,6 +43,7 @@ import {
   type ProfileRecord,
   type ShotRecord,
   type ShotRecordSummary,
+  type SteamRecordSummary,
   type WakeSchedule,
   type Workflow,
 } from './types.ts';
@@ -322,6 +323,16 @@ const SHOT_PAGE: Rule = {
   fallback: { total: 0, limit: 0, offset: 0 },
 };
 
+const STEAM_SUMMARY: Rule = {
+  // The care reminders read only when the newest steam began, to tell a count that does not add up (D-CARE-3).
+  shape: z.looseObject({ id, timestamp: text }),
+  required: ['id'],
+  fallback: { timestamp: '' },
+};
+
+/** A record's id in a list of them: one that is not a non-empty string is left out (and reported). */
+const RECORD_ID: Rule = { shape: id };
+
 const BEAN: Rule = {
   shape: z.looseObject({
     id,
@@ -416,6 +427,8 @@ export const readProfileRecord: Reader<ProfileRecord> = recordReader(PROFILE_REC
 export const readProfileRecords: Reader<ProfileRecord[]> = listReader(PROFILE_RECORD);
 export const readShotSummary: Reader<ShotRecordSummary> = recordReader(SHOT_SUMMARY);
 export const readShot: Reader<ShotRecord> = recordReader(SHOT);
+export const readSteamSummary: Reader<SteamRecordSummary> = recordReader(STEAM_SUMMARY);
+export const readRecordIds: Reader<string[]> = listReader(RECORD_ID);
 export const readBean: Reader<Bean> = recordReader(BEAN);
 export const readBeans: Reader<Bean[]> = listReader(BEAN);
 export const readBatch: Reader<BeanBatch> = recordReader(BATCH);
