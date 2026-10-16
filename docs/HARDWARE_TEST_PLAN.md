@@ -613,6 +613,28 @@ Settings > Appearance > Temperatures shows °F; Decaid and the profiles keep
 5. **Back to °C.** Expected: every screen, the chat and History read °C
    again.
 
+## 18. Overlaid shot curves (D-CURVE-1-D-CURVE-5)
+
+A shot's card and the Shot view draw the shot the card asks about faintly
+under this one. The mock shows where and what; only the tablet shows
+whether the band reads in daylight and whether a slow tablet keeps up. Look
+in dark and in light.
+
+1. **The card.** Pull two shots of one bag, the second a step finer.
+   Expected: the second card shows the first as a pale band under its
+   lines; at arm's length, in daylight, the band is seen and the line on it
+   stays readable.
+2. **While it pulls.** Pull a third shot and watch the Shot view. Expected:
+   the second shot's band is under the live curves from the start, the line
+   over the plot names it with its time and yield, and the live graph does
+   not stutter (the timer keeps time, the curves keep up).
+3. **Another coffee.** Start a new bag and pull its first shot. Expected:
+   once its card is in, the card and the Shot view draw the last shot of
+   the other bag, named by its coffee.
+4. **A deleted shot.** In Decaid's own shot history, delete a shot a card
+   compares with, then reload CafAI. Expected: the card draws its own shot
+   alone, with no message.
+
 ## Results
 
 | Section | Step | Expected | Observed | Pass? |
@@ -684,6 +706,10 @@ Settings > Appearance > Temperatures shows °F; Decaid and the profiles keep
 | 17 | 3 | Each drink's view in °F | | |
 | 17 | 4 | Change card "+1.8 °F", the coach in °F; 200 °F proposed as 93.5 °C (200.3 °F) | | |
 | 17 | 5 | °C everywhere again | | |
+| 18 | 1 | The first shot's band under the second's lines, readable in daylight | | |
+| 18 | 2 | The band under the live curves from the start, named; no stutter | | |
+| 18 | 3 | A bag's first shot draws the other coffee's last shot, named | | |
+| 18 | 4 | A shot deleted in Decaid: the card's own shot alone, no message | | |
 
 Send back this table, the saved shot and profile JSON files, the `[CafAI]`
 lines from `/api/v1/webview/logs`, the output of `npm run test:decaid`, and,
