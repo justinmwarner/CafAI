@@ -2654,7 +2654,7 @@ describe('coach engine', () => {
   });
 
   // -------------------------------------------------------------------------
-  // D-SIMA-1: a run that never poured is no shot
+  // D-SIMA-1: a run that never poured is no shot. D-SIMA-2: a shot's notices keep how it ended.
   // -------------------------------------------------------------------------
 
   /** A shotState frame as Decaid sends it for the run `shotId`; null names none, as the idle frame after a run. */
@@ -2672,6 +2672,9 @@ describe('coach engine', () => {
     telemetry.emitShot({ type: 'finished', shotId, stopReason });
   };
   const NEVER_POURED = 'That shot stopped before it poured: nothing to taste.';
+  const CUT_OFF =
+    'The machine disconnected during that shot, and Decaid has no record of it. When the machine is back, tap Retry to look again, or pull another shot.';
+  const NOT_SAVED = 'The shot finished, but Decaid has not saved it. Tap Retry to look again, or pull another shot.';
   const SHOT_NOT_SAVED = 'Decaid has not saved that shot yet.';
 
   describe('a run that never poured (D-SIMA-1)', () => {
@@ -2812,6 +2815,63 @@ describe('coach engine', () => {
       telemetry.setState({ shotState: shotFrame(null, 'idle') });
       expect(await shotIsCredited('shot-1')).toBe(true);
       expect(notices().some((p) => p.text === NEVER_POURED)).toBe(false);
+    });
+  });
+
+  describe("a lost shot's notices keep how it ended, Retry's too (D-SIMA-2)", () => {
+    /** Every warning the chat holds about a lost shot. */
+    const lostShotWarnings = () => notices().filter((p) => p.text === CUT_OFF || p.text === NOT_SAVED).map((p) => p.text);
+
+    it('a shot cut off as the machine dropped says so on Retry, with the machine back', async () => {
+      await throughTemplatePick();
+      machine.missingShots.add('shot-cut');
+      telemetry.setState({ machineConnected: false });
+      ranAndEnded('shot-cut', null);
+      await vi.waitFor(() => expect(engine.getState().error).toBe(SHOT_NOT_SAVED));
+      expect(lostShotWarnings()).toEqual([CUT_OFF]);
+
+      telemetry.setState({ machineConnected: true });
+      await drain();
+      await engine.retry();
+      expect(lostShotWarnings()).toEqual([CUT_OFF, CUT_OFF]);
+      await engine.retry();
+      expect(lostShotWarnings()).toEqual([CUT_OFF, CUT_OFF, CUT_OFF]);
+    });
+
+    it("Decaid's teardown for a disconnect says cut off, though the machine was back before the search ended", async () => {
+      await throughTemplatePick();
+      machine.missingShots.add('shot-cut');
+      telemetry.setState({ shotState: shotFrame('shot-cut', 'pouring') });
+      telemetry.emitShot({ type: 'started', shotId: 'shot-cut' });
+      telemetry.setState({ shotState: shotFrame('shot-cut', 'pouring', decision('terminal', 'disconnected')) });
+      telemetry.setState({ shotState: shotFrame(null, 'idle') });
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-cut', stopReason: null });
+      await vi.waitFor(() => expect(engine.getState().error).toBe(SHOT_NOT_SAVED));
+      expect(lostShotWarnings()).toEqual([CUT_OFF]);
+      await engine.retry();
+      expect(lostShotWarnings()).toEqual([CUT_OFF, CUT_OFF]);
+    });
+
+    it('a shot that finished says so on Retry, though the machine dropped since', async () => {
+      await throughTemplatePick();
+      machine.missingShots.add('shot-lost');
+      ranAndEnded('shot-lost');
+      await vi.waitFor(() => expect(engine.getState().error).toBe(SHOT_NOT_SAVED));
+      expect(lostShotWarnings()).toEqual([NOT_SAVED]);
+
+      telemetry.setState({ machineConnected: false });
+      await engine.retry();
+      expect(lostShotWarnings()).toEqual([NOT_SAVED, NOT_SAVED]);
+    });
+
+    it("another run's teardown says nothing of this shot", async () => {
+      await throughTemplatePick();
+      telemetry.setState({ shotState: shotFrame('old-run', 'pouring', decision('terminal', 'disconnected')) });
+      telemetry.setState({ shotState: shotFrame(null, 'idle') });
+      machine.missingShots.add('shot-lost');
+      ranAndEnded('shot-lost');
+      await vi.waitFor(() => expect(engine.getState().error).toBe(SHOT_NOT_SAVED));
+      expect(lostShotWarnings()).toEqual([NOT_SAVED]);
     });
   });
 

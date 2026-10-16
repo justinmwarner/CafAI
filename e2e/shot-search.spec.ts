@@ -7,7 +7,8 @@ import { decaidRequests, machineRow, openApp, pullShot, pullShotOnMachine, saveA
 /**
  * D65: while CafAI asks Decaid for a just-finished shot (six tries over about
  * 15 s), the chat says so with a progress bar, updated on each try, until the
- * shot card or the warning takes its place. Retry searches again, visibly.
+ * shot card or the warning takes its place. Retry searches again, visibly,
+ * and says what the first warning said of how the shot ended (D-SIMA-2).
  * A cleaning profile's run is no shot, and CafAI looks for none (D193); nor
  * is a run that never poured, which gets one quiet line (D-SIMA-1).
  */
@@ -105,12 +106,18 @@ test('shows the search again on Retry after the machine dropped mid-shot', async
   const search = page.getByText(SEARCH);
   await expect(search).toBeVisible({ timeout: 30_000 });
   // Six tries over about 15 s, then the warning, and the banner with Retry.
-  await expect(page.getByText(/The machine disconnected during that shot/)).toBeVisible({ timeout: 40_000 });
+  const cutOff = page.getByText(/The machine disconnected during that shot/);
+  await expect(cutOff).toBeVisible({ timeout: 40_000 });
   await expect(search).toHaveCount(0);
   await expect(page.getByTestId(TID.errorBanner)).toContainText('Decaid has not saved that shot yet.');
 
+  // With the machine back, as the warning says, Retry looks again, and still says how the shot ended (D-SIMA-2).
+  await page.evaluate(() => (window as CafaiMockWindow).__CAFAI_MOCK__!.state.setMachineConnected(true));
   await page.getByTestId(TID.retryButton).click();
   await expect(search).toBeVisible({ timeout: 10_000 });
+  await expect(cutOff).toHaveCount(2, { timeout: 40_000 });
+  await expect(search).toHaveCount(0);
+  await expect(page.getByText(/The shot finished, but Decaid has not saved it/)).toHaveCount(0);
 });
 
 test('Espresso then Stop at once is no shot: no card, no taste question, and the next shot is compared with the one before', async ({
