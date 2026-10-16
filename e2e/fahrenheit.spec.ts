@@ -112,7 +112,8 @@ test('the coach in °F: its prompt asks for °F, its change and the change card 
   await expect(card).toContainText('197.6 °F');
   await expect(card).toContainText('199.4 °F (every step +1.8 °F)');
   await expect(card).not.toContainText('°C');
-  const asked = seen.filter((request) => new URL(request.url).pathname === '/v1/messages').map((request) => request.body ?? '');
+  // The coach's turns, not a preflight: each with its body.
+  const asked = seen.filter((request) => new URL(request.url).pathname === '/v1/messages' && request.body !== null).map((request) => request.body ?? '');
   expect(asked.length).toBeGreaterThan(0);
   expect(asked.every((body) => body.includes('# Temperatures in °F')), 'every request carries the °F section').toBe(true);
 

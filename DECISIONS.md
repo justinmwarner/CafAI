@@ -2512,9 +2512,10 @@ The °F item of D151 (`docs/superpowers/specs/2026-10-15-fahrenheit-design.md`).
   lines, the chat, exports, Decaid's backup) is °C or the words as they were
   written; nothing is converted on its way in or out. A temperature converts
   as °C × 1.8 + 32, a change of one as × 1.8, without the 32: 1 °C hotter is
-  1.8 °F hotter. Why: streamline does the same (`units.js`: "Celsius on the
-  wire... a pure display-layer conversion"), and with one unit in the data a
-  switch of units changes no record, and an export, a backup or a version
+  1.8 °F hotter. Why: streamline and MSL do the same (`units.js`: "Celsius on
+  the wire... a pure display-layer conversion"; MSL's "Units are
+  display-only", docs/verified/01-platform.md), and with one unit in the data
+  a switch of units changes no record, and an export, a backup or a version
   reads the same on any device.
 - **D-TEMP-2. Settings > Appearance > Temperatures, °C for everyone until
   changed.** A row after the custom hue, drawn as the Mode control, **°C
@@ -2524,9 +2525,11 @@ The °F item of D151 (`docs/superpowers/specs/2026-10-15-fahrenheit-design.md`).
   is kept in Settings as `temperatureUnit`, absent until someone chooses on
   the device and read as °C, as `keepKeyInDecaid` is (D99), so the mirror and
   exports carry it, and an import or a restore fills it only on a device that
-  never chose. No default from the locale: a tablet's language says little
-  about the unit its barista brews in, streamline starts in °C too, and a
-  guess would change what existing users see. Why in Appearance: it is how
+  never chose. Decaid has no unit setting to follow (streamline keeps its
+  own, docs/audit/2026-10-09/streamline.md). No default from the locale: a
+  tablet's language says little about the unit its barista brews in,
+  streamline starts in °C too, and a guess would change what existing users
+  see. Why in Appearance: it is how
   CafAI shows itself, it applies at once as the rest of that section does,
   and it is the first section a barista opens; a section of its own for one
   control would add an eleventh card to Settings.
