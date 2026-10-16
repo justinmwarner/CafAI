@@ -6,7 +6,11 @@ session on a DE1 with Decaid. It covers what the owner's answers leave open
 (QUESTIONS #1, #4 and #9), every check an answer deferred to the machine
 (#3, #7, #8), and what the Decaid alignment of 2026-10-09 and 10 added, the
 bag photo, the Visualizer link and DYE2 included (section 12, QUESTIONS #10).
-Allow 2 to 2.5 hours and about 14 shots.
+Allow 2 to 2.5 hours and about 14 shots. Sections 13 to 19, added since
+(the drinks' views, machine care, sleep and wake, and the gap review's four
+items of 2026-10-15), add about an hour and a few shots; a Descale from
+streamline (section 19, step 5) takes most of an hour of its own, so run it
+only when the machine is due one.
 
 For each step, write what you saw in the results table at the end (pass,
 fail, or a note). The saved JSON files and log excerpts matter as much as the
@@ -663,8 +667,11 @@ laptop on the same network for steps 4 and 5. Put any setting back after.
    descale step says "Done today". Record each state and substate the log
    shows.
 6. **Forward Flush x5.** Run Decent's Cleaning/Forward Flush x5 from
-   streamline with a blind basket and water only. Expected: no new shot in
-   Decaid's shot list, and the detergent clean not marked done.
+   streamline with a blind basket and water only, CafAI open on the phone.
+   Expected: no new shot in Decaid's shot list; nothing in CafAI's chat (no
+   "Looking for that shot in Decaid…", no Retry, D193); and the detergent
+   clean not marked done. Record what the Shot view shows during the run
+   and after it.
 7. **The line.** After a week with shots and no clean (or with the
    tablet's date moved on a week), open the coach. Expected: the stats
    card's line "Weekly clean due: … shots since …", and a tap opens Weekly
@@ -750,7 +757,7 @@ laptop on the same network for steps 4 and 5. Put any setting back after.
 | 19 | 3 | A steam counted; in `/api/v1/steams/ids`? | | |
 | 19 | 4 | Streamline's Clean seen: "Done today"; how long it ran | | |
 | 19 | 5 | Streamline's Descale seen; its states and substates | | |
-| 19 | 6 | Forward Flush x5: no shot in Decaid, the clean not marked | | |
+| 19 | 6 | Forward Flush x5: no shot in Decaid, nothing in the chat, the clean not marked; what the Shot view showed | | |
 | 19 | 7 | The stats card's line when due; a tap opens the step | | |
 
 Send back this table, the saved shot and profile JSON files, the `[CafAI]`
