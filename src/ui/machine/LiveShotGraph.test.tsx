@@ -930,6 +930,36 @@ describe('LiveShotGraph: the shot under this one (D178-D182)', () => {
     expect(services.decaid.calls.filter((call) => call.method === 'getShot')).toEqual([]);
   });
 
+  it('after a shot stopped in its preheat, shows the dash again and takes the previous shot from under the empty plot', () => {
+    const services = createFakeServices({ coach: { messages: [shotCard('shot-0', previous())] } });
+    renderWithServices(<LiveShotGraph />, services);
+    const timer = screen.getByTestId(TID.shotTimer);
+    expect(timer.textContent).toBe(DASH);
+    act(() => services.telemetry.emitShot({ type: 'started', shotId: 'shot-1' }));
+    act(() => {
+      services.telemetry.emitSample(sample(0, 'preparingForShot', 0));
+      services.telemetry.emitSample(sample(1, 'preparingForShot', 0));
+    });
+    runFrames();
+    // While it heats, the previous shot is under the plot already.
+    expect(key()).toHaveTextContent(/^Previous shot · /);
+    expect(timer.textContent).toBe('0.0 s');
+
+    // Stopped before its first pour frame: nothing to show, as before any shot.
+    const draws = fakePlots[0]!.setDataCalls.length;
+    act(() => services.telemetry.emitShot({ type: 'finished', shotId: null, stopReason: null }));
+    runFrames();
+    expect(screen.getByText('Shot graph')).toBeInTheDocument();
+    expect(screen.getByText('Pull a shot to see it here.')).toBeInTheDocument();
+    expect(key()).toBeNull();
+    expect(timer.textContent).toBe(DASH);
+    // The plot is drawn again, so the band goes with its key.
+    expect(fakePlots[0]!.setDataCalls.length).toBeGreaterThan(draws);
+    const { plot, strokes } = canvas();
+    for (const hook of options().hooks?.drawAxes ?? []) hook(plot);
+    expect(strokes).toEqual([]);
+  });
+
   it("once the shot's card is in, draws the shot that card asks about: another coffee's, read from Decaid once", async () => {
     const services = createFakeServices({ coach: { messages: [] } });
     const getShot = vi.fn(async (id: string) => syntheticShotRecord({ id, endS: 28 }));
