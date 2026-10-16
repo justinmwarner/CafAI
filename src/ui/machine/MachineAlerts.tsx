@@ -4,11 +4,12 @@
  *
  * 1. A command that failed (from the top bar's row or the stats card): it
  *    answers the tap the barista just made, until closed or the next command.
- * 2. Decaid's latest device error (e.g. profileUploadFailed), until closed.
- * 3. Decaid itself out of reach, once that has lasted, whatever the machine
+ * 2. Decaid itself out of reach, once that has lasted, whatever the machine
  *    was (the telemetry store's `unreachable`): until Decaid says again
  *    which devices are connected, the commands that need it wait
  *    (commands.ts) and the stats card keeps its last readings.
+ * 3. Decaid's latest device error (e.g. profileUploadFailed), until closed;
+ *    it may be old, so it waits while Decaid cannot be reached.
  * 4. No machine connected, with what to do about it, and Connect for the
  *    machine and for the scale when it is missing too (deviceConnect.ts).
  * 5. The machine reporting an error.
@@ -215,14 +216,15 @@ export function MachineAlerts() {
   let problem: Problem | null = null;
   if (command.error !== null) {
     problem = { severity: 'error', text: command.error, onClose: command.dismiss };
+  } else if (unreachable) {
+    // Ahead of Decaid's device error, which may be old (scanFailed stays, profileUploadFailed lasts until an upload works): with every command held, the strip says why.
+    problem = { severity: 'warning', text: "Can't reach Decaid. Trying again…" };
   } else if (deviceError !== null && deviceError.timestamp !== closedDeviceError) {
     problem = {
       severity: deviceError.severity === 'warning' ? 'warning' : 'error',
       text: deviceErrorText(deviceError),
       onClose: () => setClosedDeviceError(deviceError.timestamp),
     };
-  } else if (unreachable) {
-    problem = { severity: 'warning', text: "Can't reach Decaid. Trying again…" };
   } else if (away && heard) {
     // Only the DE1's own failed Connect takes the machine's words; a scale not found says so in the scale's alert, once the DE1 is back.
     const failed = connect.failure?.kind === 'machine' ? connect.failure.text : null;
