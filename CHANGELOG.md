@@ -6,6 +6,18 @@ workflow checks against it. Settings > About shows the version you run.
 
 ## Unreleased
 
+### The everyday skin
+
+- A shot's card draws the shot its question asks about faintly under its
+  own curves (your previous shot, or for a bag's first shot your last shot
+  of another coffee), as a pale band in the same colours, with a third key
+  that names it. The Shot view draws the
+  bag's previous shot under a shot while it pulls, and the shot its card
+  asks about once it is done, named over the plot with its time and yield.
+  So a grind or a profile change shows on the curve. A shot in the chat is
+  drawn from its card, with no request; another coffee's is read from
+  Decaid once; one Decaid no longer has is left out, quietly. A card's
+  curves now start at the pour, as its times do.
 - A shot's card takes a TDS from your refractometer: tap **TDS · Add**
   among its numbers and type the reading (a comma works too). CafAI works
   out the extraction yield (EY) from the card's own dose and yield, shows
@@ -20,16 +32,6 @@ workflow checks against it. Settings > About shows the version you run.
   hotter is 1.8 °F hotter), while Decaid and your profiles keep °C. A
   steam, hot water or flush temperature set in °F is kept as the nearest
   whole °C, so it reads back as you set it.
-- A shot's card draws the shot its question asks about faintly under its
-  own curves: "Compared with your previous shot?" the previous shot, a
-  bag's first shot your last shot of another coffee, as a pale band in the
-  same colours, with a third key that names it. The Shot view draws the
-  bag's previous shot under a shot while it pulls, and the shot its card
-  asks about once it is done, named over the plot with its time and yield.
-  So a grind or a profile change shows on the curve. A shot in the chat is
-  drawn from its card, with no request; another coffee's is read from
-  Decaid once; one Decaid no longer has is left out, quietly. A card's
-  curves now start at the pour, as its times do.
 - Machine care reminds you, quietly: each step beyond Daily shows when it
   was last done, with **Mark done** (and **Undo**), and the stats card has
   one line for the step most overdue, "Weekly clean due: 41 shots since the
@@ -39,6 +41,14 @@ workflow checks against it. Settings > About shows the version you run.
   care with a switch for the line. A Clean or Descale CafAI sees the
   machine run counts too. The last times are kept in Decaid's backup and the
   export.
+
+### Decaid
+
+- CafAI reads Decaid's steam records (`GET /api/v1/steams/ids` and
+  `/api/v1/steams/latest`) for the care counts, and writes a shot's
+  `drinkTds` and `drinkEy`. The mock Decaid answers both as Decaid does,
+  keeps steam records and saves no shot for a cleaning profile, and the
+  contract checks cover them.
 
 ## 0.1.2 (2026-10-15)
 
