@@ -27,8 +27,8 @@ export const FUN_FACTS_CHOICES: readonly FunFactsChoice[] = [
   },
   {
     value: 'web',
-    // The one before, and a search: the list shows them in turn, and the line says the rest.
-    label: '…and a web search',
+    // Whole on its own: a closed select shows one label, so it cannot lean on the one before.
+    label: "CafAI's, the coach's and a web search",
     line: 'The coach may also look the roaster, farm or producer up on the web: one search per fact, about one US cent each, plus a few cents for the pages it reads.',
   },
 ];

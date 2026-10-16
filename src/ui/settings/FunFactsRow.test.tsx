@@ -31,7 +31,7 @@ describe('FunFactsRow (D198)', () => {
       'Off',
       "CafAI's facts",
       "CafAI's and the coach's",
-      '…and a web search',
+      "CafAI's, the coach's and a web search",
     ]);
     expect(select()).toHaveValue('coach');
     expect(select()).toHaveAccessibleDescription(COACH);

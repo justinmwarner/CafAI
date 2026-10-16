@@ -1,7 +1,8 @@
 /**
  * Anthropic's web search, for a fun fact (D203): the server tool the coach's
- * requests carry when the barista chose "…and a web search", the 400 that
- * says it cannot be used, and the sites a reply cites.
+ * requests carry when the barista chose "CafAI's, the coach's and a web
+ * search" in Settings > Coach > Fun facts, the 400 that says it cannot be
+ * used, and the sites a reply cites.
  */
 import { LlmError, type ContentBlock, type ServerToolDefinition } from './types.ts';
 

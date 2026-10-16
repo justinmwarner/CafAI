@@ -63,7 +63,7 @@ line under it that says what the chosen one does.
 | Off | "No fun facts." |
 | CafAI's facts | "From CafAI's own list of about 500 checked facts, picked for the bag where one fits. Free, and works without the coach." |
 | CafAI's and the coach's (default) | "The coach shares a fact about this bag when it knows one for sure; the rest come from CafAI's list." |
-| …and a web search | "The coach may also look the roaster, farm or producer up on the web: one search per fact, about one US cent each, plus a few cents for the pages it reads." The line also says what the CafAI Bridge does with it (section 8). |
+| CafAI's, the coach's and a web search | "The coach may also look the roaster, farm or producer up on the web: one search per fact, about one US cent each, plus a few cents for the pages it reads." The line also says what the CafAI Bridge does with it (section 8). |
 
 The setting is `Settings.funFacts`: `'off' | 'list' | 'coach' | 'web'`,
 absent until someone chooses on this device and read as `'coach'`, so a merge
