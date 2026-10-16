@@ -669,9 +669,11 @@ laptop on the same network for steps 4 and 5. Put any setting back after.
 6. **Forward Flush x5.** Run Decent's Cleaning/Forward Flush x5 from
    streamline with a blind basket and water only, CafAI open on the phone.
    Expected: no new shot in Decaid's shot list; nothing in CafAI's chat (no
-   "Looking for that shot in Decaid…", no Retry, D193); and the detergent
-   clean not marked done. Record what the Shot view shows during the run
-   and after it.
+   "Looking for that shot in Decaid…", D193); and the detergent clean not
+   marked done. The banner "The machine is running "Cleaning/Forward Flush
+   x5", not <Bean> vN. Tap Retry to load it." shows before and after the run
+   (D70): that is expected, so tap its Retry once the cleaning is done.
+   Record what the Shot view shows during the run and after it.
 7. **The line.** After a week with shots and no clean (or with the
    tablet's date moved on a week), open the coach. Expected: the stats
    card's line "Weekly clean due: … shots since …", and a tap opens Weekly
@@ -757,7 +759,7 @@ laptop on the same network for steps 4 and 5. Put any setting back after.
 | 19 | 3 | A steam counted; in `/api/v1/steams/ids`? | | |
 | 19 | 4 | Streamline's Clean seen: "Done today"; how long it ran | | |
 | 19 | 5 | Streamline's Descale seen; its states and substates | | |
-| 19 | 6 | Forward Flush x5: no shot in Decaid, nothing in the chat, the clean not marked; what the Shot view showed | | |
+| 19 | 6 | Forward Flush x5: no shot in Decaid, nothing in the chat, the clean not marked, the profile banner's Retry after; what the Shot view showed | | |
 | 19 | 7 | The stats card's line when due; a tap opens the step | | |
 
 Send back this table, the saved shot and profile JSON files, the `[CafAI]`
