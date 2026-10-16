@@ -82,28 +82,40 @@ needs no detergent) and give the line its number.
 
 ## 4. Counting
 
-- **From Decaid's totals, one request each.** Decaid never saves a run of a
-  cleaning profile as a shot (`_persistShotIfNeeded`,
+- **From Decaid's totals, read when its newest is new.** Decaid never saves
+  a run of a cleaning profile as a shot (`_persistShotIfNeeded`,
   de1_state_manager.dart:911-917 at aab5f93: beverage types cleaning and
   calibrate are skipped), so its shot list holds no clean to page back to.
   Each step's record keeps Decaid's shot total and steam total from its
-  start; the count since is the total now less that.
-  `GET /api/v1/shots?limit=1` answers the total with the newest shot (Decaid
-  parses one shot's measurements; a page of 100 parses a hundred,
-  shot_mapper.dart), and `GET /api/v1/steams/ids` the steams, as ids:
-  `GET /api/v1/steams` would make Decaid parse every steam's measurements
-  (steam_mapper.dart) and send each one's workflow. `GET /api/v1/steams/latest`
-  gives the newest steam's time.
+  start, and when Decaid's newest shot and steam began then, as Decaid wrote
+  it; the count since is the total now less that. A count asks
+  `GET /api/v1/shots/latest` and `GET /api/v1/steams/latest` first (one row
+  each, no measurements: shot_dao.dart, steam_dao.dart), and a total only
+  for a newest it has not counted with: `GET /api/v1/shots?limit=1` answers
+  the total with the newest shot (Decaid parses that shot's measurements; a
+  page of 100 parses a hundred, shot_mapper.dart), and
+  `GET /api/v1/steams/ids` the steams, as ids (`GET /api/v1/steams` would
+  make Decaid parse every steam's measurements, steam_mapper.dart, and send
+  each one's workflow).
 - **When the totals do not add up.** A total that fell (shots deleted,
-  another Decaid) starts that step's count again from now; so does a
-  newest shot (or steam) older than the step's start (old ones imported). A
-  Decaid without steam records (404: older than the pin) counts Rinza by
-  days alone.
-- **When it counts**: at start, 5 s after a shot or a steam ends, when the
-  page comes back into view and when the Care screen opens; at most once
-  every 10 s, never while a shot runs. The last totals are kept on the
-  device (`localStorage`, `cafai.care.counts`), so the stats card has them
-  at its first paint and while Decaid is away.
+  another Decaid) starts that step's count again from now; so do records
+  added when none began after Decaid's newest at the step's start (old ones
+  imported). Decaid's times are compared with Decaid's only, never with
+  CafAI's clock. A shot total that grew by more than one a minute could
+  have, since the newest of the reading before, is checked against a page
+  of the 20 newest: the ones that began before that newest are old ones
+  imported, and every baseline from before moves up by them. A Decaid
+  without steam records (404: older than the pin) counts Rinza by days
+  alone.
+- **When it counts**: at start, 5 s after a shot or a steam ends, when
+  Decaid answers again (unless a count it answered ran in the last 10 s),
+  when the page comes back into view and when the Care screen opens; at
+  most once every 10 s, never while a shot runs. Mark done and a cycle seen
+  take the totals of the count running, or of one started then. A count's
+  writes are compare and set, so a mark, a merge or another tab's write
+  that lands meanwhile stays. The last totals are kept on the device
+  (`localStorage`, `cafai.care.counts`), with the newest records, so the
+  stats card has them at its first paint and while Decaid is away.
 - **From the first look.** A step never marked done counts from the first
   time CafAI counted it, with Decaid's totals then: a new install is never
   due at once, and the Care screen says "Not marked done yet" with that
@@ -165,7 +177,9 @@ brought into view.
   (IndexedDB's VersionError), so a tablet put back on it would never start.
   A record: `id`, `doneAt` (null while never marked), `by` (`tick`, `seen`
   or null), `countFrom` (the done time, or the first look), `shotTotal` and
-  `steamTotal` (Decaid's then, or null), `updatedAt`.
+  `steamTotal` (Decaid's then, or null), `newestShotAt` and `newestSteamAt`
+  (when Decaid's newest shot and steam began then, as Decaid wrote it, or
+  null), `updatedAt`.
 - **Decaid's store**: one more key, `care`, in namespace `cafai`.
 - **Export and import**: an optional `care` list in the file, schema version
   1 still (an older CafAI drops it). A merge keeps the later `doneAt`; of two
@@ -187,9 +201,10 @@ brought into view.
   screen's row), `careReveal.ts` (bringing a step or Settings' section into
   view); `CareSection.tsx` gains the fields.
 - API: `listSteamIds`, `getLatestSteam` (`src/api/client.ts`, readers in
-  `readers.ts`); the mock records a steam as Decaid's SteamSequencer does
-  (opened on entering `steam`, kept when it leaves) and, as Decaid, never
-  saves a cleaning profile's run as a shot.
+  `readers.ts`), and the `getLatestShot` and `listShots` CafAI had; the
+  mock records a steam as Decaid's SteamSequencer does (opened on entering
+  `steam`, kept when it leaves) and, as Decaid, never saves a cleaning
+  profile's run as a shot.
 
 ## 10. Testing
 
@@ -220,6 +235,13 @@ brought into view.
 - The LSI itself: CafAI asks Decent's TDS bands, not the water's LSI.
 - Litres, and the time-to-ready of a cycle.
 - The cycles from CafAI (D161).
+- Old records imported into Decaid that one reading cannot tell apart
+  (D185): shots imported in fewer than one a minute would have pulled since
+  the newest of the reading before count as shots since, and so do steam
+  records Decaid takes in from another Decaid's backup (its de1app import
+  brings shots only, and the steam list has no page to check against).
+  Telling them apart would mean paging back through every shot's
+  measurements.
 
 ## Hardware test plan
 

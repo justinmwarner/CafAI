@@ -2864,36 +2864,60 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
   week of neither needs nothing; and litres cannot be counted: Decaid keeps
   no record of a flush or of hot water, and CafAI sees only what runs while
   it is open.
-- **D185. Counts come from Decaid's totals, one request each, never by
-  paging back.** Each step's record (D189) keeps Decaid's shot total and
-  steam total from when its count began, and the count since is the total
-  now less that (`countSince`, `rebaseline`): `GET /api/v1/shots?limit=1`
-  answers the total with the newest shot, `GET /api/v1/steams/ids` the
-  steams and `GET /api/v1/steams/latest` the newest steam (`listSteamIds` and
-  `getLatestSteam` in `src/api/client.ts`, new to CafAI, with their readers,
-  the mock and the contract checks). A total that fell (shots deleted,
-  another Decaid) starts that step's count again from now, and so does a
-  newest record older than the step's start (old ones imported); a Decaid
-  without steam records (404) counts Rinza by days alone. The care service
+- **D185. Counts come from Decaid's totals, read when its newest record is
+  new, never by paging back.** Each step's record (D189) keeps Decaid's shot
+  total and steam total from when its count began, and when Decaid's newest
+  shot and newest steam began then, as Decaid wrote it (`newestShotAt`,
+  `newestSteamAt`); the count since is the total now less the one then
+  (`countSince`, `rebaseline`). A count asks for the newest of each first,
+  `GET /api/v1/shots/latest` and `GET /api/v1/steams/latest`, which read no
+  measurements (`getLatestShot`, `getLatestSteam` in `src/api/client.ts`),
+  and for a total only when that newest is one it has not counted with:
+  `GET /api/v1/shots?limit=1` (the total, with that newest) and
+  `GET /api/v1/steams/ids` (the steams as ids; `listSteamIds` and
+  `getLatestSteam` are new to CafAI, with their readers, the mock and the
+  contract checks). A total that fell (records deleted, another Decaid)
+  starts that step's count again from now, and so do records added when none
+  began after Decaid's newest then (old ones imported). Decaid's times are
+  compared with Decaid's only, never with CafAI's clock: a phone in another
+  zone, or a tablet with its date off, reads them hours or a year away. When
+  the shot total grows by more than one shot a minute could have, between
+  the newest of the reading before and the newest now, a page of the 20
+  newest shots tells the ones that began after the newest then from the old
+  ones, and every baseline from before moves up by the old ones (de1app's
+  history brought into Decaid among new shots); a page that ends before the
+  newest then cannot tell, and the count stands. A Decaid without steam
+  records (404) counts Rinza by days alone. The care service
   (`src/app/care/careService.ts`) counts at start, 5 s after a shot or a
-  steam ends, when Decaid answers again, when the page comes back into view
-  and when the Care screen opens, at most once every 10 s and never during a
-  shot, and keeps the last totals on the device (`cafai.care.counts` in
-  localStorage) for the stats card's first paint. A count writes every
-  step's record in one transaction, compare and set
-  (`CareRepository.update`): a step's totals change only while its record is
-  still the one the count saw (the same last done and start), a first look
-  is written only while none is stored, and a step on screen takes what its
-  record is then unless it changed here meanwhile. So a mark, a cycle seen,
-  a restore's merge, an import or another tab's write that lands while a
-  count is on its way is never written over. Why: the roadmap's paging
-  back to the last clean has nothing to stop at, since Decaid never saves a
-  run of a cleaning profile as a shot (`_persistShotIfNeeded`,
-  de1_state_manager.dart:911-917 at aab5f93, skips beverage types cleaning
-  and calibrate); and each page of the shot list makes Decaid parse every
-  shot's measurements (shot_mapper.dart:14-49), as `GET /api/v1/steams` does
-  every steam's (steam_mapper.dart:11-30), where a total is one COUNT and the
-  ids one column. On a slow tablet one small request beats pages of curves.
+  steam ends, when Decaid answers again unless a count it answered ran in
+  the last 10 s, when the page comes back into view and when the Care screen
+  opens, at most once every 10 s and never during a shot; Mark done and a
+  cycle seen take the totals of the count running, or of one started then.
+  It keeps the last totals, with the newest records, on the device
+  (`cafai.care.counts` in localStorage) for the stats card's first paint and
+  the next page's first count. A count writes every step's record in one
+  transaction, compare and set (`CareRepository.update`): a step's totals
+  change only while its record is still the one the count saw (the same last
+  done and start), a first look is written only while none is stored, and a
+  step on screen takes what its record is then unless it changed here
+  meanwhile. So a mark, a cycle seen, a restore's merge, an import or
+  another tab's write that lands while a count is on its way is never
+  written over. Left: old shots imported in fewer than one a minute would
+  have pulled since the newest of the reading before count as shots since,
+  and so do steam records Decaid takes in from another Decaid's backup (its
+  de1app import brings shots only, and its steam list has no page to check
+  against). Why: the roadmap's paging back to the last clean has nothing to
+  stop at, since Decaid never saves a run of a cleaning profile as a shot
+  (`_persistShotIfNeeded`, de1_state_manager.dart:911-917 at aab5f93, skips
+  beverage types cleaning and calibrate); and each page of the shot list
+  makes Decaid parse every shot's measurements (shot_mapper.dart:14-49), as
+  `GET /api/v1/steams` does every steam's (steam_mapper.dart:11-30), where a
+  total is one COUNT, the ids one column and the newest one row without its
+  measurements (`getLatestShotMeta` and `getLatestSteamMeta`,
+  shot_dao.dart:192-204 and steam_dao.dart:58-70). Yet the ids of a busy
+  café's year of steams come to over a megabyte, and a page of one parses
+  that shot's measurements: on a slow tablet two rows a count, and a total
+  only after a shot or a steam, beat both every time.
 - **D186. A step starts over when it is marked done, or when CafAI saw
   the machine's own Clean or Descale run for a minute; Forward Flush x5
   never counts.** **Mark done** sets the step's last time to now, with

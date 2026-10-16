@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GatewayError, type MachineFrame, type ShotRecordSummary } from '../../api/types.ts';
 import { createFakeDecaid, createFakeStorage, createFakeTelemetry, IDLE_TELEMETRY, type FakeDecaid } from '../../ui/testing/fakeServices.ts';
+import { DEFAULT_CARE } from '../../storage/settings.ts';
 import type { CareRecord } from '../../storage/types.ts';
-import { TRACKED_STEPS, type Totals } from './careRules.ts';
+import { stepStatus, TRACKED_STEPS, type Totals } from './careRules.ts';
 import { AFTER_RUN_MS, createCareService, localTotalsCache, MARK_WAIT_MS, MIN_COUNT_GAP_MS, TOTALS_CACHE_KEY, type TotalsCache } from './careService.ts';
 import { CYCLE_MIN_MS } from './cycleWatch.ts';
 
@@ -48,7 +49,9 @@ function setup(options: { shots?: number; steams?: number; seed?: CareRecord[]; 
 }
 
 const machine = (state: string): MachineFrame => ({ ...IDLE_TELEMETRY.machine!, state: { state, substate: 'idle' } });
-const counts = (decaid: FakeDecaid) => decaid.calls.filter((call) => call.method === 'listShots').length;
+const calls = (decaid: FakeDecaid, method: string) => decaid.calls.filter((call) => call.method === method);
+/** Every count asks for Decaid's newest shot first. */
+const counts = (decaid: FakeDecaid) => calls(decaid, 'getLatestShot').length;
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -68,14 +71,127 @@ describe('start and counting (D185, D190)', () => {
     expect(records.every((record) => record.doneAt === null && record.countFrom === '2026-10-01T08:00:00.000Z')).toBe(true);
     expect(records.every((record) => record.shotTotal === 100 && record.steamTotal === 30)).toBe(true);
     expect(care.getState().totals).toMatchObject({ shots: 100, steams: 30 });
-    expect(cache.saved).toMatchObject({ shots: 100, steams: 30 });
-    // One request for each total, the shots' page of one.
-    expect(decaid.calls.filter((call) => call.method === 'listShots').map((call) => call.args[0])).toEqual([{ limit: 1 }]);
+    expect(cache.saved).toMatchObject({ shots: 100, steams: 30, newestShot: { id: `shot-${START - 60_000}` }, newestSteam: { id: 'steam-0' } });
+    // Every step keeps Decaid's newest times from then, as Decaid wrote them.
+    expect(records.every((record) => record.newestShotAt === shotAt(START - 60_000).timestamp && record.newestSteamAt === shotAt(START - 60_000).timestamp)).toBe(true);
+    // The newest of each first; a total only for a newest CafAI has not counted with: the shots' page of one, the steams' ids.
+    expect(counts(decaid)).toBe(1);
+    expect(calls(decaid, 'getLatestSteam')).toHaveLength(1);
+    expect(calls(decaid, 'listShots').map((call) => call.args[0])).toEqual([{ limit: 1 }]);
+    expect(calls(decaid, 'listSteamIds')).toHaveLength(1);
     care.dispose();
   });
 
+  it('asks only for the newest shot and steam while neither is new, and for a total once one is (D185)', async () => {
+    const { care, decaid } = setup();
+    await care.start();
+    await vi.advanceTimersByTimeAsync(0);
+    vi.setSystemTime(START + MIN_COUNT_GAP_MS);
+    care.refresh();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(counts(decaid)).toBe(2);
+    expect(calls(decaid, 'getLatestSteam')).toHaveLength(2);
+    expect(calls(decaid, 'listShots')).toHaveLength(1);
+    expect(calls(decaid, 'listSteamIds')).toHaveLength(1);
+
+    // A shot pulled: its page of one for the total; the steams' ids are not asked again.
+    setTotals(decaid, 101, 30, START + 5000);
+    decaid.steams.latest = { id: 'steam-0', timestamp: shotAt(START - 60_000).timestamp };
+    vi.setSystemTime(START + 2 * MIN_COUNT_GAP_MS);
+    care.refresh();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(care.getState().totals).toMatchObject({ shots: 101, steams: 30 });
+    expect(calls(decaid, 'listShots')).toHaveLength(2);
+    expect(calls(decaid, 'listSteamIds')).toHaveLength(1);
+    care.dispose();
+  });
+
+  it('a page that comes back with the newest is the total too, kept across a reload of the page', async () => {
+    const first = setup();
+    await first.care.start();
+    await vi.advanceTimersByTimeAsync(0);
+    first.care.dispose();
+    // The next page: the same Decaid, nothing new; the totals kept on the device are Decaid's.
+    const again = createCareService({ storage: first.storage, decaid: first.decaid, telemetry: first.telemetry, cache: first.cache });
+    await again.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(again.getState().totals).toMatchObject({ shots: 100, steams: 30 });
+    expect(calls(first.decaid, 'listShots')).toHaveLength(1);
+    again.dispose();
+  });
+
+  it("counts once at start, not again when Decaid's socket opens just after; again when that count went unanswered", async () => {
+    const closed = { ...IDLE_TELEMETRY.sockets, devices: 'closed' as const };
+    const open = { ...IDLE_TELEMETRY.sockets, devices: 'open' as const };
+    for (const opensWhile of ['counting', 'after'] as const) {
+      const decaid = decaidWith(100, 30);
+      const telemetry = createFakeTelemetry({ sockets: closed });
+      const care = createCareService({ storage: createFakeStorage(), decaid, telemetry, cache: memoryCache() });
+      await care.start();
+      if (opensWhile === 'after') await vi.advanceTimersByTimeAsync(1000);
+      // telemetry.start() opens Decaid's devices socket, with the start's count running or just done.
+      telemetry.setState({ sockets: open });
+      await vi.advanceTimersByTimeAsync(3 * MIN_COUNT_GAP_MS);
+      expect(counts(decaid), opensWhile).toBe(1);
+      care.dispose();
+    }
+
+    const decaid = decaidWith(100, 30);
+    decaid.failNext('getLatestShot', new GatewayError(0, '/api/v1/shots/latest', 'Could not reach Decaid.', 'network'));
+    decaid.failNext('getLatestSteam', new GatewayError(0, '/api/v1/steams/latest', 'Could not reach Decaid.', 'network'));
+    const telemetry = createFakeTelemetry({ sockets: closed });
+    const care = createCareService({ storage: createFakeStorage(), decaid, telemetry, cache: memoryCache() });
+    await care.start();
+    telemetry.setState({ sockets: open });
+    await vi.advanceTimersByTimeAsync(MIN_COUNT_GAP_MS);
+    expect(counts(decaid)).toBe(2);
+    expect(care.getState().totals).toMatchObject({ shots: 100, steams: 30 });
+    care.dispose();
+  });
+
+  it("finds old shots imported among new ones by a page of the newest, and leaves them out of every step's count (D185)", async () => {
+    const { care, decaid } = setup({ shots: 150 });
+    await care.start();
+    await vi.advanceTimersByTimeAsync(0);
+    // De1app's 2,000 shots imported into Decaid, and one pulled 90 s after the newest CafAI counted with: more than one a minute.
+    const pulled = shotAt(START + 30_000);
+    const before = Array.from({ length: 19 }, (_, i) => shotAt(START - 60_000 - i * 3_600_000));
+    decaid.shotPage = { items: [pulled, ...before], total: 2151, limit: 1, offset: 0 };
+    vi.setSystemTime(START + MIN_COUNT_GAP_MS);
+    care.refresh();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(calls(decaid, 'listShots').map((call) => call.args[0])).toEqual([{ limit: 1 }, { limit: 1 }, { limit: 20 }]);
+    const descale = care.getState().records.get('descale')!;
+    expect(descale.shotTotal).toBe(2150);
+    expect(stepStatus('descale', descale, DEFAULT_CARE, care.getState().totals, Date.now())).toMatchObject({ shots: 1, due: false });
+    care.dispose();
+  });
+
+  it('a jump one a minute could have pulled is counted with no page; one a page cannot tell stands', async () => {
+    for (const [total, newestMs, pages] of [
+      // 30 in two hours: pulled.
+      [180, START + 2 * 3_600_000, 0],
+      // 25 in two minutes, every one of the page's 20 newer than the newest then: it cannot tell.
+      [175, START + 60_000, 1],
+    ] as const) {
+      vi.setSystemTime(START);
+      const { care, decaid } = setup({ shots: 150 });
+      await care.start();
+      await vi.advanceTimersByTimeAsync(0);
+      decaid.shotPage = { items: Array.from({ length: 20 }, (_, i) => shotAt(newestMs - i * 1000)), total, limit: 1, offset: 0 };
+      vi.setSystemTime(START + MIN_COUNT_GAP_MS);
+      care.refresh();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(counts(decaid)).toBe(2);
+      expect(calls(decaid, 'listShots').filter((call) => (call.args[0] as { limit: number }).limit === 20)).toHaveLength(pages);
+      expect(care.getState().totals.shots).toBe(total);
+      expect(care.getState().records.get('descale')?.shotTotal).toBe(150);
+      care.dispose();
+    }
+  });
+
   it('has the totals kept on this device from its first moment, before Decaid answers', () => {
-    const { care } = setup({ cache: { shots: 90, steams: 20, newestShotMs: null, newestSteamMs: null } });
+    const { care } = setup({ cache: { shots: 90, steams: 20, newestShot: null, newestSteam: null } });
     expect(care.getState().totals).toMatchObject({ shots: 90, steams: 20 });
     care.dispose();
   });
@@ -118,7 +234,17 @@ describe('start and counting (D185, D190)', () => {
   });
 
   it('a total that fell starts the count again, and is written', async () => {
-    const seed = TRACKED_STEPS.map((id) => ({ id, doneAt: null, by: null, countFrom: '2026-09-01T08:00:00.000Z', shotTotal: 120, steamTotal: 30, updatedAt: '2026-09-01T08:00:00.000Z' }));
+    const seed = TRACKED_STEPS.map((id) => ({
+      id,
+      doneAt: null,
+      by: null,
+      countFrom: '2026-09-01T08:00:00.000Z',
+      shotTotal: 120,
+      steamTotal: 30,
+      newestShotAt: null,
+      newestSteamAt: null,
+      updatedAt: '2026-09-01T08:00:00.000Z',
+    }));
     const { care, storage } = setup({ seed, shots: 80 });
     await care.start();
     await vi.advanceTimersByTimeAsync(0);
@@ -128,14 +254,15 @@ describe('start and counting (D185, D190)', () => {
 
   it('a Decaid without steam records (404) counts the shots, leaves the steams unknown and asks no more', async () => {
     const { care, decaid } = setup();
-    decaid.failNext('listSteamIds', new GatewayError(404, '/api/v1/steams/ids', 'Decaid answered HTTP 404 for /api/v1/steams/ids.'));
+    decaid.failNext('getLatestSteam', new GatewayError(404, '/api/v1/steams/latest', 'Decaid answered HTTP 404 for /api/v1/steams/latest.'));
     await care.start();
     await vi.advanceTimersByTimeAsync(0);
-    expect(care.getState().totals).toMatchObject({ shots: 100, steams: null });
+    expect(care.getState().totals).toMatchObject({ shots: 100, steams: null, newestSteam: null });
     expect(care.getState().records.get('rinza')?.steamTotal).toBeNull();
     care.refresh();
     await vi.advanceTimersByTimeAsync(MIN_COUNT_GAP_MS);
-    expect(decaid.calls.filter((call) => call.method === 'listSteamIds')).toHaveLength(1);
+    expect(calls(decaid, 'getLatestSteam')).toHaveLength(1);
+    expect(calls(decaid, 'listSteamIds')).toHaveLength(0);
     care.dispose();
   });
 
@@ -171,9 +298,9 @@ describe('start and counting (D185, D190)', () => {
   });
 
   it('a Decaid that does not answer leaves the last totals, and records counted from now with none', async () => {
-    const { care, decaid, storage } = setup({ cache: { shots: 90, steams: 20, newestShotMs: null, newestSteamMs: null } });
-    decaid.failNext('listShots', new GatewayError(0, '/api/v1/shots', 'Could not reach Decaid.', 'network'));
-    decaid.failNext('listSteamIds', new GatewayError(0, '/api/v1/steams/ids', 'Could not reach Decaid.', 'network'));
+    const { care, decaid, storage } = setup({ cache: { shots: 90, steams: 20, newestShot: null, newestSteam: null } });
+    decaid.failNext('getLatestShot', new GatewayError(0, '/api/v1/shots/latest', 'Could not reach Decaid.', 'network'));
+    decaid.failNext('getLatestSteam', new GatewayError(0, '/api/v1/steams/latest', 'Could not reach Decaid.', 'network'));
     await care.start();
     await vi.advanceTimersByTimeAsync(0);
     expect(care.getState().totals).toMatchObject({ shots: 90, steams: 20 });
@@ -213,11 +340,28 @@ describe('Mark done and Undo (D186)', () => {
     const { care, decaid } = setup();
     await care.start();
     await vi.advanceTimersByTimeAsync(0);
-    decaid.listShots = () => new Promise(() => undefined);
+    decaid.getLatestShot = () => new Promise(() => undefined);
     const marking = care.markDone('rinza');
     await vi.advanceTimersByTimeAsync(MARK_WAIT_MS);
     await marking;
     expect(care.getState().records.get('rinza')).toMatchObject({ by: 'tick', shotTotal: 100, steamTotal: 30 });
+    care.dispose();
+  });
+
+  it('a mark takes the totals of the count running, rather than asking Decaid again', async () => {
+    const { care, decaid } = setup();
+    await care.start();
+    await vi.advanceTimersByTimeAsync(0);
+    setTotals(decaid, 120, 30, START + 5000);
+    vi.setSystemTime(START + MIN_COUNT_GAP_MS);
+    care.refresh();
+    await care.markDone('gasket');
+    expect(counts(decaid)).toBe(2);
+    expect(care.getState().records.get('gasket')).toMatchObject({ by: 'tick', shotTotal: 120 });
+    // And a mark with no count running starts one, at once: the barista asked.
+    await vi.advanceTimersByTimeAsync(0);
+    await care.markDone('transport');
+    expect(counts(decaid)).toBe(3);
     care.dispose();
   });
 
@@ -232,11 +376,13 @@ describe('Mark done and Undo (D186)', () => {
     decaid.listShots = () => new Promise((resolve) => (answer = () => resolve(page)));
     vi.setSystemTime(START + MIN_COUNT_GAP_MS);
     care.refresh();
-    decaid.listShots = async () => page;
-    await care.markDone('descale');
+    // The count is slow: the mark waits 3 s for it, then takes the last totals known.
+    const marking = care.markDone('descale');
+    await vi.advanceTimersByTimeAsync(MARK_WAIT_MS);
+    await marking;
     answer!();
     await vi.advanceTimersByTimeAsync(0);
-    expect(care.getState().records.get('descale')).toMatchObject({ by: 'tick', shotTotal: 80 });
+    expect(care.getState().records.get('descale')).toMatchObject({ by: 'tick', shotTotal: 100 });
     expect(care.getState().records.get('rinza')).toMatchObject({ doneAt: null, shotTotal: 80 });
     care.dispose();
   });
@@ -295,7 +441,17 @@ describe('settings and reload (D187)', () => {
     await care.start();
     await vi.advanceTimersByTimeAsync(0);
     await care.markDone('gasket');
-    await storage.care.put({ id: 'gasket', doneAt: '2026-09-20T08:00:00.000Z', by: 'tick', countFrom: '2026-09-20T08:00:00.000Z', shotTotal: 50, steamTotal: 10, updatedAt: '2026-09-20T08:00:00.000Z' });
+    await storage.care.put({
+      id: 'gasket',
+      doneAt: '2026-09-20T08:00:00.000Z',
+      by: 'tick',
+      countFrom: '2026-09-20T08:00:00.000Z',
+      shotTotal: 50,
+      steamTotal: 10,
+      newestShotAt: null,
+      newestSteamAt: null,
+      updatedAt: '2026-09-20T08:00:00.000Z',
+    });
     await care.reload();
     expect(care.getState().records.get('gasket')?.doneAt).toBe('2026-09-20T08:00:00.000Z');
     expect(care.getState().undoable.size).toBe(0);
@@ -309,13 +465,17 @@ describe('localTotalsCache', () => {
     const storage = { getItem: (key: string) => items.get(key) ?? null, setItem: (key: string, value: string) => void items.set(key, value) };
     const cache = localTotalsCache(storage);
     expect(cache.load()).toBeNull();
-    cache.save({ shots: 12, steams: null, newestShotMs: 5, newestSteamMs: null });
-    expect(JSON.parse(items.get(TOTALS_CACHE_KEY)!)).toEqual({ shots: 12, steams: null, newestShotMs: 5, newestSteamMs: null });
-    expect(cache.load()).toEqual({ shots: 12, steams: null, newestShotMs: 5, newestSteamMs: null });
+    const totals: Totals = { shots: 12, steams: null, newestShot: { id: 'shot-12', at: '2026-10-01T09:00:00.000000' }, newestSteam: null };
+    cache.save(totals);
+    expect(JSON.parse(items.get(TOTALS_CACHE_KEY)!)).toEqual(totals);
+    expect(cache.load()).toEqual(totals);
     items.set(TOTALS_CACHE_KEY, '{"shots":-1,"steams":"many"');
     expect(cache.load()).toBeNull();
-    items.set(TOTALS_CACHE_KEY, '{"shots":-1,"steams":"many"}');
-    expect(cache.load()).toEqual({ shots: null, steams: null, newestShotMs: null, newestSteamMs: null });
+    items.set(TOTALS_CACHE_KEY, '{"shots":-1,"steams":"many","newestShot":{"id":"x","at":"y"},"newestSteam":"z"}');
+    expect(cache.load()).toEqual({ shots: null, steams: null, newestShot: null, newestSteam: null });
+    // As the page before this one kept them: a newest it cannot read is none.
+    items.set(TOTALS_CACHE_KEY, '{"shots":5,"steams":2,"newestShotMs":17,"newestSteamMs":null}');
+    expect(cache.load()).toEqual({ shots: 5, steams: 2, newestShot: null, newestSteam: null });
     expect(localTotalsCache(null).load()).toBeNull();
   });
 });

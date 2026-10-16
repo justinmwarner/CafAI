@@ -106,6 +106,8 @@ const DESCALE_IN_MAY: CareRecord = {
   countFrom: '2026-05-01T08:00:00.000Z',
   shotTotal: 50,
   steamTotal: 1,
+  newestShotAt: '2026-05-01T07:40:00.000000',
+  newestSteamAt: '2026-04-30T17:00:00.000000',
   updatedAt: '2026-05-01T08:00:00.000Z',
 };
 

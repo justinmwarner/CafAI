@@ -28,7 +28,7 @@ export function makeSettings(overrides: Partial<Settings> = {}): Settings {
   };
 }
 
-/** Machine care's weekly clean, marked done on the Care screen with 120 shots in Decaid (D189). */
+/** Machine care's weekly clean, marked done on the Care screen with 120 shots in Decaid, the newest pulled before (D189). */
 export function makeCareRecord(overrides: Partial<CareRecord> = {}): CareRecord {
   return {
     id: 'detergent-clean',
@@ -37,6 +37,8 @@ export function makeCareRecord(overrides: Partial<CareRecord> = {}): CareRecord 
     countFrom: '2026-10-01T08:00:00.000Z',
     shotTotal: 120,
     steamTotal: 40,
+    newestShotAt: '2026-10-01T09:42:17.123456',
+    newestSteamAt: '2026-09-30T16:05:00.000000',
     updatedAt: '2026-10-01T08:00:00.000Z',
     ...overrides,
   };

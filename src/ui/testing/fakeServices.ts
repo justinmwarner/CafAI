@@ -156,7 +156,7 @@ export interface FakeDecaid extends DecaidClient {
   failNext(method: string, error: Error): void;
   /** Decaid's sleep and wake settings as this fake holds them; tests may set them before rendering. */
   presence: PresenceSettings;
-  /** What listShots answers, whatever it is asked (the care reminders read its total). */
+  /** What listShots answers, whatever it is asked (the care reminders read its total); its first item is the newest shot. */
   shotPage: PaginatedShots;
   /** Decaid's steam records as the care reminders count them: their ids and the newest. */
   steams: { ids: string[]; latest: SteamRecordSummary | null };
@@ -288,7 +288,8 @@ export function createFakeDecaid(): FakeDecaid {
     listShots: (options) => call('listShots', [options], clone(fake.shotPage)),
     listSteamIds: () => call('listSteamIds', [], [...fake.steams.ids]),
     getLatestSteam: () => call('getLatestSteam', [], fake.steams.latest === null ? null : clone(fake.steams.latest)),
-    getLatestShot: () => call('getLatestShot', [], null),
+    // The newest of the page listShots answers (none by default), as Decaid's newest-first list has it.
+    getLatestShot: () => call('getLatestShot', [], fake.shotPage.items[0] === undefined ? null : clone(fake.shotPage.items[0])),
     getShot: (id) => call('getShot', [id], Promise.reject(new Error('not found')) as never),
     updateShot: (id, patch) => call('updateShot', [id, patch], Promise.reject(new Error('unsupported')) as never),
     probeEnjoymentScale: () => call<EnjoymentScale | null>('probeEnjoymentScale', [], 10),

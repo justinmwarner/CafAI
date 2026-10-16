@@ -14,11 +14,15 @@ import {
   stepStatus,
   TRACKED_STEPS,
   UNKNOWN_TOTALS,
+  type NewestRecord,
   type Totals,
 } from './careRules.ts';
 
 const FROM = Date.parse('2026-10-01T08:00:00.000Z');
 const days = (n: number) => FROM + n * DAY_MS;
+
+/** Decaid's newest shot and steam when the step's count began, in Decaid's own words: local, no zone. */
+const DECAID_THEN = '2026-10-01T07:30:00.000000';
 
 function record(overrides: Partial<CareRecord> = {}): CareRecord {
   return {
@@ -28,12 +32,17 @@ function record(overrides: Partial<CareRecord> = {}): CareRecord {
     countFrom: '2026-10-01T08:00:00.000Z',
     shotTotal: 100,
     steamTotal: 30,
+    newestShotAt: DECAID_THEN,
+    newestSteamAt: DECAID_THEN,
     updatedAt: '2026-10-01T08:00:00.000Z',
     ...overrides,
   };
 }
 
-const totals = (overrides: Partial<Totals> = {}): Totals => ({ shots: 100, steams: 30, newestShotMs: days(-1), newestSteamMs: days(-1), ...overrides });
+/** Decaid's newest record, begun at `at` by its clock. */
+const newest = (at: string, id = `record-${at}`): NewestRecord => ({ id, at });
+
+const totals = (overrides: Partial<Totals> = {}): Totals => ({ shots: 100, steams: 30, newestShot: newest(DECAID_THEN), newestSteam: newest(DECAID_THEN), ...overrides });
 const settings = (overrides: Partial<CareSettings> = {}): CareSettings => ({ ...DEFAULT_CARE, ...overrides });
 
 describe('the tracked steps (D183)', () => {
@@ -79,20 +88,60 @@ describe('counting (D185)', () => {
     expect(countSince(100, null)).toBeNull();
   });
 
-  it('fills a baseline Decaid did not give, and leaves a good one alone', () => {
-    expect(rebaseline(record({ shotTotal: null, steamTotal: null }), totals({ shots: 141, steams: 33 }))).toEqual({ shotTotal: 141, steamTotal: 33 });
-    expect(rebaseline(record(), totals({ shots: 141, newestShotMs: days(2) }))).toBeNull();
+  it("fills a baseline Decaid did not give, with Decaid's newest then, and leaves a good one alone", () => {
+    const unknown = record({ shotTotal: null, steamTotal: null, newestShotAt: null, newestSteamAt: null });
+    expect(rebaseline(unknown, totals({ shots: 141, steams: 33, newestShot: newest('2026-10-02T09:00:00.000000'), newestSteam: null }))).toEqual({
+      shotTotal: 141,
+      steamTotal: 33,
+      newestShotAt: '2026-10-02T09:00:00.000000',
+      newestSteamAt: null,
+    });
+    expect(rebaseline(record(), totals({ shots: 141, newestShot: newest('2026-10-03T10:00:00.000000') }))).toBeNull();
     expect(rebaseline(record(), UNKNOWN_TOTALS)).toBeNull();
   });
 
   it('starts the count again from now when the total fell (shots deleted, another Decaid)', () => {
-    expect(rebaseline(record(), totals({ shots: 60 }))).toEqual({ shotTotal: 60, steamTotal: 30 });
-    expect(rebaseline(record(), totals({ steams: 2 }))).toEqual({ shotTotal: 100, steamTotal: 2 });
+    const now = newest('2026-10-05T11:00:00.000000');
+    expect(rebaseline(record(), totals({ shots: 60, newestShot: now }))).toEqual({ shotTotal: 60, steamTotal: 30, newestShotAt: now.at, newestSteamAt: DECAID_THEN });
+    expect(rebaseline(record(), totals({ steams: 2, newestSteam: now }))).toEqual({ shotTotal: 100, steamTotal: 2, newestShotAt: DECAID_THEN, newestSteamAt: now.at });
   });
 
-  it('and when the newest is older than the start: the ones since were old ones imported', () => {
-    expect(rebaseline(record(), totals({ shots: 400, newestShotMs: days(-3) }))).toEqual({ shotTotal: 400, steamTotal: 30 });
-    expect(rebaseline(record(), totals({ shots: 400, newestShotMs: days(1) }))).toBeNull();
+  it("and when records were added but none began after Decaid's newest then: old ones imported", () => {
+    // De1app's history brought in, nothing pulled since: Decaid's newest is still the one it had.
+    expect(rebaseline(record(), totals({ shots: 400 }))).toEqual({ shotTotal: 400, steamTotal: 30, newestShotAt: DECAID_THEN, newestSteamAt: DECAID_THEN });
+    expect(rebaseline(record(), totals({ shots: 400, newestShot: newest('2026-09-01T07:00:00.000000') }))).toMatchObject({ shotTotal: 400 });
+    expect(rebaseline(record(), totals({ shots: 400, newestShot: newest('2026-10-01T07:31:00.000000') }))).toBeNull();
+    // A record that does not know Decaid's newest then cannot tell, and keeps its count.
+    expect(rebaseline(record({ newestShotAt: null }), totals({ shots: 400 }))).toBeNull();
+  });
+
+  it("compares Decaid's times only with Decaid's: a phone's clock or zone, or a tablet's date far off, changes nothing", () => {
+    // CafAI marked the step at 08:00 by its clock; Decaid's clock says 07:50 then (ten minutes behind).
+    const behind = record({ newestShotAt: '2026-10-01T07:50:00.000000' });
+    expect(rebaseline(behind, totals({ shots: 101, newestShot: newest('2026-10-01T07:55:00.000000') }))).toBeNull();
+    // A tablet a year behind: a week of shots by its date still counts, and the weekly clean comes due.
+    const yearBehind = record({ newestShotAt: '2025-10-01T07:30:00.000000' });
+    let current = yearBehind;
+    for (let day = 1; day <= 8; day += 1) {
+      const change = rebaseline(current, totals({ shots: 100 + day * 10, newestShot: newest(`2025-10-0${day + 1}T08:00:00.000000`) }));
+      if (change) current = { ...current, ...change };
+    }
+    expect(current.shotTotal).toBe(100);
+    expect(stepStatus('detergent-clean', current, DEFAULT_CARE, totals({ shots: 180 }), days(8))).toMatchObject({ shots: 80, used: true, due: true });
+  });
+
+  it('moves a baseline up by the old shots imported among new ones, only one from before the reading that found them', () => {
+    const later = newest('2026-10-04T08:00:00.000000');
+    // 50 pulled since, then 2,000 of de1app's imported with one more pulled: 51 since, not 2,051.
+    const moved = rebaseline(record(), totals({ shots: 2151, newestShot: later }), { count: 2000, upTo: 150 });
+    expect(moved).toEqual({ shotTotal: 2100, steamTotal: 30, newestShotAt: DECAID_THEN, newestSteamAt: DECAID_THEN });
+    expect(countSince(moved!.shotTotal, 2151)).toBe(51);
+    // A baseline taken after the reading before already holds them.
+    expect(rebaseline(record({ shotTotal: 2150 }), totals({ shots: 2151, newestShot: later }), { count: 2000, upTo: 150 })).toBeNull();
+    // Never past the total.
+    expect(rebaseline(record(), totals({ shots: 2151, newestShot: later }), { count: 5000, upTo: 150 })).toMatchObject({ shotTotal: 2151 });
+    // The steams never move: Decaid's de1app import brings shots only.
+    expect(rebaseline(record(), totals({ shots: 2151, newestShot: later, steams: 40, newestSteam: later }), { count: 2000, upTo: 150 })).toMatchObject({ steamTotal: 30 });
   });
 });
 

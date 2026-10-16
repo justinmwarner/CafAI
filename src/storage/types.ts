@@ -217,6 +217,14 @@ export interface CareRecord {
   shotTotal: number | null;
   /** Decaid's steam total (its steam records) at countFrom; null while unknown. */
   steamTotal: number | null;
+  /**
+   * When Decaid's newest shot and newest steam began, at countFrom, as Decaid
+   * wrote it (local, no zone): what tells old records imported since from
+   * new ones, by Decaid's clock alone (D185). Null while unknown, or when it
+   * had none.
+   */
+  newestShotAt: string | null;
+  newestSteamAt: string | null;
   updatedAt: IsoDateTime;
 }
 

@@ -2,8 +2,8 @@
  * Machine care in the demo (D183, D188): as a barista who keeps up
  * with it would have it a day into the dial-in, the weekly clean due and the
  * rest on time. Times count back from the demo's moment; the totals are
- * Decaid's before the story's shots, so every shot of the dial-in counts
- * since, and there was no steaming.
+ * Decaid's before the story's shots (none, so no newest either), so every
+ * shot of the dial-in counts since, and there was no steaming.
  */
 import type { CareRecord } from '../../src/storage/types.ts';
 
@@ -23,6 +23,6 @@ const LAST_DONE: ReadonlyArray<readonly [string, number]> = [
 export function demoCare(nowMs: number): CareRecord[] {
   return LAST_DONE.map(([id, daysAgo]) => {
     const at = new Date(nowMs - daysAgo * DAY_MS).toISOString();
-    return { id, doneAt: at, by: 'tick', countFrom: at, shotTotal: 0, steamTotal: 0, updatedAt: at };
+    return { id, doneAt: at, by: 'tick', countFrom: at, shotTotal: 0, steamTotal: 0, newestShotAt: null, newestSteamAt: null, updatedAt: at };
   });
 }

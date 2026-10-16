@@ -196,9 +196,10 @@ export const ConversationSchema = z.object({
 });
 
 /**
- * A care step's record (D189). How it was marked, and the totals, read
- * leniently: one this build cannot read is unknown (null), so a file from a
- * newer CafAI still imports; the step and the times are needed.
+ * A care step's record (D189). How it was marked, the totals and Decaid's
+ * newest records' times, read leniently: one this build cannot read (or a
+ * record from before the times) is unknown (null), so a file from a newer
+ * CafAI still imports; the step and the times are needed.
  */
 export const CareRecordSchema = z.object({
   id,
@@ -207,6 +208,8 @@ export const CareRecordSchema = z.object({
   countFrom: timestamp,
   shotTotal: z.number().int().min(0).nullable().catch(null),
   steamTotal: z.number().int().min(0).nullable().catch(null),
+  newestShotAt: z.string().min(1).nullable().catch(null),
+  newestSteamAt: z.string().min(1).nullable().catch(null),
   updatedAt: timestamp,
 });
 

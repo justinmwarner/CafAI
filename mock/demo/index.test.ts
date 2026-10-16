@@ -263,7 +263,7 @@ describe('startDemo on an address with CafAI data of its own', () => {
 
   it("seeds over the care records CafAI makes by itself on opening, but not over a step someone marked done (D190)", async () => {
     const at = new Date(NOW - 3_600_000).toISOString();
-    const counted = { id: 'descale', doneAt: null, by: null, countFrom: at, shotTotal: 0, steamTotal: 0, updatedAt: at };
+    const counted = { id: 'descale', doneAt: null, by: null, countFrom: at, shotTotal: 0, steamTotal: 0, newestShotAt: null, newestSteamAt: null, updatedAt: at };
     await withCareDb((db) => db.put('care', counted));
     expect((await startDemo(state, host, { ...names, now: NOW })).seeded).toBe(true);
 
