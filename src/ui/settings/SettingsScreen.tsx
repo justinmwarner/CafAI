@@ -1,6 +1,7 @@
 /**
  * The settings route (#/settings): how CafAI looks (AppearanceSection.tsx),
- * the Anthropic API key, the model, and the grinder. The key goes straight
+ * the Anthropic API key, the model, where fun facts come from
+ * (FunFactsRow.tsx), and the grinder. The key goes straight
  * to the secret store and is never shown again; the UI only ever knows
  * whether one is saved. The grinder can be linked to Decaid's grinder
  * library, whose step size the coach then uses (GrinderFields.tsx), and a
@@ -29,6 +30,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { addOrFindGrinder, listGrinders } from '../../api/grinders.ts';
 import { PLUGIN } from '../../api/plugins.ts';
+import { DEFAULT_FUN_FACTS, type FunFactsSource } from '../../coach/facts/types.ts';
 import type { ModelInfo } from '../../llm/types.ts';
 import { useCoach, useServices } from '../../app/services.tsx';
 import { containsKeyLike } from '../../storage/redact.ts';
@@ -43,6 +45,7 @@ import { CoachSourceSection } from './CoachSourceSection.tsx';
 import { useApiKeyView, useCoachRunsOnComputer, useShowsApiKey } from './coachSourceView.ts';
 import { useDecaidVersion } from './decaidVersion.ts';
 import { DrinkSettingsSection } from './DrinkSettingsSection.tsx';
+import { FunFactsRow } from './FunFactsRow.tsx';
 import { GrinderFields } from './GrinderFields.tsx';
 import { LogSection } from './LogSection.tsx';
 import {
@@ -332,12 +335,15 @@ function KeyInDecaidSwitch({
 
 interface Form {
   model: string;
+  /** Null while none was chosen on this device (D198): shown as DEFAULT_FUN_FACTS, and not saved. */
+  funFacts: FunFactsSource | null;
   grinder: GrinderForm;
 }
 
 function formFrom(settings: Settings): Form {
   return {
     model: settings.model,
+    funFacts: settings.funFacts ?? null,
     grinder: {
       pick: settings.grinderId ?? NOT_LISTED,
       name: settings.grinderName ?? '',
@@ -436,7 +442,12 @@ function CoachSettingsSection({ column }: { column: RefObject<HTMLElement | null
     setKeyNotice(false);
     try {
       // Only CafAI's own settings: the engine carries the grinder to Decaid's workflow.
-      const sent = { model: form.model, ...grinderPatch(form.grinder, library, saved) };
+      // Fun facts only once chosen here, so a restore can still fill a device that never chose (D198).
+      const sent = {
+        model: form.model,
+        ...(form.funFacts !== null ? { funFacts: form.funFacts } : {}),
+        ...grinderPatch(form.grinder, library, saved),
+      };
       const next = await storage.settings.update(sent);
       setSaved({ grinderId: next.grinderId ?? null, grinderName: next.grinderName });
       // The fields show what was really saved, not what was typed.
@@ -499,6 +510,12 @@ function CoachSettingsSection({ column }: { column: RefObject<HTMLElement | null
             The prices do not apply while the coach runs on your computer: it uses your Claude plan.
           </Typography>
         ) : null}
+        <FunFactsRow
+          value={form ? (form.funFacts ?? DEFAULT_FUN_FACTS) : null}
+          onComputer={onComputer}
+          disabled={disabled}
+          onChange={(funFacts) => update({ funFacts })}
+        />
         <GrinderFields
           form={form?.grinder ?? null}
           library={library}
