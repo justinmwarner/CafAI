@@ -291,7 +291,7 @@ describe('importAll replace', () => {
     await seed(a.repos);
     const exported = await a.porter.exportAll();
     const b = await setup();
-    expect(await b.porter.importAll(exported, 'replace')).toEqual({ imported: 5 });
+    expect(await b.porter.importAll(exported, 'replace')).toEqual({ imported: 5, care: 0 });
     expect(b.mirror).toMatchObject({ pushes: 1, replaced: 1 });
   });
 
@@ -311,7 +311,7 @@ describe('importAll merge', () => {
     await seed(a.repos);
     const exported = await a.porter.exportAll();
     const b = await setup();
-    expect(await b.porter.importAll(serializeExport(exported), 'merge')).toEqual({ imported: 5 });
+    expect(await b.porter.importAll(serializeExport(exported), 'merge')).toEqual({ imported: 5, care: 0 });
     expect(await b.porter.exportAll()).toEqual(exported);
   });
 
@@ -319,7 +319,7 @@ describe('importAll merge', () => {
     const { repos, porter } = await setup();
     await repos.bags.put(makeBag({ id: 'bag_local' }));
     const result = await porter.importAll(exportOf({ bags: [makeBag()], iterations: [makeIteration()] }), 'merge');
-    expect(result).toEqual({ imported: 2 });
+    expect(result).toEqual({ imported: 2, care: 0 });
     expect((await repos.bags.list()).map((bag) => bag.id).sort()).toEqual(['bag_kiambu', 'bag_local']);
   });
 
@@ -341,7 +341,7 @@ describe('importAll merge', () => {
       }),
       'merge',
     );
-    expect(result).toEqual({ imported: 0 });
+    expect(result).toEqual({ imported: 0, care: 0 });
     expect((await repos.bags.get('bag_kiambu'))?.name).toBe('local');
     expect((await repos.conversations.get('conv_kiambu'))?.apiMessages).toHaveLength(3);
   });
@@ -390,7 +390,7 @@ describe("machine care's records (D189)", () => {
 
     const b = await setup();
     await b.repos.care.put(makeCareRecord({ id: 'descale' }));
-    expect(await b.porter.importAll(JSON.parse(serializeExport(file)), 'replace')).toEqual({ imported: 2 });
+    expect(await b.porter.importAll(JSON.parse(serializeExport(file)), 'replace')).toEqual({ imported: 2, care: 2 });
     expect(await b.repos.care.list()).toEqual(file.care);
   });
 
@@ -425,9 +425,9 @@ describe("machine care's records (D189)", () => {
     const { repos, porter } = await setup();
     await repos.care.put(makeCareRecord({ doneAt: '2026-10-08T08:00:00.000Z', updatedAt: '2026-10-08T08:00:00.000Z' }));
     const older = makeCareRecord({ doneAt: '2026-10-01T08:00:00.000Z', updatedAt: '2026-10-12T08:00:00.000Z' });
-    expect(await porter.importAll(exportOf({ care: [older] }), 'merge')).toEqual({ imported: 0 });
+    expect(await porter.importAll(exportOf({ care: [older] }), 'merge')).toEqual({ imported: 0, care: 0 });
     const later = makeCareRecord({ doneAt: '2026-10-11T08:00:00.000Z', shotTotal: 180 });
-    expect(await porter.importAll(exportOf({ care: [later, makeCareRecord({ id: 'rinza' })] }), 'merge')).toEqual({ imported: 2 });
+    expect(await porter.importAll(exportOf({ care: [later, makeCareRecord({ id: 'rinza' })] }), 'merge')).toEqual({ imported: 2, care: 2 });
     expect(await repos.care.list()).toEqual([later, makeCareRecord({ id: 'rinza' })]);
   });
 
