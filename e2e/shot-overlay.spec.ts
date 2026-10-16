@@ -10,12 +10,64 @@ import { decaidRequests, goTo, openApp, pullShot, saveApiKey, sendChat } from '.
  * drawn from its card, with no request; another coffee's is read from Decaid
  * once; one Decaid no longer has leaves the card alone, saying nothing. On an
  * upright phone the card's key for the shot under takes a line under the
- * curves, so they keep their room down to a 320 px screen.
+ * curves, so they keep their room down to a 320 px screen (D192); on any
+ * card, so does a key whose name is wider than the legend's 9.5em, so the
+ * other coffee's name reads whole (D-SIMC-1).
  *
  * mockSpeed 10 plays a scripted shot in a few seconds; the live check slows
  * the mock to real time for a moment, so the shot is surely still pulling.
  */
 const SPEED = 10;
+
+/** The narrowest card that keeps the key beside the curves (KEY_BESIDE_FROM, D192), and the name's room there in ems (D180). */
+const KEY_BESIDE_FROM = 372;
+const NAME_BESIDE_EM = 9.5;
+/** A key's 12 px swatch and the 6 px after it: the rest of its line is for its words. */
+const SWATCH_AND_GAP = 12 + 6;
+
+const box = async (locator: Locator) => (await locator.boundingBox())!;
+
+/** A card's curves (the shot drawn under them or not). */
+function curvesOf(card: Locator): Locator {
+  return card.getByRole('img', { name: /^Pressure and flow during the shot/ });
+}
+
+/** Where a card's key for the shot under sits: on a line under its curves, or beside them under Pressure and Flow. */
+async function keyPlace(card: Locator): Promise<'under' | 'beside' | 'over'> {
+  const [k, c] = [await box(card.getByTestId(TID.shotGuideKey)), await box(curvesOf(card))];
+  return k.y >= c.y + c.height ? 'under' : k.x >= c.x + c.width ? 'beside' : 'over';
+}
+
+/** The card's own width inside its padding, which the curves, the keys and Graph share. */
+async function cardWidth(card: Locator): Promise<number> {
+  return (await box(curvesOf(card).locator('xpath=../..'))).width;
+}
+
+/**
+ * The key's name set on one line with nothing to keep to, in the key's own
+ * font, and the legend's 9.5em: both in CSS px. Measured on a copy, so where
+ * the key sits cannot change it.
+ */
+function nameWidths(name: Locator): Promise<{ natural: number; cap: number }> {
+  return name.evaluate((element, em) => {
+    const style = getComputedStyle(element);
+    const copy = document.createElement('span');
+    copy.textContent = element.textContent;
+    copy.style.cssText = 'position: absolute; visibility: hidden; white-space: nowrap';
+    copy.style.font = style.font;
+    copy.style.letterSpacing = style.letterSpacing;
+    element.parentElement!.append(copy);
+    const natural = copy.getBoundingClientRect().width;
+    copy.remove();
+    return { natural, cap: em * Number.parseFloat(style.fontSize) };
+  }, NAME_BESIDE_EM);
+}
+
+/** Where the key goes (D192, D-SIMC-1): under the curves on a narrow card, or when its whole name is wider than 9.5em. */
+async function expectedPlace(card: Locator): Promise<'under' | 'beside'> {
+  const { natural, cap } = await nameWidths(card.getByTestId(TID.shotGuideKey).locator('.MuiTypography-root'));
+  return (await cardWidth(card)) < KEY_BESIDE_FROM || natural > cap ? 'under' : 'beside';
+}
 
 /** The shot ids the mock Decaid holds, oldest first. */
 function shotIds(page: Page): Promise<string[]> {
@@ -82,6 +134,10 @@ test('the second shot of a bag draws the first under it: while it pulls, on its 
   await expect(second.getByTestId(TID.shotGuide).locator('path')).toHaveCount(2);
   await expect(second.getByTestId(TID.shotGuideKey)).toHaveText('Previous shot');
   await expect(second.getByRole('img', { name: 'Pressure and flow during the shot, with the pressure and flow of your previous shot under them' })).toBeVisible();
+  // "Previous shot" fits the legend whole: beside the curves wherever the card is wide enough, so most cards never grow.
+  await second.scrollIntoViewIfNeeded();
+  expect(await expectedPlace(second)).toBe((await cardWidth(second)) < KEY_BESIDE_FROM ? 'under' : 'beside');
+  await expect.poll(() => keyPlace(second)).toBe(await expectedPlace(second));
   // The first card still draws its shot alone.
   await expect(cards.first().getByTestId(TID.shotGuide)).toHaveCount(0);
   await coachIdle(page);
@@ -116,6 +172,11 @@ test("the demo's first Kiambu AA shot draws Santos's last shot, read from Decaid
   await expect(cards.first()).toContainText('Compared with your last shot of Santos?');
   await expect(cards.first().getByTestId(TID.shotGuideKey)).toHaveText('Last shot of Santos');
   await expect(cards.first().getByTestId(TID.shotGuide).locator('path')).toHaveCount(2);
+  // A short coffee's name fits the legend whole, so on a wide card it stays beside the curves and the card does not grow.
+  const santosWide = (await cardWidth(cards.first())) >= KEY_BESIDE_FROM;
+  expect(await expectedPlace(cards.first())).toBe(santosWide ? 'beside' : 'under');
+  await expect.poll(() => keyPlace(cards.first())).toBe(santosWide ? 'beside' : 'under');
+  expect(await cards.first().getByTestId(TID.shotGuideKey).locator('.MuiTypography-root').evaluate((name) => name.scrollWidth <= name.clientWidth)).toBe(true);
   // The newest asks about the shot before it, drawn from that shot's card.
   await cards.last().scrollIntoViewIfNeeded();
   await expect(cards.last().getByTestId(TID.shotGuideKey)).toHaveText('Previous shot');
@@ -133,52 +194,59 @@ test("the demo's first Kiambu AA shot draws Santos's last shot, read from Decaid
   for (const shot of ids.filter((other) => other.id !== santos!.id)) expect(await readsOf(page, shot.id), shot.title).toBe(0);
 });
 
-test("a bag's first shot card, the newest with Graph, keeps its curves' room: on an upright phone the key of the shot under takes a line under them", async ({ page }) => {
-  test.setTimeout(150_000);
+test("a bag's first card names the other coffee whole and keeps its curves' room: the key takes a line under them on an upright phone, and wherever its name is wider than the legend's 9.5em", async ({ page }) => {
+  test.setTimeout(300_000);
   await openApp(page, '#/', SPEED);
   await saveApiKey(page);
   await goTo(page, 'coach');
-  await startBag(page, 'Kiambu AA, light roast, washed, blackcurrant and grapefruit', 'blooming-espresso');
   const cards = page.getByTestId(TID.shotCard);
-  await pullShot(page);
-  await expect(cards).toHaveCount(1, { timeout: 60_000 });
-  await coachIdle(page);
-  await startBag(page, 'Rwanda Huye, medium roast, natural', 'd-flow');
-  await pullShot(page);
-  await expect(cards).toHaveCount(1, { timeout: 60_000 });
-  const card = cards.first();
-  const key = card.getByTestId(TID.shotGuideKey);
-  // The longest key there is, beside Graph: the least room the curves get.
-  await expect(key).toHaveText('Last shot of Kiambu AA');
-  const graphLink = card.getByTestId(TID.openShotGraph);
-  await expect(graphLink).toBeVisible();
-  await coachIdle(page);
-
-  const curves = card.getByRole('img', { name: /^Pressure and flow during the shot, with/ });
-  const legend = card.getByText('Pressure', { exact: true }).locator('xpath=../..');
-  const box = async (locator: Locator) => (await locator.boundingBox())!;
   const { width: ownWidth, height } = page.viewportSize()!;
-  // An upright phone, down to the narrowest CafAI supports; the tablets and a phone on its side as they are.
+  // An upright phone, down to the narrowest CafAI supports (D192); the tablets and a phone on its side as they are.
   const upright = ownWidth < 600;
-  for (const width of upright ? [390, 360, 320] : [ownWidth]) {
-    await page.setViewportSize({ width, height });
-    await card.scrollIntoViewIfNeeded();
-    const placed = async () => {
-      const [k, c] = [await box(key), await box(curves)];
-      return k.y >= c.y + c.height ? 'under' : k.x >= c.x + c.width ? 'beside' : 'over';
-    };
-    await expect.poll(placed, { message: `the key at ${width} px` }).toBe(upright ? 'under' : 'beside');
-    const c = await box(curves);
-    if (upright) {
-      // A line of its own from the curves' left edge, the name whole; the curves keep every pixel Pressure, Flow and Graph leave them.
-      expect(Math.abs((await box(key)).x - c.x)).toBeLessThanOrEqual(1);
-      expect(await key.locator('.MuiTypography-root').evaluate((name) => name.scrollWidth <= name.clientWidth), `the name at ${width} px`).toBe(true);
-      const row = await box(curves.locator('xpath=..'));
-      const room = row.width - (await box(legend)).width - (await box(graphLink)).width - 2 * 12;
-      expect(Math.abs(c.width - room), `the curves at ${width} px: ${c.width} of ${room}`).toBeLessThanOrEqual(1);
-    } else {
-      expect(c.width, `the curves at ${width} px`).toBeGreaterThanOrEqual(120);
+  // Coffees of 9, 18 and 30 characters: each bag's first card is compared with the last shot of the bag before.
+  const coffees = ['Kiambu AA', 'Huila Pink Bourbon', 'Finca El Paraíso Lychee Geisha'];
+  for (const [index, coffee] of [...coffees, 'Rwanda Huye'].entries()) {
+    await startBag(page, `${coffee}, light roast, washed`, 'blooming-espresso');
+    await pullShot(page);
+    await expect(cards).toHaveCount(1, { timeout: 60_000 });
+    await coachIdle(page);
+    const other = coffees[index - 1];
+    if (other === undefined) continue;
+    const card = cards.first();
+    const key = card.getByTestId(TID.shotGuideKey);
+    const name = key.locator('.MuiTypography-root');
+    await expect(key).toHaveText(`Last shot of ${other}`);
+    await expect(card).toContainText(`Compared with your last shot of ${other}?`);
+    // The newest card, with Graph beside its curves: the least room they get.
+    const graphLink = card.getByTestId(TID.openShotGraph);
+    await expect(graphLink).toBeVisible();
+    const curves = curvesOf(card);
+    const legendLabels = ['Pressure', 'Flow'].map((label) => card.getByText(label, { exact: true }));
+    for (const width of upright ? [390, 360, 320] : [ownWidth]) {
+      await page.setViewportSize({ width, height });
+      await card.scrollIntoViewIfNeeded();
+      const where = `"${other}" at ${width} px`;
+      const own = await cardWidth(card);
+      const { natural, cap } = await nameWidths(name);
+      // On a wide card each of these names is wider than 9.5em, so the key leaves the legend for a line under the curves.
+      const expected = own < KEY_BESIDE_FROM || natural > cap ? 'under' : 'beside';
+      if (!upright) expect(expected, `the key of ${where}: ${natural} px of ${cap}`).toBe('under');
+      await expect.poll(() => keyPlace(card), { message: `the key of ${where}` }).toBe(expected);
+      const c = await box(curves);
+      // Under them it starts at the curves' left edge.
+      if (expected === 'under') expect(Math.abs((await box(key)).x - c.x), `the key of ${where}`).toBeLessThanOrEqual(1);
+      // The name whole wherever its line has the room: on every tablet card; on a phone, cut only beyond the card's width.
+      const cut = await name.evaluate((element) => ({ cut: element.scrollWidth > element.clientWidth, width: element.clientWidth }));
+      if (natural + SWATCH_AND_GAP <= own) expect(cut.cut, `the name of ${where}: ${natural} px on a card of ${own}`).toBe(false);
+      else expect(cut.width, `the cut name of ${where} has the card's width`).toBeGreaterThanOrEqual(own - SWATCH_AND_GAP - 1);
+      // The curves keep every pixel Pressure, Flow (a 12 px swatch, 6 px, the word) and Graph leave them, up to their 360 px, as without the key.
+      const legendWidth = SWATCH_AND_GAP + Math.max(...(await Promise.all(legendLabels.map(async (label) => (await box(label)).width))));
+      const room = Math.min(360, (await box(curves.locator('xpath=..'))).width - legendWidth - (await box(graphLink)).width - 2 * 12);
+      expect(Math.abs(c.width - room), `the curves of ${where}: ${c.width} of ${room}`).toBeLessThanOrEqual(1);
+      // D192's 85 px at 320 px wide, and at least 120 on a wider card; sub-pixel layout gives 84.98 on a phone at DPR 2.
+      expect(Math.round(c.width), `the curves of ${where}`).toBeGreaterThanOrEqual(upright ? 85 : 120);
     }
+    if (upright) await page.setViewportSize({ width: ownWidth, height });
   }
 });
 

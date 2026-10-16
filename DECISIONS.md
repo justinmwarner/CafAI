@@ -3062,17 +3062,20 @@ fixes is a choice.
   `src/ui/chat/parts/ShotSparkline.tsx`: 120 px of curves, the legend at its
   widest, Graph and the gaps; a 390 px phone's card has 332) puts the key on
   a line of its own under the curves, its name with the card's width; a
-  wider one keeps it in the legend as before. The card measures itself (`useOwnLayout.ts`), and the rule
-  counts Graph whether the card shows it or not, so the cards of a chat put
-  the key in one place. Measured with Playwright at 390, 360 and 320 px
-  (`e2e/shot-overlay.spec.ts`): the curves keep 155, 125 and 85 px, the name
-  is whole. Why: the review's other way, a legend that shrinks while the
-  curves keep 120 px, cuts even "Previous shot" at 360 px and at 320 px has
-  no room for 120 px of curves beside Pressure, Flow and Graph at all;
-  under the curves the name has the card's width and the curves lose nothing.
-  The line costs a guided card about 21 px of height on a phone, where height
-  is cheaper than width; a tablet's card, which has the room beside, does not
-  grow.
+  wider one keeps it in the legend as before, while its whole name fits
+  there (D-SIMC-1). The card measures itself, and the rule counts Graph
+  whether the card shows it or not, so a card's key keeps its place as Graph
+  moves on to the newest card. Measured with Playwright at 390, 360 and
+  320 px (`e2e/shot-overlay.spec.ts`): the curves keep 155, 125 and 85 px,
+  the name is whole (a 30-character coffee's is cut at 320 px, only beyond
+  the card's width). Why: the review's other way, a legend that shrinks
+  while the curves keep 120 px, cuts even "Previous shot" at 360 px and at
+  320 px has no room for 120 px of curves beside Pressure, Flow and Graph at
+  all; under the curves the name has the card's width and the curves lose
+  nothing. The line costs a guided card about 21 px of height on a phone,
+  where height is cheaper than width; a tablet's card, which has the room
+  beside, does not grow, but for a coffee's name too long for the legend
+  (D-SIMC-1).
 
 ### Engine fixes from the review (2026-10-15)
 
@@ -3152,3 +3155,41 @@ updated in place above.
   the records it imported. Why: a device CafAI opened before any bag backs
   up the nine records of its first look (D190), and a phone that restores
   that backup has no bags to show.
+
+### Fixes from the simulator pre-run (2026-10-16)
+
+The pre-run of the hardware test plan on Decaid 0.8.8's simulator (MockDe1
+and Mock Scale, CafAI driven by Playwright at 1280x800, 390x844 and
+844x390) found six defects. The fixes below are the UI's (the run's
+defects 3 and 4), and each is a choice.
+
+- **D-SIMC-1. The third key takes a line under the curves whenever its
+  whole name is wider than the legend's 9.5em.** On a tablet a bag's first
+  card keyed the band "Last shot of Huila Pi…": the name needs 182 px and
+  had D180's 124 (9.5em of 13 px), with no tooltip, though the question
+  under the card and the Shot view name the coffee in full. Measured at
+  962x602, 1280x800, 1920x1200 and 844x390, a wide card is 622 px inside its
+  padding and its curves already have their 360 px, with 11 px to spare
+  beside the legend; "Last shot of Kiambu AA" (a coffee of 9 characters)
+  needs 136 px, "…Huila Pink Bourbon" (18) 182 and "…Finca El Paraíso
+  Lychee Geisha" (30) 250, and each was cut. Now the card measures the name
+  as it sets on one line with no width to keep to, on a copy out of sight
+  and out of the layout (`NameRuler` in
+  `src/ui/chat/parts/ShotSparkline.tsx`), never the key where it is, and
+  puts the key on a line under the curves, from their left edge with the
+  card's width, when that is wider than 9.5em of its own size
+  (`keyUnderCurves`); a narrow card puts it there anyway (D192). It measures
+  again when the card's width or the copy's changes (a rotation, the font
+  arriving). Measured with Playwright (`e2e/shot-overlay.spec.ts`, coffees
+  of 9, 18 and 30 characters): at 962x602, 1280x800, 1920x1200 and 844x390
+  the three names are whole under the curves, which keep their 360 px, and
+  such a card is 14 px taller; "Previous shot" and "Last shot of Santos"
+  still fit beside, and their cards do not grow; at 390, 360 and 320 px all
+  is as D192 left it. Why: a wider cap has those 11 px before it squeezes
+  the curves, and would take them down to about 245 px for the
+  30-character name; wrapping inside the legend would stack four or five
+  lines beside a 48 px plot and grow the card at least as much; under the
+  curves the name has the card's width, that line is D192's already, and
+  only a bag's first card, the one that names another coffee, pays for it.
+  Measured without a width to keep to, the name measures the same wherever
+  the key sits, so the key cannot swing between its places.

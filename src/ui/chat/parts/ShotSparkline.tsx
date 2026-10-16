@@ -13,11 +13,13 @@
  * Both shots count from the pour's start, so they line up whatever their
  * preheat, and the time runs to the longer of the two.
  *
- * The third key never squeezes the curves: on a narrow card (a phone
- * upright) it takes a line of its own under them, where its name has the
- * card's width, and the curves keep the room they have without it.
+ * The third key never squeezes the curves and never cuts its name short:
+ * on a narrow card (a phone upright), and on any card whose key names a
+ * coffee too long for the legend ("Last shot of Huila Pink Bourbon"), it
+ * takes a line of its own under them, where its name has the card's width,
+ * and the curves keep the room they have without it.
  */
-import { useId, useMemo, useRef, type ReactNode } from 'react';
+import { useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
@@ -29,7 +31,6 @@ import type { ShotSummary } from '../../../coach/types.ts';
 import { comparisonTarget, describeShot, pourCurve, underThem } from '../../compare/comparison.ts';
 import { GuideSwatch } from '../../compare/GuideKey.tsx';
 import { useComparisonSummary } from '../../compare/useComparison.ts';
-import { useOwnLayout } from '../../machine/useOwnLayout.ts';
 import { TID } from '../../testIds.ts';
 import { sparklinePath } from '../sparkline.ts';
 
@@ -43,15 +44,84 @@ const GUIDE_WIDTH = 5;
 /**
  * The narrowest card (its content box, in CSS px) that keeps the third key
  * beside the curves: 120 px of curves, 12 px, the legend at its widest (the
- * band, 6 px and a name cut at 9.5em of 13 px: 141.5 px), 12 px and the Graph
+ * band, 6 px and a name of 9.5em of 13 px: 141.5 px), 12 px and the Graph
  * link (85 px). A narrower card puts the key under the curves. The Graph link
- * counts whether a card shows it or not, so every card of a chat puts its key
- * in the same place.
+ * counts whether a card shows it or not, so a card's key keeps its place as
+ * Graph moves on to the newest card.
  */
 export const KEY_BESIDE_FROM = 372;
 
-/** Before a measurement (and in jsdom, which has no layout) the width is 0: the key stays beside. */
-const keyUnderCurves = (width: number): boolean => width > 0 && width < KEY_BESIDE_FROM;
+/** The widest the third key's name may be beside the curves, in ems of its own size (D180): the legend keeps its share of the card. */
+export const NAME_BESIDE_EM = 9.5;
+
+/**
+ * Whether the third key takes a line under the curves: on a card too narrow
+ * to keep them 120 px beside the widest legend (D192), and on any card when
+ * its whole name, set on one line, is wider than NAME_BESIDE_EM (D-SIMC-1),
+ * so beside them the name is never cut. `nameWidth` is that natural width
+ * and `fontSize` the name's, both in CSS px. Before a measurement, and in
+ * jsdom, which has no layout, the card's width is 0: the key stays beside.
+ */
+export function keyUnderCurves(cardWidth: number, nameWidth: number, fontSize: number): boolean {
+  if (cardWidth <= 0) return false;
+  if (cardWidth < KEY_BESIDE_FROM) return true;
+  return nameWidth > NAME_BESIDE_EM * fontSize;
+}
+
+/**
+ * Where the third key goes, from the card's own width and the name's natural
+ * width (keyUnderCurves). The name is measured on its ruler, never where the
+ * key is, so moving the key cannot change the measurement and the key cannot
+ * swing between its places. Measured before the first paint, and again when
+ * the card's width changes (a rotation) or the ruler's (the font arriving),
+ * as useOwnLayout.ts measures: the Chromium 91 WebView has no container
+ * queries.
+ */
+function useKeyUnderCurves(card: RefObject<HTMLElement | null>, ruler: RefObject<HTMLElement | null>, name: string | null): boolean {
+  const [under, setUnder] = useState(false);
+  useLayoutEffect(() => {
+    const box = card.current;
+    if (!box) return;
+    const measure = () => {
+      const text = ruler.current;
+      const nameWidth = text ? text.getBoundingClientRect().width : 0;
+      const fontSize = text ? Number.parseFloat(getComputedStyle(text).fontSize) : 0;
+      setUnder(keyUnderCurves(box.clientWidth, nameWidth, fontSize));
+    };
+    measure();
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+    if (observer) {
+      observer.observe(box);
+      if (ruler.current) observer.observe(ruler.current);
+    } else {
+      window.addEventListener('resize', measure);
+    }
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+    // The name is not read here: a new one is set on the ruler, which is then measured again.
+  }, [card, ruler, name]);
+  return under;
+}
+
+/** Out of the layout and out of sight: a box of no size that clips what it holds. */
+const rulerBoxSx = { position: 'absolute', width: 0, height: 0, overflow: 'hidden', visibility: 'hidden' } as const;
+
+/**
+ * The third key's name once more, in its font, on one line and with no
+ * width to keep to: its natural width, whatever the key's place. Hidden from
+ * sight and from screen readers, and it takes no room.
+ */
+function NameRuler({ name, ruler }: { name: string; ruler: RefObject<HTMLSpanElement | null> }) {
+  return (
+    <Box component="span" aria-hidden sx={rulerBoxSx}>
+      <Typography ref={ruler} variant="caption" sx={{ display: 'inline-block', whiteSpace: 'nowrap', lineHeight: 1.3 }}>
+        {name}
+      </Typography>
+    </Box>
+  );
+}
 
 function LegendKey({ color, label }: { color: string; label: string }) {
   return (
@@ -66,14 +136,15 @@ function LegendKey({ color, label }: { color: string; label: string }) {
 
 /**
  * The third key: the band's form, and the shot it stands for. Beside the
- * curves its name is cut at 9.5em, so the legend never takes more than its
- * share of the card; under them it has the card's width.
+ * curves its name is whole within the legend's 9.5em (a longer one goes
+ * under them), so the legend never takes more than its share of the card;
+ * under them it has the card's width, and is cut only beyond it.
  */
 function GuideLegendKey({ name, under }: { name: string; under: boolean }) {
   return (
     <Stack direction="row" spacing={0.75} data-testid={TID.shotGuideKey} sx={{ alignItems: 'center', minWidth: 0, mt: under ? 0.5 : 0 }}>
       <GuideSwatch />
-      <Typography variant="caption" noWrap sx={{ color: 'text.secondary', lineHeight: 1.3, maxWidth: under ? 'none' : '9.5em' }}>
+      <Typography variant="caption" noWrap sx={{ color: 'text.secondary', lineHeight: 1.3, maxWidth: under ? 'none' : `${NAME_BESIDE_EM}em` }}>
         {name}
       </Typography>
     </Stack>
@@ -82,15 +153,16 @@ function GuideLegendKey({ name, under }: { name: string; under: boolean }) {
 
 /**
  * The curves, their keys and the Graph link, laid out for the card's own
- * width (useOwnLayout.ts: the Chromium 91 WebView has no container queries).
- * The curves take the room the keys and the link leave, up to 360 px; the
- * third key sits under the Pressure and Flow keys on a wide card, and on a
- * line of its own under the curves on a narrow one.
+ * width and the third key's name (useKeyUnderCurves). The curves take the
+ * room the keys and the link leave, up to 360 px; the third key sits under
+ * the Pressure and Flow keys when the card is wide and its name fits there
+ * whole, and on a line of its own under the curves otherwise.
  */
 function CurvesRow({ curves, guideName, graph }: { curves: ReactNode; guideName: string | null; graph: ReactNode }) {
   const colors = useTheme().palette.cafai.graph;
   const box = useRef<HTMLDivElement | null>(null);
-  const under = useOwnLayout(box, keyUnderCurves);
+  const ruler = useRef<HTMLSpanElement | null>(null);
+  const under = useKeyUnderCurves(box, ruler, guideName);
   const guideKey = guideName === null ? null : <GuideLegendKey name={guideName} under={under} />;
   return (
     <Box ref={box} sx={{ mt: 1 }}>
@@ -104,6 +176,7 @@ function CurvesRow({ curves, guideName, graph }: { curves: ReactNode; guideName:
         {graph}
       </Stack>
       {under ? guideKey : null}
+      {guideName === null ? null : <NameRuler name={guideName} ruler={ruler} />}
     </Box>
   );
 }

@@ -11,7 +11,9 @@ workflow checks against it. Settings > About shows the version you run.
 - A shot's card draws the shot its question asks about faintly under its
   own curves (your previous shot, or for a bag's first shot your last shot
   of another coffee), as a pale band in the same colours, with a third key
-  that names it. The Shot view draws the
+  that names it in full: beside the curves when the name fits there, and
+  on a line under them when it does not ("Last shot of Huila Pink
+  Bourbon") or the card is a phone's, upright. The Shot view draws the
   bag's previous shot under a shot while it pulls, and the shot its card
   asks about once it is done, named over the plot with its time and yield.
   So a grind or a profile change shows on the curve. A shot in the chat is
