@@ -54,6 +54,13 @@ workflow checks against it. Settings > About shows the version you run.
 - A taste CafAI cannot add to the shot's record in Decaid (a record it
   cannot read) no longer loses the verdict and the TDS waiting with it:
   they still go, and the chat names only the taste.
+- When Decaid goes away while the machine is connected (a Wi-Fi drop on a
+  phone, Decaid closed or restarting), CafAI now says "Can't reach Decaid.
+  Trying again…" after 2.5 s, as it did only for a machine already
+  disconnected, and holds the starts, Sleep, Wake, Tare and Next step until
+  Decaid answers; Stop stays. Before, the buttons stayed live and nothing
+  said why they did nothing. When Decaid is back, CafAI reads the machine
+  again, so a machine that went away meanwhile shows its own alert at once.
 
 ### Decaid
 

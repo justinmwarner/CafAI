@@ -3152,3 +3152,48 @@ updated in place above.
   the records it imported. Why: a device CafAI opened before any bag backs
   up the nine records of its first look (D190), and a phone that restores
   that backup has no bags to show.
+
+### Fixes from the simulator pre-run (2026-10-16)
+
+What the pre-run of docs/HARDWARE_TEST_PLAN.md on Decaid's simulator found,
+fixed the same day.
+
+- **D-SIMB-1. Decaid out of reach is its devices socket down 2.5 s,
+  whatever the machine was.** The telemetry store sets `unreachable`
+  (`src/api/telemetry.ts`) once Decaid's devices socket has not been open
+  for 2.5 s, from the start or since it closed; a socket back sooner was a
+  blip and changes nothing. The time does not count while the page is out
+  of sight: back in view, the sockets reconnect at once and get the 2.5 s
+  first. It clears only when Decaid says again which devices are
+  connected: its devices frame, which Decaid replays on connect, or
+  `GET /api/v1/devices`, asked again as the socket opens and taken while
+  it stays open (then `GET /api/v1/machine/state` for a machine it says
+  is there). The real link comes in the same change, so a machine that
+  went away meanwhile has its own alert at once ("Not connected", or
+  Decaid's report of the disconnect), never a moment of a live row
+  (`MachineAlerts.tsx`: time with no word from Decaid counts as time
+  away). Until then, the link and the readings are Decaid's last word:
+  the stats card keeps them, under "Can't reach Decaid. Trying again…",
+  which says why. Why: the alert
+  needed the machine to read not connected as well, and only a devices
+  frame or the REST seed changes that, so a Decaid that went away while
+  the machine was connected showed nothing: no alert and four live starts
+  for 2 min 16 s on the simulator, the only sign a chat line after a
+  write. On a phone or a computer a Wi-Fi drop or a Decaid restart does
+  that; on the tablet, Decaid going away takes CafAI with it. Keeping the
+  last readings rather than blanking the card leaves everything else that
+  reads the link (the engine, the care counts, the drinks' views) as it
+  was through a short outage, and the alert explains the card.
+- **D-SIMB-2. While Decaid is out of reach every command waits but
+  Stop.** The starts, Sleep or Wake, Tare and the Shot view's Next step
+  are held in their places (`src/ui/machine/commands.ts`, `ShotView.tsx`);
+  the row's starts and Tare tell a screen reader "Can't reach Decaid.", and
+  a group-head machine's row keeps "Start on the machine". Connect and
+  **Let Decaid stop shots** are in alerts that wait behind "Can't reach
+  Decaid". Stop stays live where Decaid's last word put it, as D90 and D97
+  say: the devices socket can be down while Decaid's REST still answers,
+  so a Stop that may get through is offered, and one that does not shows
+  in the alert like any failed Stop ("Couldn't stop the machine." and
+  why). The alert keeps its plain words and makes no claim about Stop.
+  Why: a start, Sleep or Tare sent into an outage could only fail, after a
+  tap on a button that looked live; Stop is the one command worth the try.

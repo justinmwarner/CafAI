@@ -5,7 +5,10 @@
  * 1. A command that failed (from the top bar's row or the stats card): it
  *    answers the tap the barista just made, until closed or the next command.
  * 2. Decaid's latest device error (e.g. profileUploadFailed), until closed.
- * 3. Decaid itself out of reach, once that has lasted.
+ * 3. Decaid itself out of reach, once that has lasted, whatever the machine
+ *    was (the telemetry store's `unreachable`): until Decaid says again
+ *    which devices are connected, the commands that need it wait
+ *    (commands.ts) and the stats card keeps its last readings.
  * 4. No machine connected, with what to do about it, and Connect for the
  *    machine and for the scale when it is missing too (deviceConnect.ts).
  * 5. The machine reporting an error.
@@ -38,8 +41,6 @@ import { isWaterLow } from './format.ts';
 import { useGatewayMode, type GatewayMode } from './useGatewayMode.ts';
 import { useCommandError } from './useMachineCommands.ts';
 
-/** Sockets stay 'connecting'/'closed' between backoff retries: only a lasting outage is one. */
-const UNREACHABLE_AFTER_MS = 2500;
 /** A machine that drops and comes straight back (a Bluetooth reconnect) was never away. */
 const NOT_CONNECTED_AFTER_MS = 1000;
 /** Both ways: the level wobbles around the refill line while water moves. */
@@ -193,8 +194,9 @@ export function MachineAlerts() {
   const gateway = useGatewayMode();
   // Decaid has said something about its devices: before that, "not connected" is only "not known yet".
   const heard = useOnceTrue(useTelemetry((s) => s.devices !== null || s.sockets.devices === 'open'));
-  const away = useSteadyFlag(!connected, NOT_CONNECTED_AFTER_MS);
-  const unreachable = useSteadyFlag(useTelemetry((s) => !s.machineConnected && s.sockets.devices !== 'open'), UNREACHABLE_AFTER_MS);
+  // Time without word from Decaid counts as time away: a machine Decaid says is gone when it answers again has the alert at once.
+  const away = useSteadyFlag(useTelemetry((s) => !s.machineConnected || s.unreachable || s.sockets.devices !== 'open'), NOT_CONNECTED_AFTER_MS) && !connected;
+  const unreachable = useTelemetry((s) => s.unreachable);
   const machineError = useTelemetry((s) => s.machineConnected && s.machine?.state?.state === 'error');
   const refill = useSteadyFlag(
     useTelemetry((s) => s.machineConnected && (isWaterLow(s.waterLevels) || s.machine?.state?.state === 'needsWater')),

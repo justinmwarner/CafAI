@@ -9,10 +9,17 @@
  *   - One socket per channel, reconnected only after a real close or error,
  *     with exponential backoff 1 s -> 30 s that resets on open, and at once
  *     when the page becomes visible again.
- *   - Link state comes only from ws/v1/devices (plus a REST seed at start).
- *     Machine sockets stay open and silent while the DE1 is away, so silence
- *     is not death; a watchdog reopens the machine socket only when devices
- *     says the machine is connected and nothing arrived for 20 s.
+ *   - Link state comes only from ws/v1/devices (plus a REST seed at start,
+ *     and again when Decaid comes back). Machine sockets stay open and
+ *     silent while the DE1 is away, so silence is not death; a watchdog
+ *     reopens the machine socket only when devices says the machine is
+ *     connected and nothing arrived for 20 s.
+ *   - Decaid is out of reach (`unreachable`) once its devices socket has not
+ *     been open for 2.5 s, whatever the machine was: a socket between
+ *     retries is not an outage, and a page out of sight does not count the
+ *     time. What Decaid said last stays in the state, but is news again only
+ *     once Decaid says which devices are connected: its devices frame,
+ *     replayed on connect, or GET /devices, asked again as the socket opens.
  *   - State is replaced, never mutated, so useSyncExternalStore selectors
  *     re-render only what changed. Live samples go to onSample listeners,
  *     not into state, so a 5 Hz shot never re-renders the app.
@@ -114,6 +121,8 @@ const READY_CAP_MS = 300_000;
 
 const BACKOFF_MIN_MS = 1000;
 const BACKOFF_MAX_MS = 30_000;
+/** The devices socket down this long, between retries or not, is Decaid out of reach (`unreachable`). */
+const UNREACHABLE_AFTER_MS = 2500;
 const WATCHDOG_EVERY_MS = 5000;
 const MACHINE_SILENCE_MS = 20_000;
 /** How long the machine is in a shot state, with no shotState frame this build can read, before the machine state starts the shot. */
@@ -176,6 +185,7 @@ interface EspressoStretch {
 
 const INITIAL_STATE: TelemetryState = {
   sockets: { machine: 'closed', scale: 'closed', devices: 'closed', shotState: 'closed', waterLevels: 'closed', shotSettings: 'closed' },
+  unreachable: false,
   machineConnected: false,
   scaleConnected: false,
   machine: null,
@@ -229,6 +239,8 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
   let running = false;
   let runId = 0;
   let watchdog: unknown = null;
+  /** The timer that makes the devices socket's absence an outage (watchForOutage). */
+  let outage: unknown = null;
   let devicesSeen = false;
   let machineSeen = false;
   let shotStateSeen = false;
@@ -252,8 +264,41 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
   }
 
   function setSocket(channel: SlotChannel, status: SocketStatus): void {
-    if (channel === 'timeToReady' || state.sockets[channel] === status) return;
-    update({ sockets: { ...state.sockets, [channel]: status } });
+    if (channel === 'timeToReady') return;
+    if (state.sockets[channel] !== status) update({ sockets: { ...state.sockets, [channel]: status } });
+    if (channel === 'devices') followDevicesSocket(status);
+  }
+
+  // ---- Decaid out of reach ---------------------------------------------------------------
+
+  /** Whether Decaid can be reached follows its devices socket. */
+  function followDevicesSocket(status: SocketStatus): void {
+    if (status !== 'open') {
+      watchForOutage();
+      return;
+    }
+    cancelOutageWatch();
+    // Back: Decaid replays its devices on connect; REST says it too, in case that frame is one CafAI cannot read.
+    if (state.unreachable) void seedFromRest(runId);
+  }
+
+  /** From now, UNREACHABLE_AFTER_MS without the devices socket open is an outage. */
+  function watchForOutage(): void {
+    if (!running || outage !== null || state.unreachable) return;
+    outage = timers.setTimeout(() => {
+      outage = null;
+      // Out of sight the time does not count: back in view, the sockets reconnect at once and get the moment again.
+      if (!running || state.sockets.devices === 'open' || visibility?.visibilityState === 'hidden') return;
+      // Whatever Decaid says next is its first word since, the REST seed's too.
+      devicesSeen = false;
+      machineSeen = false;
+      update({ unreachable: true });
+    }, UNREACHABLE_AFTER_MS);
+  }
+
+  function cancelOutageWatch(): void {
+    if (outage !== null) timers.clearTimeout(outage);
+    outage = null;
   }
 
   // ---- shot lifecycle -------------------------------------------------------------------
@@ -372,6 +417,8 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
           machineConnected: links.machine,
           scaleConnected: links.scale,
           connectionError: sameError(state.connectionError, error) ? state.connectionError : error,
+          // Decaid has said which devices are connected: back in reach, with the real link in the same change.
+          unreachable: false,
         });
         return;
       }
@@ -550,6 +597,9 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
     for (const slot of [...CHANNELS.map((channel) => slots[channel]), timeToReadySlot]) {
       if (!slot.socket) connect(slot);
     }
+    // Time out of sight did not count (watchForOutage): the reconnect just made gets the moment first.
+    cancelOutageWatch();
+    if (state.sockets.devices !== 'open') watchForOutage();
     checkMachineSilence();
   }
 
@@ -567,7 +617,10 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
       const devices = await options.client.getDevices();
       if (id !== runId || devicesSeen) return;
       const links = deviceConnections({ devices }) ?? { machine: false, scale: false };
-      update({ machineConnected: links.machine, scaleConnected: links.scale });
+      const patch: Partial<TelemetryState> = { machineConnected: links.machine, scaleConnected: links.scale };
+      // With its devices socket open again, Decaid has said which devices are connected: back in reach.
+      if (state.sockets.devices === 'open') patch.unreachable = false;
+      update(patch);
     } catch {
       return;
     }
@@ -615,6 +668,7 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
       runId += 1;
       if (watchdog !== null) timers.clearTimeout(watchdog);
       watchdog = null;
+      cancelOutageWatch();
       visibility?.removeEventListener('visibilitychange', onVisibilityChange);
       for (const channel of CHANNELS) close(slots[channel]);
       close(timeToReadySlot);

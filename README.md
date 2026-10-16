@@ -553,10 +553,12 @@ troubleshooting.
   a command that says "Could not reach Decaid. Check that it is running and
   that this device is on the same network.": CafAI gets no answer from
   Decaid's API on port 8080 of the address the page came from, and keeps
-  trying. Check that Decaid is running; in a browser, open CafAI from the
-  tablet's address (`http://<tablet-ip>:3000`). On a development computer,
-  see "Against a real tablet" under [Develop](#develop) for
-  `localStorage.reaHostname`.
+  trying. Until Decaid answers, the starts, Sleep, Wake, Tare and Next step
+  wait, and the stats card shows what Decaid last sent; Stop stays, and
+  says so if it cannot get through. Check that Decaid is running; in a
+  browser, open CafAI from the tablet's address (`http://<tablet-ip>:3000`).
+  On a development computer, see "Against a real tablet" under
+  [Develop](#develop) for `localStorage.reaHostname`.
 - **"Not connected. Wake the DE1 and tap Connect DE1, or pair it in
   Decaid's settings."** and **"The scale is not connected. Switch it on
   and tap Connect scale, or pair it in Decaid's settings."** Do what they

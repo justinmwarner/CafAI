@@ -10,6 +10,11 @@
  * the controls instead of queueing presses. Stop is the exception to that
  * last rule: it is never blocked.
  *
+ * While Decaid is out of reach (telemetry's `unreachable`) every command but
+ * Stop waits: a start, Sleep or Tare could only fail. Stop stays where the
+ * last word from Decaid put it, live: Decaid's REST may answer while its
+ * devices socket does not, and a Stop that fails says so like any other.
+ *
  * Stop also shows for a state this build does not know (D97): a newer Decaid
  * may run something under a new name, and a missing Stop is the worse
  * mistake. But never while the machine updates its firmware, calibrates or
@@ -30,6 +35,8 @@ const STARTABLE_STATES = new Set(['idle', 'schedIdle', 'heating', 'preheating'])
 export interface MachineControlInput {
   /** From ws/v1/devices only. */
   connected: boolean;
+  /** Decaid out of reach (telemetry's `unreachable`): `connected` and `state` are its last word. */
+  unreachable: boolean;
   state: string | null;
   scaleConnected: boolean;
   /** Null until GET /machine/info has answered once. */
@@ -52,6 +59,8 @@ export interface MachineControlModel {
   tareReason: string | null;
 }
 
+const UNREACHABLE = "Can't reach Decaid.";
+
 function blockedStartReason(state: string | null): string {
   if (state === null || state === '') return 'Waiting for the machine to report its state.';
   if (state === 'sleeping') return 'The machine is asleep. Tap Wake first.';
@@ -61,7 +70,7 @@ function blockedStartReason(state: string | null): string {
 }
 
 export function machineControls(input: MachineControlInput): MachineControlModel {
-  const { connected, scaleConnected, pending } = input;
+  const { connected, unreachable, scaleConnected, pending } = input;
   // A frame left over from before a disconnect describes nothing real.
   const state = connected ? input.state : null;
   const running = connected && isStoppableMachineState(state);
@@ -69,27 +78,33 @@ export function machineControls(input: MachineControlInput): MachineControlModel
   const startable = connected && state !== null && STARTABLE_STATES.has(state);
   // Sleep would interrupt these just as Stop would.
   const untouchable = state !== null && DO_NOT_INTERRUPT_STATES.has(state);
+  // Out of reach, Decaid carries nothing but a Stop that may get through.
+  const reachable = !unreachable;
 
   let startReason: string | null = null;
   if (ghc) startReason = 'Start on the machine';
+  else if (unreachable) startReason = UNREACHABLE;
   else if (!connected) startReason = 'Not connected. Wake the DE1 and pair it in Decaid.';
   // While a known drink runs, Stop in its place says it all; an unknown state still gets the reason.
   else if (!isRunningMachineState(state) && !startable) startReason = blockedStartReason(state);
 
   const asleep = state === 'sleeping';
+  let tareReason: string | null = null;
+  if (unreachable) tareReason = UNREACHABLE;
+  else if (!scaleConnected) tareReason = 'Connect a scale to tare.';
   return {
     running,
     startsVisible: !ghc,
-    startsEnabled: !ghc && startable && !running && pending === null,
+    startsEnabled: !ghc && reachable && startable && !running && pending === null,
     startReason,
     stopEnabled: running,
     stopProminent: running,
     sleepWake: {
       command: asleep ? 'idle' : 'sleeping',
       label: asleep ? 'Wake' : 'Sleep',
-      enabled: connected && state !== null && !running && !untouchable && pending === null,
+      enabled: reachable && connected && state !== null && !running && !untouchable && pending === null,
     },
-    tareEnabled: scaleConnected && pending === null,
-    tareReason: scaleConnected ? null : 'Connect a scale to tare.',
+    tareEnabled: reachable && scaleConnected && pending === null,
+    tareReason,
   };
 }

@@ -196,6 +196,16 @@ describe('ShotView: Next step (6.7)', () => {
     expect(nextStep()).toBeDisabled();
   });
 
+  it("is held while Decaid can't be reached, and sends nothing", async () => {
+    const services = createFakeServices({ telemetry: { ...atStep(1), unreachable: true } });
+    renderShot(services);
+    expect(nextStep()).toBeDisabled();
+    act(() => nextStep()!.click());
+    expect(stateCalls(services)).toEqual([]);
+    act(() => services.telemetry.setState({ unreachable: false }));
+    expect(nextStep()).toBeEnabled();
+  });
+
   it('skips one step per tap: held after the tap until the machine shows the next step, or 1.5 s at most', async () => {
     vi.useFakeTimers();
     try {
