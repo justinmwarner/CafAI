@@ -2557,8 +2557,9 @@ The °F item of D151 (`docs/superpowers/specs/2026-10-15-fahrenheit-design.md`).
   (`MachineStatus.tsx`) and in the steam and flush views (`drinkModel.ts`).
   Hot water shows no temperature (D148), and the Shot view and its graph,
   the live strip, the shot card and the steam view's dial (its time) show
-  none, so nothing changed there. Why: a tenth of a degree is about the same
-  in either unit, so each readout keeps its look.
+  none, so nothing changed there. Why: the same digits keep each readout's
+  look and width, as streamline's `formatTemp` keeps its decimals in either
+  unit.
 - **D-TEMP-5. The coach is told in its system prompt, one prompt per
   unit.** In °F the prompt's "Use °C" line points to a section after "How you
   talk", "Temperatures in °F" (`src/coach/fahrenheitPrompt.ts`): what it is
@@ -2588,8 +2589,9 @@ The °F item of D151 (`docs/superpowers/specs/2026-10-15-fahrenheit-design.md`).
   reads 199 °F, 92.5 °C reads 198.5 °F). It reads as a change, converted
   without the 32, when it has a sign ("+1.0 °C"), follows "by", comes before
   a comparative ("hotter", "cooler", "under", "per"…), or is small (under
-  30 °C or 50 °F, which no brew, steam or hot water temperature is); beside
-  an arrow, and otherwise, it is a temperature. A range converts both ends
+  30 °C or 50 °F, which no brew, steam or hot water temperature is);
+  otherwise, and always beside a change line's arrow, it is a temperature.
+  A range converts both ends
   ("1-3 °C under its target" reads "1.8-5.4 °F under"); "93 °C (199 °F)"
   keeps the barista's half, and a conversion the barista asked for, "200 °F
   is 93.3 °C", stays as written. It works both ways, so the coach's °F words
