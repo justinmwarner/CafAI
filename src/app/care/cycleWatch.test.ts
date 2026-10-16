@@ -16,7 +16,7 @@ function play(frames: ReadonlyArray<readonly [string | null, number]>): CycleSee
 const run = (state: string, fromS: number, toS: number) =>
   Array.from({ length: toS - fromS + 1 }, (_, i) => [state, (fromS + i) * 1000] as const);
 
-describe('seen, then gone (D-CARE-4)', () => {
+describe('seen, then gone (D186)', () => {
   it('a Clean seen for a minute, then idle, marks the weekly clean at its last frame', () => {
     expect(play([...run('idle', 0, 2), ...run('cleaning', 3, 400), ['idle', 401_000]])).toEqual([{ step: 'detergent-clean', atMs: 400_000 }]);
   });

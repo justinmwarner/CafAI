@@ -485,7 +485,7 @@ describe('the mock against the spec', () => {
     await mock.player.whenIdle();
     mock.setSpeed(1);
 
-    // The care reminders count shots and steams (D-CARE-3): the total, the newest steam before there is one
+    // The care reminders count shots and steams (D185): the total, the newest steam before there is one
     // (200 null), then a steaming, its id and itself.
     await attempt(() => client.listShots({ limit: 1 }));
     await attempt(() => client.getLatestSteam());
@@ -508,7 +508,7 @@ describe('the mock against the spec', () => {
       await attempt(() =>
         client.updateShot(latest.id, { annotations: { espressoNotes, enjoyment: 7, extras: { [EXTRAS_KEY]: { notes: line, ...rating } } } }),
       );
-      // As CafAI writes a TDS and its EY (D-TDS-4), then clears both with null.
+      // As CafAI writes a TDS and its EY (D165), then clears both with null.
       await attempt(() => client.updateShot(latest.id, { annotations: { drinkTds: 9.25, drinkEy: 20.8 } }));
       await attempt(() => client.updateShot(latest.id, { annotations: { drinkTds: null, drinkEy: null } }));
     }

@@ -408,7 +408,7 @@ describe("buildSystemPrompt: the barista's verdict (D126)", () => {
   });
 });
 
-describe('buildSystemPrompt: a refractometer reading (D-TDS-6, D-TDS-7)', () => {
+describe('buildSystemPrompt: a refractometer reading (D167, D168)', () => {
   const section = prompt.slice(prompt.indexOf('# A refractometer reading'), prompt.indexOf('# Coaching heuristics'));
 
   it('documents the reading event: the TDS, the EY worked out from the card, null for none, and when it comes', () => {
@@ -443,7 +443,7 @@ describe('buildSystemPrompt: a refractometer reading (D-TDS-6, D-TDS-7)', () => 
   });
 });
 
-describe('buildSystemPrompt: °F (D-TEMP-5)', () => {
+describe('buildSystemPrompt: °F (D175)', () => {
   const fahrenheit = buildSystemPrompt(TEMPLATES, { temperatureUnit: 'fahrenheit' });
   const section = fahrenheitSection(TEMPLATES);
   const USE_C = '- Use °C, g, bar, ml/s and seconds.';

@@ -57,10 +57,10 @@ export async function createServices(win: Window): Promise<AppServices> {
   const [restore] = await Promise.all([restoreFromMirrorIfEmpty(storage), storage.keyBackup.restoreIfMissing()]);
 
   const appearance = createAppearanceStore(storage.settings, (await storage.settings.get()).appearance);
-  // °C or °F (D-TEMP-2): the screens read it, and so does every request's prompt (D-TEMP-5).
+  // °C or °F (D172): the screens read it, and so does every request's prompt (D175).
   const temperatureUnit = createTemperatureUnitStore(storage.settings, (await storage.settings.get()).temperatureUnit);
 
-  // Machine care's steps (D-CARE-1 to D-CARE-8): read now, counted from Decaid's totals behind the start.
+  // Machine care's steps (D183-D190): read now, counted from Decaid's totals behind the start.
   const visibility = {
     visible: () => win.document.visibilityState !== 'hidden',
     subscribe(listener: () => void) {

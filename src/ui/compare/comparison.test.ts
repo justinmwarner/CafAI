@@ -27,7 +27,7 @@ function card(shotId: string, summary: ShotSummary = sampleSummary({ shotId }), 
 
 const text = (id: string, said: string): CoachUiMessage => ({ id, role: 'assistant', parts: [{ kind: 'text', text: said }], createdAt: '2026-10-15T08:00:00.000Z' });
 
-describe('the shot drawn under another (D-CURVE-1)', () => {
+describe('the shot drawn under another (D178)', () => {
   it("is the one the card's question names: the previous shot, or another coffee's last shot", () => {
     expect(comparisonTarget({ kind: 'previous', shotId: 's-1' })).toEqual({ shotId: 's-1', name: 'Previous shot' });
     expect(comparisonTarget({ kind: 'otherCoffee', shotId: 's-r', coffee: 'Red Brick' })).toEqual({ shotId: 's-r', name: 'Last shot of Red Brick' });
@@ -50,7 +50,7 @@ describe('the shot drawn under another (D-CURVE-1)', () => {
   });
 });
 
-describe('pourCurve: a shot on the pour clock (D-CURVE-5)', () => {
+describe('pourCurve: a shot on the pour clock (D182)', () => {
   it("counts from the pour's start, keeping only the preheat's last point, at 0", () => {
     const summary = sampleSummary({
       pourStartS: 2.4,
@@ -97,7 +97,7 @@ describe('pourCurve: a shot on the pour clock (D-CURVE-5)', () => {
   });
 });
 
-describe('the chat as the source of a curve (D-CURVE-4)', () => {
+describe('the chat as the source of a curve (D181)', () => {
   const messages = [card('s-1'), text('t', 'Sour?'), card('s-2', sampleSummary({ shotId: 's-2', series: sampleSeries(30, 8) }))];
 
   it("finds a shot's card, and its summary while that keeps a curve", () => {

@@ -211,13 +211,13 @@ export interface ShotSummary {
   ratio: number | null;
   /**
    * The drink's total dissolved solids, %, to 0.01, from the barista's
-   * refractometer (D-TDS-1, D-TDS-5): typed on the shot's card, or Decaid's
+   * refractometer (D162, D166): typed on the shot's card, or Decaid's
    * annotations.drinkTds. Absent while there is no reading.
    */
   tdsPct?: number;
   /**
    * Extraction yield, %, to 0.1: tdsPct x yieldG / doseG, the card's own
-   * numbers, so EY and the ratio agree (D-TDS-2). Present with tdsPct; null
+   * numbers, so EY and the ratio agree (D163). Present with tdsPct; null
    * when the shot has no dose or no yield to work it out from.
    */
   eyPct?: number | null;

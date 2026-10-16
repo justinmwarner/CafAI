@@ -12,7 +12,7 @@ import { DrinkSettingsSection } from './DrinkSettingsSection.tsx';
 
 /**
  * Settings > Steam, hot water and flush for a barista who reads °F
- * (D-TEMP-3), against a Decaid that keeps the three temperatures as whole °C
+ * (D173), against a Decaid that keeps the three temperatures as whole °C
  * and truncates anything else, as its parseInt does (models/data/utils.dart).
  */
 type Drink = 'steamSettings' | 'hotWaterData' | 'rinseData';
@@ -56,7 +56,7 @@ async function typeAndLeave(name: string, text: string) {
   await userEvent.tab();
 }
 
-describe('the drink steppers in °F (D-TEMP-3)', () => {
+describe('the drink steppers in °F (D173)', () => {
   it('show each temperature in whole °F, its unit and its bounds, and the rest as before', async () => {
     renderIn('fahrenheit');
     const steam = await findField('Steam temperature');

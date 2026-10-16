@@ -1,7 +1,7 @@
 /**
  * Bringing what a link points at into view on the screen it opens: the stats
  * card's line opens a step of the Care screen, and the Care screen's "Change
- * it in Settings" opens Settings > Machine care (D-CARE-5, D-CARE-6). The
+ * it in Settings" opens Settings > Machine care (D187, D188). The
  * link asks first, the screen takes the ask when it mounts, so a reload or a
  * visit by another way brings nothing into view.
  */

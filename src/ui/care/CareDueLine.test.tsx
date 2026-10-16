@@ -8,7 +8,7 @@ import { renderWithServices } from '../testing/renderWithServices.tsx';
 import { TID } from '../testIds.ts';
 import { takeReveal } from './careReveal.ts';
 
-describe("the stats card's line (D-CARE-6)", () => {
+describe("the stats card's line (D188)", () => {
   it('says nothing while nothing is due', async () => {
     const services = await servicesWithCare({ records: [doneRecord('detergent-clean', 2)], shots: 110 });
     renderWithServices(<StatsCard />, services);

@@ -29,13 +29,13 @@ describe('openCafaiDb', () => {
     expect(tx.objectStore('conversations').keyPath).toBe('id');
     // One settings record under a fixed key, so no key path.
     expect(tx.objectStore('settings').keyPath).toBeNull();
-    // Machine care's steps, by the step's id (D-CARE-7).
+    // Machine care's steps, by the step's id (D189).
     expect(tx.objectStore('care').keyPath).toBe('id');
     await tx.done;
     db.close();
   });
 
-  it('upgrades a version-1 database by adding the care store, and keeps everything it held (D-CARE-7)', async () => {
+  it('upgrades a version-1 database by adding the care store, and keeps everything it held (D189)', async () => {
     const name = uniqueDbName();
     // Version 1 exactly as CafAI 0.1.2 created it.
     const old = await openDB(name, 1, {

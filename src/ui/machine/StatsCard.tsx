@@ -142,7 +142,7 @@ export function StatsCard() {
         <LoadedProfile onStepNames={setStepNames} />
         <CardButtons narrow={narrow} />
       </Box>
-      {/* Machine care's line, while a step is due (D-CARE-6). */}
+      {/* Machine care's line, while a step is due (D188). */}
       <CareDueLine />
     </Paper>
   );

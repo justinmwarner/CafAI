@@ -177,7 +177,7 @@ export interface ShotCardProps {
   onOpenGraph?: () => void;
   /** The shot's page on Visualizer, once Decaid's Visualizer plugin uploaded it (6.4). */
   visualizerUrl?: string | null;
-  /** Keep the barista's TDS (%) or remove it (null) (D-TDS-1). Without it the card shows a reading it has, and no Add. */
+  /** Keep the barista's TDS (%) or remove it (null) (D162). Without it the card shows a reading it has, and no Add. */
   onSaveTds?: (tdsPct: number | null) => void;
 }
 
@@ -223,7 +223,7 @@ export function ShotCard({
         <Metric label="First drop" value={formatSeconds(firstDrop)} />
         <ShotTds summary={summary} onSave={onSaveTds} busy={disabled} />
       </Box>
-      {/* The shot under is the one the question below names (D-CURVE-1): none where the card asks nothing. */}
+      {/* The shot under is the one the question below names (D178): none where the card asks nothing. */}
       <ShotSparkline summary={summary} baseline={onRate && stars === null ? baseline : null} onOpenGraph={onOpenGraph} />
       {summary.channelingFlags.length > 0 ? (
         <Stack direction="row" spacing={1} sx={{ mt: 1, alignItems: 'flex-start', color: 'warning.main' }}>

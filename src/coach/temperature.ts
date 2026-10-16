@@ -1,5 +1,5 @@
 /**
- * Temperatures in the barista's unit (D-TEMP-1): °C or °F wherever a person
+ * Temperatures in the barista's unit (D171): °C or °F wherever a person
  * reads or types one, while Decaid, the profiles, the coach's tools and
  * CafAI's own records keep °C, as streamline does (its units.js: "Celsius on
  * the wire, a pure display-layer conversion"). Pure, so the screens, the
@@ -10,7 +10,7 @@
  * 1.8 °F hotter).
  *
  * inTemperatureUnit rewrites the temperatures in a sentence into the
- * barista's unit (D-TEMP-6): the coach's words when it slips, CafAI's own
+ * barista's unit (D176): the coach's words when it slips, CafAI's own
  * change lines, which are kept in °C, and the care guide. A number reads as a
  * change when its words say so (a sign, "by", a comparative after it) or when
  * it is too small to be an espresso temperature; otherwise as a temperature.
@@ -188,7 +188,7 @@ const ANY_UNIT = /[°º℃℉]|degree/i;
 
 /**
  * `text` with every temperature written in the other unit written in `unit`
- * instead (D-TEMP-6), rounded as precisely as it was written: "93 °C" reads
+ * instead (D176), rounded as precisely as it was written: "93 °C" reads
  * "199 °F", "92.0 °C -> 93.0 °C (every step +1.0 °C)" reads "197.6 °F ->
  * 199.4 °F (every step +1.8 °F)", "1 °C hotter" reads "1.8 °F hotter". What
  * is already in `unit` stays as it is. Never throws.

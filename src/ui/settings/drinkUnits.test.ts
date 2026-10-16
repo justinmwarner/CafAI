@@ -26,7 +26,7 @@ const TEMPERATURES: ReadonlyArray<[string, DrinkFieldSpec, { min: number; max: n
 /** Every whole number from `min` to `max`. */
 const every = (min: number, max: number) => Array.from({ length: max - min + 1 }, (_, i) => min + i);
 
-describe('fieldView in °F: the round trip at every value (D-TEMP-3)', () => {
+describe('fieldView in °F: the round trip at every value (D173)', () => {
   for (const [name, spec, shownRange] of TEMPERATURES) {
     const view = fieldView(spec, 'fahrenheit');
 

@@ -1,5 +1,5 @@
 /**
- * Machine care in the demo (D-CARE-1, D-CARE-6): as a barista who keeps up
+ * Machine care in the demo (D183, D188): as a barista who keeps up
  * with it would have it a day into the dial-in, the weekly clean due and the
  * rest on time. Times count back from the demo's moment; the totals are
  * Decaid's before the story's shots, so every shot of the dial-in counts

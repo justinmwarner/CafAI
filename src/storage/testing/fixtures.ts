@@ -28,7 +28,7 @@ export function makeSettings(overrides: Partial<Settings> = {}): Settings {
   };
 }
 
-/** Machine care's weekly clean, marked done on the Care screen with 120 shots in Decaid (D-CARE-7). */
+/** Machine care's weekly clean, marked done on the Care screen with 120 shots in Decaid (D189). */
 export function makeCareRecord(overrides: Partial<CareRecord> = {}): CareRecord {
   return {
     id: 'detergent-clean',

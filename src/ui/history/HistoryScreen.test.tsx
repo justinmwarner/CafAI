@@ -119,7 +119,7 @@ describe('HistoryScreen bag detail', () => {
     expect(screen.getAllByTestId(TID.visualizerLink)).toHaveLength(1);
   });
 
-  it("ends a shot's line with the barista's TDS and its EY, and with the TDS alone when there is no EY (D-TDS-5)", async () => {
+  it("ends a shot's line with the barista's TDS and its EY, and with the TDS alone when there is no EY (D166)", async () => {
     const iterations = KIAMBU_ITERATIONS.map((record) => {
       if (record.id === 'it-1') return { ...record, summary: withTds(record.summary!, 9.25) };
       if (record.id === 'it-2') return { ...record, summary: withTds({ ...record.summary!, yieldG: null }, 8.9) };

@@ -170,7 +170,7 @@ describe('replies are read, not trusted', () => {
     );
   });
 
-  it('reads the steam records the care reminders count (D-CARE-3): ids kept when they are ids, the newest by its id', async () => {
+  it('reads the steam records the care reminders count (D185): ids kept when they are ids, the newest by its id', async () => {
     expect(await answering(['a', 'b']).listSteamIds()).toEqual(['a', 'b']);
     expect(await answering(['a', 7, '']).listSteamIds()).toEqual(['a']);
     await expect(answering(null).listSteamIds()).rejects.toMatchObject({ code: 'unexpected_reply' });
@@ -760,7 +760,7 @@ describe('against the mock Decaid', () => {
     expect(bad).toMatchObject({ status: 400, message: 'annotations.enjoyment must be between 0 and 10, got 12' });
   });
 
-  it('counts shots in one request, and reads the steam records, null before the first (D-CARE-3)', async () => {
+  it('counts shots in one request, and reads the steam records, null before the first (D185)', async () => {
     const page = await client.listShots({ limit: 1 });
     expect(page).toMatchObject({ total: 1, limit: 1 });
     expect(page.items).toHaveLength(1);

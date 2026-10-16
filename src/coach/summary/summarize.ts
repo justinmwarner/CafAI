@@ -21,7 +21,7 @@
  * after the stop) ?? the last scale weight; the target yield is
  * workflow.context.targetYield (0 = stop-at-weight off). A TDS is
  * annotations.drinkTds when the record has one, its EY worked out from that
- * dose and yield (extraction.ts, D-TDS-5); Decaid's own drinkEy is not read.
+ * dose and yield (extraction.ts, D166); Decaid's own drinkEy is not read.
  */
 import type { ShotRecord } from '../../api/types.ts';
 import { extractionYield, isTds, roundTds } from '../extraction.ts';

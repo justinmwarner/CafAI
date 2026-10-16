@@ -1,5 +1,5 @@
 /**
- * The coach's system prompt in °F (D-TEMP-5): one section, after "How you
+ * The coach's system prompt in °F (D175): one section, after "How you
  * talk", for a barista who reads °F. The coach is given °C and sends °C (the
  * catalog, the heuristics, the shot summary, the tools); it writes °F. CafAI
  * works out each template's temperature lever in °F itself, so the model has

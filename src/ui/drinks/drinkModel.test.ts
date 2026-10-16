@@ -229,7 +229,7 @@ describe('drinkReadouts once it is done', () => {
   });
 });
 
-describe('drinkReadouts in °F (D-TEMP-4)', () => {
+describe('drinkReadouts in °F (D174)', () => {
   const fahrenheit = (overrides: Partial<ReadoutInput> = {}) => input({ unit: 'fahrenheit', ...overrides });
 
   it('steam: the heater and its setting in whole °F, the rest as in °C', () => {

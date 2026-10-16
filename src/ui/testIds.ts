@@ -49,7 +49,7 @@ export const TID = {
   tareButton: 'tare-button',
   liveGraph: 'live-graph',
   shotTimer: 'shot-timer',
-  /** The shot drawn faintly under another (D-CURVE-3): its bands on a shot card, and its key on the card and over the Shot view's plot. */
+  /** The shot drawn faintly under another (D180): its bands on a shot card, and its key on the card and over the Shot view's plot. */
   shotGuide: 'shot-guide',
   shotGuideKey: 'shot-guide-key',
 
@@ -87,7 +87,7 @@ export const TID = {
   tasteHelpDialog: 'taste-help-dialog',
   errorBanner: 'error-banner',
   retryButton: 'retry-button',
-  /** A shot card's TDS (D-TDS-1): its cell (Add, or the reading), its EY, the field with Save, Remove and Cancel, and the line under the numbers. */
+  /** A shot card's TDS (D162): its cell (Add, or the reading), its EY, the field with Save, Remove and Cancel, and the line under the numbers. */
   tdsCell: 'shot-tds',
   tdsEy: 'shot-ey',
   tdsInput: 'tds-input',
@@ -107,7 +107,7 @@ export const TID = {
   appearanceMode: (mode: string) => `appearance-mode-${mode}`,
   tintSwatch: (id: string) => `tint-${id}`,
   tintHue: 'tint-hue',
-  /** Settings > Appearance > Temperatures (D-TEMP-2): 'celsius' or 'fahrenheit'. */
+  /** Settings > Appearance > Temperatures (D172): 'celsius' or 'fahrenheit'. */
   temperatureUnit: (unit: string) => `temperature-unit-${unit}`,
   apiKeyInput: 'api-key-input',
   apiKeySave: 'api-key-save',
@@ -188,7 +188,7 @@ export const TID = {
   carePoster: 'care-poster',
   carePlayer: 'care-player',
   careWatch: 'care-watch',
-  // Machine care's reminders (D-CARE-1 to D-CARE-6): the stats card's line, a step's last time, Settings' fields
+  // Machine care's reminders (D183-D188): the stats card's line, a step's last time, Settings' fields
   careDueLine: 'care-due-line',
   careStepCare: (id: string) => `care-step-care-${slug(id)}`,
   careStepLine: (id: string) => `care-step-line-${slug(id)}`,

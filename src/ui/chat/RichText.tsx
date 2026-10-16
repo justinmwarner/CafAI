@@ -38,7 +38,7 @@ const richTextSx = {
 /**
  * Model text as React text nodes: never HTML, links or images (see textBlocks.ts).
  * While `streaming`, markup that has not closed yet shows without its markers.
- * A temperature in the other unit reads in the barista's (D-TEMP-6).
+ * A temperature in the other unit reads in the barista's (D176).
  */
 export function RichText({ text, streaming = false }: { text: string; streaming?: boolean }) {
   const unit = useTemperatureUnit();

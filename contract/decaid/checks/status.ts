@@ -83,7 +83,7 @@ export type _shot = Assert<
 >;
 
 /**
- * client.ts listSteamIds and getLatestSteam, for the care reminders (D-CARE-3): 200 is the answer. A Decaid older
+ * client.ts listSteamIds and getLatestSteam, for the care reminders (D185): 200 is the answer. A Decaid older
  * than the pin, without the routes, answers shelf's plain 404, and Rinza counts by days alone.
  */
 export type _steams = Assert<

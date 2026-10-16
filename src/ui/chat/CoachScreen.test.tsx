@@ -326,7 +326,7 @@ describe('CoachScreen', () => {
     expect(services.coach.calls).toEqual([{ method: 'rateShot', args: ['shot-1', 'muchBetter'] }]);
   });
 
-  it('passes a TDS saved on a shot card to the controller (D-TDS-1)', async () => {
+  it('passes a TDS saved on a shot card to the controller (D162)', async () => {
     const services = renderCoach(coachStateFor('options'));
     await userEvent.click(screen.getByRole('button', { name: 'Add TDS' }));
     await userEvent.type(screen.getByRole('textbox', { name: 'TDS' }), '9,3{Enter}');

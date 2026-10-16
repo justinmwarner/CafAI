@@ -47,7 +47,7 @@ const unchanging = () => () => undefined;
 const inCelsius = () => DEFAULT_TEMPERATURE_UNIT;
 
 /**
- * The barista's temperature unit (D-TEMP-2). °C outside a ServicesProvider,
+ * The barista's temperature unit (D172). °C outside a ServicesProvider,
  * as in a card's own test, so a temperature always reads as something.
  */
 export function useTemperatureUnit(): TemperatureUnit {

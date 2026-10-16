@@ -135,13 +135,13 @@ export interface Appearance {
   tint: string | { hue: number };
 }
 
-/** Decent's bands of the water's total dissolved solids (its water page): under 30 ppm, 30 to 120, over 120 (D-CARE-5). */
+/** Decent's bands of the water's total dissolved solids (its water page): under 30 ppm, 30 to 120, over 120 (D187). */
 export type WaterBand = 'under30' | 'to120' | 'over120';
 
-/** The filter at the water tank's intake: V1 (citric acid) or V2 (baking soda) (D-CARE-5). */
+/** The filter at the water tank's intake: V1 (citric acid) or V2 (baking soda) (D187). */
 export type IntakeFilter = 'v1' | 'v2';
 
-/** What sets Machine care's reminders, and whether the stats card shows them (D-CARE-5, D-CARE-6). */
+/** What sets Machine care's reminders, and whether the stats card shows them (D187, D188). */
 export interface CareSettings {
   /** Null: not sure, reminded as 30 to 120 ppm. */
   water: WaterBand | null;
@@ -182,7 +182,7 @@ export interface Settings {
   keepKeyInDecaid?: boolean;
   /**
    * The unit CafAI shows and takes temperatures in, and the coach speaks in
-   * (D-TEMP-1, D-TEMP-2); Decaid and the profiles keep °C whatever it is.
+   * (D171, D172); Decaid and the profiles keep °C whatever it is.
    * Absent until someone chooses on this device, and read as °C: like
    * keepKeyInDecaid, storage never writes it as a default, so a merge (an
    * import, a restore) can tell a choice made here, which it keeps, from
@@ -190,20 +190,20 @@ export interface Settings {
    */
   temperatureUnit?: TemperatureUnit;
   /**
-   * Machine care's reminders (D-CARE-5): the water, the intake filter and the
+   * Machine care's reminders (D187): the water, the intake filter and the
    * stats card's line. Left out while it holds the defaults (DEFAULT_CARE in
    * settings.ts), as the key-copy choice is: read `care ?? DEFAULT_CARE`.
    */
   care?: CareSettings;
 }
 
-/** How a care step's last time came about: marked done on the Care screen, or a cycle CafAI saw run (D-CARE-4). */
+/** How a care step's last time came about: marked done on the Care screen, or a cycle CafAI saw run (D186). */
 export type CareMark = 'tick' | 'seen';
 
 /**
- * A step of the cleaning guide beyond Daily, as CafAI keeps it (D-CARE-7):
+ * A step of the cleaning guide beyond Daily, as CafAI keeps it (D189):
  * when it was last done, and Decaid's totals from when its count began, so
- * the shots and steams since are the totals now less these (D-CARE-3).
+ * the shots and steams since are the totals now less these (D185).
  */
 export interface CareRecord {
   /** The step's id in the cleaning guide (src/ui/care/careGuide.ts). */
@@ -211,7 +211,7 @@ export interface CareRecord {
   /** When it was last done; null while it was never marked done. */
   doneAt: IsoDateTime | null;
   by: CareMark | null;
-  /** Where its count begins: doneAt, or the first time CafAI counted it (D-CARE-8). */
+  /** Where its count begins: doneAt, or the first time CafAI counted it (D190). */
   countFrom: IsoDateTime;
   /** Decaid's shot total at countFrom; null while unknown. */
   shotTotal: number | null;
@@ -249,7 +249,7 @@ export interface SettingsRepository {
   update(patch: Partial<Settings>): Promise<Settings>;
 }
 
-/** Machine care's steps (D-CARE-7), one record per step. */
+/** Machine care's steps (D189), one record per step. */
 export interface CareRepository {
   /** By the step's id. */
   list(): Promise<CareRecord[]>;
@@ -274,7 +274,7 @@ export interface CafaiExport {
   versions: ProfileVersion[];
   iterations: IterationRecord[];
   conversations: ConversationRecord[];
-  /** Machine care's steps (D-CARE-7); absent from files made before them, which an older CafAI leaves out. */
+  /** Machine care's steps (D189); absent from files made before them, which an older CafAI leaves out. */
   care?: CareRecord[];
 }
 

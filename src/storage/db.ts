@@ -13,7 +13,7 @@ import type { Bag, CareRecord, ConversationRecord, IterationRecord, ProfileVersi
 import { StorageError, toStorageError } from './errors.ts';
 
 export const CAFAI_DB_NAME = 'cafai';
-/** 2: the care store (D-CARE-7). */
+/** 2: the care store (D189). */
 export const CAFAI_DB_VERSION = 2;
 /** The settings store holds exactly one record, under this key. */
 export const SETTINGS_KEY = 'current';
@@ -24,7 +24,7 @@ export interface CafaiDbSchema extends DBSchema {
   iterations: { key: string; value: IterationRecord; indexes: { bagId: string; createdAt: string } };
   conversations: { key: string; value: ConversationRecord };
   settings: { key: string; value: Settings };
-  /** Machine care's steps, by the step's id (D-CARE-7). */
+  /** Machine care's steps, by the step's id (D189). */
   care: { key: string; value: CareRecord };
 }
 

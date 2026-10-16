@@ -370,7 +370,7 @@ describe('the key-copy choice through an import (D99)', () => {
   });
 });
 
-describe('machine care (D-CARE-5)', () => {
+describe('machine care (D187)', () => {
   it('reads the water, the filter and the switch leniently: an answer it does not know is not said, the switch on', () => {
     expect(normalizeCareSettings(undefined)).toEqual(DEFAULT_CARE);
     expect(normalizeCareSettings({ water: 'over120', filter: 'v2', reminders: false })).toEqual({ water: 'over120', filter: 'v2', reminders: false });
@@ -485,7 +485,7 @@ describe('appearance', () => {
   });
 });
 
-describe('the temperature unit (D-TEMP-2)', () => {
+describe('the temperature unit (D172)', () => {
   function setup() {
     const handle = createDbHandle((onLost) => openCafaiDb(uniqueDbName(), onLost));
     const db = () => handle.get();

@@ -4,7 +4,7 @@
  * order (numbered on a wide screen): what, when, how, where to run it for
  * now, the note where the video and Decent's pages differ, a link to
  * Decent's page, and the step's moment; a step beyond Daily ends with its
- * last time and Mark done (StepCare.tsx, D-CARE-1). The sources close it.
+ * last time and Mark done (StepCare.tsx, D183). The sources close it.
  */
 import { useMemo } from 'react';
 import Box from '@mui/material/Box';
@@ -149,7 +149,7 @@ function Step({ step, number, props }: { step: CareStep; number: number; props: 
 
 export function RoutineCard(props: RoutineCardProps) {
   const { links, linkProps, playingKey, onPlay, panelId, tabId } = props;
-  // Its temperatures in the barista's unit (D-TEMP-6).
+  // Its temperatures in the barista's unit (D176).
   const unit = useTemperatureUnit();
   const routine = useMemo(() => routineInUnit(props.routine, unit), [props.routine, unit]);
   return (

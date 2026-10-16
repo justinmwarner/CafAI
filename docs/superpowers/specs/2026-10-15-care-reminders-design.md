@@ -6,7 +6,7 @@ mockup. Builds on the cleaning guide
 ([2026-10-15-machine-care-design.md](2026-10-15-machine-care-design.md),
 D152-D156) and takes D161 as given: CafAI starts no cycle, so a step starts
 over when the barista marks it done, not when CafAI runs it. The calls
-below are recorded in DECISIONS.md as D-CARE-1 to D-CARE-9.
+below are recorded in DECISIONS.md as D183-D191.
 
 ## 1. The ask
 

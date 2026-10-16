@@ -241,7 +241,7 @@ describeDecaid('write', ({ url }) => {
     expect(live.problems()).toEqual([]);
   });
 
-  it('drink temperatures set in °F: kept as the whole °C CafAI sends, and read back as set, at each end (D-TEMP-3)', async () => {
+  it('drink temperatures set in °F: kept as the whole °C CafAI sends, and read back as set, at each end (D173)', async () => {
     const client = live.client;
     // Decaid puts the drinks' settings on the machine at once, so it takes them only with one connected (D114).
     if (!links.machine) assert.fail('The simulated machine is not connected.');

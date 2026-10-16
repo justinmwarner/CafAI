@@ -161,7 +161,7 @@ export function shotRatedBlock(payload: ShotRatedPayload): TextBlock {
 }
 
 /**
- * The barista's refractometer reading of a shot (D-TDS-6): the TDS they
+ * The barista's refractometer reading of a shot (D167): the TDS they
  * typed on its card and the EY CafAI worked out from it with the card's dose
  * and yield (null without either), or `tdsPct` null when they removed the
  * reading. Like a verdict, it goes with the next user turn after the reading

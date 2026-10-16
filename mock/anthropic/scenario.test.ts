@@ -528,7 +528,7 @@ describe('scripted replies', () => {
     ]);
   });
 
-  it('rule 0b: a reply to a turn carrying a TDS reading starts with what it heard, and the rule decides as before (D-TDS-9)', () => {
+  it('rule 0b: a reply to a turn carrying a TDS reading starts with what it heard, and the rule decides as before (D170)', () => {
     const measured = (tdsPct: number | null, eyPct: number | null) =>
       text(`[event:shot_measured]\n${JSON.stringify({ shotId: 'shot-1', tdsPct, eyPct, doseG: 18, yieldG: 40.4 })}`);
     const tasted = (...readings: Block[]) =>
@@ -908,7 +908,7 @@ describe('scripted replies', () => {
   });
 });
 
-describe('the scripted coach follows the °F prompt (D-TEMP-7)', () => {
+describe('the scripted coach follows the °F prompt (D177)', () => {
   const FAHRENHEIT_PROMPT = buildSystemPrompt(TEMPLATES, { temperatureUnit: 'fahrenheit' });
   const conversation = (taste: string) => [...UP_TO_SHOT, shot(BLOOMING_LEVERS, 'blooming-espresso', 1), SHOT_REPLY, answer([taste]), ANSWER_REPLY, SERIES];
   const proposal = (result: ScenarioResponse) => ok(result).tools[0]?.input as Record<string, unknown>;

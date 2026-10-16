@@ -1,5 +1,5 @@
 /**
- * Fake services whose barista reads temperatures in `unit` (D-TEMP-2), as if
+ * Fake services whose barista reads temperatures in `unit` (D172), as if
  * chosen in Settings. Tests only.
  */
 import type { TemperatureUnit } from '../../coach/temperature.ts';

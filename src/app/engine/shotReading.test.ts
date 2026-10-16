@@ -51,7 +51,7 @@ describe('setShotTds and shotCard', () => {
   });
 });
 
-describe('untoldReadings (D-TDS-6)', () => {
+describe('untoldReadings (D167)', () => {
   it('tells a card’s reading the transcript has not told, with the dose and yield it came from', () => {
     const messages = chat(withTds(summary('shot-1'), 9.25));
     expect(untoldReadings([], messages)).toEqual([{ shotId: 'shot-1', tdsPct: 9.25, eyPct: 20.8, doseG: 18, yieldG: 40.4 }]);

@@ -128,7 +128,7 @@ function BagList({ bags, shotCounts, onSelect }: { bags: Bag[]; shotCounts: Map<
 
 const STATUS_COLOR = { active: 'success', superseded: 'default', undone: 'warning' } as const;
 
-/** A change's words with their temperatures in the barista's unit (D-TEMP-6): kept as written, read in °C or °F. */
+/** A change's words with their temperatures in the barista's unit (D176): kept as written, read in °C or °F. */
 function useWords(): (text: string) => string {
   const unit = useTemperatureUnit();
   return (text) => inTemperatureUnit(text, unit);
@@ -169,7 +169,7 @@ function ChangeLines({ lines }: { lines: string[] }) {
 function shotLine(record: IterationRecord): string {
   const s = record.summary;
   if (!s) return 'No shot data';
-  // The barista's refractometer reading, and its EY when there is one (D-TDS-5).
+  // The barista's refractometer reading, and its EY when there is one (D166).
   const reading = readingOf(s);
   const measured = reading ? [`TDS ${formatTds(reading.tdsPct)}`, ...(reading.eyPct === null ? [] : [`EY ${formatEy(reading.eyPct)}`])] : [];
   return [
@@ -518,9 +518,9 @@ export function HistoryScreen({ bagId, onSelectBag = hashNavigate }: HistoryScre
         coach.refresh().catch(() => undefined);
         // An import can bring a look along (a device still on the default takes it).
         appearance.reload().catch(() => undefined);
-        // And a temperature unit, on a device that never chose one (D-TEMP-2).
+        // And a temperature unit, on a device that never chose one (D172).
         temperatureUnit.reload().catch(() => undefined);
-        // And machine care's last times (D-CARE-7).
+        // And machine care's last times (D189).
         care?.reload().catch(() => undefined);
       } catch (error) {
         setMessage({ tone: 'error', text: `Import failed: ${errorText(error)}` });

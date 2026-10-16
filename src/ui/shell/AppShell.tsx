@@ -587,7 +587,7 @@ function Shell({ route, onNavigate, children }: AppShellProps) {
   // creates it, every later one finds it), so whichever graph opens mid-shot
   // has the shot from its first frame.
   shotTraceFor(telemetry);
-  // The shot the Shot view draws under it follows the chat from the start too (D-CURVE-2).
+  // The shot the Shot view draws under it follows the chat from the start too (D179).
   useShotViewComparison();
   // And its one recording of steam, hot water and flush, for the same reason (D148).
   drinkTraceFor(telemetry);

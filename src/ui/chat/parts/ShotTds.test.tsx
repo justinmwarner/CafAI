@@ -21,7 +21,7 @@ function card(summary: ShotSummary = sampleSummary(), options: { busy?: boolean 
 const field = () => screen.getByRole('textbox', { name: 'TDS' });
 const button = (name: string) => screen.getByRole('button', { name });
 
-describe('ShotTds: the TDS cell and its field (D-TDS-1, D-TDS-3)', () => {
+describe('ShotTds: the TDS cell and its field (D162, D164)', () => {
   it('offers Add in one quiet cell among the numbers, and opens a field with the decimal keyboard, focused', async () => {
     card();
     const add = button('Add TDS');
@@ -118,7 +118,7 @@ describe('ShotTds: the TDS cell and its field (D-TDS-1, D-TDS-3)', () => {
   });
 });
 
-describe('ShotTds: a reading (D-TDS-2, D-TDS-8)', () => {
+describe('ShotTds: a reading (D163, D169)', () => {
   const read = (tdsPct: number, fields: Partial<ShotSummary> = {}) => withTds(sampleSummary(fields), tdsPct);
 
   it("shows the TDS to 0.01 and the EY to 0.1 among the card's numbers, on a row of their own", () => {

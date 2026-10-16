@@ -27,8 +27,8 @@
  *
  * Before the first shot there is no time to show: the timer shows a dash.
  *
- * Under the shot, faint, the shot it is compared with (D-CURVE-1 to
- * D-CURVE-5): while it pulls the bag's previous shot, once its card is in the
+ * Under the shot, faint, the shot it is compared with (D178 to
+ * D182): while it pulls the bag's previous shot, once its card is in the
  * one the card asks about. Its pressure and flow are wide pale bands drawn
  * after the grid and before every series (compare/guide.ts), the time axis
  * runs to the longer of the two, and a line over the plot names it.
@@ -141,7 +141,7 @@ function graphOptions(width: number, height: number, colors: GraphPalette, fontF
     legend: { show: false },
     padding: [AXIS.top, 4, 0, 0],
     scales: {
-      // To the longer of this shot and the one under it (D-CURVE-5): a live
+      // To the longer of this shot and the one under it (D182): a live
       // shot's axis then holds still as it passes the previous one's time.
       x: {
         time: false,
@@ -295,7 +295,7 @@ export function LiveShotGraph({ minPlotHeight = 160, compact = false, narrow = f
   const card = useCardNumbers(finishedShotId);
   const shownCard = useRef<CardNumbers | null>(null);
   const repaint = useRef<(() => void) | null>(null);
-  // The shot under this one (D-CURVE-1): which, then its curve, from the chat or once from Decaid.
+  // The shot under this one (D178): which, then its curve, from the chat or once from Decaid.
   const comparison = useShotViewComparison();
   const target = useSyncExternalStore(comparison.subscribe, comparison.getTarget);
   const previous = useComparisonSummary(target);
@@ -536,7 +536,7 @@ export function LiveShotGraph({ minPlotHeight = 160, compact = false, narrow = f
       </Box>
 
       {under ? (
-        // The key for the band under the curves (D-CURVE-3): its form, the shot's name, its time and yield. One line, cut short rather than wrapped.
+        // The key for the band under the curves (D180): its form, the shot's name, its time and yield. One line, cut short rather than wrapped.
         <Typography
           variant="label"
           component="p"

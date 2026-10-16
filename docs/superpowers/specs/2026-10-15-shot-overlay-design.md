@@ -2,7 +2,7 @@
 
 Date: 2026-10-15. Status: built on the owner's approval of the roadmap item
 as written (docs/ROADMAP.md, "More from the gap review (D151)"); the calls
-below are the builder's, recorded as D-CURVE-1 to D-CURVE-5 in
+below are the builder's, recorded as D178-D182 in
 DECISIONS.md, for the review.
 
 ## 1. The ask
@@ -35,7 +35,7 @@ apart in every tint and both modes, by more than colour."
 
 ## 3. The calls
 
-**Which shot goes under this one (D-CURVE-1).** The shot the card's
+**Which shot goes under this one (D178).** The shot the card's
 question names: its `baseline` (D126). For most shots that is the shot
 before it in the bag's chat; for a bag's first shot, the last shot of
 another coffee; for the very first, none. Not "the bag's previous
@@ -55,12 +55,12 @@ which becomes the new card's "previous shot" when it lands. A bag's first
 shot has no guide while it pulls (the bag has no shot yet); once its card
 is in, the Shot view draws the other coffee's shot its card names.
 
-**Where it shows (D-CURVE-2).** Every shot card whose question names a
+**Where it shows (D179).** Every shot card whose question names a
 shot; the Shot view during the shot (a guide, as DSx and Crema draw one)
 and after it; not before any shot ("Pull a shot to see it here." stays
 alone), and not in History, which draws no curves.
 
-**How the two shots are told apart (D-CURVE-3).** By form first, then
+**How the two shots are told apart (D180).** By form first, then
 lightness; never by colour alone:
 
 | | This shot | The shot under it | The profile's targets (Shot view) |
@@ -96,7 +96,7 @@ with the pressure and flow of your previous shot under them", and
 described "Previous shot: 28.1 s, peak pressure 9.0 bar."; the Shot view's
 plot is named the same way, and its key line is ordinary text.
 
-**Where the curves come from (D-CURVE-4).** The roadmap's premise was that
+**Where the curves come from (D181).** The roadmap's premise was that
 CafAI keeps shot summaries without their curves. Read in the code, it keeps
 them: each shot's card in the chat holds its summary with the ~1 Hz series
 (the series the card's sparkline has always drawn and the coach reads),
@@ -119,7 +119,7 @@ Both shots are drawn from the same ~1 Hz series, on the card and in the
 Shot view: a guide does not need Decaid's 4-5 Hz frames, and a request when
 the shot starts would land on the tablet's Decaid at its busiest.
 
-**One clock for both (D-CURVE-5).** Both curves count from the pour's start
+**One clock for both (D182).** Both curves count from the pour's start
 (the first frame after preheat, `pourStartS`), as the Shot view's clock and
 the card's times already do, so two shots with different preheats line up.
 The card's sparkline therefore starts at the pour too, without the flat

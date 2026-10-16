@@ -211,7 +211,7 @@ describe('SettingsRepository', () => {
   });
 });
 
-describe('CareRepository (D-CARE-7)', () => {
+describe('CareRepository (D189)', () => {
   it('keeps one record per step, by its id, committed by the time put() resolves, and asks for a push', async () => {
     const { name, repos, writes } = setup();
     expect(await repos.care.list()).toEqual([]);

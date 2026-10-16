@@ -1,5 +1,5 @@
 /**
- * The key for the shot drawn under another (D-CURVE-3): a pale band, the
+ * The key for the shot drawn under another (D180): a pale band, the
  * form the shot under takes, beside its name. The band is neutral (the muted
  * ink washed toward the page, `graph.guide`) because it stands for the form
  * in both colours, as the dashed target does on Decent's charts; this shot's

@@ -1,5 +1,5 @@
 /**
- * What machine care's reminders say (D-CARE-1 to D-CARE-6): the stats card's
+ * What machine care's reminders say (D183-D188): the stats card's
  * line, each step's last time on the Care screen, and what the water and the
  * intake filter set. Built by hand rather than with toLocaleString, so it
  * reads the same on every tablet locale (as src/ui/chat/format.ts does).
@@ -70,7 +70,7 @@ function measure(status: StepStatus): string {
 }
 
 /**
- * The stats card's line for the most overdue step (D-CARE-6): "Weekly clean
+ * The stats card's line for the most overdue step (D188): "Weekly clean
  * due: 41 shots since the last", or since the day CafAI began counting for a
  * step never marked done.
  */
@@ -123,7 +123,7 @@ export function stepLine(status: StepStatus, nowMs: number): StepLine {
   return { due: status.due, last, doneToday, details };
 }
 
-/** What sets the descale's reminder, as the descale step says it (D-CARE-5). */
+/** What sets the descale's reminder, as the descale step says it (D187). */
 export function waterLine(water: CareSettings['water']): string {
   switch (water) {
     case 'under30':
@@ -137,7 +137,7 @@ export function waterLine(water: CareSettings['water']): string {
   }
 }
 
-/** What sets the intake filter's reminder (D-CARE-5). */
+/** What sets the intake filter's reminder (D187). */
 export function filterLine(filter: CareSettings['filter']): string {
   switch (filter) {
     case 'v1':

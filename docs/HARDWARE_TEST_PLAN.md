@@ -564,7 +564,7 @@ minutes, and put every setting back after.
 7. **Delete.** Delete the test wake times and set the minutes back.
    Expected: Decaid's page shows them gone.
 
-## 16. TDS and EY on the shot card (D-TDS-1-D-TDS-9)
+## 16. TDS and EY on the shot card (D162-D170)
 
 A refractometer reading typed on a shot's card goes to Decaid's record and
 to the coach. The mock shows the field and the coach; only the tablet shows
@@ -591,7 +591,7 @@ Without a refractometer, type a made-up reading (9.25).
 7. **Offline.** With Decaid out of reach (on a phone, Wi-Fi off), save a
    reading. Expected: it reaches Decaid once Decaid is back.
 
-## 17. °F (D-TEMP-1-D-TEMP-7)
+## 17. °F (D171-D177)
 
 Settings > Appearance > Temperatures shows °F; Decaid and the profiles keep
 °C. Set it to °F for this section, and back to °C at its end.
@@ -613,7 +613,7 @@ Settings > Appearance > Temperatures shows °F; Decaid and the profiles keep
 5. **Back to °C.** Expected: every screen, the chat and History read °C
    again.
 
-## 18. Overlaid shot curves (D-CURVE-1-D-CURVE-5)
+## 18. Overlaid shot curves (D178-D182)
 
 A shot's card and the Shot view draw the shot the card asks about faintly
 under this one. The mock shows where and what; only the tablet shows
@@ -635,7 +635,7 @@ in dark and in light.
    compares with, then reload CafAI. Expected: the card draws its own shot
    alone, with no message.
 
-## 19. Care reminders (D-CARE-1-D-CARE-9)
+## 19. Care reminders (D183-D191)
 
 Each care step beyond Daily keeps its last time, counted from Decaid's shot
 and steam totals, and the stats card says when one is due. The mock counts

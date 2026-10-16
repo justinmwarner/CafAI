@@ -524,7 +524,7 @@ export interface FakeServices extends Services {
   host: HostEnvironment & { exits: number };
   /** The real store, over the fake settings repository above. */
   appearance: AppearanceStore;
-  /** The real store too: `storage.settings.temperatureUnit` starts it (D-TEMP-2). */
+  /** The real store too: `storage.settings.temperatureUnit` starts it (D172). */
   temperatureUnit: TemperatureUnitStore;
   plugins: FakePluginDirectory;
 }

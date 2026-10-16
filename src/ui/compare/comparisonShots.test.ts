@@ -15,7 +15,7 @@ function deferred<T>() {
 
 const notFound = () => new GatewayError(404, '/api/v1/shots/s-1', 'Shot not found');
 
-describe('shots read from Decaid to draw under another (D-CURVE-4)', () => {
+describe('shots read from Decaid to draw under another (D181)', () => {
   it('reads a shot once, summarised, and keeps it', async () => {
     const getShot = vi.fn(async (id: string) => syntheticShotRecord({ id }));
     const shots = createComparisonShots({ getShot });

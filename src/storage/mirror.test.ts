@@ -552,7 +552,7 @@ describe('pull', () => {
     });
   });
 
-  it("carries machine care's records as one key, by step, and drops one it cannot use (D-CARE-7)", async () => {
+  it("carries machine care's records as one key, by step, and drops one it cannot use (D189)", async () => {
     const kv = createMemoryKv();
     const care = [makeCareRecord({ id: 'rinza' }), makeCareRecord()];
     await makeMirror(kv, memorySource({ ...fullSnapshot(), care }).source).pushNow();

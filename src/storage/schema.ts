@@ -75,7 +75,7 @@ const SummaryShape = z.looseObject({
   channelingFlags: z.array(text),
   phases: z.array(z.unknown()),
   series: z.looseObject({ tS: z.array(z.number()) }).optional(),
-  /** The barista's refractometer reading and its EY (D-TDS-5); absent on a shot without one. */
+  /** The barista's refractometer reading and its EY (D166); absent on a shot without one. */
   tdsPct: z.number().optional(),
   eyPct: z.number().nullable().optional(),
 });
@@ -125,12 +125,12 @@ export const SettingsSchema = z.object({
   /** Absent from exports made before D99; read as off (settings.ts), same treatment as appearance above. */
   keepKeyInDecaid: z.boolean().optional(),
   /**
-   * The temperature unit (D-TEMP-2); absent from exports made before it, or from a device that never chose,
+   * The temperature unit (D172); absent from exports made before it, or from a device that never chose,
    * and read as °C. Not shape-checked here, as appearance: settings.ts keeps only a unit it knows, so a file
    * from a newer CafAI with another one still imports.
    */
   temperatureUnit: exact<TemperatureUnit>(z.unknown()).optional(),
-  /** Machine care's reminders (D-CARE-5); absent from exports made before them. Re-validated by normalizeCareSettings, as appearance is. */
+  /** Machine care's reminders (D187); absent from exports made before them. Re-validated by normalizeCareSettings, as appearance is. */
   care: exact<CareSettings>(z.unknown()).optional(),
 });
 
@@ -196,7 +196,7 @@ export const ConversationSchema = z.object({
 });
 
 /**
- * A care step's record (D-CARE-7). How it was marked, and the totals, read
+ * A care step's record (D189). How it was marked, and the totals, read
  * leniently: one this build cannot read is unknown (null), so a file from a
  * newer CafAI still imports; the step and the times are needed.
  */
@@ -220,7 +220,7 @@ export const ExportSchema = z.object({
   versions: z.array(VersionSchema),
   iterations: z.array(IterationSchema),
   conversations: z.array(ConversationSchema),
-  /** Absent from files made before machine care's records (D-CARE-7). */
+  /** Absent from files made before machine care's records (D189). */
   care: z.array(CareRecordSchema).optional(),
 });
 

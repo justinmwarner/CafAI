@@ -9,7 +9,7 @@ import { MachineReadouts } from './MachineStatus.tsx';
 
 afterEach(() => cleanup());
 
-describe("the stats card's readouts in the barista's unit (D-TEMP-4)", () => {
+describe("the stats card's readouts in the barista's unit (D174)", () => {
   it('reads the group to one decimal of °F, its target too, and steam in whole °F', () => {
     renderWithServices(<MachineReadouts columns={4} />, createFakeServicesIn('fahrenheit'));
     // The fake machine: group 92.4 °C, its target 92.5 °C, steam 140 °C.

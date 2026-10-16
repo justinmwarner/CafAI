@@ -75,7 +75,7 @@ describe('buildPalette', () => {
     expect(buildPalette('dark', namedTint('matcha')).background).not.toBe(buildPalette('dark', namedTint('cherry')).background);
   });
 
-  it('washes pressure and flow toward the page for the shot drawn under another, and the muted ink for its key (D-CURVE-3)', () => {
+  it('washes pressure and flow toward the page for the shot drawn under another, and the muted ink for its key (D180)', () => {
     for (const [mode, share] of [['dark', 0.45], ['light', 0.5]] as const) {
       for (const tint of [namedTint('crema'), namedTint('matcha'), customTint(300)]) {
         const p = buildPalette(mode, tint);
@@ -139,7 +139,7 @@ const PAIRS: readonly (readonly [string, number, (p: Palette) => readonly (reado
         (c) => [[c, p.background], [c, p.surface]] as const,
       ),
   ],
-  // The shot drawn faintly under another (D-CURVE-3): wide bands, faint by
+  // The shot drawn faintly under another (D180): wide bands, faint by
   // design, so below a series' 3:1, but seen on the page and the card; and
   // this shot's line, where it runs over its own band, still stands out.
   // In light mode a series is about 4.5:1 against the page, which leaves

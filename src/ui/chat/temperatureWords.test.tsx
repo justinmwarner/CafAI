@@ -16,7 +16,7 @@ import { RichText } from './RichText.tsx';
 
 /**
  * The coach's words, and CafAI's own change lines, in the barista's unit
- * (D-TEMP-6): kept as written, read in °F once the barista chose it, and in
+ * (D176): kept as written, read in °F once the barista chose it, and in
  * °C again after a switch back.
  */
 const diff = (overrides: Partial<DiffPart> = {}): DiffPart => ({

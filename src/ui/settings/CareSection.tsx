@@ -1,9 +1,9 @@
 /**
- * Settings > Machine care (D152, D-CARE-5): the way into the cleaning guide
+ * Settings > Machine care (D152, D187): the way into the cleaning guide
  * (#/care), and what sets its reminders, each applied at once as the look
  * is: **Your water** (Decent's bands of total dissolved solids, which set the
  * descale), **Intake filter** (V1 or V2, which sets its cleaning) and
- * **Remind me on the stats card** (the line when a step is due, D-CARE-6).
+ * **Remind me on the stats card** (the line when a step is due, D188).
  * The fields show once the care service has read them; without one (fakes,
  * previews) the section is the guide's way in alone.
  */

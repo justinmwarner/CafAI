@@ -32,7 +32,7 @@ export interface Services {
   plugins: PluginDirectory;
   /** How CafAI looks: the appearance setting as live state. */
   appearance: AppearanceStore;
-  /** °C or °F where the barista reads or sets a temperature (D-TEMP-2), as live state. */
+  /** °C or °F where the barista reads or sets a temperature (D172), as live state. */
   temperatureUnit: TemperatureUnitStore;
   /**
    * Where the coach runs: Anthropic, or CafAI Bridge on the user's computer
@@ -41,7 +41,7 @@ export interface Services {
    */
   coachSource?: CoachSourceStore;
   /**
-   * Machine care's steps, their counts and marks (D-CARE-1 to D-CARE-8,
+   * Machine care's steps, their counts and marks (D183-D190,
    * src/app/care/careService.ts). Optional: fakes and previews leave it out,
    * and then no step shows a last time and the stats card no line.
    */
@@ -369,7 +369,7 @@ export interface CoachController {
    */
   rateShot(shotId: string, verdict: ShotVerdict): Promise<void>;
   /**
-   * The barista's TDS from a refractometer on a shot's card, in % (D-TDS-1),
+   * The barista's TDS from a refractometer on a shot's card, in % (D162),
    * or null to remove it. The card and the shot's iteration keep it with the
    * EY CafAI works out from the card's dose and yield; both go to the shot's
    * record in Decaid (drinkTds, drinkEy); the coach hears it with the next

@@ -71,7 +71,7 @@ export interface GraphPalette {
   /** Axis labels. */
   axis: string;
   /**
-   * The shot drawn faintly under this one (D-CURVE-3): pressure and flow as
+   * The shot drawn faintly under this one (D180): pressure and flow as
    * wide bands of their own colour washed toward the page, opaque, so the
    * contrast sweep checks them.
    */
@@ -168,7 +168,7 @@ const ACCENT_LIGHTNESS: Record<ThemeMode, number> = { dark: 0.76, light: 0.5 };
 
 /**
  * How much of a series' colour the band under it keeps over the page
- * (D-CURVE-3): enough to be seen, little enough that this shot's line stays
+ * (D180): enough to be seen, little enough that this shot's line stays
  * readable on top of it. Light mode leaves less room: a series there is
  * about 4.5:1 against the page, so a band between them gets about 2:1 each way.
  */

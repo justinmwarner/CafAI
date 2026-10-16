@@ -1,5 +1,5 @@
 /**
- * The barista's refractometer reading on a shot's card (D-TDS-5, D-TDS-6):
+ * The barista's refractometer reading on a shot's card (D166, D167):
  * it lives in the card's summary (tdsPct and eyPct, src/coach/extraction.ts),
  * and the coach hears it with the next turn it is sent, as it hears a verdict
  * (D126).

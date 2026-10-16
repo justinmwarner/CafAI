@@ -33,7 +33,7 @@ export interface TemplateCardsProps {
 /** The model's starting-profile suggestions. Tapping "Use this" creates and loads v1. */
 export function TemplateCards({ items, pickedTemplateId, disabled = false, expired = false, setAsideReason, onPick }: TemplateCardsProps) {
   const locked = pickedTemplateId !== null || expired;
-  // The coach's reasons with their temperatures in the barista's unit (D-TEMP-6).
+  // The coach's reasons with their temperatures in the barista's unit (D176).
   const unit = useTemperatureUnit();
   return (
     <Stack spacing={1} role="list" aria-label="Suggested starting profiles" sx={{ my: 0.5 }}>

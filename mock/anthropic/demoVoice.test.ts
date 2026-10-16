@@ -278,7 +278,7 @@ describe('the demo voice, branch by branch', () => {
     expect(noYield).not.toMatch(/\d g/);
   });
 
-  it('a TDS reading: what it heard first, the extraction in bold, a doubt about one no coffee gives, and the same decision (D-TDS-9)', () => {
+  it('a TDS reading: what it heard first, the extraction in bold, a doubt about one no coffee gives, and the same decision (D170)', () => {
     const measured = (tdsPct: number | null, eyPct: number | null) =>
       text(`[event:shot_measured]\n${JSON.stringify({ shotId: 'shot-1', tdsPct, eyPct, doseG: 18, yieldG: 49.6 })}`);
     const tasted = (...readings: Block[]) =>

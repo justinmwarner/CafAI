@@ -7,7 +7,7 @@
  * With it, the mock keeps what a real Decaid keeps on disk: the `cafai`
  * key-value namespace (CafAI's backup) and the `cafai-key` one (D99's
  * optional copy of the API key), the shot records, the steam records
- * (without their measurements, which nothing reads; D-CARE-9), the workflow
+ * (without their measurements, which nothing reads; D191), the workflow
  * (profile and context), the profiles CafAI created, and the bean library (D4/D10):
  * the two seeded beans and batches, and any CafAI added. Live state starts
  * fresh, as after a Decaid restart: machine and scale links, frames, the shot

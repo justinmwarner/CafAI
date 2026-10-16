@@ -1,5 +1,5 @@
 /**
- * TDS and EY (D-TDS-1 to D-TDS-3): the barista's refractometer reading on a
+ * TDS and EY (D162-D164): the barista's refractometer reading on a
  * shot's card, and the extraction yield CafAI works out from it.
  *
  * TDS (total dissolved solids) is what a refractometer reads: the share of
@@ -17,7 +17,7 @@ import type { ShotSummary } from './types.ts';
 export const TDS_MIN_PCT = 0.01;
 /** The largest TDS CafAI takes, %: the top of the refractometers baristas use (VST, Atago, DiFluid read 0-25 %). */
 export const TDS_MAX_PCT = 25;
-/** More than this EY, %, is more than coffee gives up: the reading, the dose or the yield is off (D-TDS-8). */
+/** More than this EY, %, is more than coffee gives up: the reading, the dose or the yield is off (D169). */
 export const EY_MAX_PCT = 30;
 
 const round = (value: number, digits: number) => {

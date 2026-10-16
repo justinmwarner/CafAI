@@ -1,5 +1,5 @@
 /**
- * The shot drawn faintly under another (D-CURVE-1 to D-CURVE-5): which one,
+ * The shot drawn faintly under another (D178-D182): which one,
  * its curve on the pour's clock, and the words that name it. Pure.
  *
  * Which shot: the one the card's question names (its baseline, D126), so the

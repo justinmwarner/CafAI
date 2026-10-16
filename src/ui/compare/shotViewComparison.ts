@@ -1,5 +1,5 @@
 /**
- * The shot the Shot view draws under the one it shows (D-CURVE-1, D-CURVE-2).
+ * The shot the Shot view draws under the one it shows (D178, D179).
  *
  * The view shows the app's one recorded shot (shotTrace.ts). While it pulls
  * it has no card yet, so the guide is the bag's newest card, the shot its

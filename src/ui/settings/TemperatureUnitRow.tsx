@@ -1,7 +1,7 @@
 /**
- * Settings > Appearance > Temperatures (D-TEMP-2): °C or °F, wherever the
+ * Settings > Appearance > Temperatures (D172): °C or °F, wherever the
  * barista reads or sets a temperature, and in the coach's words. Decaid and
- * the profiles keep °C either way (D-TEMP-1). Drawn as the Mode control
+ * the profiles keep °C either way (D171). Drawn as the Mode control
  * above it, and like the rest of Appearance it applies at once and is saved
  * with the other settings (TemperatureUnitStore, src/app/temperatureUnit.ts).
  */

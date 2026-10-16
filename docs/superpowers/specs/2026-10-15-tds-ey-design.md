@@ -3,7 +3,7 @@
 Date: 2026-10-15. Status: approved as the roadmap describes it (the owner's
 pick from the gap review, D151); the calls below were made while building,
 with no check-in, and each is recorded as a decision (DECISIONS.md, "TDS and
-EY on the shot card", D-TDS-1 to D-TDS-9). As built: two rules changed from
+EY on the shot card", D162-D170). As built: two rules changed from
 this spec's first draft once the card was looked at, the cell's height (it
 no longer grows the card) and typing while the coach works (allowed, as in
 the composer); section 3 has both.
@@ -23,20 +23,20 @@ answer still reaches the coach.
 ## 2. What changes
 
 - **The shot card** gets a fifth number, **TDS**. Without a reading its cell
-  is one quiet button, "TDS" over "Add" (D-TDS-1); a tap opens a field under
+  is one quiet button, "TDS" over "Add" (D162); a tap opens a field under
   the card's numbers. With a reading the card shows **TDS** "9.25 %" and
   **EY** "20.8 %" among its numbers; a tap on the TDS opens the field again
   to change or remove it.
-- **Decaid's shot record** gets `drinkTds` and `drinkEy` (D-TDS-4), through
+- **Decaid's shot record** gets `drinkTds` and `drinkEy` (D165), through
   the queue that already carries the taste and the rating (D64), so
   Visualizer gets them with the rest.
 - **CafAI's own records**: the shot's summary carries the reading, on the
-  card in the chat and on the shot's iteration (D-TDS-5), so History, the
+  card in the chat and on the shot's iteration (D166), so History, the
   export and the backup in Decaid keep it.
 - **The coach** hears each reading with its next turn, as it hears a verdict
-  (D-TDS-6), and the system prompt says what TDS and EY are and how far to
-  trust them (D-TDS-7).
-- **The scripted coach** says what it heard (D-TDS-9), so mock mode, the
+  (D167), and the system prompt says what TDS and EY are and how far to
+  trust them (D168).
+- **The scripted coach** says what it heard (D170), so mock mode, the
   demo and the e2e can see a reading reach it.
 
 ## 3. The rules
@@ -47,9 +47,9 @@ answer still reaches the coach.
 | No reading | The cell is one button, 48 px tall: "TDS" (label, ink-muted) over "+ Add" (accent, 600), named "Add TDS". Its box reaches 3 px into the gaps above and below, so its row stays as tall as the other numbers' (42 px). |
 | A reading | Two numbers: **TDS** "9.25 %" (two decimals) and **EY** "20.8 %" (one decimal), as the card's other numbers. The TDS cell is a button named "TDS 9.25 %, change it", with a small edit icon after the value; EY is a plain number. No EY (no dose or no yield): its value is a dash and a line under the numbers says why. |
 | The field | Under the numbers, across the card: an outlined text field labelled "TDS", "%" at its end, 48 px; then **Save** (contained), **Remove** (text, only when changing a reading) and **Cancel** (text). Under it, in body-small and ink-muted: what TDS is, where the EY comes from with this shot's dose and yield, and "The coach gets it with your next tap or message." |
-| Typing | CafAI's number field (D-TDS-3): text with `inputmode="decimal"` (the numeric keyboard with a decimal point), `enterkeyhint="done"`, at most 8 characters; "9,25" reads as 9.25, a trailing "%" is allowed. Enter (the keyboard's Done) or Save keeps it; Cancel, or Escape, closes it and keeps nothing. Leaving the field keeps the draft and does nothing else: a tap on Save leaves the field first. |
+| Typing | CafAI's number field (D164): text with `inputmode="decimal"` (the numeric keyboard with a decimal point), `enterkeyhint="done"`, at most 8 characters; "9,25" reads as 9.25, a trailing "%" is allowed. Enter (the keyboard's Done) or Save keeps it; Cancel, or Escape, closes it and keeps nothing. Leaving the field keeps the draft and does nothing else: a tap on Save leaves the field first. |
 | Range | More than 0 and at most 25 %, the range of the refractometers baristas use; rounded to 0.01 %, what they read. "abc", 0 or 30 says why under the field, in the error colour, and saves nothing. Empty and Save removes a reading (or closes the field when there is none). |
-| EY | TDS (%) × yield (g) ÷ dose (g), the card's own Dose → yield, to 0.1 % (D-TDS-2). Over 30 %, more than coffee gives up: kept and sent as typed, with a line in the warning colour under the numbers (D-TDS-8). |
+| EY | TDS (%) × yield (g) ÷ dose (g), the card's own Dose → yield, to 0.1 % (D163). Over 30 %, more than coffee gives up: kept and sent as typed, with a line in the warning colour under the numbers (D169). |
 | While the coach works | Save and Remove are held, as the rating is, and Enter waits; typing is not, as in the composer, and the cell still opens the field. A draft stays in the field. |
 | Focus | Opened from a keyboard (Enter or Space on the cell), closing the field gives the cell the focus back; opened by a tap, the focus leaves with the field, so the on-screen keyboard goes and no focus ring lands on the cell. |
 | Saving | The card shows the reading at once. The write to Decaid waits and goes again when Decaid cannot take it, as the taste does; one Decaid refuses says so once in the chat. |

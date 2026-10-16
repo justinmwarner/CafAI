@@ -311,7 +311,7 @@ describe('shots', () => {
     expect('shotNotes' in cleared).toBe(false);
   });
 
-  it('PUT keeps a TDS and an EY as numbers, and null clears each, as Decaid’s deep merge and toJson do (D-TDS-4)', () => {
+  it('PUT keeps a TDS and an EY as numbers, and null clears each, as Decaid’s deep merge and toJson do (D165)', () => {
     const mock = createMockDecaid();
     const id = '3f6b0a9e-8c1d-4e52-9b7a-2d4f61c08e17';
     const read = mock.updateShot(id, { annotations: { drinkTds: 9.25, drinkEy: 20.8 } });

@@ -222,7 +222,7 @@ describe('restoreFromMirrorIfEmpty', () => {
     expect(await fresh.settings.get()).toEqual(makeSettings({ grinderName: 'Niche Zero', grinderSetting: '14', activeBagId: 'bag_kiambu' }));
   });
 
-  it("brings machine care's last times back, over the counts a fresh device began meanwhile (D-CARE-7)", async () => {
+  it("brings machine care's last times back, over the counts a fresh device began meanwhile (D189)", async () => {
     const kv = createMemoryKv();
     const original = await open(kv);
     await original.care.put(makeCareRecord());

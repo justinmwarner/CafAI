@@ -148,7 +148,7 @@ describe('snapshotStore + restoreStore', () => {
     expect(bundled(fresh)).toEqual(bundled(createMockDecaid()));
   });
 
-  it('keeps the steam records, without their measurements, which nothing reads (D-CARE-9)', () => {
+  it('keeps the steam records, without their measurements, which nothing reads (D191)', () => {
     const state = createMockDecaid();
     const machine = state.getMachineSnapshot();
     state.addSteam({ id: 'steam-1', timestamp: '2026-10-04T08:30:00.000000', measurements: [{ machine, milkTemperature: null }], workflow: state.getWorkflow() });

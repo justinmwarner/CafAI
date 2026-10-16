@@ -272,7 +272,7 @@ export function createDecaidClient(options: DecaidClientOptions): GatewayClient 
       throw unexpectedReply(PROBE_SOURCE, path);
     },
     /**
-     * Steam records' ids alone, to count them (D-CARE-3): GET /api/v1/steams
+     * Steam records' ids alone, to count them (D185): GET /api/v1/steams
      * itself makes Decaid read and parse every record's measurements
      * (getAllSteams, SteamMapper.fromRow at aab5f93) and sends each one's workflow.
      */

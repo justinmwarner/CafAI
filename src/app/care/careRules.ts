@@ -1,5 +1,5 @@
 /**
- * Machine care's reminders, as rules (D-CARE-1, D-CARE-2, D-CARE-3): which
+ * Machine care's reminders, as rules (D183, D184, D185): which
  * steps of the cleaning guide keep a last time, which of them come due and
  * when, the shots and steams since a step's count began, and which step is
  * the most overdue. Pure: the service (careService.ts) keeps the records and
@@ -33,7 +33,7 @@ export function isTrackedStep(id: string): id is TrackedStepId {
 /** What the stats card's line counts for a step: its shots, its steams, or the time. */
 export type CareCount = 'shots' | 'steams' | 'time';
 
-/** When a step comes due (D-CARE-2). */
+/** When a step comes due (D184). */
 export interface Reminder {
   /** Due once this many days have passed since its count began. */
   days: number;
@@ -59,7 +59,7 @@ export function descaleReminder(water: WaterBand | null): Reminder | null {
 }
 
 /**
- * The reminder of a step, or null for one without (D-CARE-1): the tank and
+ * The reminder of a step, or null for one without (D183): the tank and
  * drip tray are in plain sight, the gasket is looked at with the group head's
  * parts, the steam tip waits for a clog and the transport for a move.
  */
@@ -82,7 +82,7 @@ export function reminderFor(step: TrackedStepId, settings: CareSettings): Remind
   }
 }
 
-/** Decaid's totals as CafAI last read them (D-CARE-3). */
+/** Decaid's totals as CafAI last read them (D185). */
 export interface Totals {
   /** Every shot Decaid keeps (GET /api/v1/shots?limit=1, its total); null while unknown. */
   shots: number | null;
@@ -114,7 +114,7 @@ function rebased(baseline: number | null, total: number | null, newestMs: number
   return baseline;
 }
 
-/** A record's baselines with fresh totals (D-CARE-3), or null when they need no change. */
+/** A record's baselines with fresh totals (D185), or null when they need no change. */
 export function rebaseline(record: CareRecord, totals: Totals): Pick<CareRecord, 'shotTotal' | 'steamTotal'> | null {
   const fromMs = Date.parse(record.countFrom);
   const shotTotal = rebased(record.shotTotal, totals.shots, totals.newestShotMs, fromMs);

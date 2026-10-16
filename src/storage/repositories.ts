@@ -44,7 +44,7 @@ export function byCreatedAt<T extends { createdAt: string; id: string }>(a: T, b
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
-/** By id: machine care's records, one per step (D-CARE-7). */
+/** By id: machine care's records, one per step (D189). */
 export function byId<T extends { id: string }>(a: T, b: T): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }

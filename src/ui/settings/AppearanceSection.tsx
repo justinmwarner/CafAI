@@ -4,7 +4,7 @@
  * on every screen at once and is saved with the other settings
  * (AppearanceStore, src/app/appearance.ts); the slider shows each hue as it
  * moves and saves only where it stops. Last, the temperatures: °C or °F
- * (TemperatureUnitRow.tsx, D-TEMP-2).
+ * (TemperatureUnitRow.tsx, D172).
  */
 import { useId, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement } from 'react';
 import Alert from '@mui/material/Alert';

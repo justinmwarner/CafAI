@@ -1,5 +1,5 @@
 /**
- * The barista's temperature unit (D-TEMP-1, D-TEMP-2) as live state, as the
+ * The barista's temperature unit (D171, D172) as live state, as the
  * appearance is (appearance.ts): a change shows on every screen at once and
  * is saved with the other settings, so it is mirrored to Decaid and exported
  * like them. The coach's prompt reads it for every request (adapters.ts).

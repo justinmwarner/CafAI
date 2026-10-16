@@ -154,7 +154,7 @@ describeDecaid('shot', ({ url, require }) => {
     expect(live.problems()).toEqual([]);
   });
 
-  it('a TDS and its EY are written and read back, then cleared with null (D-TDS-4)', async ({ skip }) => {
+  it('a TDS and its EY are written and read back, then cleared with null (D165)', async ({ skip }) => {
     const id = shotId;
     if (id === null) return require ? assert.fail(NO_SHOT) : skip(NO_SHOT);
     await live.client.updateShot(id, { annotations: { drinkTds: 9.25, drinkEy: 20.8 } });

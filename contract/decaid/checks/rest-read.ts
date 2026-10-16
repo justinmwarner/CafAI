@@ -38,7 +38,7 @@ export type _shots_latest = Assert<Exactly<Diff<{ v: Res<'/api/v1/shots/latest',
 export type _shot = Assert<Exactly<Diff<Res<'/api/v1/shots/{id}', 'get'>, C.ShotRecord>, X.ShotRead>>;
 export type _shot_put = Assert<Exactly<Diff<Res<'/api/v1/shots/{id}', 'put'>, C.ShotRecord>, X.ShotRead>>;
 
-// ---- Steam records (the care reminders count them, D-CARE-3) -----------------------------------
+// ---- Steam records (the care reminders count them, D185) -----------------------------------
 /** client.ts listSteamIds: the ids alone, counted. */
 export type _steam_ids = Assert<Exactly<Diff<{ list: Res<'/api/v1/steams/ids', 'get'> }, { list: string[] }>, never>>;
 /** client.ts getLatestSteam: CafAI reads `null` as "no steam yet" (Decaid's 200 null; schema.ts records it for the runtime check). */

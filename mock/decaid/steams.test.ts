@@ -16,7 +16,7 @@ function setup(options: Parameters<typeof createMockDecaid>[0] = {}) {
   return { state, player };
 }
 
-describe("the mock's steam records (D-CARE-9), as steam_sequencer.dart keeps them", () => {
+describe("the mock's steam records (D191), as steam_sequencer.dart keeps them", () => {
   it('a steaming leaves one record: opened on its first frame in steam, with the workflow then and a sample per frame', async () => {
     const { state, player } = setup();
     expect(state.getSteamIds()).toEqual([]);
@@ -81,7 +81,7 @@ describe("the mock's steam records (D-CARE-9), as steam_sequencer.dart keeps the
   });
 });
 
-describe('a cleaning profile run (D-CARE-9)', () => {
+describe('a cleaning profile run (D191)', () => {
   it('saves no shot, as Decaid skips cleaning and calibration profiles; an espresso profile still does', async () => {
     const { state, player } = setup();
     const espresso = state.getWorkflow().profile;

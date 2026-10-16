@@ -44,7 +44,7 @@ describe('numbers and time', () => {
   });
 });
 
-describe("the stats card's line (D-CARE-6)", () => {
+describe("the stats card's line (D188)", () => {
   it('names the step and what it counts, since the last time', () => {
     expect(dueLine(stepStatus('detergent-clean', record(), DEFAULT_CARE, totals({ shots: 141 }), day(9)), day(9))).toBe(
       'Weekly clean due: 41 shots since the last',
@@ -124,7 +124,7 @@ describe("a step's last time on the Care screen", () => {
   });
 });
 
-describe('what the water and the filter set (D-CARE-5)', () => {
+describe('what the water and the filter set (D187)', () => {
   it('says the interval in Decent’s bands, and what CafAI assumes when it does not know', () => {
     expect(waterLine('under30')).toContain('needs no descaling');
     expect(waterLine('to120')).toContain('after a year, or 1,500 shots');

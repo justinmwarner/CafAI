@@ -20,7 +20,7 @@ describe('Settings > Machine care', () => {
     expect(open).toBe(screen.getByTestId(TID.careOpen));
   });
 
-  it('asks the water and the intake filter in Decent’s words, not sure until answered, and the switch on (D-CARE-5)', async () => {
+  it('asks the water and the intake filter in Decent’s words, not sure until answered, and the switch on (D187)', async () => {
     const services = await servicesWithCare();
     renderWithServices(<CareSection />, services);
     const water = screen.getByRole('combobox', { name: 'Your water' });

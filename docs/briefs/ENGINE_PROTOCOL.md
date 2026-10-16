@@ -137,7 +137,7 @@ All JSON payloads are compact `JSON.stringify` output.
    It is sent once; a changed verdict is sent again, and the newest one for
    a shot counts. The engine finds what to send by comparing the cards with
    the verdicts the transcript already holds.
-10. **Measured** (D-TDS-6): a text block `"[event:shot_measured]\n" + JSON`
+10. **Measured** (D167): a text block `"[event:shot_measured]\n" + JSON`
    with JSON
    `{"shotId":string,"tdsPct":number|null,"eyPct":number|null,"doseG":number|null,"yieldG":number|null}`:
    the TDS the user typed on the shot's card (to 0.01 %), and the EY CafAI
@@ -211,7 +211,7 @@ mock/anthropic/handlers.ts).
    the canned bag `BAG_PHOTO_ANSWER` as JSON (Kiambu AA by Square Mile,
    Kenya, Kiambu, washed, light, roasted 2026-09-28, blackcurrant,
    grapefruit, brown sugar). End turn.
-0b. Not a rule of its own (D-TDS-9): when the last user message carries
+0b. Not a rule of its own (D170): when the last user message carries
    `[event:shot_measured]` blocks, the reply the rules below decide starts
    with one line per reading, before its own text (or as its only text, in
    front of its tool calls): "Noted: TDS {tdsPct} %, EY {eyPct} %." (TDS to

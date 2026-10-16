@@ -4,7 +4,7 @@ import { TID } from '../src/ui/testIds.ts';
 import { decaidRequests, goTo, openApp, pullShot, saveApiKey, sendChat } from './helpers.ts';
 
 /**
- * Overlaid shot curves (D-CURVE-1 to D-CURVE-5): the shot a card's question
+ * Overlaid shot curves (D178-D182): the shot a card's question
  * asks about, drawn faintly under it, on its card and in the Shot view, and
  * the bag's previous shot under a shot while it pulls. A shot in the chat is
  * drawn from its card, with no request; another coffee's is read from Decaid

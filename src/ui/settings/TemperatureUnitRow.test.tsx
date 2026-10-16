@@ -11,7 +11,7 @@ import { AppearanceSection } from './AppearanceSection.tsx';
 
 const group = () => screen.getByRole('group', { name: 'Temperatures' });
 
-describe('Settings > Appearance > Temperatures (D-TEMP-2)', () => {
+describe('Settings > Appearance > Temperatures (D172)', () => {
   it('sits in Appearance, °C until someone chooses, each unit named in words', () => {
     renderWithServices(<AppearanceSection />, createFakeServices());
     const section = screen.getByRole('region', { name: 'Appearance' });

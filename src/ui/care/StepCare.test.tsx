@@ -18,7 +18,7 @@ function routine(id: RoutineId, services: Awaited<ReturnType<typeof servicesWith
   );
 }
 
-describe("a step's last time on the Care screen (D-CARE-1, D-CARE-4)", () => {
+describe("a step's last time on the Care screen (D183, D186)", () => {
   it('every step beyond Daily has one, with Mark done; Daily’s steps have none', async () => {
     const services = await servicesWithCare();
     const weekly = routine('weekly', services);
@@ -55,7 +55,7 @@ describe("a step's last time on the Care screen (D-CARE-1, D-CARE-4)", () => {
     services.care.dispose();
   });
 
-  it('the descale says what the water sets, and links to Settings, asking it to bring Machine care into view (D-CARE-5)', async () => {
+  it('the descale says what the water sets, and links to Settings, asking it to bring Machine care into view (D187)', async () => {
     const services = await servicesWithCare();
     renderWithServices(<StepCare stepId="descale" title="Descale" />, services);
     expect(screen.getByText(/does not know your water/)).toBeInTheDocument();

@@ -1,6 +1,6 @@
 /**
- * The barista's refractometer reading on a shot's card (D-TDS-1 to D-TDS-3,
- * D-TDS-8): cells of the card's grid of numbers, so ShotCard mounts it with
+ * The barista's refractometer reading on a shot's card (D162-D164,
+ * D169): cells of the card's grid of numbers, so ShotCard mounts it with
  * one line inside that grid.
  *
  * Without a reading, one quiet cell: "TDS" over "+ Add", the whole cell a
@@ -108,7 +108,7 @@ export interface ShotTdsProps {
   busy?: boolean;
 }
 
-/** The TDS and EY cells of a shot card's numbers, and the field that sets them (D-TDS-1). */
+/** The TDS and EY cells of a shot card's numbers, and the field that sets them (D162). */
 export function ShotTds({ summary, onSave, busy = false }: ShotTdsProps) {
   const fieldId = useId();
   const helpId = useId();

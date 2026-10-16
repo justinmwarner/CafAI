@@ -7,7 +7,7 @@
  * whatever the viewer added in the demo. "CafAI data" is any bag, version,
  * iteration or conversation, a step of machine care someone marked done, a
  * saved settings record, or an API key other than the demo's placeholder.
- * The care records CafAI makes by itself the first time it opens (D-CARE-8)
+ * The care records CafAI makes by itself the first time it opens (D190)
  * are not: they hold nothing anyone did.
  *
  * Under the marker, one thing still stops the seed: an API key the scripted

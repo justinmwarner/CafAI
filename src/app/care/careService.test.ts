@@ -56,7 +56,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
-describe('start and counting (D-CARE-3, D-CARE-8)', () => {
+describe('start and counting (D185, D190)', () => {
   it('reads the records and settings, then counts: each step is counted from now, with Decaid’s totals then', async () => {
     const { care, storage, cache, decaid } = setup();
     expect(care.getState().ready).toBe(false);
@@ -172,7 +172,7 @@ describe('start and counting (D-CARE-3, D-CARE-8)', () => {
   });
 });
 
-describe('Mark done and Undo (D-CARE-4)', () => {
+describe('Mark done and Undo (D186)', () => {
   it('a mark is now, with Decaid’s totals now; Undo puts back the record it replaced', async () => {
     const { care, decaid, storage } = setup();
     await care.start();
@@ -228,7 +228,7 @@ describe('Mark done and Undo (D-CARE-4)', () => {
   });
 });
 
-describe('the machine’s own cycles, seen (D-CARE-4)', () => {
+describe('the machine’s own cycles, seen (D186)', () => {
   it('a Clean seen for a minute, then idle, marks the weekly clean at its last frame, with Undo', async () => {
     const { care, telemetry } = setup();
     await care.start();
@@ -261,7 +261,7 @@ describe('the machine’s own cycles, seen (D-CARE-4)', () => {
   });
 });
 
-describe('settings and reload (D-CARE-5)', () => {
+describe('settings and reload (D187)', () => {
   it('a change is kept with the settings, field by field, and read back on start', async () => {
     const { care, storage, decaid, telemetry, cache } = setup();
     await care.start();

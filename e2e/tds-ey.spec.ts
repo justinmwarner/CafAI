@@ -5,7 +5,7 @@ import { TID } from '../src/ui/testIds.ts';
 import { goTo, isPhone, openApp, pullShot, saveApiKey, sendChat } from './helpers.ts';
 
 /**
- * TDS and EY on the shot card (D-TDS-1 to D-TDS-9), on the tablets and the
+ * TDS and EY on the shot card (D162-D170), on the tablets and the
  * phones: a quiet TDS cell among the card's numbers opens a field with the
  * decimal keyboard; the reading shows as TDS and EY, the EY worked out from
  * the card's own dose and yield; both go to the shot's record in the mock

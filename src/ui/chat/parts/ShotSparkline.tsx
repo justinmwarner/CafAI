@@ -1,7 +1,7 @@
 /**
  * A shot card's curves: pressure and flow on Decent's 0-12 scale, their keys
  * beside them, and the newest shot's Graph link; under them, faint, the shot
- * the card's question asks about (D-CURVE-1 to D-CURVE-5).
+ * the card's question asks about (D178-D182).
  *
  * The shot under is a pale band in each line's own hue, wider than the line
  * and under it, so the two tell apart by form and lightness as well as by

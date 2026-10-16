@@ -5,7 +5,7 @@ import { routineInUnit } from './careUnits.ts';
 
 const NBSP = ' ';
 
-describe("the cleaning guide in the barista's unit (D-TEMP-6)", () => {
+describe("the cleaning guide in the barista's unit (D176)", () => {
   it("reads the descale's 60 °C as 140 °F, kept with its number", () => {
     const descale = routineInUnit(routineOf('asNeeded'), 'fahrenheit').steps.find((step) => step.id === 'descale')!;
     expect(descale.how).toContain("Steam heater off until it's down to 140 °F (up to an hour)");

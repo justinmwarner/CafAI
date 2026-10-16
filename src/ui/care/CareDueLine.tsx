@@ -1,5 +1,5 @@
 /**
- * The stats card's line (D-CARE-6): one, quiet, only while a step of machine
+ * The stats card's line (D188): one, quiet, only while a step of machine
  * care is due and Settings > Machine care's switch is on: the most overdue
  * step, "Weekly clean due: 41 shots since the last". A link to its routine
  * on the Care screen, which brings the step into view. Never the alert under

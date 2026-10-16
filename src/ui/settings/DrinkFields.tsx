@@ -241,7 +241,7 @@ interface DrinkFieldProps {
 export function DrinkField({ spec, value, loaded, disabled, saving, error, layout, onCommit }: DrinkFieldProps) {
   const inputId = useId();
   const noteId = useId();
-  // What the barista reads and types: Decaid's own value, or a temperature in °F, which Decaid keeps in whole °C (D-TEMP-3).
+  // What the barista reads and types: Decaid's own value, or a temperature in °F, which Decaid keeps in whole °C (D173).
   const view = fieldView(spec, useTemperatureUnit());
   /** What is being typed, until it is sent or left; otherwise the field shows Decaid's value (or the one on its way). */
   const [draft, setDraft] = useState<string | null>(null);

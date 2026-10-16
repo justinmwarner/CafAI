@@ -1,5 +1,5 @@
 /**
- * The cleaning guide in the barista's unit (D-TEMP-6): its words are written
+ * The cleaning guide in the barista's unit (D176): its words are written
  * in °C (careGuide.ts), and a barista who reads °F reads its one temperature,
  * the descale's "down to 60 °C", as "down to 140 °F".
  */

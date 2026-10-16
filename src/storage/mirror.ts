@@ -22,7 +22,7 @@
  *   bags            Bag[], oldest first
  *   versions        ProfileVersion[], oldest first
  *   iterations      IterationRecord[], oldest first, without summary.series
- *   care            CareRecord[], machine care's steps by id (D-CARE-7)
+ *   care            CareRecord[], machine care's steps by id (D189)
  *   bags.1, ...     further pages of a list, only when one passes 256 KiB
  *   conv.<bagId>    the bag's ConversationRecord, skipped over 512 KiB
  * Characters of a bag id outside [a-z0-9_-] are written as ".xxxx" (UTF-16
@@ -58,7 +58,7 @@ export interface MirrorSnapshot {
   versions: ProfileVersion[];
   iterations: IterationRecord[];
   conversations: ConversationRecord[];
-  /** Machine care's steps (D-CARE-7); none when left out. */
+  /** Machine care's steps (D189); none when left out. */
   care?: CareRecord[];
 }
 

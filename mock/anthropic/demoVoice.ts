@@ -326,7 +326,7 @@ export const DEMO_VOICE: Voice = {
 
   fallback: () => "Noted. Pull a shot when you're ready and I'll read its curves with you, or tell me more about the coffee.",
 
-  // What the reading is, never what it tastes like (D127, D-TDS-7).
+  // What the reading is, never what it tastes like (D127, D168).
   measured({ tdsPct, eyPct }) {
     if (tdsPct === null) return "Got it: I'll leave that TDS reading out.";
     const tds = `${tdsText(tdsPct)} %`;

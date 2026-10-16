@@ -41,7 +41,7 @@ import type { ApiPort, CoachPort, LlmPort, ShotSource } from './engine/ports.ts'
 const SHOT_REF_KEYS = ['shot', 'shotA', 'shotB'] as const;
 
 export interface CoachPortOptions {
-  /** The barista's temperature unit, read for every request (D-TEMP-5); °C without it. */
+  /** The barista's temperature unit, read for every request (D175); °C without it. */
   temperatureUnit?: () => TemperatureUnit;
 }
 

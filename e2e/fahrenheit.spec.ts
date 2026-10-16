@@ -4,7 +4,7 @@ import { TID } from '../src/ui/testIds.ts';
 import { goTo, machineRow, openApp, pullShot, recordRequests, saveApiKey, sendChat, statsCard } from './helpers.ts';
 
 /**
- * °F (D-TEMP-1 to D-TEMP-7), on the tablets and the phones: Settings >
+ * °F (D171-D177), on the tablets and the phones: Settings >
  * Appearance > Temperatures turns every temperature a barista reads or sets
  * into °F, the coach's words too, while the mock Decaid, as Decaid does,
  * keeps whole °C and truncates anything else (mock/decaid/workflow.ts).

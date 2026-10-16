@@ -101,7 +101,7 @@ describe('readouts', () => {
   it('formats temperatures', () => {
     expect(formatTemperature(92.44)).toBe('92.4 °C');
     expect(formatTemperature(140, 0)).toBe('140 °C');
-    // In °F (D-TEMP-4): the same precision, converted.
+    // In °F (D174): the same precision, converted.
     expect(formatTemperature(92.44, 1, 'fahrenheit')).toBe('198.4 °F');
     expect(formatTemperature(140, 0, 'fahrenheit')).toBe('284 °F');
     expect(formatTemperature(null, 1, 'fahrenheit')).toBe('—');

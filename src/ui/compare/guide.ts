@@ -1,5 +1,5 @@
 /**
- * The shot under this one on the Shot view's canvas (D-CURVE-3): its
+ * The shot under this one on the Shot view's canvas (D180): its
  * pressure and flow as wide, pale bands with round ends and joins, in their
  * own hues washed toward the page, drawn in uPlot's drawAxes hook: after the
  * grid, before every series, so this shot's lines and the profile's dashed

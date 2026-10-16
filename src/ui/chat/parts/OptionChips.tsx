@@ -51,7 +51,7 @@ export function OptionChips({
   const [otherOpen, setOtherOpen] = useState(false);
   const [otherText, setOtherText] = useState('');
   const questionId = useId();
-  // The coach's words with their temperatures in the barista's unit (D-TEMP-6).
+  // The coach's words with their temperatures in the barista's unit (D176).
   const unit = useTemperatureUnit();
   const words = (text: string) => inTemperatureUnit(text, unit);
 

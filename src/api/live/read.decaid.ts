@@ -165,7 +165,7 @@ describeDecaid('read', ({ url }) => {
     expect(live.problems()).toEqual([]);
   });
 
-  it('GET /api/v1/shots/{id} for a shot Decaid does not have: 404, so a card draws its own shot alone (D-CURVE-4)', async () => {
+  it('GET /api/v1/shots/{id} for a shot Decaid does not have: 404, so a card draws its own shot alone (D181)', async () => {
     const error = await live.client.getShot(NO_SHOT).then(
       () => null,
       (caught: unknown) => caught,
@@ -178,7 +178,7 @@ describeDecaid('read', ({ url }) => {
     expect(live.problems()).toEqual([]);
   });
 
-  it('GET /api/v1/shots?limit=1 and the steam records: what the care reminders count (D-CARE-3)', async () => {
+  it('GET /api/v1/shots?limit=1 and the steam records: what the care reminders count (D185)', async () => {
     const page = await live.client.listShots({ limit: 1 });
     expect(page.total, 'the shot total').toBeGreaterThanOrEqual(page.items.length);
     // A Decaid that never steamed answers [] and 200 null.

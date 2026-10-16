@@ -97,7 +97,7 @@ export function describeMachineState(
 const finite = (value: number | null | undefined): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
-/** A reading in °C as the barista reads it: "97.7 °C", or in °F "207.9 °F" (D-TEMP-4); a dash for none. */
+/** A reading in °C as the barista reads it: "97.7 °C", or in °F "207.9 °F" (D174); a dash for none. */
 export function formatTemperature(celsius: number | null | undefined, digits = 1, unit: TemperatureUnit = 'celsius'): string {
   return finite(celsius) ? formatTemperatureIn(celsius, unit, digits) : DASH;
 }

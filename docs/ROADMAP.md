@@ -51,31 +51,31 @@ second, wait (D161):
   fill, the flush and most of a descale into one, `cleaningGroup`), how
   long each cycle runs, and whether Decaid saves the flush as a shot, which
   would put it in its shot list and on Visualizer.
-- **Care reminders, set by the water: built on 2026-10-15** (D-CARE-1 to
-  D-CARE-9, `docs/superpowers/specs/2026-10-15-care-reminders-design.md`).
+- **Care reminders, set by the water: built on 2026-10-15** (D183-D191,
+  `docs/superpowers/specs/2026-10-15-care-reminders-design.md`).
   Every step beyond Daily has its last time and **Mark done** on the Care
   screen, with Undo; five of them remind (the weekly clean, Rinza, the
   intake filter, the group head's soak, the descale), and the stats card
   carries one quiet line for the most overdue: "Weekly clean due: 41 shots
   since the last". Days decide; shots and steams gate and count; litres are
   not counted, as Decaid keeps no record of a flush or of hot water
-  (D-CARE-2). The counts are Decaid's totals, one request each, since
+  (D184). The counts are Decaid's totals, one request each, since
   Decaid never saves a cleaning profile's run as a shot and the list has
-  nothing to page back to (D-CARE-3). A step starts over when it is marked
+  nothing to page back to (D185). A step starts over when it is marked
   done, or when CafAI sees the machine's own Clean or Descale run for a
   minute; Forward Flush x5 never counts, being the daily water flush's
-  profile too (D-CARE-4). Settings > Machine care asks the water in
-  Decent's TDS bands and the filter, V1 or V2 (D-CARE-5). A step long
+  profile too (D186). Settings > Machine care asks the water in
+  Decent's TDS bands and the filter, V1 or V2 (D187). A step long
   overdue stays on the stats card: the alert under the top bar is for
-  problems of the moment (D-CARE-6). Left: a cycle seen on a real DE1 and
+  problems of the moment (D188). Left: a cycle seen on a real DE1 and
   Forward Flush x5 left out of Decaid's shot list there
   (`docs/HARDWARE_TEST_PLAN.md`), snoozing the line, the water's LSI, and
   marks shared between devices, which each keep their own as they keep
-  their bags (D-CARE-7).
+  their bags (D189).
 
 ## More from the gap review (D151)
 
-- **Overlaid shot curves: built on 2026-10-15** (D-CURVE-1 to D-CURVE-5,
+- **Overlaid shot curves: built on 2026-10-15** (D178-D182,
   `docs/superpowers/specs/2026-10-15-shot-overlay-design.md`). A shot's card
   draws the shot its question asks about faintly under its own curves: the
   previous shot, or for a bag's first shot the last shot of another coffee,
@@ -88,8 +88,8 @@ second, wait (D161):
   only a shot not in the chat is read from Decaid, once. Left: choosing
   another shot to compare with, the shot under in History, its weight and
   weight flow, and the band seen on a Decent tablet in daylight.
-- **TDS and EY on the shot card: built on 2026-10-15** (D-TDS-1 to
-  D-TDS-9, `docs/superpowers/specs/2026-10-15-tds-ey-design.md`). Every
+- **TDS and EY on the shot card: built on 2026-10-15** (D162-D170,
+  `docs/superpowers/specs/2026-10-15-tds-ey-design.md`). Every
   shot card's numbers have a quiet TDS cell, "+ Add", that opens a field with
   the decimal keyboard (0.01-25 %, a comma read as a point); the reading
   shows as TDS and EY, the EY worked out from the card's own dose and yield
@@ -104,16 +104,16 @@ second, wait (D161):
   connects (it lists a DiFluid R2 on main), a reading added in Visualizer
   coming back to the card, and a later reading reaching visualizer.coffee
   on a real upload (`docs/HARDWARE_TEST_PLAN.md`).
-- **°F: built on 2026-10-15** (D-TEMP-1 to D-TEMP-7,
+- **°F: built on 2026-10-15** (D171-D177,
   `docs/superpowers/specs/2026-10-15-fahrenheit-design.md`). Settings >
   Appearance > Temperatures turns every temperature a barista reads or sets
   into °F, the coach's words too, with Decaid, the profiles and the coach's
   tools still in °C, as streamline does. The steppers show whole °F and move
   one whole °C a tap, the step Decaid keeps, since a 1 °F step would get
   stuck and an unrounded °C comes back truncated; every value reads back as
-  set (D-TEMP-3). The coach is told in its prompt, its temperature levers and
-  their bounds worked out in °F (D-TEMP-5), and a °C it still writes reads in
-  °F where it shows, a change without the 32 (D-TEMP-6). Left: a real coach
+  set (D173). The coach is told in its prompt, its temperature levers and
+  their bounds worked out in °F (D175), and a °C it still writes reads in
+  °F where it shows, a change without the 32 (D176). Left: a real coach
   in °F over a real dial-in, the drink temperatures on a real DE1, and
   Decaid's own words (a device error naming a temperature), which stay in
   Decaid's unit (`docs/HARDWARE_TEST_PLAN.md`).

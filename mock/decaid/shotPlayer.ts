@@ -727,7 +727,7 @@ export function createShotPlayer(state: MockDecaid, options: ShotPlayerOptions =
   let activityFrame = 0;
   let activityStop = false;
   let drinkRun: DrinkRunState = { frame: 0, workS: 0, waterMl: 0, purge: 0 };
-  /** The steam record of the steaming now, kept once it ends (D-CARE-9). */
+  /** The steam record of the steaming now, kept once it ends (D191). */
   let openSteam: MockSteamRecord | null = null;
   let idleTick = 0;
   const waiters: Array<() => void> = [];

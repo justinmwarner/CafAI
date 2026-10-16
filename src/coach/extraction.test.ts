@@ -40,7 +40,7 @@ const summary = (fields: Partial<ShotSummary> = {}): ShotSummary => ({
   ...fields,
 });
 
-describe('readTdsInput: what the field makes of what was typed (D-TDS-3)', () => {
+describe('readTdsInput: what the field makes of what was typed (D164)', () => {
   it('reads a TDS to 0.01 %, with a point or a comma, a % or spaces around it', () => {
     expect(readTdsInput('9.25')).toEqual({ ok: true, tdsPct: 9.25 });
     expect(readTdsInput('9,25')).toEqual({ ok: true, tdsPct: 9.25 });
@@ -67,7 +67,7 @@ describe('readTdsInput: what the field makes of what was typed (D-TDS-3)', () =>
   });
 });
 
-describe('extractionYield: TDS x yield / dose, to 0.1 % (D-TDS-2)', () => {
+describe('extractionYield: TDS x yield / dose, to 0.1 % (D163)', () => {
   it('works the EY out from the dose and the yield', () => {
     // 9.25 x 40.4 / 18 = 20.76
     expect(extractionYield(9.25, 18, 40.4)).toBe(20.8);
@@ -85,7 +85,7 @@ describe('extractionYield: TDS x yield / dose, to 0.1 % (D-TDS-2)', () => {
   });
 });
 
-describe('withTds: a summary with a reading, or without one (D-TDS-5)', () => {
+describe('withTds: a summary with a reading, or without one (D166)', () => {
   it('adds the TDS and its EY from the summary’s own dose and yield, leaving the summary passed in as it was', () => {
     const before = summary();
     const after = withTds(before, 9.25);

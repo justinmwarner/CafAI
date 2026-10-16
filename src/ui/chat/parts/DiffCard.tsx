@@ -27,7 +27,7 @@ export interface DiffCardProps {
   onUndo(): void;
 }
 
-/** The card's words with every temperature in the barista's unit (D-TEMP-6); the part as it was in °C. */
+/** The card's words with every temperature in the barista's unit (D176); the part as it was in °C. */
 function useInTemperatureUnit(part: DiffPart): DiffPart {
   const unit = useTemperatureUnit();
   return useMemo(() => {
@@ -143,7 +143,7 @@ function StatusLine({ part, showUndo, disabled, onUndo }: Pick<DiffCardProps, 'p
 /**
  * One proposed change as a plain-language diff. Nothing reaches the machine
  * until the barista taps Confirm. Its temperatures read in the barista's unit
- * (D-TEMP-6): CafAI's lines are kept in °C, the coach's words as it wrote them.
+ * (D176): CafAI's lines are kept in °C, the coach's words as it wrote them.
  */
 export function DiffCard({ part: kept, disabled = false, showUndo, onConfirm, onDecline, onUndo }: DiffCardProps) {
   const part = useInTemperatureUnit(kept);

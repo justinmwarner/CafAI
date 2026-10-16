@@ -1,5 +1,5 @@
 /**
- * A step's last time on the Care screen (D-CARE-1, D-CARE-4, D-CARE-5): for
+ * A step's last time on the Care screen (D183, D186, D187): for
  * every step beyond Daily, when it was last done ("Last done 9 days ago · 41
  * shots since"), "Due" first in the warning colour once it is, and **Mark
  * done**, with **Undo** after a mark until the page reloads. The descale and

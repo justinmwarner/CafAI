@@ -30,7 +30,7 @@ function card(shotId: string, baseline?: ShotBaseline): CoachUiMessage {
   };
 }
 
-describe("the Shot view's shot under (D-CURVE-1, D-CURVE-2)", () => {
+describe("the Shot view's shot under (D178, D179)", () => {
   it('draws nothing before any shot', () => {
     const coach = createFakeCoach({ messages: [card('s-1')] });
     const store = createShotViewComparison(fakeTrace(), coach);

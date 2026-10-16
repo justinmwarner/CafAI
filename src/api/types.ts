@@ -381,7 +381,7 @@ export interface PaginatedShots {
 /**
  * Annotations as a shot update sends them: what is given changes, and the
  * TDS and EY take null, which clears each (Decaid's deep merge writes the
- * null, and ShotAnnotations.toJson then leaves the key out: D-TDS-4).
+ * null, and ShotAnnotations.toJson then leaves the key out: D165).
  */
 export type ShotAnnotationsPatch = Omit<ShotAnnotations, 'drinkTds' | 'drinkEy'> & {
   /** %, to 0.01; null clears it. */
@@ -398,7 +398,7 @@ export interface ShotUpdateRequest {
  * A steam record without its measurements (GET /api/v1/steams/latest): one
  * per steaming, opened when the machine enters steam and kept when it leaves
  * (steam_sequencer.dart at aab5f93). Only what CafAI reads: the care
- * reminders count steams (D-CARE-3).
+ * reminders count steams (D185).
  */
 export interface SteamRecordSummary {
   id: string;
@@ -666,7 +666,7 @@ export interface DecaidClient {
 
   /**
    * GET /api/v1/steams/ids: every steam record's id, to count them (the care
-   * reminders, D-CARE-3). A Decaid older than the pin, without steam
+   * reminders, D185). A Decaid older than the pin, without steam
    * records, answers 404.
    */
   listSteamIds(): Promise<string[]>;

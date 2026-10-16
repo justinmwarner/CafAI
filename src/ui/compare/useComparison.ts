@@ -1,5 +1,5 @@
 /**
- * The summary of the shot to draw under another (D-CURVE-4): from its card
+ * The summary of the shot to draw under another (D181): from its card
  * in the chat on screen when it is there with a curve, with no request;
  * otherwise read once from Decaid (comparisonShots.ts). Null until there is
  * one to draw, and for good when there is none: the caller then draws its
@@ -50,7 +50,7 @@ export function useComparisonSummary(target: ComparisonTarget | null, holder: st
 }
 
 /**
- * The Shot view's shot under, for the app's one shot recording (D-CURVE-2).
+ * The Shot view's shot under, for the app's one shot recording (D179).
  * The shell calls it when it mounts, so the comparison follows the chat from
  * the app's start, whether a graph is on screen or not.
  */

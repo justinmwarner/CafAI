@@ -14,7 +14,7 @@
  * attached (Crema told the model it had web search when it had none).
  * The taste section (D127) leaves the palate to the barista: the coach is
  * generic about taste and specific about the machine. The refractometer
- * section (D-TDS-7) says what a TDS and its EY are and how far to trust them.
+ * section (D168) says what a TDS and its EY are and how far to trust them.
  *
  * The coffee heuristics are a separate, swappable placeholder block
  * (heuristics.ts).
@@ -36,7 +36,7 @@ import { DOSE_RULES, GRIND_MAX_STEPS } from './validator.ts';
 export interface SystemPromptOptions {
   /** The coffee heuristics block; defaults to the placeholder in heuristics.ts. */
   heuristics?: CoachHeuristics;
-  /** The barista's unit (D-TEMP-5): °F adds its section after "How you talk"; °C, the default, is today's prompt. */
+  /** The barista's unit (D175): °F adds its section after "How you talk"; °C, the default, is today's prompt. */
   temperatureUnit?: TemperatureUnit;
 }
 

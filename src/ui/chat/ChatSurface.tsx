@@ -79,7 +79,7 @@ export interface ChatSurfaceProps {
   onUndo(): void;
   /** A word tapped under "Compared with ...?" on a shot card (D126). */
   onRateShot(shotId: string, verdict: ShotVerdict): void;
-  /** A TDS saved (or removed, null) on a shot card (D-TDS-1). Without it the cards offer no Add. */
+  /** A TDS saved (or removed, null) on a shot card (D162). Without it the cards offer no Add. */
   onShotTds?(shotId: string, tdsPct: number | null): void;
   /** A batch of Decaid's bean library picked on "Which coffee is it?" (6.1). */
   onPickBean?(batchId: string): void;

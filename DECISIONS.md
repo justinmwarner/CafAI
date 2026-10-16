@@ -2505,7 +2505,7 @@ The TDS and EY item of D151, built alongside the overlaid curves, °F and the
 care reminders (`docs/superpowers/specs/2026-10-15-tds-ey-design.md`).
 Numbered D-TDS-n until the merge numbers them from D162 on.
 
-- **D-TDS-1. A quiet TDS cell on every shot card, and no setting.** The
+- **D162. A quiet TDS cell on every shot card, and no setting.** The
   card's grid of numbers gets a fifth cell, "TDS" over "+ Add"
   (`src/ui/chat/parts/ShotTds.tsx`, mounted with one line in
   `ShotCard.tsx`): the whole cell one 48 px button whose box reaches 3 px
@@ -2519,7 +2519,7 @@ Numbered D-TDS-n until the merge numbers them from D162 on.
   a setting would hide it from the few who have one until they found it; one
   quiet cell costs a tablet nothing, says what is possible, and is where the
   reading then shows.
-- **D-TDS-2. EY is TDS × the card's yield ÷ the card's dose, to 0.1 %.**
+- **D163. EY is TDS × the card's yield ÷ the card's dose, to 0.1 %.**
   `extractionYield` (`src/coach/extraction.ts`) uses the summary's `doseG`
   and `yieldG`, the card's Dose → yield, which its ratio comes from: the dose
   is Decaid's `actualDoseWeight` (Decaid sets it when it saves the shot, from
@@ -2533,7 +2533,7 @@ Numbered D-TDS-n until the merge numbers them from D162 on.
   read. Why: EY and the ratio must agree, Visualizer's plugin picks its
   bean and drink weights in the same order, and one decimal is all a dose
   and a yield to 0.1 g allow.
-- **D-TDS-3. The field is CafAI's number field: typing is never held,
+- **D164. The field is CafAI's number field: typing is never held,
   saving is.** An outlined text field labelled TDS with "%" at its end
   (`inputmode="decimal"`, `enterkeyhint="done"`, 8 characters) that reads a
   comma as a point; Enter (the keyboard's Done) or Save keeps it, Cancel or
@@ -2548,7 +2548,7 @@ Numbered D-TDS-n until the merge numbers them from D162 on.
   Add a grinder's steps are the model (the decimal keyboard, the comma, Save
   and the error under the field); a blur that saved, as a drink stepper's
   does, would race the tap on Save and keep half-typed numbers.
-- **D-TDS-4. Both go to the shot's record through the shot write queue.**
+- **D165. Both go to the shot's record through the shot write queue.**
   `drinkTds` and `drinkEy` go in the same `PUT /api/v1/shots/{id}` as the
   taste and the rating (D61, D126), queued under the shot's key, so the
   latest wins and a write Decaid cannot take goes again (D64); one Decaid
@@ -2563,7 +2563,7 @@ Numbered D-TDS-n until the merge numbers them from D162 on.
   later notes and ratings; not yet seen at the pin or on a real upload. Why:
   one path for everything CafAI writes to a shot, and nothing it did not
   write is touched.
-- **D-TDS-5. The reading lives in the shot's summary, on the card and the
+- **D166. The reading lives in the shot's summary, on the card and the
   iteration.** `ShotSummary.tdsPct` and `eyPct`, absent without a reading:
   the engine's `setShotTds` writes them into the card's summary in the chat
   and into the shot's iteration, so History (a shot row ends "· TDS 9.25 % ·
@@ -2575,7 +2575,7 @@ Numbered D-TDS-n until the merge numbers them from D162 on.
   difference between two shots) and `get_bag_history` carry them. Why: the
   iteration is CafAI's own record of a shot, as for its Visualizer link
   (6.4), and the summary is what every reader of a shot already reads.
-- **D-TDS-6. The coach hears a reading with its next turn, as it hears a
+- **D167. The coach hears a reading with its next turn, as it hears a
   verdict.** `[event:shot_measured]` with `{shotId, tdsPct, eyPct, doseG,
   yieldG}` rides with the next user turn the engine sends, after the tool
   results and the verdicts (`untoldReadings` in
@@ -2590,7 +2590,7 @@ Numbered D-TDS-n until the merge numbers them from D162 on.
   correction and, with a change card open, set the card aside as a typed
   message does; a note in the chat would add a line per correction and take
   the stats card away.
-- **D-TDS-7. What the coach is told about TDS and EY.** The prompt's loop
+- **D168. What the coach is told about TDS and EY.** The prompt's loop
   item 10 says what the event carries, and a section, "A refractometer
   reading", says what TDS and EY are, that the barista measures the TDS and
   CafAI works out the EY from the card's numbers, and that EY is the one
@@ -2605,12 +2605,12 @@ Numbered D-TDS-n until the merge numbers them from D162 on.
   reopen a proposal. Why: D127's rule for taste must hold for a number that
   could be read as one, and a coach that trusted a mistyped TDS would move
   the recipe on it.
-- **D-TDS-8. An EY over 30 % is flagged, and kept.** "An EY of 42.0 % is
+- **D169. An EY over 30 % is flagged, and kept.** "An EY of 42.0 % is
   more than coffee gives up. Check the TDS, and the dose in Decaid." in the
   warning colour under the numbers; the reading is kept and sent as typed.
   Why: the likely causes are a typo and a dose in Decaid that is not the one
   in the basket, which the card cannot fix; refusing would lose a real TDS.
-- **D-TDS-9. The scripted coach says what it heard.** A reply to a turn
+- **D170. The scripted coach says what it heard.** A reply to a turn
   that carries the event starts "Noted: TDS 9.25 %, EY 20.8 %." in the terse
   voice (ENGINE_PROTOCOL rule 0b), the decision unchanged; the demo voice
   says it in full, doubts an EY over 30 %, and names no taste. The demo's
@@ -2622,7 +2622,7 @@ Numbered D-TDS-n until the merge numbers them from D162 on.
 
 The °F item of D151 (`docs/superpowers/specs/2026-10-15-fahrenheit-design.md`).
 
-- **D-TEMP-1. °F is a display unit: Decaid, the profiles, the coach's tools
+- **D171. °F is a display unit: Decaid, the profiles, the coach's tools
   and CafAI's records stay in °C.** CafAI converts only where a person reads
   or types a temperature: the stats card, the steam and flush views, the
   drinks' steppers, the change card, the chat, History and the cleaning guide
@@ -2636,7 +2636,7 @@ The °F item of D151 (`docs/superpowers/specs/2026-10-15-fahrenheit-design.md`).
   display-only", docs/verified/01-platform.md), and with one unit in the data
   a switch of units changes no record, and an export, a backup or a version
   reads the same on any device.
-- **D-TEMP-2. Settings > Appearance > Temperatures, °C for everyone until
+- **D172. Settings > Appearance > Temperatures, °C for everyone until
   changed.** A row after the custom hue, drawn as the Mode control, **°C
   Celsius** and **°F Fahrenheit**, over "Readouts, settings and the coach use
   it. Decaid and your profiles keep °C."; it applies at once
@@ -2652,7 +2652,7 @@ The °F item of D151 (`docs/superpowers/specs/2026-10-15-fahrenheit-design.md`).
   CafAI shows itself, it applies at once as the rest of that section does,
   and it is the first section a barista opens; a section of its own for one
   control would add an eleventh card to Settings.
-- **D-TEMP-3. A stepper in °F shows whole °F and moves one whole °C, the
+- **D173. A stepper in °F shows whole °F and moves one whole °C, the
   smallest step Decaid keeps.** Decaid keeps the steam, hot water and flush
   temperatures as whole °C: each is an `int` in its `workflow.dart`, read
   with `parseInt`, which truncates a fraction (`models/data/utils.dart`), the
@@ -2673,7 +2673,7 @@ The °F item of D151 (`docs/superpowers/specs/2026-10-15-fahrenheit-design.md`).
   (`drinkUnits.test.ts`, `DrinkFieldsFahrenheit.test.tsx`) and in e2e
   through the mock Decaid; the write suite (`write.decaid.ts`) checks each
   end against a running Decaid.
-- **D-TEMP-4. The readouts keep their °C precision in °F.** The group and
+- **D174. The readouts keep their °C precision in °F.** The group and
   its target to one decimal ("198.3 °F", "target 198.5"), steam and its
   setting in whole degrees ("284 °F", "set 302"), on the stats card
   (`MachineStatus.tsx`) and in the steam and flush views (`drinkModel.ts`).
@@ -2682,7 +2682,7 @@ The °F item of D151 (`docs/superpowers/specs/2026-10-15-fahrenheit-design.md`).
   none, so nothing changed there. Why: the same digits keep each readout's
   look and width, as streamline's `formatTemp` keeps its decimals in either
   unit.
-- **D-TEMP-5. The coach is told in its system prompt, one prompt per
+- **D175. The coach is told in its system prompt, one prompt per
   unit.** In °F the prompt's "Use °C" line points to a section after "How you
   talk", "Temperatures in °F" (`src/coach/fahrenheitPrompt.ts`): what it is
   given and sends stays °C (the catalog, the heuristics, the shot summary,
@@ -2702,7 +2702,7 @@ The °F item of D151 (`docs/superpowers/specs/2026-10-15-fahrenheit-design.md`).
   thing the model reads on every turn, and the levers' bounds in °F are what
   "the coach's levers and their bounds said in °F" asks for, without asking
   the model to do the arithmetic.
-- **D-TEMP-6. A temperature in the other unit is rewritten where it shows,
+- **D176. A temperature in the other unit is rewritten where it shows,
   never sent back to the coach.** Where the coach's words show (the chat,
   the change card's title, why and what it changes, the starting profiles'
   reasons, a question and its answers, History), and on CafAI's own change
@@ -2723,13 +2723,13 @@ The °F item of D151 (`docs/superpowers/specs/2026-10-15-fahrenheit-design.md`).
   CafAI can do itself, so a second turn of the model, at the moment the
   barista waits for a change, would buy nothing; and the coach's text
   streams onto the screen, where nothing can be sent back.
-- **D-TEMP-7. The scripted coach follows the °F prompt.** `mock/anthropic`
+- **D177. The scripted coach follows the °F prompt.** `mock/anthropic`
   reads the request's system prompt for the "Temperatures in °F" section
   (`promptTemperatureUnit` in `scenario.ts`) and words its temperature
   changes in °F ("Raise brew temperature by 1.8 °F", the demo's "Brew 1.8 °F
   hotter"), its proposals still in °C, as a coach that follows its prompt
   would. Why: mock mode, the demo and the e2e specs then show °F the way a
-  barista would see it from the real coach; the rewriting of D-TEMP-6 is
+  barista would see it from the real coach; the rewriting of D176 is
   tested on its own (`temperature.test.ts`, `temperatureWords.test.tsx`).
 
 ### Overlaid shot curves (2026-10-15)
@@ -2737,7 +2737,7 @@ The °F item of D151 (`docs/superpowers/specs/2026-10-15-fahrenheit-design.md`).
 The overlaid curves item of D151, built on its own branch
 (`docs/superpowers/specs/2026-10-15-shot-overlay-design.md`).
 
-- **D-CURVE-1. The shot drawn under a shot is the one its card's question
+- **D178. The shot drawn under a shot is the one its card's question
   names.** The card's baseline (D126): "Compared with your previous shot?"
   draws the shot before it in the bag's chat; a bag's first shot, "Compared
   with your last shot of Red Brick?", draws that one, named "Last shot of
@@ -2753,7 +2753,7 @@ The overlaid curves item of D151, built on its own branch
   version's shot would often be several shots back and the change the
   coach made would not be on the curve at all; and two shots of one version
   are what the barista is asked to compare.
-- **D-CURVE-2. It shows on the card and in the Shot view, while the shot
+- **D179. It shows on the card and in the Shot view, while the shot
   pulls and after.** Every card whose question names a shot draws it; the
   Shot view draws the guide from the shot's start, then what its card asks
   about once the card is in, and keeps that for the shot when the chat
@@ -2766,7 +2766,7 @@ The overlaid curves item of D151, built on its own branch
   Crema and DSx draw the previous shot under the live one, so the barista
   sees during the pour whether the change moved the flow, and the card and
   its graph then say the same thing.
-- **D-CURVE-3. The shot under is a faint band, told apart by its form and
+- **D180. The shot under is a faint band, told apart by its form and
   its lightness, and named in words.** Its pressure and flow are bands (7 px
   in the Shot view, 5 px on the card, round ends and joins) in their own
   hues washed toward the page, 45% in dark mode and 50% in light
@@ -2793,7 +2793,7 @@ The overlaid curves item of D151, built on its own branch
   band is the faint one, and its words are in the key. A shot under at 3:1
   would have to be a thin dotted line in full colour, as Crema draws it
   with opacity.
-- **D-CURVE-4. The curve under comes from its card in the chat, and from
+- **D181. The curve under comes from its card in the chat, and from
   Decaid only when it is not there.** The roadmap's premise, that CafAI keeps
   shot summaries without their curves, holds only for the iterations' copy
   in Decaid's store (`withoutSeries` in `src/storage/mirror.ts`): each shot's
@@ -2815,7 +2815,7 @@ The overlaid curves item of D151, built on its own branch
   that 404. Why: most cards need no request, a shot's start (when the
   tablet's Decaid is busiest) needs none, the curves still draw with Decaid
   away, and a guide needs no 4-5 Hz frames.
-- **D-CURVE-5. Both shots count from the pour's start, and the time runs to
+- **D182. Both shots count from the pour's start, and the time runs to
   the longer.** The shot under and this shot are drawn from `pourStartS`
   (the first frame after preheat; the preheat's last point pinned at 0), as
   the Shot view's clock and the card's times already count, so shots whose
@@ -2833,7 +2833,7 @@ The overlaid curves item of D151, built on its own branch
 The third machine care item of D151, built on 2026-10-15 without the
 cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md`).
 
-- **D-CARE-1. Every step beyond Daily keeps its last time; five of them
+- **D183. Every step beyond Daily keeps its last time; five of them
   remind.** The Care screen gives each step of Weekly, Monthly and As needed
   its last time and **Mark done** (`src/ui/care/StepCare.tsx`,
   `TRACKED_STEPS` in `src/app/care/careRules.ts`); Daily's four steps have
@@ -2845,7 +2845,7 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
   owner asked for each step's last time and a quiet line, and the brief for
   "no daily nags"; a tick for a daily habit would be a chore of its own, and
   a reminder for what the barista sees anyway would make the line nag.
-- **D-CARE-2. Days decide; shots and steams gate and count; litres are not
+- **D184. Days decide; shots and steams gate and count; litres are not
   counted.** The weekly clean is due a week after the last, once a shot was
   pulled since, and its line counts the shots; Rinza a week after, once the
   wand steamed since, counting the steams; the intake filter after 14 days
@@ -2864,8 +2864,8 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
   week of neither needs nothing; and litres cannot be counted: Decaid keeps
   no record of a flush or of hot water, and CafAI sees only what runs while
   it is open.
-- **D-CARE-3. Counts come from Decaid's totals, one request each, never by
-  paging back.** Each step's record (D-CARE-7) keeps Decaid's shot total and
+- **D185. Counts come from Decaid's totals, one request each, never by
+  paging back.** Each step's record (D189) keeps Decaid's shot total and
   steam total from when its count began, and the count since is the total
   now less that (`countSince`, `rebaseline`): `GET /api/v1/shots?limit=1`
   answers the total with the newest shot, `GET /api/v1/steams/ids` the
@@ -2887,7 +2887,7 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
   shot's measurements (shot_mapper.dart:14-49), as `GET /api/v1/steams` does
   every steam's (steam_mapper.dart:11-30), where a total is one COUNT and the
   ids one column. On a slow tablet one small request beats pages of curves.
-- **D-CARE-4. A step starts over when it is marked done, or when CafAI saw
+- **D186. A step starts over when it is marked done, or when CafAI saw
   the machine's own Clean or Descale run for a minute; Forward Flush x5
   never counts.** **Mark done** sets the step's last time to now, with
   Decaid's totals then (the last ones known after 3 s without an answer),
@@ -2906,7 +2906,7 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
   its run says nothing about detergent. Undo, because a mistaken tap on the
   descale would silence it for a year. Nobody has watched a cycle on a real
   DE1 yet: the hardware test plan.
-- **D-CARE-5. The water and the intake filter are asked in Settings >
+- **D187. The water and the intake filter are asked in Settings >
   Machine care, in Decent's words.** Under Cleaning guide
   (`src/ui/settings/CareSection.tsx`): **Your water** (Not sure, Under 30 ppm
   (distilled, RO, very soft), 30 to 120 ppm, Over 120 ppm: the water page's
@@ -2921,7 +2921,7 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
   screen stays a reference card to read at the machine; and a not-sure answer
   still reminds, since a missed descale can cost a heater and an extra
   reminder costs a tap.
-- **D-CARE-6. The stats card's line names the most overdue step until it is
+- **D188. The stats card's line names the most overdue step until it is
   marked done; a step never earns the alert under the top bar.** One line at
   the stats card's foot, only while a step is due and the switch is on
   (`src/ui/care/CareDueLine.tsx`): "Weekly clean due: 41 shots since the
@@ -2934,7 +2934,7 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
   that can wait days is neither, and on every screen, the Shot view's too, it
   would teach the barista to look past the alert. The stats card is where the
   machine is read, and it shows when a session starts.
-- **D-CARE-7. Care's records are an IndexedDB store of their own, in
+- **D189. Care's records are an IndexedDB store of their own, in
   Decaid's backup and the export, merged by their last time.**
   `CAFAI_DB_VERSION` 2 adds the `care` store, one record per step (`id`,
   `doneAt`, `by`, `countFrom`, `shotTotal`, `steamTotal`, `updatedAt`); the
@@ -2949,14 +2949,14 @@ cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md
   and must survive what a bag survives; updatedAt cannot decide, since a
   device that lost its storage begins counting afresh, and its new records
   must not outrank the ones the backup brings back.
-- **D-CARE-8. Counting starts the first time CafAI looks.** A step never
+- **D190. Counting starts the first time CafAI looks.** A step never
   marked done gets its record the first time CafAI counts it, with Decaid's
   totals then, so a new install is never due at once; the Care screen says
   "Not marked done yet" with the day counting began ("23 shots since 1
   Oct"). Why: asking when each step was last done would be nine questions
   before the first coffee; counting from the first look is true, and a step
   left alone comes due after one interval.
-- **D-CARE-9. The mock Decaid keeps steam records, and saves no shot for a
+- **D191. The mock Decaid keeps steam records, and saves no shot for a
   cleaning profile, as Decaid does.** Each steaming leaves a record, opened
   on the first frame in steam with the workflow then and kept when the
   machine leaves it (`mock/decaid/steams.ts`, the shot player); the routes

@@ -7,7 +7,7 @@ import { TID } from '../src/ui/testIds.ts';
 import { goTo, loseBrowserStorage, openApp, openAppWithSwitches, settledMirror, statsCard } from './helpers.ts';
 
 /**
- * Machine care's reminders (D-CARE-1 to D-CARE-8), on the tablets and the
+ * Machine care's reminders (D183-D190), on the tablets and the
  * phones: a step's last time and Mark done on the Care screen, the stats
  * card's line for the most overdue step, the water and the filter in
  * Settings > Machine care, and the last times coming back from Decaid's

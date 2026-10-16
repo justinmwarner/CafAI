@@ -93,7 +93,7 @@ const narrowSx = {
 
 export function CareScreen({ routine, onRoutine, onBack }: CareScreenProps) {
   const { host, care } = useServices();
-  // Fresh counts for the steps' last times (D-CARE-3); the service keeps to its own pace.
+  // Fresh counts for the steps' last times (D185); the service keeps to its own pace.
   useEffect(() => care?.refresh(), [care]);
   const inPlace = videoPlaysInPlace(host);
   const linkProps = outsideLinkProps(host);

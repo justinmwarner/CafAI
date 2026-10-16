@@ -207,7 +207,7 @@ describe('import validation', () => {
     expect(() => parseCafaiExport(exportOf({ iterations: [makeIteration({ visualizerUrl: 42 as never })] }))).toThrow(ImportError);
   });
 
-  it("keeps a shot's TDS and EY in its summary, and refuses numbers that are not numbers (D-TDS-5)", () => {
+  it("keeps a shot's TDS and EY in its summary, and refuses numbers that are not numbers (D166)", () => {
     const measured = { ...makeSummary(), tdsPct: 9.25, eyPct: 20.8 };
     const noEy = { ...makeSummary(), tdsPct: 9.25, eyPct: null };
     const parsed = parseCafaiExport(exportOf({ iterations: [makeIteration({ summary: measured }), makeIteration({ id: 'iter_no_ey', summary: noEy })] }));
@@ -374,7 +374,7 @@ describe('importAll merge', () => {
   });
 });
 
-describe("machine care's records (D-CARE-7)", () => {
+describe("machine care's records (D189)", () => {
   const NEVER = { doneAt: null, by: null } as const;
 
   it('travel in the export and back, and a replace takes the file’s', async () => {

@@ -1,16 +1,16 @@
 /**
- * Machine care, live (D-CARE-1 to D-CARE-8): each step's record, Decaid's
+ * Machine care, live (D183-D190): each step's record, Decaid's
  * totals, the water and the filter, and the marks. One per app
  * (createServices.ts); the Care screen, the stats card's line and Settings >
  * Machine care read it (src/ui/care/useCare.ts).
  *
- * - Counting (D-CARE-3): Decaid's shot total and steam total, one request
+ * - Counting (D185): Decaid's shot total and steam total, one request
  *   each, never by paging; at start, 5 s after a shot or a steam ends, when
  *   Decaid answers again, when the page comes back into view and when the
  *   Care screen asks; at most once every 10 s unless a run just ended, never
  *   while a shot runs. A step never counted gets its record, from now
- *   (D-CARE-8); a record's baselines follow the totals (careRules.ts).
- * - Marks (D-CARE-4): Mark done, with Undo until the page reloads, and the
+ *   (D190); a record's baselines follow the totals (careRules.ts).
+ * - Marks (D186): Mark done, with Undo until the page reloads, and the
  *   machine's own Clean or Descale seen for a minute, then gone (cycleWatch.ts).
  * - The last totals are kept on this device (TotalsCache), so the stats card
  *   has them at its first paint and while Decaid is away.
@@ -202,7 +202,7 @@ export function createCareService(deps: CareServiceDeps): CareService {
     for (const step of recordsRead ? TRACKED_STEPS : []) {
       const record = seen.get(step);
       if (!record) {
-        // Counted from the first look (D-CARE-8).
+        // Counted from the first look (D190).
         writes.push({ id: step, doneAt: null, by: null, countFrom: at, shotTotal: freshTotals.shots, steamTotal: freshTotals.steams, updatedAt: at });
         continue;
       }

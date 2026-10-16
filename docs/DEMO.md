@@ -47,7 +47,7 @@ The coach screen, on the bag **Kiambu AA** (Kenya, washed, light roast) with
 7. Shot four, a few minutes ago, not rated ("Compared with your previous
    shot?" waits for a word), measured with a refractometer since (TDS
    9.10 %, so an EY of 20.4 % from its 18.0 g dose and 40.4 g yield,
-   D-TDS-1), and the open question.
+   D162), and the open question.
 
 Every puck is its own, as at a real grinder, so no two shots share their
 numbers. A shot's time is the pour (D78), and every other time on its card
@@ -89,7 +89,7 @@ holds: idle, its first step (98.5 °C for v4, whose fill runs hotter than its
 93 °C pour), and during a shot the step that runs (91 °C in v4's bloom), back
 to the idle target once the shot is done.
 
-Machine care is kept up (D-CARE-1): the weekly clean was done 8 days ago, so
+Machine care is kept up (D183): the weekly clean was done 8 days ago, so
 it is due, and the stats card's last line says "Weekly clean due: 6 shots
 since the last" (the dial-in's shots), opening the step on the Care screen.
 The rest are on time there: Rinza 3 days ago, the tank and tray 2, the intake
@@ -102,7 +102,7 @@ The coach's replies come from the scripted coach (`mock/anthropic/`), in its
 demo voice: about 1.5 s of "Thinking…", then text at reading pace. Your
 answer carries shot four's TDS, which the coach had not heard yet, so its
 reply starts with it ("Thanks for measuring: TDS 9.10 % puts that shot's
-extraction at **20.4 %**."; D-TDS-6). Then it looks at the pressure curve
+extraction at **20.4 %**."; D167). Then it looks at the pressure curve
 (it quotes the peak as the shot card shows it, counted from the start of
 the pour: "5.4 bar, 60 s in") and proposes one change:
 

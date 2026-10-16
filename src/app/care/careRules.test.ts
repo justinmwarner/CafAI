@@ -36,7 +36,7 @@ function record(overrides: Partial<CareRecord> = {}): CareRecord {
 const totals = (overrides: Partial<Totals> = {}): Totals => ({ shots: 100, steams: 30, newestShotMs: days(-1), newestSteamMs: days(-1), ...overrides });
 const settings = (overrides: Partial<CareSettings> = {}): CareSettings => ({ ...DEFAULT_CARE, ...overrides });
 
-describe('the tracked steps (D-CARE-1)', () => {
+describe('the tracked steps (D183)', () => {
   it('are every step beyond Daily, in the guide’s order, and nothing of Daily', () => {
     const beyondDaily = ROUTINES.filter((routine) => routine.id !== 'daily').flatMap((routine) => routine.steps.map((step) => step.id));
     expect([...TRACKED_STEPS]).toEqual(beyondDaily);
@@ -49,7 +49,7 @@ describe('the tracked steps (D-CARE-1)', () => {
   });
 });
 
-describe('the reminders (D-CARE-2)', () => {
+describe('the reminders (D184)', () => {
   it('the weekly clean and Rinza after a week, once a shot or a steam since; the parts after four weeks, once a shot', () => {
     expect(reminderFor('detergent-clean', DEFAULT_CARE)).toEqual({ days: 7, needs: 'shot', counts: 'shots' });
     expect(reminderFor('rinza', DEFAULT_CARE)).toEqual({ days: 7, needs: 'steam', counts: 'steams' });
@@ -71,7 +71,7 @@ describe('the reminders (D-CARE-2)', () => {
   });
 });
 
-describe('counting (D-CARE-3)', () => {
+describe('counting (D185)', () => {
   it('is the total now less the one at the start, never below 0, and unknown while either is', () => {
     expect(countSince(100, 141)).toBe(41);
     expect(countSince(100, 90)).toBe(0);
@@ -140,7 +140,7 @@ describe('a step’s status', () => {
   });
 });
 
-describe('the most overdue (D-CARE-6)', () => {
+describe('the most overdue (D188)', () => {
   it('is the due step with the most of its interval past; ties go in the guide’s order; none when nothing is due', () => {
     const records = new Map<string, CareRecord>([
       ['detergent-clean', record()],

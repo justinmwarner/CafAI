@@ -78,7 +78,7 @@ export interface CoachPort {
   getTemplate(id: string): Template | undefined;
   /**
    * The same for every request while the barista's temperature unit stays
-   * (prompt caching): one prompt per unit (D-TEMP-5), so a switch costs one
+   * (prompt caching): one prompt per unit (D175), so a switch costs one
    * request without the cache.
    */
   systemPrompt(): string;

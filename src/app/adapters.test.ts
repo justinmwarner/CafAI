@@ -200,7 +200,7 @@ describe('createCoachPort', () => {
   const coach = createCoachPort();
   const blooming = getTemplate('blooming-espresso')!;
 
-  it('builds one prompt per temperature unit, and reads the unit for every request (D-TEMP-5)', () => {
+  it('builds one prompt per temperature unit, and reads the unit for every request (D175)', () => {
     let unit: TemperatureUnit = 'celsius';
     const port = createCoachPort({ temperatureUnit: () => unit });
     const celsius = port.systemPrompt();

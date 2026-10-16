@@ -2,7 +2,7 @@
 
 Date: 2026-10-15. Status: approved as the roadmap describes it ("°F" in
 [ROADMAP.md](../../ROADMAP.md), "More from the gap review (D151)"); the
-calls below are recorded in DECISIONS.md as D-TEMP-1 to D-TEMP-7.
+calls below are recorded in DECISIONS.md as D171-D177.
 
 ## 1. The ask
 
@@ -54,7 +54,7 @@ barista typed.
 | Where °C stays | Decaid's workflow and the DE1, the profiles and their versions, the coach's tools and proposals (lever values, the shot summary, the query tools), CafAI's records: diff lines, the chat, exports and Decaid's backup keep what was written. |
 | Where °F shows | Wherever a person reads or types a temperature: the readouts, the steppers, the change card, the chat, History, the care guide, the stepper's spoken value ("302 degrees Fahrenheit"). |
 | The setting | `Settings.temperatureUnit`: `'celsius'` or `'fahrenheit'`, absent until chosen on this device and read as °C (as `keepKeyInDecaid`, D99), so an import or a restore fills it only where nobody chose. Mirrored to Decaid and exported with the other settings. |
-| The default | °C for everyone, existing and new. No guess from the locale (D-TEMP-2). |
+| The default | °C for everyone, existing and new. No guess from the locale (D172). |
 | A temperature | °F = °C × 1.8 + 32. A readout keeps its °C precision: one decimal for the group and its target, whole degrees for steam and its setting. |
 | A change | × 1.8, never the 32: 1 °C hotter is 1.8 °F hotter, 0.5 °C is 0.9 °F, 2 °C is 3.6 °F. |
 
@@ -171,17 +171,17 @@ follows the prompt would.
 
 ## 7. Calls made (DECISIONS.md)
 
-- D-TEMP-1: °F is a display unit; everything kept and sent stays °C.
-- D-TEMP-2: Settings > Appearance > Temperatures; °C for everyone until
+- D171: °F is a display unit; everything kept and sent stays °C.
+- D172: Settings > Appearance > Temperatures; °C for everyone until
   changed, no locale guess (Decent's tablets come set to US English
   wherever they are sold; Decaid, streamline and de1app start in °C).
-- D-TEMP-3: a stepper in °F moves one whole °C and shows whole °F.
-- D-TEMP-4: the readouts keep their °C precision in °F.
-- D-TEMP-5: the coach is told in its system prompt, one prompt per unit,
+- D173: a stepper in °F moves one whole °C and shows whole °F.
+- D174: the readouts keep their °C precision in °F.
+- D175: the coach is told in its system prompt, one prompt per unit,
   its temperature levers worked out in °F.
-- D-TEMP-6: a temperature in the other unit is converted where it shows,
+- D176: a temperature in the other unit is converted where it shows,
   not sent back to the coach.
-- D-TEMP-7: the scripted coach follows the °F prompt.
+- D177: the scripted coach follows the °F prompt.
 
 ## 8. What is left
 

@@ -346,7 +346,7 @@ interface Script {
   messages: Message[];
   newToolId(): string;
   voice: Voice;
-  /** The unit the system prompt asks the coach to write in (D-TEMP-7). */
+  /** The unit the system prompt asks the coach to write in (D177). */
   temperatureUnit: TemperatureUnit;
 }
 
@@ -814,7 +814,7 @@ function readsPhoto(messages: Message[]): boolean {
   return messages.some((message) => message.content.some((block) => block.type === 'image'));
 }
 
-/** The TDS readings a user message carries (D-TDS-6): each [event:shot_measured] payload's TDS and EY. */
+/** The TDS readings a user message carries (D167): each [event:shot_measured] payload's TDS and EY. */
 function readingsIn(message: Message | undefined): ReadingFacts[] {
   return textsOf(message)
     .filter((t) => t.startsWith(EVENT.shotMeasured))
@@ -827,7 +827,7 @@ function readingsIn(message: Message | undefined): ReadingFacts[] {
 /**
  * Rule 0b: a reply to a turn that carries TDS readings starts by saying what
  * it heard, one line per reading, before its own words; the rules decide as
- * they would without them (D-TDS-9).
+ * they would without them (D170).
  */
 function acknowledgeReadings(reply: Reply, messages: Message[], voice: Voice): Reply {
   const readings = readsPhoto(messages) ? [] : readingsIn(messages[messages.length - 1]);

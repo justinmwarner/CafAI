@@ -131,7 +131,7 @@ export interface ReadoutInput {
   shotSettings: ShotSettings | null;
   presets: DrinkPresets | null;
   run: DrinkRun | null;
-  /** The barista's unit for the steam and group temperatures (D-TEMP-4); °C when absent. */
+  /** The barista's unit for the steam and group temperatures (D174); °C when absent. */
   unit?: TemperatureUnit;
 }
 
@@ -165,7 +165,7 @@ export function drinkReadouts(kind: DrinkKind, input: ReadoutInput): Readout[] {
   const done = run !== null && !run.live;
   if (kind === 'steam') {
     const set = steamTemperatureSet(input.shotSettings, presets);
-    // Decaid keeps it in whole °C; in °F it reads whole too, as the stepper shows it (D-TEMP-3).
+    // Decaid keeps it in whole °C; in °F it reads whole too, as the stepper shows it (D173).
     const setText = set === null ? '' : `set ${unit === 'celsius' ? set : Math.round(temperatureIn(set, unit))}`;
     if (done) {
       return [

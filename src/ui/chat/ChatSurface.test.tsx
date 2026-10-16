@@ -332,7 +332,7 @@ describe('ChatSurface', () => {
     expect(within(screen.getByTestId(TID.shotCard)).getByRole('radio', { name: 'Better' })).toBeDisabled();
   });
 
-  it('reports a TDS saved on a card with the shot id, and offers no Add without a handler (D-TDS-1)', async () => {
+  it('reports a TDS saved on a card with the shot id, and offers no Add without a handler (D162)', async () => {
     const onShotTds = vi.fn();
     const { rerender } = renderSurface({ messages: conversation('options'), onShotTds });
     const card = screen.getByTestId(TID.shotCard);

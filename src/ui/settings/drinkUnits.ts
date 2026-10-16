@@ -1,5 +1,5 @@
 /**
- * A drink setting as the barista reads and types it (D-TEMP-3). Every field
+ * A drink setting as the barista reads and types it (D173). Every field
  * keeps Decaid's own value and range (drinkSettings.ts); in °F a temperature
  * shows and takes whole °F, while Decaid keeps whole °C.
  *

@@ -144,7 +144,7 @@ function Readout({ testId, label, value, detail, warn }: ReadoutProps) {
 }
 
 function GroupTemperature() {
-  // In the barista's unit (D-TEMP-4); Decaid sends °C.
+  // In the barista's unit (D174); Decaid sends °C.
   const unit = useTemperatureUnit();
   // A reading Decaid did not send is null: the dash, and no target line (5.8).
   const value = useTelemetry((s) => (s.machineConnected && s.machine ? formatTemperature(s.machine.groupTemperature, 1, unit) : DASH));

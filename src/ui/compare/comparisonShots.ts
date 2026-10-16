@@ -1,5 +1,5 @@
 /**
- * Shots read from Decaid to be drawn under another (D-CURVE-4), kept for the
+ * Shots read from Decaid to be drawn under another (D181), kept for the
  * session.
  *
  * Most shots drawn under another come from their card in the chat, with no

@@ -40,7 +40,7 @@ function recordingCanvas() {
 
 const COLOURS = { pressureGuide: '#35694c', flowGuide: '#385871' };
 
-describe('the shot under, on the Shot view (D-CURVE-3)', () => {
+describe('the shot under, on the Shot view (D180)', () => {
   it('draws its flow, then its pressure, as wide bands with round ends, clipped to the plot', () => {
     const { canvas, ctx, calls, strokes } = recordingCanvas();
     const curve: PourCurve = { t: [0, 1, 2], pressure: [0, 3, 9], flow: [4, 2, 2], endS: 2 };

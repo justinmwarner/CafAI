@@ -324,7 +324,7 @@ const SHOT_PAGE: Rule = {
 };
 
 const STEAM_SUMMARY: Rule = {
-  // The care reminders read only when the newest steam began, to tell a count that does not add up (D-CARE-3).
+  // The care reminders read only when the newest steam began, to tell a count that does not add up (D185).
   shape: z.looseObject({ id, timestamp: text }),
   required: ['id'],
   fallback: { timestamp: '' },

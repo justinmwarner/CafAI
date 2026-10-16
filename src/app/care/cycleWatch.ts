@@ -1,5 +1,5 @@
 /**
- * The machine's own Clean and Descale, seen while CafAI is open (D-CARE-4):
+ * The machine's own Clean and Descale, seen while CafAI is open (D186):
  * started in streamline, or on the machine. The firmware sends no end, so
  * done is only "seen, then gone", as streamline's maintenance-progress.js
  * reads it: a cycle seen for at least a minute, then any other state, marks

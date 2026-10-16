@@ -102,7 +102,7 @@ export interface ChangeFacts {
   channelingFlags: string[] | null;
   /** This change replaces one CafAI rejected. */
   afterRejection: boolean;
-  /** The unit the prompt asks for (D-TEMP-7): its "Temperatures in °F" section, or °C. */
+  /** The unit the prompt asks for (D177): its "Temperatures in °F" section, or °C. */
   temperatureUnit: TemperatureUnit;
 }
 
@@ -113,7 +113,7 @@ export interface AppliedFacts {
   title: string | null;
 }
 
-/** A TDS reading from an [event:shot_measured] payload (D-TDS-6): the TDS and its EY, null when the request had none. */
+/** A TDS reading from an [event:shot_measured] payload (D167): the TDS and its EY, null when the request had none. */
 export interface ReadingFacts {
   /** Null: the barista removed the reading. */
   tdsPct: number | null;
@@ -153,7 +153,7 @@ export interface Voice {
   undo(back: { to: number; title: string | null }): string;
   /** Rule 8. */
   fallback(): string;
-  /** Rule 0b: the line a reply to a turn carrying a TDS reading starts with (D-TDS-9). */
+  /** Rule 0b: the line a reply to a turn carrying a TDS reading starts with (D170). */
   measured(reading: ReadingFacts): string;
 }
 
@@ -166,7 +166,7 @@ function formatNumber(value: number | null): string {
 }
 
 /**
- * A change of brew temperature as the prompt asks for it (D-TEMP-7): "1 °C",
+ * A change of brew temperature as the prompt asks for it (D177): "1 °C",
  * or in °F "1.8 °F", a change converted without the 32, to one decimal as the
  * change card shows it. The proposal itself stays in °C.
  */

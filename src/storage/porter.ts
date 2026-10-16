@@ -10,7 +10,7 @@
  *   merge   - add records missing here, take records whose updatedAt (for
  *             profile versions, createdAt) is newer than ours, and fill blank
  *             settings; whatever is newer here stays. A care step's record
- *             goes by its last time instead (careRecordWins, D-CARE-7).
+ *             goes by its last time instead (careRecordWins, D189).
  *
  * Neither touches the API key: it lives in a separate database this module
  * never opens. The export only reads the key to blank it out wherever a user
@@ -143,7 +143,7 @@ async function replaceAll(db: CafaiDb, data: CafaiExport, defaultModel: string):
 }
 
 /**
- * Whether an incoming care record should replace this device's (D-CARE-7):
+ * Whether an incoming care record should replace this device's (D189):
  * the later last done wins, a done one wins over one never done, and of two
  * never done the earlier start, from which the count is truer. updatedAt
  * cannot decide: a device that lost its storage starts counting afresh, and

@@ -252,7 +252,7 @@ const COMPARED: ReadonlyArray<keyof ShotSummary> = [
   'meanPourWeightFlowGs',
   'meanTempC',
   'tempDeviationC',
-  // The barista's refractometer reading, when both shots have one (D-TDS-5).
+  // The barista's refractometer reading, when both shots have one (D166).
   'tdsPct',
   'eyPct',
 ];
@@ -364,7 +364,7 @@ export function getBagHistory(versions: readonly ProfileVersion[], iterations: r
               timeToFirstDropS: it.summary.timeToFirstDropS,
               peakPressureBar: it.summary.peakPressureBar,
               channelingFlags: it.summary.channelingFlags,
-              // The barista's refractometer reading, when there is one (D-TDS-5).
+              // The barista's refractometer reading, when there is one (D166).
               ...readingOf(it.summary),
             }
           : null,

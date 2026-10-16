@@ -852,7 +852,7 @@ describe("LiveShotGraph: the Shot view's readouts and step", () => {
   });
 });
 
-describe('LiveShotGraph: the shot under this one (D-CURVE-1 to D-CURVE-5)', () => {
+describe('LiveShotGraph: the shot under this one (D178-D182)', () => {
   type Hook = (plot: unknown) => void;
   interface Options {
     hooks?: { drawAxes?: Hook[]; draw?: Hook[] };

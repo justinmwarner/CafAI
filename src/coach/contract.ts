@@ -222,7 +222,7 @@ export const EVENT = {
   shotCompleted: '[event:shot_completed]',
   /** The barista's verdict on a shot against the one it was compared with (D126), with the next user turn. */
   shotRated: '[event:shot_rated]',
-  /** The barista's TDS reading of a shot and the EY CafAI worked out from it (D-TDS-6), with the next user turn. */
+  /** The barista's TDS reading of a shot and the EY CafAI worked out from it (D167), with the next user turn. */
   shotMeasured: '[event:shot_measured]',
   undo: '[event:undo]',
   bagResumed: '[event:bag_resumed]',

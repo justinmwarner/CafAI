@@ -19,7 +19,7 @@
  * - A shot card asks how the shot compared with the one before it (D126):
  *   the words stay on the card, Decaid's `enjoyment` gets a running score,
  *   and the coach hears the verdict with the next turn it is sent.
- * - A shot card takes a TDS from the barista's refractometer (D-TDS-1): the
+ * - A shot card takes a TDS from the barista's refractometer (D162): the
  *   card and the iteration keep it with the EY worked out from the card's
  *   dose and yield, Decaid's record gets both, and the coach hears it with
  *   the next turn it is sent, as a verdict.
@@ -275,7 +275,7 @@ interface RatingNote extends ShotRating {
 }
 
 /**
- * The barista's reading as CafAI writes it to a shot record (D-TDS-4):
+ * The barista's reading as CafAI writes it to a shot record (D165):
  * drinkTds, and drinkEy when CafAI could work one out; `tdsPct` null clears
  * both.
  */
@@ -896,7 +896,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     const own: Record<string, unknown> = {};
     const annotations: ShotAnnotationsPatch = {};
     if (write.reading) {
-      // A removed reading clears both; a TDS without an EY leaves a drinkEy someone else wrote (D-TDS-4).
+      // A removed reading clears both; a TDS without an EY leaves a drinkEy someone else wrote (D165).
       annotations.drinkTds = write.reading.tdsPct;
       if (write.reading.tdsPct === null) annotations.drinkEy = null;
       else if (write.reading.eyPct !== null) annotations.drinkEy = write.reading.eyPct;
@@ -1432,7 +1432,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       // Summaries restored from Decaid's KV backup carry an empty series.
       const stored = iteration.summary;
       if (stored && stored.series.tS.length > 0) return { record, summary: stored };
-      // Rebuilt from the record, with the reading CafAI keeps (D-TDS-5): Decaid's copy may still wait in the outbox.
+      // Rebuilt from the record, with the reading CafAI keeps (D166): Decaid's copy may still wait in the outbox.
       const rebuilt = coach.summarizeShot(record);
       return { record, summary: stored ? withTds(rebuilt, readingOf(stored)?.tdsPct ?? null) : rebuilt };
     },
@@ -1686,7 +1686,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
 
   /**
    * Answer every tool call the model is waiting on (in tool_use order), then
-   * add the verdicts (D126) and TDS readings (D-TDS-6) the coach has not heard and `extra` blocks,
+   * add the verdicts (D126) and TDS readings (D167) the coach has not heard and `extra` blocks,
    * append the user turn, and run the model. Cards left unanswered are set
    * aside, and say why: `setAsideFor`.
    */
@@ -1713,7 +1713,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     s.pending = [];
     s.held = [];
     if (results.length === 0 && extra.length === 0) return;
-    // A verdict comes after the shot's own event left, so it rides with the next turn; so does a TDS reading (D-TDS-6).
+    // A verdict comes after the shot's own event left, so it rides with the next turn; so does a TDS reading (D167).
     const rated = untoldRatings(s.conversation.apiMessages, state.messages).map(shotRatedBlock);
     const measured = untoldReadings(s.conversation.apiMessages, state.messages).map(shotMeasuredBlock);
     const blocks: ContentBlock[] = [...results, ...rated, ...measured, ...extra];
@@ -2800,7 +2800,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   }
 
   /**
-   * The barista's TDS on a shot's card (D-TDS-1 to D-TDS-6), or null to
+   * The barista's TDS on a shot's card (D162-D167), or null to
    * remove it: the card and the shot's iteration keep it, with the EY worked
    * out from the card's own dose and yield; Decaid's record gets both through
    * the outbox (D64); the coach hears it with the next turn it is sent, as a
@@ -2818,7 +2818,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     setMessages(setCardTds(state.messages, shotId, tds));
     await persistConversation(s);
     emit();
-    // CafAI's own record of the shot: History, the export and the backup keep it too (D-TDS-5).
+    // CafAI's own record of the shot: History, the export and the backup keep it too (D166).
     const iteration = (await bagIterations(s)).find((i) => i.shotId === shotId);
     if (iteration?.summary) await putIteration({ ...iteration, summary: withTds(iteration.summary, tds) });
     const eyPct = readingOf(shotCard(state.messages, shotId)?.summary)?.eyPct ?? null;

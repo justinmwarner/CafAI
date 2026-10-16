@@ -153,7 +153,7 @@ describe('compareShots', () => {
     expect(error(compareShots(createShotSource([syntheticShotRecord()]), 'latest', 'latest'))).toMatch(/two different shots/);
   });
 
-  it("carries each shot's TDS and EY, and their difference when both have a reading (D-TDS-5)", () => {
+  it("carries each shot's TDS and EY, and their difference when both have a reading (D166)", () => {
     const { older, newer } = twoShots();
     const read = (record: ShotRecord, tdsPct: number) => ({ record, summary: withTds(summarizeShot(record), tdsPct) });
     const result = data(compareShots(createShotSource([read(older, 9.1), read(newer, 9.6)]), 'previous', 'latest'));
@@ -240,7 +240,7 @@ describe('getBagHistory', () => {
     expect(JSON.stringify(history).length).toBeLessThan(1500);
   });
 
-  it("gives a shot's TDS and EY when the barista measured it, and nothing when not (D-TDS-5)", () => {
+  it("gives a shot's TDS and EY when the barista measured it, and nothing when not (D166)", () => {
     const measured = iteration(1, 'shot-a');
     const read = { ...measured, summary: withTds(measured.summary!, 9.25) };
     const iterations = data(getBagHistory([], [read, iteration(2, 'shot-b')]))['iterations'] as Array<Record<string, unknown>>;

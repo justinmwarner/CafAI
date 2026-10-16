@@ -118,7 +118,7 @@ describe('summarizeShot: the verified example record', () => {
     expect(summary).not.toHaveProperty('eyPct');
   });
 
-  it("reads Decaid's drinkTds, and works the EY out from the summary's own dose and yield, not Decaid's drinkEy (D-TDS-5)", () => {
+  it("reads Decaid's drinkTds, and works the EY out from the summary's own dose and yield, not Decaid's drinkEy (D166)", () => {
     const record = asRecord(example);
     const read = summarizeShot({ ...record, annotations: { ...record.annotations, drinkTds: 9.254, drinkEy: 12 } });
     // 9.25 x 36.3 / 18 = 18.65: the card's own numbers, so EY = TDS x ratio.

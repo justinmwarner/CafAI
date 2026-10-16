@@ -45,7 +45,7 @@ function series(tS: number[], pressure: number[], flow: number[]): ShotSeries {
   return { tS, pressure, flow, weight: blank, weightFlow: blank, temperature: blank, targetPressure: blank, targetFlow: blank };
 }
 
-describe("a shot card's curves, with the shot its question names under them (D-CURVE-1 to D-CURVE-5)", () => {
+describe("a shot card's curves, with the shot its question names under them (D178-D182)", () => {
   it('draws the previous shot from its card in the chat, under this one, with no request', () => {
     const { services } = renderInChat(<ShotSparkline summary={thisShot} baseline={PREVIOUS} />, [card(previousShot), card(thisShot, PREVIOUS)]);
     const svg = curves();
