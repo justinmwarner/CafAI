@@ -15,7 +15,7 @@ tablet and a phone layout, and a look of your own. It follows the
 patterns of Decent's own skin, streamline.js, and began as a port of Crema's
 logic; see [Influences and thanks](#influences-and-thanks).
 
-![The coach on a 1280x800 tablet: the barista tapped "Sour / sharp", the coach read the pressure curve and proposes one change, 1 °C hotter, to confirm](docs/images/tablet-coach.png)
+![The coach on a 1280x800 tablet: the barista measured the last shot's TDS and tapped "Sour / sharp"; the coach gives the extraction it works out, reads the pressure curve and proposes one change, 1 °C hotter, to confirm](docs/images/tablet-coach.png)
 
 - Skin id: `cafai` (never changes; it fixes the skin's install folder, port
   and origin in Decaid, and so its saved data)
@@ -63,11 +63,11 @@ From the built-in demo (`npm run demo`, no machine needed);
 
 | The big shot graph, from a shot's card | History: every version, its change and its shots |
 |---|---|
-| ![The shot view on a tablet: pressure, flow, weight and weight flow over a 60 s Blooming Espresso shot](docs/images/tablet-shot.png) | ![History on a tablet: Kiambu AA's versions v4 (active), v3 (undone) and v2, each with its change and shots](docs/images/tablet-history.png) |
+| ![The shot view on a tablet: pressure, flow, weight and weight flow over a 60 s Blooming Espresso shot, the previous shot faint under it and named over the plot](docs/images/tablet-shot.png) | ![History on a tablet: Kiambu AA's versions v4 (active), v3 (undone) and v2, each with its change and shots, the last with its TDS and EY](docs/images/tablet-history.png) |
 | **Settings > Appearance: Light, in Matcha** | **On a phone: the coach and the shot** |
-| ![Settings on a tablet in the Light mode with the Matcha tint: the mode, seven tints and a custom hue](docs/images/tablet-settings.png) | <img src="docs/images/phone-coach.png" width="49%" alt="The coach on a phone, proposing one change"> <img src="docs/images/phone-shot.png" width="49%" alt="The shot graph on a phone"> |
+| ![Settings on a tablet in the Light mode with the Matcha tint: the mode, seven tints, a custom hue and the temperatures in °C or °F](docs/images/tablet-settings.png) | <img src="docs/images/phone-coach.png" width="49%" alt="The coach on a phone, proposing one change"> <img src="docs/images/phone-shot.png" width="49%" alt="The shot graph on a phone, the previous shot faint under it"> |
 | **Settings > Machine care: Decent's cleaning routine, by how often** | **Settings > Sleep and wake: warm at 06:30 on weekdays** |
-| ![Machine care on a tablet: the Weekly routine's steps, each with its time in Decent's video, beside the video's card](docs/images/tablet-care.png) | <img src="docs/images/phone-sleep-wake.png" width="49%" alt="Sleep and wake on a phone: Sleep when idle after 30 minutes, held off until 10:00 by a wake time, and two wake times, weekdays at 06:30 for an hour and weekends at 08:00 for two, with the next wake over them"> |
+| ![Machine care on a tablet: the Weekly routine's steps, each with its time in Decent's video, the detergent clean due with 6 shots since it was last done and Mark done, beside the video's card](docs/images/tablet-care.png) | <img src="docs/images/phone-sleep-wake.png" width="49%" alt="Sleep and wake on a phone: Sleep when idle after 30 minutes, held off until 10:00 by a wake time, and two wake times, weekdays at 06:30 for an hour and weekends at 08:00 for two, with the next wake over them"> |
 
 ## What you need
 
