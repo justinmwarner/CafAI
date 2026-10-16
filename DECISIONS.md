@@ -2524,8 +2524,12 @@ The overlaid curves item of D151, built on its own branch
   pulls and after.** Every card whose question names a shot draws it; the
   Shot view draws the guide from the shot's start, then what its card asks
   about once the card is in, and keeps that for the shot when the chat
-  moves to another bag. Nothing before any shot ("Pull a shot to see it
-  here." stays alone), and nothing in History, which draws no curves. Why:
+  moves to another bag; while the card is not in, it keeps the guide it
+  pulled with. That follows every shot and card from the app's start, the
+  shell creating it (`useShotViewComparison`), whether the Shot view is on
+  screen or not. Nothing before any shot ("Pull a shot to see it here."
+  stays alone), nothing on a card rated with stars, which asks nothing, and
+  nothing in History, which draws no curves. Why:
   Crema and DSx draw the previous shot under the live one, so the barista
   sees during the pour whether the change moved the flow, and the card and
   its graph then say the same thing.
@@ -2542,16 +2546,20 @@ The overlaid curves item of D151, built on its own branch
   36.2 g" over the Shot view's plot; the curves' names tell a screen reader
   a shot is under them, and the card's description gives its time and peak.
   The contrast sweep checks the band and the swatch at 1.9:1 or more on the
-  page and the card, and this shot's line at 2:1 or more on its band, in
-  every tint and at every hue (worst 1.97 and 2.13:1, light mode). Seen in
-  the PNGs at 1280x800, 962x602 and 390x844, dark and light, in Crema,
-  Matcha and Tamper. Why: opacity would hide the colour from the sweep
-  (DESIGN.md); a dashed or dotted line would read as the targets; and in
-  light mode a series is about 4.5:1 against the page, which leaves about
-  2:1 on each side for a band between them. That is below the 3:1 a series
-  keeps, on purpose: the band is the faint one, and its words are in the
-  key. A shot under at 3:1 would have to be a thin dotted line in full
-  colour, as Crema draws it with opacity.
+  page and the card, this shot's pressure and flow at 2:1 or more on their
+  own bands, and every line of this shot at 1.6:1 or more where it crosses
+  the other band, in every tint and at every hue (worst 1.97, 2.13 and
+  1.65:1, all in light mode, the last weight flow along the flow band, which
+  it differs from in hue too). Seen in PNGs at 1280x800, 962x602, 390x844
+  and 844x390, in dark, light and Auto, in Crema, Matcha, Tamper, Plum and
+  Cherry, and in a real Chromium 91.
+  Why: opacity would hide the colour from the sweep (DESIGN.md); a dashed
+  or dotted line would read as the targets; and in light mode a series is
+  about 4.5:1 against the page, which leaves about 2:1 on each side for a
+  band between them. That is below the 3:1 a series keeps, on purpose: the
+  band is the faint one, and its words are in the key. A shot under at 3:1
+  would have to be a thin dotted line in full colour, as Crema draws it
+  with opacity.
 - **D-CURVE-4. The curve under comes from its card in the chat, and from
   Decaid only when it is not there.** The roadmap's premise, that CafAI keeps
   shot summaries without their curves, holds only for the iterations' copy
@@ -2562,9 +2570,13 @@ The overlaid curves item of D151, built on its own branch
   other (another coffee's last shot, a bag the barista has since left) is
   read once with `GET /api/v1/shots/{id}`, summarised as any shot is, and
   kept for the session, at most 24, callers wanting it meanwhile sharing
-  the request (`src/ui/compare/comparisonShots.ts`, `useComparison.ts`). A
-  404 is kept as none; any other failure draws this shot alone, saying
-  nothing, and may be read again after 60 s when something wants it. The
+  the request (`src/ui/compare/comparisonShots.ts`, `useComparison.ts`), and
+  only while the chat on screen still holds the card that wants it (when
+  the chat moves to another bag, the old bag's cards render once more
+  against the new bag's messages before they go, and must not read their
+  previous shots then). A 404 is kept as none; any other failure draws this
+  shot alone, saying nothing, and may be read again after 60 s when
+  something wants it. The
   card and the Shot view draw the same ~1 Hz curve. The mock Decaid already
   answers the route as Decaid does, 404 included; the live read suite checks
   that 404. Why: most cards need no request, a shot's start (when the

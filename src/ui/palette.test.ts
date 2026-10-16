@@ -149,7 +149,20 @@ const PAIRS: readonly (readonly [string, number, (p: Palette) => readonly (reado
     1.9,
     (p) => [p.graph.pressureGuide, p.graph.flowGuide, p.graph.guide].flatMap((c) => [[c, p.background], [c, p.surface]] as const),
   ],
-  ["this shot's pressure and flow over the shot under", 2, (p) => [[p.graph.pressure, p.graph.pressureGuide], [p.graph.flow, p.graph.flowGuide]]],
+  ["this shot's pressure and flow over their own bands", 2, (p) => [[p.graph.pressure, p.graph.pressureGuide], [p.graph.flow, p.graph.flowGuide]]],
+  // Lines that cross the other band: weight flow runs along the flow band for
+  // most of a pour. They differ from it in hue too (orange, tan or green on
+  // blue, blue on green), and light mode leaves weight flow, about 3.5:1
+  // against the page, about 1.65:1 against the flow band.
+  [
+    "this shot's lines crossing the other bands",
+    1.6,
+    (p) => [
+      [p.graph.pressure, p.graph.flowGuide],
+      [p.graph.flow, p.graph.pressureGuide],
+      ...[p.graph.weight, p.graph.weightFlow].flatMap((c) => [[c, p.graph.pressureGuide], [c, p.graph.flowGuide]] as const),
+    ],
+  ],
   // The steam, hot water and flush dial (D149): its number in ink and its
   // "of" line in ink-muted sit over the water and the milk inside the ring.
   ['ink on the dial’s water and milk', 7, (p) => [[p.ink, p.waterWash], [p.ink, p.milkWash]]],

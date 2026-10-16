@@ -75,16 +75,21 @@ The band's colours are two palette roles, `graph.pressureGuide` and
 50% in light (opaque hex, never opacity, which the contrast sweep could not
 check), and the key's neutral swatch, `graph.guide`, ink-muted the same
 way. The contrast sweep checks them in every tint, at every hue, in both
-modes: the band at least 1.9:1 against the page and the card, and this
-shot's line at least 2:1 against the band under it, so the line stays
-readable where the two run together. That is below the 3:1 a series keeps,
-on purpose: the band is the faint one, its words are in the key, and in
-light mode a series' own 4.5:1 or so against the page leaves room for no
-more than about 2:1 on each side of a band between them. Auto is light or
-dark, so it is covered by both. As built, the worst across the sweep: the
-band 1.97:1 on the page and this shot's line 2.13:1 on its band in light
-mode, 2.38:1 and 3.22:1 in dark; seen in PNGs at 1280x800, 962x602 and
-390x844, dark and light, in Crema, Matcha and Tamper.
+modes: the band at least 1.9:1 against the page and the card, this shot's
+pressure and flow at least 2:1 against their own bands, so a line stays
+readable where it runs along its band, and every line of this shot at least
+1.6:1 where it crosses the other band (weight flow runs along the flow band
+for most of a pour; a crossing line differs from the band in hue too). That
+is below the 3:1 a series keeps, on purpose: the band is the faint one, its
+words are in the key, and in light mode a series' own 4.5:1 or so against
+the page leaves room for no more than about 2:1 on each side of a band
+between them (weight flow, about 3.5:1, less). Auto is light or dark, so it
+is covered by both. As built, the worst across the sweep, all in light
+mode: the band 1.97:1 on the page, pressure and flow 2.13:1 on their bands,
+weight flow 1.65:1 along the flow band; in dark, 2.38:1 (the band on the
+card), 3.22:1 and 2.74:1. Seen in PNGs at 1280x800,
+962x602, 390x844 and 844x390, dark, light and Auto, in Crema, Matcha,
+Tamper, Plum and Cherry, and in a real Chromium 91.
 
 The words: the card's curves are named "Pressure and flow during the shot,
 with the pressure and flow of your previous shot under them", and
@@ -136,18 +141,24 @@ would double the lines on a graph read from a step back.
 - `src/ui/compare/comparisonShots.ts`: the per-client cache of shots read
   from Decaid: one request per shot, shared while in flight, 404 kept as
   none, a failure tried again after 60 s, at most 24 shots.
-- `src/ui/compare/useComparison.ts`: `useComparisonSummary(target)`, from
-  the chat first, then the cache; nothing outside a `ServicesProvider` (a
-  card drawn on its own in a test or a preview).
+- `src/ui/compare/useComparison.ts`: `useComparisonSummary(target, holder)`,
+  from the chat first, then the cache, Decaid asked only while the chat on
+  screen still holds the card that wants it (the old bag's cards render once
+  more against a new bag's messages before they go); nothing outside a
+  `ServicesProvider` (a card drawn on its own in a test or a preview). And
+  `useShotViewComparison()`, which the shell (`AppShell.tsx`) calls when the
+  app starts.
 - `src/ui/compare/shotViewComparison.ts`: the Shot view's comparison for the
   app's one shot trace: the newest card while the shot pulls, the finished
   shot's card's comparison once it is in (kept for that shot, even after a
-  switch of bag).
+  switch of bag), and the guide it pulled with while its card is not in.
+  Created with the shell, so it has followed every shot and card.
 - `src/ui/compare/guide.ts`: drawing the band on uPlot's canvas, in its
   `drawAxes` hook (after the grid, before the series), clipped to the plot.
 - `src/ui/compare/GuideKey.tsx`: the band's swatch for the keys.
 - `src/ui/chat/parts/ShotSparkline.tsx`: the card's curves, moved out of
-  `ShotCard.tsx`, which now only mounts it.
+  `ShotCard.tsx`, which now only mounts it, with the baseline only where the
+  card asks its question (not on a card rated with stars).
 - `src/ui/machine/LiveShotGraph.tsx`: the guide hook, the time axis, the key
   line and the plot's name.
 - `src/ui/palette.ts`: `graph.pressureGuide`, `graph.flowGuide`,

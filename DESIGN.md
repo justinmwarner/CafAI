@@ -586,7 +586,8 @@ The shot graph follows Decent's convention whatever the tint: pressure green, fl
 | chip outlines: status colours and the accent on background and surface | 3:1 | 6.71 | 5.11 |
 | each graph series on background and surface | 3:1 | 7.77 | 3.53 |
 | the shot under: its bands and its key's swatch on background and surface (faint by design, D-CURVE-3) | 1.9:1 | 2.38 | 1.97 |
-| this shot's pressure and flow over the shot under | 2:1 | 3.22 | 2.13 |
+| this shot's pressure and flow over their own bands | 2:1 | 3.22 | 2.13 |
+| this shot's lines crossing the other bands (weight flow along the flow band; they differ in hue too) | 1.6:1 | 2.74 | 1.65 |
 
 Some pairs the UI draws are not in the sweep. Ink and ink-muted on the accent wash (the live strip's title and numbers) measure 10.54 and 5.49:1 at worst and pass. Status colours on raised (the tonal "Forget key" button in Settings, `variant="tonal" color="error"`) are in the sweep: light-mode error was darkened from lightness 0.55 to 0.53 so it passes there too (4.90:1 at worst; 5.97:1 in dark). Colours MUI derives itself (the text of its Alerts, disabled controls) are outside the sweep. Opacity hides a colour from the sweep too, so CafAI never dims content with it: what is set aside (the starting profiles not picked, an undone version, a closed question's other answers) and every placeholder is drawn in ink-muted at full opacity, which its row covers; only a control disabled for the moment keeps MUI's faded look. Faded with opacity, the set-aside cards and chips measured 2.3 to 3.7:1 in light mode; in ink-muted they measure 6.4:1 and up in light Crema.
 
