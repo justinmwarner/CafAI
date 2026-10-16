@@ -83,6 +83,8 @@ test('a reload after lost browser storage restores bags, history and the chat fr
   // 4. The API key was not restored: the coach asks for one, Settings has
   // none, and nothing the mock Decaid saw or stores holds it.
   await expect(page.getByRole('heading', { name: 'Add your Anthropic API key to start coaching' })).toBeVisible();
+  // The bags came back, and the card says so (machine care's last times alone would not: D189).
+  await expect(page.getByText("Your bags came from Decaid's backup. Paste your API key to go on.")).toBeVisible();
   await page.getByTestId(TID.navSettings).click();
   await expect(page.getByRole('status').filter({ hasText: 'No key saved yet' })).toBeVisible();
   await expect(page.getByTestId(TID.forgetKey)).toHaveCount(0);

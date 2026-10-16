@@ -175,4 +175,8 @@ test("a step's last time comes back from Decaid's backup after the browser stora
   await openAppWithSwitches(page, { mockPersist: '1' }, '#/care/monthly');
   await expect(page.getByTestId(TID.careStepLine('gasket'))).toHaveText('Done today');
   await expect(page.getByTestId(TID.careStepLine('group-parts'))).toHaveText(/^Not marked done yet/);
+  // The backup held machine care's last times and no bag: the coach does not say the bags came back (D189).
+  await goTo(page, 'coach');
+  await expect(page.getByRole('heading', { name: 'Add your Anthropic API key to start coaching' })).toBeVisible();
+  await expect(page.getByText("Your bags came from Decaid's backup.")).toHaveCount(0);
 });

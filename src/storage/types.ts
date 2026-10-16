@@ -310,8 +310,13 @@ export interface CafaiExport {
 
 export interface DataPorter {
   exportAll(): Promise<CafaiExport>;
-  /** Validates with a schema first; `merge` keeps existing records with newer updatedAt. */
-  importAll(data: unknown, mode: 'merge' | 'replace'): Promise<{ imported: number }>;
+  /**
+   * Validates with a schema first; `merge` keeps existing records with newer
+   * updatedAt. `imported` counts every record written, machine care's among
+   * them; `care` how many of those were machine care's (D189), so that a
+   * restore of nothing else is not taken for bags back.
+   */
+  importAll(data: unknown, mode: 'merge' | 'replace'): Promise<{ imported: number; care: number }>;
 }
 
 /** Mirror of non-secret data into Decaid's key-value store. */

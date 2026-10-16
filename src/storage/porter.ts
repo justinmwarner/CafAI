@@ -264,7 +264,7 @@ export function createDataPorter(deps: PorterDeps): DataPorter {
       }
       if (mode === 'replace') deps.mirror.noteReplaced?.();
       deps.mirror.schedulePush();
-      return { imported: records + care };
+      return { imported: records + care, care };
     },
   };
 }

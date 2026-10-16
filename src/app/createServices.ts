@@ -102,8 +102,9 @@ export async function createServices(win: Window): Promise<AppServices> {
   await coach.start();
 
   // Records that came back after start (D100): the chat, the look and machine care read them again.
-  const landed = () => {
-    void coach.restored();
+  // The chat says the bags are back only when bags came back, not for machine care's last times alone (D189).
+  const landed = ({ records }: { records: boolean }) => {
+    if (records) void coach.restored();
     void appearance.reload();
     void temperatureUnit.reload();
     void care.reload();
@@ -114,9 +115,9 @@ export async function createServices(win: Window): Promise<AppServices> {
   const late =
     restore === 'unreachable'
       ? startLateRestore(storage, {
-          onRestored({ records }) {
-            if (records) landed();
-            else void coach.refresh();
+          onRestored({ records, care: careAlone, key }) {
+            if (records || careAlone) landed({ records });
+            if (key && !records) void coach.refresh();
           },
         })
       : null;

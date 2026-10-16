@@ -42,9 +42,11 @@ export interface IdbStorage extends Storage {
   /**
    * Calls `listener` when the first push of a store that started empty merged
    * records from Decaid's backup in (5.4): they came back after start, so the
-   * screens read them again. Returns the unsubscribe.
+   * screens read them again. `records`: bags, versions, iterations or chats
+   * came back; false when machine care's last times alone did (D189), which
+   * are no bags to announce. Returns the unsubscribe.
    */
-  onRestored(listener: () => void): () => void;
+  onRestored(listener: (restored: { records: boolean }) => void): () => void;
   /** Stop the mirror's timers and close the databases. */
   close(): void;
 }
@@ -102,7 +104,7 @@ export async function createIdbStorage(options: CreateIdbStorageOptions): Promis
   const care = createCareRepository({ db: careDb, onWrite: () => mirror.schedulePush() });
   const porter = createDataPorter({ db, careDb, secrets, mirror, appVersion, defaultModel, now });
   const keyBackup = createKeyBackup(kv, secrets, secrets.keyCopy);
-  const restoredListeners = new Set<() => void>();
+  const restoredListeners = new Set<(restored: { records: boolean }) => void>();
 
   // A store that started this session empty (first run, or browser storage
   // lost) must not overwrite a backup it has not seen: if the start-up
@@ -113,14 +115,15 @@ export async function createIdbStorage(options: CreateIdbStorageOptions): Promis
     mirror.setGate(async () => {
       const remote = await mirror.pull();
       if (remote === null) return;
-      let imported = 0;
+      let merged = { imported: 0, care: 0 };
       try {
-        imported = (await porter.importAll(remote, 'merge')).imported;
+        merged = await porter.importAll(remote, 'merge');
       } catch (error) {
         // A backup this version cannot read is no backup; do not block on it.
         if (!(error instanceof ImportError)) throw error;
       }
-      if (imported > 0) for (const listener of [...restoredListeners]) listener();
+      const restored = { records: merged.imported > merged.care };
+      if (merged.imported > 0) for (const listener of [...restoredListeners]) listener(restored);
     });
   }
 
@@ -145,7 +148,11 @@ export async function createIdbStorage(options: CreateIdbStorageOptions): Promis
 
 /**
  * What a restore from Decaid's backup found (5.3, 5.4):
- * - `restored`: records came back;
+ * - `restored`: records came back: bags, versions, iterations or chats
+ *   (machine care's last times with them, maybe);
+ * - `care`: machine care's last times came back, and nothing else (D189):
+ *   the device's first look was backed up, say, before any bag. No bags to
+ *   say are back;
  * - `nothing`: nothing to restore (this device has bags, Decaid holds no
  *   backup, or nothing in it is new here);
  * - `unreachable`: Decaid did not answer (no answer, a timeout, busy), so it
@@ -153,7 +160,7 @@ export async function createIdbStorage(options: CreateIdbStorageOptions): Promis
  * - `unreadable`: Decaid answered something CafAI cannot read (the reader
  *   reported it as drift); never taken for an empty backup.
  */
-export type RestoreResult = 'restored' | 'nothing' | 'unreachable' | 'unreadable';
+export type RestoreResult = 'restored' | 'care' | 'nothing' | 'unreachable' | 'unreadable';
 
 function restoreFailure(error: unknown): 'unreachable' | 'unreadable' {
   if (!(error instanceof GatewayError)) return 'unreadable';
@@ -169,8 +176,9 @@ export async function restoreFromMirror(storage: Storage): Promise<RestoreResult
   try {
     const remote = await storage.mirror.pull();
     if (remote === null) return 'nothing';
-    const { imported } = await storage.porter.importAll(remote, 'merge');
-    return imported > 0 ? 'restored' : 'nothing';
+    const { imported, care } = await storage.porter.importAll(remote, 'merge');
+    if (imported > care) return 'restored';
+    return care > 0 ? 'care' : 'nothing';
   } catch (error) {
     // A backup this version cannot read is no backup, as for the first push.
     return error instanceof ImportError ? 'nothing' : restoreFailure(error);
@@ -199,8 +207,12 @@ export const LATE_RESTORE_MAX_MS = 30_000;
 export const LATE_RESTORE_FOR_MS = 10 * 60_000;
 
 export interface LateRestoreOptions {
-  /** Records came back (`records`), or the API key from its copy in Decaid (`key`). */
-  onRestored(restored: { records: boolean; key: boolean }): void;
+  /**
+   * Records came back (`records`: bags, versions, iterations or chats),
+   * machine care's last times alone (`care`), or the API key from its copy
+   * in Decaid (`key`).
+   */
+  onRestored(restored: { records: boolean; care: boolean; key: boolean }): void;
   timers?: RestoreTimers;
   now?: () => number;
 }
@@ -252,8 +264,8 @@ export function startLateRestore(storage: Storage, options: LateRestoreOptions):
       storage.keyBackup.restoreIfMissing().catch(() => false),
     ]);
     if (done) return;
-    if (records === 'restored' || records === 'nothing') done = true;
-    if (records === 'restored' || key) options.onRestored({ records: records === 'restored', key });
+    if (records === 'restored' || records === 'care' || records === 'nothing') done = true;
+    if (records === 'restored' || records === 'care' || key) options.onRestored({ records: records === 'restored', care: records === 'care', key });
     schedule();
   }
 

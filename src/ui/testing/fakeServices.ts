@@ -406,7 +406,7 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
         conversations: [...conversations.values()],
         care: [...care.values()],
       }),
-      importAll: async () => ({ imported: 0 }),
+      importAll: async () => ({ imported: 0, care: 0 }),
     },
     mirror: {
       schedulePush() {},

@@ -3036,3 +3036,15 @@ updated in place above.
   so a CafAI put back on the tablet after a newer one said another window
   held it, on every reload, where there was none; what helps is the newer
   CafAI, as a newer export file says to update CafAI.
+- **D-FIX-CARE-2. A restore that brings back machine care's last times and
+  no bag says nothing of bags.** The porter counts machine care's records
+  apart (`importAll` answers `{ imported, care }`, `src/storage/porter.ts`),
+  and a restore that brought back those alone is `care`, not `restored`
+  (`restoreFromMirror` in `src/storage/index.ts`); so is the first push's
+  merge and the late restore's. The key card then does not say "Your bags
+  came from Decaid's backup", nor the chat "Your bags are back from Decaid's
+  backup", while the Care screen reads its last times again
+  (`src/app/createServices.ts`). History > Import still counts them among
+  the records it imported. Why: a device CafAI opened before any bag backs
+  up the nine records of its first look (D190), and a phone that restores
+  that backup has no bags to show.
