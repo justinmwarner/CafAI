@@ -45,8 +45,7 @@ import type { ShotSummary } from '../../coach/types.ts';
 import { hasCurve, keyFacts, pourCurve, underThem, type PourCurve } from '../compare/comparison.ts';
 import { drawGuide } from '../compare/guide.ts';
 import { GuideSwatch } from '../compare/GuideKey.tsx';
-import { shotViewComparisonFor } from '../compare/shotViewComparison.ts';
-import { useComparisonSummary } from '../compare/useComparison.ts';
+import { useComparisonSummary, useShotViewComparison } from '../compare/useComparison.ts';
 import type { GraphPalette } from '../palette.ts';
 import { TID } from '../testIds.ts';
 import { DASH, formatSeconds } from './format.ts';
@@ -287,7 +286,7 @@ export interface LiveShotGraphProps {
 }
 
 export function LiveShotGraph({ minPlotHeight = 160, compact = false, narrow = false }: LiveShotGraphProps) {
-  const { telemetry, coach } = useServices();
+  const { telemetry } = useServices();
   const trace = useMemo(() => shotTraceFor(telemetry), [telemetry]);
   const { phase, finishedShotId } = useSyncExternalStore(trace.subscribe, trace.getState);
   const plotHost = useRef<HTMLDivElement>(null);
@@ -297,7 +296,7 @@ export function LiveShotGraph({ minPlotHeight = 160, compact = false, narrow = f
   const shownCard = useRef<CardNumbers | null>(null);
   const repaint = useRef<(() => void) | null>(null);
   // The shot under this one (D-CURVE-1): which, then its curve, from the chat or once from Decaid.
-  const comparison = useMemo(() => shotViewComparisonFor(trace, coach), [trace, coach]);
+  const comparison = useShotViewComparison();
   const target = useSyncExternalStore(comparison.subscribe, comparison.getTarget);
   const previous = useComparisonSummary(target);
   const guide = useMemo(() => {

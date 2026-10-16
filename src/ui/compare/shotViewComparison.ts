@@ -8,9 +8,13 @@
  * and keeps it for that shot even when the chat moves to another bag and the
  * card leaves the messages. Before any shot nothing is drawn.
  *
- * A shot Decaid gave no id cannot be matched to its card: once done it keeps
- * the guide it pulled with, never the newest card, which by then may be its
- * own.
+ * A finished shot without its card (still on its way, never coming because
+ * it ran another profile, or not to be matched because Decaid gave it no id)
+ * keeps the guide it pulled with, never the newest card of the chat, which
+ * by then may be its own or another bag's.
+ *
+ * The shell creates it when the app starts (useShotViewComparison), so it
+ * has followed every shot and card whether a graph was on screen or not.
  */
 import type { CoachController } from '../../app/types.ts';
 import type { ShotTrace } from '../machine/shotTrace.ts';
@@ -46,12 +50,16 @@ export function createShotViewComparison(trace: TraceSource, coach: CoachSource)
       whilePulling = previousShot(newestShotId(messages));
       return whilePulling;
     }
-    if (finishedShotId === null) return whilePulling;
-    const card = shotCardOf(messages, finishedShotId);
-    if (card) fromCard = { shotId: finishedShotId, target: comparisonTarget(card.baseline) };
-    if (fromCard?.shotId === finishedShotId) return fromCard.target;
-    // Done, its card still on its way (or never coming: a shot of another profile).
-    return previousShot(newestShotId(messages, finishedShotId));
+    if (finishedShotId !== null) {
+      const card = shotCardOf(messages, finishedShotId);
+      // A card rated with stars before D126 asks nothing, so names no shot.
+      if (card) fromCard = { shotId: finishedShotId, target: comparisonTarget(card.stars === undefined ? card.baseline : null) };
+      if (fromCard?.shotId === finishedShotId) return fromCard.target;
+    }
+    // Done, its card still on its way, or never coming (a shot of another
+    // profile): the guide it pulled with, never the newest card of a chat
+    // that may since have moved to another bag.
+    return whilePulling;
   };
 
   const listeners = new Set<() => void>();

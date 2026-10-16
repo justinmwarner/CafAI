@@ -12,6 +12,7 @@ import { createFakeServices } from '../../testing/fakeServices.ts';
 import { previewTheme } from '../testing/previewTheme.ts';
 import { renderThemed, renderWithServices } from '../testing/render.tsx';
 import { sampleSeries, sampleSummary } from '../testing/fixtures.ts';
+import { ShotCard } from './ShotCard.tsx';
 import { ShotSparkline } from './ShotSparkline.tsx';
 
 const graph = previewTheme.palette.cafai.graph;
@@ -50,6 +51,8 @@ describe("a shot card's curves, with the shot its question names under them (D-C
     const svg = curves();
     expect(svg).toHaveAccessibleName('Pressure and flow during the shot, with the pressure and flow of your previous shot under them');
     expect(svg).toHaveAccessibleDescription('Previous shot: 30.0 s, peak pressure 9.4 bar.');
+    // Heard once, as the description, never again as text in the reading order.
+    expect(screen.getByText('Previous shot: 30.0 s, peak pressure 9.4 bar.')).not.toBeVisible();
     const bands = guide()!.querySelectorAll('path');
     expect(bands).toHaveLength(2);
     // Under this shot's lines: the bands come first in the drawing.
@@ -83,6 +86,16 @@ describe("a shot card's curves, with the shot its question names under them (D-C
     expect(services.decaid.getShot).toHaveBeenCalledWith('shot-r');
   });
 
+  it('asks Decaid nothing as the chat moves to another bag and this card renders once more before it goes', async () => {
+    const getShot = vi.fn(async (id: string) => syntheticShotRecord({ id }));
+    const { services } = renderInChat(<ShotSparkline summary={thisShot} baseline={PREVIOUS} />, [card(previousShot), card(thisShot, PREVIOUS)], getShot);
+    expect(guide()).not.toBeNull();
+    // The new bag's chat holds neither this card nor its previous shot.
+    act(() => services.coach.setState({ messages: [card(sampleSummary({ shotId: 'other-bag-1' }))] }));
+    await act(async () => {});
+    expect(getShot).not.toHaveBeenCalled();
+  });
+
   it('reads the previous shot from Decaid when its card in the chat kept no curve', async () => {
     const restored = sampleSummary({ shotId: 'shot-0', series: series([], [], []) });
     const getShot = vi.fn(async (id: string) => syntheticShotRecord({ id }));
@@ -112,6 +125,20 @@ describe("a shot card's curves, with the shot its question names under them (D-C
     expect(screen.getByText('Pressure')).toBeInTheDocument();
     expect(screen.queryByTestId(TID.shotGuideKey)).toBeNull();
     expect(services.decaid.calls.filter((call) => call.method === 'getShot')).toEqual([]);
+  });
+
+  it('draws nothing under on a card that asks nothing: rated with stars before D126, or with no rating at all', () => {
+    const messages = [card(previousShot), card(thisShot, PREVIOUS)];
+    let view = renderInChat(<ShotCard summary={thisShot} baseline={PREVIOUS} stars={4} onRate={vi.fn()} />, messages);
+    expect(screen.getByText('You rated it 4 of 5 stars.')).toBeInTheDocument();
+    expect(guide()).toBeNull();
+    view.unmount();
+    view = renderInChat(<ShotCard summary={thisShot} baseline={PREVIOUS} />, messages);
+    expect(guide()).toBeNull();
+    view.unmount();
+    renderInChat(<ShotCard summary={thisShot} baseline={PREVIOUS} onRate={vi.fn()} />, messages);
+    expect(screen.getByRole('radiogroup', { name: 'Compared with your previous shot?' })).toBeInTheDocument();
+    expect(guide()).not.toBeNull();
   });
 
   it('draws this shot alone on its own, outside the chat (a test, a preview)', () => {

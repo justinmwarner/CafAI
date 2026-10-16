@@ -59,7 +59,7 @@ describe("the Shot view's shot under (D-CURVE-1, D-CURVE-2)", () => {
     expect(store.getTarget()).toEqual({ shotId: 's-r', name: 'Last shot of Red Brick' });
   });
 
-  it('once done and before its card lands, keeps to the newest other card; then takes the card, unchanged when it says the same', () => {
+  it('once done and before its card lands, keeps the guide it pulled with; then takes the card, unchanged when it says the same', () => {
     const trace = fakeTrace({ phase: 'live', finishedShotId: null });
     const coach = createFakeCoach({ messages: [card('s-1')] });
     const store = createShotViewComparison(trace, coach);
@@ -93,6 +93,26 @@ describe("the Shot view's shot under (D-CURVE-1, D-CURVE-2)", () => {
     trace.set({ phase: 'done', finishedShotId: null });
     coach.setState({ messages: [card('s-1'), card('s-2', { kind: 'previous', shotId: 's-1' })] });
     expect(store.getTarget()).toEqual({ shotId: 's-1', name: 'Previous shot' });
+  });
+
+  it("keeps the guide it pulled with for a shot whose card never comes, after the chat moves to another bag", () => {
+    const trace = fakeTrace({ phase: 'live', finishedShotId: null });
+    const coach = createFakeCoach({ messages: [card('s-1')] });
+    const store = createShotViewComparison(trace, coach);
+    // Another profile ran: no card for it, ever.
+    trace.set({ phase: 'done', finishedShotId: 's-2' });
+    coach.setState({ messages: [card('other-1'), card('other-2', { kind: 'previous', shotId: 'other-1' })] });
+    expect(store.getTarget()).toEqual({ shotId: 's-1', name: 'Previous shot' });
+  });
+
+  it('draws nothing under a shot its card does not ask about: one rated with stars before D126', () => {
+    const trace = fakeTrace({ phase: 'done', finishedShotId: 's-2' });
+    const starred: CoachUiMessage = {
+      ...card('s-2', { kind: 'previous', shotId: 's-1' }),
+      parts: [{ kind: 'shot', shotId: 's-2', summary: sampleSummary({ shotId: 's-2' }), baseline: { kind: 'previous', shotId: 's-1' }, stars: 4 }],
+    };
+    const coach = createFakeCoach({ messages: [card('s-1'), starred] });
+    expect(createShotViewComparison(trace, coach).getTarget()).toBeNull();
   });
 
   it('starts over with the next shot', () => {

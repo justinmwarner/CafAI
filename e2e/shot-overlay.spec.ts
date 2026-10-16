@@ -93,6 +93,13 @@ test('the second shot of a bag draws the first under it: while it pulls, on its 
 
   // The first shot came from its card in the chat: CafAI never read it from Decaid again.
   expect(await readsOf(page, first)).toBe(readsBefore);
+
+  // Nor as the chat moves to a new bag and the old cards go.
+  await page.getByTestId(TID.newBag).click();
+  await expect(page.getByTestId(TID.beanCard)).toBeVisible();
+  // Time for a read the old cards might start to reach the mock Decaid.
+  await page.waitForTimeout(500);
+  expect(await readsOf(page, first)).toBe(readsBefore);
 });
 
 test("the demo's first Kiambu AA shot draws Santos's last shot, read from Decaid once; its other shots come from the chat", async ({ page }) => {

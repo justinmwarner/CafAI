@@ -218,7 +218,8 @@ export function ShotCard({
         <Metric label="Peak pressure" value={peak} />
         <Metric label="First drop" value={formatSeconds(firstDrop)} />
       </Box>
-      <ShotSparkline summary={summary} baseline={baseline} onOpenGraph={onOpenGraph} />
+      {/* The shot under is the one the question below names (D-CURVE-1): none where the card asks nothing. */}
+      <ShotSparkline summary={summary} baseline={onRate && stars === null ? baseline : null} onOpenGraph={onOpenGraph} />
       {summary.channelingFlags.length > 0 ? (
         <Stack direction="row" spacing={1} sx={{ mt: 1, alignItems: 'flex-start', color: 'warning.main' }}>
           <WarningAmberIcon fontSize="small" sx={{ mt: 0.25 }} />

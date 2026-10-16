@@ -35,15 +35,6 @@ const SPARK_Y_MAX = 12;
 /** The band of the shot under, in CSS px: two and a half times this shot's 2 px lines. */
 const GUIDE_WIDTH = 5;
 
-const visuallyHidden = {
-  position: 'absolute',
-  width: '1px',
-  height: '1px',
-  overflow: 'hidden',
-  clipPath: 'inset(50%)',
-  whiteSpace: 'nowrap',
-} as const;
-
 function LegendKey({ color, label }: { color: string; label: string }) {
   return (
     <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
@@ -79,7 +70,7 @@ export function ShotSparkline({ summary, baseline = null, onOpenGraph }: ShotSpa
   const theme = useTheme();
   const descriptionId = useId();
   const target = useMemo(() => comparisonTarget(baseline), [baseline]);
-  const previous = useComparisonSummary(target);
+  const previous = useComparisonSummary(target, summary.shotId);
   const own = pourCurve(summary);
   const under = previous !== null && previous.shotId !== summary.shotId ? pourCurve(previous) : null;
   const box = {
@@ -122,9 +113,10 @@ export function ShotSparkline({ summary, baseline = null, onOpenGraph }: ShotSpa
         ) : null}
       </Box>
       {guided ? (
-        <Box component="span" id={descriptionId} sx={visuallyHidden}>
+        // Hidden, so a screen reader hears it once, as the curves' description, and not again as text.
+        <span id={descriptionId} hidden>
           {describeShot(target, previous)}
-        </Box>
+        </span>
       ) : null}
       <Stack spacing={0.25} sx={{ flexShrink: 0, minWidth: 0 }}>
         <LegendKey color={graph.pressure} label="Pressure" />
