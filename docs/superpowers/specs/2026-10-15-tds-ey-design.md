@@ -6,7 +6,9 @@ with no check-in, and each is recorded as a decision (DECISIONS.md, "TDS and
 EY on the shot card", D162-D170). As built: two rules changed from
 this spec's first draft once the card was looked at, the cell's height (it
 no longer grows the card) and typing while the coach works (allowed, as in
-the composer); section 3 has both.
+the composer); section 3 has both. After the review (2026-10-15), a TDS
+without an EY clears the EY on Decaid's record (section 4, D165), and a
+taste whose record cannot be read no longer takes the TDS with it (D-FIX-2).
 The item on the roadmap ([ROADMAP.md](../../ROADMAP.md), "More from the gap
 review (D151)").
 
@@ -77,8 +79,11 @@ it by hand and EY and the ratio always agree: EY = TDS × ratio. Visualizer's
 plugin picks its `bean_weight` and `drink_weight` in the same order
 (`plugin.js` `convertReaToVisualizerFormat`). A shot with no yield (no scale,
 or one CafAI does not trust) or no dose keeps its TDS alone: `drinkTds` goes
-to Decaid, `drinkEy` is left as it is, and the card says "No EY: this shot
-has no yield from the scale." (or "...: Decaid had no dose for this shot.").
+to Decaid with `drinkEy` null, which clears an EY another app worked out
+from another TDS, so Decaid and Visualizer never show a TDS beside an EY
+that does not go with it (D165, changed after the review), and the card
+says "No EY: this shot has no yield from the scale." (or "...: Decaid had
+no dose for this shot.").
 
 ## 5. Reaching the coach (the second check)
 
@@ -131,7 +136,8 @@ and `get_bag_history`.
 - `ShotUpdateRequest`'s annotations take `null` for `drinkTds` and `drinkEy`
   (the pinned spec says nullable; Decaid's deep merge writes the null and
   `ShotAnnotations.toJson` then leaves the key out). The mock Decaid already
-  answers that way; its contract test now writes and clears a reading.
+  answers that way; its contract test now writes a reading, then a TDS
+  without an EY, and clears it.
 - `EVENT.shotMeasured`, `shotMeasuredBlock` (protocol.ts), and the prompt's
   loop item 10 and its section "A refractometer reading".
 - The UI: `src/ui/chat/parts/ShotTds.tsx` (the cells, the field and the
@@ -168,7 +174,10 @@ own, "A refractometer reading":
   cases); `summarize.test.ts` (a record with `drinkTds`); the engine (the
   card, the iteration and Decaid written; a change and a removal; told with
   the next turn, again when changed, as removed; after a reload; behind a
-  write that waits; a refusal named in the chat); `shotReading.test.ts`;
+  write that waits; a refusal named in the chat; a TDS without an EY
+  clearing another app's; a record's own reading told once, in its shot's
+  event; a taste whose record cannot be read losing only the taste);
+  `shotReading.test.ts`;
   the queries (`get_bag_history`, `compare_shots`); the prompt; the storage
   schema; the scripted coach (terse and demo voices); `ShotTds.test.tsx`,
   `ShotCard.test.tsx`, `ChatSurface.test.tsx`, `HistoryScreen.test.tsx`; the
@@ -177,9 +186,11 @@ own, "A refractometer reading":
   answer reaches the coach with it, and Decaid's record has both numbers
   worked out from the card's dose and yield; a reading after the coach
   proposed a change reaches it with Confirm; changing, removing, the
-  range, a reload and History.
+  range, a reload and History; a TDS on a shot with no yield, the EY
+  another app left in Decaid cleared.
 - Live (`src/api/live/shot.decaid.ts`): on the simulated shot, a TDS and its
-  EY written, read back and cleared.
+  EY written and read back, a TDS without an EY clearing the EY, and both
+  cleared.
 
 ## 9. Out of scope, left
 
