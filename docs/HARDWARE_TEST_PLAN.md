@@ -220,18 +220,27 @@ credits. Nothing to judge on the spot: send the files.
 
 1. During a shot, switch the machine off (or take it out of range).
    Expected: "Looking for that shot in Decaid…" with a progress bar for up to
-   about 15 s, then a warning with Retry. Switch the machine on and tap Retry:
-   the progress shows again.
+   about 15 s, then a warning that the machine disconnected during that
+   shot, with Retry. Switch the machine on and tap Retry: the progress shows
+   again, and the warning after it still says the machine disconnected
+   (D-SIMA-2). Note whether Decaid saved the shot (the newest entry in
+   `/api/v1/shots`): the simulator's Decaid saves none for a shot cut off by
+   a disconnect.
 2. Optional: restart Decaid while CafAI is open and confirm a grind move
-   meanwhile. Expected: a notice that Decaid can't be reached; once Decaid is
-   back, `/api/v1/workflow` -> `context.grinderSetting` has the new setting
-   within about 30 s.
+   meanwhile. Expected: within about 3 s "Can't reach Decaid. Trying
+   again…", with the starts, Sleep or Wake and Tare greyed until Decaid is
+   back, and Stop still live while a drink runs (D-SIMB-1, D-SIMB-2). Once
+   Decaid is back the alert goes, and `/api/v1/workflow` ->
+   `context.grinderSetting` has the new setting within about 30 s.
 3. Tap Espresso, then Stop (it takes Espresso's place in the top bar)
-   within half a second (still preheating). Note whether Decaid saves a
-   shot for it (the newest entry in `/api/v1/shots`). CafAI looks for one
-   up to 6 times ("Try 6 of 6"), and the browser console logs a 404 for
-   each try. If Decaid never saves a shot that never poured, CafAI should
-   stop looking for those.
+   within half a second (still preheating). Expected (D-SIMA-1): no
+   "Looking for that shot in Decaid…" and no warning; one line in the chat,
+   "That shot stopped before it poured: nothing to taste.", and the coach
+   back at once; no card and no "How did it taste?", and the next shot's
+   card compares with the shot before this one. Note whether Decaid saves a
+   shot for it (the newest entry in `/api/v1/shots`): the simulator's Decaid
+   saves none for a stop in preheat, and one with no pour for a stop on the
+   pour's first frame, which gets the same line.
 
 ## 10. The stats card's profile line (D66)
 
@@ -700,7 +709,9 @@ laptop on the same network for steps 4 and 5. Put any setting back after.
 | 6 | 4 | 88 °C target in every sample | | |
 | 7 | 2-3 | Notes, enjoyment 5, your own note kept | | |
 | 8 | 2 | Grind direction right for your grinder | | |
-| 9 | 1 | Progress, warning, Retry | | |
+| 9 | 1 | Progress, the disconnect warning, Retry, the same warning after it; the shot saved? | | |
+| 9 | 2 | Optional: "Can't reach Decaid" within 3 s, every button but Stop held; the grind setting after | | |
+| 9 | 3 | A stop in preheat: one line, the coach back, no card, question or search; a shot saved? | | |
 | 10 | - | Profile line follows another skin | | |
 | 11 | 1 | Shot view by itself, Espresso turns into Stop in place, coach returns | | |
 | 11 | 2 | Stop in the top bar works on the first tap, right after the switch and mid-pour | | |
