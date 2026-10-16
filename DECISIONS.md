@@ -2430,8 +2430,9 @@ The wake schedule item of D151, built on branch `feat/wake-schedule`.
 - **D157. Settings > Sleep and wake edits Decaid's own idle sleep and wake
   schedules.** A section after Steam, hot water and flush
   (`src/ui/settings/SleepWakeSection.tsx`, its reads and writes in
-  `usePresence.ts`) reads `GET /api/v1/presence/settings` once each time
-  Settings opens and writes Decaid's presence routes at once, with no Save
+  `usePresence.ts`) reads `GET /api/v1/presence/settings` each time
+  Settings opens, and again after each change for the keep-awake window
+  (D-SIMC-2), and writes Decaid's presence routes at once, with no Save
   (`src/api/client.ts`). CafAI keeps no copy: Decaid stores them and acts on
   them (presence_controller.dart at aab5f93), as for its own Sleep & Wake
   page and streamline's Presence page. No machine is needed to change them,
@@ -3062,17 +3063,20 @@ fixes is a choice.
   `src/ui/chat/parts/ShotSparkline.tsx`: 120 px of curves, the legend at its
   widest, Graph and the gaps; a 390 px phone's card has 332) puts the key on
   a line of its own under the curves, its name with the card's width; a
-  wider one keeps it in the legend as before. The card measures itself (`useOwnLayout.ts`), and the rule
-  counts Graph whether the card shows it or not, so the cards of a chat put
-  the key in one place. Measured with Playwright at 390, 360 and 320 px
-  (`e2e/shot-overlay.spec.ts`): the curves keep 155, 125 and 85 px, the name
-  is whole. Why: the review's other way, a legend that shrinks while the
-  curves keep 120 px, cuts even "Previous shot" at 360 px and at 320 px has
-  no room for 120 px of curves beside Pressure, Flow and Graph at all;
-  under the curves the name has the card's width and the curves lose nothing.
-  The line costs a guided card about 21 px of height on a phone, where height
-  is cheaper than width; a tablet's card, which has the room beside, does not
-  grow.
+  wider one keeps it in the legend as before, while its whole name fits
+  there (D-SIMC-1). The card measures itself, and the rule counts Graph
+  whether the card shows it or not, so a card's key keeps its place as Graph
+  moves on to the newest card. Measured with Playwright at 390, 360 and
+  320 px (`e2e/shot-overlay.spec.ts`): the curves keep 155, 125 and 85 px,
+  the name is whole (a 30-character coffee's is cut at 320 px, only beyond
+  the card's width). Why: the review's other way, a legend that shrinks
+  while the curves keep 120 px, cuts even "Previous shot" at 360 px and at
+  320 px has no room for 120 px of curves beside Pressure, Flow and Graph at
+  all; under the curves the name has the card's width and the curves lose
+  nothing. The line costs a guided card about 21 px of height on a phone,
+  where height is cheaper than width; a tablet's card, which has the room
+  beside, does not grow, but for a coffee's name too long for the legend
+  (D-SIMC-1).
 
 ### Engine fixes from the review (2026-10-15)
 
@@ -3156,7 +3160,9 @@ updated in place above.
 ### Fixes from the simulator pre-run (2026-10-16)
 
 What the pre-run of docs/HARDWARE_TEST_PLAN.md on Decaid 0.8.8's simulator
-(MockDe1 and Mock Scale) found, fixed the same day.
+(MockDe1 and Mock Scale, CafAI driven by Playwright) found, fixed the same
+day: five defects in CafAI, below, and a step of the plan that expected the
+wrong thing (its section 19.6).
 
 - **D-SIMA-1. A run that never poured is no shot: no card, no taste
   question, nothing to compare with, and one quiet line.** On the
@@ -3259,3 +3265,58 @@ What the pre-run of docs/HARDWARE_TEST_PLAN.md on Decaid 0.8.8's simulator
   why). The alert keeps its plain words and makes no claim about Stop.
   Why: a start, Sleep or Tare sent into an outage could only fail, after a
   tap on a button that looked live; Stop is the one command worth the try.
+- **D-SIMC-1. The third key takes a line under the curves whenever its
+  whole name is wider than the legend's 9.5em.** On a tablet a bag's first
+  card keyed the band "Last shot of Huila Pi…": the name needs 182 px and
+  had D180's 124 (9.5em of 13 px), with no tooltip, though the question
+  under the card and the Shot view name the coffee in full. Measured at
+  962x602, 1280x800, 1920x1200 and 844x390, a wide card is 622 px inside its
+  padding and its curves already have their 360 px, with 11 px to spare
+  beside the legend; "Last shot of Kiambu AA" (a coffee of 9 characters)
+  needs 136 px, "…Huila Pink Bourbon" (18) 182 and "…Finca El Paraíso
+  Lychee Geisha" (30) 250, and each was cut. Now the card measures the name
+  as it sets on one line with no width to keep to, on a copy out of sight
+  and out of the layout (`NameRuler` in
+  `src/ui/chat/parts/ShotSparkline.tsx`), never the key where it is, and
+  puts the key on a line under the curves, from their left edge with the
+  card's width, when that is wider than 9.5em of its own size
+  (`keyUnderCurves`); a narrow card puts it there anyway (D192). It measures
+  again when the card's width or the copy's changes (a rotation, the font
+  arriving). Measured with Playwright (`e2e/shot-overlay.spec.ts`, coffees
+  of 9, 18 and 30 characters): at 962x602, 1280x800, 1920x1200 and 844x390
+  the three names are whole under the curves, which keep their 360 px, and
+  such a card is 14 px taller; "Previous shot" and "Last shot of Santos"
+  still fit beside, and their cards do not grow; at 390, 360 and 320 px all
+  is as D192 left it. Why: a wider cap has those 11 px before it squeezes
+  the curves, and would take them down to about 245 px for the
+  30-character name; wrapping inside the legend would stack four or five
+  lines beside a 48 px plot and grow the card at least as much; under the
+  curves the name has the card's width, that line is D192's already, and
+  only a bag's first card, the one that names another coffee, pays for it.
+  Measured without a width to keep to, the name measures the same wherever
+  the key sits, so the key cannot swing between its places.
+- **D-SIMC-2. Sleep and wake's window line reads Decaid again after every
+  change.** "A wake time keeps the machine awake until 09:16." stayed for
+  over 10 s after the wake time was deleted, Sleep when idle off and then on
+  again at 30 minutes, though Decaid said `keepAwakeUntil: null`; it went
+  only when Settings was opened again. Decaid works the window out afresh
+  from the wake times on every read, only while a machine is connected and
+  not once the machine has slept in it (presence_controller.dart:58-69 at
+  aab5f93), and no write's answer carries it (presence_handler.dart:98-101,
+  182, 267 and 294); CafAI read it only as Settings opened. Now each change
+  Decaid takes (a wake time added, changed, switched or deleted, a delete
+  Decaid answers 404 too; Sleep when idle; the minutes, once the newest
+  change answers) reads `GET /api/v1/presence/settings` again and takes only
+  its `keepAwakeUntil` (`readWindow` in `src/ui/settings/usePresence.ts`);
+  the newest read alone sets it, and one that fails takes the line away.
+  The live write suite checks on the simulator that a window running now is
+  `keepAwakeUntil` and goes with its schedule's delete
+  (`src/api/live/write.decaid.ts`, which puts the schedules back as found
+  even when an expectation fails). Why: only the window, because the rest
+  is what CafAI wrote, and a change of the minutes may still be on its way;
+  a read after each change rather than on a timer, because a change is when
+  the section moves the window, and a timer would ask Decaid for nothing
+  while Settings sits open; and a failed read says nothing rather than keep
+  a window Decaid may no longer hold, which was the defect. A wake time
+  firing, or the machine going to sleep, while the section is open still
+  shows at the next change or the next visit.
