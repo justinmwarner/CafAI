@@ -3,6 +3,7 @@ import '../chat/testing/setup.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { withTds } from '../../coach/extraction.ts';
 import { createFakeServices, type FakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
 import { KIAMBU, KIAMBU_ITERATIONS, KIAMBU_VERSIONS, SANTOS } from '../chat/testing/fixtures.ts';
@@ -116,6 +117,23 @@ describe('HistoryScreen bag detail', () => {
     const second = within(await screen.findByTestId(TID.historyVersion(2))).getByTestId(TID.historyIteration('it-2'));
     expect(within(second).getByTestId(TID.visualizerLink)).toHaveAttribute('href', url);
     expect(screen.getAllByTestId(TID.visualizerLink)).toHaveLength(1);
+  });
+
+  it("ends a shot's line with the barista's TDS and its EY, and with the TDS alone when there is no EY (D-TDS-5)", async () => {
+    const iterations = KIAMBU_ITERATIONS.map((record) => {
+      if (record.id === 'it-1') return { ...record, summary: withTds(record.summary!, 9.25) };
+      if (record.id === 'it-2') return { ...record, summary: withTds({ ...record.summary!, yieldG: null }, 8.9) };
+      return record;
+    });
+    renderHistory(KIAMBU.id, createFakeServices({ storage: { bags: [KIAMBU], versions: KIAMBU_VERSIONS, iterations } }));
+    const first = within(await screen.findByTestId(TID.historyVersion(1))).getByTestId(TID.historyIteration('it-1'));
+    // 9.25 % x 36.4 g / 18.0 g = 18.7 %.
+    expect(first).toHaveTextContent('27.8 s · 18.0 g → 36.4 g · 1:2.0 · peak 8.9 bar · TDS 9.25 % · EY 18.7 %');
+    const second = within(screen.getByTestId(TID.historyVersion(2))).getByTestId(TID.historyIteration('it-2'));
+    expect(second).toHaveTextContent('TDS 8.90 %');
+    expect(second).not.toHaveTextContent('EY');
+    const third = within(screen.getByTestId(TID.historyVersion(3))).getByTestId(TID.historyIteration('it-3'));
+    expect(third).not.toHaveTextContent('TDS');
   });
 
   it('goes back to the list', async () => {

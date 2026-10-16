@@ -84,6 +84,14 @@ export const TID = {
   tasteHelpDialog: 'taste-help-dialog',
   errorBanner: 'error-banner',
   retryButton: 'retry-button',
+  /** A shot card's TDS (D-TDS-1): its cell (Add, or the reading), its EY, the field with Save, Remove and Cancel, and the line under the numbers. */
+  tdsCell: 'shot-tds',
+  tdsEy: 'shot-ey',
+  tdsInput: 'tds-input',
+  tdsSave: 'tds-save',
+  tdsRemove: 'tds-remove',
+  tdsCancel: 'tds-cancel',
+  tdsNote: 'tds-note',
 
   // History
   historyBag: (bagId: string) => `history-bag-${bagId}`,

@@ -19,6 +19,10 @@
  * - A shot card asks how the shot compared with the one before it (D126):
  *   the words stay on the card, Decaid's `enjoyment` gets a running score,
  *   and the coach hears the verdict with the next turn it is sent.
+ * - A shot card takes a TDS from the barista's refractometer (D-TDS-1): the
+ *   card and the iteration keep it with the EY worked out from the card's
+ *   dose and yield, Decaid's record gets both, and the coach hears it with
+ *   the next turn it is sent, as a verdict.
  * - A bag whose details were saved is added to Decaid's bean library in the
  *   background, and every load names its batch (D102).
  * - A new bag opens with "Which coffee is it?": a batch from Decaid's bean
@@ -53,6 +57,7 @@ import {
   type SaveBagDetails,
   type ToolName,
 } from '../../coach/contract.ts';
+import { isTds, readingOf, roundTds, withTds } from '../../coach/extraction.ts';
 import { todayOf, writtenDate, type FreezerDates } from '../../coach/roastAge.ts';
 import { reportDrift } from '../../api/drift.ts';
 import { describeValue } from '../../api/frames.ts';
@@ -66,7 +71,7 @@ import {
   type BeanBatch,
   type BeanCreateRequest,
   type EnjoymentScale,
-  type ShotAnnotations,
+  type ShotAnnotationsPatch,
   type ShotRecord,
   type TelemetryStore,
   type WireProfile,
@@ -113,6 +118,7 @@ import {
   photoIntakeText,
   pickedIntakeText,
   shotCompletedBlock,
+  shotMeasuredBlock,
   shotRatedBlock,
   summaryForModel,
   textBlock,
@@ -125,6 +131,7 @@ import {
   type TemplatePickedPayload,
 } from './protocol.ts';
 import { EXTRAS_KEY, cafaiNotesLine, isTasteQuestion, lastCafaiNotes, mergeNotes, tasteWords } from './shotNotes.ts';
+import { setShotTds as setCardTds, shotCard, untoldReadings } from './shotReading.ts';
 import {
   baselineFor,
   enjoymentFromScore,
@@ -267,12 +274,23 @@ interface RatingNote extends ShotRating {
   comparedWith: ShotBaseline;
 }
 
+/**
+ * The barista's reading as CafAI writes it to a shot record (D-TDS-4):
+ * drinkTds, and drinkEy when CafAI could work one out; `tdsPct` null clears
+ * both.
+ */
+interface ReadingNote {
+  tdsPct: number | null;
+  eyPct: number | null;
+}
+
 /** Everything CafAI still has to say about one shot; a newer write carries the older one's fields. */
 interface ShotWrite {
   /** The bag whose chat has the shot: a write Decaid refuses is reported there, whichever bag is open by then. */
   bagId: string;
   taste?: TasteNote;
   rating?: RatingNote;
+  reading?: ReadingNote;
 }
 
 const DEFAULT_YIELD_G = 36;
@@ -869,14 +887,20 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
    * One PUT /shots/{id} with everything CafAI still has to say about the shot.
    * Safe to repeat: Decaid merges extras key by key, and CafAI's notes line
    * replaces its own previous line instead of piling up. The rating waits in
-   * the outbox until Decaid has said its rating scale; the taste goes on
-   * without it.
+   * the outbox until Decaid has said its rating scale; the taste and a TDS
+   * reading go on without it.
    */
   async function writeShot(shotId: string): Promise<void> {
     const write = shotWrites.get(shotId);
     if (!write) return;
     const own: Record<string, unknown> = {};
-    const annotations: ShotAnnotations = {};
+    const annotations: ShotAnnotationsPatch = {};
+    if (write.reading) {
+      // A removed reading clears both; a TDS without an EY leaves a drinkEy someone else wrote (D-TDS-4).
+      annotations.drinkTds = write.reading.tdsPct;
+      if (write.reading.tdsPct === null) annotations.drinkEy = null;
+      else if (write.reading.eyPct !== null) annotations.drinkEy = write.reading.eyPct;
+    }
     if (write.taste) {
       // The notes as they are now: a person may have written some in Decaid since.
       const record = await api.getShot(shotId).catch((error: unknown) => {
@@ -894,8 +918,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       own.verdict = write.rating.verdict;
       own.comparedWith = write.rating.comparedWith;
     }
-    if (Object.keys(own).length > 0) {
-      annotations.extras = { [EXTRAS_KEY]: own };
+    if (Object.keys(own).length > 0) annotations.extras = { [EXTRAS_KEY]: own };
+    if (Object.keys(annotations).length > 0) {
       try {
         await api.updateShot(shotId, { annotations });
       } catch (error) {
@@ -931,8 +955,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       const shotId = key.slice(SHOT_WRITE.length);
       const write = shotWrites.get(shotId);
       shotWrites.delete(shotId);
-      const parts = [...(write?.taste ? ['the taste'] : []), ...(write?.rating ? ['the rating'] : [])];
-      what = `${parts.join(' and ') || 'the notes'} for this shot`;
+      const parts = [...(write?.taste ? ['the taste'] : []), ...(write?.rating ? ['the rating'] : []), ...(write?.reading ? ['the TDS'] : [])];
+      const listed = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts[0];
+      what = `${listed ?? 'the notes'} for this shot`;
       source = readFailed ? 'GET /api/v1/shots/{id}' : 'PUT /api/v1/shots/{id}';
       field = readFailed ? 'record' : 'annotations';
       bagId = write?.bagId ?? null;
@@ -1406,7 +1431,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       }
       // Summaries restored from Decaid's KV backup carry an empty series.
       const stored = iteration.summary;
-      return { record, summary: stored && stored.series.tS.length > 0 ? stored : coach.summarizeShot(record) };
+      if (stored && stored.series.tS.length > 0) return { record, summary: stored };
+      // Rebuilt from the record, with the reading CafAI keeps (D-TDS-5): Decaid's copy may still wait in the outbox.
+      const rebuilt = coach.summarizeShot(record);
+      return { record, summary: stored ? withTds(rebuilt, readingOf(stored)?.tdsPct ?? null) : rebuilt };
     },
   };
 
@@ -1658,7 +1686,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
 
   /**
    * Answer every tool call the model is waiting on (in tool_use order), then
-   * add the verdicts the coach has not heard (D126) and `extra` blocks,
+   * add the verdicts (D126) and TDS readings (D-TDS-6) the coach has not heard and `extra` blocks,
    * append the user turn, and run the model. Cards left unanswered are set
    * aside, and say why: `setAsideFor`.
    */
@@ -1685,9 +1713,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     s.pending = [];
     s.held = [];
     if (results.length === 0 && extra.length === 0) return;
-    // A verdict comes after the shot's own event left, so it rides with the next turn.
+    // A verdict comes after the shot's own event left, so it rides with the next turn; so does a TDS reading (D-TDS-6).
     const rated = untoldRatings(s.conversation.apiMessages, state.messages).map(shotRatedBlock);
-    const blocks: ContentBlock[] = [...results, ...rated, ...extra];
+    const measured = untoldReadings(s.conversation.apiMessages, state.messages).map(shotMeasuredBlock);
+    const blocks: ContentBlock[] = [...results, ...rated, ...measured, ...extra];
     s.conversation = {
       ...s.conversation,
       apiMessages: [...s.conversation.apiMessages, { role: 'user', content: blocks }],
@@ -2770,6 +2799,32 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     void queueShotWrite(shotId, { bagId: s.bag.id, rating: { verdict, score, comparedWith: baseline } });
   }
 
+  /**
+   * The barista's TDS on a shot's card (D-TDS-1 to D-TDS-6), or null to
+   * remove it: the card and the shot's iteration keep it, with the EY worked
+   * out from the card's own dose and yield; Decaid's record gets both through
+   * the outbox (D64); the coach hears it with the next turn it is sent, as a
+   * verdict. A TDS CafAI does not take, a shot no card shows, or the reading
+   * the card already has does nothing.
+   */
+  async function setShotTds(shotId: string, tdsPct: number | null): Promise<void> {
+    const s = session;
+    if (!s || (tdsPct !== null && !isTds(tdsPct))) return;
+    const card = shotCard(state.messages, shotId);
+    if (!card) return;
+    const tds = tdsPct === null ? null : roundTds(tdsPct);
+    if ((readingOf(card.summary)?.tdsPct ?? null) === tds) return;
+    // On the card, so it comes back with the transcript; the coach hears it with the next turn.
+    setMessages(setCardTds(state.messages, shotId, tds));
+    await persistConversation(s);
+    emit();
+    // CafAI's own record of the shot: History, the export and the backup keep it too (D-TDS-5).
+    const iteration = (await bagIterations(s)).find((i) => i.shotId === shotId);
+    if (iteration?.summary) await putIteration({ ...iteration, summary: withTds(iteration.summary, tds) });
+    const eyPct = readingOf(shotCard(state.messages, shotId)?.summary)?.eyPct ?? null;
+    void queueShotWrite(shotId, { bagId: s.bag.id, reading: { tdsPct: tds, eyPct } });
+  }
+
   async function sendText(text: string): Promise<void> {
     const typed = text.trim();
     if (!typed) return;
@@ -2938,6 +2993,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     declineChange: (requestId) => enqueue(() => declineChange(requestId)),
     undo: () => enqueue(() => undo()),
     rateShot: (shotId, verdict) => enqueue(() => rateShot(shotId, verdict)),
+    setShotTds: (shotId, tdsPct) => enqueue(() => setShotTds(shotId, tdsPct)),
     pickBean: (batchId) => enqueue(() => pickBean(batchId)),
     skipBeanPick: () => enqueue(() => skipBeanPick()),
     readBagPhoto: (photo) => enqueue(() => readBagPhoto(photo)),

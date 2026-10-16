@@ -332,6 +332,17 @@ describe('ChatSurface', () => {
     expect(within(screen.getByTestId(TID.shotCard)).getByRole('radio', { name: 'Better' })).toBeDisabled();
   });
 
+  it('reports a TDS saved on a card with the shot id, and offers no Add without a handler (D-TDS-1)', async () => {
+    const onShotTds = vi.fn();
+    const { rerender } = renderSurface({ messages: conversation('options'), onShotTds });
+    const card = screen.getByTestId(TID.shotCard);
+    await userEvent.click(within(card).getByRole('button', { name: 'Add TDS' }));
+    await userEvent.type(within(card).getByRole('textbox', { name: 'TDS' }), '9.25{Enter}');
+    expect(onShotTds).toHaveBeenCalledWith('shot-1', 9.25);
+    rerender({ messages: conversation('options'), onShotTds: undefined });
+    expect(within(screen.getByTestId(TID.shotCard)).queryByRole('button', { name: 'Add TDS' })).toBeNull();
+  });
+
   it('shows the verdict a shot was given, under the question naming what it was compared with', () => {
     renderSurface({ messages: conversation('rated') });
     expect(screen.getByRole('radiogroup', { name: 'Compared with your last shot of Brazil Santos?' })).toBeInTheDocument();

@@ -2498,3 +2498,122 @@ The wake schedule item of D151, built on branch `feat/wake-schedule`.
   roadmap keeps the item's research for when it comes back, and the care
   reminders go ahead without it. Why: the owner's call ("I'm not super
   interested in number 1... we can consider it in the future").
+
+### TDS and EY on the shot card (2026-10-15)
+
+The TDS and EY item of D151, built alongside the overlaid curves, °F and the
+care reminders (`docs/superpowers/specs/2026-10-15-tds-ey-design.md`).
+Numbered D-TDS-n until the merge numbers them from D162 on.
+
+- **D-TDS-1. A quiet TDS cell on every shot card, and no setting.** The
+  card's grid of numbers gets a fifth cell, "TDS" over "+ Add"
+  (`src/ui/chat/parts/ShotTds.tsx`, mounted with one line in
+  `ShotCard.tsx`): the whole cell one 48 px button whose box reaches 3 px
+  into the gaps around it, so its row stays 42 px tall; on a tablet, where
+  the grid has five columns, the cell fills the empty one and the card does
+  not grow (a phone gives it a row of its own). A tap opens the field
+  across the card, under the numbers. With a reading, TDS and EY start a row
+  of their own, the barista's numbers apart from the machine's, and a tap
+  on the TDS opens the field again. Why: most baristas have no
+  refractometer, so a field open on every card is a box they never fill, and
+  a setting would hide it from the few who have one until they found it; one
+  quiet cell costs a tablet nothing, says what is possible, and is where the
+  reading then shows.
+- **D-TDS-2. EY is TDS × the card's yield ÷ the card's dose, to 0.1 %.**
+  `extractionYield` (`src/coach/extraction.ts`) uses the summary's `doseG`
+  and `yieldG`, the card's Dose → yield, which its ratio comes from: the dose
+  is Decaid's `actualDoseWeight` (Decaid sets it when it saves the shot, from
+  the workflow's dose) or the workflow's `targetDoseWeight`; the yield is
+  Decaid's settled `actualYield` (`trustedFinalYield`, to 0.1 g) or, without
+  one, the scale's last weight in the record when CafAI trusts the scale. So
+  EY = TDS × ratio, and the barista can check it from the card. With no
+  yield (no scale, or a scale CafAI does not trust) or no dose, the TDS is
+  kept alone, with no EY, and the card says why ("No EY: this shot has no
+  yield from the scale."). The TDS is kept to 0.01 %, what refractometers
+  read. Why: EY and the ratio must agree, Visualizer's plugin picks its
+  bean and drink weights in the same order, and one decimal is all a dose
+  and a yield to 0.1 g allow.
+- **D-TDS-3. The field is CafAI's number field: typing is never held,
+  saving is.** An outlined text field labelled TDS with "%" at its end
+  (`inputmode="decimal"`, `enterkeyhint="done"`, 8 characters) that reads a
+  comma as a point; Enter (the keyboard's Done) or Save keeps it, Cancel or
+  Escape closes it, and leaving the field keeps the draft and does nothing
+  else. More than 0 and at most 25 %, the range of the refractometers
+  baristas use (VST, Atago, DiFluid), rounded to 0.01; anything else says why
+  under the field in the error colour and saves nothing. Empty and Save
+  removes a reading, and Remove shows while one is being changed. While the
+  coach works, Save and Remove are held, as the rating is, and typing is
+  not, as in the composer. The cell takes the focus back only when a
+  keyboard opened the field, so no focus ring lands on it after a tap. Why:
+  Add a grinder's steps are the model (the decimal keyboard, the comma, Save
+  and the error under the field); a blur that saved, as a drink stepper's
+  does, would race the tap on Save and keep half-typed numbers.
+- **D-TDS-4. Both go to the shot's record through the shot write queue.**
+  `drinkTds` and `drinkEy` go in the same `PUT /api/v1/shots/{id}` as the
+  taste and the rating (D61, D126), queued under the shot's key, so the
+  latest wins and a write Decaid cannot take goes again (D64); one Decaid
+  refuses says so once in the chat ("Decaid would not save the TDS for this
+  shot: …"). A change sends both again; Remove sends `null` for both, which
+  Decaid's deep merge writes and `ShotAnnotations.toJson` then leaves out
+  (`ShotAnnotationsPatch` in `src/api/types.ts`; the pinned spec says
+  nullable); a TDS without an EY sends `drinkTds` alone, leaving a
+  `drinkEy` another app wrote. No notes line and no extras: the two fields
+  are Decaid's own. Decaid's Visualizer plugin uploads them with the shot
+  and, on Decaid's main (af4e995), sends a later edit of either as it sends
+  later notes and ratings; not yet seen at the pin or on a real upload. Why:
+  one path for everything CafAI writes to a shot, and nothing it did not
+  write is touched.
+- **D-TDS-5. The reading lives in the shot's summary, on the card and the
+  iteration.** `ShotSummary.tdsPct` and `eyPct`, absent without a reading:
+  the engine's `setShotTds` writes them into the card's summary in the chat
+  and into the shot's iteration, so History (a shot row ends "· TDS 9.25 % ·
+  EY 20.8 %"), the export and the backup in Decaid keep them, and the
+  storage schema checks the two numbers. `summarizeShot` reads Decaid's
+  `drinkTds` too and works the EY out itself, so a record that comes with a
+  reading shows it, and a summary rebuilt from Decaid's record after a
+  restore keeps CafAI's. `get_shot_summary`, `compare_shots` (with the
+  difference between two shots) and `get_bag_history` carry them. Why: the
+  iteration is CafAI's own record of a shot, as for its Visualizer link
+  (6.4), and the summary is what every reader of a shot already reads.
+- **D-TDS-6. The coach hears a reading with its next turn, as it hears a
+  verdict.** `[event:shot_measured]` with `{shotId, tdsPct, eyPct, doseG,
+  yieldG}` rides with the next user turn the engine sends, after the tool
+  results and the verdicts (`untoldReadings` in
+  `src/app/engine/shotReading.ts`): told once, again when it changes, with
+  `tdsPct` null when removed (only when one was told), and still after a
+  reload, since the transcript is the record of what the coach heard. A
+  reading typed before the taste answer comes with the answer; one typed
+  after the coach proposed a change comes with Confirm, Not now, a message
+  or the next shot, the change card waiting as it was. The field's line
+  says so ("the coach gets both with your next tap or message"). Why: a turn
+  of its own (a re-ask) would call the model for every reading and every
+  correction and, with a change card open, set the card aside as a typed
+  message does; a note in the chat would add a line per correction and take
+  the stats card away.
+- **D-TDS-7. What the coach is told about TDS and EY.** The prompt's loop
+  item 10 says what the event carries, and a section, "A refractometer
+  reading", says what TDS and EY are, that the barista measures the TDS and
+  CafAI works out the EY from the card's numbers, and that EY is the one
+  measure of extraction the curves cannot give; that it is a number about
+  extraction, not a taste, never a number to aim for, and outranked by the
+  verdict and the barista's words (D127); that it is a measurement with an
+  error of its own (a few tenths from the sample, plus the dose's and the
+  yield's: Decaid's dose is the one set), to compare between shots of the
+  bag, under about 0.5 EY points being noise; that outside about 14-26 % is
+  unusual for espresso and over 30 % impossible, so the coach says the
+  reading may be off and asks for a check; and that a late reading does not
+  reopen a proposal. Why: D127's rule for taste must hold for a number that
+  could be read as one, and a coach that trusted a mistyped TDS would move
+  the recipe on it.
+- **D-TDS-8. An EY over 30 % is flagged, and kept.** "An EY of 42.0 % is
+  more than coffee gives up. Check the TDS, and the dose in Decaid." in the
+  warning colour under the numbers; the reading is kept and sent as typed.
+  Why: the likely causes are a typo and a dose in Decaid that is not the one
+  in the basket, which the card cannot fix; refusing would lose a real TDS.
+- **D-TDS-9. The scripted coach says what it heard.** A reply to a turn
+  that carries the event starts "Noted: TDS 9.25 %, EY 20.8 %." in the terse
+  voice (ENGINE_PROTOCOL rule 0b), the decision unchanged; the demo voice
+  says it in full, doubts an EY over 30 %, and names no taste. The demo's
+  last shot carries a reading (TDS 9.10 %, EY 20.4 %), untold until the
+  viewer answers its open question (docs/DEMO.md). Why: mock mode, the demo
+  and the e2e can then see a reading reach the coach.

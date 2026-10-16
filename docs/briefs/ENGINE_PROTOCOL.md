@@ -137,6 +137,19 @@ All JSON payloads are compact `JSON.stringify` output.
    It is sent once; a changed verdict is sent again, and the newest one for
    a shot counts. The engine finds what to send by comparing the cards with
    the verdicts the transcript already holds.
+10. **Measured** (D-TDS-6): a text block `"[event:shot_measured]\n" + JSON`
+   with JSON
+   `{"shotId":string,"tdsPct":number|null,"eyPct":number|null,"doseG":number|null,"yieldG":number|null}`:
+   the TDS the user typed on the shot's card (to 0.01 %), and the EY CafAI
+   worked out from it as `tdsPct x yieldG / doseG`, the card's own dose and
+   yield (to 0.1 %; null without either). `tdsPct` null means the user
+   removed the reading. Like a verdict it rides in the next user turn the
+   engine sends (any of rules 1-8), after the tool_results and the verdicts
+   and before everything else; it is sent once, again when it changes, and
+   as removed only when a reading was sent. A shot's own event whose
+   summary already carried a reading (`summary.tdsPct`, `summary.eyPct`:
+   its record came with one) counts as sent. A summary carries the reading
+   once there is one (`get_shot_summary`, `compare_shots`, `get_bag_history`).
 
 Auto tools (`save_bag_details`, `get_shot_summary`, `get_shot_series`,
 `get_phase_stats`, `compare_shots`, `get_bag_history`, `get_recent_setups`)
@@ -198,6 +211,13 @@ mock/anthropic/handlers.ts).
    the canned bag `BAG_PHOTO_ANSWER` as JSON (Kiambu AA by Square Mile,
    Kenya, Kiambu, washed, light, roasted 2026-09-28, blackcurrant,
    grapefruit, brown sugar). End turn.
+0b. Not a rule of its own (D-TDS-9): when the last user message carries
+   `[event:shot_measured]` blocks, the reply the rules below decide starts
+   with one line per reading, before its own text (or as its only text, in
+   front of its tool calls): "Noted: TDS {tdsPct} %, EY {eyPct} %." (TDS to
+   two decimals, EY to one), "Noted: TDS {tdsPct} %, no EY." without an EY,
+   "Noted: no TDS reading for that shot." for a removed one. The decision
+   and the tool calls are what they would be without it.
 1. tool_result for `propose_adjustment` with `is_error` (CafAI rejected it)
    -> text "That one is outside what this profile allows. Here is another
    change." + a new `propose_adjustment`: the grind move below, or

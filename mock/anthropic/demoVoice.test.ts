@@ -278,6 +278,18 @@ describe('the demo voice, branch by branch', () => {
     expect(noYield).not.toMatch(/\d g/);
   });
 
+  it('a TDS reading: what it heard first, the extraction in bold, a doubt about one no coffee gives, and the same decision (D-TDS-9)', () => {
+    const measured = (tdsPct: number | null, eyPct: number | null) =>
+      text(`[event:shot_measured]\n${JSON.stringify({ shotId: 'shot-1', tdsPct, eyPct, doseG: 18, yieldG: 49.6 })}`);
+    const tasted = (...readings: Block[]) =>
+      compare([...UP_TO_SHOT, shot(), SHOT_REPLY, user(toolResult('t_ask', { selected: ['Sour / sharp'], other: null }), ...readings)]).demo.text;
+    // 9.25 % x 49.6 g / 18 g = 25.5 %.
+    expect(tasted(measured(9.25, 25.5))).toMatch(/^Thanks for measuring: TDS 9\.25 % puts that shot's extraction at \*\*25\.5 %\*\*\. Sour on a light roast/);
+    expect(tasted(measured(9.25, null))).toMatch(/^Thanks for measuring: TDS 9\.25 %\. That shot has no dose or yield to go with it/);
+    expect(tasted(measured(null, null))).toMatch(/^Got it: I'll leave that TDS reading out\./);
+    expect(tasted(measured(12, 33.1))).toMatch(/^Thanks for measuring, but TDS 12\.00 % works out to an extraction of 33\.1 %, more than coffee can give: check the reading/);
+  });
+
   it('the taste answer, before the pressure curve', () => {
     const base = [...UP_TO_SHOT, shot(), SHOT_REPLY];
     const sour = compare([...base, answer(['Sour / sharp'])]).demo.text;

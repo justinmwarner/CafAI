@@ -10,6 +10,7 @@ import type { ShotRecord } from '../api/types.ts';
 import type { Bag, IterationRecord, ProfileVersion } from '../storage/types.ts';
 import { TOOL, TOOL_INPUTS, type SeriesMetric } from './contract.ts';
 import { diffProfiles } from './diff.ts';
+import { readingOf } from './extraction.ts';
 import { normalizeProfile } from './profile.ts';
 import { profileId } from './profileId.ts';
 import { localDay } from './roastAge.ts';
@@ -251,6 +252,9 @@ const COMPARED: ReadonlyArray<keyof ShotSummary> = [
   'meanPourWeightFlowGs',
   'meanTempC',
   'tempDeviationC',
+  // The barista's refractometer reading, when both shots have one (D-TDS-5).
+  'tdsPct',
+  'eyPct',
 ];
 
 function safeId(profile: unknown): string | null {
@@ -360,6 +364,8 @@ export function getBagHistory(versions: readonly ProfileVersion[], iterations: r
               timeToFirstDropS: it.summary.timeToFirstDropS,
               peakPressureBar: it.summary.peakPressureBar,
               channelingFlags: it.summary.channelingFlags,
+              // The barista's refractometer reading, when there is one (D-TDS-5).
+              ...readingOf(it.summary),
             }
           : null,
       })),

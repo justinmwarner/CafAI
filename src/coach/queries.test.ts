@@ -4,6 +4,7 @@ import type { ShotRecord } from '../api/types.ts';
 import type { IterationRecord, ProfileVersion } from '../storage/types.ts';
 import { syntheticShotRecord } from './__fixtures__/syntheticShot.ts';
 import { TOOL } from './contract.ts';
+import { withTds } from './extraction.ts';
 import type { Dye2Setup } from '../api/pluginData.ts';
 import {
   compareShots,
@@ -151,6 +152,21 @@ describe('compareShots', () => {
   it('refuses comparing a shot with itself', () => {
     expect(error(compareShots(createShotSource([syntheticShotRecord()]), 'latest', 'latest'))).toMatch(/two different shots/);
   });
+
+  it("carries each shot's TDS and EY, and their difference when both have a reading (D-TDS-5)", () => {
+    const { older, newer } = twoShots();
+    const read = (record: ShotRecord, tdsPct: number) => ({ record, summary: withTds(summarizeShot(record), tdsPct) });
+    const result = data(compareShots(createShotSource([read(older, 9.1), read(newer, 9.6)]), 'previous', 'latest'));
+    expect(result['a']).toMatchObject({ tdsPct: 9.1, eyPct: expect.any(Number) });
+    expect(result['b']).toMatchObject({ tdsPct: 9.6, eyPct: expect.any(Number) });
+    const delta = result['delta'] as Record<string, number | null>;
+    expect(delta['tdsPct']).toBe(0.5);
+    expect(delta['eyPct']).toBe(Number((((result['b'] as { eyPct: number }).eyPct - (result['a'] as { eyPct: number }).eyPct)).toFixed(2)));
+    // Without a reading on one of them: no difference, and no numbers made up.
+    const half = data(compareShots(createShotSource([older, read(newer, 9.6)]), 'previous', 'latest'));
+    expect(half['a']).not.toHaveProperty('tdsPct');
+    expect((half['delta'] as Record<string, number | null>)['tdsPct']).toBeNull();
+  });
 });
 
 describe('getBagHistory', () => {
@@ -222,6 +238,15 @@ describe('getBagHistory', () => {
     });
     expect(iterations[0]!['shot']).toMatchObject({ durationS: expect.any(Number), channelingFlags: [] });
     expect(JSON.stringify(history).length).toBeLessThan(1500);
+  });
+
+  it("gives a shot's TDS and EY when the barista measured it, and nothing when not (D-TDS-5)", () => {
+    const measured = iteration(1, 'shot-a');
+    const read = { ...measured, summary: withTds(measured.summary!, 9.25) };
+    const iterations = data(getBagHistory([], [read, iteration(2, 'shot-b')]))['iterations'] as Array<Record<string, unknown>>;
+    expect(iterations[0]!['shot']).toMatchObject({ tdsPct: 9.25, eyPct: read.summary.eyPct });
+    expect(iterations[1]!['shot']).not.toHaveProperty('tdsPct');
+    expect(iterations[1]!['shot']).not.toHaveProperty('eyPct');
   });
 
   it('keeps only the most recent iterations', () => {

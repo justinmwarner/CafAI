@@ -378,8 +378,20 @@ export interface PaginatedShots {
   offset: number;
 }
 
+/**
+ * Annotations as a shot update sends them: what is given changes, and the
+ * TDS and EY take null, which clears each (Decaid's deep merge writes the
+ * null, and ShotAnnotations.toJson then leaves the key out: D-TDS-4).
+ */
+export type ShotAnnotationsPatch = Omit<ShotAnnotations, 'drinkTds' | 'drinkEy'> & {
+  /** %, to 0.01; null clears it. */
+  drinkTds?: number | null;
+  /** %, to 0.1; null clears it. */
+  drinkEy?: number | null;
+};
+
 export interface ShotUpdateRequest {
-  annotations?: ShotAnnotations | null;
+  annotations?: ShotAnnotationsPatch | null;
 }
 
 // ---------------------------------------------------------------------------
