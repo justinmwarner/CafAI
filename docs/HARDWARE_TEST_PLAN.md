@@ -216,7 +216,7 @@ credits. Nothing to judge on the spot: send the files.
 3. Confirm. Settings shows the new setting; `/api/v1/workflow` ->
    `context.grinderSetting` has it, and the next shot's record carries it.
 
-## 9. A lost shot, and retries (D64, D65)
+## 9. A lost shot, and retries (D64, D65, D204-D207)
 
 1. During a shot, switch the machine off (or take it out of range).
    Expected: "Looking for that shot in Decaid…" with a progress bar for up to
@@ -545,7 +545,7 @@ it does.
    the video. Expected: the flush view takes the screen, and **Go back**
    returns to Machine care.
 
-## 15. Sleep and wake: Decaid's idle sleep and wake times (D157-D160)
+## 15. Sleep and wake: Decaid's idle sleep and wake times (D157-D160, D209)
 
 Settings > Sleep and wake only edits what Decaid keeps; Decaid does the
 sleeping and the waking. The mock and the simulator show the settings
@@ -579,7 +579,9 @@ minutes, and put every setting back after.
    the tablet's screen off (Decaid left open). Record: does the DE1 wake?
    (Decaid acts on the schedule only while it runs.)
 7. **Delete.** Delete the test wake times and set the minutes back.
-   Expected: Decaid's page shows them gone.
+   Expected: Decaid's page shows them gone, and if a window was still
+   running, CafAI's "keeps the machine awake until" line goes at once
+   (D209).
 
 ## 16. TDS and EY on the shot card (D162-D170)
 
@@ -630,7 +632,7 @@ Settings > Appearance > Temperatures shows °F; Decaid and the profiles keep
 5. **Back to °C.** Expected: every screen, the chat and History read °C
    again.
 
-## 18. Overlaid shot curves (D178-D182)
+## 18. Overlaid shot curves (D178-D182, D208)
 
 A shot's card and the Shot view draw the shot the card asks about faintly
 under this one. The mock shows where and what; only the tablet shows
@@ -647,7 +649,9 @@ in dark and in light.
    not stutter (the timer keeps time, the curves keep up).
 3. **Another coffee.** Start a new bag and pull its first shot. Expected:
    once its card is in, the card and the Shot view draw the last shot of
-   the other bag, named by its coffee.
+   the other bag, named by its coffee. On the tablet a name longer than
+   "Last shot of Santos" takes its own line under the curves and reads
+   whole (D208).
 4. **A deleted shot.** In Decaid's own shot history, delete a shot a card
    compares with, then reload CafAI. Expected: the card draws its own shot
    alone, with no message.
@@ -752,7 +756,7 @@ laptop on the same network for steps 4 and 5. Put any setting back after.
 | 15 | 4 | Kept awake through the window, asleep within 5 min of its end | | |
 | 15 | 5 | Off in CafAI: Decaid's switch on, Sleep 0, the wake time listed | | |
 | 15 | 6 | Screen off: does the DE1 still wake? | | |
-| 15 | 7 | Deleted from Decaid too | | |
+| 15 | 7 | Deleted from Decaid too; a running window's line gone at once | | |
 | 16 | 1 | TDS · Add: the decimal keyboard, the field above it | | |
 | 16 | 2 | TDS and EY on the card; EY = TDS × yield ÷ dose | | |
 | 16 | 3 | The coach's reply uses the reading, with no taste for it | | |
@@ -767,7 +771,7 @@ laptop on the same network for steps 4 and 5. Put any setting back after.
 | 17 | 5 | °C everywhere again | | |
 | 18 | 1 | The first shot's band under the second's lines, readable in daylight | | |
 | 18 | 2 | The band under the live curves from the start, named; no stutter | | |
-| 18 | 3 | A bag's first shot draws the other coffee's last shot, named | | |
+| 18 | 3 | A bag's first shot draws the other coffee's last shot, named in full | | |
 | 18 | 4 | A shot deleted in Decaid: the card's own shot alone, no message | | |
 | 19 | 1 | Weekly: "Not marked done yet" from today; no line on the stats card | | |
 | 19 | 2 | A shot counted; how long it took | | |
