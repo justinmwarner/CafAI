@@ -227,9 +227,9 @@ with **Retry**; it never loads anything on the machine by itself.
   and Hot water; the one running turns into Stop in its place; Wake alone
   while the machine sleeps), Decaid settings and Exit, and the coach across
   the whole width under it. The chat opens with the live stats card (state,
-  temperatures, water, scale with Tare, the loaded profile, Sleep); it goes
-  once the chat moves on, and
-  **Stats** above the composer brings it back. Shot opens the graph. When a
+  temperatures, water, scale with Tare, the loaded profile, Sleep, and a
+  line when a step of machine care is due); it goes once the chat moves on,
+  and **Stats** above the composer brings it back. Shot opens the graph. When a
   shot starts, the screen becomes the Shot view by itself: a big timer,
   pressure, flow, weight and weight flow, the graph, and a note from the
   coach saying it is watching. When the shot's card reaches the chat, the
@@ -353,6 +353,25 @@ with **Retry**; it never loads anything on the machine by itself.
   CafAI's own words and work offline. CafAI does not start the DE1's
   Clean, Descale or Transport; the steps that need them say to use
   streamline, the skin Decaid comes with.
+- **Machine care's reminders**: every step beyond Daily says when it was
+  last done ("Last done 9 days ago · 41 shots since"), with **Mark done**
+  (and **Undo** until the page reloads). Five come due by themselves and
+  say **Due**: the weekly clean, a week after the last once a shot was
+  pulled; Rinza, a week after once the wand steamed; the intake filter,
+  every two weeks (V1) or month (V2); the group head's soak, every four
+  weeks; and the descale by your water. The stats card then has one quiet
+  line for the step most overdue, "Weekly clean due: 41 shots since the
+  last", which opens it on the Care screen; never the alert under the top
+  bar. The shots and steams are Decaid's own (any skin's count), counted
+  from the first time CafAI looked, so a new install is never due at once.
+  A Clean or Descale CafAI sees the machine run for a minute (from
+  streamline, say, with CafAI open on a phone) marks its step done too;
+  Decent's Forward Flush x5 does not, as it is the daily water flush's
+  profile as well. In Settings > Machine care: **Your water**, in Decent's
+  bands (under 30 ppm never descale; up to 120 ppm once a year or 1,500
+  shots; over 120 ppm every six months or 800 shots; Not sure is reminded as
+  up to 120), **Intake filter** (V1, V2 or Not sure, reminded as V1) and
+  **Remind me on the stats card**.
 - **Settings > About**: CafAI's version, and the Decaid you run next to the
   one CafAI was checked against ("Decaid 0.9.0 (CafAI was verified with
   0.8.8)", with a note when yours is older); anything Decaid sent that
@@ -435,10 +454,14 @@ troubleshooting.
   key) as soon as Decaid is back, and a forgotten key never comes back from a
   copy.
 - Coach data (bags, versions, shot summaries without their curves,
-  feedback, each bag's chat and your settings) is stored in the skin's
-  IndexedDB and copied to Decaid's key-value store (namespace `cafai`) so it
-  survives a browser-storage reset. Like the key's copy, any device on your
-  network can read it there. Export it any time as JSON from History.
+  feedback, each bag's chat, machine care's last times and your settings)
+  is stored in the skin's IndexedDB and copied to Decaid's key-value store
+  (namespace `cafai`) so it survives a browser-storage reset. Like the key's
+  copy, any device on your network can read it there. Export it any time as
+  JSON from History.
+- To count the shots and steams since a step of machine care, CafAI asks
+  Decaid how many it holds and when the newest began; it keeps those
+  numbers, never the shots themselves.
 - A photo of a bag goes to Anthropic once, in a request of its own, to read
   the bag's details. CafAI keeps no copy of the photo (not on the device,
   not in Decaid, not in the chat or an export), and with an API key the

@@ -2498,3 +2498,136 @@ The wake schedule item of D151, built on branch `feat/wake-schedule`.
   roadmap keeps the item's research for when it comes back, and the care
   reminders go ahead without it. Why: the owner's call ("I'm not super
   interested in number 1... we can consider it in the future").
+
+### Care reminders (2026-10-15)
+
+The third machine care item of D151, built on 2026-10-15 without the
+cycles D161 put off (`docs/superpowers/specs/2026-10-15-care-reminders-design.md`).
+
+- **D-CARE-1. Every step beyond Daily keeps its last time; five of them
+  remind.** The Care screen gives each step of Weekly, Monthly and As needed
+  its last time and **Mark done** (`src/ui/care/StepCare.tsx`,
+  `TRACKED_STEPS` in `src/app/care/careRules.ts`); Daily's four steps have
+  neither. Five have a reminder, the dirt and scale nobody sees: the weekly
+  clean with detergent, Rinza through the wand, the intake filter, the group
+  head's parts and the descale. The tank and drip tray are in plain sight,
+  the gasket is looked at while the parts are off, the steam tip waits for a
+  clog and the transport for a move: they keep a last time only. Why: the
+  owner asked for each step's last time and a quiet line, and the brief for
+  "no daily nags"; a tick for a daily habit would be a chore of its own, and
+  a reminder for what the barista sees anyway would make the line nag.
+- **D-CARE-2. Days decide; shots and steams gate and count; litres are not
+  counted.** The weekly clean is due a week after the last, once a shot was
+  pulled since, and its line counts the shots; Rinza a week after, once the
+  wand steamed since, counting the steams; the intake filter after 14 days
+  (V1, or a filter not said) or 30 (V2); the group head's parts after 28 days
+  once a shot was pulled (Monthly's "two to four weeks", the quieter end);
+  the descale by the water: under 30 ppm never; 30 to 120 ppm, or not said,
+  a year or 1,500 shots, whichever comes first; over 120 ppm six months or
+  800 shots (`reminderFor`, `descaleReminder`). Decent's water page gives its
+  bands in TDS; its LSI table, keyed to the water's LSI, pairs a year with
+  1,500 to 2,250 shots and six months with 800 to 1,200, and CafAI takes the
+  earlier end of each. Counts CafAI does not know let the days decide. Why,
+  the roadmap's first check: Decent's own intervals are in weeks, months and
+  shots; oils come with shots and milk with steam, so a week of neither needs
+  nothing; and litres cannot be counted: Decaid keeps no record of a flush or
+  of hot water, and CafAI sees only what runs while it is open.
+- **D-CARE-3. Counts come from Decaid's totals, one request each, never by
+  paging back.** Each step's record (D-CARE-7) keeps Decaid's shot total and
+  steam total from when its count began, and the count since is the total
+  now less that (`countSince`, `rebaseline`): `GET /api/v1/shots?limit=1`
+  answers the total with the newest shot, `GET /api/v1/steams/ids` the
+  steams and `GET /api/v1/steams/latest` the newest steam (`listSteamIds` and
+  `getLatestSteam` in `src/api/client.ts`, new to CafAI, with their readers,
+  the mock and the contract checks). A total that fell (shots deleted,
+  another Decaid) starts that step's count again from now, and so does a
+  newest record older than the step's start (old ones imported); a Decaid
+  without steam records (404) counts Rinza by days alone. The care service
+  (`src/app/care/careService.ts`) counts at start, 5 s after a shot or a
+  steam ends, when Decaid answers again, when the page comes back into view
+  and when the Care screen opens, at most once every 10 s and never during a
+  shot, and keeps the last totals on the device (`cafai.care.counts` in
+  localStorage) for the stats card's first paint. Why: the roadmap's paging
+  back to the last clean has nothing to stop at, since Decaid never saves a
+  run of a cleaning profile as a shot (`_persistShotIfNeeded`,
+  de1_state_manager.dart:911-917 at aab5f93, skips beverage types cleaning
+  and calibrate); and each page of the shot list makes Decaid parse every
+  shot's measurements (shot_mapper.dart:14-49), as `GET /api/v1/steams` does
+  every steam's (steam_mapper.dart:11-30), where a total is one COUNT and the
+  ids one column. On a slow tablet one small request beats pages of curves.
+- **D-CARE-4. A step starts over when it is marked done, or when CafAI saw
+  the machine's own Clean or Descale run for a minute; Forward Flush x5
+  never counts.** **Mark done** sets the step's last time to now, with
+  Decaid's totals then (the last ones known after 3 s without an answer),
+  and **Undo** puts back the record it replaced, until the page reloads. A
+  `cleaning` or `descaling` state seen for at least a minute and then any
+  other state, started in streamline or on the machine while CafAI is open,
+  marks the weekly clean or the descale done at the last frame seen running
+  (`src/app/care/cycleWatch.ts`): the firmware sends no end, a shorter run
+  was stopped, and a frame CafAI could not see ends nothing; Undo works for
+  it too. A run of Decent's Cleaning/Forward Flush x5 counts for nothing, in
+  Decaid's shot list or live. Why: D161 put the cycles off, so CafAI starts
+  none, but a Clean or a Descale seen running is the machine saying so, at no
+  cost to the barista, and a minute keeps one stopped at once from counting.
+  The profile cannot say: Decaid never saves its run as a shot, and Decent's
+  quick start uses the same profile for the daily flush with water only, so
+  its run says nothing about detergent. Undo, because a mistaken tap on the
+  descale would silence it for a year. Nobody has watched a cycle on a real
+  DE1 yet: the hardware test plan.
+- **D-CARE-5. The water and the intake filter are asked in Settings >
+  Machine care, in Decent's words.** Under Cleaning guide
+  (`src/ui/settings/CareSection.tsx`): **Your water** (Not sure, Under 30 ppm
+  (distilled, RO, very soft), 30 to 120 ppm, Over 120 ppm: the water page's
+  TDS bands), **Intake filter** (Not sure, V1 (citric acid), V2 (baking soda))
+  and **Remind me on the stats card** (on), each applied at once and kept in
+  one `care` block of the settings, left out while it holds the defaults, as
+  the key-copy choice is. Not sure reminds as 30 to 120 ppm, and as V1, the
+  more often of the two filters. The Care screen's descale and intake filter
+  steps say what reminds them and link to Settings ("Set it in Settings",
+  "Change it in Settings"), which brings the section into view. Why:
+  settings live in Settings, and D152 made the section for this; the Care
+  screen stays a reference card to read at the machine; and a not-sure answer
+  still reminds, since a missed descale can cost a heater and an extra
+  reminder costs a tap.
+- **D-CARE-6. The stats card's line names the most overdue step until it is
+  marked done; a step never earns the alert under the top bar.** One line at
+  the stats card's foot, only while a step is due and the switch is on
+  (`src/ui/care/CareDueLine.tsx`): "Weekly clean due: 41 shots since the
+  last", or since the day CafAI began counting for a step never marked done.
+  The most overdue is the step with most of its interval past, ties in the
+  guide's order. It links to the step's routine on the Care screen and brings
+  the step into view. No snooze: it stays until the step is marked done or the
+  switch is off. Why, the roadmap's second check: the alert under the top bar
+  is for what stops the machine working now, or what one tap fixes; a clean
+  that can wait days is neither, and on every screen, the Shot view's too, it
+  would teach the barista to look past the alert. The stats card is where the
+  machine is read, and it shows when a session starts.
+- **D-CARE-7. Care's records are an IndexedDB store of their own, in
+  Decaid's backup and the export, merged by their last time.**
+  `CAFAI_DB_VERSION` 2 adds the `care` store, one record per step (`id`,
+  `doneAt`, `by`, `countFrom`, `shotTotal`, `steamTotal`, `updatedAt`); the
+  upgrade only adds it. The mirror writes the records as one more key,
+  `care`, in namespace `cafai`; the export carries an optional `care` list,
+  schema version 1 still, which an older CafAI drops. A merge (an import, a
+  restore) keeps the later last done, a step marked done over one never
+  marked, and of two never marked the earlier start (`careRecordWins` in
+  `src/storage/porter.ts`). Why: a step's last time is the barista's data,
+  like a bag, and must survive what a bag survives; updatedAt cannot decide,
+  since a device that lost its storage begins counting afresh, and its new
+  records must not outrank the ones the backup brings back.
+- **D-CARE-8. Counting starts the first time CafAI looks.** A step never
+  marked done gets its record the first time CafAI counts it, with Decaid's
+  totals then, so a new install is never due at once; the Care screen says
+  "Not marked done yet" with the day counting began ("23 shots since 1
+  Oct"). Why: asking when each step was last done would be nine questions
+  before the first coffee; counting from the first look is true, and a step
+  left alone comes due after one interval.
+- **D-CARE-9. The mock Decaid keeps steam records, and saves no shot for a
+  cleaning profile, as Decaid does.** Each steaming leaves a record, opened
+  on the first frame in steam with the workflow then and kept when the
+  machine leaves it (`mock/decaid/steams.ts`, the shot player); the routes
+  answer as steams_handler.dart does; `?mockPersist=1` keeps the records
+  without their measurements; and a shot of a profile whose beverage type is
+  cleaning or calibrate is not saved. Why: the care reminders count steams
+  and must not count a cleaning run, and the mock answers as Decaid's Dart
+  does.
