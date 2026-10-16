@@ -20,6 +20,9 @@
  *     time. What Decaid said last stays in the state, but is news again only
  *     once Decaid says which devices are connected: its devices frame,
  *     replayed on connect, or GET /devices, asked again as the socket opens.
+ *     A Decaid gone without a word (no close ever arrives) leaves its
+ *     sockets looking open: the watchdog that reopens a silent machine
+ *     socket reopens the devices socket with it.
  *   - State is replaced, never mutated, so useSyncExternalStore selectors
  *     re-render only what changed. Live samples go to onSample listeners,
  *     not into state, so a 5 Hz shot never re-renders the app.
@@ -579,9 +582,19 @@ export function createTelemetryStore(options: TelemetryStoreOptions): TelemetryS
     // Silence only counts while devices says the machine is there.
     const quietSince = Math.max(slot.lastFrameAt, machineConnectedSince);
     if (now() - quietSince < MACHINE_SILENCE_MS) return;
-    recordSocket(trafficName(slot.channel), 'sent', `close (silent ${Math.round(MACHINE_SILENCE_MS / 1000)} s)`);
+    const silent = `silent ${Math.round(MACHINE_SILENCE_MS / 1000)} s`;
+    recordSocket(trafficName(slot.channel), 'sent', `close (${silent})`);
     drop(slot, socket, false);
     connect(slot);
+    // So quiet a machine may be a Decaid gone without a word: a tablet that lost its power or its Wi-Fi sends no
+    // close, and nothing pings, so its devices socket would look open for ever. Opened again, a gone Decaid's is
+    // out of reach UNREACHABLE_AFTER_MS later; a healthy one replays its devices long before, the link unchanged.
+    const devices = slots.devices;
+    if (devices.socket && state.sockets.devices === 'open') {
+      recordSocket(trafficName(devices.channel), 'sent', `close (machine ${silent})`);
+      drop(devices, devices.socket, false);
+      connect(devices);
+    }
   }
 
   function scheduleWatchdog(): void {

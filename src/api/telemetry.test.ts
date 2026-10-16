@@ -427,8 +427,24 @@ describe('Decaid out of reach', () => {
     expect(unreachable(h)).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
     expect(h.store.getState()).toMatchObject({ unreachable: true, machineConnected: true, scaleConnected: true });
-    // Retries come and go under it.
-    await vi.advanceTimersByTimeAsync(60_000);
+
+    // Retries come and go under it, each refused: the flag never flips.
+    const flags: boolean[] = [];
+    h.store.subscribe(() => flags.push(unreachable(h)));
+    let retry = h.ws.latest(PATHS.devices);
+    retry.fail();
+    let retries = 0;
+    for (let waited = 0; waited < 120_000; waited += 500) {
+      await vi.advanceTimersByTimeAsync(500);
+      if (h.ws.latest(PATHS.devices) === retry) continue;
+      retry = h.ws.latest(PATHS.devices);
+      retries += 1;
+      expect(h.store.getState().sockets.devices).toBe('connecting');
+      retry.fail();
+    }
+    expect(retries, 'retries at 2, 4, 8, 16 and 30 s').toBeGreaterThanOrEqual(5);
+    expect(flags.length).toBeGreaterThan(0);
+    expect(flags).not.toContain(false);
     expect(unreachable(h)).toBe(true);
   });
 
@@ -448,6 +464,47 @@ describe('Decaid out of reach', () => {
     late.ws.latest(PATHS.devices).open();
     await vi.advanceTimersByTimeAsync(10_000);
     expect(unreachable(late), 'open, even before a frame').toBe(false);
+  });
+
+  it("a Decaid gone without a word leaves its devices socket open: the silent machine socket's watchdog reopens it, and 2.5 s later it is out of reach", async () => {
+    // The tablet loses its power: no close reaches the page, and nothing more arrives on any socket.
+    trafficLog.clear();
+    const h = connected();
+    const silentDevices = h.ws.latest(PATHS.devices);
+    await vi.advanceTimersByTimeAsync(19_999);
+    expect(h.ws.latest(PATHS.devices), 'nothing to go on yet').toBe(silentDevices);
+    expect(unreachable(h)).toBe(false);
+
+    // The machine has been silent 20 s while devices said it was connected: both sockets are opened again.
+    await vi.advanceTimersByTimeAsync(1);
+    expect(silentDevices.closedByClient).toBe(true);
+    expect(h.ws.latest(PATHS.devices)).not.toBe(silentDevices);
+    expect(h.store.getState().sockets.devices).toBe('connecting');
+    expect(trafficLog.list().filter((entry) => entry.what === 'ws/v1/devices' && entry.direction === 'sent').map((entry) => entry.status)).toEqual([
+      'connect',
+      'close (machine silent 20 s)',
+      'connect',
+    ]);
+    // The new one never opens.
+    await vi.advanceTimersByTimeAsync(2499);
+    expect(unreachable(h)).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(h.store.getState()).toMatchObject({ unreachable: true, machineConnected: true });
+  });
+
+  it("a healthy Decaid's devices socket, opened again by the watchdog, replays its devices: no outage, the link as it was", async () => {
+    const h = connected();
+    const states: Array<{ unreachable: boolean; machineConnected: boolean }> = [];
+    h.store.subscribe(() => states.push({ unreachable: unreachable(h), machineConnected: h.store.getState().machineConnected }));
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(h.store.getState().sockets.devices).toBe('connecting');
+    // Decaid answers at once, as it does on every connect, and the machine streams again.
+    h.ws.latest(PATHS.devices).open().message(devicesFrame('connected'));
+    h.ws.latest(PATHS.machine).open().message(machineFrame('idle', 'idle', '2026-10-03T08:00:20.000000'));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(h.store.getState()).toMatchObject({ unreachable: false, machineConnected: true, sockets: { devices: 'open', machine: 'open' } });
+    expect(states.length).toBeGreaterThan(0);
+    expect(states.every((s) => !s.unreachable && s.machineConnected)).toBe(true);
   });
 
   it('counts from the start when the devices socket never opens', async () => {
