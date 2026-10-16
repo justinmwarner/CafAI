@@ -1,4 +1,4 @@
-import { createContext, useContext, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useSyncExternalStore, type ReactNode } from 'react';
 import type { CoachState, Services } from './types.ts';
 import type { TelemetryState } from '../api/types.ts';
 import { DEFAULT_TEMPERATURE_UNIT, type TemperatureUnit } from '../coach/temperature.ts';
@@ -53,4 +53,18 @@ const inCelsius = () => DEFAULT_TEMPERATURE_UNIT;
 export function useTemperatureUnit(): TemperatureUnit {
   const store = useContext(ServicesContext)?.temperatureUnit;
   return useSyncExternalStore(store?.subscribe ?? unchanging, store?.get ?? inCelsius);
+}
+
+const noneChosen = () => null;
+
+/**
+ * The unit words are rewritten into (D176): the coach's, and CafAI's own
+ * change lines kept in °C. None until the barista has chosen a unit, so a
+ * barista who never did reads every word as it was written, as before °F
+ * (D172), even a °F the coach gave because they asked for it.
+ */
+export function useWordsTemperatureUnit(): TemperatureUnit | null {
+  const store = useContext(ServicesContext)?.temperatureUnit;
+  const chosenUnit = useCallback(() => (store?.chosen() ? store.get() : null), [store]);
+  return useSyncExternalStore(store?.subscribe ?? unchanging, store ? chosenUnit : noneChosen);
 }

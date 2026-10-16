@@ -5,7 +5,7 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import { useTemperatureUnit } from '../../../app/services.tsx';
+import { useWordsTemperatureUnit } from '../../../app/services.tsx';
 import type { SetAsideReason, TemplateCardItem } from '../../../app/types.ts';
 import type { Confidence } from '../../../coach/contract.ts';
 import { inTemperatureUnit } from '../../../coach/temperature.ts';
@@ -34,7 +34,7 @@ export interface TemplateCardsProps {
 export function TemplateCards({ items, pickedTemplateId, disabled = false, expired = false, setAsideReason, onPick }: TemplateCardsProps) {
   const locked = pickedTemplateId !== null || expired;
   // The coach's reasons with their temperatures in the barista's unit (D176).
-  const unit = useTemperatureUnit();
+  const unit = useWordsTemperatureUnit();
   return (
     <Stack spacing={1} role="list" aria-label="Suggested starting profiles" sx={{ my: 0.5 }}>
       {expired && pickedTemplateId === null ? (

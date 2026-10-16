@@ -2613,7 +2613,11 @@ Numbered D-TDS-n until the merge numbers them from D162 on.
 - **D170. The scripted coach says what it heard.** A reply to a turn
   that carries the event starts "Noted: TDS 9.25 %, EY 20.8 %." in the terse
   voice (ENGINE_PROTOCOL rule 0b), the decision unchanged; the demo voice
-  says it in full, doubts an EY over 30 %, and names no taste. The demo's
+  says it in full, doubts an EY over 30 %, names no taste, and ends "Your
+  taste still comes first.", so what follows reads from the taste, not
+  against the number (the review: a bold 20.4 %, a usual extraction,
+  followed by "sour usually means under-extraction" read as the coach
+  ignoring its own number). The demo's
   last shot carries a reading (TDS 9.10 %, EY 20.4 %), untold until the
   viewer answers its open question (docs/DEMO.md). Why: mock mode, the demo
   and the e2e can then see a reading reach the coach.
@@ -2692,8 +2696,10 @@ The °F item of D151 (`docs/superpowers/specs/2026-10-15-fahrenheit-design.md`).
   tips); a temperature converts × 1.8 + 32 and a change × 1.8, with worked
   examples ("never 33.8 °F hotter"); a change to one decimal, as the change
   card shows it; a temperature the barista gives in °F goes to the tools in
-  °C on the lever's steps (200 °F is 93.3 °C, which a lever in 0.5 °C steps
-  takes as 93.5 °C, 200.3 °F); and each template's temperature lever with
+  °C on the lever's steps and back to the barista in °F only (200 °F is
+  93.3 °C, the tool gets 93.5 °C, the barista hears 200.3 °F; the review
+  found the first wording gave a °C sentence as the thing to say, against
+  its own "never °C"); and each template's temperature lever with
   its bounds, step, largest change and starting value in °F, worked out by
   CafAI. `createCoachPort` reads the unit for every request and builds each
   prompt once, so it stays the same while the unit does and still caches; a
@@ -2709,17 +2715,29 @@ The °F item of D151 (`docs/superpowers/specs/2026-10-15-fahrenheit-design.md`).
   lines and the cleaning guide, `inTemperatureUnit` writes a temperature in
   the other unit in the barista's, as precisely as it was written (93 °C
   reads 199 °F, 92.5 °C reads 198.5 °F). It reads as a change, converted
-  without the 32, when it has a sign ("+1.0 °C"), follows "by", comes before
-  a comparative ("hotter", "cooler", "under", "per"…), or is small (under
-  30 °C or 50 °F, which no brew, steam or hot water temperature is);
-  otherwise, and always beside a change line's arrow, it is a temperature.
-  A range converts both ends
-  ("1-3 °C under its target" reads "1.8-5.4 °F under"); "93 °C (199 °F)"
-  keeps the barista's half, and a conversion the barista asked for, "200 °F
-  is 93.3 °C", stays as written. It works both ways, so the coach's °F words
+  without the 32, when it has a sign ("+1.0 °C") or is small (under 30 °C
+  or 50 °F, which no brew, steam or hot water temperature is), unless the
+  words right before it name a temperature ("at 25 °C", "cool it to about
+  20 °C", "room temperature (20-25 °C)", a fridge, "a freezer at -18 °C",
+  whose minus is its sign); otherwise, and always beside an arrow, it is a
+  temperature. The words after a number never make it a change, so "from
+  92 °C up to 94 °C" is two temperatures (the first rules read "up",
+  "over", "behind" and the like as a change, and the review found 92 °C
+  shown as 165.6 °F). A range or a list converts every number ("1-3 °C
+  under its target" reads "1.8-5.4 °F under", "92 → 93 °C" reads
+  "198 → 199 °F", "89 / 88.5 / 88 °C" every one), except a number further
+  than 20 °C (36 °F) from the rest, which is something else and stays as
+  written ("Step 3 to 90 °C", "Shot 41, 92 °C"). "93 °C (199 °F)" keeps
+  the barista's half, and a conversion the barista asked for, "200 °F is
+  93.3 °C", stays as written. Nothing is rewritten until a unit is chosen
+  in Settings: a barista who never chose reads every word as it was
+  written, as before °F (D172), even a °F the coach gave because they asked
+  for it. Once one is chosen it works both ways, so the coach's °F words
   read in °C after a switch back. The answer a question sends is still the
-  coach's own option; what the barista typed, Decaid's own words and the log
-  stay as written. Why: unlike a taste promise (D127), a unit is arithmetic
+  coach's own option, and its echo in the barista's bubble shows it as the
+  coach wrote it, in its own unit; what the barista typed, Decaid's own
+  words and the log stay as written; "1.5 degrees" with no unit, "92,5 °C"
+  and markup inside a number stay too. Why: unlike a taste promise (D127), a unit is arithmetic
   CafAI can do itself, so a second turn of the model, at the moment the
   barista waits for a change, would buy nothing; and the coach's text
   streams onto the screen, where nothing can be sent back.

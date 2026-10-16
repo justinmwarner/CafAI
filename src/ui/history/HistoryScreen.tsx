@@ -28,7 +28,7 @@ import type { Bag, IterationRecord, ProfileVersion } from '../../storage/types.t
 import { OTHER_OPTION } from '../../coach/contract.ts';
 import { formatEy, formatTds, readingOf } from '../../coach/extraction.ts';
 import { inTemperatureUnit } from '../../coach/temperature.ts';
-import { useCoach, useServices, useTemperatureUnit } from '../../app/services.tsx';
+import { useCoach, useServices, useWordsTemperatureUnit } from '../../app/services.tsx';
 import { TID } from '../testIds.ts';
 import {
   describeChannelingFlag,
@@ -130,7 +130,7 @@ const STATUS_COLOR = { active: 'success', superseded: 'default', undone: 'warnin
 
 /** A change's words with their temperatures in the barista's unit (D176): kept as written, read in °C or °F. */
 function useWords(): (text: string) => string {
-  const unit = useTemperatureUnit();
+  const unit = useWordsTemperatureUnit();
   return (text) => inTemperatureUnit(text, unit);
 }
 

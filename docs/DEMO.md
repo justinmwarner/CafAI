@@ -102,7 +102,8 @@ The coach's replies come from the scripted coach (`mock/anthropic/`), in its
 demo voice: about 1.5 s of "Thinking…", then text at reading pace. Your
 answer carries shot four's TDS, which the coach had not heard yet, so its
 reply starts with it ("Thanks for measuring: TDS 9.10 % puts that shot's
-extraction at **20.4 %**."; D167). Then it looks at the pressure curve
+extraction at **20.4 %**. Your taste still comes first."; D167, D170).
+Then it looks at the pressure curve
 (it quotes the peak as the shot card shows it, counted from the start of
 the pour: "5.4 bar, 60 s in") and proposes one change:
 

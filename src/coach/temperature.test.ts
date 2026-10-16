@@ -153,6 +153,42 @@ describe('inTemperatureUnit, into °F', () => {
       expect(inC(text)).toBe(text);
     }
   });
+
+  it('never reads the words after a temperature as a change', () => {
+    expect(inF('Move the brew temperature from 92 °C up to 94 °C.')).toBe('Move the brew temperature from 198 °F up to 201 °F.');
+    expect(inF('Hold 93 °C over the whole shot.')).toBe('Hold 199 °F over the whole shot.');
+    expect(inF('The pour at 92 °C lags behind the fill.')).toBe('The pour at 198 °F lags behind the fill.');
+  });
+
+  it('converts every number of an arrow range or a list', () => {
+    expect(inF('Brew temperature 92 → 93 °C')).toBe('Brew temperature 198 → 199 °F');
+    expect(inF('Brew temperature 92 -> 93 °C')).toBe('Brew temperature 198 -> 199 °F');
+    expect(inF('the 89 / 88.5 / 88 °C shape')).toBe('the 192 / 191.3 / 190 °F shape');
+    expect(inF('92, 92.5 or 93 °C')).toBe('198, 198.5 or 199 °F');
+    // A number far from the rest is something else, as a step's number is.
+    expect(inF('Shot 41, 92 °C')).toBe('Shot 41, 198 °F');
+    expect(inF('In 2024, 92 °C was usual')).toBe('In 2024, 198 °F was usual');
+    // A comma with no space is a decimal comma, never a list.
+    expect(inF('92,5 °C')).toBe('92,5 °C');
+  });
+
+  it('reads a small number named as a temperature as one', () => {
+    expect(inF('Let the sample cool to about 25 °C.')).toBe('Let the sample cool to about 77 °F.');
+    expect(inF('room temperature (20-25 °C)')).toBe('room temperature (68-77 °F)');
+    expect(inF('a fridge at 4 °C')).toBe('a fridge at 39 °F');
+    // Its minus is its sign: -18 °C is -0.4 °F, whole as written.
+    expect(inF('A freezer at -18 °C')).toBe('A freezer at 0 °F');
+    // "At most" limits a change: still a change.
+    expect(inF('at most 2 °C per change')).toBe('at most 3.6 °F per change');
+  });
+});
+
+describe('inTemperatureUnit, with no unit chosen', () => {
+  it('leaves every word as written, even a °F the coach gave when asked (D172)', () => {
+    for (const text of ["That's 197.6 °F.", '93 °C (199.4 °F)', '92 °C, or 197.6 °F if you think in Fahrenheit', 'Raise brew temperature by 1.8 °F']) {
+      expect(inTemperatureUnit(text, null)).toBe(text);
+    }
+  });
 });
 
 describe('inTemperatureUnit, back into °C', () => {
@@ -162,6 +198,10 @@ describe('inTemperatureUnit, back into °C', () => {
     expect(inC('about 199 °F')).toBe('about 93 °C');
     expect(inC('2 °F hotter')).toBe('1.1 °C hotter');
     expect(inC('down to 140 °F')).toBe('down to 60 °C');
+    expect(inC('from 197.6 °F up to 201.2 °F')).toBe('from 92.0 °C up to 94.0 °C');
+    expect(inC('Hold 199.4 °F over the whole shot')).toBe('Hold 93.0 °C over the whole shot');
+    expect(inC('197.6 → 199.4 °F')).toBe('92.0 → 93.0 °C');
+    expect(inC('a fridge at 39 °F')).toBe('a fridge at 4 °C');
   });
 
   it('gives back the °C line it came from, for lines written to one decimal', () => {

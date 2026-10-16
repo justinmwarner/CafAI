@@ -12,8 +12,9 @@
  * inTemperatureUnit rewrites the temperatures in a sentence into the
  * barista's unit (D176): the coach's words when it slips, CafAI's own
  * change lines, which are kept in °C, and the care guide. A number reads as a
- * change when its words say so (a sign, "by", a comparative after it) or when
- * it is too small to be an espresso temperature; otherwise as a temperature.
+ * change when it has a sign or is too small to be an espresso temperature,
+ * unless the words before it name a temperature ("at 25 °C", "cool to",
+ * "room temperature", a fridge); otherwise as a temperature.
  */
 
 export type TemperatureUnit = 'celsius' | 'fahrenheit';
@@ -66,8 +67,13 @@ export function formatTemperatureIn(celsius: number, unit: TemperatureUnit, digi
 const NUMBER = String.raw`\d+(?:\.\d+)?`;
 /** A sign makes a number a change: "+1.0 °C", "-0.5 °C", "−1 °C", "±1 °C". */
 const SIGN = '[+\\-−±]';
-/** Between the two ends of a range: "88-94", "88–94", "1 to 2", "88 and 94", "1 or 2". */
-const SEPARATOR = String.raw`(?:\s*[-–]\s*|\s+(?:to|and|or)\s+)`;
+/** Between the two ends of a range: "88-94", "88–94", "92 -> 93", "92 → 93", "1 to 2", "88 and 94", "1 or 2". */
+const SEPARATOR = String.raw`(?:\s*(?:->|→|[-–])\s*|\s+(?:to|and|or)\s+)`;
+/** Between the items of a list: "89 / 88.5 / 88", "92, 92.5 or 93". A comma takes a space, so "92,5" is never a list. */
+const LIST_SEPARATOR = String.raw`(?:\s+/\s+|,\s+(?:(?:or|and)\s+)?)`;
+const JOIN = String.raw`(?:${SEPARATOR}|${LIST_SEPARATOR})`;
+/** One more number of a range or a list, after the first: its join, sign and number. */
+const ITEM = new RegExp(String.raw`(${JOIN})(${SIGN})?(${NUMBER})`, 'g');
 
 /** Each unit as a sentence may write it after a number: "°C", "ºC", "℃", "degrees C", "degrees Celsius". */
 const UNIT_WORDS: Record<TemperatureUnit, { letter: string; name: string; sign: string }> = {
@@ -80,9 +86,9 @@ function unitPattern(unit: TemperatureUnit): string {
   return String.raw`(?:\s?[°º]\s?[${letter}${letter.toLowerCase()}](?![A-Za-z])|\s?${sign}|\s+degrees?\s+(?:${name}|${letter})(?![A-Za-z]))`;
 }
 
-/** A temperature or a range of them, with its unit: sign, first number, separator, second sign, second number, unit. */
+/** A temperature, or a range or list of them, with its unit: sign, first number, the rest of the range or list, unit. */
 function temperaturePattern(unit: TemperatureUnit): string {
-  return String.raw`(?<![\w.,])(${SIGN})?(${NUMBER})(?:(${SEPARATOR})(${SIGN})?(${NUMBER}))?(${unitPattern(unit)})`;
+  return String.raw`(?<![\w.,])(${SIGN})?(${NUMBER})((?:${JOIN}${SIGN}?${NUMBER})*)(${unitPattern(unit)})`;
 }
 
 /** The same, without its groups, to find a temperature beside another one. */
@@ -92,20 +98,37 @@ function plainPattern(unit: TemperatureUnit): string {
 
 const APPROXIMATELY = String.raw`(?:about\s+|around\s+|roughly\s+|approximately\s+|~\s?|≈\s?)?`;
 
-/** Words after a temperature that make it a change: "1 °C hotter", "1-3 °C under its target", "2 °C per change". */
-const CHANGE_AFTER =
-  /^\s+(?:hotter|cooler|warmer|colder|higher|lower|more|less|under|over|above|below|per|up|down|apart|behind|lag|lags|change|changes|difference|drop|rise|increase|decrease|shift)\b/i;
-/** Words before it: "by 1 °C". */
-const CHANGE_BEFORE = /\bby\s*$/i;
+/**
+ * Words right before a number that name it a temperature, however small:
+ * "at 25 °C", "cool it to about 20 °C", "room temperature (20-25 °C)", "a
+ * fridge (4 °C)", "a freezer at -18 °C". Never "at most 2 °C".
+ */
+const TEMPERATURE_BEFORE = new RegExp(
+  String.raw`\b(?:at|(?:cool|chill)(?:s|ed|ing)?(?:\s+(?:it|down))*\s+to|room[\s-]temperature|fridge|freezer|ambient)\s*[(:,]?\s*${APPROXIMATELY}$`,
+  'i',
+);
 /** Beside an arrow it is a setting before or after a change: "Tank temperature: 0.0 °C -> 1.0 °C". */
 const ARROW_AFTER = /^\s*(?:->|→)/;
 const ARROW_BEFORE = /(?:->|→)\s*$/;
+const ARROW = /->|→/;
 /**
  * Under this, a number with no other sign of what it is reads as a change: no
  * brew, steam or hot water temperature is under 30 °C (86 °F), and no change
  * the coach makes comes near it.
  */
 const CHANGE_BELOW: Record<TemperatureUnit, number> = { celsius: 30, fahrenheit: 50 };
+/**
+ * The most a range or list of temperatures spans: a number further from the
+ * rest is something else, kept as written ("Step 3 to 90 °C", "Shot 41, 92 °C").
+ */
+const SPREAD: Record<TemperatureUnit, number> = { celsius: 20, fahrenheit: 36 };
+
+/** A number of a range or list as written: what joins it to the one before, its sign and its digits. */
+interface Item {
+  join: string;
+  sign: string | undefined;
+  value: string;
+}
 
 function decimalsOf(text: string): number {
   const point = text.indexOf('.');
@@ -186,34 +209,50 @@ function dropDoubles(text: string, to: TemperatureUnit): string {
 /** Any unit at all: a degree sign, ℃ or ℉, or "degrees". */
 const ANY_UNIT = /[°º℃℉]|degree/i;
 
+/** "-18" as -18: a minus before a temperature named as one is its sign, not a fall. */
+const signedValue = (item: Item) => (item.sign === '-' || item.sign === '−' ? -Number(item.value) : Number(item.value));
+const asWritten = (item: Item) => `${item.join}${item.sign ?? ''}${item.value}`;
+
 /**
  * `text` with every temperature written in the other unit written in `unit`
  * instead (D176), rounded as precisely as it was written: "93 °C" reads
  * "199 °F", "92.0 °C -> 93.0 °C (every step +1.0 °C)" reads "197.6 °F ->
  * 199.4 °F (every step +1.8 °F)", "1 °C hotter" reads "1.8 °F hotter". What
- * is already in `unit` stays as it is. Never throws.
+ * is already in `unit` stays as it is, and with no unit chosen (null) the
+ * whole text does: a barista who never chose a unit reads every word as it
+ * was written. Never throws.
  */
-export function inTemperatureUnit(text: string, unit: TemperatureUnit): string {
+export function inTemperatureUnit(text: string, unit: TemperatureUnit | null): string {
   // Most sentences name no temperature at all.
-  if (!ANY_UNIT.test(text)) return text;
+  if (unit === null || !ANY_UNIT.test(text)) return text;
   const from = otherUnit(unit);
   const source = dropDoubles(text, unit);
-  return source.replace(
-    PATTERNS[from],
-    (match: string, sign: string | undefined, first: string, separator: string | undefined, secondSign: string | undefined, second: string | undefined, written: string, offset: number) => {
-      const before = source.slice(0, offset);
-      const after = source.slice(offset + match.length);
-      if (PAIRED[unit].after.test(after) || PAIRED[unit].before.test(before)) return match;
-      const small = (value: string) => Number(value) < CHANGE_BELOW[from];
-      // "Step 3 to 90 °C": a small number before a temperature is not one end of its range.
-      const mixed = second !== undefined && sign === undefined && small(first) !== small(second);
-      const top = second === undefined ? first : mixed ? second : String(Math.max(Number(first), Number(second)));
-      const arrow = ARROW_AFTER.test(after) || ARROW_BEFORE.test(before);
-      const change = sign !== undefined || (!arrow && (CHANGE_AFTER.test(after) || CHANGE_BEFORE.test(before) || small(top)));
-      const one = (value: string) => numberText(convert(Number(value), from, unit, change), value, change);
-      const head = mixed ? first : `${sign ?? ''}${one(first)}`;
-      const range = separator !== undefined && second !== undefined ? `${separator}${secondSign ?? ''}${one(second)}` : '';
-      return `${head}${range}${unitText(written, unit)}`;
-    },
-  );
+  return source.replace(PATTERNS[from], (match: string, sign: string | undefined, first: string, rest: string, written: string, offset: number) => {
+    const before = source.slice(0, offset);
+    const after = source.slice(offset + match.length);
+    if (PAIRED[unit].after.test(after) || PAIRED[unit].before.test(before)) return match;
+    const items: Item[] = [{ join: '', sign, value: first }];
+    for (const [, join, itemSign, value] of rest.matchAll(ITEM)) items.push({ join: join!, sign: itemSign, value: value! });
+    // The temperatures are the last numbers and those close to them; a number further off stays as written.
+    let start = items.length - 1;
+    let low = Number(items[start]!.value);
+    let high = low;
+    while (start > 0) {
+      const value = Number(items[start - 1]!.value);
+      if (Math.max(high, value) - Math.min(low, value) > SPREAD[from]) break;
+      low = Math.min(low, value);
+      high = Math.max(high, value);
+      start -= 1;
+    }
+    const temperatures = items.slice(start);
+    const lead = temperatures[0]!;
+    const arrow = ARROW_AFTER.test(after) || ARROW_BEFORE.test(before) || temperatures.some((item) => ARROW.test(item.join));
+    const named = start === 0 && TEMPERATURE_BEFORE.test(before);
+    const change = temperatures.some((item) => item.sign === '±') || (!named && (lead.sign !== undefined || (!arrow && high < CHANGE_BELOW[from])));
+    const one = (item: Item) =>
+      change
+        ? `${item.join}${item.sign ?? ''}${numberText(convert(Number(item.value), from, unit, true), item.value, true)}`
+        : `${item.join}${item.sign === '+' ? '+' : ''}${numberText(convert(signedValue(item), from, unit, false), item.value, false)}`;
+    return `${items.slice(0, start).map(asWritten).join('')}${temperatures.map(one).join('')}${unitText(written, unit)}`;
+  });
 }

@@ -63,6 +63,13 @@ describe('the change card in °F', () => {
     expect(screen.getByText('92.0 °C')).toBeInTheDocument();
     expect(screen.getByTestId(TID.diffCard)).not.toHaveTextContent('°F');
   });
+
+  it("shows the coach's °F words as written while no unit is chosen, and follows a unit once one is", async () => {
+    const { services } = renderWithServices(<RichText text="That's 197.6 °F, as you asked." />, createFakeServices());
+    expect(document.body).toHaveTextContent("That's 197.6 °F, as you asked.");
+    await act(() => services.temperatureUnit.set('celsius'));
+    expect(document.body).toHaveTextContent("That's 92.0 °C, as you asked.");
+  });
 });
 
 describe("the coach's words elsewhere in °F", () => {

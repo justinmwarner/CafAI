@@ -7,7 +7,7 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import CheckIcon from '@mui/icons-material/Check';
 import EditIcon from '@mui/icons-material/Edit';
-import { useTemperatureUnit } from '../../../app/services.tsx';
+import { useWordsTemperatureUnit } from '../../../app/services.tsx';
 import type { SetAsideReason } from '../../../app/types.ts';
 import { OTHER_OPTION } from '../../../coach/contract.ts';
 import { inTemperatureUnit } from '../../../coach/temperature.ts';
@@ -52,7 +52,7 @@ export function OptionChips({
   const [otherText, setOtherText] = useState('');
   const questionId = useId();
   // The coach's words with their temperatures in the barista's unit (D176).
-  const unit = useTemperatureUnit();
+  const unit = useWordsTemperatureUnit();
   const words = (text: string) => inTemperatureUnit(text, unit);
 
   // The engine already appends "Other" last; keep it last even if it did not.

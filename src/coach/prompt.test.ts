@@ -481,7 +481,9 @@ describe('buildSystemPrompt: °F (D175)', () => {
     expect(section).toContain('°F = °C × 1.8 + 32: 92 °C is 197.6 °F');
     expect(section).toContain('without the 32: 0.5 °C is 0.9 °F, 1 °C is 1.8 °F, 1.5 °C is 2.7 °F, 2 °C is 3.6 °F');
     expect(section).toContain('never 33.8 °F hotter');
-    expect(section).toContain('200 °F is 93.3 °C, which a lever in steps of 0.5 °C takes as 93.5 °C (200.3 °F)');
+    expect(section).toContain('200 °F is 93.3 °C, your tool gets 93.5 °C, and the user hears 200.3 °F.');
+    // The °C in that line is arithmetic for its tools: the user is told °F only.
+    expect(section).toContain('tell the user in °F what you chose');
   });
 
   it("gives every template's temperature lever in °F, worked out from its °C bounds", () => {

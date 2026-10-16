@@ -10,7 +10,7 @@ import BackHandIcon from '@mui/icons-material/BackHandOutlined';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineOutlined';
 import UndoIcon from '@mui/icons-material/Undo';
-import { useTemperatureUnit } from '../../../app/services.tsx';
+import { useWordsTemperatureUnit } from '../../../app/services.tsx';
 import { inTemperatureUnit } from '../../../coach/temperature.ts';
 import { TID } from '../../testIds.ts';
 import { setAsideNote, splitDiffLine } from '../format.ts';
@@ -29,7 +29,7 @@ export interface DiffCardProps {
 
 /** The card's words with every temperature in the barista's unit (D176); the part as it was in °C. */
 function useInTemperatureUnit(part: DiffPart): DiffPart {
-  const unit = useTemperatureUnit();
+  const unit = useWordsTemperatureUnit();
   return useMemo(() => {
     const words = (text: string) => inTemperatureUnit(text, unit);
     return {

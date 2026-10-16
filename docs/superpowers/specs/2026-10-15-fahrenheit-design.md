@@ -129,13 +129,23 @@ reasons, a question and its answers, History), and CafAI's own diff lines
 and the care guide go through the same converter. A temperature written in
 the other unit is written in the barista's, rounded as it was written (93 °C
 reads 199 °F, 92.5 °C reads 198.5 °F). It reads as a change, converted
-without the 32, when it has a sign ("+1.0 °C"), follows "by", comes before
-a comparative ("hotter", "cooler", "under", "per"…), or is small (under
-30 °C or 50 °F, which no brew, steam or hot water temperature is);
-otherwise as a temperature. A range converts both ends ("88-94 °C", "1-2
-°C"). "93 °C (199 °F)" keeps the barista's half, and a conversion the
-barista asked for ("200 °F is 93.3 °C") stays as written. It works both
-ways, so words the coach wrote in °F read in °C after a switch back.
+without the 32, when it has a sign ("+1.0 °C") or is small (under 30 °C or
+50 °F, which no brew, steam or hot water temperature is), unless the words
+right before it name a temperature ("at 25 °C", "cool to", "room
+temperature", a fridge or a freezer); otherwise, and beside an arrow, as a
+temperature. The words after a number never make it a change ("from 92 °C
+up to 94 °C" is two temperatures). A range or a list converts every number
+("88-94 °C", "1-2 °C", "92 → 93 °C", "89 / 88.5 / 88 °C"), but a number
+further than 20 °C from the rest stays as written ("Step 3 to 90 °C").
+"93 °C (199 °F)" keeps the barista's half, and a conversion the barista
+asked for ("200 °F is 93.3 °C") stays as written. Nothing is rewritten
+until a unit is chosen in Settings, so a barista who never chose sees
+today's words exactly; once one is chosen it works both ways, so words the
+coach wrote in °F read in °C after a switch back. (The review of
+2026-10-15 found the first rules read "up", "over" and "behind" as a
+change, converted only an arrow range's last number, read a cooled
+sample's 25 °C as a change, and rewrote a °F the coach gave a °C barista
+who asked for it; D176 records the rules as they are now.)
 
 Unlike a taste promise (D127), a unit is arithmetic CafAI does exactly: a
 second turn of the model, at the moment the barista waits for a change,

@@ -39,7 +39,7 @@ export function fahrenheitSection(templates: readonly Template[]): string {
     "- Write every temperature for the user in °F, never in °C and never both: your replies, ask_user's question and options, and propose_adjustment's summary, rationale, expectedEffect and tips.",
     '- A temperature converts as °F = °C × 1.8 + 32: 92 °C is 197.6 °F, 93.5 °C is 200.3 °F. A change of temperature converts as × 1.8, without the 32: 0.5 °C is 0.9 °F, 1 °C is 1.8 °F, 1.5 °C is 2.7 °F, 2 °C is 3.6 °F. So 1 °C hotter is 1.8 °F hotter, never 33.8 °F hotter.',
     '- Give a change to one decimal, as the change card shows it ("Raise brew temperature by 1.8 °F"); a temperature to one decimal or as a whole degree.',
-    '- When the user gives a temperature in °F, convert it to °C for your tools, on the lever\'s own steps, and say what you chose: 200 °F is 93.3 °C, which a lever in steps of 0.5 °C takes as 93.5 °C (200.3 °F).',
+    '- When the user gives a temperature in °F, work out the °C for your tools on the lever\'s own steps, and tell the user in °F what you chose. For "200 °F" on a lever in steps of 0.5 °C: 200 °F is 93.3 °C, your tool gets 93.5 °C, and the user hears 200.3 °F.',
     '- The temperature levers in °F (the catalog gives the same in °C):',
     ...levers,
   ].join('\n');

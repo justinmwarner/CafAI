@@ -1,6 +1,6 @@
 import { Fragment, useMemo } from 'react';
 import Box from '@mui/material/Box';
-import { useTemperatureUnit } from '../../app/services.tsx';
+import { useWordsTemperatureUnit } from '../../app/services.tsx';
 import { inTemperatureUnit } from '../../coach/temperature.ts';
 import { parseRichText, withoutOpenMarkers, type RichInline } from './textBlocks.ts';
 
@@ -41,7 +41,7 @@ const richTextSx = {
  * A temperature in the other unit reads in the barista's (D176).
  */
 export function RichText({ text, streaming = false }: { text: string; streaming?: boolean }) {
-  const unit = useTemperatureUnit();
+  const unit = useWordsTemperatureUnit();
   const blocks = useMemo(
     () => parseRichText(inTemperatureUnit(streaming ? withoutOpenMarkers(text) : text, unit)),
     [text, streaming, unit],

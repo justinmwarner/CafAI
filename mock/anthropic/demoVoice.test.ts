@@ -284,7 +284,9 @@ describe('the demo voice, branch by branch', () => {
     const tasted = (...readings: Block[]) =>
       compare([...UP_TO_SHOT, shot(), SHOT_REPLY, user(toolResult('t_ask', { selected: ['Sour / sharp'], other: null }), ...readings)]).demo.text;
     // 9.25 % x 49.6 g / 18 g = 25.5 %.
-    expect(tasted(measured(9.25, 25.5))).toMatch(/^Thanks for measuring: TDS 9\.25 % puts that shot's extraction at \*\*25\.5 %\*\*\. Sour on a light roast/);
+    expect(tasted(measured(9.25, 25.5))).toMatch(
+      /^Thanks for measuring: TDS 9\.25 % puts that shot's extraction at \*\*25\.5 %\*\*\. Your taste still comes first\. Sour on a light roast/,
+    );
     expect(tasted(measured(9.25, null))).toMatch(/^Thanks for measuring: TDS 9\.25 %\. That shot has no dose or yield to go with it/);
     expect(tasted(measured(null, null))).toMatch(/^Got it: I'll leave that TDS reading out\./);
     expect(tasted(measured(12, 33.1))).toMatch(/^Thanks for measuring, but TDS 12\.00 % works out to an extraction of 33\.1 %, more than coffee can give: check the reading/);

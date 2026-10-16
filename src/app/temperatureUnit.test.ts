@@ -47,6 +47,18 @@ describe('createTemperatureUnitStore', () => {
     expect(createTemperatureUnitStore(fakeSettingsRepo(makeSettings())).get()).toBe('celsius');
   });
 
+  it('says whether a unit was chosen: not from the default °C, yes from a saved one or a set, even of °C (D176)', async () => {
+    expect(createTemperatureUnitStore(fakeSettingsRepo(makeSettings()), 'celsius').chosen()).toBe(true);
+    const repo = fakeSettingsRepo(makeSettings());
+    const store = createTemperatureUnitStore(repo);
+    expect(store.chosen()).toBe(false);
+    let calls = 0;
+    store.subscribe(() => void (calls += 1));
+    await store.set('celsius');
+    // Still °C, but chosen now: subscribers hear it, so words start following the unit.
+    expect([store.get(), store.chosen(), calls]).toEqual(['celsius', true, 1]);
+  });
+
   it('set() shows at once, tells subscribers once, and saves the choice with the settings', async () => {
     const repo = fakeSettingsRepo(makeSettings());
     const store = createTemperatureUnitStore(repo);

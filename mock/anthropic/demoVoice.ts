@@ -334,6 +334,7 @@ export const DEMO_VOICE: Voice = {
     if (eyPct > EY_MAX_PCT) {
       return `Thanks for measuring, but TDS ${tds} works out to an extraction of ${eyText(eyPct)} %, more than coffee can give: check the reading, and the dose in Decaid.`;
     }
-    return `Thanks for measuring: TDS ${tds} puts that shot's extraction at ${bold(`${eyText(eyPct)} %`)}.`;
+    // The verdict outranks the number (D168): whatever the taste, what follows reads from it, not against the EY.
+    return `Thanks for measuring: TDS ${tds} puts that shot's extraction at ${bold(`${eyText(eyPct)} %`)}. Your taste still comes first.`;
   },
 };
