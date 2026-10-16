@@ -68,6 +68,18 @@ export function waitsOnServerTool(content: readonly ContentBlock[]): boolean {
   return content.some((block) => block.type === 'server_tool_use' && !answered.has(block.id));
 }
 
+/**
+ * True when a stored transcript ends on a search still waiting, its client
+ * calls answered (a reload between appends, D203): the next request must
+ * carry the search tool, and nothing may be said after those results before
+ * the search ran, or the API refuses every request from then on.
+ */
+export function resumesSearch(messages: readonly LlmMessage[]): boolean {
+  const last = messages[messages.length - 1];
+  const turn = messages[messages.length - 2];
+  return last?.role === 'user' && turn?.role === 'assistant' && waitsOnServerTool(turn.content);
+}
+
 function isToolUse(block: ContentBlock): block is ToolUseBlock {
   return block.type === 'tool_use';
 }
@@ -98,7 +110,7 @@ async function handleToolUse(use: ToolUseBlock, tools: Map<string, RunnerTool>):
   if (tool.kind === 'ui') return { pending: { id: use.id, name: use.name, input: validation.value } };
   if (!tool.execute) return fail(`The tool "${use.name}" cannot run here.`);
   try {
-    const outcome = await tool.execute(validation.value);
+    const outcome = await tool.execute(validation.value, { id: use.id });
     return { result: toolResult(use.id, outcome.content, outcome.isError === true) };
   } catch (error) {
     const reason = error instanceof Error && error.message !== '' ? error.message : 'unknown error';
@@ -154,14 +166,21 @@ export async function runConversation(run: RunRequest): Promise<RunResult> {
   const maxCalls = run.maxModelCalls ?? DEFAULT_MAX_MODEL_CALLS;
   const tools = new Map(run.tools.map((tool) => [tool.definition.name, tool]));
   const messages = [...run.messages];
-  /** Parts of the turn the server paused, sent back but not yet appended. */
-  let paused: LlmMessage[] = [];
+  /**
+   * Messages sent back but not yet appended (D203): the parts of a turn the
+   * server paused, or a turn whose web search waits beside client calls, with
+   * their results. Appended with the turn that finishes them, so a failure
+   * leaves the user message last and a retry asks again.
+   */
+  let held: LlmMessage[] = [];
+  /** What was held last is a turn the server paused: its rest streams on in the same bubble. */
+  let goingOn = false;
 
   for (let calls = 0; ; ) {
     if (calls >= maxCalls) throw stuckError();
     calls += 1;
 
-    const turn = await streamTurn(run, messages, paused);
+    const turn = await streamTurn(run, messages, goingOn ? held : []);
     // Refused output is discarded, never stored or replayed.
     if (turn.stopReason === 'refusal') throw refusalError();
 
@@ -170,19 +189,24 @@ export async function runConversation(run: RunRequest): Promise<RunResult> {
     const uses = turn.content.filter(isToolUse);
     if (turn.stopReason === 'pause_turn' && uses.length === 0) {
       // The server paused its own loop (a web search, D203): the turn goes back as it is, with no new user
-      // message, and the server goes on. Appended with the rest, so a failure leaves the user message last.
-      paused.push(assistant);
+      // message, and the server goes on.
+      held.push(assistant);
+      goingOn = true;
       continue;
     }
-    const before = paused;
-    paused = [];
-    for (const part of before) await run.onAppend(part);
-    await run.onAppend(assistant);
+    // A search called beside client calls runs only once their results come back, in a message of tool
+    // results alone (D203): no card may wait for a tap then, and the turn and its results are held until
+    // the turn that finishes the search comes, as a paused turn is.
+    const searchWaits = uses.length > 0 && waitsOnServerTool(turn.content);
+    const before = searchWaits ? [] : held;
+    if (!searchWaits) {
+      held = [];
+      goingOn = false;
+      for (const part of before) await run.onAppend(part);
+      await run.onAppend(assistant);
+      if (uses.length === 0) return finish(turn, before, [], []);
+    }
 
-    if (uses.length === 0) return finish(turn, before, [], []);
-
-    // A search waiting beside a card would wait for the tap (D203): the card goes back unshown instead.
-    const searchWaits = waitsOnServerTool(turn.content);
     const results: ToolResultBlock[] = [];
     const pending: PendingUiCall[] = [];
     for (const use of uses) {
@@ -195,6 +219,13 @@ export async function runConversation(run: RunRequest): Promise<RunResult> {
       if (!('pending' in handled)) results.push(handled.result);
       else if (searchWaits) results.push(toolResult(use.id, SEARCH_FIRST_MESSAGE, true));
       else pending.push(handled.pending);
+    }
+    if (searchWaits) {
+      const answers: LlmMessage = { role: 'user', content: results };
+      messages.push(answers);
+      held.push(assistant, answers);
+      goingOn = false;
+      continue;
     }
     if (pending.length > 0) return finish(turn, before, pending, results);
 

@@ -99,7 +99,8 @@ import { redactKeyLike } from '../../storage/redact.ts';
 import type { GrinderInfo, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
 import type { BagPhoto, ExtractedBag } from '../../llm/extractBag.ts';
 import type { ContentBlock, Effort, LlmMessage, PendingUiCall, RunnerTool, RunResult, ToolResultBlock, ToolValidation } from '../../llm/types.ts';
-import { siteOf, WEB_SEARCH_TOOL, webSearchUnavailable } from '../../llm/webSearch.ts';
+import { resumesSearch, SEARCH_FIRST_MESSAGE, waitsOnServerTool } from '../../llm/runner.ts';
+import { citedSites, siteOf, WEB_SEARCH_TOOL, webSearchUnavailable } from '../../llm/webSearch.ts';
 import type {
   AppliedChange,
   Bag,
@@ -129,6 +130,7 @@ import { coachShares, previousLikeShot } from './funFacts.ts';
 import { browserTimers, createOutbox, writeFailure, WriteLater, type OutboxTimers } from './outbox.ts';
 import type { ApiPort, ChangePlan, Clock, CoachPort, LlmPort, ShotSource } from './ports.ts';
 import {
+  FACT_NOT_DUE,
   FACT_NOT_SHOWN_AGAIN,
   FACT_SHOWN,
   ONE_FACT_PER_REPLY,
@@ -189,9 +191,11 @@ import {
   setShotRating,
   setVisualizerLink,
   shotPart,
+  sourcesPart,
   startingYieldText,
   templatesPart,
   updatePart,
+  withPart,
   withoutTransient,
 } from './uiMessages.ts';
 
@@ -274,6 +278,12 @@ interface Session {
    * failed keeps it for the retry; the next shot replaces it.
    */
   factDue: { shotId: string; shown: boolean } | null;
+  /**
+   * The run going on answers something the barista typed, where they may
+   * have asked for a fun fact (D201); a tap or a shot is not. Kept for the
+   * Retry of a run that failed.
+   */
+  typedTurn: boolean;
 }
 
 /** What CafAI knows about a version on the machine (D55); see VersionLoad. A failed barrier leaves Decaid retrying its own upload. */
@@ -1495,14 +1505,20 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   }
 
   /**
-   * The coach's fun fact (D201), whenever it shares one: told under its
-   * label, with its page's site only in the web mode, where it may have read
-   * one (D203). One per run: a second is sent back and not shown.
+   * The coach's fun fact (D201): told under its label, with its page's site
+   * only in the web mode, where it may have read one (D203), and the call's
+   * id, so a reload can say it was shown. One per run, and one per shot
+   * (D197): with the reply to a shot due one, or when the barista typed what
+   * the coach answers (they may have asked for one); any other is sent back,
+   * so a fact sent back beside the taste question, CafAI's shown instead,
+   * never brings a second under the barista's answer.
    */
-  async function shareCoachFact(s: Session, input: ShareFunFact): Promise<{ content: string; isError?: boolean }> {
+  async function shareCoachFact(s: Session, input: ShareFunFact, callId: string | null): Promise<{ content: string; isError?: boolean }> {
     if (factShown) return { content: ONE_FACT_PER_REPLY, isError: true };
+    const due = s.factDue !== null && !s.factDue.shown;
+    if (!due && !s.typedTurn) return { content: FACT_NOT_DUE, isError: true };
     const site = funFactsSource() === 'web' ? siteOf(input.source) : null;
-    showFact(s, factPart(input.fact, input.topic, site), coachKey(input.about));
+    showFact(s, factPart(input.fact, input.topic, site, callId ?? undefined), coachKey(input.about));
     await persistConversation(s);
     emit();
     return { content: JSON.stringify(FACT_SHOWN) };
@@ -1589,7 +1605,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     },
   };
 
-  async function executeAuto(name: ToolName, value: unknown): Promise<{ content: string; isError?: boolean }> {
+  /** `callId`: the call's tool_use id, which a fun fact keeps (D201); null when unknown. */
+  async function executeAuto(name: ToolName, value: unknown, callId: string | null): Promise<{ content: string; isError?: boolean }> {
     const s = session;
     if (!s) return { content: JSON.stringify({ error: 'No bag is active.' }), isError: true };
     switch (name) {
@@ -1625,7 +1642,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
           iterations: await bagIterations(s),
         });
       case TOOL.shareFunFact:
-        return shareCoachFact(s, value as ShareFunFact);
+        return shareCoachFact(s, value as ShareFunFact, callId);
       default:
         return { content: JSON.stringify({ error: `${name} is not an automatic tool.` }), isError: true };
     }
@@ -1697,7 +1714,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       validate: (input) => check(input, true),
       validateStored: (input) => check(input, false),
     };
-    if (auto) tool.execute = (value) => executeAuto(name, value);
+    if (auto) tool.execute = (value, call) => executeAuto(name, value, call.id);
     return tool;
   });
   // Every tool, so a call stored in any mode is still answered after a reload.
@@ -1816,7 +1833,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         ...(deps.maxTokens ? { maxTokens: deps.maxTokens } : {}),
         messages: s.conversation.apiMessages,
         tools: toolsFor(source),
-        ...(source === 'web' ? { serverTools: [WEB_SEARCH_TOOL] } : {}),
+        // A stored search still waiting resumes with its tool whatever the mode, or the API refuses it (D203).
+        ...(source === 'web' || resumesSearch(s.conversation.apiMessages) ? { serverTools: [WEB_SEARCH_TOOL] } : {}),
         onTurnStart: () => {
           streamingId = null;
         },
@@ -1830,6 +1848,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         },
         onAppend: async (appended) => {
           s.conversation = { ...s.conversation, apiMessages: [...s.conversation.apiMessages, appended] };
+          // The sites the coach's words cite, under them (D203): Anthropic asks that search results shown to people say where they came from.
+          const sites = appended.role === 'assistant' ? citedSites(appended.content) : [];
+          if (sites.length > 0 && streamingId) setMessages(withPart(state.messages, streamingId, sourcesPart(sites)));
           await persistConversation(s);
         },
       });
@@ -1878,6 +1899,12 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     extra: ContentBlock[],
     setAsideFor: SetAsideReason,
   ): Promise<void> {
+    // A stored search still waiting, its calls answered (a reload between appends), runs before anything else
+    // is said (D203): a message after those results would join them, and the API would refuse every request.
+    if (resumesSearch(s.conversation.apiMessages)) {
+      await runModel();
+      if (resumesSearch(s.conversation.apiMessages)) return;
+    }
     const order = unansweredToolUses(s.conversation.apiMessages).map((u) => u.id);
     const byId = new Map<string, ToolResultBlock>();
     for (const held of s.held) byId.set(held.tool_use_id, held);
@@ -1905,6 +1932,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       ...s.conversation,
       apiMessages: [...s.conversation.apiMessages, { role: 'user', content: blocks }],
     };
+    // What the barista typed may ask for a fun fact; a tap or a shot does not (D201).
+    s.typedTurn = setAsideFor === 'typed';
     await persistConversation(s);
     await runModel();
   }
@@ -1913,10 +1942,17 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   // Sessions
   // -------------------------------------------------------------------------
 
-  /** Rebuild pending calls from a stored transcript (after a reload). */
+  /**
+   * Rebuild pending calls from a stored transcript (after a reload). A turn
+   * whose web search still waits beside its calls (a reload between appends,
+   * D203) shows no card: each is answered as the runner answers it, and the
+   * answers go in a message of their own, for Retry to resume the search.
+   */
   async function recoverPending(s: Session): Promise<void> {
     s.pending = [];
     s.held = [];
+    const last = s.conversation.apiMessages[s.conversation.apiMessages.length - 1];
+    const searchWaits = last?.role === 'assistant' && waitsOnServerTool(last.content);
     for (const use of unansweredToolUses(s.conversation.apiMessages)) {
       const tool = toolsByName.get(use.name);
       if (!tool) {
@@ -1927,11 +1963,16 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       if (!validation.ok) {
         s.held.push(toolResult(use.id, validation.error, true));
       } else if (use.name === TOOL.shareFunFact) {
-        // Shown before the reload, or never: either way not shown again.
-        s.held.push(toolResult(use.id, FACT_NOT_SHOWN_AGAIN));
+        // Never shown twice: the chat says whether this call's fact is in it (D201).
+        const inChat = state.messages.some((m) => m.parts.some((part) => part.kind === 'fact' && part.requestId === use.id));
+        s.held.push(toolResult(use.id, inChat ? FACT_SHOWN : FACT_NOT_SHOWN_AGAIN));
       } else if (tool.kind === 'auto' && tool.execute) {
-        const outcome = await tool.execute(validation.value);
+        const outcome = await tool.execute(validation.value, { id: use.id });
         s.held.push(toolResult(use.id, outcome.content, outcome.isError ?? false));
+      } else if (searchWaits) {
+        s.held.push(toolResult(use.id, SEARCH_FIRST_MESSAGE, true));
+        // A card it may have shown before the reload no longer answers anything.
+        setMessages(updatePart(state.messages, byRequestId(use.id), (part) => setAside(part, 'other')));
       } else if (use.name === TOOL.proposeAdjustment) {
         const context = proposalContext(s);
         const plan = context ? coach.validateProposal(validation.value as ProposeAdjustment, context) : null;
@@ -1946,6 +1987,12 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     const unshown = new Set(crowded.map((held) => held.tool_use_id));
     s.pending = s.pending.filter((p) => !unshown.has(p.id));
     s.held.push(...crowded);
+    if (searchWaits && s.held.length > 0) {
+      // Tool results alone, in tool_use order: the API runs the waiting search once they are in (D203).
+      s.conversation = { ...s.conversation, apiMessages: [...s.conversation.apiMessages, { role: 'user', content: s.held }] };
+      s.held = [];
+      await persistConversation(s);
+    }
   }
 
   async function openSession(bag: Bag): Promise<void> {
@@ -1967,6 +2014,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       targetYieldG: null,
       numbers: Promise.resolve(),
       factDue: null,
+      typedTurn: false,
     };
     session = s;
     // A stored progress notice (an older build, a crash) describes work that is long over.

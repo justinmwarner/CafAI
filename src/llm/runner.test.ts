@@ -335,7 +335,27 @@ describe('runConversation', () => {
         ],
       });
       expect(run.requests[1]?.messages.at(-1)).toEqual(run.appended[1]);
+      // Held until the turn that ran the search came: never stored waiting on a search.
+      expect(run.appendedAt).toEqual([2, 2, 2]);
       expect(result.pendingUiCalls).toEqual([{ id: 't3', name: 'ask', input: { question: 'How did it taste?', options: ['Sour', 'Sweet'] } }]);
+      // The rest is a reply of its own after the tool calls: a new bubble.
+      expect(run.turnStarts()).toBe(2);
+    });
+
+    it('appends nothing when the turn that should run the search fails, so the user message stays last and a retry asks again', async () => {
+      // Stored as [turn, results] alone, the transcript would end on a message of tool results that a typed
+      // message after it would join, and the API would refuse every request from then on.
+      const beside = turn('tool_use', SEARCH, toolUse('t1', 'ask', { question: 'How did it taste?', options: ['Sour', 'Sweet'] }));
+      const overloaded = new LlmError('overloaded', 'Claude is overloaded right now.', 529, true);
+      const failed = start([beside, overloaded]);
+      await expect(failed.promise).rejects.toBe(overloaded);
+      expect(failed.appended).toEqual([]);
+      const stuck = start(
+        Array.from({ length: 4 }, () => turn('tool_use', SEARCH, toolUse('t1', 'lookup', { shot: 'latest' }))),
+        { maxModelCalls: 3 },
+      );
+      await expect(stuck.promise).rejects.toMatchObject({ kind: 'protocol' });
+      expect(stuck.appended).toEqual([]);
     });
 
     it('lets a card wait for its tap when the turn has the search result', async () => {

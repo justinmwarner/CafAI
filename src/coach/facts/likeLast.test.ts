@@ -50,6 +50,17 @@ describe('ranLikeLast (D197)', () => {
     }
   });
 
+  it('times the first drop from the start of the pour, as the shot card does, so a longer preheat moves nothing', () => {
+    // The same pour after 1.0 s and 6.5 s of preheat: the drop 7.2 s into the pour both times.
+    const shortHeat = shot({ pourStartS: 1, timeToFirstDropS: 8.2 });
+    const longHeat = shot({ pourStartS: 6.5, timeToFirstDropS: 13.7 });
+    expect(ranLikeLast(longHeat, shortHeat)).toBe(true);
+    // 3.5 s later into the pour is another shot, whatever the preheat.
+    expect(ranLikeLast(shot({ pourStartS: 6.5, timeToFirstDropS: 17.2 }), shortHeat)).toBe(false);
+    // A summary from before pourStartS keeps its clock.
+    expect(ranLikeLast(shot({ timeToFirstDropS: 9 }), shot({ timeToFirstDropS: 7.5 }))).toBe(true);
+  });
+
   it('compares a number only when both shots have it', () => {
     expect(ranLikeLast(shot({ yieldG: null, peakPressureBar: null, timeToFirstDropS: null }), LAST)).toBe(true);
     expect(ranLikeLast(shot({ yieldG: 50 }), shot({ yieldG: null }))).toBe(true);

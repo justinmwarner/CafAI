@@ -274,6 +274,17 @@ export type CoachUiPart =
       topic: FactTopic;
       /** The site the fact came from ("sca.coffee"), shown as plain text; null when none is shown. */
       source: string | null;
+      /** The coach's share_fun_fact call that showed it (D201); absent for CafAI's own facts. */
+      requestId?: string;
+    }
+  | {
+      /**
+       * The sites the coach's words just above cite (web search citations,
+       * D203), shown as plain text under them, never as links: Anthropic asks
+       * that search results shown to people say where they came from.
+       */
+      kind: 'sources';
+      sites: string[];
     }
   | {
       kind: 'notice';

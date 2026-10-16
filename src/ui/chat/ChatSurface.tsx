@@ -52,6 +52,7 @@ import { BagConfirmCard } from './parts/BagConfirmCard.tsx';
 import { BeanCard } from './parts/BeanCard.tsx';
 import { DiffCard } from './parts/DiffCard.tsx';
 import { FactCard } from './parts/FactCard.tsx';
+import { SourcesLine } from './parts/SourcesLine.tsx';
 import { GrinderOfferCard } from './parts/GrinderOfferCard.tsx';
 import { Notice } from './parts/Notice.tsx';
 import { OptionChips } from './parts/OptionChips.tsx';
@@ -388,6 +389,12 @@ function FactView({ data }: { data: unknown }) {
   return part ? <FactCard text={part.text} source={part.source} /> : null;
 }
 
+/** The sites the coach's words cite, under them (D203). */
+function SourcesView({ data }: { data: unknown }) {
+  const part = cardOf(data, 'sources');
+  return part && part.sites.length > 0 ? <SourcesLine sites={part.sites} /> : null;
+}
+
 /** "Thinking… 12 s": the elapsed counter updates in place, so a slow reply never looks frozen. */
 function ThinkingView() {
   const [startedAt] = useState(() => Date.now());
@@ -427,6 +434,7 @@ const PART_RENDERERS: ChatPartRendererMap = {
   [`${DATA_PREFIX}bagConfirm`]: ({ part }: DataRendererProps) => <BagConfirmView data={part.data} />,
   [`${DATA_PREFIX}grinderOffer`]: ({ part }: DataRendererProps) => <GrinderOfferView data={part.data} />,
   [`${DATA_PREFIX}fact`]: ({ part }: DataRendererProps) => <FactView data={part.data} />,
+  [`${DATA_PREFIX}sources`]: ({ part }: DataRendererProps) => <SourcesView data={part.data} />,
   [THINKING_TYPE]: () => <ThinkingView />,
   [STATS_TYPE]: () => <StatsCard />,
 };

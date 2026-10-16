@@ -200,7 +200,9 @@ backup and the export.
   message of tool results alone, which a tap with its verdicts and readings
   could not always be. So the runner never shows such a card: it answers it
   at once ("Not shown: a web search was still waiting..."), the search runs,
-  and the coach asks again.
+  and the coach asks again. The turn and those results are held until the
+  turn that ran the search comes (after the review, 2026-10-16), so a failure
+  in between leaves the transcript as it was and Retry asks again.
 
 ## 9. In the chat (D202)
 

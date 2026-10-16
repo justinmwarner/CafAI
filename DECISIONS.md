@@ -3170,7 +3170,9 @@ checked against its source.
   this shot ran, and this shot ran like the latest earlier shot on that
   version (`previousLikeShot`, `src/app/engine/funFacts.ts`): pour time
   within 3 s, yield within 1.5 g, peak pressure within 1 bar, first drop
-  within 3 s, each compared when both shots have it, the same stop reason
+  within 3 s (timed from the start of the pour, as the shot card does: real
+  preheats run 1 to 6.5 s, which would move it on their own), each compared
+  when both shots have it, the same stop reason
   when both have one, and no channeling flag the earlier shot did not raise
   (`LIKE_LAST`, `ranLikeLast`, `src/coach/facts/likeLast.ts`). One fact per
   shot, after the coach's reply and before its taste question. The due state
@@ -3253,7 +3255,12 @@ checked against its source.
   cup tastes like, a flavour only from the bag's notes. CafAI checks the
   fact's words (D199) and sends back one that fails, shows it, tells it and
   answers `{"shown":true}`; a second in one model run is sent back ("One fun
-  fact per reply."), one recovered after a reload is not shown again, and
+  fact per reply."), and so is one with no shot due a fact unless the run
+  answers something the barista typed (they may have asked): one fact per
+  shot, so a fact sent back beside the taste question, CafAI's shown in its
+  place, never brings a second under the barista's answer. The fact part
+  keeps the call's id, so one recovered after a reload is answered
+  `{"shown":true}` when its block is in the chat, and is never shown again;
   without the web search a `source` is ignored. When the run that answers a
   due shot ends with no fact, CafAI shows one of its list there. In CafAI's
   facts mode the coach hears nothing of facts. Asked for a fun fact, the
@@ -3290,11 +3297,23 @@ checked against its source.
   beside a search still waiting is never shown: the API runs such a search
   only once the card's result comes back, in a message of tool results alone,
   so the runner answers the card at once ("Not shown: a web search was still
-  waiting…"), the search runs and the coach asks again. A 400 that says web
-  search is off or unsupported (`webSearchUnavailable`) sends the same
-  request again without it, says once "Web search is not available for your
-  Anthropic account, so the coach shares what it knows.", and runs as the
-  coach's mode for the rest of the session. Through the CafAI Bridge, a
+  waiting…"), the search runs and the coach asks again; that turn and its
+  results are held, as a paused turn is, and appended only with the turn
+  that ran the search, so a failure leaves the user message last and Retry
+  asks again (stored as a pair, a message typed after it would join those
+  results, and the API would refuse every request from then on). A reload
+  between those appends is recovered: cards beside a waiting search are
+  answered and set aside, their results stored alone, Retry carries the
+  search tool whatever the mode (`resumesSearch`), and anything sent first
+  waits for that search to run. The sites the coach's own words cite show
+  under them as "Sources: …", plain text (`SourcesLine.tsx`), as Anthropic
+  asks of search results shown to people. A search's results stay in the
+  bag's conversation, which Decaid's backup leaves out once it passes 512
+  KiB (`mirror.ts`): a bag that searches very often may outgrow it. A 400
+  that says web search is off or unsupported (`webSearchUnavailable`) sends
+  the same request again without it, says once "Web search is not available
+  for your Anthropic account, so the coach shares what it knows.", and runs
+  as the coach's mode for the rest of the session. Through the CafAI Bridge, a
   request with the tool runs Claude Code with its WebSearch tool on and
   allowed, still the only built-in tool (`bridge/lib/claude.mjs`), its calls
   and results kept inside the run, which goes on in the same CafAI turn

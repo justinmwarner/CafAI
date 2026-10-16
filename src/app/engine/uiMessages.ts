@@ -133,9 +133,18 @@ export function noticePart(tone: 'info' | 'success' | 'warning' | 'error', text:
   return { kind: 'notice', tone, text };
 }
 
-/** A fun fact in a quiet block of its own (D202): CafAI's or the coach's, with the site it came from when one is shown. */
-export function factPart(text: string, topic: FactTopic, source: string | null): CoachUiPart {
-  return { kind: 'fact', text, topic, source };
+/**
+ * A fun fact in a quiet block of its own (D202): CafAI's or the coach's, with
+ * the site it came from when one is shown, and the coach's call that showed
+ * it, so a reload can tell the coach it was shown (D201).
+ */
+export function factPart(text: string, topic: FactTopic, source: string | null, requestId?: string): CoachUiPart {
+  return requestId === undefined ? { kind: 'fact', text, topic, source } : { kind: 'fact', text, topic, source, requestId };
+}
+
+/** The sites the coach's words cite (D203), under them as plain text. */
+export function sourcesPart(sites: readonly string[]): CoachUiPart {
+  return { kind: 'sources', sites: [...sites] };
 }
 
 /** The dose behind v1's yield (D57). */
@@ -266,6 +275,25 @@ export function appendText(messages: readonly CoachUiMessage[], messageId: strin
     const part = parts[index]!;
     if (part.kind === 'text') parts[index] = { ...part, text: part.text + delta, streaming: true };
     return { ...m, parts };
+  });
+}
+
+/**
+ * `part` added at the end of message `messageId`; a sources part joins the
+ * message's own, each site once, so a reply that cites in two of its turns
+ * still says them in one line (D203).
+ */
+export function withPart(messages: readonly CoachUiMessage[], messageId: string, part: CoachUiPart): CoachUiMessage[] {
+  return messages.map((m) => {
+    if (m.id !== messageId) return m;
+    const index = part.kind === 'sources' ? m.parts.findIndex((p) => p.kind === 'sources') : -1;
+    const existing = index >= 0 ? m.parts[index] : undefined;
+    if (existing?.kind === 'sources' && part.kind === 'sources') {
+      const parts = m.parts.slice();
+      parts[index] = { kind: 'sources', sites: [...new Set([...existing.sites, ...part.sites])] };
+      return { ...m, parts };
+    }
+    return { ...m, parts: [...m.parts, part] };
   });
 }
 

@@ -187,7 +187,15 @@ All JSON payloads are compact `JSON.stringify` output.
    so the coach shares what it knows." and no request carries it again until
    CafAI is reloaded. Its `server_tool_use` and `web_search_tool_result`
    blocks stay in the assistant turn and are replayed unchanged, as every
-   block is.
+   block is. A search the coach calls beside a client tool waits for that
+   tool's result, which must then come in a user message of tool results
+   alone: the runner answers any card in that turn at once (`Not shown: a web
+   search was still waiting beside this call...`, never shown to the
+   barista), and holds the turn and those results until the turn that ran
+   the search comes, so they are stored together or not at all. A stored
+   transcript that still ends on such a search (a reload between appends)
+   is answered the same way on open, with Retry, and the next request
+   carries the web search tool whatever the mode.
 
 Auto tools (`save_bag_details`, `get_shot_summary`, `get_shot_series`,
 `get_phase_stats`, `compare_shots`, `get_bag_history`, `get_recent_setups`,
@@ -210,15 +218,21 @@ bag's batch, false for an earlier one, null when unknown; `date` is the day
 DYE2 captured it, on the device's calendar. `share_fun_fact` (D201) takes
 `{"topic","about","fact","source"}` (a fact topic, a label of at most 80
 characters, the fact in at most 280, and the page it came from or null).
-CafAI shows the fact in an assistant message of its own (`{kind:"fact"}`,
-the page's site only in the `web` mode), puts it on the told list and
-answers `{"shown":true}`, whenever it is called, a fact due or not. A fresh
-call whose fact foretells or describes the barista's cup ("should taste",
-"this cup", "your coffee tastes"...) is answered with `is_error` and the
-reason (`src/coach/facts/wording.ts`); a second call in the same model run
-with `is_error` and `One fun fact per reply.`, not shown. A call found
-unanswered after a reload is answered
-`{"shown":false,"note":"CafAI reloaded before answering this call; the fact is not shown again."}`.
+CafAI shows the fact in an assistant message of its own (`{kind:"fact"}`
+with the call's id as `requestId`, the page's site only in the `web` mode),
+puts it on the told list and answers `{"shown":true}`, in the run that
+answers a shot due a fact, or in one that answers something the barista
+typed (they may have asked for one). Any other call is answered with
+`is_error` and `Not shown: a fun fact goes once with a shot whose event
+carries "funFact", or when the barista asks for one.` (one fact per shot,
+D197). A fresh call whose fact foretells or describes the barista's cup
+("should taste", "this cup", "your coffee tastes"...) is answered with
+`is_error` and the reason (`src/coach/facts/wording.ts`); a second call in
+the same model run with `is_error` and `One fun fact per reply.`, not
+shown. A call found unanswered after a reload is answered `{"shown":true}`
+when the chat holds its fact, else
+`{"shown":false,"note":"CafAI reloaded before answering this call; the fact is not shown again."}`;
+it is never shown again.
 Outside the `coach` and `web` modes it is not offered, and the runner
 answers it as any unknown tool. Invalid tool input (schema or coach bounds)
 is answered with `is_error: true` and the validation sentences, so the

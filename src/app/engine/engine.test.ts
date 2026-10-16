@@ -3,6 +3,7 @@ import type { ZodType } from 'zod';
 import { createCoachEngine, type CoachEngine, type EngineDeps, type PageVisibility } from './engine.ts';
 import type { OutboxTimers } from './outbox.ts';
 import type { ApiPort, ChangePlan, CoachPort, LlmPort, ProposalContext } from './ports.ts';
+import { FACT_NOT_DUE } from './protocol.ts';
 import { message, NEW_BAG_PROMPT, progressNoticePart } from './uiMessages.ts';
 import { EVENT, OTHER_OPTION, TOOL, type OfferGrinder, type ProposeAdjustment } from '../../coach/contract.ts';
 import { DOSE_RULES, knownDose, REFERENCE_DOSE_G } from '../../coach/dose.ts';
@@ -26,6 +27,7 @@ import {
   type WorkflowContext,
 } from '../../api/types.ts';
 import { LlmError, type ContentBlock, type LlmMessage, type PendingUiCall, type RunRequest, type RunResult, type ToolResultBlock } from '../../llm/types.ts';
+import { SEARCH_FIRST_MESSAGE } from '../../llm/runner.ts';
 import { WEB_SEARCH_TOOL } from '../../llm/webSearch.ts';
 import { createToldList, type ToldList } from '../../coach/facts/told.ts';
 import type { FunFact, FunFactsSource } from '../../coach/facts/types.ts';
@@ -653,7 +655,7 @@ function makeLlm(scripts: Script[], requests: LlmMessage[][], runs: RunRequest[]
           if (!validation.ok) {
             results.push({ type: 'tool_result', tool_use_id: block.id, content: validation.error, is_error: true });
           } else if (tool.kind === 'auto') {
-            const outcome = await tool.execute!(validation.value);
+            const outcome = await tool.execute!(validation.value, { id: block.id });
             results.push({ type: 'tool_result', tool_use_id: block.id, content: outcome.content, ...(outcome.isError ? { is_error: true } : {}) });
           } else {
             pendingUiCalls.push({ id: block.id, name: block.name, input: validation.value });
@@ -3987,7 +3989,7 @@ describe('coach engine', () => {
       expect(offered(lastRun())).toContain(TOOL.shareFunFact);
       expect(lastRun().system).toBe('SYSTEM coach');
       expect(lastKinds(3)).toEqual(['text', 'fact', 'options']);
-      expect(factParts()).toEqual([{ kind: 'fact', text: KIAMBU_SOIL, topic: 'origin', source: null }]);
+      expect(factParts()).toEqual([{ kind: 'fact', text: KIAMBU_SOIL, topic: 'origin', source: null, requestId: 't-fact' }]);
       const bag = engine.getState().activeBag!;
       expect(told.entries()).toEqual([{ key: 'coach:kiambu growers', bagId: bag.id, at: new Date(nowMs).toISOString() }]);
       // On the device, never with the bag's records; the block stays in the chat.
@@ -4094,7 +4096,7 @@ describe('coach engine', () => {
       expect(toldKeys()).toEqual(['coach:kiambu growers']);
     });
 
-    it('answers a fact found unanswered after a reload as not shown again, and shows it once', async () => {
+    it('answers a fact found unanswered after a reload as shown when its block is in the chat, and shows it once', async () => {
       await throughKept();
       await pull('shot-2', () => [text('Same as the last one.'), shareFact('t-fact'), askTasteAs('t-ask-2')]);
       await rebuild();
@@ -4102,9 +4104,96 @@ describe('coach engine', () => {
       expect(factParts()).toHaveLength(1);
       scripts.push(() => [text('Thanks.')]);
       await engine.answerOptions('t-ask-2', ['Sour'], null);
-      expect(parsed(resultFor('t-fact'))).toEqual({ shown: false, note: 'CafAI reloaded before answering this call; the fact is not shown again.' });
+      // So the coach does not share it again.
+      expect(parsed(resultFor('t-fact'))).toEqual({ shown: true });
       expect(factParts()).toHaveLength(1);
       expect(toldKeys()).toEqual(['coach:kiambu growers']);
+    });
+
+    it('answers a fact found unanswered after a reload as not shown when its block never made the chat', async () => {
+      await throughKept();
+      await pull('shot-2', () => [text('Same as the last one.'), shareFact('t-fact'), askTasteAs('t-ask-2')]);
+      // As if the page went before the fact was shown: the stored chat has no block of that call.
+      const bag = engine.getState().activeBag!;
+      const stored = (await storage.conversations.get(bag.conversationId))!;
+      await storage.conversations.put({ ...stored, uiMessages: stored.uiMessages.filter((m) => !m.parts.some((p) => p.kind === 'fact')) });
+      await rebuild();
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask-2', ['Sour'], null);
+      expect(parsed(resultFor('t-fact'))).toEqual({ shown: false, note: 'CafAI reloaded before answering this call; the fact is not shown again.' });
+      expect(factParts()).toEqual([]);
+    });
+
+    it("sends back a fact for a shot that already had one, CafAI's in its place, unless the barista asked (D197, D201)", async () => {
+      await throughKept();
+      // Sent back beside the taste question, so CafAI's shows; the error invites another, which comes after the taste answer.
+      await pull('shot-2', () => [
+        text('Same as the last one.'),
+        shareFact('t-fact', { fact: 'This cup should taste of blackcurrant, as Kiambu coffees do.' }),
+        askTasteAs('t-ask-2'),
+      ]);
+      expect(factParts().map((part) => part.text)).toEqual([KENYA.text]);
+      scripts.push(() => [shareFact('t-fact-2')], () => [text('Thanks.')]);
+      await engine.answerOptions('t-ask-2', ['Sour'], null);
+      expect(lastUserTurn(requests)[0]).toMatchObject({ tool_use_id: 't-fact-2', is_error: true, content: FACT_NOT_DUE });
+      expect(factParts().map((part) => part.text)).toEqual([KENYA.text]);
+
+      // Asked for one in words, the barista gets it.
+      scripts.push(() => [shareFact('t-fact-3')], () => [text('There you go.')]);
+      await engine.sendText('Another fun fact, please.');
+      expect(factParts().map((part) => part.text)).toEqual([KENYA.text, KIAMBU_SOIL]);
+    });
+
+    it('shows the sites the coach cites in its own words under them, never as links (D203)', async () => {
+      await chooseFunFacts('web');
+      await throughKept();
+      const cited: ContentBlock = {
+        type: 'text',
+        text: 'Onyx publishes what it pays its farmers.',
+        citations: [
+          { type: 'web_search_result_location', url: 'https://onyxcoffeelab.com/pages/transparency', title: 'Transparency', encrypted_index: 'Eo8=', cited_text: 'what we paid' },
+          { type: 'web_search_result_location', url: 'https://sprudge.com/onyx', title: 'Sprudge', encrypted_index: 'Eo9=', cited_text: 'Onyx' },
+        ],
+      } as ContentBlock;
+      await pull('shot-2', () => [cited, askTasteAs('t-ask-2')]);
+      const reply = engine.getState().messages.find((m) => m.parts.some((p) => p.kind === 'text' && p.text.startsWith('Onyx publishes')))!;
+      expect(reply.parts.map((p) => p.kind)).toEqual(['text', 'sources']);
+      expect(reply.parts[1]).toEqual({ kind: 'sources', sites: ['onyxcoffeelab.com', 'sprudge.com'] });
+    });
+
+    it('resumes a stored turn whose web search still waits: its cards are answered, unshown, and Retry carries the search tool whatever the mode (D203)', async () => {
+      await chooseFunFacts('web');
+      await throughKept();
+      const SEARCH: ContentBlock = { type: 'server_tool_use', id: 'srvtoolu_1', name: 'web_search', input: { query: 'Kiambu coffee' } } as ContentBlock;
+      // The page went between the turn's appends: it is stored with its search still waiting beside the taste question.
+      await pull('shot-2', () => [text('Let me look.'), SEARCH, askTasteAs('t-ask-2')]);
+      await chooseFunFacts('coach');
+      await rebuild();
+      const stored = (await storage.conversations.get(engine.getState().activeBag!.conversationId))!.apiMessages;
+      expect(stored.at(-1)).toEqual({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 't-ask-2', content: SEARCH_FIRST_MESSAGE, is_error: true }] });
+      expect(engine.getState().error).toBe("The coach's last reply did not finish. Tap Retry to ask again.");
+      expect(allParts().filter((p) => p.kind === 'options' && p.requestId === 't-ask-2' && p.answer === null && p.expired !== true)).toEqual([]);
+
+      scripts.push(() => [text('Same as the last one.'), askTasteAs('t-ask-3')]);
+      await engine.retry();
+      expect(lastRun().serverTools).toEqual([WEB_SEARCH_TOOL]);
+      expect(lastRun().system).toBe('SYSTEM coach');
+    });
+
+    it('resumes a stored waiting search before sending what the barista types after it (D203)', async () => {
+      await chooseFunFacts('web');
+      await throughKept();
+      const SEARCH: ContentBlock = { type: 'server_tool_use', id: 'srvtoolu_1', name: 'web_search', input: { query: 'Kiambu coffee' } } as ContentBlock;
+      await pull('shot-2', () => [SEARCH, askTasteAs('t-ask-2')]);
+      await rebuild();
+      const before = runs.length;
+      scripts.push(() => [text('Same as the last one.')], () => [text('Sour, noted.')]);
+      await engine.sendText('It was sour.');
+      // First the search's own request, ending on its results alone; then the typed words, in a turn of their own.
+      expect(runs.length - before).toBe(2);
+      const resumed = runs[before]!;
+      expect(resumed.messages.at(-1)).toEqual({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 't-ask-2', content: SEARCH_FIRST_MESSAGE, is_error: true }] });
+      expect(lastUserTurn(requests).some((b) => b.type === 'text' && b.text === 'It was sour.')).toBe(true);
     });
 
     it('keeps the fact due for the retry of a reply that failed', async () => {

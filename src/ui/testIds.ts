@@ -97,6 +97,8 @@ export const TID = {
   tdsNote: 'tds-note',
   /** A fun fact's block in the chat (D202). */
   factCard: 'fact-card',
+  /** The sites the coach's words cite, under them (D203). */
+  sourcesLine: 'sources-line',
 
   // History
   historyBag: (bagId: string) => `history-bag-${bagId}`,

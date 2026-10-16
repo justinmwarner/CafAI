@@ -3,8 +3,11 @@
  * pour time, the yield, the peak pressure and the first drop each close to
  * the earlier shot's, the same stop reason, and no channeling flag the
  * earlier shot did not raise. Only such a shot of a kept recipe gets a fun
- * fact: one that ran differently is the coach's to explain.
+ * fact: one that ran differently is the coach's to explain. The first drop
+ * is timed from the start of the pour, as the shot card does: preheat runs
+ * a second or several from shot to shot, and would move it on its own.
  */
+import { pourTime } from '../summary/pourClock.ts';
 import type { ShotSummary } from '../types.ts';
 
 /** How far each number may move and still be the same shot: seconds, grams, bar, seconds. */
@@ -22,7 +25,7 @@ export function ranLikeLast(shot: ShotSummary, previous: ShotSummary): boolean {
     close(shot.durationS, previous.durationS, LIKE_LAST.durationS) &&
     close(shot.yieldG, previous.yieldG, LIKE_LAST.yieldG) &&
     close(shot.peakPressureBar, previous.peakPressureBar, LIKE_LAST.peakPressureBar) &&
-    close(shot.timeToFirstDropS, previous.timeToFirstDropS, LIKE_LAST.firstDropS) &&
+    close(pourTime(shot.timeToFirstDropS, shot.pourStartS), pourTime(previous.timeToFirstDropS, previous.pourStartS), LIKE_LAST.firstDropS) &&
     (shot.stopReason === null || previous.stopReason === null || shot.stopReason === previous.stopReason) &&
     shot.channelingFlags.every((flag) => previous.channelingFlags.includes(flag))
   );

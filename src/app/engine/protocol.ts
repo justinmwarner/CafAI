@@ -190,7 +190,9 @@ export function shotMeasuredBlock(payload: ShotMeasuredPayload): TextBlock {
 export const FACT_SHOWN = { shown: true } as const;
 /** A second share_fun_fact in one model run: sent back, never shown. */
 export const ONE_FACT_PER_REPLY = 'One fun fact per reply.';
-/** A share_fun_fact found unanswered after a reload: shown before it or never, it is not shown again. */
+/** A share_fun_fact with no shot due one and nothing the barista typed: one fact per shot (D197), or one asked for. */
+export const FACT_NOT_DUE = 'Not shown: a fun fact goes once with a shot whose event carries "funFact", or when the barista asks for one.';
+/** A share_fun_fact found unanswered after a reload whose fact is not in the chat: it is not shown now. */
 export const FACT_NOT_SHOWN_AGAIN = { shown: false, note: 'CafAI reloaded before answering this call; the fact is not shown again.' } as const;
 
 export function undoBlock(payload: { from: number; to: number; title: string }): TextBlock {

@@ -229,8 +229,8 @@ export interface RunnerTool {
   kind: 'auto' | 'ui';
   /** Schema-validate raw model input (zod). Invalid input is answered with an is_error result. */
   validate(input: unknown): ToolValidation;
-  /** Required for `auto` tools. Receives the validated value. */
-  execute?(value: unknown): Promise<ToolOutcome>;
+  /** Required for `auto` tools. Receives the validated value, and the call's tool_use id. */
+  execute?(value: unknown, call: { id: string }): Promise<ToolOutcome>;
 }
 
 export interface PendingUiCall {
