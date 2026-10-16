@@ -191,7 +191,9 @@ no API key ([docs/DEMO.md](docs/DEMO.md)).
    nothing is sent until you send), and **Need help?** explains how to
    taste. If you like, also say how the shot compared with your previous
    one: Much worse, Worse, About the same, Better or Much better (a bag's
-   first shot is compared with your last shot of another coffee). The
+   first shot is compared with your last shot of another coffee). The card
+   draws that shot faintly under its own pressure and flow, a pale band in
+   the same colours, so the change the coach made shows on the curve. The
    coach hears your words, and both go to the shot's record in Decaid, so
    they show there and in Visualizer; the comparison becomes a running
    score in `enjoyment`, on the rating scale your Decaid keeps (0-10, or
@@ -241,9 +243,11 @@ with **Retry**; it never loads anything on the machine by itself.
   once the chat moves on, and
   **Stats** above the composer brings it back. Shot opens the graph. When a
   shot starts, the screen becomes the Shot view by itself: a big timer,
-  pressure, flow, weight and weight flow, the graph, and a note from the
-  coach saying it is watching. When the shot's card reaches the chat, the
-  coach comes back by itself; the top bar and Stop never move. Steam, hot
+  pressure, flow, weight and weight flow, the graph, with the bag's previous
+  shot faintly under it ("Previous shot · 28.1 s · 36.2 g" over the plot),
+  and a note from the coach saying it is watching. When the shot's card
+  reaches the chat, the coach comes back by itself (the graph then draws
+  the shot the card asks about); the top bar and Stop never move. Steam, hot
   water and flush take the screen the same way while they run, whoever
   started them (unless you are typing, or following Decent's cleaning video
   in Settings > Machine care): a dial fills toward the time or volume set

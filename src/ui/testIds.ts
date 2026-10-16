@@ -49,6 +49,9 @@ export const TID = {
   tareButton: 'tare-button',
   liveGraph: 'live-graph',
   shotTimer: 'shot-timer',
+  /** The shot drawn faintly under another (D-CURVE-3): its bands on a shot card, and its key on the card and over the Shot view's plot. */
+  shotGuide: 'shot-guide',
+  shotGuideKey: 'shot-guide-key',
 
   // Coach / chat
   newBag: 'new-bag',

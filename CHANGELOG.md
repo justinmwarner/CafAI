@@ -20,6 +20,16 @@ workflow checks against it. Settings > About shows the version you run.
   hotter is 1.8 °F hotter), while Decaid and your profiles keep °C. A
   steam, hot water or flush temperature set in °F is kept as the nearest
   whole °C, so it reads back as you set it.
+- A shot's card draws the shot its question asks about faintly under its
+  own curves: "Compared with your previous shot?" the previous shot, a
+  bag's first shot your last shot of another coffee, as a pale band in the
+  same colours, with a third key that names it. The Shot view draws the
+  bag's previous shot under a shot while it pulls, and the shot its card
+  asks about once it is done, named over the plot with its time and yield.
+  So a grind or a profile change shows on the curve. A shot in the chat is
+  drawn from its card, with no request; another coffee's is read from
+  Decaid once; one Decaid no longer has is left out, quietly. A card's
+  curves now start at the pour, as its times do.
 
 ## 0.1.2 (2026-10-15)
 

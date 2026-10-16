@@ -10,6 +10,7 @@
  */
 import { beforeAll, beforeEach, expect, it } from 'vitest';
 import { profileId, summarizeShot } from '../../coach/index.ts';
+import { createComparisonShots } from '../../ui/compare/comparisonShots.ts';
 import { deviceConnections, parseMachineFrame, type DeviceConnections, type ParsedScaleFrame } from '../frames.ts';
 import { listGrinders } from '../grinders.ts';
 import { readDye2, visualizerIdFor, type PluginReads } from '../pluginData.ts';
@@ -27,7 +28,7 @@ const WHILE_MACHINE = new Set(['/ws/v1/machine/snapshot', '/ws/v1/machine/waterL
 const SCALE = '/ws/v1/scale/snapshot';
 /** A bean id no Decaid has: its batches are an empty list. */
 const NO_BEAN = 'cafai-contract-test-no-bean';
-/** A shot id no Decaid has: Visualizer never uploaded it. */
+/** A shot id no Decaid has: Visualizer never uploaded it, and no card can draw it under another. */
 const NO_SHOT = 'cafai-contract-test-no-shot';
 /** Decaid loads its plugins in the background after it serves the skin (D103): how long a check waits for one. */
 const PLUGIN_WAIT_MS = 20_000;
@@ -161,6 +162,19 @@ describeDecaid('read', ({ url }) => {
       expect(shot.id).toBe(latest.id);
       expect(summarizeShot(shot).shotId).toBe(latest.id);
     }
+    expect(live.problems()).toEqual([]);
+  });
+
+  it('GET /api/v1/shots/{id} for a shot Decaid does not have: 404, so a card draws its own shot alone (D-CURVE-4)', async () => {
+    const error = await live.client.getShot(NO_SHOT).then(
+      () => null,
+      (caught: unknown) => caught,
+    );
+    expect(error instanceof GatewayError ? error.status : error, 'a shot Decaid does not have').toBe(404);
+    // The overlay's own read keeps it as none, and never asks again this session.
+    const shots = createComparisonShots(live.client);
+    expect(await shots.load(NO_SHOT)).toBeNull();
+    expect(shots.peek(NO_SHOT)).toBeNull();
     expect(live.problems()).toEqual([]);
   });
 

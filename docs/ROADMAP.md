@@ -71,14 +71,19 @@ ahead without them:
 
 ## More from the gap review (D151)
 
-- **Overlaid shot curves.** A shot's card and the Shot view draw one shot,
-  and "Compared with your previous shot?" is words only
-  (`src/ui/chat/parts/ShotCard.tsx`). Draw the bag's previous version's
-  shot faintly under this one, so the change the coach made shows on the
-  curve, as Visualizer, Liquid Aqua, Crema and DSx do. CafAI keeps shot
-  summaries without their curves, so both shots come from Decaid
-  (`GET /api/v1/shots/{id}`). Check first: how the graph tells the two
-  shots apart in every tint and both modes, by more than colour.
+- **Overlaid shot curves: built on 2026-10-15** (D-CURVE-1 to D-CURVE-5,
+  `docs/superpowers/specs/2026-10-15-shot-overlay-design.md`). A shot's card
+  draws the shot its question asks about faintly under its own curves: the
+  previous shot, or for a bag's first shot the last shot of another coffee,
+  rather than the previous version's shot, which a grind move (no new
+  version) would skip. The Shot view draws the bag's previous shot under a
+  shot while it pulls, and the card's once it is done. The shot under is a
+  pale band in each line's own hue, wider than the line and under it, with
+  a key that names it, checked in every tint and both modes. The curves
+  were kept after all: each card in the chat holds its ~1 Hz series, so
+  only a shot not in the chat is read from Decaid, once. Left: choosing
+  another shot to compare with, the shot under in History, its weight and
+  weight flow, and the band seen on a Decent tablet in daylight.
 - **TDS and EY on the shot card: built on 2026-10-15** (D-TDS-1 to
   D-TDS-9, `docs/superpowers/specs/2026-10-15-tds-ey-design.md`). Every
   shot card's numbers have a quiet TDS cell, "+ Add", that opens a field with
