@@ -221,9 +221,18 @@ test("Decaid gone while the machine is connected: Can't reach Decaid once that l
   await expect(card.getByTestId(TID.tareButton)).toBeEnabled();
   await expect(alert).toHaveCount(0);
 
-  await setDecaidAway(page, true);
-  // Not at once: a socket between retries is no outage.
-  await expect(alert).toHaveCount(0);
+  // Decaid goes, and for its first 1.5 s nothing shows: a socket between retries is no outage. Watched in the page, every 100 ms.
+  const shownEarly = await page.evaluate(async (alertId) => {
+    (window as CafaiMockWindow).__CAFAI_MOCK__!.setDecaidAway(true);
+    const since = performance.now();
+    const seen: number[] = [];
+    while (performance.now() - since < 1500) {
+      if (document.querySelector(`[data-testid="${alertId}"]`)) seen.push(Math.round(performance.now() - since));
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return seen;
+  }, TID.machineAlerts);
+  expect(shownEarly, 'ms after Decaid went at which an alert showed').toEqual([]);
   await expect(alert).toHaveText(UNREACHABLE);
   for (const id of STARTS) await expect(row.getByTestId(id)).toBeDisabled();
   await expect(row.getByTestId(TID.espressoButton)).toHaveAccessibleDescription("Can't reach Decaid.");
