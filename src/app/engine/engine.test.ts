@@ -2394,13 +2394,17 @@ describe('coach engine', () => {
       expect(machine.annotations.get('shot-1')).toMatchObject({ drinkTds: null, drinkEy: null });
     });
 
-    it('keeps a TDS without an EY when the card has no yield: drinkTds alone goes to Decaid', async () => {
+    it('keeps a TDS without an EY when the card has no yield, and clears the EY another app left in Decaid from another TDS', async () => {
       await throughShot();
+      // Another app's reading on the record: its EY was worked out from a TDS that is not this one.
+      machine.annotations.set('shot-1', { drinkTds: 8.1, drinkEy: 22.6 } as ShotAnnotations);
       await asStoredBefore((part) => ({ ...part, summary: { ...part.summary, yieldG: null, ratio: null } }));
       await engine.setShotTds('shot-1', 8.5);
       expect(cardOf('shot-1')!.summary).toMatchObject({ tdsPct: 8.5, eyPct: null });
       await vi.waitFor(() => expect(callsOf('updateShot')).toHaveLength(1));
-      expect(callsOf('updateShot')[0]!.args).toEqual(['shot-1', { annotations: { drinkTds: 8.5 } }]);
+      expect(callsOf('updateShot')[0]!.args).toEqual(['shot-1', { annotations: { drinkTds: 8.5, drinkEy: null } }]);
+      // Decaid's deep merge writes the null, so its record, and Visualizer's, has the TDS alone, as the card does.
+      expect(machine.annotations.get('shot-1')).toMatchObject({ drinkTds: 8.5, drinkEy: null });
     });
 
     it('ignores a TDS out of range, a shot no card shows, and the reading the card already has', async () => {
@@ -4869,6 +4873,78 @@ describe('coach engine', () => {
       expect(notSaved()[0]).toEqual({ kind: 'notice', tone: 'warning', text: 'CafAI could not save the taste for this shot.' });
       expect(logged).toHaveBeenCalledWith('CafAI could not save the taste for this shot:', "Decaid sent a reply CafAI doesn't recognise.");
       expect(callsOf('updateShot')).toEqual([]);
+      expect(timers.delays()).toEqual([]);
+    });
+
+    it('still sends a reading and a verdict that wait with the taste when the record cannot be read, and names the taste alone', async () => {
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+      await throughShot();
+      // A reading and a verdict Decaid could not take wait in the outbox; the taste answer joins them.
+      machine.failShotUpdates = 2;
+      await engine.setShotTds('shot-1', 8.5);
+      await engine.rateShot('shot-1', 'better');
+      await vi.waitFor(() => expect(machine.failShotUpdates).toBe(0));
+      await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
+      machine.unreadableRecords = true;
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+
+      const notSaved = () => notices().filter((p) => p.text.startsWith('CafAI could not save'));
+      await vi.waitFor(() => expect(notSaved()).toHaveLength(1));
+      expect(notSaved()[0]).toEqual({ kind: 'notice', tone: 'warning', text: 'CafAI could not save the taste for this shot.' });
+      expect(logged).toHaveBeenCalledWith('CafAI could not save the taste for this shot:', "Decaid sent a reply CafAI doesn't recognise.");
+      // The TDS write needs no read, nor does the verdict: both went, without the taste's notes.
+      expect(callsOf('updateShot')).toHaveLength(1);
+      expect(callsOf('updateShot')[0]!.args).toEqual([
+        'shot-1',
+        { annotations: { drinkTds: 8.5, drinkEy: 23.7, enjoyment: 5, extras: { cafai: { verdict: 'better', comparedWith: { kind: 'usual' } } } } },
+      ]);
+      // Nothing waits, and nothing is said again.
+      expect(timers.delays()).toEqual([]);
+      decaidBack();
+      await drain();
+      expect(callsOf('updateShot')).toHaveLength(1);
+      expect(notSaved()).toHaveLength(1);
+    });
+
+    it('keeps a verdict waiting for the rating scale when the taste cannot be read, and sends it once Decaid says the scale', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      await throughShot();
+      // Decaid has not said its rating scale yet (D101): the verdict waits for it.
+      machine.enjoymentScale = null;
+      await engine.rateShot('shot-1', 'better');
+      await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
+      machine.unreadableRecords = true;
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      const notSaved = () => notices().filter((p) => p.text.startsWith('CafAI could not save'));
+      await vi.waitFor(() => expect(notSaved().map((p) => p.text)).toEqual(['CafAI could not save the taste for this shot.']));
+      expect(callsOf('updateShot')).toEqual([]);
+      expect(timers.delays()).toEqual([30_000]);
+
+      machine.enjoymentScale = 10;
+      timers.fire();
+      await vi.waitFor(() => expect(callsOf('updateShot')).toHaveLength(1));
+      expect(callsOf('updateShot')[0]!.args).toEqual(['shot-1', { annotations: { enjoyment: 5, extras: { cafai: { verdict: 'better', comparedWith: { kind: 'usual' } } } } }]);
+      await drain();
+      expect(notSaved()).toHaveLength(1);
+    });
+
+    it('names the taste and the TDS in one notice when Decaid no longer has the shot to take either', async () => {
+      await throughShot();
+      machine.failShotUpdates = 1;
+      await engine.setShotTds('shot-1', 8.5);
+      await vi.waitFor(() => expect(timers.delays()).toEqual([30_000]));
+      // The shot is gone from Decaid: its record is not found, and a write to it is refused.
+      machine.missingShots.add('shot-1');
+      machine.shotRefusal = new GatewayError(404, '/api/v1/shots/shot-1', 'Shot not found', 'http', { error: 'Shot not found' });
+      scripts.push(() => [text('Thanks.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      await vi.waitFor(() => expect(refusals()).toHaveLength(1));
+      expect(refusals()[0]!.text).toBe('Decaid would not save the taste and the TDS for this shot: Shot not found.');
+      expect(drift()).toContainEqual(['PUT /api/v1/shots/{id}', 'annotations: refused (HTTP 404)']);
+      await drain();
+      expect(refusals()).toHaveLength(1);
       expect(timers.delays()).toEqual([]);
     });
 

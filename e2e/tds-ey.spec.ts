@@ -23,8 +23,11 @@ async function latestShot(page: Page): Promise<ShotRecord | null> {
   });
 }
 
-/** A new bag on Blooming Espresso v1, one shot pulled, its card in the chat and the coach done asking how it tasted. */
-async function toShotCard(page: Page): Promise<Locator> {
+/**
+ * A new bag on Blooming Espresso v1, one shot pulled, its card in the chat and the coach done asking how it tasted.
+ * `withoutScale` pulls it with the scale off, so the shot has no yield and its card no EY.
+ */
+async function toShotCard(page: Page, { withoutScale = false } = {}): Promise<Locator> {
   await openApp(page);
   await saveApiKey(page);
   await goTo(page, 'coach');
@@ -33,6 +36,7 @@ async function toShotCard(page: Page): Promise<Locator> {
   await sendChat(page, 'Kiambu AA, light roast, washed');
   await page.getByTestId(TID.templatePick('blooming-espresso')).click();
   await expect(page.getByText('Loaded Kiambu AA v1 on the machine.')).toBeVisible();
+  if (withoutScale) await page.evaluate(() => (window as CafaiMockWindow).__CAFAI_MOCK__!.state.setScaleConnected(false));
   await pullShot(page);
   const card = page.getByTestId(TID.shotCard).last();
   await expect(card).toBeVisible({ timeout: 60_000 });
@@ -152,6 +156,21 @@ test('a reading changed and removed: the field says why a number is not a TDS, D
   // The coach heard 9.1, so it hears that the reading is gone with the next tap.
   await page.getByTestId(TID.diffCard).last().getByTestId(TID.diffCancel).click();
   await expect(page.getByTestId(TID.chat)).toContainText('Noted: no TDS reading for that shot. OK, we keep v1 as it is.');
+});
+
+test('a TDS on a shot with no yield goes to Decaid without an EY, and the EY another app left there goes', async ({ page }) => {
+  const card = await toShotCard(page, { withoutScale: true });
+  // Another app's reading on the record, its EY worked out from another TDS.
+  await page.evaluate(() => {
+    const state = (window as CafaiMockWindow).__CAFAI_MOCK__!.state;
+    state.updateShot(state.getLatestShot()!.id, { annotations: { drinkTds: 8.1, drinkEy: 19.6 } });
+  });
+  await typeTds(card, '9.25');
+  await expect(card.getByTestId(TID.tdsCell)).toHaveAccessibleName('TDS 9.25 %, change it');
+  await expect(card.getByTestId(TID.tdsNote)).toHaveText('No EY: this shot has no yield from the scale.');
+  // Decaid keeps what the card shows: the TDS alone, never beside the other TDS's EY.
+  await expect.poll(async () => (await latestShot(page))?.annotations?.drinkTds).toBe(9.25);
+  expect(Object.keys((await latestShot(page))?.annotations ?? {})).not.toContain('drinkEy');
 });
 
 test('a reading stays on the card after a reload, and History keeps it on the shot', async ({ page }) => {

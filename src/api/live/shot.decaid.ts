@@ -154,13 +154,18 @@ describeDecaid('shot', ({ url, require }) => {
     expect(live.problems()).toEqual([]);
   });
 
-  it('a TDS and its EY are written and read back, then cleared with null (D165)', async ({ skip }) => {
+  it('a TDS and its EY are written and read back, a TDS without an EY clears the EY, then both are cleared with null (D165)', async ({ skip }) => {
     const id = shotId;
     if (id === null) return require ? assert.fail(NO_SHOT) : skip(NO_SHOT);
     await live.client.updateShot(id, { annotations: { drinkTds: 9.25, drinkEy: 20.8 } });
     const read = (await live.client.getShot(id)).annotations;
     expect(read?.drinkTds, 'drinkTds').toBe(9.25);
     expect(read?.drinkEy, 'drinkEy').toBe(20.8);
+    // As CafAI writes a TDS it has no EY for (a card with no yield or no dose): the EY of the other TDS goes with it.
+    await live.client.updateShot(id, { annotations: { drinkTds: 9.4, drinkEy: null } });
+    const alone = (await live.client.getShot(id)).annotations ?? {};
+    expect(alone.drinkTds, 'drinkTds without an EY').toBe(9.4);
+    expect('drinkEy' in alone, 'drinkEy after a TDS without one').toBe(false);
     // As CafAI removes a reading: Decaid's deep merge writes the nulls, and its toJson leaves the keys out.
     await live.client.updateShot(id, { annotations: { drinkTds: null, drinkEy: null } });
     const cleared = (await live.client.getShot(id)).annotations ?? {};

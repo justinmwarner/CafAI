@@ -279,8 +279,8 @@ interface RatingNote extends ShotRating {
 
 /**
  * The barista's reading as CafAI writes it to a shot record (D165):
- * drinkTds, and drinkEy when CafAI could work one out; `tdsPct` null clears
- * both.
+ * drinkTds and drinkEy, `eyPct` null when CafAI could not work an EY out
+ * (the card has no yield or no dose); `tdsPct` null clears both.
  */
 interface ReadingNote {
   tdsPct: number | null;
@@ -909,7 +909,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
    * Safe to repeat: Decaid merges extras key by key, and CafAI's notes line
    * replaces its own previous line instead of piling up. The rating waits in
    * the outbox until Decaid has said its rating scale; the taste and a TDS
-   * reading go on without it.
+   * reading go on without it. Only the taste reads the record first (its
+   * notes as they are now): a record CafAI cannot read, or one Decaid
+   * refuses, costs the taste alone, and the reading and the rating still go
+   * (D-FIX-2).
    */
   async function writeShot(shotId: string): Promise<void> {
     const write = shotWrites.get(shotId);
@@ -917,22 +920,27 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     const own: Record<string, unknown> = {};
     const annotations: ShotAnnotationsPatch = {};
     if (write.reading) {
-      // A removed reading clears both; a TDS without an EY leaves a drinkEy someone else wrote (D165).
+      // Both, always (D165): a TDS CafAI has no EY for clears an EY another app worked out from another TDS.
       annotations.drinkTds = write.reading.tdsPct;
-      if (write.reading.tdsPct === null) annotations.drinkEy = null;
-      else if (write.reading.eyPct !== null) annotations.drinkEy = write.reading.eyPct;
+      annotations.drinkEy = write.reading.tdsPct === null ? null : write.reading.eyPct;
     }
+    let unread: RecordReadFailed | null = null;
     if (write.taste) {
-      // The notes as they are now: a person may have written some in Decaid since.
-      const record = await api.getShot(shotId).catch((error: unknown) => {
+      try {
+        // The notes as they are now: a person may have written some in Decaid since.
+        const record = await api.getShot(shotId);
+        shotCache.set(record.id, record);
+        annotations.espressoNotes = mergeNotes(record.annotations?.espressoNotes, lastCafaiNotes(record.annotations), write.taste.notes);
+        Object.assign(own, write.taste);
+      } catch (error) {
         // The write waits while Decaid may answer later. Otherwise nothing was
         // written (an unreadable record is no write Decaid took): the read failed.
-        throw writeFailure(error) === 'retry' ? error : new RecordReadFailed(error);
-      });
-      shotCache.set(record.id, record);
-      annotations.espressoNotes = mergeNotes(record.annotations?.espressoNotes, lastCafaiNotes(record.annotations), write.taste.notes);
-      Object.assign(own, write.taste);
+        if (writeFailure(error) === 'retry') throw error;
+        unread = new RecordReadFailed(error);
+      }
     }
+    // The taste was all there was to say: the read's failure is the write's.
+    if (unread && write.reading === undefined && write.rating === undefined) throw unread;
     const scale = write.rating === undefined ? null : await ratingScale();
     if (write.rating !== undefined && scale !== null) {
       annotations.enjoyment = enjoymentFromScore(write.rating.score, scale);
@@ -948,8 +956,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         if (writeFailure(error) !== 'landed') throw error;
       }
     }
-    // A newer write came in meanwhile: it carries everything, the rating included.
+    // A newer write came in meanwhile: it carries everything, the rating included, and reads for the taste again.
     if (shotWrites.get(shotId) !== write) return;
+    // The rest went (or waits for the scale): the taste is all that was lost, and the chat says so.
+    if (unread) shotWriteLost(write.bagId, { taste: write.taste }, unread);
     if (write.rating === undefined || scale !== null) {
       shotWrites.delete(shotId);
       return;
@@ -966,23 +976,37 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
    * a plain sentence; its detail goes to the log Decaid keeps of the WebView.
    */
   function writeDropped(key: string, error: unknown): void {
-    const readFailed = error instanceof RecordReadFailed;
-    const cause = readFailed ? error.reason : error;
-    let what = 'the grinder for the next shots';
-    let source = 'PUT /api/v1/workflow';
-    let field = 'context';
-    let bagId: string | null = null;
-    if (key.startsWith(SHOT_WRITE)) {
-      const shotId = key.slice(SHOT_WRITE.length);
-      const write = shotWrites.get(shotId);
-      shotWrites.delete(shotId);
-      const parts = [...(write?.taste ? ['the taste'] : []), ...(write?.rating ? ['the rating'] : []), ...(write?.reading ? ['the TDS'] : [])];
-      const listed = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts[0];
-      what = `${listed ?? 'the notes'} for this shot`;
-      source = readFailed ? 'GET /api/v1/shots/{id}' : 'PUT /api/v1/shots/{id}';
-      field = readFailed ? 'record' : 'annotations';
-      bagId = write?.bagId ?? null;
+    if (!key.startsWith(SHOT_WRITE)) {
+      sayNotSaved('the grinder for the next shots', null, 'PUT /api/v1/workflow', 'context', error);
+      return;
     }
+    const shotId = key.slice(SHOT_WRITE.length);
+    const write = shotWrites.get(shotId);
+    shotWrites.delete(shotId);
+    shotWriteLost(write?.bagId ?? null, write, error);
+  }
+
+  /**
+   * Say what of a shot write was not saved (`lost`: whichever of its taste,
+   * rating and reading it names), in the shot's own bag's chat: all of a
+   * write that was dropped, or the taste alone when its read failed and the
+   * rest went (D-FIX-2).
+   */
+  function shotWriteLost(bagId: string | null, lost: Pick<ShotWrite, 'taste' | 'rating' | 'reading'> | undefined, error: unknown): void {
+    const readFailed = error instanceof RecordReadFailed;
+    const parts = [...(lost?.taste ? ['the taste'] : []), ...(lost?.rating ? ['the rating'] : []), ...(lost?.reading ? ['the TDS'] : [])];
+    const listed = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts[0];
+    sayNotSaved(
+      `${listed ?? 'the notes'} for this shot`,
+      bagId,
+      readFailed ? 'GET /api/v1/shots/{id}' : 'PUT /api/v1/shots/{id}',
+      readFailed ? 'record' : 'annotations',
+      readFailed ? error.reason : error,
+    );
+  }
+
+  /** Say once that `what` was not saved: a refusal names Decaid's reason and is reported as drift under `source`. */
+  function sayNotSaved(what: string, bagId: string | null, source: string, field: string, cause: unknown): void {
     const refused = cause instanceof GatewayError && cause.status >= 400 && cause.status < 500;
     let text: string;
     if (refused) {
