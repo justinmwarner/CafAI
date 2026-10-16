@@ -99,8 +99,17 @@ describe("a step's last time on the Care screen", () => {
     expect(line(seen, day(5)).details[0]).toBe("CafAI saw the machine's Clean");
   });
 
-  it('never marked done: since when CafAI counts it', () => {
-    expect(line(record(NEVER), day(2), { shots: 103 })).toMatchObject({ last: 'Not marked done since 1 Oct', details: ['3 shots since', 'due in 5 days'] });
+  it('never marked done: since when CafAI counts it, with the count where there is one', () => {
+    expect(line(record(NEVER), day(2), { shots: 103 })).toMatchObject({ last: 'Not marked done yet', details: ['3 shots since 1 Oct', 'due in 5 days'] });
+    expect(line(record(NEVER), day(2))).toMatchObject({ last: 'Not marked done yet', details: ['no shots since 1 Oct'] });
+    const filter = record({ ...NEVER, id: 'intake-filter' });
+    expect(stepLine(stepStatus('intake-filter', filter, DEFAULT_CARE, totals(), day(5)), day(5))).toMatchObject({
+      last: 'Not marked done since 1 Oct',
+      details: ['due in 9 days'],
+    });
+    expect(stepLine(stepStatus('tank-tray', record({ ...NEVER, id: 'tank-tray' }), DEFAULT_CARE, totals(), day(2)), day(2)).last).toBe(
+      'Not marked done since 1 Oct',
+    );
     expect(stepLine(stepStatus('tank-tray', null, DEFAULT_CARE, totals(), day(2)), day(2)).last).toBe('Not marked done yet');
   });
 

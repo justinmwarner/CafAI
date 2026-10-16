@@ -88,7 +88,7 @@ const SEEN_CYCLES: Partial<Record<TrackedStepId, string>> = { 'detergent-clean':
 export interface StepLine {
   /** "Due", for a step that is: said first, in the warning colour. */
   due: boolean;
-  /** "Done today", "Last done 9 days ago", "Not marked done since 3 Oct". */
+  /** "Done today", "Last done 9 days ago", "Not marked done yet", "Not marked done since 3 Oct". */
   last: string;
   /** Done today: in the success colour, with a check. */
   doneToday: boolean;
@@ -101,16 +101,19 @@ export function stepLine(status: StepStatus, nowMs: number): StepLine {
   const doneMs = record?.doneAt ? Date.parse(record.doneAt) : NaN;
   const done = Number.isFinite(doneMs);
   const doneToday = done && calendarDays(doneMs, nowMs) <= 0;
+  // What a reminder counts since the step's start: its steams, or its shots where they gate or bring it due.
+  const counted = !reminder || !record ? null : reminder.counts === 'steams' ? steams : reminder.needs === 'shot' || reminder.shots !== undefined ? shots : null;
+  const word = reminder?.counts === 'steams' ? 'steam' : 'shot';
+  // Never marked done: the day CafAI began counting goes with the count ("23 shots since 1 Oct"), else with the words.
+  const since = record && !done ? ` since ${shortDate(Date.parse(record.countFrom), nowMs)}` : ' since';
   let last: string;
   if (doneToday) last = 'Done today';
   else if (done) last = `Last done ${ago(doneMs, nowMs)}`;
-  else last = record ? `Not marked done since ${shortDate(Date.parse(record.countFrom), nowMs)}` : 'Not marked done yet';
+  else last = record && counted === null ? `Not marked done${since}` : 'Not marked done yet';
   const details: string[] = [];
   if (done && record?.by === 'seen' && SEEN_CYCLES[status.step]) details.push(`CafAI saw the machine's ${SEEN_CYCLES[status.step]}`);
   if (reminder && record) {
-    const counted = reminder.counts === 'steams' ? steams : reminder.needs === 'shot' || reminder.shots !== undefined ? shots : null;
-    const word = reminder.counts === 'steams' ? 'steam' : 'shot';
-    if (counted !== null && !doneToday) details.push(counted === 0 ? `no ${word}s since` : `${plural(counted, word)} since`);
+    if (counted !== null && !doneToday) details.push(counted === 0 ? `no ${word}s${since}` : `${plural(counted, word)}${since}`);
     if (!status.due && status.used && status.dueAtMs !== null) {
       // To the nearest day: the screen's clock moves once a minute, so a step marked a moment ago is a week away, not 8 days.
       const left = Math.round((status.dueAtMs - nowMs) / DAY_MS);
