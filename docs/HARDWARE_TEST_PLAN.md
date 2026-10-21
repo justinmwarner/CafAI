@@ -239,8 +239,9 @@ credits. Nothing to judge on the spot: send the files.
    back at once; no card and no "How did it taste?", and the next shot's
    card compares with the shot before this one. Note whether Decaid saves a
    shot for it (the newest entry in `/api/v1/shots`): the simulator's Decaid
-   saves none for a stop in preheat, and one with no pour for a stop on the
-   pour's first frame, which gets the same line.
+   saves none for a stop in preheat, and one for a stop later on. A stop in
+   the pour's first 2 s gets the same line; once the pump has run, record how
+   many seconds into the pour you stopped and what CafAI showed.
 
 ## 10. The stats card's profile line (D66)
 
