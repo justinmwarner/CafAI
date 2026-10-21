@@ -3229,15 +3229,26 @@ wrong thing (its section 19.6).
   after each search. On the simulator MockDe1 disconnected 9 s into a pour:
   the first warning said "The machine disconnected during that shot…", and
   Retry's, with the machine back, "The shot finished, but Decaid has not
-  saved it." Now the first warning settles how the shot ended and the run
-  keeps it (`ShotRun.cutOff` in `src/app/engine/engine.ts`): cut off when
-  Decaid tore the run down for a disconnect (its terminal decision,
-  reason `disconnected`, de1_state_manager.dart:965-985) or the machine is
-  still away after the search, else finished. Every Retry of that shot says
-  the same. Why: Retry looks again for the same shot, and how that shot
-  ended does not change when the machine comes back. Left: on Decaid 0.8.8
-  that teardown saves nothing, so a Retry after a disconnect cannot find
-  the shot, whatever the warning advises.
+  saved it." Now how the shot ended is settled once and the run keeps it
+  (`ShotRun.cutOff` in `src/app/engine/engine.ts`). It was cut off when
+  Decaid tore the run down for a disconnect (its terminal decision, reason
+  `disconnected`, de1_state_manager.dart:965-985). It finished when Decaid
+  stopped it (a stop decision, such as `targetWeight` or `apiStop`, kept in
+  `ShotRun.stopReason`), so a DE1 switched off during the search never
+  turns a shot Decaid stopped into one cut off. With neither, it was cut
+  off when the machine is still away after the search, but only while
+  Decaid answers: out of reach (D206), Decaid's word on the machine is only
+  its last, so the warning then says "Decaid can't be reached right now, so
+  CafAI could not look for that shot. When it is back, tap Retry to look
+  again, or pull another shot.", settles nothing, and leaves it to the
+  next. A shot settled cut off says so even while Decaid is out of reach,
+  as Decaid keeps no record of a run it tore down; one settled finished
+  says Decaid has not saved it only once Decaid answers. Every warning
+  after the one that settled it says the same. Why: Retry looks again for
+  the same shot, and how that shot ended does not change when the machine
+  comes back, nor when it goes after Decaid stopped the shot. Left: on
+  Decaid 0.8.8 that teardown saves nothing, so a Retry after a disconnect
+  cannot find the shot, whatever the warning advises.
 - **D206. Decaid out of reach is its devices socket down 2.5 s,
   whatever the machine was.** The telemetry store sets `unreachable`
   (`src/api/telemetry.ts`) once Decaid's devices socket has not been open

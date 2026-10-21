@@ -279,7 +279,12 @@ interface ShotRun {
   aborted: boolean;
   /** Decaid tore the run down mid-shot because the machine disconnected (D205). */
   disconnected: boolean;
-  /** Whether the machine cut the shot off: settled at its first notice, and every notice of it says the same (D205). */
+  /** Decaid's stop decision for the run (targetWeight, apiStop, machineEnded…): it stopped the shot, so no disconnect cut it off (D205). */
+  stopReason: string | null;
+  /**
+   * Whether the machine cut the shot off, settled by the first notice that
+   * can know, and kept for every notice of it after (D205); null until then.
+   */
   cutOff: boolean | null;
 }
 
@@ -339,6 +344,9 @@ const SEARCH_NOTICE = 'Looking for that shot in Decaid…';
 const CUT_OFF_NOTICE =
   'The machine disconnected during that shot, and Decaid has no record of it. When the machine is back, tap Retry to look again, or pull another shot.';
 const NOT_SAVED_NOTICE = 'The shot finished, but Decaid has not saved it. Tap Retry to look again, or pull another shot.';
+/** The same warning while Decaid is out of reach (D206): it says nothing of how the shot ended, which Decaid has not said. */
+const UNREACHABLE_NOTICE =
+  "Decaid can't be reached right now, so CafAI could not look for that shot. When it is back, tap Retry to look again, or pull another shot.";
 /** The one line for a run stopped before it poured or in its first 2 s of pour (D204): no shot to taste, none to compare with. */
 const NEVER_POURED = 'That shot stopped before it poured: nothing to taste.';
 /**
@@ -2149,9 +2157,22 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   }
 
   /** The run that just ended, with what Decaid decided of it; `saved` is asked now (D193). */
-  function endedRun(shotId: string | null, started: ShotStart | null, saved: Promise<boolean | null>): ShotRun {
+  function endedRun(
+    shotId: string | null,
+    stopReason: string | null,
+    started: ShotStart | null,
+    saved: Promise<boolean | null>,
+  ): ShotRun {
     const decided = shotId !== null && runDecisions?.shotId === shotId ? runDecisions : null;
-    return { shotId, started, saved, aborted: decided?.aborted ?? false, disconnected: decided?.disconnected ?? false, cutOff: null };
+    return {
+      shotId,
+      started,
+      saved,
+      aborted: decided?.aborted ?? false,
+      disconnected: decided?.disconnected ?? false,
+      stopReason,
+      cutOff: null,
+    };
   }
 
   /** True when a shot started before the machine had the version (D55). */
@@ -2270,13 +2291,20 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     const record = await fetchShot(run.shotId);
     if (!record) {
       // Typically the machine dropped mid-shot, or Decaid is slow to save the
-      // record, so Retry looks for it again. How the shot ended is settled at
-      // its first notice, and Retry's say the same, whether the machine is
-      // back by then or not (D205): cut off when Decaid tore the run down
-      // as the machine dropped (Decaid 0.8.8 then saves nothing), or when the
-      // machine is still away after the search (that frame can be missed).
-      run.cutOff ??= run.disconnected || !telemetry.getState().machineConnected;
-      addMessage('system', [noticePart('warning', run.cutOff ? CUT_OFF_NOTICE : NOT_SAVED_NOTICE)]);
+      // record, so Retry looks for it again. How the shot ended is settled
+      // once, and every notice of it after says the same, whether the machine
+      // is back by then or not (D205): cut off when Decaid tore the run down
+      // as the machine dropped (Decaid 0.8.8 then saves nothing); finished
+      // when Decaid stopped it, whatever the machine did after; else cut off
+      // when the machine is away after the search (that frame can be missed),
+      // but only while Decaid answers: out of reach, its last word on the
+      // machine is no news (D206), so this notice says only that Decaid could
+      // not be reached, and the next one settles it.
+      const { unreachable, machineConnected } = telemetry.getState();
+      run.cutOff ??= run.disconnected ? true : run.stopReason !== null ? false : unreachable ? null : !machineConnected;
+      // A cut-off shot is known to be lost (Decaid keeps no record of a torn-down run); a finished one only once Decaid answered.
+      const words = run.cutOff === true ? CUT_OFF_NOTICE : unreachable ? UNREACHABLE_NOTICE : NOT_SAVED_NOTICE;
+      addMessage('system', [noticePart('warning', words)]);
       replaceStanding({ kind: 'shot', message: SHOT_NOT_SAVED, retry: () => handleShotFinished(run), run });
       await persistConversation(s);
       return;
@@ -3097,7 +3125,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         // A new shot: a rating scale Decaid could not tell is asked once more (D101).
         scaleUnclear = false;
         // Asked now, as Decaid decides whether to keep the run, not once a reply the queue waits on is done (D193).
-        const run = endedRun(event.shotId, started, runSaved());
+        const run = endedRun(event.shotId, event.stopReason, started, runSaved());
         void enqueue(() => handleShotFinished(run));
       });
       // React only to reports that arrive while CafAI runs, not a stale one.

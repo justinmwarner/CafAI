@@ -1295,7 +1295,8 @@ describe('coach engine', () => {
     await throughTemplatePick();
     machine.missingShots.add('shot-lost');
     telemetry.setState({ machineConnected: false });
-    telemetry.emitShot({ type: 'finished', shotId: 'shot-lost', stopReason: 'targetWeight' });
+    // Cut off mid-pour: Decaid made no stop decision for it (D205).
+    telemetry.emitShot({ type: 'finished', shotId: 'shot-lost', stopReason: null });
     await vi.waitFor(() => expect(engine.getState().error).toBe('Decaid has not saved that shot yet.'));
     const notices = engine.getState().messages.flatMap((m) => m.parts).filter((p) => p.kind === 'notice');
     expect(notices.at(-1)).toMatchObject({ tone: 'warning', text: expect.stringContaining('disconnected during that shot') });
@@ -2686,6 +2687,8 @@ describe('coach engine', () => {
   const CUT_OFF =
     'The machine disconnected during that shot, and Decaid has no record of it. When the machine is back, tap Retry to look again, or pull another shot.';
   const NOT_SAVED = 'The shot finished, but Decaid has not saved it. Tap Retry to look again, or pull another shot.';
+  const UNREACHABLE =
+    "Decaid can't be reached right now, so CafAI could not look for that shot. When it is back, tap Retry to look again, or pull another shot.";
   const SHOT_NOT_SAVED = 'Decaid has not saved that shot yet.';
 
   describe('a run that never poured (D204)', () => {
@@ -2865,7 +2868,7 @@ describe('coach engine', () => {
 
   describe("a lost shot's notices keep how it ended, Retry's too (D205)", () => {
     /** Every warning the chat holds about a lost shot. */
-    const lostShotWarnings = () => notices().filter((p) => p.text === CUT_OFF || p.text === NOT_SAVED).map((p) => p.text);
+    const lostShotWarnings = () => notices().filter((p) => [CUT_OFF, NOT_SAVED, UNREACHABLE].includes(p.text)).map((p) => p.text);
 
     it('a shot cut off as the machine dropped says so on Retry, with the machine back', async () => {
       await throughTemplatePick();
@@ -2917,6 +2920,62 @@ describe('coach engine', () => {
       ranAndEnded('shot-lost');
       await vi.waitFor(() => expect(engine.getState().error).toBe(SHOT_NOT_SAVED));
       expect(lostShotWarnings()).toEqual([NOT_SAVED]);
+    });
+
+    it('a shot Decaid stopped is never cut off, though the machine is switched off during the search', async () => {
+      await throughTemplatePick();
+      machine.missingShots.add('shot-lost');
+      ranAndEnded('shot-lost', 'targetWeight');
+      // Switched off as the search starts: the machine is away at the first warning.
+      telemetry.setState({ machineConnected: false });
+      await vi.waitFor(() => expect(engine.getState().error).toBe(SHOT_NOT_SAVED));
+      expect(lostShotWarnings()).toEqual([NOT_SAVED]);
+      await engine.retry();
+      expect(lostShotWarnings()).toEqual([NOT_SAVED, NOT_SAVED]);
+    });
+
+    it('while Decaid is out of reach the warning says only that, and the next one, with Decaid back, settles how the shot ended', async () => {
+      await throughTemplatePick();
+      machine.missingShots.add('shot-gone');
+      // Decaid went away with the machine connected: that is only its last word (D206).
+      telemetry.setState({ unreachable: true, machineConnected: true });
+      ranAndEnded('shot-gone', null);
+      await vi.waitFor(() => expect(engine.getState().error).toBe(SHOT_NOT_SAVED));
+      expect(lostShotWarnings()).toEqual([UNREACHABLE]);
+
+      // Back, and the machine is not: cut off, and so from then on.
+      telemetry.setState({ unreachable: false, machineConnected: false });
+      await engine.retry();
+      expect(lostShotWarnings()).toEqual([UNREACHABLE, CUT_OFF]);
+      telemetry.setState({ machineConnected: true });
+      await drain();
+      await engine.retry();
+      expect(lostShotWarnings()).toEqual([UNREACHABLE, CUT_OFF, CUT_OFF]);
+    });
+
+    it('a shot Decaid stopped, lost while Decaid is out of reach, is said to have finished once Decaid answers', async () => {
+      await throughTemplatePick();
+      machine.missingShots.add('shot-lost');
+      telemetry.setState({ unreachable: true, machineConnected: false });
+      ranAndEnded('shot-lost', 'targetWeight');
+      await vi.waitFor(() => expect(engine.getState().error).toBe(SHOT_NOT_SAVED));
+      expect(lostShotWarnings()).toEqual([UNREACHABLE]);
+      // Decaid is back; the machine is still away, which says nothing of a shot Decaid stopped.
+      telemetry.setState({ unreachable: false });
+      await engine.retry();
+      expect(lostShotWarnings()).toEqual([UNREACHABLE, NOT_SAVED]);
+    });
+
+    it("Decaid's teardown for a disconnect says cut off even while Decaid is out of reach: it is Decaid's own word", async () => {
+      await throughTemplatePick();
+      machine.missingShots.add('shot-cut');
+      telemetry.setState({ shotState: shotFrame('shot-cut', 'pouring') });
+      telemetry.emitShot({ type: 'started', shotId: 'shot-cut' });
+      telemetry.setState({ shotState: shotFrame('shot-cut', 'pouring', decision('terminal', 'disconnected')) });
+      telemetry.setState({ shotState: shotFrame(null, 'idle'), unreachable: true });
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-cut', stopReason: null });
+      await vi.waitFor(() => expect(engine.getState().error).toBe(SHOT_NOT_SAVED));
+      expect(lostShotWarnings()).toEqual([CUT_OFF]);
     });
   });
 

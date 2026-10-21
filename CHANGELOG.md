@@ -56,14 +56,16 @@ workflow checks against it. Settings > About shows the version you run.
 - A taste CafAI cannot add to the shot's record in Decaid (a record it
   cannot read) no longer loses the verdict and the TDS waiting with it:
   they still go, and the chat names only the taste.
-- A shot stopped before it poured (Espresso, then Stop at once) is no
-  longer a shot to taste: no card, no "How did it taste?", and the next
-  shot is compared with the last shot that poured. The chat says "That shot
-  stopped before it poured: nothing to taste." and the Shot view gives the
-  screen back at once; Decaid keeps no record of a run stopped in preheat,
-  so CafAI no longer looks for one and warns that it is missing. After a
-  shot cut off by the machine disconnecting, Retry's warning says so again,
-  rather than that the shot finished.
+- A shot stopped before it poured, or in its first 2 s of pour (Espresso,
+  then Stop at once), is no longer a shot to taste: no card, no "How did it
+  taste?", and the next shot is compared with the last one that counted.
+  The chat says "That shot stopped before it poured: nothing to taste." and
+  the Shot view gives the screen back at once; Decaid keeps no record of a
+  run stopped in preheat, so CafAI no longer looks for one and warns that
+  it is missing. After a shot cut off by the machine disconnecting, Retry's
+  warning says so again, rather than that the shot finished; a shot Decaid
+  stopped is never said to be cut off, and while Decaid can't be reached
+  the warning says just that.
 - When Decaid goes away while the machine is connected (a Wi-Fi drop on a
   phone, Decaid closed or restarting), CafAI now says "Can't reach Decaid.
   Trying again…" after 2.5 s, as it did only for a machine already
