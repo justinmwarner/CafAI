@@ -215,6 +215,22 @@ describe('StatsCard: Tare and Sleep', () => {
     expect(inCard(TID.tareButton)).toBeEnabled();
   });
 
+  it("holds Tare and Sleep while Decaid can't be reached, and keeps the last readings it sent", async () => {
+    const { services } = await renderCard();
+    act(() => services.telemetry.setState({ unreachable: true, sockets: { ...IDLE_TELEMETRY.sockets, devices: 'closed' } }));
+    expect(inCard(TID.tareButton)).toBeDisabled();
+    expect(inCard(TID.tareButton)).toHaveAccessibleDescription("Can't reach Decaid.");
+    expect(inCard(TID.sleepWakeButton)).toBeDisabled();
+    // The alert under the top bar says why; the card keeps Decaid's last word.
+    expect(inCard(TID.machineState)).toHaveTextContent('Ready');
+    expect(inCard(TID.groupTemp)).toHaveTextContent('92.4 °C');
+    expect(inCard(TID.connectionStatus)).toHaveTextContent('DE1 connected');
+
+    act(() => services.telemetry.setState({ unreachable: false, sockets: IDLE_TELEMETRY.sockets }));
+    expect(inCard(TID.tareButton)).toBeEnabled();
+    expect(inCard(TID.sleepWakeButton)).toBeEnabled();
+  });
+
   it("holds its buttons while the row's command is in flight: one command at a time across the app", async () => {
     const services = createFakeServices();
     let release: () => void = () => {};

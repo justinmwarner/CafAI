@@ -138,6 +138,145 @@ describe('Sleep when idle', () => {
   });
 });
 
+describe("the keep-awake window follows Decaid after every change (D209)", () => {
+  // Thursday 15 October 2026, 07:00: the 06:30 weekday wake keeps the machine awake until 07:30.
+  const DURING = new Date(2026, 9, 15, 7, 0);
+  const UNTIL_0730 = '2026-10-15T07:30:00.000';
+  const windowLine = () => screen.queryByText(/^A wake time keeps the machine awake until/);
+
+  /** Decaid works the window out afresh on every read: from now on it answers `until`. */
+  function decaidWindow(services: ReturnType<typeof renderSection>['services'], until: string | null) {
+    services.decaid.presence = { ...services.decaid.presence, keepAwakeUntil: until };
+  }
+
+  function renderDuring(presence: Partial<PresenceSettings> = {}) {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(DURING);
+    return renderSection({ keepAwakeUntil: UNTIL_0730, schedules: [WEEKDAYS_0630], ...presence });
+  }
+
+  it("goes when the wake time is deleted, Sleep when idle off at the time, and stays gone as it is turned back on (the simulator's run)", async () => {
+    const { services, calls, user } = renderDuring();
+    await loaded();
+    expect(windowLine()).toHaveTextContent('A wake time keeps the machine awake until 07:30.');
+    await user.click(sleepSwitch());
+    await waitFor(() => expect(sleepSwitch()).not.toBeChecked());
+    // Only while the idle sleep is on does the window hold anything off (D158).
+    expect(windowLine()).toBeNull();
+    const remove = services.decaid.deleteWakeSchedule;
+    services.decaid.deleteWakeSchedule = async (id) => {
+      await remove(id);
+      decaidWindow(services, null);
+    };
+    await user.click(screen.getByTestId(TID.wakeEdit('w1')));
+    await user.click(dialog().getByTestId(TID.wakeDialogDelete));
+    await waitFor(() => expect(screen.queryByTestId(TID.wakeDialog)).toBeNull());
+    await user.click(sleepSwitch());
+    await waitFor(() => expect(sleepSwitch()).toBeChecked());
+    expect(minutes()).toHaveValue('30');
+    await waitFor(() => expect(calls('getPresenceSettings')).toHaveLength(4));
+    expect(windowLine()).toBeNull();
+  });
+
+  it('moves with a change of the wake time, and goes when the wake time is turned off', async () => {
+    const { services, user } = renderDuring();
+    await loaded();
+    const update = services.decaid.updateWakeSchedule;
+    services.decaid.updateWakeSchedule = async (id, patch) => {
+      const saved = await update(id, patch);
+      decaidWindow(services, patch.enabled === false ? null : '2026-10-15T08:30:00.000');
+      return saved;
+    };
+    await user.click(screen.getByTestId(TID.wakeEdit('w1')));
+    await user.selectOptions(dialog().getByTestId(TID.wakeDialogKeepAwake), 'Stay awake for 2 h');
+    await user.click(dialog().getByTestId(TID.wakeDialogSave));
+    expect(await screen.findByText('A wake time keeps the machine awake until 08:30.')).toBeInTheDocument();
+    await user.click(screen.getByTestId(TID.wakeSwitch('w1')));
+    await waitFor(() => expect(windowLine()).toBeNull());
+  });
+
+  it('comes with a wake time added whose minute has just passed, as Decaid holds the machine awake at once', async () => {
+    const { services, user } = renderDuring({ keepAwakeUntil: null, schedules: [] });
+    await loaded();
+    expect(windowLine()).toBeNull();
+    const add = services.decaid.addWakeSchedule;
+    services.decaid.addWakeSchedule = async (request) => {
+      const added = await add(request);
+      decaidWindow(services, '2026-10-15T07:55:00.000');
+      return added;
+    };
+    await user.click(screen.getByTestId(TID.wakeAdd));
+    await user.selectOptions(dialog().getByTestId(TID.wakeDialogHour), '06');
+    await user.selectOptions(dialog().getByTestId(TID.wakeDialogMinute), '55');
+    await user.click(dialog().getByTestId(TID.wakeDialogSave));
+    expect(await screen.findByText('A wake time keeps the machine awake until 07:55.')).toBeInTheDocument();
+  });
+
+  it('follows the minutes too: a window Decaid ended meanwhile goes with the next change', async () => {
+    const { services, calls, user } = renderDuring();
+    await loaded();
+    expect(windowLine()).not.toBeNull();
+    // The machine went to sleep in the window, which ends it in Decaid.
+    decaidWindow(services, null);
+    await user.click(screen.getByRole('button', { name: 'More sleep after' }));
+    await waitFor(() => expect(windowLine()).toBeNull());
+    expect(calls('updatePresenceSettings')).toEqual([[{ sleepTimeoutMinutes: 35 }]]);
+  });
+
+  it('takes the line away when the read after a change fails, rather than keep a window Decaid may not hold', async () => {
+    const { services, user } = renderDuring();
+    await loaded();
+    services.decaid.failNext('getPresenceSettings', new Error('Could not reach Decaid.'));
+    await user.click(screen.getByRole('button', { name: 'More sleep after' }));
+    await waitFor(() => expect(windowLine()).toBeNull());
+    // The change itself went through, and says nothing of the read.
+    expect(minutes()).toHaveValue('35');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('takes the line away when the full read after a wake time deleted elsewhere fails', async () => {
+    const { services, user } = renderDuring();
+    await loaded();
+    expect(windowLine()).not.toBeNull();
+    // Decaid answers 404 for a wake time deleted elsewhere, and the section reads everything again: that read fails.
+    services.decaid.failNext('updateWakeSchedule', new GatewayError(404, '/api/v1/presence/schedules/w1', 'Schedule not found'));
+    services.decaid.failNext('getPresenceSettings', new Error('Could not reach Decaid.'));
+    await user.click(screen.getByTestId(TID.wakeSwitch('w1')));
+    expect(await screen.findByText(/^Could not read Decaid's sleep and wake settings/)).toBeInTheDocument();
+    expect(windowLine()).toBeNull();
+  });
+
+  it('is set by the newest read alone, when an older one answers last', async () => {
+    const { services, user } = renderDuring();
+    await loaded();
+    const read = services.decaid.getPresenceSettings;
+    let answerFirst!: () => void;
+    const firstHeld = new Promise<void>((resolve) => (answerFirst = resolve));
+    let reads = 0;
+    services.decaid.getPresenceSettings = async () => {
+      reads += 1;
+      // The read after the first change, of a window Decaid still held then, answers only after the second's.
+      if (reads === 1) {
+        const old = await read();
+        await firstHeld;
+        return old;
+      }
+      return read();
+    };
+    await user.click(screen.getByRole('button', { name: 'More sleep after' }));
+    await waitFor(() => expect(reads).toBe(1));
+    decaidWindow(services, null);
+    await user.click(screen.getByTestId(TID.wakeSwitch('w1')));
+    await waitFor(() => expect(reads).toBe(2));
+    await waitFor(() => expect(windowLine()).toBeNull());
+    await act(async () => {
+      answerFirst();
+      await firstHeld;
+    });
+    expect(windowLine()).toBeNull();
+  });
+});
+
 describe('reading', () => {
   it('says why it could not read, and reads again on Retry', async () => {
     const { user } = renderSection({}, { failRead: new Error('Could not reach Decaid.') });
@@ -198,7 +337,8 @@ describe('the wake times', () => {
     await user.click(screen.getByTestId(TID.wakeSwitch('w1')));
     await waitFor(() => expect(screen.getByTestId(TID.wakeSwitch('w1'))).toBeChecked());
     expect(calls('updatePresenceSettings')).toEqual([[{ userPresenceEnabled: true, sleepTimeoutMinutes: 0 }]]);
-    expect(services.decaid.calls.map((call) => call.method).slice(-2)).toEqual(['updatePresenceSettings', 'updateWakeSchedule']);
+    // Then the keep-awake window is read again (D209).
+    expect(services.decaid.calls.map((call) => call.method).slice(-3)).toEqual(['updatePresenceSettings', 'updateWakeSchedule', 'getPresenceSettings']);
     // The machine still does not sleep by itself.
     expect(sleepSwitch()).not.toBeChecked();
   });
@@ -250,7 +390,7 @@ describe('the wake time dialog', () => {
     await user.click(screen.getByTestId(TID.wakeAdd));
     await user.click(dialog().getByTestId(TID.wakeDialogSave));
     await waitFor(() => expect(screen.queryByTestId(TID.wakeDialog)).toBeNull());
-    expect(services.decaid.calls.map((call) => call.method).slice(-2)).toEqual(['updatePresenceSettings', 'addWakeSchedule']);
+    expect(services.decaid.calls.map((call) => call.method).slice(-3)).toEqual(['updatePresenceSettings', 'addWakeSchedule', 'getPresenceSettings']);
     expect(services.decaid.presence).toMatchObject({ userPresenceEnabled: true, sleepTimeoutMinutes: 0 });
   });
 

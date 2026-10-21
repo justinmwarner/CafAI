@@ -53,6 +53,21 @@ async function renderAlerts(services: FakeServices = createFakeServices()) {
   return view;
 }
 
+const START_IDS = [TID.espressoButton, TID.steamButton, TID.flushButton, TID.hotWaterButton];
+
+/** The machine row over the alert, as in the shell; by default a connected, ready machine. */
+async function renderWithRow(services: FakeServices = createFakeServices()) {
+  renderWithServices(
+    <>
+      <MachineRow />
+      <MachineAlerts />
+    </>,
+    services,
+  );
+  await act(async () => {});
+  return services;
+}
+
 const alert = () => screen.getByTestId(TID.machineAlerts);
 const wait = (ms: number) => act(() => vi.advanceTimersByTime(ms));
 /** A tap under fake timers (userEvent waits on a timer of its own there), and the request it sends. */
@@ -87,7 +102,7 @@ describe('MachineAlerts', () => {
     expect(screen.queryByTestId(TID.machineAlerts)).not.toBeInTheDocument();
   });
 
-  it("says nothing before Decaid has answered, then that it can't be reached if that lasts", async () => {
+  it("says nothing before Decaid has answered, then that it can't be reached once that has lasted", async () => {
     vi.useFakeTimers();
     const services = createFakeServices({ telemetry: STARTING });
     renderWithServices(<MachineAlerts />, services);
@@ -95,26 +110,120 @@ describe('MachineAlerts', () => {
     expect(screen.queryByTestId(TID.machineAlerts)).not.toBeInTheDocument();
     wait(2000);
     expect(screen.queryByTestId(TID.machineAlerts)).not.toBeInTheDocument();
-    wait(1000);
+    // The store says when it has lasted (telemetry.ts, 2.5 s).
+    act(() => services.telemetry.setState({ unreachable: true }));
+    expect(alert()).toHaveRole('alert');
     expect(alert()).toHaveTextContent("Can't reach Decaid. Trying again…");
   });
 
-  it("says when Decaid can't be reached, without flickering on reconnects", async () => {
+  it("says when Decaid can't be reached while the machine is connected, holding the starts; a blip shows nothing", async () => {
     vi.useFakeTimers();
-    const services = createFakeServices({
-      telemetry: { ...DISCONNECTED, sockets: { ...IDLE_TELEMETRY.sockets, devices: 'connecting' } },
-    });
-    renderWithServices(<MachineAlerts />, services);
+    const services = await renderWithRow();
+    // A socket between retries is not an outage: the machine stands as Decaid last said.
+    act(() => services.telemetry.setState({ sockets: { ...IDLE_TELEMETRY.sockets, devices: 'connecting' } }));
+    wait(2000);
+    expect(screen.queryByTestId(TID.machineAlerts)).not.toBeInTheDocument();
+    expect(screen.getByTestId(TID.espressoButton)).toBeEnabled();
+    act(() => services.telemetry.setState({ sockets: IDLE_TELEMETRY.sockets }));
+    wait(5000);
+    expect(screen.queryByTestId(TID.machineAlerts)).not.toBeInTheDocument();
+
+    // Decaid goes away, and the store says so: the machine is still connected by its last word.
     act(() => services.telemetry.setState({ sockets: { ...IDLE_TELEMETRY.sockets, devices: 'closed' } }));
-    wait(3000);
-    expect(alert()).toHaveTextContent("Can't reach Decaid");
-    // Decaid answers, and says there is no machine: straight from one to the other.
-    act(() => services.telemetry.setState({ sockets: { ...IDLE_TELEMETRY.sockets, devices: 'open' } }));
-    expect(alert()).toHaveTextContent('Not connected');
+    wait(2500);
+    act(() => services.telemetry.setState({ unreachable: true }));
+    expect(alert()).toHaveTextContent("Can't reach Decaid. Trying again…");
+    for (const id of START_IDS) expect(screen.getByTestId(id)).toBeDisabled();
+    // Retries come and go under it.
+    act(() => services.telemetry.setState({ sockets: { ...IDLE_TELEMETRY.sockets, devices: 'connecting' } }));
+    wait(30_000);
+    expect(alert()).toHaveTextContent("Can't reach Decaid. Trying again…");
+
+    // Back, with the machine still there: the alert goes and the starts are live, at once.
+    act(() => services.telemetry.setState({ unreachable: false, sockets: IDLE_TELEMETRY.sockets }));
+    expect(screen.queryByTestId(TID.machineAlerts)).not.toBeInTheDocument();
+    for (const id of START_IDS) expect(screen.getByTestId(id)).toBeEnabled();
+  });
+
+  it("shows nothing while the watchdog opens a healthy Decaid's devices socket again, however long it takes, and the row stays live", async () => {
+    vi.useFakeTimers();
+    const services = await renderWithRow();
+    // Closed by CafAI, then connecting: past the 1 s a dropped machine waits before its alert.
+    for (const devices of ['closed', 'connecting'] as const) {
+      act(() => services.telemetry.setState({ sockets: { ...IDLE_TELEMETRY.sockets, devices } }));
+      wait(1200);
+      expect(screen.queryByTestId(TID.machineAlerts)).not.toBeInTheDocument();
+      for (const id of START_IDS) expect(screen.getByTestId(id)).toBeEnabled();
+    }
+    // Decaid answers, its devices as they were.
+    act(() => services.telemetry.setState({ sockets: IDLE_TELEMETRY.sockets }));
+    wait(5000);
+    expect(screen.queryByTestId(TID.machineAlerts)).not.toBeInTheDocument();
+    for (const id of START_IDS) expect(screen.getByTestId(id)).toBeEnabled();
+  });
+
+  it('when Decaid answers again that the machine went away meanwhile, goes straight to Not connected: never a moment of a live row', async () => {
+    vi.useFakeTimers();
+    const services = await renderWithRow();
+    act(() => services.telemetry.setState({ sockets: { ...IDLE_TELEMETRY.sockets, devices: 'closed' } }));
+    wait(2500);
+    act(() => services.telemetry.setState({ unreachable: true }));
+    // The socket opens again: no word from Decaid yet, so nothing changes.
+    act(() => services.telemetry.setState({ sockets: IDLE_TELEMETRY.sockets }));
+    expect(alert()).toHaveTextContent("Can't reach Decaid. Trying again…");
+    expect(screen.getByTestId(TID.espressoButton)).toBeDisabled();
+    // Its devices frame: the machine and the scale went away. One change, as the store makes it.
+    act(() => services.telemetry.setState({ ...AWAY, unreachable: false }));
+    expect(alert()).toHaveTextContent(NOT_CONNECTED);
+    expect(within(alert()).getByTestId(TID.connectMachine)).toBeEnabled();
+    expect(screen.getByTestId(TID.espressoButton)).toBeDisabled();
     // A dropped socket between retries is not an outage.
     act(() => services.telemetry.setState({ sockets: { ...IDLE_TELEMETRY.sockets, devices: 'connecting' } }));
     wait(1000);
-    expect(alert()).toHaveTextContent('Not connected');
+    expect(alert()).toHaveTextContent(NOT_CONNECTED);
+  });
+
+  it("keeps Stop live while Decaid can't be reached; a Stop that can't get through says so", async () => {
+    const services = createFakeServices({ telemetry: { machine: { ...IDLE_TELEMETRY.machine!, state: { state: 'espresso', substate: 'pouring' } } } });
+    services.decaid.failNext(
+      'setMachineState',
+      new GatewayError(0, '/api/v1/machine/state/idle', 'Could not reach Decaid. Check that it is running and that this device is on the same network.', 'network'),
+    );
+    await renderWithRow(services);
+    act(() => services.telemetry.setState({ unreachable: true, sockets: { ...IDLE_TELEMETRY.sockets, devices: 'closed' } }));
+    // The plain words: whether Stop gets through is for its tap to say.
+    expect(alert()).toHaveTextContent("Can't reach Decaid. Trying again…");
+    expect(screen.getByTestId(TID.stopButton)).toBeEnabled();
+    await userEvent.click(screen.getByTestId(TID.stopButton));
+    expect(callsTo(services, 'setMachineState')).toEqual([['idle']]);
+    expect(alert()).toHaveTextContent("Couldn't stop the machine. Could not reach Decaid.");
+  });
+
+  it("says Decaid can't be reached over a device error it reported before, which may be old; a failed command still comes first", async () => {
+    // Decaid keeps a failed scan's error until the next scan (status_publisher.dart:31-45).
+    const scanFailed: ConnectionError = { ...UPLOAD_FAILED, kind: 'scanFailed', message: 'Scanning for devices failed.', suggestion: null };
+    const services = createFakeServices({
+      telemetry: { connectionError: scanFailed, machine: { ...IDLE_TELEMETRY.machine!, state: { state: 'steam', substate: 'pouring' } } },
+    });
+    services.decaid.failNext(
+      'setMachineState',
+      new GatewayError(0, '/api/v1/machine/state/idle', 'Could not reach Decaid. Check that it is running and that this device is on the same network.', 'network'),
+    );
+    await renderWithRow(services);
+    expect(alert()).toHaveTextContent('Scanning for devices failed.');
+
+    act(() => services.telemetry.setState({ unreachable: true, sockets: { ...IDLE_TELEMETRY.sockets, devices: 'closed' } }));
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(alert()).toHaveTextContent("Can't reach Decaid. Trying again…");
+    // The tap the barista just made comes first.
+    await userEvent.click(screen.getByTestId(TID.stopButton));
+    expect(alert()).toHaveTextContent("Couldn't stop the machine. Could not reach Decaid.");
+    await userEvent.click(within(alert()).getByRole('button', { name: /close/i }));
+    expect(alert()).toHaveTextContent("Can't reach Decaid. Trying again…");
+
+    // Back: Decaid's own error again, as it still stands, until closed.
+    act(() => services.telemetry.setState({ unreachable: false, sockets: IDLE_TELEMETRY.sockets }));
+    expect(alert()).toHaveTextContent('Scanning for devices failed.');
   });
 
   it("shows Decaid's connection error at once and until closed, then the next problem", async () => {

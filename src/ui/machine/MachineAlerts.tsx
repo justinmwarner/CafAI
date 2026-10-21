@@ -4,8 +4,12 @@
  *
  * 1. A command that failed (from the top bar's row or the stats card): it
  *    answers the tap the barista just made, until closed or the next command.
- * 2. Decaid's latest device error (e.g. profileUploadFailed), until closed.
- * 3. Decaid itself out of reach, once that has lasted.
+ * 2. Decaid itself out of reach, once that has lasted, whatever the machine
+ *    was (the telemetry store's `unreachable`): until Decaid says again
+ *    which devices are connected, the commands that need it wait
+ *    (commands.ts) and the stats card keeps its last readings.
+ * 3. Decaid's latest device error (e.g. profileUploadFailed), until closed;
+ *    it may be old, so it waits while Decaid cannot be reached.
  * 4. No machine connected, with what to do about it, and Connect for the
  *    machine and for the scale when it is missing too (deviceConnect.ts).
  * 5. The machine reporting an error.
@@ -38,8 +42,6 @@ import { isWaterLow } from './format.ts';
 import { useGatewayMode, type GatewayMode } from './useGatewayMode.ts';
 import { useCommandError } from './useMachineCommands.ts';
 
-/** Sockets stay 'connecting'/'closed' between backoff retries: only a lasting outage is one. */
-const UNREACHABLE_AFTER_MS = 2500;
 /** A machine that drops and comes straight back (a Bluetooth reconnect) was never away. */
 const NOT_CONNECTED_AFTER_MS = 1000;
 /** Both ways: the level wobbles around the refill line while water moves. */
@@ -193,8 +195,9 @@ export function MachineAlerts() {
   const gateway = useGatewayMode();
   // Decaid has said something about its devices: before that, "not connected" is only "not known yet".
   const heard = useOnceTrue(useTelemetry((s) => s.devices !== null || s.sockets.devices === 'open'));
-  const away = useSteadyFlag(!connected, NOT_CONNECTED_AFTER_MS);
-  const unreachable = useSteadyFlag(useTelemetry((s) => !s.machineConnected && s.sockets.devices !== 'open'), UNREACHABLE_AFTER_MS);
+  // Time without word from Decaid counts as time away: a machine Decaid says is gone when it answers again has the alert at once.
+  const away = useSteadyFlag(useTelemetry((s) => !s.machineConnected || s.unreachable || s.sockets.devices !== 'open'), NOT_CONNECTED_AFTER_MS) && !connected;
+  const unreachable = useTelemetry((s) => s.unreachable);
   const machineError = useTelemetry((s) => s.machineConnected && s.machine?.state?.state === 'error');
   const refill = useSteadyFlag(
     useTelemetry((s) => s.machineConnected && (isWaterLow(s.waterLevels) || s.machine?.state?.state === 'needsWater')),
@@ -213,14 +216,15 @@ export function MachineAlerts() {
   let problem: Problem | null = null;
   if (command.error !== null) {
     problem = { severity: 'error', text: command.error, onClose: command.dismiss };
+  } else if (unreachable) {
+    // Ahead of Decaid's device error, which may be old (scanFailed stays, profileUploadFailed lasts until an upload works): with every command held, the strip says why.
+    problem = { severity: 'warning', text: "Can't reach Decaid. Trying again…" };
   } else if (deviceError !== null && deviceError.timestamp !== closedDeviceError) {
     problem = {
       severity: deviceError.severity === 'warning' ? 'warning' : 'error',
       text: deviceErrorText(deviceError),
       onClose: () => setClosedDeviceError(deviceError.timestamp),
     };
-  } else if (unreachable) {
-    problem = { severity: 'warning', text: "Can't reach Decaid. Trying again…" };
   } else if (away && heard) {
     // Only the DE1's own failed Connect takes the machine's words; a scale not found says so in the scale's alert, once the DE1 is back.
     const failed = connect.failure?.kind === 'machine' ? connect.failure.text : null;

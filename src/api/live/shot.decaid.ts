@@ -3,7 +3,8 @@
  * DECAID_SIM=1): espresso, Next step once mid-shot (D113), the shotState
  * sequence, the shot record read and summarised by CafAI's summariser, notes
  * and a rating written and read back, a TDS and its EY written, read back and
- * cleared, then idle. Every reply and every frame of the shot is checked against the
+ * cleared, then idle; then espresso and idle at once, a run Decaid aborts
+ * before its pour (D204). Every reply and every frame of the shot is checked against the
  * pinned spec and for drift. A simulator only (D104): it refuses to run unless
  * Decaid simulates the machine and no real machine is connected, because
  * espresso moves water. `npm test` never runs it.
@@ -15,6 +16,7 @@
 import { afterAll, assert, beforeAll, beforeEach, expect, it } from 'vitest';
 import { MIDDLE_SCORE, SCORE_STEP, enjoymentFromScore } from '../../app/engine/shotRating.ts';
 import { summarizeShot } from '../../coach/index.ts';
+import { MIN_SHOT_POUR_S, recordPourSeconds } from '../../coach/summary/summarize.ts';
 import { deviceConnections, parseShotStateFrame } from '../frames.ts';
 import { GatewayError, type DeviceEntry, type ShotStateEvent } from '../types.ts';
 import { describeDecaid, openDecaid, type LiveDecaid } from './env.ts';
@@ -200,6 +202,57 @@ describeDecaid('shot', ({ url, require }) => {
       'the machine to report idle',
     );
     expect(state).toBe('idle');
+    expect(live.problems()).toEqual([]);
+  });
+
+  it('espresso, then idle at once: Decaid aborts the run before its pour and keeps no record, or keeps one CafAI can time (D204)', async () => {
+    const shotState = watches.find((watch) => watch.path === SHOT_STATE);
+    if (!shotState) throw new Error('shotState is not being listened to.');
+    const client = live.client;
+    const before = shotState.frames.length;
+    const events = () => shotState.frames.slice(before).map(shotEvent).filter((event) => event !== null);
+    const idle = undo.add('the machine (idle)', () => client.setMachineState('idle'));
+
+    await client.setMachineState('espresso');
+    // CafAI's Stop the moment the run shows: on the simulated machine's short preheat, it lands there as a rule.
+    const started = await waitUntil(() => events().find((event) => event.state === 'preheating' || event.state === 'pouring'), SHOT_MS, 'shotState preheating or pouring');
+    await idle();
+    const ended = await waitUntil(() => events().find((event) => event.decision?.kind === 'abort' || event.state === 'finished'), SHOT_MS, 'the run to end');
+    const id = ended.shotId ?? started.shotId;
+    if (id === null) assert.fail('Decaid named no shot id for the run.');
+    if (ended.decision?.kind === 'abort') {
+      // What CafAI's engine relies on: the abort names the run, the idle frame follows, and no record is kept.
+      if (started.shotId !== null) expect(ended.shotId, 'the abort names the run').toBe(started.shotId);
+      await waitUntil(
+        () => {
+          const all = events();
+          return all.slice(all.findIndex((event) => event.decision?.kind === 'abort') + 1).find((event) => event.state === 'idle') ?? null;
+        },
+        IDLE_MS,
+        'shotState idle after the abort',
+      );
+      const found = await client.getShot(id).then(
+        () => true,
+        (error: unknown) => (error instanceof GatewayError && error.status === 404 ? false : Promise.reject(error)),
+      );
+      expect(found, 'a record of the aborted run').toBe(false);
+      console.log('Espresso, then idle at once: Decaid aborted the run before its pour and kept no record of it.');
+    } else {
+      const record = await waitUntil(
+        () =>
+          client.getShot(id).catch((error: unknown) => {
+            if (error instanceof GatewayError && error.status === 404) return null;
+            throw error;
+          }),
+        RECORD_MS,
+        `shot ${id} in Decaid’s history`,
+      );
+      // What CafAI's engine relies on: a sample it can read (Decaid records the first preheat one), and the pour's time.
+      const pour = recordPourSeconds(record);
+      if (pour === null) assert.fail('CafAI could read no sample of the record.');
+      const shot = pour >= MIN_SHOT_POUR_S ? 'a shot' : `no shot, under ${MIN_SHOT_POUR_S} s`;
+      console.log(`Espresso, then idle at once: the pour had begun, and Decaid kept the run with ${pour.toFixed(2)} s of pour (${shot}).`);
+    }
     expect(live.problems()).toEqual([]);
   });
 

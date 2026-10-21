@@ -4,9 +4,10 @@ Ranked by the cost of a wrong guess (most expensive first). Each says what
 CafAI assumes now and what would change if the guess is wrong. Questions 1-8
 came out of the morning session of 2026-10-04, 9-13 out of the Decaid
 alignment of 2026-10-09, 14-16 out of Claude on your computer of
-2026-10-11, 17 out of your list of 2026-10-11, and 18-21 out of the gap
-review's four items of 2026-10-15 (each ranked the same way, in its own
-section); the questions you answered are in "Answered" at the end.
+2026-10-11, 17 out of your list of 2026-10-11, 18-21 out of the gap
+review's four items of 2026-10-15, and 22-23 out of the simulator pre-run
+of 2026-10-16 (each ranked the same way, in its own section); the questions
+you answered are in "Answered" at the end.
 
 1. **Does Decaid's barrier behave on a real DE1 the way its source says?**
    CafAI now waits for `POST /api/v1/machine/profile` after every load and
@@ -212,6 +213,20 @@ section); the questions you answered are in "Answered" at the end.
     a quiet "TDS · Add" cell, even for a barista with no refractometer. A
     setting would hide it from those who have one until they find it; on a
     tablet it fills an empty column, on a phone it takes a short row.
+
+## From the simulator pre-run (2026-10-16)
+
+22. **Where does a shot begin (D204)?** A run with less than 2 s of pour
+    is no shot: no card, no "How did it taste?", and the next shot is
+    compared with the one before it. The chat says "That shot stopped before
+    it poured: nothing to taste." In the first 2 s of pour the puck is still
+    being wetted, so nothing in it says anything about the grind; a shot
+    that gushes or chokes shows later than that. If you stop shots early on
+    purpose to learn from them, say where the line should be.
+23. **Should Retry go after a shot cut off by a disconnect (D205)?** When
+    the machine disconnects during a shot, Decaid 0.8.8 saves nothing, so
+    the warning's Retry can never find that shot. It stays because a newer
+    Decaid may save such a shot; without it the warning would stand alone.
 
 ## Answered
 

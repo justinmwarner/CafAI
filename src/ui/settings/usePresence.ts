@@ -1,7 +1,8 @@
 /**
  * Decaid's sleep and wake settings for Settings > Sleep and wake (D157-D160):
- * read once on mount (and by Retry) with GET /api/v1/presence/settings, each
- * change sent at once and shown as Decaid answers it. None needs the machine:
+ * read on mount (and by Retry) with GET /api/v1/presence/settings, each
+ * change sent at once and shown as Decaid answers it, and the keep-awake
+ * window read again after each change (below). None needs the machine:
  * they are Decaid's own settings, kept on its device.
  *
  * Sleep when idle is Decaid's idle sleep on and above 0 minutes (D158). Off
@@ -17,6 +18,11 @@
  * fails; the switches move once Decaid has answered. The dialog's adds,
  * changes and deletes are promises that throw with a sentence, for the
  * dialog to show.
+ *
+ * The keep-awake window ("A wake time keeps the machine awake until 07:30.")
+ * is Decaid's keepAwakeUntil, which it works out afresh from the wake times
+ * on every read and which no write's answer carries: after each change that
+ * Decaid took, the settings are read again for it (D209).
  */
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -85,24 +91,60 @@ export function usePresence(): PresenceView {
   const remembered = useRef(DEFAULT_SLEEP_MINUTES);
   /** The number of the newest change of the minutes, its changes on their way, and the value Decaid last held, which a failed newest change goes back to. */
   const minutesSaves = useRef({ newest: 0, inFlight: 0, settled: 0 });
+  /** The number of the newest read of Decaid's settings: only its answer sets the keep-awake window. */
+  const windowReads = useRef(0);
+  /** Whether the section is still on screen, for a read of the window that answers after it has gone. */
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let live = true;
+    const number = ++windowReads.current;
     setLoadError(null);
     decaid
       .getPresenceSettings()
       .then((read) => {
         if (!live) return;
         if (read.sleepTimeoutMinutes > 0) remembered.current = read.sleepTimeoutMinutes;
-        setSettings(read);
+        // A read sent after this one (after a change) says the window: this one keeps the window that read set, or will set.
+        setSettings((now) => (now !== null && number !== windowReads.current ? { ...read, keepAwakeUntil: now.keepAwakeUntil } : read));
       })
       .catch((caught: unknown) => {
-        if (live) setLoadError(`Could not read Decaid's sleep and wake settings: ${errorText(caught)}`);
+        if (!live) return;
+        setLoadError(`Could not read Decaid's sleep and wake settings: ${errorText(caught)}`);
+        // The newest read of the window failed: a window Decaid may no longer hold does not stay (D209).
+        if (number === windowReads.current) setSettings((now) => now && { ...now, keepAwakeUntil: null });
       });
     return () => {
       live = false;
     };
   }, [decaid, reads]);
+
+  /**
+   * Decaid's keep-awake window after a change it took (D209). No write's
+   * answer carries keepAwakeUntil (presence_handler.dart:98-101, 182, 267
+   * and 294 at aab5f93), and Decaid works it out afresh from the wake times
+   * on every read, so the settings are read again for it. Only the window is
+   * taken: the rest shows what CafAI wrote, and a change of the minutes may
+   * still be on its way. Only the newest read sets it, and one that fails
+   * takes the line away rather than leave a window Decaid may no longer hold.
+   */
+  const readWindow = () => {
+    const number = ++windowReads.current;
+    const settle = (keepAwakeUntil: string | null) => {
+      if (mounted.current && number === windowReads.current) setSettings((now) => now && { ...now, keepAwakeUntil });
+    };
+    decaid.getPresenceSettings().then(
+      (read) => settle(read.keepAwakeUntil ?? null),
+      () => settle(null),
+    );
+  };
 
   /** Decaid's answer to a settings change: the two settings as it saved them. */
   const applySaved = (saved: Pick<PresenceSettings, 'userPresenceEnabled' | 'sleepTimeoutMinutes'>) => {
@@ -134,6 +176,7 @@ export function usePresence(): PresenceView {
     setSleepError(null);
     setMinutesError(null);
     sendSettings(patch)
+      .then(() => readWindow())
       .catch((caught: unknown) => setSleepError(`Could not change Sleep when idle: ${errorText(caught)}`))
       .finally(() => setSleepBusy(false));
   };
@@ -153,8 +196,10 @@ export function usePresence(): PresenceView {
       .updatePresenceSettings({ sleepTimeoutMinutes: minutes })
       .then((saved) => {
         saves.settled = saved.sleepTimeoutMinutes;
-        // A newer change was sent: its own answer decides what the field shows.
-        if (number === saves.newest) applySaved(saved);
+        // A newer change was sent: its own answer decides what the field shows, and reads the window.
+        if (number !== saves.newest) return;
+        applySaved(saved);
+        readWindow();
       })
       .catch((caught: unknown) => {
         if (number !== saves.newest) return;
@@ -175,6 +220,7 @@ export function usePresence(): PresenceView {
     (async () => {
       if (enabled) await switchOnForWakes(current);
       putSchedule(await decaid.updateWakeSchedule(schedule.id, { enabled }));
+      readWindow();
     })()
       .catch((caught: unknown) => {
         if (isGone(caught)) {
@@ -202,6 +248,8 @@ export function usePresence(): PresenceView {
     } catch (caught) {
       throw new Error(`Could not add the wake time: ${errorText(caught)}`, { cause: caught });
     }
+    // A wake time whose minute has just passed holds the machine awake at once.
+    readWindow();
   };
 
   const updateSchedule = async (id: string, patch: WakeSchedulePatch) => {
@@ -212,10 +260,12 @@ export function usePresence(): PresenceView {
     } catch (caught) {
       if (isGone(caught)) {
         dropSchedule(id);
+        readWindow();
         throw new Error(WAKE_TIME_GONE, { cause: caught });
       }
       throw new Error(`Could not save the wake time: ${errorText(caught)}`, { cause: caught });
     }
+    readWindow();
   };
 
   const deleteSchedule = async (id: string) => {
@@ -226,6 +276,8 @@ export function usePresence(): PresenceView {
       if (!isGone(caught)) throw new Error(`Could not delete the wake time: ${errorText(caught)}`, { cause: caught });
     }
     dropSchedule(id);
+    // Its window, if one ran, went with it.
+    readWindow();
   };
 
   return {

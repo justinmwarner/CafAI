@@ -1,6 +1,36 @@
 # Good morning: CafAI after your answers (2026-10-04)
 
-**Newest (2026-10-15, evening):** four more items of the gap review, built
+**Newest (2026-10-21):** the six defects the simulator pre-run of
+`docs/HARDWARE_TEST_PLAN.md` found on 2026-10-16 are fixed (D204-D209,
+branch `fix/sim-findings`, merged into `main`), and the plan expects the
+fixed behaviour. A shot stopped before it poured, or in its first 2 s of
+pour, is no shot: no card, no "How did it taste?", just "That shot stopped
+before it poured: nothing to taste.", and the next shot is compared with
+the one before (D204); a run stopped in preheat is no longer searched for
+and reported missing. A lost shot's warning settles once how the shot
+ended, so Retry after a disconnect keeps saying so (D205). When Decaid
+goes away while the machine shows connected, "Can't reach Decaid. Trying
+again…" comes after 2.5 s and every button but Stop waits until Decaid
+answers (D206, D207); a tablet that loses its power is noticed once the
+machine falls silent, after about 25 s. A bag's first card names the other
+coffee in full, on a line under the curves on a tablet (D208), and
+Settings > Sleep and wake's "keeps the machine awake until" follows every
+change made there (D209). Three reviewers then read the fixes and found
+12 problems, none critical: all are fixed, one by writing it down. Calls
+of mine to check: the 2 s line (QUESTIONS 22); Stop kept live while Decaid
+can't be reached, as D90 and D97 say; a Retry kept after a disconnect,
+though Decaid 0.8.8 never saves such a shot (QUESTIONS 23); and the
+warning's words while Decaid can't be reached, "Decaid can't be reached
+right now, so CafAI could not look for that shot." (D205). On the final
+code: typecheck, lint, 4347 unit tests, both builds and the release zip
+pass; Playwright passed all 492 tests (8 skipped by design); Chromium 91
+runs the smoke and the coach loop; `npm run test:decaid` passed 45/45
+against Decaid 0.8.8 on your simulator, the new checks included (a stop at
+once: Decaid aborted the run and kept no record), and `npm run e2e:real`
+passed. Not yet seen on a real DE1: the plan's sections 9, 15 and 18 with
+these fixes.
+
+**Before that (2026-10-15, evening):** four more items of the gap review, built
 side by side by four agents and merged on branch `feat/gap-review-batch`
 (D161-D196), then into `main`: overlaid shot curves, TDS and EY on the shot
 card, °F, and care reminders set by your water. You put off Clean, Descale

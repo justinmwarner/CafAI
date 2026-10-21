@@ -143,6 +143,29 @@ export function pourSeconds(rows: readonly ShotRow[]): number | null {
 }
 
 /**
+ * A run with less pour than this is no shot (D204): in a pour's first 2 s
+ * the puck is still being wetted, so nothing in it says anything about the
+ * grind; a gusher or a choke shows later than that.
+ */
+export const MIN_SHOT_POUR_S = 2;
+
+/**
+ * How long a shot record poured, in seconds, timed as its card times it
+ * (pourSeconds), and 0 for preheat alone: under MIN_SHOT_POUR_S, the run is
+ * no shot to taste and none to compare the next one with (D204). Decaid keeps
+ * such a record when the stop lands just as the pour begins: on its
+ * simulator, and from a real DE1 (decaid-mcp's shot-09). Null when the record
+ * holds no sample CafAI can read: Decaid records a run's first preheat
+ * sample whatever follows (shot_sequencer.dart:288-294, 355-396 at aab5f93),
+ * so that is a record whose shape changed (a field renamed, a time CafAI
+ * cannot parse), never a run that did not pour.
+ */
+export function recordPourSeconds(record: Pick<ShotRecord, 'measurements'>): number | null {
+  const rows = shotRows(record);
+  return rows.length === 0 ? null : (pourSeconds(rows) ?? 0);
+}
+
+/**
  * Resample to whole seconds by timestamp (never by index: real sampling is
  * ~3.7 Hz and irregular), plus the final sample. Each value is the nearest
  * real sample within 0.6 s, rounded to 0.1; null when there is none. Machine

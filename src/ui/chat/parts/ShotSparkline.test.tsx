@@ -13,7 +13,7 @@ import { previewTheme } from '../testing/previewTheme.ts';
 import { renderThemed, renderWithServices } from '../testing/render.tsx';
 import { sampleSeries, sampleSummary } from '../testing/fixtures.ts';
 import { ShotCard } from './ShotCard.tsx';
-import { KEY_BESIDE_FROM, ShotSparkline } from './ShotSparkline.tsx';
+import { KEY_BESIDE_FROM, keyUnderCurves, NAME_BESIDE_EM, ShotSparkline } from './ShotSparkline.tsx';
 
 const graph = previewTheme.palette.cafai.graph;
 
@@ -149,6 +149,7 @@ describe("a shot card's curves, with the shot its question names under them (D17
 
   // Its room on a real screen, and its name whole there, are e2e/shot-overlay.spec.ts's to measure.
   it('puts the third key on a line of its own under the curves on a narrow card, so it never squeezes them; beside them on a wide one', () => {
+    // jsdom has no layout: the name measures 0 here, so only the card's width decides.
     const red: ShotBaseline = { kind: 'otherCoffee', shotId: 'shot-0', coffee: 'Red Brick' };
     const legendOf = () => screen.getByText('Pressure').parentElement!.parentElement!;
     const key = () => screen.getByTestId(TID.shotGuideKey);
@@ -161,7 +162,7 @@ describe("a shot card's curves, with the shot its question names under them (D17
       [KEY_BESIDE_FROM, false],
       [654, false],
     ] as const) {
-      // The Graph link counts either way, so every card of a chat puts its key in the same place.
+      // The Graph link counts either way, so a card's key keeps its place as Graph moves on to the newest card.
       for (const onOpenGraph of [vi.fn(), undefined]) {
         vi.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(() => width);
         const view = renderInChat(<ShotSparkline summary={thisShot} baseline={red} onOpenGraph={onOpenGraph} />, [card(previousShot), card(thisShot, red)]);
@@ -178,6 +179,58 @@ describe("a shot card's curves, with the shot its question names under them (D17
         view.unmount();
         vi.restoreAllMocks();
       }
+    }
+  });
+
+  it("decides by the card's width and the whole name's width: beside only when the name fits the legend's 9.5em", () => {
+    const capAt13 = NAME_BESIDE_EM * 13; // 123.5 px
+    // A tablet's card (622 px inside its padding): the name decides.
+    expect(keyUnderCurves(622, 80, 13), 'Previous shot').toBe(false);
+    expect(keyUnderCurves(622, capAt13, 13), 'a name of 9.5em exactly').toBe(false);
+    expect(keyUnderCurves(622, capAt13 + 0.1, 13), 'a hair over').toBe(true);
+    expect(keyUnderCurves(622, 136, 13), 'Last shot of Kiambu AA').toBe(true);
+    expect(keyUnderCurves(622, 250, 13), 'a 30-character coffee').toBe(true);
+    // A narrow card puts any key under (D192); before a measurement, and without layout, it stays beside.
+    expect(keyUnderCurves(KEY_BESIDE_FROM - 1, 80, 13)).toBe(true);
+    expect(keyUnderCurves(KEY_BESIDE_FROM, 80, 13)).toBe(false);
+    expect(keyUnderCurves(0, 250, 13)).toBe(false);
+    // A font size that could not be read never sends a key under.
+    expect(keyUnderCurves(622, 250, Number.NaN)).toBe(false);
+  });
+
+  it("puts the key under the curves on a wide card when its whole name is wider than the legend's 9.5em, measured on a hidden ruler, never where the key is", () => {
+    const legendOf = () => screen.getByText('Pressure').parentElement!.parentElement!;
+    const key = () => screen.getByTestId(TID.shotGuideKey);
+    const rect = (width: number) => ({ x: 0, y: 0, top: 0, left: 0, right: width, bottom: 0, width, height: 0, toJSON: () => ({}) }) as DOMRect;
+    for (const [coffee, width, under] of [
+      // The caption is 13 px, so 9.5em is 123.5 px.
+      ['Santos', 112, false],
+      ['Kiambu AA', 136, true],
+      ['Huila Pink Bourbon', 182, true],
+      ['Finca El Paraíso Lychee Geisha', 250, true],
+    ] as const) {
+      const name = `Last shot of ${coffee}`;
+      // A tablet's card; only the ruler, out of sight, has a width: the key itself measures 0 wherever it is.
+      vi.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(() => 622);
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+        return rect(this.closest('[aria-hidden="true"]') !== null && this.textContent === name ? width : 0);
+      });
+      const baseline: ShotBaseline = { kind: 'otherCoffee', shotId: 'shot-0', coffee };
+      const view = renderInChat(<ShotSparkline summary={thisShot} baseline={baseline} onOpenGraph={vi.fn()} />, [card(previousShot), card(thisShot, baseline)]);
+      expect(key()).toHaveTextContent(name);
+      if (under) {
+        expect(legendOf(), name).not.toContainElement(key());
+        expect(key().previousElementSibling).toContainElement(curves());
+      } else {
+        expect(legendOf(), name).toContainElement(key());
+      }
+      // The ruler is the name once more, hidden from screen readers, which hear the key alone.
+      const [shown, ruler] = screen.getAllByText(name);
+      expect(key()).toContainElement(shown!);
+      expect(ruler!.closest('[aria-hidden="true"]')).not.toBeNull();
+      expect(key()).not.toContainElement(ruler!);
+      view.unmount();
+      vi.restoreAllMocks();
     }
   });
 
