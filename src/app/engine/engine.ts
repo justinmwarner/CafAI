@@ -26,10 +26,11 @@
  * - A run of a cleaning or calibration profile (the weekly clean's Forward
  *   Flush x5) is no shot: Decaid saves none, so CafAI neither looks for one
  *   nor says anything of it (D193).
- * - A run that never poured is no shot either: stopped in preheat, Decaid
- *   aborts it and keeps no record, so CafAI looks for none; stopped with the
- *   pour's first frame, its record holds no pour. No card, no taste question,
- *   nothing to compare the next shot with; one quiet line says so (D204).
+ * - A run with less than 2 s of pour is no shot either: stopped in preheat,
+ *   Decaid aborts it and keeps no record, so CafAI looks for none; stopped as
+ *   the pour begins, its record holds too little of it. No card, no taste
+ *   question, nothing to compare the next shot with; one quiet line says so
+ *   (D204).
  * - A bag whose details were saved is added to Decaid's bean library in the
  *   background, and every load names its batch (D102).
  * - A new bag opens with "Which coffee is it?": a batch from Decaid's bean
@@ -66,7 +67,7 @@ import {
 } from '../../coach/contract.ts';
 import { isTds, readingOf, roundTds, withTds } from '../../coach/extraction.ts';
 import { todayOf, writtenDate, type FreezerDates } from '../../coach/roastAge.ts';
-import { poured } from '../../coach/summary/summarize.ts';
+import { MIN_SHOT_POUR_S, recordPourSeconds } from '../../coach/summary/summarize.ts';
 import { reportDrift } from '../../api/drift.ts';
 import { describeValue } from '../../api/frames.ts';
 import { grinderRequest, NO_GRINDER_LIBRARY } from '../../api/grinders.ts';
@@ -338,7 +339,7 @@ const SEARCH_NOTICE = 'Looking for that shot in Decaid…';
 const CUT_OFF_NOTICE =
   'The machine disconnected during that shot, and Decaid has no record of it. When the machine is back, tap Retry to look again, or pull another shot.';
 const NOT_SAVED_NOTICE = 'The shot finished, but Decaid has not saved it. Tap Retry to look again, or pull another shot.';
-/** The one line for a run that stopped before it poured (D204): no shot to taste, none to compare with. */
+/** The one line for a run stopped before it poured or in its first 2 s of pour (D204): no shot to taste, none to compare with. */
 const NEVER_POURED = 'That shot stopped before it poured: nothing to taste.';
 /**
  * Decaid answers the barrier 500 ms after the machine acknowledged the
@@ -2282,10 +2283,16 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     }
     const iterations = await bagIterations(s);
     if (iterations.some((i) => i.shotId === record.id)) return;
-    if (!poured(record)) {
-      // Stopped with the pour's first frame: Decaid kept a record with no pour in it. No card, no taste question, and
-      // the pending iteration and the next card's comparison stay with the shot before (D204). Another shot's hunt
-      // comes back to the banner; this run's own, ended by its Retry, does not.
+    const pour = recordPourSeconds(record);
+    if (pour === null) {
+      // No sample CafAI can read: Decaid records every run's first preheat sample, so its record changed shape (a
+      // field renamed, a time CafAI cannot parse). Said in Settings > About, and the shot is credited as before, never
+      // taken for a run that did not pour (D204).
+      reportDrift('GET /api/v1/shots/{id}', 'measurements: no sample with a machine.timestamp CafAI can read');
+    } else if (pour < MIN_SHOT_POUR_S) {
+      // Stopped as the pour began, or within its first 2 s: no card, no taste question, and the pending iteration and
+      // the next card's comparison stay with the shot before (D204). Another shot's hunt comes back to the banner;
+      // this run's own, ended by its Retry, does not.
       if (hunt && hunt.run !== run && standing === null) standing = hunt;
       await sayNeverPoured(s);
       return;

@@ -25,20 +25,26 @@ async function latestShot(page: Page): Promise<ShotRecord | null> {
   });
 }
 
-/** Resolves once the mock machine has been stopped on the next shot's first frame of pour, as on Decaid's simulator. */
-async function stopOnFirstPourFrame(page: Page): Promise<void> {
+/**
+ * Resolves once the mock machine has been stopped on the next shot's `frames`th frame of pour: a stop a moment
+ * into the pour, as on Decaid's simulator, where a stop at about 0.65 s left two frames of pour.
+ */
+async function stopAfterPourFrames(page: Page, frames: number): Promise<void> {
   await page.evaluate(
-    () =>
+    (count) =>
       new Promise<void>((resolve) => {
         const mock = (window as CafaiMockWindow).__CAFAI_MOCK__!;
-        const stop = mock.state.on('shotState', (event) => {
-          if (event.event !== 'state' || event.state !== 'pouring') return;
+        let seen = 0;
+        const stop = mock.state.on('machine', (frame) => {
+          if (mock.player.activity !== 'espresso' || (frame.state.substate !== 'preinfusion' && frame.state.substate !== 'pouring')) return;
+          if ((seen += 1) < count) return;
           stop();
-          // Inside the frame's delivery: the next frame is the stop, so the record keeps this one frame of pour.
+          // Inside the frame's delivery: the next frame is the stop, so the record keeps `count` frames of pour.
           mock.player.stop();
           resolve();
         });
       }),
+    frames,
   );
 }
 
@@ -136,19 +142,25 @@ test('Espresso then Stop at once is no shot: no card, no taste question, and the
   // page is): Decaid aborts the run and keeps no record of it, and CafAI looks for none.
   await page.evaluate(() => (window as CafaiMockWindow).__CAFAI_MOCK__!.setSpeed(0.25));
   await pullShot(page);
+  // The run takes the screen by itself (D85)...
+  await expect(page).toHaveURL(/#\/shot$/);
   await machineRow(page).getByTestId(TID.stopButton).click();
   await expect(page.getByText(NEVER_POURED)).toHaveCount(1, { timeout: 30_000 });
-  // The line is the run's outcome: the Shot view hands the screen back with it.
-  await expect(page).toHaveURL(/#\/$/, { timeout: 10_000 });
+  // ...and the line, the run's outcome, hands it back at once: well before D85's 8 s without one.
+  await expect(page).toHaveURL(/#\/$/, { timeout: 3_000 });
   expect(await shotIds(), 'Decaid keeps no record of a run stopped in preheat').toHaveLength(kept);
   await page.evaluate(() => (window as CafaiMockWindow).__CAFAI_MOCK__!.setSpeed(25));
 
-  // Stopped with the pour's first frame, as on Decaid's simulator: Decaid keeps a record with no pour in it.
-  const stopped = stopOnFirstPourFrame(page);
+  // Stopped a moment into the pour, three frames in, as on Decaid's simulator: Decaid keeps a record with well under
+  // 2 s of pour, which is no shot either (D204).
+  const stopped = stopAfterPourFrames(page, 3);
   await pullShot(page);
   await stopped;
   await expect(page.getByText(NEVER_POURED)).toHaveCount(2, { timeout: 30_000 });
+  await expect(page).toHaveURL(/#\/$/, { timeout: 3_000 });
   expect(await shotIds(), 'Decaid kept this one').toHaveLength(kept + 1);
+  const pour = (await latestShot(page))!.measurements.filter((m) => m.machine.state.substate !== 'preparingForShot');
+  expect(pour, 'three frames of pour in its record').toHaveLength(3);
 
   // Neither run got a card, a taste question or a search; the first shot's question is still open.
   await expect(page.getByTestId(TID.shotCard)).toHaveCount(1);

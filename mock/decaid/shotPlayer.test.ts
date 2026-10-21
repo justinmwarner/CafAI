@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseDecaidTimestamp } from '../../src/api/time.ts';
 import type { MachineSnapshot, ShotStateEvent } from '../../src/api/types.ts';
-import { poured } from '../../src/coach/summary/summarize.ts';
+import { MIN_SHOT_POUR_S, recordPourSeconds } from '../../src/coach/summary/summarize.ts';
 import blooming from '../../src/coach/templates/source/Blooming_espresso.json';
 import dflow from '../../src/coach/templates/source/D-Flow____default.json';
 import gentle from '../../src/coach/templates/source/Gentle_and_sweet1.json';
@@ -297,7 +297,7 @@ describe('createShotSimulation', () => {
     expect(events(frames).some((e) => e.state === 'pouring' || e.state === 'finished')).toBe(false);
   });
 
-  it("a stop right after the pour's first frame keeps a record with one frame of pour, which never poured (D204)", () => {
+  it("a stop right after the pour's first frame keeps a record with one frame of pour; under 2 s of pour it is no shot (D204)", () => {
     const { simulation, frames } = stoppedAt(11);
     expect(simulation.aborted).toBe(false);
     expect(simulation.stopReason).toBe('apiStop');
@@ -305,12 +305,16 @@ describe('createShotSimulation', () => {
     expect(events(frames).filter((e) => e.event === 'state').map((e) => e.state)).toEqual(['preheating', 'pouring', 'finished']);
     const measurements = recorded(frames).map((frame) => ({ machine: frame.machine, scale: frame.scale, volume: frame.volume }));
     expect(measurements.map((m) => m.machine.state.substate)).toEqual([...Array<string>(10).fill('preparingForShot'), 'preinfusion']);
-    expect(poured({ measurements })).toBe(false);
+    expect(recordPourSeconds({ measurements })).toBe(0);
 
-    // A frame later, the record holds a pour: a shot stopped early is a shot.
+    // A frame later, as a stop at about 0.65 s left it on MockDe1: two frames of pour, a fifth of a second, still no shot.
     const later = recorded(stoppedAt(12).frames).map((frame) => ({ machine: frame.machine, scale: frame.scale, volume: frame.volume }));
     expect(later).toHaveLength(12);
-    expect(poured({ measurements: later })).toBe(true);
+    expect(recordPourSeconds({ measurements: later })).toBeGreaterThan(0);
+    expect(recordPourSeconds({ measurements: later })).toBeLessThan(MIN_SHOT_POUR_S);
+    // Twelve frames of pour, about 2.2 s: a shot stopped early is a shot.
+    const shot = recorded(stoppedAt(22).frames).map((frame) => ({ machine: frame.machine, scale: frame.scale, volume: frame.volume }));
+    expect(recordPourSeconds({ measurements: shot })).toBeGreaterThanOrEqual(MIN_SHOT_POUR_S);
   });
 
   it('a stop during the pour is an apiStop', () => {
@@ -581,7 +585,7 @@ describe('createShotPlayer', () => {
     expect(record.stopReason).toBe('apiStop');
     expect(record.measurements.at(-1)!.machine.state.substate).toBe('preinfusion');
     expect(record.measurements.filter((m) => m.machine.state.substate !== 'preparingForShot')).toHaveLength(1);
-    expect(poured(record)).toBe(false);
+    expect(recordPourSeconds(record)).toBe(0);
   });
 
   /** Seconds of data time the frames in `substate` of `state` cover (each frame is FRAME_MS). */

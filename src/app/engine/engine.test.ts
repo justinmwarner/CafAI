@@ -15,6 +15,7 @@ import shot09 from '../../coach/__fixtures__/decaid-mcp/shot-09.json';
 import { fixtures } from '../../../mock/fixtures/index.ts';
 import type { MachineProfileStatus } from '../../api/machineProfile.ts';
 import { driftLog } from '../../api/drift.ts';
+import { parseDecaidTimestamp } from '../../api/time.ts';
 import { PLUGIN } from '../../api/plugins.ts';
 import type { BagPhoto, ExtractedBag } from '../../llm/extractBag.ts';
 import {
@@ -110,6 +111,16 @@ const POURED: ShotSnapshot[] = syntheticShotRecord({ endS: 12 }).measurements;
 const FIRST_FRAME_ONLY: ShotSnapshot[] = (shot09 as unknown as ShotRecord).measurements;
 /** A run Decaid kept with preheat alone. */
 const PREHEAT_ONLY: ShotSnapshot[] = POURED.filter((sample) => sample.machine.state.substate === 'preparingForShot');
+/** POURED's preheat and its first `seconds` of pour, as Decaid keeps a run stopped then. */
+function pouredFor(seconds: number): ShotSnapshot[] {
+  const start = POURED.findIndex((sample) => sample.machine.state.substate !== 'preparingForShot');
+  const began = parseDecaidTimestamp(POURED[start]!.machine.timestamp);
+  return POURED.filter((sample, i) => i < start || parseDecaidTimestamp(sample.machine.timestamp) - began <= seconds * 1000);
+}
+/** A stop a moment late: 1.5 s of pour, under the 2 s a shot needs (D204). */
+const UNDER_TWO_SECONDS = pouredFor(1.5);
+/** A shot stopped early, but past 2 s of pour: still a shot (D204). */
+const PAST_TWO_SECONDS = pouredFor(2.6);
 
 const summary: ShotSummary = {
   shotId: 'shot-1',
@@ -2715,7 +2726,7 @@ describe('coach engine', () => {
     it.each([
       ["the pour's first frame alone, as a real DE1 left it (decaid-mcp's shot-09)", FIRST_FRAME_ONLY],
       ['preheat alone', PREHEAT_ONLY],
-      ['no samples', []],
+      ['1.5 s of pour, stopped a moment late', UNDER_TWO_SECONDS],
     ])('a record that holds %s is no shot: no card, no taste question, one quiet line', async (_what, samples) => {
       await throughShot();
       const turns = requests.length;
@@ -2730,6 +2741,30 @@ describe('coach engine', () => {
       expect(requests).toHaveLength(turns);
       expect(engine.getState().phase).toBe('awaiting_feedback');
       expect(await iterationsNow()).toEqual(before);
+    });
+
+    it('a shot stopped early but past 2 s of pour is a shot: a card and a taste question', async () => {
+      await throughTemplatePick();
+      machine.samples.set('shot-short', PAST_TWO_SECONDS);
+      expect(await shotIsCredited('shot-short')).toBe(true);
+      expect(cardOf('shot-short')).toBeDefined();
+      expect(notices().some((p) => p.text === NEVER_POURED)).toBe(false);
+    });
+
+    it.each([
+      ['no samples', []],
+      ['samples whose time CafAI cannot read', POURED.map((sample) => ({ ...sample, machine: { ...sample.machine, timestamp: 'later' } }))],
+    ])('a record with %s is credited as before, never taken for a run that did not pour, and Settings > About hears of it', async (_what, samples) => {
+      await throughTemplatePick();
+      driftLog.clear();
+      machine.samples.set('shot-odd', samples);
+      expect(await shotIsCredited('shot-odd')).toBe(true);
+      expect(cardOf('shot-odd')).toBeDefined();
+      expect(notices().some((p) => p.text === NEVER_POURED)).toBe(false);
+      expect(driftLog.list().map(({ source, problem }) => [source, problem])).toContainEqual([
+        'GET /api/v1/shots/{id}',
+        'measurements: no sample with a machine.timestamp CafAI can read',
+      ]);
     });
 
     it('the next shot is compared with the shot before the stopped runs, on its card and in Decaid', async () => {
@@ -2807,6 +2842,16 @@ describe('coach engine', () => {
       stoppedInPreheat('stopped-1');
       await drain();
       expect(notices().map((p) => p.text)).toEqual([NEVER_POURED]);
+    });
+
+    it('before any version, a run Decaid kept with under 2 s of pour is told to pick a starting profile first, as any run then', async () => {
+      await openBag();
+      machine.samples.set('stopped-1', FIRST_FRAME_ONLY);
+      ranAndEnded('stopped-1', 'apiStop');
+      await drain();
+      // No version, no record read: what the run held is not looked at (D204 accepts it).
+      expect(notices().map((p) => p.text)).toEqual(['Pick a starting profile first; that shot is not part of this dial-in.']);
+      expect(callsOf('getShot')).toEqual([]);
     });
 
     it('an abort Decaid sent for another run leaves this one a shot', async () => {

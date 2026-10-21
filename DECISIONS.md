@@ -3164,7 +3164,7 @@ What the pre-run of docs/HARDWARE_TEST_PLAN.md on Decaid 0.8.8's simulator
 day: five defects in CafAI, below, and a step of the plan that expected the
 wrong thing (its section 19.6).
 
-- **D204. A run that never poured is no shot: no card, no taste
+- **D204. A run with less than 2 s of pour is no shot: no card, no taste
   question, nothing to compare with, and one quiet line.** On the
   simulator, Espresso then Stop within 0.7 s made a card, "Shot 0.0 s",
   asked "How did it taste?", and became the next card's "previous shot".
@@ -3181,36 +3181,48 @@ wrong thing (its section 19.6).
   `GET /shots/latest`, which never carries them; the record CafAI read had
   its preheat and one preinfusion frame) and decaid-mcp's shot-09 from a
   real DE1 on Decaid 0.8.6 (a second of preheat, then one frame of
-  preinfusion). So a record never poured when it holds fewer than two
-  samples of pour: no samples, preheat alone, or one (`poured` in
-  `src/coach/summary/summarize.ts`). With two samples or more it holds a
-  pour, however short, and stays a shot: a pour that chokes or is stopped
-  early is still something to dial in from. The engine
+  preinfusion). A frame later the defect is back: on MockDe1 a stop at
+  about 0.65 s leaves two frames of preinfusion, a "Shot 0.1 s" card and
+  "How did it taste?". So a run is no shot when its record holds less than
+  2 s of pour, timed as its card times it, preheat alone counting as none
+  (`recordPourSeconds`, `MIN_SHOT_POUR_S` in
+  `src/coach/summary/summarize.ts`). A pour of 2 s or more stays a shot,
+  however early it was stopped. A record with no sample CafAI can read is
+  another matter: Decaid records every run's first preheat sample
+  (shot_sequencer.dart:288-294, 355-396), so it comes from a record whose
+  shape changed (the reader's empty list for a renamed field, times CafAI
+  cannot parse). It is reported in Settings > About and credited as before,
+  so a renamed field never swallows every shot. The engine
   (`src/app/engine/engine.ts`) keeps Decaid's abort for the run from the
   shotState frames (`noteDecision`) and then looks for no record, and it
-  reads a record that holds no pour and stops there. Either way there is no
-  card, no iteration and no shot event for the coach; the shot before keeps
-  its pending iteration and its open taste question, so the next card is
-  compared with it (D126, D178), and a bag's first shot still with the
-  other coffee's last. The chat gets one info line, "That shot stopped
-  before it poured: nothing to taste.", which also hands the Shot view back
-  at once rather than 8 s later (D85). A lost shot's Retry on the banner
-  stays through such a run; a Retry that finds its own shot with no pour in
-  it ends there. A cleaning profile's run still says nothing (D193 comes
-  first), and a run whose abort frame CafAI missed is looked for as before,
-  so no shot is lost to a missed frame. The mock Decaid saved a stop after
-  its last preheat frame and before its first pour frame as a shot of
-  preheat alone; it now aborts it, as Decaid's sequencer is still preheating
-  then, and keeps the record of a stop with the first pour frame
-  (`mock/decaid/shotPlayer.ts`). The live suite stops a shot at once on
-  Decaid's simulator and checks what CafAI relies on: the abort and no
-  record, or the record and how CafAI reads it
-  (`src/api/live/shot.decaid.ts`). Why: Decaid's own sequencer decides when
-  the pour begins; a record with no time of pour has nothing to taste, and
-  as the next card's baseline it asked the barista to compare a shot with
-  nothing. A line rather than silence, unlike a cleaning run: the barista
-  stopped a shot, on purpose or not, and one line says CafAI saw it and
-  that it does not count, and gives the screen back with it.
+  reads a record with less than 2 s of pour and stops there. Either way
+  there is no card, no iteration and no shot event for the coach; the shot
+  before keeps its pending iteration and its open taste question, so the
+  next card is compared with it (D126, D178), and a bag's first shot still
+  with the other coffee's last. The chat gets one info line, "That shot
+  stopped before it poured: nothing to taste.", which also hands the Shot
+  view back at once rather than 8 s later (D85). A lost shot's Retry on the
+  banner stays through such a run; a Retry that finds its own shot with
+  less than 2 s of pour ends there. A cleaning profile's run still says
+  nothing (D193 comes first), and a run whose abort frame CafAI missed is
+  looked for as before, so no shot is lost to a missed frame. Before any
+  version is picked, the line comes only for a run Decaid aborted: a run it
+  kept is told "Pick a starting profile first; that shot is not part of
+  this dial-in." as any run then, its record unread, and that is accepted.
+  The mock Decaid saved a stop after its last preheat frame and before its
+  first pour frame as a shot of preheat alone; it now aborts it, as
+  Decaid's sequencer is still preheating then, and keeps the record of a
+  stop with the first pour frame (`mock/decaid/shotPlayer.ts`). The live
+  suite stops a shot at once on Decaid's simulator and checks what CafAI
+  relies on: the abort and no record, or a record whose pour CafAI can time
+  (`src/api/live/shot.decaid.ts`). Why: in a pour's first 2 s the puck is
+  still being wetted, so nothing in it says anything about the grind, and
+  a gusher or a choke shows later than that; on a real DE1 such a stop is
+  "oops, no cup" as the pump starts. As the next card's baseline it asked
+  the barista to compare a shot with nothing. A line rather than silence,
+  unlike a cleaning run: the barista stopped a shot, on purpose or not, and
+  one line says CafAI saw it and that it does not count, and gives the
+  screen back with it.
 - **D205. A lost shot's warning says how the shot ended, once, and
   every Retry says the same.** The warning for a finished shot with no
   record in Decaid chose its words by whether the machine was connected

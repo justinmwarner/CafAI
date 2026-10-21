@@ -16,7 +16,7 @@
 import { afterAll, assert, beforeAll, beforeEach, expect, it } from 'vitest';
 import { MIDDLE_SCORE, SCORE_STEP, enjoymentFromScore } from '../../app/engine/shotRating.ts';
 import { summarizeShot } from '../../coach/index.ts';
-import { poured } from '../../coach/summary/summarize.ts';
+import { MIN_SHOT_POUR_S, recordPourSeconds } from '../../coach/summary/summarize.ts';
 import { deviceConnections, parseShotStateFrame } from '../frames.ts';
 import { GatewayError, type DeviceEntry, type ShotStateEvent } from '../types.ts';
 import { describeDecaid, openDecaid, type LiveDecaid } from './env.ts';
@@ -205,7 +205,7 @@ describeDecaid('shot', ({ url, require }) => {
     expect(live.problems()).toEqual([]);
   });
 
-  it('espresso, then idle at once: Decaid aborts the run before its pour and keeps no record, or keeps one CafAI reads as it poured (D204)', async () => {
+  it('espresso, then idle at once: Decaid aborts the run before its pour and keeps no record, or keeps one CafAI can time (D204)', async () => {
     const shotState = watches.find((watch) => watch.path === SHOT_STATE);
     if (!shotState) throw new Error('shotState is not being listened to.');
     const client = live.client;
@@ -247,9 +247,11 @@ describeDecaid('shot', ({ url, require }) => {
         RECORD_MS,
         `shot ${id} in Decaid’s history`,
       );
-      const pour = record.measurements.filter((m) => m.machine.state.substate === 'preinfusion' || m.machine.state.substate === 'pouring').length;
-      expect(poured(record), `a record with ${pour} samples of pour`).toBe(pour >= 2);
-      console.log(`Espresso, then idle at once: the pour had begun, and Decaid kept the run with ${pour} samples of pour.`);
+      // What CafAI's engine relies on: a sample it can read (Decaid records the first preheat one), and the pour's time.
+      const pour = recordPourSeconds(record);
+      if (pour === null) assert.fail('CafAI could read no sample of the record.');
+      const shot = pour >= MIN_SHOT_POUR_S ? 'a shot' : `no shot, under ${MIN_SHOT_POUR_S} s`;
+      console.log(`Espresso, then idle at once: the pour had begun, and Decaid kept the run with ${pour.toFixed(2)} s of pour (${shot}).`);
     }
     expect(live.problems()).toEqual([]);
   });
