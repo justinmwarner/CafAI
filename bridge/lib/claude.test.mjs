@@ -180,6 +180,17 @@ describe('buildRunArgs', () => {
     const plain = buildRunArgs({ model: 'm', effort: 'turbo', systemPromptFile: 's' });
     expect(plain).not.toContain('--effort');
     expect(plain).not.toContain('--mcp-config');
+    expect(plain).not.toContain('--allowedTools');
+  });
+
+  it("turns on and allows Claude Code's own WebSearch, and nothing else, for a request that may search (D203)", () => {
+    const args = buildRunArgs({ model: 'claude-opus-5-5', systemPromptFile: '/w/s.txt', mcpConfigFile: '/w/m.json', webSearch: true });
+    expect(args.slice(args.indexOf('--tools'), args.indexOf('--tools') + 2)).toEqual(['--tools', 'WebSearch']);
+    expect(args.slice(-4)).toEqual(['--mcp-config', '/w/m.json', '--allowedTools', 'mcp__cafai,WebSearch']);
+    expect(args.slice(args.indexOf('--permission-mode'), args.indexOf('--permission-mode') + 2)).toEqual(['--permission-mode', 'dontAsk']);
+    const alone = buildRunArgs({ model: 'm', systemPromptFile: 's', webSearch: true });
+    expect(alone.slice(-2)).toEqual(['--allowedTools', 'WebSearch']);
+    expect(alone).not.toContain('--mcp-config');
   });
 });
 

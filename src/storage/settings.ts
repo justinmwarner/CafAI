@@ -17,6 +17,7 @@
  * Every read and write passes through here, so a record saved before that
  * rule is cleaned when it is read.
  */
+import { isFunFactsSource } from '../coach/facts/types.ts';
 import { isTemperatureUnit } from '../coach/temperature.ts';
 import { containsKeyLike, redactKeyLike } from './redact.ts';
 import type { Appearance, AppearanceMode, CareSettings, IntakeFilter, Settings, SettingsPatch, WaterBand } from './types.ts';
@@ -136,6 +137,8 @@ export function normalizeSettings(raw: unknown, defaultModel: string): Settings 
   if (isTemperatureUnit(raw['temperatureUnit'])) settings.temperatureUnit = raw['temperatureUnit'];
   // Machine care's answers (D187), the same way: the block once someone answered, an answer put back to Not sure included.
   if (isRecord(raw['care'])) settings.care = normalizeCareSettings(raw['care']);
+  // Where fun facts come from (D198), as the unit: one this build does not know reads as none chosen.
+  if (isFunFactsSource(raw['funFacts'])) settings.funFacts = raw['funFacts'];
   return settings;
 }
 
@@ -149,6 +152,7 @@ const FIELDS: ReadonlyArray<keyof Settings> = [
   'keepKeyInDecaid',
   'temperatureUnit',
   'care',
+  'funFacts',
 ];
 
 /** `undefined` means "not part of this edit", never "clear it"; clearing takes an explicit null. */
@@ -182,8 +186,8 @@ function isBlank(value: string | null | undefined): boolean {
  * The appearance, like the model, is adopted only while it is still the default.
  * The key's copy in Decaid (D99) is the user's choice wherever this device
  * holds one, off as much as on; only a device that never chose takes it.
- * The temperature unit (D172) and machine care's answers (D187) follow the
- * same rule, the care block whole.
+ * The temperature unit (D172), machine care's answers (D187) and the source
+ * of fun facts (D198) follow the same rule, the care block whole.
  */
 export function fillBlankSettings(local: Settings, incoming: Settings, defaultModel: string): Settings {
   const pick = (mine: string | null, theirs: string | null) => (isBlank(mine) && !isBlank(theirs) ? theirs : mine);
@@ -209,5 +213,8 @@ export function fillBlankSettings(local: Settings, incoming: Settings, defaultMo
   // Machine care (D187): answers given here win whole, Not sure and the switch's default too; a device that never answered takes the incoming ones.
   const care = local.care ?? incoming.care;
   if (care !== undefined) merged.care = care;
+  // Fun facts (D198), as the unit: a choice made here wins, Off as much as any other.
+  const facts = local.funFacts ?? incoming.funFacts;
+  if (facts !== undefined) merged.funFacts = facts;
   return merged;
 }

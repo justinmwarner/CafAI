@@ -5,9 +5,10 @@ CafAI assumes now and what would change if the guess is wrong. Questions 1-8
 came out of the morning session of 2026-10-04, 9-13 out of the Decaid
 alignment of 2026-10-09, 14-16 out of Claude on your computer of
 2026-10-11, 17 out of your list of 2026-10-11, 18-21 out of the gap
-review's four items of 2026-10-15, and 22-23 out of the simulator pre-run
-of 2026-10-16 (each ranked the same way, in its own section); the questions
-you answered are in "Answered" at the end.
+review's four items of 2026-10-15, 22-23 out of the simulator pre-run of
+2026-10-16 and 24-27 out of fun facts of 2026-10-16 (each ranked the same
+way, in its own section); the questions you answered are in "Answered" at
+the end.
 
 1. **Does Decaid's barrier behave on a real DE1 the way its source says?**
    CafAI now waits for `POST /api/v1/machine/profile` after every load and
@@ -227,6 +228,33 @@ you answered are in "Answered" at the end.
     the machine disconnects during a shot, Decaid 0.8.8 saves nothing, so
     the warning's Retry can never find that shot. It stays because a newer
     Decaid may save such a shot; without it the warning would stand alone.
+
+## From fun facts (2026-10-16)
+
+24. **Is "ran like the last one" the right test (D197)?** A kept recipe's
+    shot gets a fact when its pour time is within 3 s of the last shot on
+    it, its yield within 1.5 g, its peak pressure within 1 bar and its first
+    drop within 3 s, with the same stop and no new channeling flag. Too
+    tight and a fact rarely comes; too loose and it lands on a shot the
+    coach should have talked about. Each is one number in
+    `src/coach/facts/likeLast.ts`.
+25. **Is "CafAI's and the coach's" the right default (D198)?** It adds the
+    coach's facts about your bag, a fraction of a cent each, where it is
+    sure of one. "CafAI's facts" alone is free and never wrong, but never
+    about your roaster unless it is on the list.
+26. **Grow the list further?** The research aimed at about 500 facts; you
+    stopped it at 340 checked ones to save usage (D199). 45 more are drafted
+    and wait only for their check (34 about Africa, 11 about history and
+    milk; milk and cleaning have few facts yet). The brief, the checking
+    pass, the drafts and the merge script are kept outside the repo
+    (`E:\source\cafai-facts-research`), so another round adds more the same
+    way, and the coach covers the rest meanwhile.
+27. **Region words that catch a neighbour.** Facts match whole words in the
+    bag's origin, so a fact for Cauca also shows for Valle del Cauca, and one
+    for Santander for Norte de Santander; the writers left out region names
+    that would catch more (bare "San Marcos", "Volcán", "Origin" as a
+    roaster). If one shows where it should not, the fix is that fact's
+    match words in `src/coach/facts/facts.json`.
 
 ## Answered
 

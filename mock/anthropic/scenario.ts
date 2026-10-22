@@ -12,8 +12,12 @@
  * default; the demo voice (demoVoice.ts) writes fuller prose around the same
  * tool calls.
  */
-import { EVENT, TEMPLATE_IDS, TOOL, toRoastLevel, type ProposeAdjustment, type RoastLevel } from '../../src/coach/contract.ts';
+import { EVENT, TEMPLATE_IDS, TOOL, toRoastLevel, type ProposeAdjustment, type RoastLevel, type ShareFunFact } from '../../src/coach/contract.ts';
 import { FAHRENHEIT_HEADING } from '../../src/coach/fahrenheitPrompt.ts';
+import FACT_LIST from '../../src/coach/facts/facts.json';
+import { factFits, matchedKeys, type BagFacts } from '../../src/coach/facts/match.ts';
+import { coachKey } from '../../src/coach/facts/told.ts';
+import type { FunFact } from '../../src/coach/facts/types.ts';
 import { resolveGrindMove } from '../../src/coach/grinder.ts';
 import type { TemperatureUnit } from '../../src/coach/temperature.ts';
 import { pourTime } from '../../src/coach/summary/pourClock.ts';
@@ -81,7 +85,12 @@ export type ScenarioResponse =
 export interface RespondOptions {
   /** Default 'terse'. */
   voice?: VoiceName;
+  /** The facts the scripted coach knows (rule 4a): CafAI's own list, facts.json, by default. */
+  facts?: readonly FunFact[];
 }
+
+/** CafAI's own facts (D199): the scripted coach shares one that fits the bag as its own (D201). */
+const CAFAI_FACTS = FACT_LIST as unknown as readonly FunFact[];
 
 export interface HeaderSource {
   get(name: string): string | null;
@@ -196,6 +205,11 @@ function checkImages(messages: Message[]): ScenarioResponse | null {
   return null;
 }
 
+/** Anthropic's web search server tool, as the web mode's requests carry it (D203): `{"type":"web_search_20250305","name":"web_search",...}`, no input schema. */
+function isWebSearch(tool: unknown): boolean {
+  return isRecord(tool) && typeof tool.type === 'string' && tool.type.startsWith('web_search_') && typeof tool.name === 'string' && !('input_schema' in tool);
+}
+
 function checkHeaders(headers: HeaderSource): ScenarioResponse | null {
   if (!(headers.get('content-type') ?? '').includes('application/json')) {
     return invalid('content-type: expected application/json.');
@@ -221,6 +235,8 @@ function checkBody(body: Raw, messages: Message[], memory: ScenarioMemory): Scen
   const tools = body.tools ?? [];
   if (!Array.isArray(tools)) return invalid('tools: expected a list.');
   for (const [i, tool] of tools.entries()) {
+    // Anthropic runs its web search itself (D203): no schema, nothing to be strict about. This fake never searches.
+    if (isWebSearch(tool)) continue;
     if (!isRecord(tool) || tool.strict !== true) return invalid(`tools.${i}.strict: every CafAI tool must be strict.`);
   }
   if (tools.length > 0 || body.tool_choice !== undefined) {
@@ -348,6 +364,8 @@ interface Script {
   voice: Voice;
   /** The unit the system prompt asks the coach to write in (D177). */
   temperatureUnit: TemperatureUnit;
+  /** The facts the coach knows (rule 4a). */
+  facts: readonly FunFact[];
 }
 
 /** °F when the system prompt has CafAI's "Temperatures in °F" section, as a coach that follows its prompt would write. */
@@ -838,6 +856,41 @@ function acknowledgeReadings(reply: Reply, messages: Message[], voice: Voice): R
   return { ...reply, blocks: [{ type: 'text', text: line }, ...reply.blocks] };
 }
 
+/**
+ * The bag's details as last saved: the latest save_bag_details call (a
+ * correction replaces the intake's), else the bag CafAI saved itself from
+ * Decaid's bean library or a photo (6.1, 6.8). Null before either.
+ */
+function savedBag(messages: Message[]): BagFacts | null {
+  let details = knownBag(messages);
+  for (const message of messages) {
+    if (message.role !== 'assistant') continue;
+    for (const block of toolUses(message)) if (block.name === TOOL.saveBagDetails && isRecord(block.input)) details = block.input;
+  }
+  if (!details) return null;
+  return {
+    name: textOf(details.name) ?? '',
+    roaster: textOf(details.roaster),
+    origin: textOf(details.origin),
+    process: textOf(details.process),
+    notes: textOf(details.notes),
+    roastLevel: toRoastLevel(details.roastLevel),
+  };
+}
+
+/**
+ * Rule 4a: a shot due a fun fact (its event carries "funFact", D201). The
+ * scripted coach knows CafAI's list and shares, as its own, the first fact
+ * that fits the bag by its origin and is not in "told", with no source: it
+ * never searches. With none, it shares nothing and CafAI shows its own.
+ */
+function coachFact(facts: readonly FunFact[], bag: BagFacts | null, funFact: Raw): ShareFunFact | null {
+  if (!bag) return null;
+  const told = new Set((Array.isArray(funFact.told) ? funFact.told : []).filter((label): label is string => typeof label === 'string').map(coachKey));
+  const fact = facts.find((f) => matchedKeys(f, bag).includes('origins') && factFits(f, bag) && !told.has(coachKey(f.about)));
+  return fact ? { topic: fact.topic, about: fact.about, fact: fact.text, source: null } : null;
+}
+
 function decide(script: Script): Reply {
   const { messages, voice } = script;
   // 0. A photo of the bag: the canned bag's details, as JSON.
@@ -905,15 +958,17 @@ function decide(script: Script): Reply {
     };
   }
 
-  // 4. A shot finished: sum it up and ask how it tasted.
+  // 4. A shot finished: sum it up and ask how it tasted; due a fun fact, share one that fits first (4a).
   const shotText = texts.find((t) => t.startsWith(EVENT.shotCompleted));
   if (shotText !== undefined) {
     const payload = eventPayload(shotText);
     const summary = isRecord(payload?.summary) ? payload.summary : {};
     const shot = { durationS: num(summary.durationS), yieldG: num(summary.yieldG), doseG: num(summary.doseG) ?? num(payload?.doseG) };
+    const fact = isRecord(payload?.funFact) ? coachFact(script.facts, savedBag(messages), payload.funFact) : null;
     return {
       blocks: [
         { type: 'text', text: voice.shotCompleted(shot) },
+        ...(fact ? [{ type: 'tool_use' as const, id: script.newToolId(), name: TOOL.shareFunFact, input: fact }] : []),
         {
           type: 'tool_use',
           id: script.newToolId(),
@@ -1008,6 +1063,7 @@ export function respond(
       newToolId: () => `toolu_mock_${memory.session}_${turn}_${++toolCount}`,
       voice,
       temperatureUnit: promptTemperatureUnit(requestBody.system),
+      facts: options.facts ?? CAFAI_FACTS,
     }),
     messages,
     voice,

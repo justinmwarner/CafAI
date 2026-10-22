@@ -18,6 +18,7 @@ import {
 } from './anthropic.ts';
 import { computerWording } from './errors.ts';
 import { toToolDefinition } from './schema.ts';
+import { WEB_SEARCH_TOOL } from './webSearch.ts';
 import {
   LlmError,
   type ContentBlock,
@@ -166,6 +167,27 @@ describe('buildAnthropicRequest', () => {
     expect(body.max_tokens).toBe(4000);
     expect(body).not.toHaveProperty('tools');
     expect(body).not.toHaveProperty('tool_choice');
+    expect(JSON.parse(buildAnthropicRequest(request({ tools: [], serverTools: [] }), KEY).body)).not.toHaveProperty('tools');
+  });
+
+  it('puts the server tools after the strict client tools, as given, with auto tool choice and the same caching (D203)', () => {
+    const body = JSON.parse(buildAnthropicRequest(request({ serverTools: [WEB_SEARCH_TOOL] }), KEY).body);
+    expect(body.tools).toEqual([
+      ...TOOLS.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema, strict: true })),
+      { type: 'web_search_20250305', name: 'web_search', max_uses: 1 },
+    ]);
+    expect(body.tool_choice).toEqual({ type: 'auto' });
+    expect(body.cache_control).toEqual({ type: 'ephemeral' });
+    // The same list on every request of a conversation, so the cached prefix holds.
+    expect(buildAnthropicRequest(request({ serverTools: [WEB_SEARCH_TOOL] }), KEY).body).toBe(
+      buildAnthropicRequest(request({ serverTools: [{ ...WEB_SEARCH_TOOL }] }), KEY).body,
+    );
+  });
+
+  it('sends a server tool alone with auto tool choice', () => {
+    const body = JSON.parse(buildAnthropicRequest(request({ tools: [], serverTools: [WEB_SEARCH_TOOL] }), KEY).body);
+    expect(body.tools).toEqual([WEB_SEARCH_TOOL]);
+    expect(body.tool_choice).toEqual({ type: 'auto' });
   });
 
   it('lets a custom base URL win and trims its trailing slash', () => {
@@ -278,6 +300,46 @@ describe('createAnthropicProvider: streaming', () => {
     );
     expect(error.kind).toBe('bad_request');
     expect(error.message).toMatch(/^Anthropic rejected the request: .*modified/);
+  });
+
+  it('replays a web search turn as the API sent it: the call, its results with their encrypted content, the citations (D203)', async () => {
+    const results = [
+      { type: 'web_search_result', url: 'https://onyxcoffeelab.com/pages/our-story', title: 'Our Story', encrypted_content: 'EqgfCioIARgB==', page_age: null },
+    ];
+    const citation = {
+      type: 'web_search_result_location',
+      url: 'https://onyxcoffeelab.com/pages/our-story',
+      title: 'Our Story',
+      encrypted_index: 'Eo8BCioIAhgB..',
+      cited_text: 'the price paid',
+    };
+    const at = (index: number, d: Record<string, unknown>) => ({ type: 'content_block_delta', index, delta: d });
+    countRequests(() =>
+      sse(
+        MESSAGE_START,
+        { type: 'content_block_start', index: 0, content_block: { type: 'server_tool_use', id: 'srvtoolu_01', name: 'web_search', input: {} } },
+        at(0, { type: 'input_json_delta', partial_json: '{"query":"Onyx Coffee Lab"}' }),
+        { type: 'content_block_stop', index: 0 },
+        { type: 'content_block_start', index: 1, content_block: { type: 'web_search_tool_result', tool_use_id: 'srvtoolu_01', content: results } },
+        { type: 'content_block_stop', index: 1 },
+        { type: 'content_block_start', index: 2, content_block: { type: 'text', text: '', citations: [] } },
+        at(2, { type: 'citations_delta', citation }),
+        at(2, { type: 'text_delta', text: 'Onyx publishes what it pays.' }),
+        { type: 'content_block_stop', index: 2 },
+        { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 40, server_tool_use: { web_search_requests: 1 } } },
+        { type: 'message_stop' },
+      ),
+    );
+    const turn = doneTurn(await collect(provider().stream(request({ serverTools: [WEB_SEARCH_TOOL] }))));
+    expect(turn.usage.webSearchRequests).toBe(1);
+    const sentWhole = [
+      { type: 'server_tool_use', id: 'srvtoolu_01', name: 'web_search', input: { query: 'Onyx Coffee Lab' } },
+      { type: 'web_search_tool_result', tool_use_id: 'srvtoolu_01', content: results },
+      { type: 'text', text: 'Onyx publishes what it pays.', citations: [citation] },
+    ];
+    const next: LlmMessage = { role: 'user', content: [{ type: 'text', text: 'Thanks.' }] };
+    const body = JSON.parse(buildAnthropicRequest(request({ messages: [INTAKE, { role: 'assistant', content: turn.content }, next] }), KEY).body);
+    expect(JSON.stringify(body.messages[1].content)).toBe(JSON.stringify(sentWhole));
   });
 
   it('works through a stream cut into small odd-sized chunks', async () => {

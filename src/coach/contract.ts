@@ -14,6 +14,7 @@
  *     coach validators (template ids exist, lever bounds, one variable...).
  */
 import { z } from 'zod';
+import { FACT_TOPICS } from './facts/types.ts';
 
 export const TOOL = {
   /** UI tool: structured facts about the bag, saved on the bag record. */
@@ -34,6 +35,8 @@ export const TOOL = {
   getBagHistory: 'get_bag_history',
   /** Auto tool: DYE2's recent setups for this bag's coffee (D103). Read-only. */
   getRecentSetups: 'get_recent_setups',
+  /** Auto tool: one fun fact about this bag, in a block of its own under the reply (D201); offered in the coach's modes only (D198). */
+  shareFunFact: 'share_fun_fact',
 } as const;
 
 export type ToolName = (typeof TOOL)[keyof typeof TOOL];
@@ -50,6 +53,7 @@ export const AUTO_TOOLS: readonly ToolName[] = [
   TOOL.compareShots,
   TOOL.getBagHistory,
   TOOL.getRecentSetups,
+  TOOL.shareFunFact,
 ];
 
 /** The label CafAI always appends as the last option of every ask_user. */
@@ -197,6 +201,17 @@ export const CompareShotsInput = z.object({ shotA: ShotRefSchema, shotB: ShotRef
 export const GetBagHistoryInput = z.object({});
 export const GetRecentSetupsInput = z.object({});
 
+export const ShareFunFactInput = z.object({
+  topic: z.enum(FACT_TOPICS),
+  /** A short label for the told list: what the coach hears of the fact once it is told ("Kenya's SL28"). */
+  about: z.string().trim().min(1).max(80),
+  /** One or two plain sentences about the coffee, never how this cup tastes (D199). */
+  fact: z.string().trim().min(1).max(280),
+  /** The page the fact came from, with a web search (D203); else null, and ignored without one. */
+  source: z.string().max(400).nullable(),
+});
+export type ShareFunFact = z.infer<typeof ShareFunFactInput>;
+
 export const TOOL_INPUTS = {
   [TOOL.saveBagDetails]: SaveBagDetailsInput,
   [TOOL.proposeTemplates]: ProposeTemplatesInput,
@@ -209,6 +224,7 @@ export const TOOL_INPUTS = {
   [TOOL.compareShots]: CompareShotsInput,
   [TOOL.getBagHistory]: GetBagHistoryInput,
   [TOOL.getRecentSetups]: GetRecentSetupsInput,
+  [TOOL.shareFunFact]: ShareFunFactInput,
 } as const satisfies Record<ToolName, z.ZodType>;
 
 /**

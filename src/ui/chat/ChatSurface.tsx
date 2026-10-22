@@ -51,6 +51,8 @@ import { RichText } from './RichText.tsx';
 import { BagConfirmCard } from './parts/BagConfirmCard.tsx';
 import { BeanCard } from './parts/BeanCard.tsx';
 import { DiffCard } from './parts/DiffCard.tsx';
+import { FactCard } from './parts/FactCard.tsx';
+import { SourcesLine } from './parts/SourcesLine.tsx';
 import { GrinderOfferCard } from './parts/GrinderOfferCard.tsx';
 import { Notice } from './parts/Notice.tsx';
 import { OptionChips } from './parts/OptionChips.tsx';
@@ -381,6 +383,18 @@ function NoticeView({ data }: { data: unknown }) {
   return part ? <Notice tone={part.tone} text={part.text} progress={part.progress} /> : null;
 }
 
+/** A fun fact under the coach's reply to a shot (D202). */
+function FactView({ data }: { data: unknown }) {
+  const part = cardOf(data, 'fact');
+  return part ? <FactCard text={part.text} source={part.source} /> : null;
+}
+
+/** The sites the coach's words cite, under them (D203). */
+function SourcesView({ data }: { data: unknown }) {
+  const part = cardOf(data, 'sources');
+  return part && part.sites.length > 0 ? <SourcesLine sites={part.sites} /> : null;
+}
+
 /** "Thinking… 12 s": the elapsed counter updates in place, so a slow reply never looks frozen. */
 function ThinkingView() {
   const [startedAt] = useState(() => Date.now());
@@ -406,6 +420,9 @@ function TextView({ part, message }: ChatPartRendererProps<Extract<ChatMessagePa
 
 type DataRendererProps = ChatPartRendererProps<Extract<ChatMessagePart, { type: `data-${string}` }>>;
 
+// Every part kind needs its renderer here: x-chat draws a data part it has
+// none for as its raw JSON in a <pre>, which is what a build older than a kind
+// shows of it (a fact, D202, in 0.1.2), never a crash.
 const PART_RENDERERS: ChatPartRendererMap = {
   text: (props) => <TextView {...props} />,
   [`${DATA_PREFIX}templates`]: ({ part }: DataRendererProps) => <TemplatesView data={part.data} />,
@@ -416,6 +433,8 @@ const PART_RENDERERS: ChatPartRendererMap = {
   [`${DATA_PREFIX}beanPicker`]: ({ part }: DataRendererProps) => <BeanPickerView data={part.data} />,
   [`${DATA_PREFIX}bagConfirm`]: ({ part }: DataRendererProps) => <BagConfirmView data={part.data} />,
   [`${DATA_PREFIX}grinderOffer`]: ({ part }: DataRendererProps) => <GrinderOfferView data={part.data} />,
+  [`${DATA_PREFIX}fact`]: ({ part }: DataRendererProps) => <FactView data={part.data} />,
+  [`${DATA_PREFIX}sources`]: ({ part }: DataRendererProps) => <SourcesView data={part.data} />,
   [THINKING_TYPE]: () => <ThinkingView />,
   [STATS_TYPE]: () => <StatsCard />,
 };

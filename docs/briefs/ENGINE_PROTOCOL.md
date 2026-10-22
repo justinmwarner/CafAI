@@ -7,10 +7,16 @@ real engine agree. Tool names and input schemas: `src/coach/contract.ts`.
 
 ## Every request
 
-- `system`: `buildSystemPrompt(TEMPLATES)` from `src/coach/prompt.ts`,
-  byte-identical across turns (cacheable).
-- `tools`: all ten contract tools, in `TOOL` declaration order, strict
-  schemas, `tool_choice: {type: "auto"}`.
+- `system`: `buildSystemPrompt(TEMPLATES, {temperatureUnit, funFacts})` from
+  `src/coach/prompt.ts`, byte-identical across turns (cacheable): one prompt
+  per temperature unit (D175) and fun facts mode (D198; `off` and `list`
+  share the plain one, `coach` and `web` add the "Fun facts" section).
+- `tools`: the contract tools, in `TOOL` declaration order (`share_fun_fact`
+  only in the `coach` and `web` modes), strict schemas,
+  `tool_choice: {type: "auto"}`. In the `web` mode Anthropic's web search
+  server tool follows them on every request of a run,
+  `{"type":"web_search_20250305","name":"web_search","max_uses":1}` (D203),
+  until a request is refused for it (rule 11).
 - `messages`: the bag's append-only transcript. Assistant turns are replayed
   exactly as received, thinking blocks and signatures included.
 
@@ -102,6 +108,11 @@ All JSON payloads are compact `JSON.stringify` output.
    as in rule 1, the age counted to the day of the shot, and `today` is that
    day on the device's calendar, so a roast date said in words after the
    shot counts from it rather than from the intake.
+   When the shot is due a fun fact in the `coach` or `web` mode (rule 11),
+   `"funFact":{"told":[string],"web":boolean}` follows the summary: `told`
+   the labels of the 40 facts told most recently on this device, any bag's,
+   CafAI's or the coach's, newest first; `web` true in the web mode. No
+   `funFact` otherwise.
    If UI tool calls are still pending, their tool_results come first in the
    same message (rule 7).
 4. **Feedback**: tool_result for `ask_user` with JSON
@@ -150,10 +161,46 @@ All JSON payloads are compact `JSON.stringify` output.
    summary already carried a reading (`summary.tdsPct`, `summary.eyPct`:
    its record came with one) counts as sent. A summary carries the reading
    once there is one (`get_shot_summary`, `compare_shots`, `get_bag_history`).
+11. **Fun fact** (D197-D203): a shot is due one when the bag's latest
+   decided shot (its iteration neither `pending` nor `superseded`) was kept
+   (`kept`) on the version the new shot ran, and the new shot ran like the
+   latest earlier shot on that version: pour time within 3 s, yield within
+   1.5 g, peak pressure within 1 bar, first drop within 3 s (each compared
+   when both shots have it), the same stop reason when both have one, and
+   no channeling flag the earlier shot did not raise. Settings' Fun facts
+   (`Settings.funFacts`, read as `coach` until someone chooses) says who
+   shares it: `off`, nobody, and nothing of facts happens at all; `list`,
+   CafAI alone: the coach hears nothing of facts (no `share_fun_fact`, no
+   prompt section, no `funFact`); `coach` and `web`, the coach first, told
+   with the shot event (rule 3). After the model run that answers the shot,
+   when the coach shared none, CafAI shows one of its own list
+   (`src/coach/facts/facts.json`, picked for the bag by
+   `src/coach/facts/pick.ts`), after the coach's words and before the run's
+   cards, so above the taste question. A run that fails keeps the fact due
+   for its Retry; the next shot replaces it. Every fact shown, CafAI's (its
+   id) or the coach's (`"coach:"` and its label), goes on the told list in
+   the device's own storage (`cafai.facts.told`), never mirrored or
+   exported. In the `web` mode, a request refused for its web search (a 400
+   that names it: an organisation whose admin turned web search off) is sent
+   again at once without it, with the `coach` mode's prompt and tools; the
+   chat says once "Web search is not available for your Anthropic account,
+   so the coach shares what it knows." and no request carries it again until
+   CafAI is reloaded. Its `server_tool_use` and `web_search_tool_result`
+   blocks stay in the assistant turn and are replayed unchanged, as every
+   block is. A search the coach calls beside a client tool waits for that
+   tool's result, which must then come in a user message of tool results
+   alone: the runner answers any card in that turn at once (`Not shown: a web
+   search was still waiting beside this call...`, never shown to the
+   barista), and holds the turn and those results until the turn that ran
+   the search comes, so they are stored together or not at all. A stored
+   transcript that still ends on such a search (a reload between appends)
+   is answered the same way on open, with Retry, and the next request
+   carries the web search tool whatever the mode.
 
 Auto tools (`save_bag_details`, `get_shot_summary`, `get_shot_series`,
-`get_phase_stats`, `compare_shots`, `get_bag_history`, `get_recent_setups`)
-are executed by the runner immediately; their results are JSON objects.
+`get_phase_stats`, `compare_shots`, `get_bag_history`, `get_recent_setups`,
+`share_fun_fact`) are executed by the runner immediately; their results are
+JSON objects.
 `save_bag_details` takes `roastDate` (`"YYYY-MM-DD"` or null) with the other
 details and answers `{"saved":true}`; a call stored before `roastDate` existed
 reads as null. Each call replaces every detail, so a correction resends the
@@ -168,9 +215,28 @@ and roaster; at most 10, the recent ones first as DYE2 lists them, then the
 favourites and recipes. `kind` is `"recent"` (DYE2 saw it used lately),
 `"favourite"` or `"recipe"` (the user saved it); `sameBatch` is true for the
 bag's batch, false for an earlier one, null when unknown; `date` is the day
-DYE2 captured it, on the device's calendar. Invalid tool input (schema or
-coach bounds) is answered with `is_error: true` and the validation
-sentences, so the model can retry.
+DYE2 captured it, on the device's calendar. `share_fun_fact` (D201) takes
+`{"topic","about","fact","source"}` (a fact topic, a label of at most 80
+characters, the fact in at most 280, and the page it came from or null).
+CafAI shows the fact in an assistant message of its own (`{kind:"fact"}`
+with the call's id as `requestId`, the page's site only in the `web` mode),
+puts it on the told list and answers `{"shown":true}`, in the run that
+answers a shot due a fact, or in one that answers something the barista
+typed (they may have asked for one). Any other call is answered with
+`is_error` and `Not shown: a fun fact goes once with a shot whose event
+carries "funFact", or when the barista asks for one.` (one fact per shot,
+D197). A fresh call whose fact foretells or describes the barista's cup
+("should taste", "this cup", "your coffee tastes"...) is answered with
+`is_error` and the reason (`src/coach/facts/wording.ts`); a second call in
+the same model run with `is_error` and `One fun fact per reply.`, not
+shown. A call found unanswered after a reload is answered `{"shown":true}`
+when the chat holds its fact, else
+`{"shown":false,"note":"CafAI reloaded before answering this call; the fact is not shown again."}`;
+it is never shown again.
+Outside the `coach` and `web` modes it is not offered, and the runner
+answers it as any unknown tool. Invalid tool input (schema or coach bounds)
+is answered with `is_error: true` and the validation sentences, so the
+model can retry.
 
 ## The bag photo request (6.8)
 
@@ -282,6 +348,15 @@ mock/anthropic/handlers.ts).
    {yieldG} g out." + tool_use `ask_user` `{question:"How did it taste?",
    options:["Sour / sharp","Bitter / harsh","Balanced, sweet","Weak / watery"],
    multiSelect:false}`.
+4a. The same event with `funFact` (a fun fact due, D201): between the text
+   and the `ask_user`, tool_use `share_fun_fact` with the first of CafAI's
+   facts (`src/coach/facts/facts.json`, or `RespondOptions.facts`) that
+   fits the bag by its origin (`src/coach/facts/match.ts`, its other keys
+   read as CafAI reads them) and whose label is not in `told` (both read as
+   the told list keys them, `coachKey`): `{topic, about, fact: <its text>,
+   source: null}`, as its own. The bag is the latest `save_bag_details`
+   input, else the intake context's `bag`. With none, no call: CafAI shows
+   one of its own. It never searches the web.
 5. tool_result for `propose_templates` -> text "Loaded {title}. Pull a shot
    when you are ready; I will read the curves." (`uploaded:false`: "I saved
    {title}, but it did not load on the machine. Tap Retry above, then pull a
@@ -316,7 +391,9 @@ mock/anthropic/handlers.ts).
 
 The fake also checks the request and answers HTTP 400 with an Anthropic-style
 error body when the client breaks the protocol: missing or wrong headers,
-`stream !== true`, `tool_choice` not `auto`, a tool without `strict: true`, an
+`stream !== true`, `tool_choice` not `auto`, a client tool without
+`strict: true` (Anthropic's web search server tool, a `type` starting
+`web_search_` with a `name` and no `input_schema`, takes none), an
 image that is not base64 JPEG, PNG, GIF or WebP data in a user message, a
 tool_use not answered by a tool_result in the next user message, or an
 assistant turn it remembers producing that was modified on replay (unknown

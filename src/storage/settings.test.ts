@@ -593,3 +593,44 @@ describe('the temperature unit (D172)', () => {
     expect(restored?.settings.temperatureUnit).toBe('fahrenheit');
   });
 });
+
+describe('where fun facts come from (D198)', () => {
+  it('is absent until chosen, so a record saved before it, or by a device that never chose, is unchanged', () => {
+    expect(defaultSettings(MODEL)).not.toHaveProperty('funFacts');
+    expect(normalizeSettings(makeSettings(), MODEL)).not.toHaveProperty('funFacts');
+    expect(applySettingsPatch(makeSettings(), { activeBagId: 'bag_1' }, MODEL)).not.toHaveProperty('funFacts');
+  });
+
+  it('keeps each of the four choices, and reads anything else as none chosen', () => {
+    for (const source of ['off', 'list', 'coach', 'web'] as const) {
+      expect(normalizeSettings(makeSettings({ funFacts: source }), MODEL), source).toHaveProperty('funFacts', source);
+    }
+    for (const other of ['Off', 'search', 1, null, {}]) {
+      expect(normalizeSettings({ ...makeSettings(), funFacts: other }, MODEL), String(other)).not.toHaveProperty('funFacts');
+    }
+  });
+
+  it('is patched like any other setting, and kept across other edits', () => {
+    const next = applySettingsPatch(makeSettings(), { funFacts: 'off' }, MODEL);
+    expect(next.funFacts).toBe('off');
+    expect(applySettingsPatch(next, { grinderSetting: '14' }, MODEL).funFacts).toBe('off');
+    expect(applySettingsPatch(next, { funFacts: 'web' }, MODEL).funFacts).toBe('web');
+  });
+
+  it('keeps a choice made on this device, Off as much as any other, and fills only a device that never chose', () => {
+    const off = makeSettings({ funFacts: 'off' });
+    const web = makeSettings({ funFacts: 'web' });
+    expect(fillBlankSettings(off, web, MODEL).funFacts).toBe('off');
+    expect(fillBlankSettings(web, off, MODEL).funFacts).toBe('web');
+    expect(fillBlankSettings(makeSettings(), web, MODEL).funFacts).toBe('web');
+    expect(fillBlankSettings(makeSettings(), makeSettings(), MODEL)).not.toHaveProperty('funFacts');
+  });
+
+  it('survives the Decaid mirror round trip', () => {
+    const settings = makeSettings({ funFacts: 'list' });
+    const { entries } = buildMirrorEntries({ settings, bags: [], versions: [], iterations: [], conversations: [] }, null, MODEL);
+    const data = Object.fromEntries([...entries].map(([key, text]) => [key, JSON.parse(text)]));
+    const restored = exportFromMirror(data, { appVersion: '1.2.3', defaultModel: MODEL, now: () => new Date(0) });
+    expect(restored?.settings.funFacts).toBe('list');
+  });
+});

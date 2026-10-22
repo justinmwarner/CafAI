@@ -160,6 +160,119 @@ describe('createTurnAssembler', () => {
     ]);
   });
 
+  describe('a web search turn (D203)', () => {
+    const RESULTS = [
+      {
+        type: 'web_search_result',
+        url: 'https://onyxcoffeelab.com/pages/our-story',
+        title: 'Our Story',
+        encrypted_content: 'EqgfCioIARgBIiQ3YTAwMjY1Mi1mZjM5LTQ1NGUt==',
+        page_age: 'March 3, 2026',
+      },
+      {
+        type: 'web_search_result',
+        url: 'https://en.wikipedia.org/wiki/Onyx_Coffee_Lab',
+        title: 'Onyx Coffee Lab',
+        encrypted_content: 'Eo8BCioIAhgBIiQyYjQ0OWJmZi1lNm==',
+        page_age: null,
+      },
+    ];
+    const CITATION = {
+      type: 'web_search_result_location',
+      url: 'https://onyxcoffeelab.com/pages/our-story',
+      title: 'Our Story',
+      encrypted_index: 'Eo8BCioIAhgBIiQyYjQ0OWJmZi1lNm..',
+      cited_text: 'Jon made all of his own deals public, including the price paid',
+    };
+    const SECOND_CITATION = { ...CITATION, encrypted_index: 'EpABCioIAhgBIiQ0ZDk..', cited_text: 'the cupping score' };
+    const searchUsage = { type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 931, server_tool_use: { web_search_requests: 1 } } };
+
+    it('keeps the call, its results with their encrypted content, and the citations on the text, as the API sends the turn whole', () => {
+      const events = feed([
+        messageStart,
+        blockStart(0, { type: 'thinking', thinking: '', signature: '' }),
+        delta(0, { type: 'signature_delta', signature: 'EqQBsig==' }),
+        blockStop(0),
+        blockStart(1, { type: 'text', text: '' }),
+        delta(1, { type: 'text_delta', text: "I'll look the roaster up." }),
+        blockStop(1),
+        blockStart(2, { type: 'server_tool_use', id: 'srvtoolu_01', name: 'web_search', input: {} }),
+        delta(2, { type: 'input_json_delta', partial_json: '{"query": "Onyx Coffee' }),
+        delta(2, { type: 'input_json_delta', partial_json: ' Lab history"}' }),
+        blockStop(2),
+        // The results come whole, in the block's start.
+        blockStart(3, { type: 'web_search_tool_result', tool_use_id: 'srvtoolu_01', content: RESULTS }),
+        blockStop(3),
+        blockStart(4, { type: 'text', text: '' }),
+        delta(4, { type: 'text_delta', text: 'Onyx publishes ' }),
+        blockStop(4),
+        blockStart(5, { type: 'text', text: '', citations: [] }),
+        delta(5, { type: 'citations_delta', citation: CITATION }),
+        delta(5, { type: 'text_delta', text: 'what it pays for each ' }),
+        delta(5, { type: 'citations_delta', citation: SECOND_CITATION }),
+        delta(5, { type: 'text_delta', text: 'green coffee.' }),
+        blockStop(5),
+        searchUsage,
+        messageStop,
+      ]);
+      const turn = turnOf(events);
+      const sentWhole = [
+        { type: 'thinking', thinking: '', signature: 'EqQBsig==' },
+        { type: 'text', text: "I'll look the roaster up." },
+        { type: 'server_tool_use', id: 'srvtoolu_01', name: 'web_search', input: { query: 'Onyx Coffee Lab history' } },
+        { type: 'web_search_tool_result', tool_use_id: 'srvtoolu_01', content: RESULTS },
+        { type: 'text', text: 'Onyx publishes ' },
+        { type: 'text', text: 'what it pays for each green coffee.', citations: [CITATION, SECOND_CITATION] },
+      ];
+      // Replayed as stored: the API refuses a turn whose results or citations changed.
+      expect(JSON.stringify(turn.content)).toBe(JSON.stringify(sentWhole));
+      expect(turn.usage).toEqual({ inputTokens: 120, outputTokens: 931, cacheReadInputTokens: 100, cacheCreationInputTokens: 0, webSearchRequests: 1 });
+      // The search is the server's to run: no tool call for the runner, text deltas for the text only.
+      expect(events.some((e) => e.type === 'tool_use_start')).toBe(false);
+      expect(events.filter((e) => e.type === 'text_delta').map((e) => (e as { index: number }).index)).toEqual([1, 4, 5, 5]);
+    });
+
+    it('gives a citation to text that started without a list of them', () => {
+      const events = feed([
+        messageStart,
+        blockStart(0, { type: 'text', text: '' }),
+        delta(0, { type: 'text_delta', text: 'Founded in 2012.' }),
+        delta(0, { type: 'citations_delta', citation: CITATION }),
+        blockStop(0),
+        blockStart(1, { type: 'text', text: '', citations: null }),
+        delta(1, { type: 'citations_delta', citation: SECOND_CITATION }),
+        delta(1, { type: 'text_delta', text: ' In Arkansas.' }),
+        blockStop(1),
+        messageDelta('end_turn'),
+        messageStop,
+      ]);
+      expect(turnOf(events).content).toEqual([
+        { type: 'text', text: 'Founded in 2012.', citations: [CITATION] },
+        { type: 'text', text: ' In Arkansas.', citations: [SECOND_CITATION] },
+      ]);
+    });
+
+    it('takes the call input from its deltas when the call starts without one', () => {
+      const events = feed([
+        messageStart,
+        blockStart(0, { type: 'server_tool_use', id: 'srvtoolu_02', name: 'web_search' }),
+        delta(0, { type: 'input_json_delta', partial_json: '{"query":"Kiambu AA"}' }),
+        blockStop(0),
+        messageDelta('pause_turn'),
+        messageStop,
+      ]);
+      const turn = turnOf(events);
+      expect(turn.content).toEqual([{ type: 'server_tool_use', id: 'srvtoolu_02', name: 'web_search', input: { query: 'Kiambu AA' } }]);
+      expect(turn.stopReason).toBe('pause_turn');
+    });
+
+    it("keeps a search's error as it came", () => {
+      const failed = { type: 'web_search_tool_result', tool_use_id: 'srvtoolu_03', content: { type: 'web_search_tool_result_error', error_code: 'max_uses_exceeded' } };
+      const events = feed([messageStart, blockStart(0, failed), blockStop(0), messageDelta('end_turn'), messageStop]);
+      expect(turnOf(events).content).toEqual([failed]);
+    });
+  });
+
   it('drops what the declined model wrote before a fallback boundary, except its text', () => {
     const events = feed([
       messageStart,

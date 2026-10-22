@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { AUTO_TOOLS, TEMPLATE_IDS, TOOL, UI_TOOLS, type ToolName } from './contract.ts';
+import { FACT_TOPICS } from './facts/types.ts';
 import { COACH_TOOL_SPECS } from './tools.ts';
 
 describe('COACH_TOOL_SPECS', () => {
@@ -74,6 +75,20 @@ describe('COACH_TOOL_SPECS', () => {
     expect(description).toMatch(/at intake/);
     expect(description).toMatch(/batch/);
     expect(description).toMatch(/name and roaster/);
+  });
+
+  it('shares one fun fact about this bag, sure and true, never how the cup tastes, and says what CafAI answers (D201)', () => {
+    const { description, kind } = COACH_TOOL_SPECS.share_fun_fact;
+    expect(kind).toBe('auto');
+    for (const topic of FACT_TOPICS) expect(description).toContain(topic);
+    expect(description).toMatch(/about \(a short label, at most 80 characters/);
+    expect(description).toMatch(/fact \(one or two plain sentences, at most 280 characters, true as written\)/);
+    expect(description).toMatch(/source \(the https address of the page you read it on, else null\)/);
+    expect(description).toMatch(/Only when you are sure of it and it is about this bag/);
+    expect(description).toMatch(/never what this cup tastes like or will/);
+    expect(description).toMatch(/CafAI sends back a fact that says how the cup tastes/);
+    expect(description).toContain('Answers {"shown":true}');
+    expect(description).toMatch(/at most one per reply/);
   });
 
   it('says a recent setup was only used, not that it worked, and to look once the bag has its name', () => {

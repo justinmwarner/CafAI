@@ -31,6 +31,12 @@
  *   the pour begins, its record holds too little of it. No card, no taste
  *   question, nothing to compare the next shot with; one quiet line says so
  *   (D204).
+ * - A shot of a recipe the barista kept that ran like the last one gets one
+ *   fun fact (D197): the coach's, shared with share_fun_fact, or else one of
+ *   CafAI's own list, between the coach's words and its taste question. The
+ *   source is the barista's choice in Settings (D198); the facts told stay
+ *   on the device (D200), and the web mode carries Anthropic's web search
+ *   until it proves unavailable (D203).
  * - A bag whose details were saved is added to Decaid's bean library in the
  *   background, and every load names its batch (D102).
  * - A new bag opens with "Which coffee is it?": a batch from Decaid's bean
@@ -63,9 +69,16 @@ import {
   type ProposeAdjustment,
   type ProposeTemplates,
   type SaveBagDetails,
+  type ShareFunFact,
   type ToolName,
 } from '../../coach/contract.ts';
 import { isTds, readingOf, roundTds, withTds } from '../../coach/extraction.ts';
+import { loadFacts } from '../../coach/facts/load.ts';
+import { ranLikeLast } from '../../coach/facts/likeLast.ts';
+import { pickFact, toldLabels } from '../../coach/facts/pick.ts';
+import { coachKey, createToldList, type ToldList } from '../../coach/facts/told.ts';
+import { DEFAULT_FUN_FACTS, type FunFact, type FunFactsSource } from '../../coach/facts/types.ts';
+import { factWordingError } from '../../coach/facts/wording.ts';
 import { todayOf, writtenDate, type FreezerDates } from '../../coach/roastAge.ts';
 import { MIN_SHOT_POUR_S, recordPourSeconds } from '../../coach/summary/summarize.ts';
 import { reportDrift } from '../../api/drift.ts';
@@ -92,7 +105,9 @@ import { isShotRunning as shotInProgress } from '../../api/workflow.ts';
 import { redactKeyLike } from '../../storage/redact.ts';
 import type { GrinderInfo, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
 import type { BagPhoto, ExtractedBag } from '../../llm/extractBag.ts';
-import type { ContentBlock, Effort, LlmMessage, PendingUiCall, RunnerTool, ToolResultBlock, ToolValidation } from '../../llm/types.ts';
+import type { ContentBlock, Effort, LlmMessage, PendingUiCall, RunnerTool, RunResult, ToolResultBlock, ToolValidation } from '../../llm/types.ts';
+import { resumesSearch, SEARCH_FIRST_MESSAGE, waitsOnServerTool } from '../../llm/runner.ts';
+import { citedSites, siteOf, WEB_SEARCH_TOOL, webSearchUnavailable } from '../../llm/webSearch.ts';
 import type {
   AppliedChange,
   Bag,
@@ -118,9 +133,14 @@ import type {
   TemplateCardItem,
   VersionLoad,
 } from '../types.ts';
+import { coachShares, previousLikeShot } from './funFacts.ts';
 import { browserTimers, createOutbox, writeFailure, WriteLater, type OutboxTimers } from './outbox.ts';
 import type { ApiPort, ChangePlan, Clock, CoachPort, LlmPort, ShotSource } from './ports.ts';
 import {
+  FACT_NOT_DUE,
+  FACT_NOT_SHOWN_AGAIN,
+  FACT_SHOWN,
+  ONE_FACT_PER_REPLY,
   UNANSWERED_SHOT,
   UNANSWERED_TEXT,
   grinderPayload,
@@ -158,6 +178,7 @@ import {
   bagConfirmPart,
   byRequestId,
   diffPart,
+  factPart,
   filledBeanCard,
   finishStreaming,
   grinderOfferPart,
@@ -177,9 +198,11 @@ import {
   setShotRating,
   setVisualizerLink,
   shotPart,
+  sourcesPart,
   startingYieldText,
   templatesPart,
   updatePart,
+  withPart,
   withoutTransient,
 } from './uiMessages.ts';
 
@@ -205,6 +228,10 @@ export interface EngineDeps {
   restoredFromBackup?: boolean;
   /** Which of Decaid's optional plugins run (D103); none by default. */
   plugins?: Pick<PluginDirectory, 'isLoaded'>;
+  /** The fun facts told on this device (D200); a list in memory by default. */
+  told?: ToldList;
+  /** CafAI's own fun facts (D199), read only when one is due; facts.json by default. */
+  facts?: () => Promise<readonly FunFact[]>;
 }
 
 /** The page's visibility: the WebView runs on with the page hidden behind another app or a dark screen. */
@@ -252,6 +279,18 @@ interface Session {
   targetYieldG: number | null;
   /** The read of Decaid's dose and yield that started when the session opened. */
   numbers: Promise<void>;
+  /**
+   * The shot due a fun fact (D197), until a run that answers it ends: `shown`
+   * once the coach shared one, else CafAI shows its own then. A run that
+   * failed keeps it for the retry; the next shot replaces it.
+   */
+  factDue: { shotId: string; shown: boolean } | null;
+  /**
+   * The run going on answers something the barista typed, where they may
+   * have asked for a fun fact (D201); a tap or a shot is not. Kept for the
+   * Retry of a run that failed.
+   */
+  typedTurn: boolean;
 }
 
 /** What CafAI knows about a version on the machine (D55); see VersionLoad. A failed barrier leaves Decaid retrying its own upload. */
@@ -379,6 +418,8 @@ const NEEDS_KEY = 'Add your API key in Settings first.';
 const READING_BAG = 'Reading the bag…';
 const NO_PHOTO_READER = 'CafAI cannot read photos here. Describe the bag in the chat.';
 const DYE2_UNREACHABLE = "Decaid can't be reached right now, so DYE2's setups could not be read.";
+/** Said once, when Anthropic refused the coach's web search (D203): turned off for the organisation, or of no use to it. */
+const NO_WEB_SEARCH = 'Web search is not available for your Anthropic account, so the coach shares what it knows.';
 /** How often, and for how long, CafAI looks for a shot's Visualizer upload: every 3 s for 30 s (streamline's rule, 6.4). */
 const VISUALIZER_LOOK_MS = 3_000;
 const VISUALIZER_WATCH_MS = 30_000;
@@ -545,6 +586,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   const checkTimers = deps.checkTimers ?? browserTimers;
   const visibility = deps.visibility ?? ALWAYS_VISIBLE;
   const plugins = deps.plugins ?? NO_PLUGINS;
+  const told = deps.told ?? createToldList(null);
+  const facts = deps.facts ?? loadFacts;
 
   let state: CoachState = {
     ready: false,
@@ -640,6 +683,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
    * shot, not at every try of the waiting rating.
    */
   let scaleUnclear = false;
+  /** False once Anthropic refused a request for its web search (D203): the coach shares what it knows for the rest of the session. */
+  let webSearch = true;
+  /** A fun fact was shown in the model run going on: one per run, the coach's or CafAI's. */
+  let factShown = false;
   /** Bags being added to Decaid's bean library now, so a second save never adds a second batch. */
   const linking = new Set<string>();
   /** Bags whose bean card is reading Decaid's batches now, so a second open reads them once. */
@@ -1483,6 +1530,81 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   }
 
   // -------------------------------------------------------------------------
+  // Fun facts (D197-D203)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Where fun facts come from now (D198), read at each use: Settings' choice,
+   * the coach and the list until someone chose; the web mode without its
+   * search once Anthropic refused it this session (D203).
+   */
+  function funFactsSource(): FunFactsSource {
+    const chosen = settings.funFacts ?? DEFAULT_FUN_FACTS;
+    return chosen === 'web' && !webSearch ? 'coach' : chosen;
+  }
+
+  /** CafAI's own facts, read when one is due; none when they cannot be read, so only the coach's can show. */
+  async function factList(): Promise<readonly FunFact[]> {
+    try {
+      return await facts();
+    } catch {
+      return [];
+    }
+  }
+
+  /** A fact in an assistant message of its own (D202), on the told list (D200) under `key`. */
+  function showFact(s: Session, part: CoachUiPart, key: string): void {
+    addMessage('assistant', [part]);
+    told.add({ key, bagId: s.bag.id, at: nowIso() });
+    factShown = true;
+    if (s.factDue) s.factDue.shown = true;
+  }
+
+  /**
+   * The coach's fun fact (D201): told under its label, with its page's site
+   * only in the web mode, where it may have read one (D203), and the call's
+   * id, so a reload can say it was shown. One per run, and one per shot
+   * (D197): with the reply to a shot due one, or when the barista typed what
+   * the coach answers (they may have asked for one); any other is sent back,
+   * so a fact sent back beside the taste question, CafAI's shown instead,
+   * never brings a second under the barista's answer.
+   */
+  async function shareCoachFact(s: Session, input: ShareFunFact, callId: string | null): Promise<{ content: string; isError?: boolean }> {
+    if (factShown) return { content: ONE_FACT_PER_REPLY, isError: true };
+    const due = s.factDue !== null && !s.factDue.shown;
+    if (!due && !s.typedTurn) return { content: FACT_NOT_DUE, isError: true };
+    const site = funFactsSource() === 'web' ? siteOf(input.source) : null;
+    showFact(s, factPart(input.fact, input.topic, site, callId ?? undefined), coachKey(input.about));
+    await persistConversation(s);
+    emit();
+    return { content: JSON.stringify(FACT_SHOWN) };
+  }
+
+  /**
+   * After the run that answers a shot due a fact (D201): CafAI's own when the
+   * coach shared none, picked for the bag (D200), before the run's cards, so
+   * it sits between the coach's words and its taste question.
+   */
+  async function showListFact(s: Session): Promise<void> {
+    const due = s.factDue;
+    s.factDue = null;
+    if (!due || due.shown || funFactsSource() === 'off') return;
+    const fact = pickFact(await factList(), s.bag, told.entries());
+    if (fact) showFact(s, factPart(fact.text, fact.topic, siteOf(fact.source)), fact.id);
+  }
+
+  /**
+   * Whether this shot is due a fun fact (D197): the bag's latest decided shot
+   * was kept on the version this one ran, and this one ran like the latest
+   * earlier shot on it. `iterations` are the bag's before this shot's own.
+   */
+  function factDueFor(iterations: readonly IterationRecord[], version: ProfileVersion, shotId: string, summary: ShotSummary): boolean {
+    if (funFactsSource() === 'off') return false;
+    const previous = previousLikeShot(iterations, version.id, shotId);
+    return previous !== null && ranLikeLast(summary, previous);
+  }
+
+  // -------------------------------------------------------------------------
   // Shots and query tools
   // -------------------------------------------------------------------------
 
@@ -1539,7 +1661,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     },
   };
 
-  async function executeAuto(name: ToolName, value: unknown): Promise<{ content: string; isError?: boolean }> {
+  /** `callId`: the call's tool_use id, which a fun fact keeps (D201); null when unknown. */
+  async function executeAuto(name: ToolName, value: unknown, callId: string | null): Promise<{ content: string; isError?: boolean }> {
     const s = session;
     if (!s) return { content: JSON.stringify({ error: 'No bag is active.' }), isError: true };
     switch (name) {
@@ -1574,6 +1697,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
           versions: s.versions,
           iterations: await bagIterations(s),
         });
+      case TOOL.shareFunFact:
+        return shareCoachFact(s, value as ShareFunFact, callId);
       default:
         return { content: JSON.stringify({ error: `${name} is not an automatic tool.` }), isError: true };
     }
@@ -1624,6 +1749,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       const errors = [...(result.ok ? [] : result.errors), ...(wording ? [wording] : [])];
       return errors.length > 0 ? errors.join(' ') : null;
     }
+    // A fact never says how the barista's cup tastes (D199); one stored, as the coach wrote it then, is not shown again anyway.
+    if (name === TOOL.shareFunFact) return fresh ? factWordingError((value as ShareFunFact).fact) : null;
     return null;
   }
 
@@ -1643,10 +1770,17 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       validate: (input) => check(input, true),
       validateStored: (input) => check(input, false),
     };
-    if (auto) tool.execute = (value) => executeAuto(name, value);
+    if (auto) tool.execute = (value, call) => executeAuto(name, value, call.id);
     return tool;
   });
+  // Every tool, so a call stored in any mode is still answered after a reload.
   const toolsByName = new Map(tools.map((t) => [t.definition.name, t]));
+  const toolsWithoutFacts = tools.filter((t) => t.definition.name !== TOOL.shareFunFact);
+
+  /** The tools a run offers (D198): share_fun_fact in the coach's modes only. */
+  function toolsFor(source: FunFactsSource): EngineTool[] {
+    return coachShares(source) ? tools : toolsWithoutFacts;
+  }
 
   // -------------------------------------------------------------------------
   // Model runs
@@ -1744,15 +1878,19 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     lastFailed = null;
     emit();
     let streamingId: string | null = null;
-    try {
-      const result = await llm.run({
+    factShown = false;
+    // The prompt, the tools and the web search follow the fun facts mode of the moment (D198, D203).
+    const run = (source: FunFactsSource) =>
+      llm.run({
         provider: llm.provider,
         model: settings.model,
-        system: coach.systemPrompt(),
+        system: coach.systemPrompt(source),
         effort,
         ...(deps.maxTokens ? { maxTokens: deps.maxTokens } : {}),
         messages: s.conversation.apiMessages,
-        tools,
+        tools: toolsFor(source),
+        // A stored search still waiting resumes with its tool whatever the mode, or the API refuses it (D203).
+        ...(source === 'web' || resumesSearch(s.conversation.apiMessages) ? { serverTools: [WEB_SEARCH_TOOL] } : {}),
         onTurnStart: () => {
           streamingId = null;
         },
@@ -1766,10 +1904,29 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         },
         onAppend: async (appended) => {
           s.conversation = { ...s.conversation, apiMessages: [...s.conversation.apiMessages, appended] };
+          // The sites the coach's words cite, under them (D203): Anthropic asks that search results shown to people say where they came from.
+          const sites = appended.role === 'assistant' ? citedSites(appended.content) : [];
+          if (sites.length > 0 && streamingId) setMessages(withPart(state.messages, streamingId, sourcesPart(sites)));
           await persistConversation(s);
         },
       });
+    try {
+      const source = funFactsSource();
+      let result: RunResult;
+      try {
+        result = await run(source);
+      } catch (error) {
+        if (source !== 'web' || !webSearchUnavailable(error)) throw error;
+        // Web search turned off for the organisation, or of no use to it: the same request without it, at once,
+        // and none for the rest of the session, said once (D203).
+        webSearch = false;
+        setMessages(finishStreaming(state.messages));
+        addMessage('system', [noticePart('info', NO_WEB_SEARCH)]);
+        result = await run(funFactsSource());
+      }
       setMessages(finishStreaming(state.messages));
+      // CafAI's own fact when the coach shared none for a shot due one, before the taste question (D201).
+      await showListFact(s);
       s.pending = [];
       const crowded = crowdedGrinderOffers(result.pendingUiCalls);
       s.held = [...result.heldResults, ...crowded];
@@ -1798,6 +1955,12 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     extra: ContentBlock[],
     setAsideFor: SetAsideReason,
   ): Promise<void> {
+    // A stored search still waiting, its calls answered (a reload between appends), runs before anything else
+    // is said (D203): a message after those results would join them, and the API would refuse every request.
+    if (resumesSearch(s.conversation.apiMessages)) {
+      await runModel();
+      if (resumesSearch(s.conversation.apiMessages)) return;
+    }
     const order = unansweredToolUses(s.conversation.apiMessages).map((u) => u.id);
     const byId = new Map<string, ToolResultBlock>();
     for (const held of s.held) byId.set(held.tool_use_id, held);
@@ -1825,6 +1988,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       ...s.conversation,
       apiMessages: [...s.conversation.apiMessages, { role: 'user', content: blocks }],
     };
+    // What the barista typed may ask for a fun fact; a tap or a shot does not (D201).
+    s.typedTurn = setAsideFor === 'typed';
     await persistConversation(s);
     await runModel();
   }
@@ -1833,10 +1998,17 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   // Sessions
   // -------------------------------------------------------------------------
 
-  /** Rebuild pending calls from a stored transcript (after a reload). */
+  /**
+   * Rebuild pending calls from a stored transcript (after a reload). A turn
+   * whose web search still waits beside its calls (a reload between appends,
+   * D203) shows no card: each is answered as the runner answers it, and the
+   * answers go in a message of their own, for Retry to resume the search.
+   */
   async function recoverPending(s: Session): Promise<void> {
     s.pending = [];
     s.held = [];
+    const last = s.conversation.apiMessages[s.conversation.apiMessages.length - 1];
+    const searchWaits = last?.role === 'assistant' && waitsOnServerTool(last.content);
     for (const use of unansweredToolUses(s.conversation.apiMessages)) {
       const tool = toolsByName.get(use.name);
       if (!tool) {
@@ -1846,9 +2018,17 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       const validation = tool.validateStored(use.input);
       if (!validation.ok) {
         s.held.push(toolResult(use.id, validation.error, true));
+      } else if (use.name === TOOL.shareFunFact) {
+        // Never shown twice: the chat says whether this call's fact is in it (D201).
+        const inChat = state.messages.some((m) => m.parts.some((part) => part.kind === 'fact' && part.requestId === use.id));
+        s.held.push(toolResult(use.id, inChat ? FACT_SHOWN : FACT_NOT_SHOWN_AGAIN));
       } else if (tool.kind === 'auto' && tool.execute) {
-        const outcome = await tool.execute(validation.value);
+        const outcome = await tool.execute(validation.value, { id: use.id });
         s.held.push(toolResult(use.id, outcome.content, outcome.isError ?? false));
+      } else if (searchWaits) {
+        s.held.push(toolResult(use.id, SEARCH_FIRST_MESSAGE, true));
+        // A card it may have shown before the reload no longer answers anything.
+        setMessages(updatePart(state.messages, byRequestId(use.id), (part) => setAside(part, 'other')));
       } else if (use.name === TOOL.proposeAdjustment) {
         const context = proposalContext(s);
         const plan = context ? coach.validateProposal(validation.value as ProposeAdjustment, context) : null;
@@ -1863,6 +2043,12 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     const unshown = new Set(crowded.map((held) => held.tool_use_id));
     s.pending = s.pending.filter((p) => !unshown.has(p.id));
     s.held.push(...crowded);
+    if (searchWaits && s.held.length > 0) {
+      // Tool results alone, in tool_use order: the API runs the waiting search once they are in (D203).
+      s.conversation = { ...s.conversation, apiMessages: [...s.conversation.apiMessages, { role: 'user', content: s.held }] };
+      s.held = [];
+      await persistConversation(s);
+    }
   }
 
   async function openSession(bag: Bag): Promise<void> {
@@ -1883,6 +2069,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       doseG: null,
       targetYieldG: null,
       numbers: Promise.resolve(),
+      factDue: null,
+      typedTurn: false,
     };
     session = s;
     // A stored progress notice (an older build, a crash) describes work that is long over.
@@ -2415,6 +2603,11 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     emit();
     const roast = await roastFor(s);
     const template = coach.getTemplate(current.templateId);
+    // One fact per shot (D197), decided from the iterations before this one's; one still due to an earlier shot
+    // whose reply failed is dropped. In the coach's modes the coach hears it is due, and what was told (D201).
+    s.factDue = factDueFor(iterations, current, record.id, summary) ? { shotId: record.id, shown: false } : null;
+    const source = funFactsSource();
+    const funFact = s.factDue && coachShares(source) ? { told: toldLabels(told.entries(), await factList()), web: source === 'web' } : null;
     const block = shotCompletedBlock({
       shotRef: 'latest',
       shotId: record.id,
@@ -2427,6 +2620,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       roast,
       today: todayOf(clock.now()),
       summary: summaryForModel(summary),
+      ...(funFact ? { funFact } : {}),
     });
     await sendUser(s, new Map(), UNANSWERED_SHOT, [block], 'shot');
   }

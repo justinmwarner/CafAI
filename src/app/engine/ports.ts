@@ -25,6 +25,7 @@ import type {
   WorkflowPatch,
 } from '../../api/types.ts';
 import type { ProposeAdjustment, ProposeTemplates, ToolName } from '../../coach/contract.ts';
+import type { FunFactsSource } from '../../coach/facts/types.ts';
 import type { BagIdentity } from '../../coach/queries.ts';
 import type { FreezerDates } from '../../coach/roastAge.ts';
 import type { GrinderInfo, LeverValues, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
@@ -77,11 +78,12 @@ export interface CoachPort {
   templates: readonly Template[];
   getTemplate(id: string): Template | undefined;
   /**
-   * The same for every request while the barista's temperature unit stays
-   * (prompt caching): one prompt per unit (D175), so a switch costs one
-   * request without the cache.
+   * The same for every request while the barista's temperature unit and the
+   * source of fun facts stay (prompt caching): one prompt per unit (D175)
+   * and per fun facts mode (D198, off and CafAI's list sharing one), so a
+   * switch costs one request without the cache.
    */
-  systemPrompt(): string;
+  systemPrompt(funFacts: FunFactsSource): string;
   toolDescription(name: ToolName): string;
   readLeverValues(template: Template, profile: ProfileJson): LeverValues;
   validateProposal(input: ProposeAdjustment, context: ProposalContext): ProposalValidation;

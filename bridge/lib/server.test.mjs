@@ -81,6 +81,8 @@ const TOOL = (name) => ({
   description: `The ${name} tool.`,
   input_schema: { type: 'object', properties: { shot: { type: 'string' } }, required: [], additionalProperties: false },
 });
+/** Anthropic's web search, as CafAI sends it for a fun fact (D203). */
+const WEB_SEARCH = { type: 'web_search_20250305', name: 'web_search', max_uses: 1 };
 
 describe('CafAI Bridge', () => {
   let ctx;
@@ -285,6 +287,36 @@ describe('CafAI Bridge', () => {
     expect(second.reply.stopReason).toBe('tool_use');
   });
 
+  it("searches with Claude Code's own WebSearch inside the run, and passes on the coach's words and tools in one reply (D203)", async () => {
+    const tools = [TOOL('share_fun_fact'), WEB_SEARCH];
+    const ask1 = [user('WEB_SEARCH, then USE_TOOL:share_fun_fact:{"shot":"fact"}')];
+    const first = await ask(ctx.url, { tools, messages: ask1 });
+    expect(first.reply.stopReason).toBe('tool_use');
+    expect(first.reply.message.content).toEqual([
+      { type: 'text', text: "I'll look up Onyx Coffee Lab for you." },
+      { type: 'tool_use', id: 'toolu_1_a', name: 'share_fun_fact', input: { shot: 'fact' } },
+    ]);
+    expect(first.events.filter((event) => event.type === 'message_start')).toHaveLength(1);
+    expect(JSON.stringify(first.events)).not.toMatch(/WebSearch|toolu_search|Web search results/);
+    const second = await ask(ctx.url, {
+      tools,
+      messages: [...ask1, first.reply.message, { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_1_a', content: '{"shown":true}' }] }],
+    });
+    // The same Claude Code held the call: no replay, no second search.
+    expect(second.reply.text).toBe('Tool results: share_fun_fact => {"shown":true}');
+  });
+
+  it('starts the text after the search on a paragraph of its own', async () => {
+    const { reply } = await ask(ctx.url, { tools: [TOOL('share_fun_fact'), WEB_SEARCH], messages: [user('WEB_SEARCH hello')] });
+    expect(reply.text).toMatch(/^I'll look up Onyx Coffee Lab for you\.\n\npid \d+ turn 1: WEB_SEARCH hello$/);
+    expect(reply.stopReason).toBe('end_turn');
+  });
+
+  it('keeps every Claude Code tool off for a request without the web search tool', async () => {
+    const { reply } = await ask(ctx.url, { tools: [TOOL('share_fun_fact')], messages: [user('WEB_SEARCH please')] });
+    expect(reply.text).toMatch(/^pid \d+ turn 1 \(no WebSearch\): WEB_SEARCH please$/);
+  });
+
   it("passes a photo through to Claude Code's first message", async () => {
     const photo = { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: '/9j/4AAQ' } };
     const { reply } = await ask(ctx.url, { messages: [{ role: 'user', content: [photo, { type: 'text', text: 'Read the bag.' }] }] });
@@ -328,6 +360,7 @@ describe('CafAI Bridge', () => {
   it('logs requests without their content', () => {
     const log = ctx.lines.join('\n');
     expect(log).toContain('POST /v1/messages claude-opus-5-5');
+    expect(log).toMatch(/POST \/v1\/messages claude-opus-5-5 with web search, 1 messages, new, /);
     expect(log).not.toContain('hello one');
     expect(log).not.toContain('Read the bag');
   });
@@ -488,8 +521,23 @@ describe('parseMessagesBody', () => {
         messages: [user('hi')],
         tools: [{ name: 'save_bag_details', description: 'The save_bag_details tool.', input_schema: TOOL('x').input_schema }],
         effort: 'medium',
+        webSearch: null,
       },
     });
     expect(parseMessagesBody({ model: 'm', messages: [user('x')], tools: [{ name: 'a'.repeat(53) }] }).ok).toBe(false);
+  });
+
+  it('reads the web search server tool and its limit, and leaves other server tools out (D203)', () => {
+    const parsed = parseMessagesBody({
+      model: 'claude-opus-5-5',
+      messages: [user('hi')],
+      tools: [TOOL('share_fun_fact'), WEB_SEARCH, { type: 'code_execution_20260521', name: 'code_execution' }],
+    });
+    expect(parsed.request.tools.map((tool) => tool.name)).toEqual(['share_fun_fact']);
+    expect(parsed.request.webSearch).toEqual({ maxUses: 1 });
+    const newer = parseMessagesBody({ model: 'm', messages: [user('x')], tools: [{ type: 'web_search_20260209', name: 'web_search' }] });
+    expect(newer.request.webSearch).toEqual({ maxUses: null });
+    // Only Anthropic's web search under its own name stands for Claude Code's.
+    expect(parseMessagesBody({ model: 'm', messages: [user('x')], tools: [{ ...WEB_SEARCH, name: 'search' }] }).request.webSearch).toBeNull();
   });
 });

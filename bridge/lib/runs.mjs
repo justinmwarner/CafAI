@@ -25,6 +25,25 @@ export const TOOL_NOTE =
   '\n\n[CafAI Bridge] The tools are provided under the prefix mcp__cafai__: a tool this prompt calls ' +
   'propose_adjustment is called as mcp__cafai__propose_adjustment, and so on.';
 
+/**
+ * Claude Code's WebSearch stands in for Anthropic's web_search (D203): the
+ * request's `max_uses` is kept by asking, and the links its results ask for
+ * would show in CafAI as markdown.
+ */
+export function webSearchNote(maxUses) {
+  const limit = maxUses === 1 ? ': search at most once per reply' : maxUses ? `: search at most ${maxUses} times per reply` : '';
+  return (
+    `\n\n[CafAI Bridge] The web search this prompt calls web_search is the WebSearch tool here${limit}. ` +
+    'Its results ask you to list their sources as markdown links, which CafAI shows as plain text: name each source by its site instead (onyxcoffeelab.com).'
+  );
+}
+
+/** The system prompt a run starts with: the coach's, and what the bridge adds. */
+export function runSystemPrompt(request) {
+  const tools = request.tools.length > 0 ? TOOL_NOTE : '';
+  return `${request.system}${tools}${request.webSearch ? webSearchNote(request.webSearch.maxUses) : ''}`;
+}
+
 const DEFAULTS = {
   firstEventMs: 90_000,
   stallMs: 180_000,
@@ -49,6 +68,7 @@ const DEFAULTS = {
  * @property {Array<{ role: string, content: unknown }>} messages
  * @property {Array<{ name: string, description?: string, input_schema?: object }>} tools
  * @property {string | null} effort
+ * @property {{ maxUses: number | null } | null} webSearch  The request's web_search server tool (D203).
  */
 
 function sameList(a, b) {
@@ -69,7 +89,7 @@ function textOf(message) {
 export function configKey(request) {
   const tools = request.tools.map((tool) => [tool.name, tool.description ?? '', tool.input_schema ?? null]);
   return createHash('sha256')
-    .update(JSON.stringify([request.model, request.effort ?? null, request.system, tools]))
+    .update(JSON.stringify([request.model, request.effort ?? null, request.system, tools, request.webSearch ?? null]))
     .digest('hex');
 }
 
@@ -121,7 +141,7 @@ class Run {
     const { workDir, install } = this.manager;
     mkdirSync(workDir, { recursive: true });
     const systemFile = path.join(workDir, `run-${this.id}-system.txt`);
-    writeFileSync(systemFile, `${request.system}${this.tools.length > 0 ? TOOL_NOTE : ''}`, 'utf8');
+    writeFileSync(systemFile, runSystemPrompt(request), 'utf8');
     this.files.push(systemFile);
     let mcpFile = null;
     if (this.tools.length > 0) {
@@ -134,7 +154,13 @@ class Run {
       );
       this.files.push(mcpFile);
     }
-    const args = buildRunArgs({ model: request.model, effort: request.effort, systemPromptFile: systemFile, mcpConfigFile: mcpFile });
+    const args = buildRunArgs({
+      model: request.model,
+      effort: request.effort,
+      systemPromptFile: systemFile,
+      mcpConfigFile: mcpFile,
+      webSearch: Boolean(request.webSearch),
+    });
     const env = childEnv(this.manager.env, { allowApiKey: this.manager.allowApiKey });
     if (request.maxTokens) env.CLAUDE_CODE_MAX_OUTPUT_TOKENS = String(request.maxTokens);
 
@@ -276,7 +302,8 @@ class Run {
             return;
           }
           clearTimeout(this.timers.firstEvent);
-          this.transformer = createStreamTransformer();
+          // After Claude Code ran its own calls (its WebSearch, D203), its next message goes on with the same reply.
+          if (!this.transformer?.continuing) this.transformer = createStreamTransformer();
           this.messageId = String(event.message?.id ?? '');
         }
         if (!this.transformer) return;
@@ -319,8 +346,9 @@ class Run {
 
   onMessageStop() {
     const transformer = this.transformer;
+    // Claude Code runs its own calls and writes on: the reply goes on with its next message.
+    if (!transformer || transformer.continuing) return;
     this.transformer = null;
-    if (!transformer) return;
     const stop = transformer.stopReason;
     const fingerprint = fingerprintMessage(transformer.message());
     const uses = transformer.toolUses();

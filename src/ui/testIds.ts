@@ -95,6 +95,10 @@ export const TID = {
   tdsRemove: 'tds-remove',
   tdsCancel: 'tds-cancel',
   tdsNote: 'tds-note',
+  /** A fun fact's block in the chat (D202). */
+  factCard: 'fact-card',
+  /** The sites the coach's words cite, under them (D203). */
+  sourcesLine: 'sources-line',
 
   // History
   historyBag: (bagId: string) => `history-bag-${bagId}`,
@@ -114,6 +118,8 @@ export const TID = {
   forgetKey: 'forget-key',
   forgetKeyConfirm: 'forget-key-confirm',
   modelSelect: 'model-select',
+  /** Settings > Coach > Fun facts (D198): where they come from. */
+  funFacts: 'fun-facts',
   grinderName: 'grinder-name',
   grinderSetting: 'grinder-setting',
   settingsSave: 'settings-save',

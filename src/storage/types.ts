@@ -12,6 +12,7 @@
  */
 import type { ProfileJson, ShotSummary } from '../coach/types.ts';
 import type { ProposeAdjustment, RoastLevel } from '../coach/contract.ts';
+import type { FunFactsSource } from '../coach/facts/types.ts';
 import type { TemperatureUnit } from '../coach/temperature.ts';
 import type { LlmMessage } from '../llm/types.ts';
 import type { CoachUiMessage } from '../app/types.ts';
@@ -198,6 +199,15 @@ export interface Settings {
    * answers given here, which it keeps, from none, which it may fill.
    */
   care?: CareSettings;
+  /**
+   * Where fun facts come from (D198): off, CafAI's list, the coach and the
+   * list, or both with a web search. Absent until someone chooses on this
+   * device, and read as DEFAULT_FUN_FACTS (the coach and the list): like
+   * temperatureUnit, storage never writes it as a default, so a merge (an
+   * import, a restore) can tell a choice made here, which it keeps, from
+   * none, which it may fill.
+   */
+  funFacts?: FunFactsSource;
 }
 
 /** An edit of the settings: what it names changes, the care block field by field (D187). */

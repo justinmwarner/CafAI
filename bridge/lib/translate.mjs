@@ -207,23 +207,40 @@ function pickUsage(usage) {
   return out;
 }
 
-const DROPPED_BLOCKS = new Set(['thinking', 'redacted_thinking']);
+/**
+ * Blocks bound to the plan's organisation: thinking signatures, and the
+ * search results a model that searched itself would get (D203).
+ */
+const DROPPED_BLOCKS = new Set(['thinking', 'redacted_thinking', 'server_tool_use', 'web_search_tool_result']);
+const DROPPED_DELTAS = new Set(['thinking_delta', 'signature_delta', 'citations_delta']);
+
+const isCoachTool = (name) => typeof name === 'string' && name.startsWith(TOOL_PREFIX);
 
 /**
- * Rewrites one assistant message of Claude Code's stream for CafAI: thinking
+ * Rewrites one assistant reply of Claude Code's stream for CafAI: thinking
  * blocks are dropped and the rest renumbered (their signatures belong to the
  * plan's organisation and could fail if replayed to the API under a Console
  * key; CafAI never shows them), tool names lose `mcp__cafai__`, and fields
- * the API would not take back (`caller`) go. It also keeps the message as
- * sent, for the run's transcript.
+ * the API would not take back (`caller`) go. Claude Code's own tool calls
+ * (its WebSearch, D203) stay inside the run: a message that makes only those
+ * does not end the reply, and the message Claude Code writes once it has run
+ * them goes on in the same reply, its text on a paragraph of its own. It also
+ * keeps the reply as sent, for the run's transcript.
  */
 export function createStreamTransformer() {
-  const map = new Map();
+  let map = new Map();
   const blocks = [];
   let next = 0;
   let stopReason = null;
   let started = false;
   let stopped = false;
+  /** This message's calls of Claude Code's own tools, and of the coach's. */
+  let ownCalls = 0;
+  let coachCalls = 0;
+  /** The message ended on Claude Code's own calls only: its next one goes on with this reply. */
+  let continuing = false;
+  /** The next text starts a paragraph: the reply said something before Claude Code's own calls. */
+  let breakText = false;
 
   return {
     get started() {
@@ -235,7 +252,10 @@ export function createStreamTransformer() {
     get stopReason() {
       return stopReason;
     },
-    /** The message as CafAI will hold it. */
+    get continuing() {
+      return continuing;
+    },
+    /** The reply as CafAI will hold it: one message, however many Claude Code wrote. */
     message() {
       return {
         role: 'assistant',
@@ -246,14 +266,24 @@ export function createStreamTransformer() {
         }),
       };
     },
-    /** The coach-tool calls in the message (not built-in tools, which are off anyway). */
+    /** The coach-tool calls in the reply (Claude Code's own never reach CafAI). */
     toolUses() {
-      return blocks.filter((block) => block.type === 'tool_use' && block.ours).map((block) => ({ id: block.id, name: block.name }));
+      return blocks.filter((block) => block.type === 'tool_use').map((block) => ({ id: block.id, name: block.name }));
     },
     push(event) {
       if (!event || typeof event !== 'object') return [];
       switch (event.type) {
         case 'message_start': {
+          if (continuing) {
+            // Claude Code ran its own calls and writes on: still the reply CafAI is reading.
+            continuing = false;
+            stopped = false;
+            map = new Map();
+            ownCalls = 0;
+            coachCalls = 0;
+            breakText = blocks.some((block) => block.type === 'text' && block.text.trim() !== '');
+            return [];
+          }
           started = true;
           const message = event.message ?? {};
           return [
@@ -278,13 +308,19 @@ export function createStreamTransformer() {
             map.set(event.index, -1);
             return [];
           }
+          if (block.type === 'tool_use' && !isCoachTool(block.name)) {
+            // Claude Code runs and answers it itself; CafAI would not know the tool.
+            map.set(event.index, -1);
+            ownCalls += 1;
+            return [];
+          }
           const index = next++;
           map.set(event.index, index);
           let clean;
           if (block.type === 'tool_use') {
-            const ours = typeof block.name === 'string' && block.name.startsWith(TOOL_PREFIX);
+            coachCalls += 1;
             clean = { type: 'tool_use', id: String(block.id ?? ''), name: stripToolPrefix(String(block.name ?? '')), input: {} };
-            blocks[index] = { type: 'tool_use', id: clean.id, name: clean.name, ours };
+            blocks[index] = { type: 'tool_use', id: clean.id, name: clean.name };
           } else if (block.type === 'text') {
             clean = { type: 'text', text: String(block.text ?? '') };
             blocks[index] = { type: 'text', text: clean.text };
@@ -299,9 +335,18 @@ export function createStreamTransformer() {
           const index = map.get(event.index);
           if (index === undefined || index < 0) return [];
           const delta = event.delta ?? {};
-          if (delta.type === 'thinking_delta' || delta.type === 'signature_delta') return [];
-          if (delta.type === 'text_delta' && blocks[index]?.type === 'text') blocks[index].text += String(delta.text ?? '');
-          return [{ type: 'content_block_delta', index, delta }];
+          if (DROPPED_DELTAS.has(delta.type)) return [];
+          const out = [];
+          if (delta.type === 'text_delta' && blocks[index]?.type === 'text') {
+            if (breakText && String(delta.text ?? '') !== '') {
+              breakText = false;
+              blocks[index].text += '\n\n';
+              out.push({ type: 'content_block_delta', index, delta: { type: 'text_delta', text: '\n\n' } });
+            }
+            blocks[index].text += String(delta.text ?? '');
+          }
+          out.push({ type: 'content_block_delta', index, delta });
+          return out;
         }
         case 'content_block_stop': {
           const index = map.get(event.index);
@@ -311,6 +356,10 @@ export function createStreamTransformer() {
         case 'message_delta': {
           const delta = event.delta ?? {};
           if (typeof delta.stop_reason === 'string') stopReason = delta.stop_reason;
+          if (delta.stop_reason === 'tool_use' && ownCalls > 0 && coachCalls === 0) {
+            continuing = true;
+            return [];
+          }
           return [
             {
               type: 'message_delta',
@@ -321,7 +370,7 @@ export function createStreamTransformer() {
         }
         case 'message_stop':
           stopped = true;
-          return [{ type: 'message_stop' }];
+          return continuing ? [] : [{ type: 'message_stop' }];
         case 'error':
           return [event];
         default:

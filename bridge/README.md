@@ -264,8 +264,10 @@ Claude Code runs in.
   Anthropic's own sign-in. It never reads, stores or forwards your Claude
   sign-in or tokens, and never calls Anthropic's API itself.
 - Coach runs use none of your Claude Code settings, hooks, plugins, skills or
-  CLAUDE.md files and none of its built-in tools: only the coach's own tools,
-  in an empty folder. Nothing is added to Claude Code's session history.
+  CLAUDE.md files, in an empty folder, with the coach's own tools. Of Claude
+  Code's built-in tools they use only WebSearch, and that only when CafAI's
+  Settings > Coach > Fun facts includes a web search; its searches stay
+  inside Claude Code. Nothing is added to Claude Code's session history.
 - The pairing code keeps other devices on your network out. A device that
   sends five wrong codes is locked out for a while.
 - The log holds times, message counts, durations, model names and the
@@ -273,7 +275,7 @@ Claude Code runs in.
   Claude Code's version and error output), never what you or the coach
   wrote, and never the code (`code` shows it).
 - The coach's usage counts against your plan's limits, like any other use of
-  Claude.
+  Claude, its web searches included.
 
 ## Troubleshooting
 

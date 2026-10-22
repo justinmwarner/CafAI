@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   REPLAY_NOTE,
@@ -168,12 +169,106 @@ describe('createStreamTransformer', () => {
     expect(fingerprintMessage(transformer.message())).toBe(fingerprintMessage(asCafaiStoresIt));
   });
 
-  it('does not count a built-in tool as a coach tool', () => {
+  it('does not count a built-in tool as a coach tool, nor pass it on', () => {
     const transformer = createStreamTransformer();
     transformer.push(events[0]);
-    transformer.push({ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 't', name: 'Bash', input: {} } });
+    expect(transformer.push({ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 't', name: 'Bash', input: {} } })).toEqual([]);
     expect(transformer.toolUses()).toEqual([]);
     expect(stripToolPrefix('Bash')).toBe('Bash');
+  });
+});
+
+/** What CafAI's assembler (src/llm/assemble.ts) builds from the events: content and stop reason. */
+function assembled(out) {
+  const content = [];
+  const json = new Map();
+  let stopReason = null;
+  for (const event of out) {
+    if (event.type === 'content_block_start') {
+      content[event.index] = { ...event.content_block };
+      if (event.content_block.type === 'tool_use') json.set(event.index, '');
+    } else if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') content[event.index].text += event.delta.text;
+    else if (event.type === 'content_block_delta' && event.delta.type === 'input_json_delta') json.set(event.index, json.get(event.index) + event.delta.partial_json);
+    else if (event.type === 'content_block_stop' && json.has(event.index)) content[event.index].input = JSON.parse(json.get(event.index) || '{}');
+    else if (event.type === 'message_delta') stopReason = event.delta.stop_reason;
+  }
+  return { content, stopReason };
+}
+
+describe("Claude Code's own web search (D203)", () => {
+  // Claude Code 2.1.301's stdout for one turn with WebSearch on (test/claude-web-search.jsonl): a sentence and a
+  // WebSearch call (msg_search), the search's result, a share_fun_fact call (msg_fact), then the reply (msg_reply).
+  const capture = readFileSync(new URL('../test/claude-web-search.jsonl', import.meta.url), 'utf8')
+    .split('\n')
+    .filter((line) => line.trim() !== '')
+    .map((line) => JSON.parse(line));
+  const eventsOf = (id) => capture.filter((line) => line.type === 'stream_event' && line.api_message_id === id).map((line) => line.event);
+
+  it("keeps the search inside the run and passes on one reply: the coach's sentence, then its tool call", () => {
+    const transformer = createStreamTransformer();
+    const out = eventsOf('msg_search').flatMap((event) => transformer.push(event));
+    // A message of Claude Code's own calls only: the reply goes on.
+    expect(transformer.continuing).toBe(true);
+    out.push(...eventsOf('msg_fact').flatMap((event) => transformer.push(event)));
+    expect(transformer.continuing).toBe(false);
+
+    expect(JSON.stringify(out)).not.toMatch(/WebSearch|toolu_search|Web search results/);
+    expect(out.filter((event) => event.type === 'message_start')).toHaveLength(1);
+    expect(out.filter((event) => event.type === 'message_delta')).toEqual([
+      { type: 'message_delta', delta: { stop_reason: 'tool_use', stop_sequence: null }, usage: expect.any(Object) },
+    ]);
+    expect(out.at(-1)).toEqual({ type: 'message_stop' });
+    const reply = assembled(out);
+    expect(reply).toEqual({
+      content: [
+        { type: 'text', text: "I'll look up Onyx Coffee Lab for you." },
+        {
+          type: 'tool_use',
+          id: 'toolu_fact',
+          name: 'share_fun_fact',
+          input: { topic: 'roaster', about: 'Onyx Coffee Lab', fact: expect.stringContaining('founded in 2012'), source: 'https://onyxcoffeelab.com/pages/our-story' },
+        },
+      ],
+      stopReason: 'tool_use',
+    });
+    expect(transformer.stopReason).toBe('tool_use');
+    expect(transformer.toolUses()).toEqual([{ id: 'toolu_fact', name: 'share_fun_fact' }]);
+    expect(fingerprintMessage(transformer.message())).toBe(fingerprintMessage({ role: 'assistant', content: reply.content }));
+  });
+
+  it('starts the text after the search on a paragraph of its own', () => {
+    const transformer = createStreamTransformer();
+    for (const event of eventsOf('msg_search')) transformer.push(event);
+    // The capture's reply, as if it came right after the search.
+    const out = eventsOf('msg_reply').flatMap((event) => transformer.push(event));
+    expect(out.find((event) => event.type === 'content_block_delta')).toEqual({ type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: '\n\n' } });
+    const reply = assembled(out);
+    expect(reply.stopReason).toBe('end_turn');
+    expect(transformer.message().content).toEqual([
+      { type: 'text', text: "I'll look up Onyx Coffee Lab for you." },
+      { type: 'text', text: expect.stringMatching(/^\n\nYour fun fact is ready: /) },
+    ]);
+    expect(fingerprintMessage(transformer.message())).toBe(
+      fingerprintMessage({ role: 'assistant', content: [{ type: 'text', text: "I'll look up Onyx Coffee Lab for you." }, reply.content[1]] }),
+    );
+  });
+
+  it("passes on no search results or citations Claude Code's model might get itself: they belong to the plan's organisation", () => {
+    const transformer = createStreamTransformer();
+    const out = [
+      { type: 'message_start', message: { id: 'msg_1', model: 'claude-opus-5-5', usage: {} } },
+      { type: 'content_block_start', index: 0, content_block: { type: 'server_tool_use', id: 'srvtoolu_1', name: 'web_search', input: {} } },
+      { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{"query":"x"}' } },
+      { type: 'content_block_stop', index: 0 },
+      { type: 'content_block_start', index: 1, content_block: { type: 'web_search_tool_result', tool_use_id: 'srvtoolu_1', content: [] } },
+      { type: 'content_block_stop', index: 1 },
+      { type: 'content_block_start', index: 2, content_block: { type: 'text', text: '', citations: [] } },
+      { type: 'content_block_delta', index: 2, delta: { type: 'citations_delta', citation: { type: 'web_search_result_location', encrypted_index: 'E..' } } },
+      { type: 'content_block_delta', index: 2, delta: { type: 'text_delta', text: 'Founded in 2012.' } },
+      { type: 'content_block_stop', index: 2 },
+    ].flatMap((event) => transformer.push(event));
+    expect(JSON.stringify(out)).not.toMatch(/srvtoolu|web_search|citation|encrypted/);
+    expect(assembled(out).content).toEqual([{ type: 'text', text: 'Founded in 2012.' }]);
   });
 });
 

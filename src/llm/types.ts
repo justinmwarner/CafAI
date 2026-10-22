@@ -17,6 +17,8 @@ export type JsonSchema = Record<string, unknown>;
 export interface TextBlock {
   type: 'text';
   text: string;
+  /** The pages a text draws on (web search, D203): opaque `encrypted_index` included, replay unchanged. */
+  citations?: Array<Record<string, unknown>> | null;
 }
 
 export interface ToolUseBlock {
@@ -53,13 +55,39 @@ export interface ImageBlock {
   source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png' | 'image/webp'; data: string };
 }
 
+/** A call of a tool the provider runs itself (web search, D203): the server answers it in the same turn, never CafAI. */
+export interface ServerToolUseBlock {
+  type: 'server_tool_use';
+  id: string;
+  name: string;
+  input: unknown;
+}
+
+/** One page a web search found. `encrypted_content` is the page for later turns: replay it unchanged. */
+export interface WebSearchResult {
+  type: 'web_search_result';
+  url: string;
+  title: string;
+  encrypted_content: string;
+  page_age?: string | null;
+}
+
+/** A web search's results, or its error (`max_uses_exceeded`, `unavailable`...), in the assistant's own turn. */
+export interface WebSearchToolResultBlock {
+  type: 'web_search_tool_result';
+  tool_use_id: string;
+  content: WebSearchResult[] | { type: 'web_search_tool_result_error'; error_code: string };
+}
+
 export type ContentBlock =
   | TextBlock
   | ToolUseBlock
   | ToolResultBlock
   | ThinkingBlock
   | RedactedThinkingBlock
-  | ImageBlock;
+  | ImageBlock
+  | ServerToolUseBlock
+  | WebSearchToolResultBlock;
 
 export interface LlmMessage {
   role: 'user' | 'assistant';
@@ -79,6 +107,19 @@ export interface ToolDefinition {
   inputSchema: JsonSchema;
 }
 
+/**
+ * A tool the provider runs itself (Anthropic's server tools), sent as its
+ * wire object: Anthropic's web search for a fun fact (D203),
+ * `{type: 'web_search_20250305', name: 'web_search', max_uses: 1}`. Its
+ * calls and results come back as blocks of the assistant's own turn
+ * (`server_tool_use`, `web_search_tool_result`), kept and replayed unchanged.
+ */
+export interface ServerToolDefinition {
+  type: string;
+  name: string;
+  [field: string]: unknown;
+}
+
 export type Effort = 'low' | 'medium' | 'high';
 
 export interface LlmRequest {
@@ -87,6 +128,8 @@ export interface LlmRequest {
   system: string;
   messages: LlmMessage[];
   tools: ToolDefinition[];
+  /** Tools the provider runs itself, after the client tools; absent or empty for none (D203). */
+  serverTools?: ServerToolDefinition[];
   maxTokens?: number;
   /** Ignored for models that do not support effort (Haiku 4.5). */
   effort?: Effort;
@@ -106,6 +149,8 @@ export interface LlmUsage {
   outputTokens: number;
   cacheReadInputTokens?: number;
   cacheCreationInputTokens?: number;
+  /** Searches the server ran for the turn (D203), when it said. */
+  webSearchRequests?: number;
 }
 
 /** A finished assistant turn, assembled from the stream. */
@@ -184,8 +229,8 @@ export interface RunnerTool {
   kind: 'auto' | 'ui';
   /** Schema-validate raw model input (zod). Invalid input is answered with an is_error result. */
   validate(input: unknown): ToolValidation;
-  /** Required for `auto` tools. Receives the validated value. */
-  execute?(value: unknown): Promise<ToolOutcome>;
+  /** Required for `auto` tools. Receives the validated value, and the call's tool_use id. */
+  execute?(value: unknown, call: { id: string }): Promise<ToolOutcome>;
 }
 
 export interface PendingUiCall {
@@ -204,17 +249,21 @@ export interface RunRequest {
   /** The append-only transcript so far; must end with a user message. */
   messages: LlmMessage[];
   tools: RunnerTool[];
+  /** Tools the provider runs itself, passed on with every model call of the run (D203). */
+  serverTools?: ServerToolDefinition[];
   signal?: AbortSignal;
   /**
    * Called once for every message the runner appends (assistant turns and
    * tool_result user messages), in order, so the caller can persist at once.
+   * A turn the server paused (`pause_turn`) comes with the turn that finishes
+   * it, as consecutive assistant messages, which the API takes as one (D203).
    */
   onAppend(message: LlmMessage): void | Promise<void>;
   /** Streaming text of the current assistant turn, for display. */
   onTextDelta?(delta: string): void;
   /** Called when a new assistant turn starts streaming. */
   onTurnStart?(): void;
-  /** Hard cap on model calls per run (default 6). */
+  /** Hard cap on model calls per run (default 6); going on after a `pause_turn` is one. */
   maxModelCalls?: number;
 }
 
@@ -227,7 +276,7 @@ export interface RunResult {
    */
   heldResults: ToolResultBlock[];
   stopReason: string;
-  /** Text of the final assistant turn. */
+  /** Text of the final assistant turn, the parts a `pause_turn` split off included. */
   finalText: string;
 }
 

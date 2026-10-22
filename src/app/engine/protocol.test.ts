@@ -247,6 +247,25 @@ describe('engine protocol', () => {
     );
   });
 
+  it('carries a fun fact due, after the summary, and nothing of facts otherwise (rule 3, D201)', () => {
+    const payload = {
+      shotRef: 'latest' as const,
+      shotId: 's2',
+      version: 2,
+      templateId: 'd-flow',
+      levers: { temp: 88 },
+      doseG: 18,
+      targetYieldG: 36,
+      grinder: grinderPayload(null, null, null, false),
+      roast: null,
+      today: '2026-10-16',
+      summary: summaryForModel(summary),
+    };
+    const due = shotCompletedBlock({ ...payload, funFact: { told: ["Kenya's SL28", 'onyx coffee lab'], web: false } }).text;
+    expect(due.endsWith(',"funFact":{"told":["Kenya\'s SL28","onyx coffee lab"],"web":false}}')).toBe(true);
+    expect(shotCompletedBlock(payload).text).not.toContain('funFact');
+  });
+
   it('formats the undo event', () => {
     expect(undoBlock({ from: 3, to: 2, title: 'Kiambu v2' }).text).toBe(
       '[event:undo]\n{"from":3,"to":2,"title":"Kiambu v2"}',

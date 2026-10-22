@@ -4,8 +4,9 @@
  *
  * Every content block is kept exactly as received so the turn can be replayed
  * unchanged: thinking text and signature, redacted_thinking data, and block
- * types this build does not know, as raw objects with all their fields. Only
- * deltas mutate a block (text, partial tool JSON, thinking, signature).
+ * types this build does not know, as raw objects with all their fields (a web
+ * search's call and results, D203). Only deltas mutate a block (text, partial
+ * tool JSON, thinking, signature, citations).
  */
 import { ANTHROPIC_WORDING, errorFromStreamError, unreadableReplyError, type ProviderWording } from './errors.ts';
 import { markUnparsedToolInput } from './toolInput.ts';
@@ -77,6 +78,8 @@ function toUsage(usage: Raw): LlmUsage {
   if (typeof usage.cache_creation_input_tokens === 'number') {
     out.cacheCreationInputTokens = usage.cache_creation_input_tokens;
   }
+  const server = isRecord(usage.server_tool_use) ? usage.server_tool_use : {};
+  if (typeof server.web_search_requests === 'number') out.webSearchRequests = server.web_search_requests;
   return out;
 }
 
@@ -142,8 +145,15 @@ export function createTurnAssembler(wording: ProviderWording = ANTHROPIC_WORDING
               return slot.block.type === 'text' ? [{ type: 'text_delta', index, text }] : [];
             }
             case 'input_json_delta':
-              if (slot.json !== null) slot.json += str(delta.partial_json);
+              // A server tool's call can start without an input; its deltas still carry it.
+              slot.json = (slot.json ?? '') + str(delta.partial_json);
               return [];
+            case 'citations_delta': {
+              // One citation at a time, onto the text it cites, as the API's whole turn lists them (D203).
+              const citations = Array.isArray(slot.block.citations) ? (slot.block.citations as unknown[]) : [];
+              if (slot.block.type === 'text' && delta.citation !== undefined) slot.block.citations = [...citations, delta.citation];
+              return [];
+            }
             case 'thinking_delta':
               slot.block.thinking = str(slot.block.thinking) + str(delta.thinking);
               return [];
@@ -165,6 +175,7 @@ export function createTurnAssembler(wording: ProviderWording = ANTHROPIC_WORDING
           if (isRecord(event.delta) && typeof event.delta.stop_reason === 'string') stopReason = event.delta.stop_reason;
           if (isRecord(event.usage)) {
             for (const [key, value] of Object.entries(event.usage)) if (typeof value === 'number') usage[key] = value;
+            if (isRecord(event.usage.server_tool_use)) usage.server_tool_use = event.usage.server_tool_use;
           }
           return [];
         }

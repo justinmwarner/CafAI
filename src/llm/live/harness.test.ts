@@ -196,9 +196,9 @@ describe('coachRunnerTools', () => {
   });
 
   it('answers save_bag_details with {"saved":true} and every query with "no shots yet"', async () => {
-    expect(await byName(TOOL.saveBagDetails).execute?.(SAVE_INPUT)).toEqual({ content: '{"saved":true}' });
+    expect(await byName(TOOL.saveBagDetails).execute?.(SAVE_INPUT, { id: 't1' })).toEqual({ content: '{"saved":true}' });
     for (const name of AUTO_TOOLS.filter((n) => n !== TOOL.saveBagDetails)) {
-      expect(await byName(name).execute?.({ shot: 'latest' })).toEqual({ content: NO_SHOTS_YET, isError: true });
+      expect(await byName(name).execute?.({ shot: 'latest' }, { id: 't2' })).toEqual({ content: NO_SHOTS_YET, isError: true });
     }
   });
 

@@ -9,6 +9,7 @@
 import type { DecaidClient, Heartbeat, HostEnvironment, TelemetryStore } from '../api/types.ts';
 import type { PluginDirectory } from '../api/plugins.ts';
 import type { Confidence, OfferGrinder, RoastLevel, SaveBagDetails } from '../coach/contract.ts';
+import type { FactTopic } from '../coach/facts/types.ts';
 import type { ShotSummary } from '../coach/types.ts';
 import type { BagPhoto } from '../llm/extractBag.ts';
 import type { ModelInfo } from '../llm/types.ts';
@@ -261,6 +262,29 @@ export type CoachUiPart =
       linkedName?: string;
       /** Why the card was set aside (status `expired`). */
       setAsideReason?: SetAsideReason;
+    }
+  | {
+      /**
+       * A fun fact under the coach's reply to a shot that ran like the last
+       * one on a recipe the barista kept (D197, D202): CafAI's own (D199) or
+       * the coach's (share_fun_fact, D201). Kept in the chat like any part.
+       */
+      kind: 'fact';
+      text: string;
+      topic: FactTopic;
+      /** The site the fact came from ("sca.coffee"), shown as plain text; null when none is shown. */
+      source: string | null;
+      /** The coach's share_fun_fact call that showed it (D201); absent for CafAI's own facts. */
+      requestId?: string;
+    }
+  | {
+      /**
+       * The sites the coach's words just above cite (web search citations,
+       * D203), shown as plain text under them, never as links: Anthropic asks
+       * that search results shown to people say where they came from.
+       */
+      kind: 'sources';
+      sites: string[];
     }
   | {
       kind: 'notice';
