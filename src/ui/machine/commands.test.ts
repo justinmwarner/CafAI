@@ -6,6 +6,7 @@ import { machineControls, type MachineControlInput } from './commands.ts';
 
 const idle: MachineControlInput = {
   connected: true,
+  unreachable: false,
   state: 'idle',
   scaleConnected: true,
   hasGhc: false,
@@ -32,6 +33,34 @@ describe('machineControls', () => {
     expect(model.startReason).toMatch(/wake the DE1/i);
     expect(model.stopEnabled).toBe(false);
     expect(model.sleepWake.enabled).toBe(false);
+  });
+
+  it('holds every command but Stop while Decaid is out of reach, whatever the machine was, and says why', () => {
+    // The last word from Decaid: a connected machine at rest, a scale.
+    const model = machineControls({ ...idle, unreachable: true });
+    expect(model.startsVisible).toBe(true);
+    expect(model.startsEnabled).toBe(false);
+    expect(model.startReason).toBe("Can't reach Decaid.");
+    expect(model.sleepWake).toEqual({ command: 'sleeping', label: 'Sleep', enabled: false });
+    expect(model.tareEnabled).toBe(false);
+    expect(model.tareReason).toBe("Can't reach Decaid.");
+    expect(machineControls({ ...idle, unreachable: true, state: 'sleeping' }).sleepWake).toEqual({ command: 'idle', label: 'Wake', enabled: false });
+    // Back in reach, all of it again.
+    expect(machineControls({ ...idle, unreachable: false }).startsEnabled).toBe(true);
+  });
+
+  it('keeps Stop where it was, live, while Decaid is out of reach (D90, D97): its REST may still answer', () => {
+    for (const state of ['espresso', 'steam', 'brewing']) {
+      const model = machineControls({ ...idle, unreachable: true, state });
+      expect(model.running, state).toBe(true);
+      expect(model.stopEnabled, state).toBe(true);
+      expect(model.stopProminent, state).toBe(true);
+      expect(model.startsEnabled, state).toBe(false);
+    }
+    const ghc = machineControls({ ...idle, unreachable: true, hasGhc: true, state: 'espresso' });
+    expect(ghc.stopEnabled).toBe(true);
+    // A group-head machine still starts from its own buttons.
+    expect(machineControls({ ...idle, unreachable: true, hasGhc: true }).startReason).toBe('Start on the machine');
   });
 
   it('ignores a stale frame once the link is down', () => {

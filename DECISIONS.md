@@ -2430,8 +2430,9 @@ The wake schedule item of D151, built on branch `feat/wake-schedule`.
 - **D157. Settings > Sleep and wake edits Decaid's own idle sleep and wake
   schedules.** A section after Steam, hot water and flush
   (`src/ui/settings/SleepWakeSection.tsx`, its reads and writes in
-  `usePresence.ts`) reads `GET /api/v1/presence/settings` once each time
-  Settings opens and writes Decaid's presence routes at once, with no Save
+  `usePresence.ts`) reads `GET /api/v1/presence/settings` each time
+  Settings opens, and again after each change for the keep-awake window
+  (D209), and writes Decaid's presence routes at once, with no Save
   (`src/api/client.ts`). CafAI keeps no copy: Decaid stores them and acts on
   them (presence_controller.dart at aab5f93), as for its own Sleep & Wake
   page and streamline's Presence page. No machine is needed to change them,
@@ -3062,17 +3063,20 @@ fixes is a choice.
   `src/ui/chat/parts/ShotSparkline.tsx`: 120 px of curves, the legend at its
   widest, Graph and the gaps; a 390 px phone's card has 332) puts the key on
   a line of its own under the curves, its name with the card's width; a
-  wider one keeps it in the legend as before. The card measures itself (`useOwnLayout.ts`), and the rule
-  counts Graph whether the card shows it or not, so the cards of a chat put
-  the key in one place. Measured with Playwright at 390, 360 and 320 px
-  (`e2e/shot-overlay.spec.ts`): the curves keep 155, 125 and 85 px, the name
-  is whole. Why: the review's other way, a legend that shrinks while the
-  curves keep 120 px, cuts even "Previous shot" at 360 px and at 320 px has
-  no room for 120 px of curves beside Pressure, Flow and Graph at all;
-  under the curves the name has the card's width and the curves lose nothing.
-  The line costs a guided card about 21 px of height on a phone, where height
-  is cheaper than width; a tablet's card, which has the room beside, does not
-  grow.
+  wider one keeps it in the legend as before, while its whole name fits
+  there (D208). The card measures itself, and the rule counts Graph
+  whether the card shows it or not, so a card's key keeps its place as Graph
+  moves on to the newest card. Measured with Playwright at 390, 360 and
+  320 px (`e2e/shot-overlay.spec.ts`): the curves keep 155, 125 and 85 px,
+  the name is whole (a 30-character coffee's is cut at 320 px, only beyond
+  the card's width). Why: the review's other way, a legend that shrinks
+  while the curves keep 120 px, cuts even "Previous shot" at 360 px and at
+  320 px has no room for 120 px of curves beside Pressure, Flow and Graph at
+  all; under the curves the name has the card's width and the curves lose
+  nothing. The line costs a guided card about 21 px of height on a phone,
+  where height is cheaper than width; a tablet's card, which has the room
+  beside, does not grow, but for a coffee's name too long for the legend
+  (D208).
 
 ### Engine fixes from the review (2026-10-15)
 
@@ -3331,3 +3335,204 @@ checked against its source.
   owner's plan, with nothing to pay per search. Why: the owner's third
   source, the most specific facts; the cost and the way out are said where
   it is chosen.
+
+### Fixes from the simulator pre-run (2026-10-16)
+
+What the pre-run of docs/HARDWARE_TEST_PLAN.md on Decaid 0.8.8's simulator
+(MockDe1 and Mock Scale, CafAI driven by Playwright) found, fixed the same
+day: five defects in CafAI, below, and a step of the plan that expected the
+wrong thing (its section 19.6).
+
+- **D204. A run with less than 2 s of pour is no shot: no card, no taste
+  question, nothing to compare with, and one quiet line.** On the
+  simulator, Espresso then Stop within 0.7 s made a card, "Shot 0.0 s",
+  asked "How did it taste?", and became the next card's "previous shot".
+  Decaid's sequencer starts the pour at the machine's first preinfusion or
+  pouring frame (shot_sequencer.dart:399-433 at aab5f93). A stop before it
+  is an abort, "Shot aborted during preheat, before the pour began", and
+  Decaid cleans the run up without saving it (de1_state_manager.dart:
+  854-864). A real DE1 preheats for 1 to 6.5 s in the real shots among
+  CafAI's test fixtures (`src/coach/__fixtures__/`), so a stop at once lands
+  there, and CafAI then looked for the run for 15 s and warned that Decaid
+  had not saved it, with a Retry that could find nothing. A stop with the
+  pour's first frame is saved with that one frame of pour: the simulator's
+  record (the pre-run's report read "0 measurements" from
+  `GET /shots/latest`, which never carries them; the record CafAI read had
+  its preheat and one preinfusion frame) and decaid-mcp's shot-09 from a
+  real DE1 on Decaid 0.8.6 (a second of preheat, then one frame of
+  preinfusion). A frame later the defect is back: on MockDe1 a stop at
+  about 0.65 s leaves two frames of preinfusion, a "Shot 0.1 s" card and
+  "How did it taste?". So a run is no shot when its record holds less than
+  2 s of pour, timed as its card times it, preheat alone counting as none
+  (`recordPourSeconds`, `MIN_SHOT_POUR_S` in
+  `src/coach/summary/summarize.ts`). A pour of 2 s or more stays a shot,
+  however early it was stopped. A record with no sample CafAI can read is
+  another matter: Decaid records every run's first preheat sample
+  (shot_sequencer.dart:288-294, 355-396), so it comes from a record whose
+  shape changed (the reader's empty list for a renamed field, times CafAI
+  cannot parse). It is reported in Settings > About and credited as before,
+  so a renamed field never swallows every shot. The engine
+  (`src/app/engine/engine.ts`) keeps Decaid's abort for the run from the
+  shotState frames (`noteDecision`) and then looks for no record, and it
+  reads a record with less than 2 s of pour and stops there. Either way
+  there is no card, no iteration and no shot event for the coach; the shot
+  before keeps its pending iteration and its open taste question, so the
+  next card is compared with it (D126, D178), and a bag's first shot still
+  with the other coffee's last. The chat gets one info line, "That shot
+  stopped before it poured: nothing to taste.", which also hands the Shot
+  view back at once rather than 8 s later (D85). A lost shot's Retry on the
+  banner stays through such a run; a Retry that finds its own shot with
+  less than 2 s of pour ends there. A cleaning profile's run still says
+  nothing (D193 comes first), and a run whose abort frame CafAI missed is
+  looked for as before, so no shot is lost to a missed frame. Before any
+  version is picked, the line comes only for a run Decaid aborted: a run it
+  kept is told "Pick a starting profile first; that shot is not part of
+  this dial-in." as any run then, its record unread, and that is accepted.
+  The mock Decaid saved a stop after its last preheat frame and before its
+  first pour frame as a shot of preheat alone; it now aborts it, as
+  Decaid's sequencer is still preheating then, and keeps the record of a
+  stop with the first pour frame (`mock/decaid/shotPlayer.ts`). The live
+  suite stops a shot at once on Decaid's simulator and checks what CafAI
+  relies on: the abort and no record, or a record whose pour CafAI can time
+  (`src/api/live/shot.decaid.ts`). Why: in a pour's first 2 s the puck is
+  still being wetted, so nothing in it says anything about the grind, and
+  a gusher or a choke shows later than that; on a real DE1 such a stop is
+  "oops, no cup" as the pump starts. As the next card's baseline it asked
+  the barista to compare a shot with nothing. A line rather than silence,
+  unlike a cleaning run: the barista stopped a shot, on purpose or not, and
+  one line says CafAI saw it and that it does not count, and gives the
+  screen back with it.
+- **D205. A lost shot's warning says how the shot ended, once, and
+  every Retry says the same.** The warning for a finished shot with no
+  record in Decaid chose its words by whether the machine was connected
+  after each search. On the simulator MockDe1 disconnected 9 s into a pour:
+  the first warning said "The machine disconnected during that shot…", and
+  Retry's, with the machine back, "The shot finished, but Decaid has not
+  saved it." Now how the shot ended is settled once and the run keeps it
+  (`ShotRun.cutOff` in `src/app/engine/engine.ts`). It was cut off when
+  Decaid tore the run down for a disconnect (its terminal decision, reason
+  `disconnected`, de1_state_manager.dart:965-985). It finished when Decaid
+  stopped it (a stop decision, such as `targetWeight` or `apiStop`, kept in
+  `ShotRun.stopReason`), so a DE1 switched off during the search never
+  turns a shot Decaid stopped into one cut off. With neither, it was cut
+  off when the machine is still away after the search, but only while
+  Decaid answers: out of reach (D206), Decaid's word on the machine is only
+  its last, so the warning then says "Decaid can't be reached right now, so
+  CafAI could not look for that shot. When it is back, tap Retry to look
+  again, or pull another shot.", settles nothing, and leaves it to the
+  next. A shot settled cut off says so even while Decaid is out of reach,
+  as Decaid keeps no record of a run it tore down; one settled finished
+  says Decaid has not saved it only once Decaid answers. Every warning
+  after the one that settled it says the same. Why: Retry looks again for
+  the same shot, and how that shot ended does not change when the machine
+  comes back, nor when it goes after Decaid stopped the shot. Left: on
+  Decaid 0.8.8 that teardown saves nothing, so a Retry after a disconnect
+  cannot find the shot, whatever the warning advises.
+- **D206. Decaid out of reach is its devices socket down 2.5 s,
+  whatever the machine was.** The telemetry store sets `unreachable`
+  (`src/api/telemetry.ts`) once Decaid's devices socket has not been open
+  for 2.5 s, from the start or since it closed; a socket back sooner was a
+  blip and changes nothing. The time does not count while the page is out
+  of sight: back in view, the sockets reconnect at once and get the 2.5 s
+  first. A Decaid gone without a word never closes the socket: a tablet
+  that loses its power or its Wi-Fi sends no FIN or RST to a phone, and
+  neither side pings. So when the watchdog reopens a machine socket
+  silent for 20 s while devices says the machine is connected, it reopens
+  the devices socket with it; a gone Decaid's then counts as out of reach
+  2.5 s later, about 25 s in all, and a healthy one replays its devices on
+  connect well inside the 2.5 s, the link unchanged, so neither the alert
+  nor the row moves. `unreachable` clears only when Decaid says again
+  which devices are connected: its devices frame, which Decaid replays on
+  connect, or `GET /api/v1/devices`, asked again as the socket opens and
+  taken while it stays open (then `GET /api/v1/machine/state` for a
+  machine it says is there). The real link comes in the same change, so a
+  machine that went away meanwhile has its own alert at once ("Not
+  connected", or Decaid's report of the disconnect), never a moment of a
+  live row (`MachineAlerts.tsx`: time with no word from Decaid counts as
+  time away). Until then, the link and the readings are Decaid's last
+  word: the stats card keeps them, under "Can't reach Decaid. Trying
+  again…", which says why. The alert comes right after a failed command
+  (a Stop that did not get through, D207) and before Decaid's own device
+  error, which may be old: `scanFailed` stays (status_publisher.dart:31-45)
+  and `profileUploadFailed` lasts until an upload succeeds, so behind it
+  the strip would show an old error, with every command held and no word
+  of why. Why: the alert needed the machine to read not connected as
+  well, and only a devices frame or the REST seed changes that, so a
+  Decaid that went away while the machine was connected showed nothing:
+  no alert and four live starts for 2 min 16 s on the simulator, the only
+  sign a chat line after a write. On a phone or a computer a Wi-Fi drop or
+  a Decaid restart does that; on the tablet, Decaid going away takes
+  CafAI with it. Keeping the last readings rather than blanking the card
+  leaves everything else that reads the link (the engine, the care
+  counts, the drinks' views) as it was through a short outage, and the
+  alert explains the card. Left: with no machine connected the machine
+  socket is silent by right, so a Decaid gone without a word then is not
+  noticed; the alert already says the machine is not connected.
+- **D207. While Decaid is out of reach every command waits but
+  Stop.** The starts, Sleep or Wake, Tare and the Shot view's Next step
+  are held in their places (`src/ui/machine/commands.ts`, `ShotView.tsx`);
+  the row's starts and Tare tell a screen reader "Can't reach Decaid.", and
+  a group-head machine's row keeps "Start on the machine". Connect and
+  **Let Decaid stop shots** are in alerts that wait behind "Can't reach
+  Decaid". Stop stays live where Decaid's last word put it, as D90 and D97
+  say: the devices socket can be down while Decaid's REST still answers,
+  so a Stop that may get through is offered, and one that does not shows
+  in the alert like any failed Stop ("Couldn't stop the machine." and
+  why). The alert keeps its plain words and makes no claim about Stop.
+  Why: a start, Sleep or Tare sent into an outage could only fail, after a
+  tap on a button that looked live; Stop is the one command worth the try.
+- **D208. The third key takes a line under the curves whenever its
+  whole name is wider than the legend's 9.5em.** On a tablet a bag's first
+  card keyed the band "Last shot of Huila Pi…": the name needs 182 px and
+  had D180's 124 (9.5em of 13 px), with no tooltip, though the question
+  under the card and the Shot view name the coffee in full. Measured at
+  962x602, 1280x800, 1920x1200 and 844x390, a wide card is 622 px inside its
+  padding and its curves already have their 360 px, with 11 px to spare
+  beside the legend; "Last shot of Kiambu AA" (a coffee of 9 characters)
+  needs 136 px, "…Huila Pink Bourbon" (18) 182 and "…Finca El Paraíso
+  Lychee Geisha" (30) 250, and each was cut. Now the card measures the name
+  as it sets on one line with no width to keep to, on a copy out of sight
+  and out of the layout (`NameRuler` in
+  `src/ui/chat/parts/ShotSparkline.tsx`), never the key where it is, and
+  puts the key on a line under the curves, from their left edge with the
+  card's width, when that is wider than 9.5em of its own size
+  (`keyUnderCurves`); a narrow card puts it there anyway (D192). It measures
+  again when the card's width or the copy's changes (a rotation, the font
+  arriving). Measured with Playwright (`e2e/shot-overlay.spec.ts`, coffees
+  of 9, 18 and 30 characters): at 962x602, 1280x800, 1920x1200 and 844x390
+  the three names are whole under the curves, which keep their 360 px, and
+  such a card is 14 px taller; "Previous shot" and "Last shot of Santos"
+  still fit beside, and their cards do not grow; at 390, 360 and 320 px all
+  is as D192 left it. Why: a wider cap has those 11 px before it squeezes
+  the curves, and would take them down to about 245 px for the
+  30-character name; wrapping inside the legend would stack four or five
+  lines beside a 48 px plot and grow the card at least as much; under the
+  curves the name has the card's width, that line is D192's already, and
+  only a bag's first card, the one that names another coffee, pays for it.
+  Measured without a width to keep to, the name measures the same wherever
+  the key sits, so the key cannot swing between its places.
+- **D209. Sleep and wake's window line reads Decaid again after every
+  change.** "A wake time keeps the machine awake until 09:16." stayed for
+  over 10 s after the wake time was deleted, Sleep when idle off and then on
+  again at 30 minutes, though Decaid said `keepAwakeUntil: null`; it went
+  only when Settings was opened again. Decaid works the window out afresh
+  from the wake times on every read, only while a machine is connected and
+  not once the machine has slept in it (presence_controller.dart:58-69 at
+  aab5f93), and no write's answer carries it (presence_handler.dart:98-101,
+  182, 267 and 294); CafAI read it only as Settings opened. Now each change
+  Decaid takes (a wake time added, changed, switched or deleted, a delete
+  Decaid answers 404 too; Sleep when idle; the minutes, once the newest
+  change answers) reads `GET /api/v1/presence/settings` again and takes only
+  its `keepAwakeUntil` (`readWindow` in `src/ui/settings/usePresence.ts`);
+  the newest read alone sets it, and one that fails takes the line away.
+  The live write suite checks on the simulator that a window running now is
+  `keepAwakeUntil` and goes with its schedule's delete
+  (`src/api/live/write.decaid.ts`, which puts the schedules back as found
+  even when an expectation fails). Why: only the window, because the rest
+  is what CafAI wrote, and a change of the minutes may still be on its way;
+  a read after each change rather than on a timer, because a change is when
+  the section moves the window, and a timer would ask Decaid for nothing
+  while Settings sits open; and a failed read says nothing rather than keep
+  a window Decaid may no longer hold, which was the defect. A wake time
+  firing, or the machine going to sleep, while the section is open still
+  shows at the next change or the next visit.

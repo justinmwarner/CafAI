@@ -241,6 +241,35 @@ describeDecaid('write', ({ url }) => {
     expect(live.problems()).toEqual([]);
   });
 
+  it("sleep and wake: a wake schedule's window running now is keepAwakeUntil, and goes with the schedule's delete (D209)", async () => {
+    const client = live.client;
+    // Decaid holds a window only while a machine is connected (presence_controller.dart:58-69 at aab5f93).
+    if (!links.machine) assert.fail('The simulated machine is not connected.');
+    const before = await client.getPresenceSettings();
+    if (before.keepAwakeUntil) assert.fail(`A wake schedule already keeps the machine awake until ${before.keepAwakeUntil}: run this when none does.`);
+    // Two minutes back on Decaid's own clock (its machine snapshot's local time): a minute that has passed, so Decaid
+    // never wakes the machine for it, inside a 30-minute window that runs now.
+    const { timestamp } = await client.getMachineState();
+    const clock = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(timestamp);
+    if (!clock) assert.fail(`The machine snapshot's time is not a local time: ${timestamp}.`);
+    const [year, month, day, hour, minute] = clock.slice(1).map(Number) as [number, number, number, number, number];
+    const start = new Date(year, month - 1, day, hour, minute - 2);
+    const end = new Date(start.getTime() + 30 * 60_000);
+    const hhmm = (at: Date) => `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+    const added = await client.addWakeSchedule({ time: hhmm(start), daysOfWeek: [], enabled: true, keepAwakeFor: 30 });
+    // On, unlike the schedule above, so it must not stay whatever fails below: afterAll retries this and names it.
+    const deleteNow = undo.add('the test wake schedule (D209)', async () => {
+      if ((await client.getPresenceSettings()).schedules.some((schedule) => schedule.id === added.id)) await client.deleteWakeSchedule(added.id);
+    });
+    expect((await client.getPresenceSettings()).keepAwakeUntil, 'while its window runs').toMatch(new RegExp(`T${hhmm(end)}:00`));
+    // Decaid's answer to the delete carries no window: CafAI reads the settings again for it.
+    await client.deleteWakeSchedule(added.id);
+    expect((await client.getPresenceSettings()).keepAwakeUntil, 'after deleting it').toBeNull();
+    await deleteNow();
+    expect((await client.getPresenceSettings()).schedules, 'the wake schedules as found').toEqual(before.schedules);
+    expect(live.problems()).toEqual([]);
+  });
+
   it('drink temperatures set in °F: kept as the whole °C CafAI sends, and read back as set, at each end (D173)', async () => {
     const client = live.client;
     // Decaid puts the drinks' settings on the machine at once, so it takes them only with one connected (D114).

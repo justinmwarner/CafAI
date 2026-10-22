@@ -216,22 +216,32 @@ credits. Nothing to judge on the spot: send the files.
 3. Confirm. Settings shows the new setting; `/api/v1/workflow` ->
    `context.grinderSetting` has it, and the next shot's record carries it.
 
-## 9. A lost shot, and retries (D64, D65)
+## 9. A lost shot, and retries (D64, D65, D204-D207)
 
 1. During a shot, switch the machine off (or take it out of range).
    Expected: "Looking for that shot in Decaid…" with a progress bar for up to
-   about 15 s, then a warning with Retry. Switch the machine on and tap Retry:
-   the progress shows again.
+   about 15 s, then a warning that the machine disconnected during that
+   shot, with Retry. Switch the machine on and tap Retry: the progress shows
+   again, and the warning after it still says the machine disconnected
+   (D205). Note whether Decaid saved the shot (the newest entry in
+   `/api/v1/shots`): the simulator's Decaid saves none for a shot cut off by
+   a disconnect.
 2. Optional: restart Decaid while CafAI is open and confirm a grind move
-   meanwhile. Expected: a notice that Decaid can't be reached; once Decaid is
-   back, `/api/v1/workflow` -> `context.grinderSetting` has the new setting
-   within about 30 s.
+   meanwhile. Expected: within about 3 s "Can't reach Decaid. Trying
+   again…", with the starts, Sleep or Wake and Tare greyed until Decaid is
+   back, and Stop still live while a drink runs (D206, D207). Once
+   Decaid is back the alert goes, and `/api/v1/workflow` ->
+   `context.grinderSetting` has the new setting within about 30 s.
 3. Tap Espresso, then Stop (it takes Espresso's place in the top bar)
-   within half a second (still preheating). Note whether Decaid saves a
-   shot for it (the newest entry in `/api/v1/shots`). CafAI looks for one
-   up to 6 times ("Try 6 of 6"), and the browser console logs a 404 for
-   each try. If Decaid never saves a shot that never poured, CafAI should
-   stop looking for those.
+   within half a second (still preheating). Expected (D204): no
+   "Looking for that shot in Decaid…" and no warning; one line in the chat,
+   "That shot stopped before it poured: nothing to taste.", and the coach
+   back at once; no card and no "How did it taste?", and the next shot's
+   card compares with the shot before this one. Note whether Decaid saves a
+   shot for it (the newest entry in `/api/v1/shots`): the simulator's Decaid
+   saves none for a stop in preheat, and one for a stop later on. A stop in
+   the pour's first 2 s gets the same line; once the pump has run, record how
+   many seconds into the pour you stopped and what CafAI showed.
 
 ## 10. The stats card's profile line (D66)
 
@@ -536,7 +546,7 @@ it does.
    the video. Expected: the flush view takes the screen, and **Go back**
    returns to Machine care.
 
-## 15. Sleep and wake: Decaid's idle sleep and wake times (D157-D160)
+## 15. Sleep and wake: Decaid's idle sleep and wake times (D157-D160, D209)
 
 Settings > Sleep and wake only edits what Decaid keeps; Decaid does the
 sleeping and the waking. The mock and the simulator show the settings
@@ -554,7 +564,11 @@ minutes, and put every setting back after.
    every day, After waking: Stay awake for 30 min. Expected: within 30
    seconds of that minute the DE1 wakes and heats. Record what CafAI's top
    bar and the stats card show while it does, and how long it takes to be
-   ready.
+   ready. Also save `/api/v1/machine/state` every few seconds while it
+   warms: Decaid's simulator wakes a machine as `schedIdle`, and CafAI shows
+   Heating only for `idle` and `preparingForShot`, so a DE1 that warms in
+   `schedIdle` would read "Ready" with a cold group (the simulator pre-run
+   of 2026-10-16).
 4. **The window.** Still at 5 minutes, leave it alone after that wake.
    Expected: Settings says "A wake time keeps the machine awake until …",
    the DE1 stays awake past 5 minutes, and sleeps within 5 minutes of the
@@ -566,7 +580,9 @@ minutes, and put every setting back after.
    the tablet's screen off (Decaid left open). Record: does the DE1 wake?
    (Decaid acts on the schedule only while it runs.)
 7. **Delete.** Delete the test wake times and set the minutes back.
-   Expected: Decaid's page shows them gone.
+   Expected: Decaid's page shows them gone, and if a window was still
+   running, CafAI's "keeps the machine awake until" line goes at once
+   (D209).
 
 ## 16. TDS and EY on the shot card (D162-D170)
 
@@ -617,7 +633,7 @@ Settings > Appearance > Temperatures shows °F; Decaid and the profiles keep
 5. **Back to °C.** Expected: every screen, the chat and History read °C
    again.
 
-## 18. Overlaid shot curves (D178-D182)
+## 18. Overlaid shot curves (D178-D182, D208)
 
 A shot's card and the Shot view draw the shot the card asks about faintly
 under this one. The mock shows where and what; only the tablet shows
@@ -634,7 +650,9 @@ in dark and in light.
    not stutter (the timer keeps time, the curves keep up).
 3. **Another coffee.** Start a new bag and pull its first shot. Expected:
    once its card is in, the card and the Shot view draw the last shot of
-   the other bag, named by its coffee.
+   the other bag, named by its coffee. On the tablet a name longer than
+   "Last shot of Santos" takes its own line under the curves and reads
+   whole (D208).
 4. **A deleted shot.** In Decaid's own shot history, delete a shot a card
    compares with, then reload CafAI. Expected: the card draws its own shot
    alone, with no message.
@@ -669,9 +687,11 @@ laptop on the same network for steps 4 and 5. Put any setting back after.
 6. **Forward Flush x5.** Run Decent's Cleaning/Forward Flush x5 from
    streamline with a blind basket and water only, CafAI open on the phone.
    Expected: no new shot in Decaid's shot list; nothing in CafAI's chat (no
-   "Looking for that shot in Decaid…", no Retry, D193); and the detergent
-   clean not marked done. Record what the Shot view shows during the run
-   and after it.
+   "Looking for that shot in Decaid…", D193); and the detergent clean not
+   marked done. The banner "The machine is running "Cleaning/Forward Flush
+   x5", not <Bean> vN. Tap Retry to load it." shows before and after the run
+   (D70): that is expected, so tap its Retry once the cleaning is done.
+   Record what the Shot view shows during the run and after it.
 7. **The line.** After a week with shots and no clean (or with the
    tablet's date moved on a week), open the coach. Expected: the stats
    card's line "Weekly clean due: … shots since …", and a tap opens Weekly
@@ -694,7 +714,9 @@ laptop on the same network for steps 4 and 5. Put any setting back after.
 | 6 | 4 | 88 °C target in every sample | | |
 | 7 | 2-3 | Notes, enjoyment 5, your own note kept | | |
 | 8 | 2 | Grind direction right for your grinder | | |
-| 9 | 1 | Progress, warning, Retry | | |
+| 9 | 1 | Progress, the disconnect warning, Retry, the same warning after it; the shot saved? | | |
+| 9 | 2 | Optional: "Can't reach Decaid" within 3 s, every button but Stop held; the grind setting after | | |
+| 9 | 3 | A stop in preheat: one line, the coach back, no card, question or search; a shot saved? | | |
 | 10 | - | Profile line follows another skin | | |
 | 11 | 1 | Shot view by itself, Espresso turns into Stop in place, coach returns | | |
 | 11 | 2 | Stop in the top bar works on the first tap, right after the switch and mid-pour | | |
@@ -731,11 +753,11 @@ laptop on the same network for steps 4 and 5. Put any setting back after.
 | 14 | 7 | Flush with the video open keeps Care; without it, the flush view and Go back to Machine care | | |
 | 15 | 1 | Sleep when idle and the wake times as Decaid's own page has them | | |
 | 15 | 2 | Asleep about 5 min after the last use; how long it took | | |
-| 15 | 3 | Woken within 30 s of the minute; what the top bar and stats card show; time to ready | | |
+| 15 | 3 | Woken within 30 s of the minute; what the top bar and stats card show; time to ready; the state and substate while it warms (`schedIdle`?) | | |
 | 15 | 4 | Kept awake through the window, asleep within 5 min of its end | | |
 | 15 | 5 | Off in CafAI: Decaid's switch on, Sleep 0, the wake time listed | | |
 | 15 | 6 | Screen off: does the DE1 still wake? | | |
-| 15 | 7 | Deleted from Decaid too | | |
+| 15 | 7 | Deleted from Decaid too; a running window's line gone at once | | |
 | 16 | 1 | TDS · Add: the decimal keyboard, the field above it | | |
 | 16 | 2 | TDS and EY on the card; EY = TDS × yield ÷ dose | | |
 | 16 | 3 | The coach's reply uses the reading, with no taste for it | | |
@@ -750,14 +772,14 @@ laptop on the same network for steps 4 and 5. Put any setting back after.
 | 17 | 5 | °C everywhere again | | |
 | 18 | 1 | The first shot's band under the second's lines, readable in daylight | | |
 | 18 | 2 | The band under the live curves from the start, named; no stutter | | |
-| 18 | 3 | A bag's first shot draws the other coffee's last shot, named | | |
+| 18 | 3 | A bag's first shot draws the other coffee's last shot, named in full | | |
 | 18 | 4 | A shot deleted in Decaid: the card's own shot alone, no message | | |
 | 19 | 1 | Weekly: "Not marked done yet" from today; no line on the stats card | | |
 | 19 | 2 | A shot counted; how long it took | | |
 | 19 | 3 | A steam counted; in `/api/v1/steams/ids`? | | |
 | 19 | 4 | Streamline's Clean seen: "Done today"; how long it ran | | |
 | 19 | 5 | Streamline's Descale seen; its states and substates | | |
-| 19 | 6 | Forward Flush x5: no shot in Decaid, nothing in the chat, the clean not marked; what the Shot view showed | | |
+| 19 | 6 | Forward Flush x5: no shot in Decaid, nothing in the chat, the clean not marked, the profile banner's Retry after; what the Shot view showed | | |
 | 19 | 7 | The stats card's line when due; a tap opens the step | | |
 
 Send back this table, the saved shot and profile JSON files, the `[CafAI]`

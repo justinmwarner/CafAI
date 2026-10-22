@@ -11,6 +11,7 @@
  *   await page.evaluate(() => window.__CAFAI_MOCK__.state.getMachineProfile().title);
  *   await page.evaluate(() => window.__CAFAI_MOCK__.state.addWakeSchedule({ time: '06:30', daysOfWeek: [1, 2, 3, 4, 5], enabled: true }));
  *   await page.evaluate(() => window.__CAFAI_MOCK__.state.getPresenceSettings().schedules);
+ *   await page.evaluate(() => window.__CAFAI_MOCK__.setDecaidAway(true));
  *
  * URL switches, read once at start (mock/decaid/urlOptions.ts):
  *   ?mockSpeed=N            wall-clock compression of shots and activities
@@ -47,8 +48,9 @@
  *                           window.__CAFAI_MOCK__, and ?mockPersist does nothing.
  *   ?mockPersist=1          keep the store across page loads (mock/persist.ts)
  */
+import { http, HttpResponse, ws } from 'msw';
 import { setupWorker, type SetupWorker } from 'msw/browser';
-import { createDecaidMock, type MockHandler, type CreateDecaidMockOptions } from './decaid/index.ts';
+import { createDecaidMock, DECAID_ORIGIN_PATTERN, type MockHandler, type CreateDecaidMockOptions } from './decaid/index.ts';
 import type { MockDecaid } from './decaid/state.ts';
 import type { ShotPlayer } from './decaid/shotPlayer.ts';
 import { mockOptionsFromUrl } from './decaid/urlOptions.ts';
@@ -57,6 +59,27 @@ export interface CafaiMockHandle {
   state: MockDecaid;
   player: ShotPlayer;
   setSpeed(speed: number): void;
+  /**
+   * Decaid gone (true), as when it is closed or restarting, or back (false).
+   * While gone, its open sockets close, a new one closes before it opens and
+   * every REST request fails as a refused connection does; the mock keeps
+   * its state, so Decaid comes back as it was, with whatever changed meanwhile.
+   */
+  setDecaidAway(away: boolean): void;
+}
+
+/**
+ * Decaid's absence, ahead of its handlers: while `away()`, every REST request
+ * on its port is a network error and every socket closes before it opens, as
+ * a refused connection does. Otherwise they pass on to Decaid's handlers.
+ */
+function absenceHandlers(away: () => boolean): MockHandler[] {
+  return [
+    http.all(`${DECAID_ORIGIN_PATTERN}/*`, () => (away() ? HttpResponse.error() : undefined)),
+    ws.link(`${DECAID_ORIGIN_PATTERN}/ws/*`).addEventListener('connection', ({ client }) => {
+      if (away()) client.close(1006, 'Decaid is away');
+    }),
+  ];
 }
 
 export interface StartMockWorkerOptions {
@@ -92,7 +115,8 @@ export async function startMockWorker(options: StartMockWorkerOptions = {}): Pro
   polyfillRandomUuid();
   const fromUrl = mockOptionsFromUrl(window.location.search);
   const mock = createDecaidMock({ ...fromUrl, ...options.mock, speed: options.speed ?? options.mock?.speed ?? fromUrl.speed ?? 1 });
-  const worker = setupWorker(...mock.handlers, ...(options.extraHandlers ?? []), ...mock.fallback);
+  let away = false;
+  const worker = setupWorker(...absenceHandlers(() => away), ...mock.handlers, ...(options.extraHandlers ?? []), ...mock.fallback);
   await worker.start({
     serviceWorker: { url: './mockServiceWorker.js' },
     onUnhandledRequest: 'bypass',
@@ -105,6 +129,10 @@ export async function startMockWorker(options: StartMockWorkerOptions = {}): Pro
     state: mock.state,
     player: mock.player,
     setSpeed: (speed) => mock.player.setSpeed(speed),
+    setDecaidAway(next) {
+      away = next;
+      if (away) mock.state.dropSockets();
+    },
   };
   (window as CafaiMockWindow).__CAFAI_MOCK__ = handle;
   return { ...handle, worker };

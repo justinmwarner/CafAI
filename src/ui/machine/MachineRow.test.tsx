@@ -186,6 +186,33 @@ describe('MachineRow', () => {
     expect(screen.queryByTestId(TID.stopButton)).not.toBeInTheDocument();
   });
 
+  it("holds every start of a connected machine while Decaid can't be reached, and says why to a screen reader", async () => {
+    const { services } = await renderRow();
+    act(() => services.telemetry.setState({ unreachable: true, sockets: { ...IDLE_TELEMETRY.sockets, devices: 'closed' } }));
+    expect(labels()).toEqual(['Espresso', 'Steam', 'Flush', 'Hot water']);
+    for (const id of START_IDS) {
+      expect(screen.getByTestId(id)).toBeDisabled();
+      expect(screen.getByTestId(id)).toHaveAccessibleDescription("Can't reach Decaid.");
+    }
+    // Decaid answers again: live at once.
+    act(() => services.telemetry.setState({ unreachable: false, sockets: IDLE_TELEMETRY.sockets }));
+    for (const id of START_IDS) expect(screen.getByTestId(id)).toBeEnabled();
+
+    // Asleep when Decaid went away: Wake waits too.
+    act(() => services.telemetry.setState({ ...withState('sleeping', 'idle'), unreachable: true }));
+    expect(labels()).toEqual(['Wake']);
+    expect(screen.getByRole('button', { name: 'Wake' })).toBeDisabled();
+  });
+
+  it("keeps Stop where it was, live, while Decaid can't be reached (D90, D97), and sends it", async () => {
+    const { services } = await renderRow(createFakeServices({ telemetry: { ...withState('steam'), unreachable: true } }));
+    expect(labels()).toEqual(['Espresso', 'Stop', 'Flush', 'Hot water']);
+    expect(screen.getByTestId(TID.stopButton)).toBeEnabled();
+    expect(screen.getByTestId(TID.espressoButton)).toBeDisabled();
+    await userEvent.click(screen.getByTestId(TID.stopButton));
+    expect(stateCalls(services)).toEqual(['idle']);
+  });
+
   it('shows nothing on a group-head machine until something runs, then Stop alone', async () => {
     const services = groupHead();
     await renderRow(services);

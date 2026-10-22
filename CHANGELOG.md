@@ -30,7 +30,9 @@ workflow checks against it. Settings > About shows the version you run.
 - A shot's card draws the shot its question asks about faintly under its
   own curves (your previous shot, or for a bag's first shot your last shot
   of another coffee), as a pale band in the same colours, with a third key
-  that names it. The Shot view draws the
+  that names it in full: beside the curves when the name fits there, and
+  on a line under them when it does not ("Last shot of Huila Pink
+  Bourbon") or the card is a phone's, upright. The Shot view draws the
   bag's previous shot under a shot while it pulls, and the shot its card
   asks about once it is done, named over the plot with its time and yield.
   So a grind or a profile change shows on the curve. A shot in the chat is
@@ -73,6 +75,30 @@ workflow checks against it. Settings > About shows the version you run.
 - A taste CafAI cannot add to the shot's record in Decaid (a record it
   cannot read) no longer loses the verdict and the TDS waiting with it:
   they still go, and the chat names only the taste.
+- A shot stopped before it poured, or in its first 2 s of pour (Espresso,
+  then Stop at once), is no longer a shot to taste: no card, no "How did it
+  taste?", and the next shot is compared with the last one that counted.
+  The chat says "That shot stopped before it poured: nothing to taste." and
+  the Shot view gives the screen back at once; Decaid keeps no record of a
+  run stopped in preheat, so CafAI no longer looks for one and warns that
+  it is missing. After a shot cut off by the machine disconnecting, Retry's
+  warning says so again, rather than that the shot finished; a shot Decaid
+  stopped is never said to be cut off, and while Decaid can't be reached
+  the warning says just that.
+- When Decaid goes away while the machine is connected (a Wi-Fi drop on a
+  phone, Decaid closed or restarting), CafAI now says "Can't reach Decaid.
+  Trying again…" after 2.5 s, as it did only for a machine already
+  disconnected, and holds the starts, Sleep, Wake, Tare and Next step until
+  Decaid answers; Stop stays. A tablet that loses its power or its Wi-Fi
+  says nothing as it goes, so there it takes about 20 s more. The alert
+  comes before an error Decaid reported earlier, which could otherwise hide
+  why every button is held. Before, the buttons stayed live and nothing
+  said why they did nothing. When Decaid is back, CafAI reads the machine
+  again, so a machine that went away meanwhile shows its own alert at once.
+- Settings > Sleep and wake: "A wake time keeps the machine awake until
+  09:16." now follows Decaid after every change you make there. Deleting
+  or changing the wake time, or turning a wake time off, no longer leaves
+  the old time showing until you leave Settings and come back.
 
 ### Decaid
 

@@ -11,8 +11,12 @@ import { roastLine } from '../../coach/prompt.ts';
 import { createShotSource, runQueryTool } from '../../coach/queries.ts';
 import { proposalWordingError, validateProposal as validateWithCoach } from '../../coach/validator.ts';
 import type { GrinderInfo, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
+import { syntheticShotRecord } from '../../coach/__fixtures__/syntheticShot.ts';
+import shot09 from '../../coach/__fixtures__/decaid-mcp/shot-09.json';
+import { fixtures } from '../../../mock/fixtures/index.ts';
 import type { MachineProfileStatus } from '../../api/machineProfile.ts';
 import { driftLog } from '../../api/drift.ts';
+import { parseDecaidTimestamp } from '../../api/time.ts';
 import { PLUGIN } from '../../api/plugins.ts';
 import type { BagPhoto, ExtractedBag } from '../../llm/extractBag.ts';
 import {
@@ -21,7 +25,10 @@ import {
   type BeanBatch,
   type EnjoymentScale,
   type ShotAnnotations,
+  type ShotDecision,
   type ShotRecord,
+  type ShotSnapshot,
+  type ShotStateEvent,
   type WireProfile,
   type Workflow,
   type WorkflowContext,
@@ -102,6 +109,23 @@ const ENCORE: GrinderInfo = {
 
 /** What the engine handed the coach with the last proposal it had checked. */
 let lastProposalContext: ProposalContext | null = null;
+
+/** The samples of a shot that poured: every record holds them unless a test says otherwise (the summary is the stub's). */
+const POURED: ShotSnapshot[] = syntheticShotRecord({ endS: 12 }).measurements;
+/** A real DE1's run stopped with the pour's first frame: four frames of preheat, one of preinfusion (D204). */
+const FIRST_FRAME_ONLY: ShotSnapshot[] = (shot09 as unknown as ShotRecord).measurements;
+/** A run Decaid kept with preheat alone. */
+const PREHEAT_ONLY: ShotSnapshot[] = POURED.filter((sample) => sample.machine.state.substate === 'preparingForShot');
+/** POURED's preheat and its first `seconds` of pour, as Decaid keeps a run stopped then. */
+function pouredFor(seconds: number): ShotSnapshot[] {
+  const start = POURED.findIndex((sample) => sample.machine.state.substate !== 'preparingForShot');
+  const began = parseDecaidTimestamp(POURED[start]!.machine.timestamp);
+  return POURED.filter((sample, i) => i < start || parseDecaidTimestamp(sample.machine.timestamp) - began <= seconds * 1000);
+}
+/** A stop a moment late: 1.5 s of pour, under the 2 s a shot needs (D204). */
+const UNDER_TWO_SECONDS = pouredFor(1.5);
+/** A shot stopped early, but past 2 s of pour: still a shot (D204). */
+const PAST_TWO_SECONDS = pouredFor(2.6);
 
 const summary: ShotSummary = {
   shotId: 'shot-1',
@@ -223,6 +247,8 @@ const machine = {
   missingShots: new Set<string>(),
   /** Shots Decaid saves late: how many more GETs answer 404. */
   shotMisses: new Map<string, number>(),
+  /** The samples a shot's record holds, when not a pour's (D204). */
+  samples: new Map<string, ShotSnapshot[]>(),
   /** The profile as the last workflow PUT answered it (a copy, as over the wire). */
   returned: null as WireProfile | null,
   barrier: 'loaded' as BarrierAnswer,
@@ -332,6 +358,7 @@ function makeApi(calls: ApiCall[]): ApiPort {
   machine.failUpdates = 0;
   machine.missingShots.clear();
   machine.shotMisses.clear();
+  machine.samples.clear();
   machine.returned = null;
   machine.barrier = 'loaded';
   machine.held = null;
@@ -366,7 +393,8 @@ function makeApi(calls: ApiCall[]): ApiPort {
     const workflow: Record<string, unknown> = { ...SAMPLE_WORKFLOW, profile: machine.loaded, context: machine.context };
     if (machine.recordsWithoutProfile) delete workflow.profile;
     const annotations = machine.annotations.get(id);
-    return { id, timestamp: '', createdAt: '', updatedAt: '', workflow, measurements: [], ...(annotations ? { annotations } : {}) } as unknown as ShotRecord;
+    const measurements = machine.samples.get(id) ?? POURED;
+    return { id, timestamp: '', createdAt: '', updatedAt: '', workflow, measurements, ...(annotations ? { annotations } : {}) } as unknown as ShotRecord;
   };
   /** A bean library call: 404 without the library, fails while Decaid is away, else answers. */
   const beanCall = async <T>(method: string, args: unknown[], answer: () => T): Promise<T> => {
@@ -1283,7 +1311,8 @@ describe('coach engine', () => {
     await throughTemplatePick();
     machine.missingShots.add('shot-lost');
     telemetry.setState({ machineConnected: false });
-    telemetry.emitShot({ type: 'finished', shotId: 'shot-lost', stopReason: 'targetWeight' });
+    // Cut off mid-pour: Decaid made no stop decision for it (D205).
+    telemetry.emitShot({ type: 'finished', shotId: 'shot-lost', stopReason: null });
     await vi.waitFor(() => expect(engine.getState().error).toBe('Decaid has not saved that shot yet.'));
     const notices = engine.getState().messages.flatMap((m) => m.parts).filter((p) => p.kind === 'notice');
     expect(notices.at(-1)).toMatchObject({ tone: 'warning', text: expect.stringContaining('disconnected during that shot') });
@@ -2649,6 +2678,320 @@ describe('coach engine', () => {
       await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
       expect(machine.failWorkflowReads).toBe(0);
       expect(cardOf('shot-1')).toBeDefined();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // D204: a run that never poured is no shot. D205: a shot's notices keep how it ended.
+  // -------------------------------------------------------------------------
+
+  /** A shotState frame as Decaid sends it for the run `shotId`; null names none, as the idle frame after a run. */
+  const shotFrame = (shotId: string | null, state: string, decision: ShotDecision | null = null): ShotStateEvent => ({
+    ...fixtures.shotStateWs(),
+    event: decision === null ? 'state' : decision.kind === 'terminal' ? 'terminal' : 'decision',
+    shotId,
+    state,
+    decision,
+  });
+  const decision = (kind: string, reason: string): ShotDecision => ({ kind, reason, details: null, data: null });
+  /** A run that ran and ended, with no shotState decision about it. */
+  const ranAndEnded = (shotId: string, stopReason: string | null = 'targetWeight') => {
+    telemetry.emitShot({ type: 'started', shotId });
+    telemetry.emitShot({ type: 'finished', shotId, stopReason });
+  };
+  const NEVER_POURED = 'That shot stopped before it poured: nothing to taste.';
+  const CUT_OFF =
+    'The machine disconnected during that shot, and Decaid has no record of it. When the machine is back, tap Retry to look again, or pull another shot.';
+  const NOT_SAVED = 'The shot finished, but Decaid has not saved it. Tap Retry to look again, or pull another shot.';
+  const UNREACHABLE =
+    "Decaid can't be reached right now, so CafAI could not look for that shot. When it is back, tap Retry to look again, or pull another shot.";
+  const SHOT_NOT_SAVED = 'Decaid has not saved that shot yet.';
+
+  describe('a run that never poured (D204)', () => {
+    /**
+     * Espresso, then Stop in preheat, as Decaid 0.8.8 reports it: preheating,
+     * its abort ("Shot aborted during preheat, before the pour began"), the
+     * idle frame, and so the run's end. Decaid keeps no record of the run.
+     */
+    const stoppedInPreheat = (shotId: string) => {
+      machine.missingShots.add(shotId);
+      telemetry.setState({ shotState: shotFrame(shotId, 'preheating') });
+      telemetry.emitShot({ type: 'started', shotId });
+      telemetry.setState({ shotState: shotFrame(shotId, 'preheating', decision('abort', 'apiStop')) });
+      telemetry.setState({ shotState: shotFrame(null, 'idle') });
+      telemetry.emitShot({ type: 'finished', shotId, stopReason: null });
+    };
+    /** The open bag's iterations, as their shot and outcome. */
+    const iterationsNow = async () => (await storage.iterations.listAll()).map((i) => [i.shotId, i.outcome]);
+
+    it('a run Decaid aborted in preheat: no search, no card, no taste question, one quiet line', async () => {
+      await throughShot();
+      const turns = requests.length;
+      const before = await iterationsNow();
+      stoppedInPreheat('stopped-1');
+      await drain();
+
+      expect(callsOf('getShot').filter((call) => call.args[0] === 'stopped-1'), 'Decaid keeps no record of it: nothing to look for').toEqual([]);
+      expect(progressNotices()).toEqual([]);
+      expect(notices().at(-1)).toMatchObject({ tone: 'info', text: NEVER_POURED });
+      expect(cardOf('stopped-1')).toBeUndefined();
+      expect(engine.getState().error).toBeNull();
+      // The coach hears nothing, and the shot before keeps its open taste question and its pending iteration.
+      expect(requests).toHaveLength(turns);
+      expect(engine.getState().phase).toBe('awaiting_feedback');
+      expect(await iterationsNow()).toEqual(before);
+    });
+
+    it.each([
+      ["the pour's first frame alone, as a real DE1 left it (decaid-mcp's shot-09)", FIRST_FRAME_ONLY],
+      ['preheat alone', PREHEAT_ONLY],
+      ['1.5 s of pour, stopped a moment late', UNDER_TWO_SECONDS],
+    ])('a record that holds %s is no shot: no card, no taste question, one quiet line', async (_what, samples) => {
+      await throughShot();
+      const turns = requests.length;
+      const before = await iterationsNow();
+      machine.samples.set('stopped-1', samples);
+      ranAndEnded('stopped-1', 'apiStop');
+      await drain();
+
+      expect(callsOf('getShot').some((call) => call.args[0] === 'stopped-1'), 'Decaid kept a record: CafAI read it').toBe(true);
+      expect(notices().at(-1)).toMatchObject({ tone: 'info', text: NEVER_POURED });
+      expect(cardOf('stopped-1')).toBeUndefined();
+      expect(requests).toHaveLength(turns);
+      expect(engine.getState().phase).toBe('awaiting_feedback');
+      expect(await iterationsNow()).toEqual(before);
+    });
+
+    it('a shot stopped early but past 2 s of pour is a shot: a card and a taste question', async () => {
+      await throughTemplatePick();
+      machine.samples.set('shot-short', PAST_TWO_SECONDS);
+      expect(await shotIsCredited('shot-short')).toBe(true);
+      expect(cardOf('shot-short')).toBeDefined();
+      expect(notices().some((p) => p.text === NEVER_POURED)).toBe(false);
+    });
+
+    it.each([
+      ['no samples', []],
+      ['samples whose time CafAI cannot read', POURED.map((sample) => ({ ...sample, machine: { ...sample.machine, timestamp: 'later' } }))],
+    ])('a record with %s is credited as before, never taken for a run that did not pour, and Settings > About hears of it', async (_what, samples) => {
+      await throughTemplatePick();
+      driftLog.clear();
+      machine.samples.set('shot-odd', samples);
+      expect(await shotIsCredited('shot-odd')).toBe(true);
+      expect(cardOf('shot-odd')).toBeDefined();
+      expect(notices().some((p) => p.text === NEVER_POURED)).toBe(false);
+      expect(driftLog.list().map(({ source, problem }) => [source, problem])).toContainEqual([
+        'GET /api/v1/shots/{id}',
+        'measurements: no sample with a machine.timestamp CafAI can read',
+      ]);
+    });
+
+    it('the next shot is compared with the shot before the stopped runs, on its card and in Decaid', async () => {
+      await throughShot();
+      stoppedInPreheat('stopped-1');
+      machine.samples.set('stopped-2', FIRST_FRAME_ONLY);
+      ranAndEnded('stopped-2', 'apiStop');
+      await drain();
+      expect(notices().filter((p) => p.text === NEVER_POURED)).toHaveLength(2);
+
+      await pullAnother('shot-2');
+      expect(cardOf('shot-2')?.baseline).toEqual({ kind: 'previous', shotId: 'shot-1' });
+      await engine.rateShot('shot-2', 'better');
+      await vi.waitFor(() => expect(machine.annotations.get('shot-2')?.extras?.cafai).toMatchObject({ comparedWith: { kind: 'previous', shotId: 'shot-1' } }));
+      // Only the shots that poured are iterations: shot-1, set aside by shot-2, and shot-2.
+      expect((await storage.iterations.listAll()).map((i) => i.shotId)).toEqual(['shot-1', 'shot-2']);
+    });
+
+    it("a bag's first shot after a stopped run is still compared with the other coffee's last shot", async () => {
+      await throughShot();
+      await anotherBag('Sumatra', 'd-flow');
+      machine.samples.set('stopped-1', FIRST_FRAME_ONLY);
+      ranAndEnded('stopped-1', 'apiStop');
+      await drain();
+      await pullAnother('sumatra-1');
+      expect(cardOf('sumatra-1')?.baseline).toMatchObject({ kind: 'otherCoffee', shotId: 'shot-1' });
+    });
+
+    it("keeps a lost shot's Retry on the banner through runs that never poured, and Retry still looks for that shot", async () => {
+      await throughTemplatePick();
+      machine.missingShots.add('shot-lost');
+      ranAndEnded('shot-lost');
+      await vi.waitFor(() => expect(engine.getState().error).toBe(SHOT_NOT_SAVED));
+      const looks = () => callsOf('getShot').filter((call) => call.args[0] === 'shot-lost').length;
+      const before = looks();
+
+      stoppedInPreheat('stopped-1');
+      await drain();
+      expect(engine.getState().error).toBe(SHOT_NOT_SAVED);
+      machine.samples.set('stopped-2', FIRST_FRAME_ONLY);
+      ranAndEnded('stopped-2', 'apiStop');
+      await drain();
+      expect(engine.getState().error).toBe(SHOT_NOT_SAVED);
+
+      await engine.retry();
+      expect(looks()).toBe(before + 6);
+      expect(engine.getState().error).toBe(SHOT_NOT_SAVED);
+    });
+
+    it('a lost shot that Retry finds with no pour in its record ends the hunt: the quiet line, and the banner goes', async () => {
+      await throughTemplatePick();
+      machine.missingShots.add('shot-late');
+      ranAndEnded('shot-late', 'apiStop');
+      await vi.waitFor(() => expect(engine.getState().error).toBe(SHOT_NOT_SAVED));
+
+      machine.missingShots.delete('shot-late');
+      machine.samples.set('shot-late', FIRST_FRAME_ONLY);
+      await engine.retry();
+      expect(engine.getState().error).toBeNull();
+      expect(notices().at(-1)).toMatchObject({ tone: 'info', text: NEVER_POURED });
+      expect(cardOf('shot-late')).toBeUndefined();
+    });
+
+    it("says nothing of a cleaning profile's run stopped in preheat: no shot at all comes first (D193)", async () => {
+      await throughTemplatePick();
+      machine.loaded = { ...baseProfile, title: 'Cleaning/Forward Flush x5', beverage_type: 'cleaning' as ProfileJson['beverage_type'] };
+      const chat = engine.getState().messages;
+      stoppedInPreheat('flush-1');
+      await drain();
+      expect(engine.getState().messages).toEqual(chat);
+    });
+
+    it('says the quiet line, not "Pick a starting profile first", for a run stopped in preheat before any version', async () => {
+      await openBag();
+      stoppedInPreheat('stopped-1');
+      await drain();
+      expect(notices().map((p) => p.text)).toEqual([NEVER_POURED]);
+    });
+
+    it('before any version, a run Decaid kept with under 2 s of pour is told to pick a starting profile first, as any run then', async () => {
+      await openBag();
+      machine.samples.set('stopped-1', FIRST_FRAME_ONLY);
+      ranAndEnded('stopped-1', 'apiStop');
+      await drain();
+      // No version, no record read: what the run held is not looked at (D204 accepts it).
+      expect(notices().map((p) => p.text)).toEqual(['Pick a starting profile first; that shot is not part of this dial-in.']);
+      expect(callsOf('getShot')).toEqual([]);
+    });
+
+    it('an abort Decaid sent for another run leaves this one a shot', async () => {
+      await throughTemplatePick();
+      telemetry.setState({ shotState: shotFrame('old-run', 'preheating', decision('abort', 'apiStop')) });
+      telemetry.setState({ shotState: shotFrame(null, 'idle') });
+      expect(await shotIsCredited('shot-1')).toBe(true);
+      expect(notices().some((p) => p.text === NEVER_POURED)).toBe(false);
+    });
+  });
+
+  describe("a lost shot's notices keep how it ended, Retry's too (D205)", () => {
+    /** Every warning the chat holds about a lost shot. */
+    const lostShotWarnings = () => notices().filter((p) => [CUT_OFF, NOT_SAVED, UNREACHABLE].includes(p.text)).map((p) => p.text);
+
+    it('a shot cut off as the machine dropped says so on Retry, with the machine back', async () => {
+      await throughTemplatePick();
+      machine.missingShots.add('shot-cut');
+      telemetry.setState({ machineConnected: false });
+      ranAndEnded('shot-cut', null);
+      await vi.waitFor(() => expect(engine.getState().error).toBe(SHOT_NOT_SAVED));
+      expect(lostShotWarnings()).toEqual([CUT_OFF]);
+
+      telemetry.setState({ machineConnected: true });
+      await drain();
+      await engine.retry();
+      expect(lostShotWarnings()).toEqual([CUT_OFF, CUT_OFF]);
+      await engine.retry();
+      expect(lostShotWarnings()).toEqual([CUT_OFF, CUT_OFF, CUT_OFF]);
+    });
+
+    it("Decaid's teardown for a disconnect says cut off, though the machine was back before the search ended", async () => {
+      await throughTemplatePick();
+      machine.missingShots.add('shot-cut');
+      telemetry.setState({ shotState: shotFrame('shot-cut', 'pouring') });
+      telemetry.emitShot({ type: 'started', shotId: 'shot-cut' });
+      telemetry.setState({ shotState: shotFrame('shot-cut', 'pouring', decision('terminal', 'disconnected')) });
+      telemetry.setState({ shotState: shotFrame(null, 'idle') });
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-cut', stopReason: null });
+      await vi.waitFor(() => expect(engine.getState().error).toBe(SHOT_NOT_SAVED));
+      expect(lostShotWarnings()).toEqual([CUT_OFF]);
+      await engine.retry();
+      expect(lostShotWarnings()).toEqual([CUT_OFF, CUT_OFF]);
+    });
+
+    it('a shot that finished says so on Retry, though the machine dropped since', async () => {
+      await throughTemplatePick();
+      machine.missingShots.add('shot-lost');
+      ranAndEnded('shot-lost');
+      await vi.waitFor(() => expect(engine.getState().error).toBe(SHOT_NOT_SAVED));
+      expect(lostShotWarnings()).toEqual([NOT_SAVED]);
+
+      telemetry.setState({ machineConnected: false });
+      await engine.retry();
+      expect(lostShotWarnings()).toEqual([NOT_SAVED, NOT_SAVED]);
+    });
+
+    it("another run's teardown says nothing of this shot", async () => {
+      await throughTemplatePick();
+      telemetry.setState({ shotState: shotFrame('old-run', 'pouring', decision('terminal', 'disconnected')) });
+      telemetry.setState({ shotState: shotFrame(null, 'idle') });
+      machine.missingShots.add('shot-lost');
+      ranAndEnded('shot-lost');
+      await vi.waitFor(() => expect(engine.getState().error).toBe(SHOT_NOT_SAVED));
+      expect(lostShotWarnings()).toEqual([NOT_SAVED]);
+    });
+
+    it('a shot Decaid stopped is never cut off, though the machine is switched off during the search', async () => {
+      await throughTemplatePick();
+      machine.missingShots.add('shot-lost');
+      ranAndEnded('shot-lost', 'targetWeight');
+      // Switched off as the search starts: the machine is away at the first warning.
+      telemetry.setState({ machineConnected: false });
+      await vi.waitFor(() => expect(engine.getState().error).toBe(SHOT_NOT_SAVED));
+      expect(lostShotWarnings()).toEqual([NOT_SAVED]);
+      await engine.retry();
+      expect(lostShotWarnings()).toEqual([NOT_SAVED, NOT_SAVED]);
+    });
+
+    it('while Decaid is out of reach the warning says only that, and the next one, with Decaid back, settles how the shot ended', async () => {
+      await throughTemplatePick();
+      machine.missingShots.add('shot-gone');
+      // Decaid went away with the machine connected: that is only its last word (D206).
+      telemetry.setState({ unreachable: true, machineConnected: true });
+      ranAndEnded('shot-gone', null);
+      await vi.waitFor(() => expect(engine.getState().error).toBe(SHOT_NOT_SAVED));
+      expect(lostShotWarnings()).toEqual([UNREACHABLE]);
+
+      // Back, and the machine is not: cut off, and so from then on.
+      telemetry.setState({ unreachable: false, machineConnected: false });
+      await engine.retry();
+      expect(lostShotWarnings()).toEqual([UNREACHABLE, CUT_OFF]);
+      telemetry.setState({ machineConnected: true });
+      await drain();
+      await engine.retry();
+      expect(lostShotWarnings()).toEqual([UNREACHABLE, CUT_OFF, CUT_OFF]);
+    });
+
+    it('a shot Decaid stopped, lost while Decaid is out of reach, is said to have finished once Decaid answers', async () => {
+      await throughTemplatePick();
+      machine.missingShots.add('shot-lost');
+      telemetry.setState({ unreachable: true, machineConnected: false });
+      ranAndEnded('shot-lost', 'targetWeight');
+      await vi.waitFor(() => expect(engine.getState().error).toBe(SHOT_NOT_SAVED));
+      expect(lostShotWarnings()).toEqual([UNREACHABLE]);
+      // Decaid is back; the machine is still away, which says nothing of a shot Decaid stopped.
+      telemetry.setState({ unreachable: false });
+      await engine.retry();
+      expect(lostShotWarnings()).toEqual([UNREACHABLE, NOT_SAVED]);
+    });
+
+    it("Decaid's teardown for a disconnect says cut off even while Decaid is out of reach: it is Decaid's own word", async () => {
+      await throughTemplatePick();
+      machine.missingShots.add('shot-cut');
+      telemetry.setState({ shotState: shotFrame('shot-cut', 'pouring') });
+      telemetry.emitShot({ type: 'started', shotId: 'shot-cut' });
+      telemetry.setState({ shotState: shotFrame('shot-cut', 'pouring', decision('terminal', 'disconnected')) });
+      telemetry.setState({ shotState: shotFrame(null, 'idle'), unreachable: true });
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-cut', stopReason: null });
+      await vi.waitFor(() => expect(engine.getState().error).toBe(SHOT_NOT_SAVED));
+      expect(lostShotWarnings()).toEqual([CUT_OFF]);
     });
   });
 

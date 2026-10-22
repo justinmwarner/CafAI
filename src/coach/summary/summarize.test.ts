@@ -9,7 +9,16 @@ import blooming from '../templates/source/Blooming_espresso.json';
 import example from '../../../docs/verified/examples/shot-record.json';
 import { normalizeProfile } from '../../../mock/decaid/profiles.ts';
 import { createShotSimulation } from '../../../mock/decaid/shotPlayer.ts';
-import { pourSeconds, pourStartSeconds, resampleSeries, shotPhases, summarizeShot, summaryForModel } from './summarize.ts';
+import {
+  MIN_SHOT_POUR_S,
+  pourSeconds,
+  pourStartSeconds,
+  recordPourSeconds,
+  resampleSeries,
+  shotPhases,
+  summarizeShot,
+  summaryForModel,
+} from './summarize.ts';
 import { shotRows } from './analysis.ts';
 import { elapsedSeconds, parseTimestampMicros } from './time.ts';
 
@@ -255,6 +264,80 @@ describe('summarizeShot: the time is the pour, the yield what is in the cup', ()
     expect(pourSeconds([])).toBeNull();
     const doneAtOnce = [...preheat, { ...rows[preheat.length]!, substate: 'pouringDone' }, { ...rows[preheat.length + 1]!, substate: 'idle' }];
     expect(pourSeconds(doneAtOnce)).toBe(0);
+  });
+});
+
+describe('recordPourSeconds: how long a record poured; under 2 s it is no shot (D204)', () => {
+  /** A record's preheat and its samples up to `seconds` into the pour, as Decaid keeps a run stopped then. */
+  function stoppedAfter(record: ShotRecord, seconds: number): ShotRecord {
+    const start = record.measurements.findIndex((m) => m.machine.state.substate !== 'preparingForShot');
+    const pourBegan = record.measurements[start]!.machine.timestamp;
+    const kept = record.measurements.filter((m, i) => i < start || elapsedSeconds(pourBegan, m.machine.timestamp)! <= seconds);
+    return { ...record, measurements: kept };
+  }
+  /** A record's preheat and its first `samples` samples of pour. */
+  function stoppedOnSample(record: ShotRecord, samples: number): ShotRecord {
+    const start = record.measurements.findIndex((m) => m.machine.state.substate !== 'preparingForShot');
+    return { ...record, measurements: record.measurements.slice(0, start + samples) };
+  }
+  const isShot = (record: Pick<ShotRecord, 'measurements'>) => (recordPourSeconds(record) ?? Number.NaN) >= MIN_SHOT_POUR_S;
+
+  it('the line is 2 s of pour', () => {
+    expect(MIN_SHOT_POUR_S).toBe(2);
+  });
+
+  it("a real DE1's run stopped with the pour's first frame has no pour (decaid-mcp's shot-09)", () => {
+    const record = asRecord(shot09);
+    // Four frames of preheat over a second, then one of preinfusion: Decaid kept it.
+    expect(record.measurements.map((m) => m.machine.state.substate)).toEqual([
+      'preparingForShot',
+      'preparingForShot',
+      'preparingForShot',
+      'preparingForShot',
+      'preinfusion',
+    ]);
+    expect(recordPourSeconds(record)).toBe(0);
+    expect(summarizeShot(record).durationS).toBe(0);
+  });
+
+  it('a run stopped on its first frames of pour, or within 2 s of it, is no shot; 2 s and more of pour is one', () => {
+    // Shots sampled as Decaid samples them (the verified example is trimmed to a few samples).
+    for (const record of [asRecord(shot01), asRecord(shot07), syntheticShotRecord(), mockShotRecord()]) {
+      expect(recordPourSeconds(stoppedOnSample(record, 1))).toBe(0);
+      // A frame later, as a stop at about 0.65 s left it on the simulator: a fraction of a second of pour.
+      const twoFrames = stoppedOnSample(record, 2);
+      expect(recordPourSeconds(twoFrames)).toBeGreaterThan(0);
+      expect(isShot(twoFrames)).toBe(false);
+      expect(isShot(stoppedAfter(record, 1.9))).toBe(false);
+      expect(isShot(stoppedAfter(record, 3))).toBe(true);
+      expect(isShot(record)).toBe(true);
+    }
+  });
+
+  it('preheat alone, or a pour the machine reports done at once, has no pour', () => {
+    const record = syntheticShotRecord();
+    const preheat = record.measurements.findIndex((m) => m.machine.state.substate !== 'preparingForShot');
+    expect(recordPourSeconds({ measurements: record.measurements.slice(0, preheat) })).toBe(0);
+    const doneAtOnce = record.measurements.slice(0, preheat + 2).map((m, i) =>
+      i === preheat + 1 ? { ...m, machine: { ...m.machine, state: { state: 'espresso', substate: 'pouringDone' } } } : m,
+    );
+    expect(recordPourSeconds({ measurements: doneAtOnce })).toBe(0);
+  });
+
+  it('a record with no sample CafAI can read has no reading at all, never a run that did not pour', () => {
+    const record = syntheticShotRecord();
+    expect(recordPourSeconds({ measurements: [] })).toBeNull();
+    expect(recordPourSeconds({} as Pick<ShotRecord, 'measurements'>)).toBeNull();
+    // Samples whose time a renamed or reformatted field hides.
+    const timeless = record.measurements.map((m) => ({ ...m, machine: { ...m.machine, timestamp: 'later' } }));
+    expect(recordPourSeconds({ measurements: timeless })).toBeNull();
+  });
+
+  it('a record without machine substates is timed from its first sample to its last', () => {
+    const record = syntheticShotRecord();
+    const bare = record.measurements.map((m) => ({ ...m, machine: { ...m.machine, state: { state: 'espresso', substate: '' } } }));
+    expect(recordPourSeconds({ measurements: bare.slice(0, 1) })).toBe(0);
+    expect(isShot({ measurements: bare })).toBe(true);
   });
 });
 
