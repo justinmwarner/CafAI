@@ -18,7 +18,7 @@ export const FUN_FACTS_CHOICES: readonly FunFactsChoice[] = [
   {
     value: 'list',
     label: "CafAI's facts",
-    line: "From CafAI's own list of about 500 checked facts, picked for the bag where one fits. Free, and works without the coach.",
+    line: "From CafAI's own list of over 300 checked facts, picked for the bag where one fits. Free, and works without the coach.",
   },
   {
     value: 'coach',

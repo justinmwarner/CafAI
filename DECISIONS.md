@@ -3194,7 +3194,7 @@ checked against its source.
   search"), since a closed select shows one label. Why: the owner's "all
   three with the option of disabling altogether"; the default gives facts
   about the bag where the coach knows one, without paying for a search.
-- **D199. CafAI's own list: about 500 facts, researched, each checked against
+- **D199. CafAI's own list: 340 facts, researched, each checked against
   its source, in our own words.** `src/coach/facts/facts.json`: `id`,
   `topic` (roaster, origin, process, variety, flavour, science, roasting,
   growing, history, milk, care), `about` (a label of at most 80 characters),
@@ -3203,7 +3203,15 @@ checked against its source.
   `match`. Ten researchers drafted facts by category from the SCA, World
   Coffee Research, papers, coffee boards, makers' and roasters' own pages and
   established trade press; a second pass opened every source again and kept,
-  fixed or dropped each. The brief and the drafts stay outside the repo, and
+  fixed or dropped each. The usage limit cut the writers' targets (about 550
+  at first); of 389 facts drafted, 340 passed the check and ship, 113 about
+  origins, 40 each about processes, varieties and roasters, 45 about
+  roasting and growing, 45 about flavour and espresso science and 17 about
+  history, and the 45 the checkers did not reach before the owner stopped
+  the research to save usage stay out. A flavour fact's notes hold only the
+  word it explains, with its spellings (the lexicon's reference foods and a
+  molecule's other names it may mention never make it show): so "whiskey"
+  brings no coconut fact. The brief and the drafts stay outside the repo, and
   their evidence quotes are not shipped. Read with a dynamic import the first
   time a fact is due; the build makes one chunk (a lazy chunk could 404 after
   an in-place update of the skin), so the facts ship in it but are evaluated

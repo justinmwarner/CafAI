@@ -3,7 +3,8 @@
 Date: 2026-10-16. Status: approved by the owner (2026-10-16), with the source of
 the facts chosen in Settings, the fact in a block of its own, placed before the
 taste question, and a list of about 500 facts, each checked against its source.
-Decisions D197-D203.
+Decisions D197-D203. As built: 340 facts, every one checked; the research
+stopped there, at the owner's call, to save usage (D199).
 
 ## 1. The ask
 
@@ -26,7 +27,7 @@ too."
 - **Settings > Coach > Fun facts** chooses where facts come from: Off,
   CafAI's facts, CafAI's and the coach's (the default), or the same with a
   web search (D198).
-- **CafAI's facts**: about 500 facts, researched for this, in CafAI's own
+- **CafAI's facts**: 340 facts, researched for this, in CafAI's own
   words, each with the page it was checked against, bundled as JSON and
   loaded only when a fact is due (D199).
 - **The picker** prefers facts that fit the bag (roaster, origin, process,
@@ -61,7 +62,7 @@ line under it that says what the chosen one does.
 | Choice | Line under it |
 |---|---|
 | Off | "No fun facts." |
-| CafAI's facts | "From CafAI's own list of about 500 checked facts, picked for the bag where one fits. Free, and works without the coach." |
+| CafAI's facts | "From CafAI's own list of over 300 checked facts, picked for the bag where one fits. Free, and works without the coach." |
 | CafAI's and the coach's (default) | "The coach shares a fact about this bag when it knows one for sure; the rest come from CafAI's list." |
 | CafAI's, the coach's and a web search | "The coach may also look the roaster, farm or producer up on the web: one search per fact, about one US cent each, plus a few cents for the pages it reads." The line also says what the CafAI Bridge does with it (section 8). |
 

@@ -1,6 +1,6 @@
 /**
  * CafAI's own fun facts (D199), read the first time a fact is due: a dynamic
- * import, so the start-up bundle does not carry some 500 facts a session may
+ * import, so the start-up bundle does not carry some 340 facts a session may
  * never need. Read once; a read that failed (a chunk the WebView could not
  * fetch) is tried again the next time.
  */

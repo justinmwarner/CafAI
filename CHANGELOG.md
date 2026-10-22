@@ -13,7 +13,7 @@ workflow checks against it. Settings > About shows the version you run.
   and the taste question, instead of only "it ran the same". The coach
   shares one about your bag when it is sure of it (the roaster, the region,
   the process, the variety, where the notes on the bag come from), and
-  otherwise CafAI picks one from its own list of about 500 researched facts,
+  otherwise CafAI picks one from its own list of 340 researched facts,
   each checked against the page it came from (the bag's first, then
   roasting, growing, fermenting, espresso science, history, milk and latte
   art, and cleaning), shown with its site. A fact never says what your cup

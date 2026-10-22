@@ -1,1 +1,3933 @@
-[]
+[
+  {
+    "id": "flavour-blackcurrant-thiol",
+    "topic": "flavour",
+    "about": "Espresso's blackcurrant-smelling odorant",
+    "text": "One of espresso's key odorants is a compound with a long name, 3-mercapto-3-methylbutyl formate, which a 2021 review of espresso aroma lists with a blackcurrant-like smell.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8270317/",
+    "match": {
+      "notes": [
+        "blackcurrant",
+        "blackcurrants",
+        "black currant",
+        "cassis"
+      ]
+    }
+  },
+  {
+    "id": "flavour-buttery-diones",
+    "topic": "flavour",
+    "about": "Diones behind buttery notes",
+    "text": "When tasters call a coffee 'buttery', chemists look to diones: a 2021 review of espresso aroma lists 2,3-butanedione and 2,3-pentanedione with buttery odours, the second one also caramel-like.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8270317/",
+    "match": {
+      "notes": [
+        "butter",
+        "buttery"
+      ]
+    }
+  },
+  {
+    "id": "flavour-furaneol-caramel-marshmallow",
+    "topic": "flavour",
+    "about": "Furaneol, marshmallow and caramel",
+    "text": "Coffee holds more than 1,000 volatile compounds; in a 2025 study furaneol was among the most aroma-active of the 85 it picked out, and sniffed on its own it was described as marshmallow and caramel.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12469716/",
+    "match": {
+      "notes": [
+        "caramel",
+        "marshmallow",
+        "marshmallows"
+      ]
+    }
+  },
+  {
+    "id": "flavour-guaiacol-spicy-hot-water",
+    "topic": "flavour",
+    "about": "Guaiacol and brewing water at 96 °C",
+    "text": "Guaiacol, listed with a phenolic, spicy smell in a 2021 review of espresso aroma, is one of the compounds the review says appear in espresso when the brewing water reaches 96 °C or more.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8270317/",
+    "match": {
+      "notes": [
+        "spicy",
+        "spice",
+        "phenolic"
+      ]
+    }
+  },
+  {
+    "id": "flavour-lexicon-blueberry-reference",
+    "topic": "flavour",
+    "about": "WCR lexicon's canned-blueberry reference",
+    "text": "To teach 'blueberry', World Coffee Research's sensory lexicon uses a tin of blueberries in light syrup: tasters sniff a teaspoon of the syrup in a covered glass, then taste the blueberries themselves.",
+    "source": "https://worldcoffeeresearch.org/download/5806d8c7-cd7c-4882-a81a-2850bd6fbd36",
+    "match": {
+      "notes": [
+        "blueberry",
+        "blueberries"
+      ]
+    }
+  },
+  {
+    "id": "flavour-lexicon-caramelised-sugar",
+    "topic": "flavour",
+    "about": "WCR's melted-sugar reference for caramelised",
+    "text": "For its strongest flavour reference for 'caramelised', World Coffee Research's lexicon has panellists melt white sugar in a heavy pan until light amber, pour it onto wax paper and break up the cooled sheet.",
+    "source": "https://worldcoffeeresearch.org/download/5806d8c7-cd7c-4882-a81a-2850bd6fbd36",
+    "match": {
+      "notes": [
+        "caramel",
+        "caramelised",
+        "caramelized"
+      ]
+    }
+  },
+  {
+    "id": "flavour-lexicon-citric-malic-acids",
+    "topic": "flavour",
+    "about": "Citric and malic acid references in the lexicon",
+    "text": "Citric and malic acids each have an entry of their own in World Coffee Research's lexicon, and panellists learn them from weak solutions of the pure acid in water, starting at 0.025% citric acid and 0.5 g per litre of malic.",
+    "source": "https://worldcoffeeresearch.org/download/5806d8c7-cd7c-4882-a81a-2850bd6fbd36",
+    "match": {
+      "notes": [
+        "citric",
+        "citric acid",
+        "malic",
+        "malic acid"
+      ]
+    }
+  },
+  {
+    "id": "flavour-lexicon-coconut-whiskey-lactone",
+    "topic": "flavour",
+    "about": "WCR's coconut references and whiskey lactone",
+    "text": "World Coffee Research's lexicon gives two references for 'coconut': a drop of imitation coconut extract on a cotton ball, and whiskey lactone, a molecule whose name points to another drink entirely.",
+    "source": "https://worldcoffeeresearch.org/download/5806d8c7-cd7c-4882-a81a-2850bd6fbd36",
+    "match": {
+      "notes": [
+        "coconut"
+      ]
+    }
+  },
+  {
+    "id": "flavour-lexicon-esters-pineapple-apple",
+    "topic": "flavour",
+    "about": "Ester references for pineapple and apple",
+    "text": "Some references in World Coffee Research's lexicon are single molecules: 'pineapple' can be calibrated with ethyl butyrate and 'apple' with ethyl hexanoate, two esters supplied by the flavour-standards firm FlavorActiV.",
+    "source": "https://worldcoffeeresearch.org/download/5806d8c7-cd7c-4882-a81a-2850bd6fbd36",
+    "match": {
+      "notes": [
+        "pineapple",
+        "apple",
+        "apples"
+      ]
+    }
+  },
+  {
+    "id": "flavour-lexicon-malt-grape-nuts",
+    "topic": "flavour",
+    "about": "WCR lexicon's Grape-Nuts reference for malt",
+    "text": "The reference World Coffee Research's lexicon gives for 'malt' is a breakfast cereal: a spoonful of Grape-Nuts in a covered glass for the aroma, and a small cup of it for the flavour.",
+    "source": "https://worldcoffeeresearch.org/download/5806d8c7-cd7c-4882-a81a-2850bd6fbd36",
+    "match": {
+      "notes": [
+        "malt",
+        "malty"
+      ]
+    }
+  },
+  {
+    "id": "flavour-lexicon-nutty-walnuts",
+    "topic": "flavour",
+    "about": "Why WCR's nutty reference gained walnuts",
+    "text": "While World Coffee Research's lexicon was being built, its panel swapped the reference for 'nutty' from almonds with hazelnuts to almonds with walnuts, because that blend came closer to what the word meant.",
+    "source": "https://worldcoffeeresearch.org/download/5806d8c7-cd7c-4882-a81a-2850bd6fbd36",
+    "match": {
+      "notes": [
+        "nutty",
+        "nut",
+        "nuts",
+        "almond",
+        "almonds",
+        "hazelnut",
+        "hazelnuts",
+        "walnut",
+        "walnuts"
+      ]
+    }
+  },
+  {
+    "id": "flavour-lexicon-overripe-banana",
+    "topic": "flavour",
+    "about": "WCR's microwaved-banana reference for overripe",
+    "text": "To calibrate 'overripe', World Coffee Research's lexicon has panellists freeze an overripe banana, microwave it for a minute, mash it and serve a teaspoon in a covered glass.",
+    "source": "https://worldcoffeeresearch.org/download/5806d8c7-cd7c-4882-a81a-2850bd6fbd36",
+    "match": {
+      "notes": [
+        "overripe"
+      ]
+    }
+  },
+  {
+    "id": "flavour-lexicon-peach-stone",
+    "topic": "flavour",
+    "about": "WCR lexicon's peach-stone reference",
+    "text": "To teach the aroma of 'peach', World Coffee Research's lexicon has tasters sniff a clean peach stone in a covered glass; for the flavour, they taste dry peach jelly powder.",
+    "source": "https://worldcoffeeresearch.org/download/5806d8c7-cd7c-4882-a81a-2850bd6fbd36",
+    "match": {
+      "notes": [
+        "peach",
+        "peaches",
+        "stone fruit"
+      ]
+    }
+  },
+  {
+    "id": "flavour-lexicon-pomegranate-beetroot",
+    "topic": "flavour",
+    "about": "WCR's pomegranate entry and root vegetables",
+    "text": "World Coffee Research's lexicon notes that the aroma of 'pomegranate' can recall root vegetables such as beetroot and carrot, and it calibrates the word with pure pomegranate juice.",
+    "source": "https://worldcoffeeresearch.org/download/5806d8c7-cd7c-4882-a81a-2850bd6fbd36",
+    "match": {
+      "notes": [
+        "pomegranate",
+        "pomegranates"
+      ]
+    }
+  },
+  {
+    "id": "flavour-lexicon-vanilla-vanillin",
+    "topic": "flavour",
+    "about": "Vanilla and vanillin in the WCR lexicon",
+    "text": "World Coffee Research's lexicon keeps 'vanilla' and 'vanillin' apart: one reference for vanilla is chopped vanilla pods, while vanillin, the pure compound, is linked with marshmallows and candyfloss.",
+    "source": "https://worldcoffeeresearch.org/download/5806d8c7-cd7c-4882-a81a-2850bd6fbd36",
+    "match": {
+      "notes": [
+        "vanilla",
+        "vanillin"
+      ]
+    }
+  },
+  {
+    "id": "flavour-lexicon-winey-cabernet",
+    "topic": "flavour",
+    "about": "WCR lexicon's Cabernet reference for winey",
+    "text": "In World Coffee Research's lexicon, tasters learn 'winey' by sniffing half a cup of Cabernet Sauvignon in a large covered glass, a reference rated 10 on the lexicon's 15-point intensity scale.",
+    "source": "https://worldcoffeeresearch.org/download/5806d8c7-cd7c-4882-a81a-2850bd6fbd36",
+    "match": {
+      "notes": [
+        "winey",
+        "wine",
+        "wine-like",
+        "winy"
+      ]
+    }
+  },
+  {
+    "id": "flavour-linalool-floral-lemon-rose",
+    "topic": "flavour",
+    "about": "Linalool: floral, lemon and rose in one molecule",
+    "text": "One molecule can sit behind several tasting-note words: in a 2025 study of coffee aroma, sniffers described linalool on its own as floral, lemon and rose.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12469716/",
+    "match": {
+      "notes": [
+        "floral",
+        "lemon",
+        "rose"
+      ]
+    }
+  },
+  {
+    "id": "flavour-pyrazines-nuts-cocoa",
+    "topic": "flavour",
+    "about": "Pyrazines behind nutty and cocoa notes",
+    "text": "In a 2025 study that sniffed coffee's aroma compounds one by one as they left a gas chromatograph, individual pyrazines were described as nuts, peanuts, almond, popcorn, and coffee and cocoa.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12469716/",
+    "match": {
+      "notes": [
+        "nutty",
+        "nuts",
+        "nut",
+        "peanut",
+        "peanuts",
+        "almond",
+        "almonds"
+      ]
+    }
+  },
+  {
+    "id": "flavour-roasting-raises-vanillin",
+    "topic": "flavour",
+    "about": "Roasting raises vanillin in arabica",
+    "text": "Vanillin is already present in raw arabica beans, and a 2000 study found that roasting raised it strongly, along with other potent odorants such as β-damascenone and 4-vinylguaiacol.",
+    "source": "https://pubmed.ncbi.nlm.nih.gov/10725165/",
+    "match": {
+      "notes": [
+        "vanilla",
+        "vanillin"
+      ]
+    }
+  },
+  {
+    "id": "flavour-vinylguaiacol-smoky",
+    "topic": "flavour",
+    "about": "4-Vinylguaiacol and smoky notes",
+    "text": "In a 2025 study of commercial coffees, 4-vinylguaiacol was among the most influential aroma compounds, with an odour activity value of 761 in one sample; sniffed on its own, it was described as smoky.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12469716/",
+    "match": {
+      "notes": [
+        "smoky",
+        "smoke"
+      ]
+    }
+  },
+  {
+    "id": "flavour-wheel-black-tea-floral",
+    "topic": "flavour",
+    "about": "Black tea in the flavour wheel's floral family",
+    "text": "On the 2016 SCA and World Coffee Research flavour wheel, 'black tea' sits in the floral family, beside chamomile, rose and jasmine. The families grew out of 72 experts sorting the words online, without tasting.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5215420/",
+    "match": {
+      "notes": [
+        "black tea"
+      ]
+    }
+  },
+  {
+    "id": "flavour-wheel-red-fruit-colours",
+    "topic": "flavour",
+    "about": "Why the flavour wheel's colours matter",
+    "text": "The colours on the SCA flavour wheel were picked to evoke each word, so a taster stuck at 'some kind of red fruit' can run an eye over the wheel's red-coloured words to find a closer match.",
+    "source": "https://sca.coffee/sca-news/how-to-use-the-flavor-wheel-in-eight-steps-ab2hy",
+    "match": {
+      "notes": [
+        "red fruit",
+        "red fruits"
+      ]
+    }
+  },
+  {
+    "id": "growing-bean-belt-tropics",
+    "topic": "growing",
+    "about": "The coffee belt between the tropics",
+    "text": "Most coffee grows in a narrow band around the Equator, between the Tropics of Cancer and Capricorn, where the plant finds the rich soil, mild temperatures, seasonal rain and dappled shade it likes.",
+    "source": "https://www.aboutcoffee.org/origins/coffee-regions-of-the-world/"
+  },
+  {
+    "id": "growing-bees-raise-fruit-set",
+    "topic": "growing",
+    "about": "Bee variety and arabica fruit set",
+    "text": "Arabica can pollinate itself, yet bees still matter. Across 24 agroforestry plots in Indonesia, fruit set rose from about 60% where three bee species visited the flowers to about 90% where twenty did.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC1691323/"
+  },
+  {
+    "id": "growing-berry-borer-eggs",
+    "topic": "growing",
+    "about": "The berry borer's eggs, seen by micro-CT",
+    "text": "The coffee berry borer spends most of its life hidden inside the cherry, so researchers used micro-CT scans to watch it. Its eggs are laid in order, starting at the edge of the seed and working inwards.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6242942/"
+  },
+  {
+    "id": "growing-berry-borer-gut-bacteria",
+    "topic": "growing",
+    "about": "The coffee berry borer's gut bacteria",
+    "text": "The coffee berry borer, coffee's most damaging insect pest, can cut a crop by up to 80%. It copes with caffeine thanks to gut bacteria, including Pseudomonas, that break it down and even live on it.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4510693/"
+  },
+  {
+    "id": "growing-caffeine-evolved-separately",
+    "topic": "growing",
+    "about": "Coffee's caffeine evolved on its own",
+    "text": "Coffee most likely did not get its caffeine from an ancestor it shares with tea or cacao. Reading the robusta genome in 2014 showed its caffeine-making genes are closer kin to other coffee genes than to theirs.",
+    "source": "https://www.buffalo.edu/news/releases/2014/09/005.html"
+  },
+  {
+    "id": "growing-caffeine-nectar-bees",
+    "topic": "growing",
+    "about": "Caffeine in coffee nectar and bee memory",
+    "text": "Coffee flowers carry a little caffeine in their nectar. In a 2013 study, honeybees given caffeine with their reward were three times as likely to remember a flower's scent as bees fed sugar alone.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4521368/"
+  },
+  {
+    "id": "growing-ceylon-rust-collapse",
+    "topic": "growing",
+    "about": "Leaf rust ends Ceylon's coffee",
+    "text": "In 1870 Ceylon, now Sri Lanka, exported some 53,000 tonnes of coffee. Then leaf rust took hold: by 1890, 90% of its coffee land had been abandoned, and the island turned to tea instead.",
+    "source": "https://www.npr.org/sections/thesalt/2018/10/16/649155664/coffee-rust-threatens-latin-american-crop-150-years-ago-it-wiped-out-an-empire"
+  },
+  {
+    "id": "growing-cherry-layers",
+    "topic": "growing",
+    "about": "The layers of a coffee cherry",
+    "text": "Peel a coffee cherry and you pass a thin skin, then the pulp, then the parchment, a thin layer that guards each bean, and finally the silverskin, a tissue that supported the bean as it first grew.",
+    "source": "https://www.aboutcoffee.org/origins/what-is-coffee/"
+  },
+  {
+    "id": "growing-derricadeira-hand-shaker",
+    "topic": "growing",
+    "about": "The derriçadeira hand-held shaker",
+    "text": "Between hand and machine sits the derriçadeira: a long pole tipped with two vibrating 'hands'. Pickers spread a sheet under the tree, raise the pole into the branches, and the shaking brings the cherries down.",
+    "source": "https://perfectdailygrind.com/2017/07/hand-picked-vs-mechanized-coffee-harvesting/"
+  },
+  {
+    "id": "growing-harry-marshall-ward",
+    "topic": "growing",
+    "about": "Harry Marshall Ward and leaf rust",
+    "text": "Around 1880, Kew sent Harry Marshall Ward, a young Cambridge graduate, to Ceylon. In two years there he proved that a fungus caused coffee leaf rust and worked out its life cycle, but he had no way to stop it.",
+    "source": "https://www.npr.org/sections/thesalt/2018/10/16/649155664/coffee-rust-threatens-latin-american-crop-150-years-ago-it-wiped-out-an-empire"
+  },
+  {
+    "id": "growing-harvester-vibrating-rods",
+    "topic": "growing",
+    "about": "How coffee harvesting machines work",
+    "text": "Coffee harvesting machines knock cherries loose with rotating, vibrating rods, then catch them and carry them to a bin. Tuning the vibration and arm speed lets them favour the ripest fruit, but they need fairly flat land.",
+    "source": "https://perfectdailygrind.com/2017/07/hand-picked-vs-mechanized-coffee-harvesting/"
+  },
+  {
+    "id": "growing-peaberry-five-percent",
+    "topic": "growing",
+    "about": "Peaberries, the one-bean cherries",
+    "text": "Most coffee cherries hold two beans, but in about 5% of the world's coffee the cherry carries just one, called a peaberry. Some are sorted out by hand to be sold on their own.",
+    "source": "https://www.aboutcoffee.org/origins/what-is-coffee/"
+  },
+  {
+    "id": "growing-rust-reaches-americas",
+    "topic": "growing",
+    "about": "Leaf rust reaches the Americas",
+    "text": "Coffee leaf rust turned up in Brazil in 1970. Within roughly twelve years, every major coffee country in the Americas had it.",
+    "source": "https://www.npr.org/sections/thesalt/2018/10/16/649155664/coffee-rust-threatens-latin-american-crop-150-years-ago-it-wiped-out-an-empire"
+  },
+  {
+    "id": "growing-rust-spores-travel",
+    "topic": "growing",
+    "about": "How leaf rust spores spread",
+    "text": "Leaf rust spores ride the wind and rain and hitch lifts on workers, birds and insects. They can survive for months, and on a coffee leaf in the right conditions can get inside within a few hours.",
+    "source": "https://www.npr.org/sections/thesalt/2018/10/16/649155664/coffee-rust-threatens-latin-american-crop-150-years-ago-it-wiped-out-an-empire"
+  },
+  {
+    "id": "growing-rust-symptoms",
+    "topic": "growing",
+    "about": "What coffee leaf rust looks like",
+    "text": "Coffee leaf rust shows as pale-yellow spots on top of a leaf, with yellow-orange powdery spores beneath. It seldom kills the plant outright: the leaves drop, the beans are starved, and yields plunge.",
+    "source": "https://www.npr.org/sections/thesalt/2018/10/16/649155664/coffee-rust-threatens-latin-american-crop-150-years-ago-it-wiped-out-an-empire"
+  },
+  {
+    "id": "growing-selective-picking-rounds",
+    "topic": "growing",
+    "about": "Selective picking versus strip picking",
+    "text": "Selective pickers work back through the same trees every eight to ten days, taking only the ripe cherries each time. Strip picking, by hand or machine, clears a whole branch in one go.",
+    "source": "https://www.aboutcoffee.org/origins/lifecycle-of-coffee/"
+  },
+  {
+    "id": "growing-shade-coffee-birds",
+    "topic": "growing",
+    "about": "Shade coffee, forest and birds in Colombia",
+    "text": "In Colombia's Eastern Andes, a study with Smithsonian bird scientists found dense, varied shade coffee helped many birds, from insect-eaters to nectar-feeders. Birds were also likelier to turn up where more forest stood within 2 km.",
+    "source": "https://dailycoffeenews.com/2026/08/04/study-bird-friendly-coffee-landscapes-need-forest-alongside-shade/"
+  },
+  {
+    "id": "growing-smallholders-share",
+    "topic": "growing",
+    "about": "Smallholders grow most of the world's coffee",
+    "text": "Coffee is mostly a small farmer's crop: some 25 million smallholders grow it, and farms under roughly 2 to 5 hectares are thought to make up 80% of coffee farms and grow about 60% of the world's coffee.",
+    "source": "https://www.aboutcoffee.org/sustainability/"
+  },
+  {
+    "id": "growing-three-to-four-years",
+    "topic": "growing",
+    "about": "Three to four years to first fruit",
+    "text": "A newly planted coffee tree takes about three to four years to bear its first fruit, depending on the variety. When ripe, the cherries of most varieties turn a deep red to purple.",
+    "source": "https://www.aboutcoffee.org/origins/lifecycle-of-coffee/"
+  },
+  {
+    "id": "growing-tree-height-and-crops",
+    "topic": "growing",
+    "about": "Tall trees with flowers and fruit at once",
+    "text": "Left unpruned, a coffee tree can grow taller than 9 m. One plant can carry flowers, bright green cherries and ripe purplish ones all at the same time.",
+    "source": "https://www.aboutcoffee.org/origins/what-is-coffee/"
+  },
+  {
+    "id": "growing-wild-arabica-climate-2080",
+    "topic": "growing",
+    "about": "Climate projections for wild arabica",
+    "text": "A 2012 Kew-led study modelled wild arabica in its native forests and projected that, by 2080, the area with a suitable climate could shrink by 38% at best and by about 90% at worst.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3492365/"
+  },
+  {
+    "id": "growing-wild-species-threatened",
+    "topic": "growing",
+    "about": "Wild coffee species at risk",
+    "text": "When Kew scientists assessed all 124 wild coffee species in 2019, at least 60% were threatened with extinction, and 45% were not held in any genebank collection.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6357749/"
+  },
+  {
+    "id": "growing-yield-per-tree",
+    "topic": "growing",
+    "about": "How much coffee one tree yields",
+    "text": "An average coffee tree yields about 4.5 kg of cherries a year, which makes only around 1 kg of green coffee. Most trees give their best crops between about seven and twenty years old.",
+    "source": "https://www.aboutcoffee.org/origins/what-is-coffee/"
+  },
+  {
+    "id": "history-bezzera-pavoni-milan-1906",
+    "topic": "history",
+    "about": "Bezzera's patent and Pavoni's Ideale",
+    "text": "In the early 1900s Luigi Bezzera patented a brewing group that made each coffee fresh, to order. Desiderio Pavoni bought the patent, and the Ideale machine he built on it was first shown at Milan's 1906 Universal Exhibition.",
+    "source": "https://artsandculture.google.com/story/espresso-in-style-details-museimpresa/rAXR5jdvgGVPPQ?hl=en"
+  },
+  {
+    "id": "history-cappuccino-capuchin-name",
+    "topic": "history",
+    "about": "Why the cappuccino is named after friars",
+    "text": "The cappuccino is named after the Capuchin friars. Their own name comes from cappuccio, Italian for 'hood', and the drink took it from the brown of their hooded habits.",
+    "source": "https://capuchinswest.org/post-featured/the-capuchin-hood-meaning-history-and-name/"
+  },
+  {
+    "id": "history-cup-of-excellence-1999",
+    "topic": "history",
+    "about": "Cup of Excellence and its online auction",
+    "text": "The Cup of Excellence began in Brazil in 1999. To sell that first year's winning coffees to the highest bidders, its team built coffee's first online auction.",
+    "source": "https://cupofexcellence.org/cup-of-excellence-history/"
+  },
+  {
+    "id": "history-de-clieu-martinique-seedling",
+    "topic": "history",
+    "about": "De Clieu's seedling for Martinique",
+    "text": "The story goes that in 1723 the young naval officer Gabriel de Clieu took a seedling from the French king's coffee tree and carried it to Martinique, through storms, a pirate attack and a saboteur. Within 50 years the island had over 18 million coffee trees.",
+    "source": "https://www.aboutcoffee.org/origins/history-of-coffee/"
+  },
+  {
+    "id": "history-decent-kickstarter-origin",
+    "topic": "history",
+    "about": "How Decent Espresso began",
+    "text": "Decent Espresso began when John Buckman, frustrated that his high-end home machines gave no live feedback and let temperatures swing, backed a computer-driven coffee machine on Kickstarter. When it collapsed, he stepped in and promised its stranded backers a working machine.",
+    "source": "https://decentespresso.com/docs/the_decent_backstory"
+  },
+  {
+    "id": "history-dutch-java-plantations",
+    "topic": "history",
+    "about": "Java and the Mocha Java blend",
+    "text": "The Dutch got coffee growing on Java in the late 1600s, and pairing it with Yemen's 'Mocha' gave Mocha Java, often called the world's first coffee blend.",
+    "source": "https://www.aboutcoffee.org/origins/history-of-coffee/"
+  },
+  {
+    "id": "history-faema-e61-1961",
+    "topic": "history",
+    "about": "The Faema E61 of 1961",
+    "text": "The Faema E61 of 1961 swapped hand levers for an on/off switch and an electric pump holding a steady 9 bar, which became the standard for Italian espresso. Its boiler was turned on its side, keeping the machine low enough for the barista to talk to customers over it.",
+    "source": "https://www.historians.org/perspectives-article/the-faema-e61-espresso-machine-january-2021/"
+  },
+  {
+    "id": "history-gaggia-lampo-1938",
+    "topic": "history",
+    "about": "Gaggia's 1938 Lampo group",
+    "text": "Achille Gaggia's 1938 patent was for 'Lampo', a group that pushed hot water through the coffee by pressure instead of steam. On the back of his machines he put the slogan 'Crema caffè naturale – funziona senza vapore': natural coffee crema, works without steam.",
+    "source": "https://www.gaggia.com/our-history/"
+  },
+  {
+    "id": "history-gaggia-pulling-a-shot",
+    "topic": "history",
+    "about": "Gaggia's 1947 spring-lever machine",
+    "text": "Achille Gaggia's lever design of 1947 had the barista pull a lever to load a spring, which then drove a piston through the coffee at 8 to 10 bar. A shot was 'pulled' in 25 to 30 seconds.",
+    "source": "https://artsandculture.google.com/story/YgVxzyyXKVR5Iw"
+  },
+  {
+    "id": "history-kaldi-goats-legend",
+    "topic": "history",
+    "about": "The legend of Kaldi and his goats",
+    "text": "Legend has it that a goat herder named Kaldi saw his goats grow so lively after eating the cherries of a certain tree that they wouldn't sleep at night. In the story, a monastery's abbot made a drink from the cherries to stay awake through evening prayers.",
+    "source": "https://www.aboutcoffee.org/origins/history-of-coffee/"
+  },
+  {
+    "id": "history-la-marzocco-gs-1970",
+    "topic": "history",
+    "about": "La Marzocco GS, the first dual boiler",
+    "text": "La Marzocco's GS of 1970 was the first machine with two separate boilers and saturated groups; GS stands for 'Gruppo Saturo'. One boiler could make steam without changing the temperature of the other, which held the brew water.",
+    "source": "https://lamarzocco.com/it/en/about-us/history/"
+  },
+  {
+    "id": "history-la-marzocco-lion-name",
+    "topic": "history",
+    "about": "How La Marzocco got its lion name",
+    "text": "La Marzocco was founded in Florence in 1927 by the brothers Giuseppe and Bruno Bambi. It is named after the Marzocco, the lion that stands for Florence, which sat on top of the brothers' new machine.",
+    "source": "https://lamarzocco.com/it/en/about-us/history/"
+  },
+  {
+    "id": "history-moriondo-1884-patent",
+    "topic": "history",
+    "about": "Moriondo's 1884 steam-and-water machine",
+    "text": "Angelo Moriondo of Turin patented a coffee machine using both steam and water in 1884 and showed it at that year's General Italian Exhibition. None of his machines survive; the one in the MUMAC museum is a 2018 replica built from his patent.",
+    "source": "https://www.ilpost.it/2022/06/06/angelo-moriondo-caffe-espresso/"
+  },
+  {
+    "id": "history-palheta-bouquet-brazil",
+    "topic": "history",
+    "about": "Palheta and the bouquet of coffee seeds",
+    "text": "As the story goes, coffee reached Brazil in a bouquet. Francisco de Mello Palheta, a Portuguese officer, was sent to French Guiana for seedlings; the French wouldn't share, but the governor's wife, taken with him, gave him flowers with coffee seeds hidden inside.",
+    "source": "https://www.aboutcoffee.org/origins/history-of-coffee/"
+  },
+  {
+    "id": "history-qahveh-khaneh-schools-of-wise",
+    "topic": "history",
+    "about": "Qahveh khaneh, the 'Schools of the Wise'",
+    "text": "By the 1500s, public coffeehouses called qahveh khaneh had sprung up in cities across the Middle East, with music, performances, chess and news alongside the coffee. They mattered so much for passing on news that they were also known as 'Schools of the Wise'.",
+    "source": "https://www.aboutcoffee.org/origins/history-of-coffee/"
+  },
+  {
+    "id": "history-sca-unification-2017",
+    "topic": "history",
+    "about": "SCAA and SCAE unite as the SCA in 2017",
+    "text": "The Specialty Coffee Association was formed in 2017, when two older bodies joined: the Specialty Coffee Association of America, set up in 1982, and the Specialty Coffee Association of Europe, formed in 1998.",
+    "source": "https://library.ucdavis.edu/archives-and-special-collections/collection/specialty-coffee-association-records/"
+  },
+  {
+    "id": "history-wbc-monte-carlo-2000",
+    "topic": "history",
+    "about": "The first World Barista Championship, 2000",
+    "text": "The first World Barista Championship, in Monte Carlo in 2000, had some 17 baristas making nine drinks for three judges. Mirrors were fitted above the espresso machines so spectators could see what the baristas were doing.",
+    "source": "https://sca.coffee/sca-news/25-magazine/issue-9/english/calling-the-shots-20-years-of-the-world-barista-championship-25-magazine-issue-9-wkzbr"
+  },
+  {
+    "id": "origin-acatenango-fuego-volcano",
+    "topic": "origin",
+    "about": "Fuego's eruptions and Acatenango's soil",
+    "text": "Acatenango's farms lie beside Fuego, Spanish for 'fire', a volcano whose frequent eruptions keep topping up the coarse, sandy soil with minerals. Much of the coffee grows under thick shade, as high as about 2,000 m.",
+    "source": "https://www.guatemalancoffees.com/main/regions-and-profiles/acatenango-valley/",
+    "match": {
+      "origins": [
+        "acatenango"
+      ]
+    }
+  },
+  {
+    "id": "origin-antigua-genuine-label",
+    "topic": "origin",
+    "about": "Mislabelled Antigua coffee and APCA's founding",
+    "text": "In the early 2000s Antigua's growers reckoned the valley made at most 80,000 bags of green coffee, while 180,000 to 300,000 bags left Guatemala labelled Antigua. Their association, APCA, founded in 2000, set out to certify the real thing.",
+    "source": "https://www.wipo.int/edocs/mdocs/geoind/en/wipo_geo_sfo_03/wipo_geo_sfo_03_21-part2.pdf",
+    "match": {
+      "origins": [
+        "antigua"
+      ]
+    }
+  },
+  {
+    "id": "origin-antigua-pumice-soil",
+    "topic": "origin",
+    "about": "Antigua's three volcanoes and pumice soil",
+    "text": "Antigua's valley is ringed by three volcanoes: Agua, Fuego and Acatenango. Its soil carries volcanic pumice, which holds water and helps the coffee cope with the valley's low rainfall.",
+    "source": "https://www.guatemalancoffees.com/main/regions-and-profiles/antigua-coffee/",
+    "match": {
+      "origins": [
+        "antigua"
+      ]
+    }
+  },
+  {
+    "id": "origin-antioquia-fnc-medellin",
+    "topic": "origin",
+    "about": "The FNC's 1927 founding in Medellín",
+    "text": "Colombia's coffee growers' federation, the FNC, was created in Medellín, Antioquia, in 1927, and Antioquia's own growers' committee began work at almost the same time.",
+    "source": "https://publicaciones.cenicafe.org/index.php/atl/article/view/2975",
+    "match": {
+      "origins": [
+        "antioquia",
+        "medellín",
+        "medellin"
+      ]
+    }
+  },
+  {
+    "id": "origin-atitlan-xocomil-winds",
+    "topic": "origin",
+    "about": "Atitlán's Xocomil wind",
+    "text": "Nine-tenths of Atitlán's coffee grows on the slopes of the three volcanoes that tower over Lake Atitlán. Every day a wind called the Xocomil churns the cold lake water and shapes the farms' microclimate.",
+    "source": "https://www.guatemalancoffees.com/main/regions-and-profiles/traditional-atitlan/",
+    "match": {
+      "origins": [
+        "atitlan",
+        "atitlán"
+      ]
+    }
+  },
+  {
+    "id": "origin-bali-kintamani-ceremony-gift",
+    "topic": "origin",
+    "about": "Coffee as a ceremony gift in Kintamani, Bali",
+    "text": "In Kintamani, on Bali, coffee is a customary gift at weddings, tooth-filing ceremonies and times of mourning, when neighbours and relatives bring it to be shared during the ceremony.",
+    "source": "https://www.museumnasional.or.id/wp-content/uploads/2022/11/5-Trivia_ENG.docx.pdf",
+    "match": {
+      "origins": [
+        "kintamani",
+        "bali"
+      ]
+    }
+  },
+  {
+    "id": "origin-bali-kintamani-first-gi",
+    "topic": "origin",
+    "about": "Kintamani, Indonesia's first GI product",
+    "text": "In 2008 arabica from Kintamani, in the north of Bali, became the first Indonesian product recognised with a Geographical Indication certificate, after local farmers and processors applied for it together.",
+    "source": "https://www.thejakartapost.com/news/2008/12/13/kintamani-coffee-gets-certification.html",
+    "match": {
+      "origins": [
+        "kintamani",
+        "bali"
+      ]
+    }
+  },
+  {
+    "id": "origin-baru-boquete-volcan",
+    "topic": "origin",
+    "about": "Boquete and Volcán either side of Volcán Barú",
+    "text": "Panama's best-known coffee regions face each other across Volcán Barú, the country's tallest mountain: Boquete lies to its east and south-east, and the region called Volcán to its west and south-west.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/panama/",
+    "match": {
+      "origins": [
+        "boquete",
+        "volcán barú",
+        "volcan baru",
+        "chiriquí",
+        "chiriqui"
+      ]
+    }
+  },
+  {
+    "id": "origin-bolivia-yungas",
+    "topic": "origin",
+    "about": "Bolivia's Yungas and its smallholders",
+    "text": "Bolivia's coffee grows mainly in the Yungas, mountains and valleys that fall from the high Altiplano around La Paz down towards the Amazon rainforest. Land reforms have returned land to smallholders, most of them indigenous, who grow most of its coffee.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/bolivia/",
+    "match": {
+      "origins": [
+        "bolivia",
+        "yungas"
+      ]
+    }
+  },
+  {
+    "id": "origin-boquete-esmeralda-el-velo-trial",
+    "topic": "origin",
+    "about": "Esmeralda's El Velo variety trial",
+    "text": "In 2007 Boquete's Hacienda La Esmeralda began a decade-long variety trial, planting more than 400 different accessions high up at El Velo, in the hope of finding another coffee as remarkable as its Gesha.",
+    "source": "https://haciendaesmeralda.com/our-story/",
+    "match": {
+      "origins": [
+        "boquete"
+      ]
+    }
+  },
+  {
+    "id": "origin-brazil-150-years-top-producer",
+    "topic": "origin",
+    "about": "Brazil, top coffee producer for 150 years",
+    "text": "Brazil has been the world's biggest coffee producer for more than 150 years.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/brazil/",
+    "match": {
+      "origins": [
+        "brazil",
+        "brasil"
+      ]
+    }
+  },
+  {
+    "id": "origin-brazil-mizuno-cafe-paulista",
+    "topic": "origin",
+    "about": "Ryo Mizuno's Café Paulista and Brazil's coffee",
+    "text": "In 1908, the year the first Japanese emigrants arrived in Brazil, São Paulo state agreed to give Ryo Mizuno free coffee for three years if he opened coffee shops in Japan. His Café Paulista, founded in 1910, had its main shop in Ginza.",
+    "source": "https://www.ndl.go.jp/brasil/e/column/coffee.html",
+    "match": {
+      "origins": [
+        "brazil",
+        "brasil"
+      ]
+    }
+  },
+  {
+    "id": "origin-brazil-national-coffee-day",
+    "topic": "origin",
+    "about": "Brazil's National Coffee Day, 24 May",
+    "text": "Brazil's National Coffee Day falls on 24 May. The date, set in 2005 by the coffee industry association ABIC, marks the start of the harvest in most of the country's growing regions.",
+    "source": "https://www.revistacultivar.com.br/noticias/embrapa-comemora-o-dia-nacional-do-cafe-com-degustacao-de-cafes-de-diferentes-regioes-produtoras",
+    "match": {
+      "origins": [
+        "brazil",
+        "brasil"
+      ]
+    }
+  },
+  {
+    "id": "origin-brazil-slow-start-after-1727",
+    "topic": "origin",
+    "about": "Brazil's slow coffee start after 1727",
+    "text": "Brazil was a slow starter: after coffee seedlings arrived from French Guiana in 1727, almost 80 years passed before it exported meaningful amounts. In 1800 its coffee exports were still close to nothing.",
+    "source": "https://journals.univie.ac.at/index.php/oezg/article/download/3781/5636/11996",
+    "match": {
+      "origins": [
+        "brazil",
+        "brasil"
+      ]
+    }
+  },
+  {
+    "id": "origin-cajamarca-first-peru-coe",
+    "topic": "origin",
+    "about": "Cajamarca sweeps Peru's first Cup of Excellence",
+    "text": "Peru's first Cup of Excellence, in 2017, was won by a coffee from Juan Heredia Sanchez in Cajamarca, scoring 92.25 points; the two next-highest scorers came from Cajamarca too.",
+    "source": "https://dailycoffeenews.com/2017/09/18/quality-shines-at-perus-first-cup-of-excellence-competition",
+    "match": {
+      "origins": [
+        "cajamarca"
+      ]
+    }
+  },
+  {
+    "id": "origin-caranavi-2004-cup-of-excellence",
+    "topic": "origin",
+    "about": "Caranavi's clean sweep at Bolivia's 2004 CoE",
+    "text": "All 13 winning lots at Bolivia's 2004 Cup of Excellence came from Caranavi, in La Paz department. First place went to a lot pooled from 82 farmers.",
+    "source": "https://allianceforcoffeeexcellence.org/bolivia-2004/",
+    "match": {
+      "origins": [
+        "caranavi"
+      ]
+    }
+  },
+  {
+    "id": "origin-caranavi-pioneer-road",
+    "topic": "origin",
+    "about": "Caranavi, a 1960s pioneer settlement",
+    "text": "Caranavi began in the early 1960s as a pioneer settlement, when a road was pushed down into Bolivia's lower Yungas. Most newcomers to the La Paz Yungas were Aymara-speaking farmers from the Altiplano, growing coffee, cacao and fruit.",
+    "source": "https://es.mongabay.com/2024/12/la-marcha-hacia-el-oriente-caso-boliviano-libro/",
+    "match": {
+      "origins": [
+        "caranavi",
+        "yungas"
+      ]
+    }
+  },
+  {
+    "id": "origin-cauca-pacific-shield",
+    "topic": "origin",
+    "about": "Cauca's mountain shield from the Pacific",
+    "text": "Cauca's coffee farms lie behind high Andean ranges that shield them from strong winds and damp air off the Pacific, one of the traits written into the region's denomination of origin in 2011.",
+    "source": "https://cafedecolombia.com/en/regional-designation-of-origin/",
+    "match": {
+      "origins": [
+        "cauca",
+        "popayán",
+        "popayan"
+      ]
+    }
+  },
+  {
+    "id": "origin-central-valley-urban-sprawl",
+    "topic": "origin",
+    "about": "Coffee's retreat from Costa Rica's Central Valley",
+    "text": "Coffee from Costa Rica's Central Valley fell by almost two-thirds between the 1999–2000 and 2016–17 harvests, an ICAFE study found, from about 772,000 to 273,000 fanegas of cherry. Spreading towns, leaf rust and low prices all played a part.",
+    "source": "https://www.nacion.com/economia/agro/cultivo-de-cafe-desaparece-poco-a-poco-del-valle/TGRW37JVFRCL7P355JJTAFDJZM/story/",
+    "match": {
+      "origins": [
+        "central valley",
+        "valle central"
+      ]
+    }
+  },
+  {
+    "id": "origin-cerrado-mineiro-first-gi",
+    "topic": "origin",
+    "about": "Cerrado Mineiro, Brazil's first coffee GI",
+    "text": "Cerrado Mineiro was the first Brazilian coffee region to win a geographical indication, in 2005, and became a denomination of origin in 2013. Its coffee grows at about 800 to 1,300 m.",
+    "source": "https://agenciasebrae.com.br/modelos-de-negocio/cafeicultores-do-cerrado-mineiro-alcancam-1-milhao-de-sacas-comercializadas-com-selo-de-origem-e-qualidade",
+    "match": {
+      "origins": [
+        "cerrado mineiro",
+        "cerrado"
+      ]
+    }
+  },
+  {
+    "id": "origin-chanchamayo-coffee-capital-mark",
+    "topic": "origin",
+    "about": "Chanchamayo's 'coffee capital' mark",
+    "text": "In 2022 the certification mark 'Chanchamayo, capital cafetalera del Perú' (Peru's coffee capital) was registered with Indecopi, as Chanchamayo worked towards a denomination of origin for its coffee.",
+    "source": "https://andina.pe/agencia/noticia-chanchamayo-busca-denominacion-origen-para-su-cafe-918896.aspx",
+    "match": {
+      "origins": [
+        "chanchamayo"
+      ]
+    }
+  },
+  {
+    "id": "origin-chiapas-appellation-800m",
+    "topic": "origin",
+    "about": "Café Chiapas appellation of origin, 2003",
+    "text": "In 2003 Mexico made 'Café Chiapas' a protected appellation of origin, reserved for Arabica grown in the state above 800 m, a band that held about three-quarters of its coffee land.",
+    "source": "https://www.wipo.int/wipolex/en/legislation/details/9311",
+    "match": {
+      "origins": [
+        "chiapas"
+      ]
+    }
+  },
+  {
+    "id": "origin-coban-chipi-chipi-mist",
+    "topic": "origin",
+    "about": "Cobán's chipi-chipi mist",
+    "text": "Cobán, Guatemala's rainforest coffee region, has no real dry season, only wet and wetter months. A fine mist known as the chipi-chipi sinks from the clouds over its rolling hills, where the coffee grows in limestone and clay.",
+    "source": "https://www.guatemalancoffees.com/main/regions-and-profiles/rainforest-coban/",
+    "match": {
+      "origins": [
+        "coban",
+        "cobán",
+        "alta verapaz"
+      ]
+    }
+  },
+  {
+    "id": "origin-colombia-coffee-landscape-bahareque",
+    "topic": "origin",
+    "about": "Bahareque in Colombia's Coffee Cultural Landscape",
+    "text": "In 2011 UNESCO listed Colombia's Coffee Cultural Landscape as World Heritage. Its traditional buildings use bahareque: walls on a timber frame, covered with mats of guadua, a tough native bamboo.",
+    "source": "https://whc.unesco.org/en/decisions/4314",
+    "match": {
+      "origins": [
+        "caldas",
+        "quindío",
+        "quindio",
+        "risaralda",
+        "valle del cauca",
+        "eje cafetero",
+        "coffee axis"
+      ]
+    }
+  },
+  {
+    "id": "origin-colombia-eu-geographical-indication",
+    "topic": "origin",
+    "about": "Café de Colombia's EU protected status",
+    "text": "In 2007 'Café de Colombia' became a Protected Geographical Indication in the European Union. The growers' federation had applied in 2005, the first such application for a product from outside the EU.",
+    "source": "https://www.wipo.int/ipadvantage/en/details.jsp?id=2617",
+    "match": {
+      "origins": [
+        "colombia"
+      ]
+    }
+  },
+  {
+    "id": "origin-colombia-juan-valdez",
+    "topic": "origin",
+    "about": "Juan Valdez and his mule Conchita",
+    "text": "Juan Valdez, the fictional grower who travels with his mule Conchita, was introduced by Colombia's coffee federation in the late 1950s. Carlos Sánchez played him in print and on screen from 1969 to 2006.",
+    "source": "https://dailycoffeenews.com/2019/01/04/juan-valdez-actor-carlos-sanchez-remembered-as-a-hero-to-colombian-coffee",
+    "match": {
+      "origins": [
+        "colombia"
+      ]
+    }
+  },
+  {
+    "id": "origin-colombia-mitaca",
+    "topic": "origin",
+    "about": "Colombia's mitaca, the second harvest",
+    "text": "Besides its main harvest, Colombia has a smaller second one, usually about six months later, which growers call the mitaca or traviesa.",
+    "source": "https://huila.federaciondecafeteros.org/glosario/secondary-harvest/?lang=en",
+    "match": {
+      "origins": [
+        "colombia"
+      ]
+    }
+  },
+  {
+    "id": "origin-costa-rica-micromill-machines",
+    "topic": "origin",
+    "about": "The machines behind Costa Rica's micromills",
+    "text": "Costa Rica's micromills grew out of compact, low-water demucilaging machines made by Penagos in Colombia and Pinhalense in Brazil. With them, farmers who used to sell their cherries to big mills could process their own coffee, and their neighbours'.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/costa-rica/",
+    "match": {
+      "origins": [
+        "costa rica"
+      ]
+    }
+  },
+  {
+    "id": "origin-costa-rica-national-theatre-tax",
+    "topic": "origin",
+    "about": "San José's National Theatre and its coffee tax",
+    "text": "San José's National Theatre began with a coffee tax: in 1890 wealthy growers and merchants proposed five centavos on every arroba of coffee exported. It raised only about 133,000 pesos before an import duty replaced it; the theatre cost over three million.",
+    "source": "https://www.teatronacional.go.cr/repositorio/detail/28-1875_resumen_historia_teatro_nacional_costarica.pdf",
+    "match": {
+      "origins": [
+        "costa rica"
+      ]
+    }
+  },
+  {
+    "id": "origin-costa-rica-oxcart-coffee-route",
+    "topic": "origin",
+    "about": "Costa Rica's oxcarts on the coffee road",
+    "text": "From the mid-1800s, oxcarts hauled Costa Rica's coffee from the Central Valley over the mountains to the Pacific port of Puntarenas, a trip of 10 to 15 days. Each cart was built to ring its own chime as its wheels turned.",
+    "source": "https://ich.unesco.org/en/RL/oxherding-and-oxcart-traditions-in-costa-rica-00103",
+    "match": {
+      "origins": [
+        "costa rica"
+      ]
+    }
+  },
+  {
+    "id": "origin-dominican-santo-domingo-name",
+    "topic": "origin",
+    "about": "Santo Domingo coffee and Dominican regions",
+    "text": "Dominican coffee is sometimes sold as 'Santo Domingo', the country's old name. Most of it comes from smallholders who grow it in shade, and the country's coffee authorities recognise seven official regions, including Cibao and Barahona.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/dominican-republic/",
+    "match": {
+      "origins": [
+        "dominican republic",
+        "república dominicana",
+        "republica dominicana",
+        "santo domingo"
+      ]
+    }
+  },
+  {
+    "id": "origin-ecuador-instant-coffee-exports",
+    "topic": "origin",
+    "about": "Ecuador's instant coffee exports in 2014",
+    "text": "In 2014 about 87% of Ecuador's coffee exports left as soluble (instant) powder. The country's own crop was not enough to feed its soluble factories, which also brought in robusta from Vietnam.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/ecuador/",
+    "match": {
+      "origins": [
+        "ecuador"
+      ]
+    }
+  },
+  {
+    "id": "origin-el-salvador-1970s-producer",
+    "topic": "origin",
+    "about": "El Salvador's 1970s rank as a coffee producer",
+    "text": "In the early 1970s El Salvador was the world's fourth- or fifth-largest coffee producer by volume. Later it made its name instead with elite specialty coffees.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/el-salvador/",
+    "match": {
+      "origins": [
+        "el salvador"
+      ]
+    }
+  },
+  {
+    "id": "origin-el-salvador-bourbon-loyalty",
+    "topic": "origin",
+    "about": "El Salvador's long loyalty to Bourbon",
+    "text": "From the 1930s on, Salvadoran growers kept faith with the heirloom Bourbon. Before leaf rust struck in 2012–13, Bourbon trees, among them a widely grown selection called Tekisic, gave an estimated seven-tenths of the country's coffee.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/el-salvador/",
+    "match": {
+      "origins": [
+        "el salvador"
+      ]
+    }
+  },
+  {
+    "id": "origin-el-salvador-rust-2013",
+    "topic": "origin",
+    "about": "El Salvador's 2012–13 leaf-rust losses",
+    "text": "When leaf rust swept Central America in 2012–13, El Salvador was hit hard: its prized Bourbon and Pacamara trees resist the disease poorly, and the country's harvest fell by about 60% from one season to the next.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/el-salvador/",
+    "match": {
+      "origins": [
+        "el salvador"
+      ]
+    }
+  },
+  {
+    "id": "origin-espirito-santo-conilon-1912",
+    "topic": "origin",
+    "about": "Espírito Santo's conilon since 1912",
+    "text": "Espírito Santo's conilon story began in 1912, when Governor Jerônimo Monteiro introduced this Coffea canephora coffee to the state. It has since become Brazil's leading conilon grower, with about 70% of the country's crop in the years around 2020.",
+    "source": "https://revista.incaper.es.gov.br/index.php/ojs/article/download/27/26/52",
+    "match": {
+      "origins": [
+        "espírito santo",
+        "espirito santo"
+      ]
+    }
+  },
+  {
+    "id": "origin-ethiopia-first-cup-of-excellence",
+    "topic": "origin",
+    "about": "Ethiopia's first Cup of Excellence, 2020",
+    "text": "Ethiopia held its first Cup of Excellence only in 2020. More than 1,400 lots were entered, and with travel halted by the pandemic, the international jury cupped the finalists in their own labs around the world.",
+    "source": "https://baristamagazine.com/how-cup-of-excellence-held-its-first-ethiopia-competition-in-the-time-of-covid-19",
+    "match": {
+      "origins": [
+        "ethiopia"
+      ]
+    }
+  },
+  {
+    "id": "origin-ethiopia-region-trademarks",
+    "topic": "origin",
+    "about": "Ethiopia's Yirgacheffe, Sidamo and Harar trademarks",
+    "text": "In a scheme begun in 2004, Ethiopia registered Yirgacheffe, Sidamo and Harar as trademarks abroad, then licensed the names free of royalties to roasters and importers. By mid-2009 almost a hundred licence agreements had been signed.",
+    "source": "https://www.wipo.int/en/web/ip-advantage/w/stories/the-coffee-war-ethiopia-and-the-starbucks-story",
+    "match": {
+      "origins": [
+        "yirgacheffe",
+        "yirgachefe",
+        "sidamo",
+        "sidama",
+        "harar",
+        "harrar"
+      ]
+    }
+  },
+  {
+    "id": "origin-fraijanes-pacaya-ash",
+    "topic": "origin",
+    "about": "Pacaya's ash on the Fraijanes plateau",
+    "text": "Now and then Pacaya, one of Guatemala's active volcanoes, dusts the Fraijanes plateau with a fine layer of ash, topping up the pumice soil the coffee grows in with fresh minerals.",
+    "source": "https://www.guatemalancoffees.com/main/regions-and-profiles/fraijanes-plateau/",
+    "match": {
+      "origins": [
+        "fraijanes"
+      ]
+    }
+  },
+  {
+    "id": "origin-galapagos-el-progreso",
+    "topic": "origin",
+    "about": "Hacienda El Progreso on San Cristóbal",
+    "text": "On San Cristóbal in the Galápagos, Manuel J. Cobos turned Hacienda El Progreso into an industrial sugar plantation after 1879, and planted some 1,200 acres (about 490 hectares) with coffee, maize, fruit trees and other crops.",
+    "source": "https://archaeology.org/issues/online/collection/galapagos-islands-history",
+    "match": {
+      "origins": [
+        "galápagos",
+        "galapagos"
+      ]
+    }
+  },
+  {
+    "id": "origin-gayo-lake-tawar-shade",
+    "topic": "origin",
+    "about": "Gayo coffee around Lake Tawar",
+    "text": "Aceh's Gayo coffee grows on the hills around Lake Tawar, a crater lake beside the town of Takengon. It is usually grown under managed shade, by smallholders who are often members of cooperatives.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-india-and-the-pacific/sumatra/",
+    "match": {
+      "origins": [
+        "gayo",
+        "aceh",
+        "takengon"
+      ]
+    }
+  },
+  {
+    "id": "origin-gayo-veenhuyzen-1908",
+    "topic": "origin",
+    "about": "Gayo coffee's Dutch beginnings, 1908",
+    "text": "Coffee in Aceh's Gayo highlands goes back to 1908, when a Dutchman named Veenhuyzen first developed it there. For a decade it stayed a small, non-commercial crop, until the Wilhelmina Blang Gele plantation opened in 1918.",
+    "source": "https://journal.unnes.ac.id/nju/paramita/article/view/21637",
+    "match": {
+      "origins": [
+        "gayo",
+        "aceh",
+        "takengon"
+      ]
+    }
+  },
+  {
+    "id": "origin-gedeo-world-heritage",
+    "topic": "origin",
+    "about": "Gedeo Cultural Landscape, World Heritage site",
+    "text": "In 2023 UNESCO made the Gedeo Cultural Landscape in Ethiopia a World Heritage site. On its slopes, tall trees shade enset, the local staple crop, and coffee grows in the layer beneath.",
+    "source": "https://whc.unesco.org/en/decisions/8387",
+    "match": {
+      "origins": [
+        "gedeo"
+      ]
+    }
+  },
+  {
+    "id": "origin-guatemala-coffee-heritage-2018",
+    "topic": "origin",
+    "about": "Guatemala's 2018 coffee heritage decree",
+    "text": "In 2018 a ministerial decree named the traditional knowledge of growing coffee a symbol of Guatemalan identity, part of the nation's intangible heritage.",
+    "source": "https://www.anacafe.org/conozcanos/cafes-de-guatemala/",
+    "match": {
+      "origins": [
+        "guatemala"
+      ]
+    }
+  },
+  {
+    "id": "origin-guatemala-shb-grade",
+    "topic": "origin",
+    "about": "Guatemala's SHB altitude grade",
+    "text": "On a Guatemalan sack, SHB stands for strictly hard bean: an altitude grade, not a cupping score, for coffee grown from about 1,370 m. Up there the cherries ripen slowly, so the beans grow harder and denser.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-basics/coffee-language/grade-names/",
+    "match": {
+      "origins": [
+        "guatemala"
+      ]
+    }
+  },
+  {
+    "id": "origin-guianas-coffee-route",
+    "topic": "origin",
+    "about": "How coffee reached the Guianas and Brazil",
+    "text": "Coffee came to the Guianas from the Indian Ocean, carried by Dutch and French trading companies, and from the Guianas it went on to Brazil.",
+    "source": "https://journals.univie.ac.at/index.php/oezg/article/download/3781/5636/11996",
+    "match": {
+      "origins": [
+        "suriname",
+        "guyana",
+        "french guiana",
+        "guiana",
+        "guianas"
+      ]
+    }
+  },
+  {
+    "id": "origin-honduras-lempira-rust",
+    "topic": "origin",
+    "about": "Honduras's Lempira hybrid and new rust strains",
+    "text": "Many Honduran farms were replanted with rust-resistant hybrids carrying Robusta genes, such as Lempira and IHCAFE 90. In 2017 Lempira fell to a new strain of leaf rust, one of as many as four new strains found in Honduran fields.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/honduras/",
+    "match": {
+      "origins": [
+        "honduras"
+      ]
+    }
+  },
+  {
+    "id": "origin-honduras-six-regions",
+    "topic": "origin",
+    "about": "Honduras's six coffee regions",
+    "text": "Honduras's coffee authorities have marked out six coffee regions. Three of them, Copán, Opalaca and Montecillos, line the mountain range along the borders with Guatemala and El Salvador, and tend to grow the country's highest coffees.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/honduras/",
+    "match": {
+      "origins": [
+        "honduras"
+      ]
+    }
+  },
+  {
+    "id": "origin-huehuetenango-tehuantepec-winds",
+    "topic": "origin",
+    "about": "Huehuetenango's frost-guarding Tehuantepec winds",
+    "text": "Huehuetenango is the highest and driest of Guatemala's three coffee regions without a volcano. Hot, dry winds from Mexico's Tehuantepec plain keep frost off its mountains, so coffee grows up to about 2,000 m.",
+    "source": "https://www.guatemalancoffees.com/main/regions-and-profiles/highland-huehue/",
+    "match": {
+      "origins": [
+        "huehuetenango",
+        "huehue"
+      ]
+    }
+  },
+  {
+    "id": "origin-huila-cloudy-hills",
+    "topic": "origin",
+    "about": "Huila's altitude and cloud cover",
+    "text": "Huila's coffee grows between about 1,000 and 2,200 m under frequent cloud: its denomination of origin, granted in 2013, cites only about 3.5 hours of sunshine a day.",
+    "source": "https://cafedecolombia.com/en/regional-designation-of-origin/",
+    "match": {
+      "origins": [
+        "huila"
+      ]
+    }
+  },
+  {
+    "id": "origin-india-baba-budan-seven-beans",
+    "topic": "origin",
+    "about": "Baba Budan's seven beans",
+    "text": "Legend has it that Indian coffee began with seven beans: the saint Baba Budan is said to have brought them from Yemen and planted them in the Karnataka hills now named after him, the Baba Budangiris.",
+    "source": "https://coffeeboard.gov.in/coffee-regions-india.html",
+    "match": {
+      "origins": [
+        "india",
+        "bababudangiri",
+        "bababudangiris",
+        "baba budangiri",
+        "chikmagalur",
+        "chikkamagaluru"
+      ]
+    }
+  },
+  {
+    "id": "origin-india-kaapi-royale-grade",
+    "topic": "origin",
+    "about": "India's Kaapi Royale robusta",
+    "text": "'Kaapi Royale' names one of India's speciality robustas, not an estate: bold Robusta Parchment AB beans drawn from Coorg, Wayanad, Chikmagalur and Travancore.",
+    "source": "https://coffeeboard.gov.in/coffee-regions-india.html",
+    "match": {
+      "origins": [
+        "kaapi royale"
+      ]
+    }
+  },
+  {
+    "id": "origin-india-kents-english-planter",
+    "topic": "origin",
+    "about": "India's Kents arabica and leaf rust",
+    "text": "India's Kents coffee takes its name from the English planter who selected it early in the 20th century. Because it held up better against leaf rust, it stayed a favourite with Indian growers until the 1940s.",
+    "source": "https://coffeeboard.gov.in/coffee-regions-india.html",
+    "match": {
+      "origins": [
+        "india"
+      ]
+    }
+  },
+  {
+    "id": "origin-india-mysore-nuggets-grade",
+    "topic": "origin",
+    "about": "India's Mysore Nuggets Extra Bold",
+    "text": "'Mysore Nuggets Extra Bold' names neither a farm nor a single region: it is one of India's speciality coffees, made from very large, bluish-green washed arabica beans grown in several regions, among them Chikmagalur, Coorg and the Baba Budangiris.",
+    "source": "https://coffeeboard.gov.in/coffee-regions-india.html",
+    "match": {
+      "origins": [
+        "mysore nuggets"
+      ]
+    }
+  },
+  {
+    "id": "origin-india-two-tier-shade",
+    "topic": "origin",
+    "about": "India's two-tier shade canopy",
+    "text": "Indian coffee grows beneath two layers of shade trees, including evergreen legumes, and nearly 50 kinds of shade tree have been found on its plantations. The trees also pull nutrients up from deep in the soil.",
+    "source": "https://coffeeboard.gov.in/coffee-regions-india.html",
+    "match": {
+      "origins": [
+        "india"
+      ]
+    }
+  },
+  {
+    "id": "origin-jamaica-1800s-world-leader",
+    "topic": "origin",
+    "about": "Jamaica Blue Mountain's early fame and its board",
+    "text": "Jamaica Blue Mountain was already prized in the early 1800s, when the island was for a short while the world's leading coffee producer. After the Second World War a newly formed Coffee Industry Board took control of quality to guard the name.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/jamaica/",
+    "match": {
+      "origins": [
+        "jamaica"
+      ]
+    }
+  },
+  {
+    "id": "origin-jamaica-blue-mountain-altitude",
+    "topic": "origin",
+    "about": "Jamaica Blue Mountain's altitude rule and fog",
+    "text": "To carry the Jamaica Blue Mountain name, coffee must grow between about 910 and 1,700 m; coffee from just below is sold as Jamaica High Mountain. Near-constant fog on the high slopes slows the coffee's growth, so its beans are denser than such heights usually give.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/jamaica/",
+    "match": {
+      "origins": [
+        "jamaica"
+      ]
+    }
+  },
+  {
+    "id": "origin-java-ijen-raung-estates",
+    "topic": "origin",
+    "about": "East Java's Ijen-Raung estates",
+    "text": "Java's big traditional arabica estates, among them Kayumas, Pancur, Jampit and Blawan, lie in the Ijen-Raung highlands at the island's eastern end. The four largest are run by the government.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-india-and-the-pacific/java/",
+    "match": {
+      "origins": [
+        "java",
+        "east java",
+        "ijen",
+        "kayumas",
+        "jampit",
+        "djampit",
+        "blawan",
+        "pancur",
+        "pancoer"
+      ]
+    }
+  },
+  {
+    "id": "origin-kafa-wild-arabica-reserve",
+    "topic": "origin",
+    "about": "Kafa, birthplace of wild Arabica",
+    "text": "UNESCO calls Kafa, in south-west Ethiopia, the birthplace of wild Arabica. A biosphere reserve since 2010, it is said to shelter nearly 5,000 wild varieties of the coffee plant.",
+    "source": "https://www.unesco.org/en/mab/kafa",
+    "match": {
+      "origins": [
+        "kaffa",
+        "kafa"
+      ]
+    }
+  },
+  {
+    "id": "origin-kona-coffee-vacation",
+    "topic": "origin",
+    "about": "Kona's coffee-picking school holiday",
+    "text": "From 1932 until 1969, Kona's public schools took their long break from August to November instead of June to September, so that children could help pick the coffee harvest.",
+    "source": "https://www.honolulumagazine.com/a-timeline-of-coffee-in-hawaii/",
+    "match": {
+      "origins": [
+        "kona"
+      ]
+    }
+  },
+  {
+    "id": "origin-kona-lava-soils",
+    "topic": "origin",
+    "about": "North and South Kona's soils",
+    "text": "Kona has two halves: North Kona, on the slopes above Kailua-Kona, has mostly deep soil, while in South Kona the soil is younger and sometimes so thin that coffee trees grow straight out of holes and cracks in part-weathered lava.",
+    "source": "https://www.coffeereview.com/coffee-origins/hawaii/",
+    "match": {
+      "origins": [
+        "kona"
+      ]
+    }
+  },
+  {
+    "id": "origin-kona-nightingales",
+    "topic": "origin",
+    "about": "Kona Nightingales, the coffee donkeys",
+    "text": "Kona's coffee was once carried down its steep slopes by donkeys nicknamed 'Kona Nightingales'. In the late 1940s surplus military Jeeps took over the job.",
+    "source": "https://www.honolulumagazine.com/a-timeline-of-coffee-in-hawaii/",
+    "match": {
+      "origins": [
+        "kona"
+      ]
+    }
+  },
+  {
+    "id": "origin-kona-ruggles-1828",
+    "topic": "origin",
+    "about": "Samuel Ruggles brings coffee to Kona, 1828",
+    "text": "Kona's coffee goes back to 1828, when the Rev. Samuel Ruggles planted cuttings there from trees that Chief Boki, governor of Oʻahu, had brought back from Brazil three years earlier.",
+    "source": "https://www.honolulumagazine.com/a-timeline-of-coffee-in-hawaii/",
+    "match": {
+      "origins": [
+        "kona"
+      ]
+    }
+  },
+  {
+    "id": "origin-laos-bolaven-french-robusta",
+    "topic": "origin",
+    "about": "Laos, the Bolaven Plateau and robusta",
+    "text": "Coffee reached Laos with French colonists in the early 1900s, and the Bolaven Plateau soon became its main growing area. Arabica came first, until leaf rust and hard weather pushed farmers to robusta; growers have since worked to revive arabica.",
+    "source": "https://www.baristamagazine.com/a-look-at-specialty-coffee-culture-in-laos/",
+    "match": {
+      "origins": [
+        "laos",
+        "bolaven",
+        "paksong"
+      ]
+    }
+  },
+  {
+    "id": "origin-lintong-lintongnihuta-plateau",
+    "topic": "origin",
+    "about": "Lintong's plateau south-west of Lake Toba",
+    "text": "Lintong coffee comes from one compact district, Lintongnihuta, just south-west of Lake Toba: a high, rolling plateau of clay soils under ferns, where smallholders grow it mostly without shade and largely without chemicals.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-india-and-the-pacific/sumatra/",
+    "match": {
+      "origins": [
+        "lintong",
+        "lintongnihuta",
+        "toba",
+        "lake toba"
+      ]
+    }
+  },
+  {
+    "id": "origin-machu-picchu-huadquina",
+    "topic": "origin",
+    "about": "Machu Picchu–Huadquiña's slow-ripening microclimate",
+    "text": "Café Machu Picchu–Huadquiña, a Peruvian denomination of origin, comes from a former hacienda in Santa Teresa, Cusco, near the snowy peaks of Salkantay, Sacsarayoc and Humantay, whose microclimate makes the cherries ripen slowly.",
+    "source": "https://andina.pe/agencia/noticia-dia-del-cafe-peruano-conoce-las-dos-denominaciones-origen-cafes-pasco-y-cusco-907348.aspx",
+    "match": {
+      "origins": [
+        "machu picchu",
+        "huadquiña",
+        "huadquina",
+        "cusco",
+        "cuzco"
+      ]
+    }
+  },
+  {
+    "id": "origin-manabi-coffee-by-the-sea",
+    "topic": "origin",
+    "about": "Manabí's coffee grown by the sea",
+    "text": "In Las Piñas, near Manta on Ecuador's Pacific coast, coffee is grown just 40 to 250 m above sea level, close to the ocean, while elsewhere in Ecuador the average is about 1,200 m.",
+    "source": "https://www.eltelegrafo.com.ec/noticias/economia/4/manabi-cafe-oceano-manta",
+    "match": {
+      "origins": [
+        "manabí",
+        "manabi"
+      ]
+    }
+  },
+  {
+    "id": "origin-mantiqueira-de-minas-small-farms",
+    "topic": "origin",
+    "about": "Mantiqueira de Minas and its small farms",
+    "text": "When Mantiqueira de Minas, a group of 25 municipalities in southern Minas Gerais, won its denomination of origin in 2020, about four in five of its 8,200 growers farmed small coffee properties.",
+    "source": "https://agenciasebrae.com.br/?p=4738",
+    "match": {
+      "origins": [
+        "mantiqueira de minas",
+        "mantiqueira"
+      ]
+    }
+  },
+  {
+    "id": "origin-marcala-first-appellation",
+    "topic": "origin",
+    "about": "Marcala, Central America's first appellation",
+    "text": "Marcala, in the highlands of western Honduras near the border with El Salvador, became Central America's first registered appellation of origin in 2005. It takes in some of the country's highest coffee-growing towns.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/honduras/",
+    "match": {
+      "origins": [
+        "marcala"
+      ]
+    }
+  },
+  {
+    "id": "origin-mexico-indigenous-smallholders",
+    "topic": "origin",
+    "about": "Mexico's indigenous smallholder coffee farmers",
+    "text": "Almost all of Mexico's coffee is grown on small farms, and an estimated 85% of its coffee farmers are indigenous. In the south, many communities keep old traditions of communal self-government that lend themselves to co-operatives.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/mexico/",
+    "match": {
+      "origins": [
+        "mexico",
+        "méxico"
+      ]
+    }
+  },
+  {
+    "id": "origin-myanmar-shan-specialty-2016",
+    "topic": "origin",
+    "about": "Myanmar's Shan State coffee goes specialty",
+    "text": "Coffee from Myanmar's Shan State long crossed informally into China and Thailand, sold far below market rates. A five-year programme from 2014 linked its smallholders to world buyers, and in 2016 Myanmar's first commercially available specialty coffee was served in Washington.",
+    "source": "https://sprudge.com/myanmar-coffee-108387.html",
+    "match": {
+      "origins": [
+        "myanmar",
+        "burma",
+        "shan",
+        "shan state",
+        "ywangan",
+        "pyin oo lwin"
+      ]
+    }
+  },
+  {
+    "id": "origin-narino-first-regional-do",
+    "topic": "origin",
+    "about": "Nariño, Colombia's first regional origin",
+    "text": "In 2011 Colombia's industry regulator made Café de Nariño the country's first regional coffee denomination of origin, the result of a study of the region's coffee begun in 2006.",
+    "source": "https://www.semana.com/cafe-narino-denominacion-origen-regional/113808/",
+    "match": {
+      "origins": [
+        "nariño",
+        "narino"
+      ]
+    }
+  },
+  {
+    "id": "origin-nepal-hira-giri-1938",
+    "topic": "origin",
+    "about": "Hira Giri and Nepal's first coffee",
+    "text": "The story goes that coffee reached Nepal in 1938, when a hermit named Hira Giri travelled to Aapchaur in Gulmi district with seeds from Burma. Farmers passed the plant along for more than four decades before commercial growing took off in the mid-1980s.",
+    "source": "https://kathmandupost.com/money/2019/07/22/nepalis-wake-up-and-smell-nepali-coffee",
+    "match": {
+      "origins": [
+        "nepal",
+        "gulmi"
+      ]
+    }
+  },
+  {
+    "id": "origin-nicaragua-drying-roads",
+    "topic": "origin",
+    "about": "Nicaragua's half-dried coffee and better roads",
+    "text": "Small Nicaraguan farms often sent half-dried coffee down from cloudy highlands to big mills in the sunnier lowlands to finish drying, and hold-ups on the way could ruin a lot. Better roads have since eased the trip.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/nicaragua/",
+    "match": {
+      "origins": [
+        "nicaragua"
+      ]
+    }
+  },
+  {
+    "id": "origin-nicaragua-maracaturra",
+    "topic": "origin",
+    "about": "Maracaturra, a Maragogipe and Caturra cross",
+    "text": "Maracaturra, also called Maracatu, crosses the giant-beaned Maragogipe with the compact Caturra. Where it began is debated; one account credits the Nicaraguan farmer Byron Corrales and his father.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/nicaragua/",
+    "match": {
+      "origins": [
+        "nicaragua"
+      ],
+      "varieties": [
+        "maracaturra",
+        "maracatu"
+      ]
+    }
+  },
+  {
+    "id": "origin-nicaragua-matagalpa-jinotega",
+    "topic": "origin",
+    "about": "Where Nicaragua grows its coffee",
+    "text": "Nicaragua grows almost all its coffee in the highlands of its north and centre, up towards the Honduran border: in Matagalpa and, further north, Jinotega and Nueva Segovia.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/nicaragua/",
+    "match": {
+      "origins": [
+        "nicaragua",
+        "matagalpa",
+        "jinotega",
+        "nueva segovia"
+      ]
+    }
+  },
+  {
+    "id": "origin-norte-santander-penance-legend",
+    "topic": "origin",
+    "about": "Norte de Santander's coffee-planting penance",
+    "text": "The story goes that around 1834 Francisco Romero, a priest in Salazar de las Palmas in Norte de Santander, set his parishioners an unusual penance: planting coffee trees.",
+    "source": "https://publicaciones.cenicafe.org/index.php/atl/article/view/3001",
+    "match": {
+      "origins": [
+        "norte de santander"
+      ]
+    }
+  },
+  {
+    "id": "origin-oaxaca-pluma-hidalgo",
+    "topic": "origin",
+    "about": "Pluma Hidalgo's coffee history and appellation",
+    "text": "Pluma Hidalgo in Oaxaca was founded in 1880 among districts that already grew coffee, and by 1891 the Juquila district's farms had about 365,000 coffee plants. In 2020 Mexico made 'Pluma' a designation of origin for the region's coffee.",
+    "source": "https://sidof.segob.gob.mx/notas/docFuente/5585437",
+    "match": {
+      "origins": [
+        "oaxaca",
+        "pluma",
+        "pluma hidalgo"
+      ]
+    }
+  },
+  {
+    "id": "origin-oromia-black-gold-film",
+    "topic": "origin",
+    "about": "Black Gold film and the Oromia co-op union",
+    "text": "The 2006 documentary Black Gold follows Tadesse Meskela, manager of the Oromia Coffee Farmers Co-operative Union, which then spoke for over 74,000 farmers, on his mission to keep them from going bankrupt.",
+    "source": "https://www.pbs.org/independentlens/documentaries/black-gold/",
+    "match": {
+      "origins": [
+        "oromia",
+        "oromiya"
+      ]
+    }
+  },
+  {
+    "id": "origin-panama-best-of-panama-judging",
+    "topic": "origin",
+    "about": "How Best of Panama is judged",
+    "text": "Best of Panama lots are cupped blind twice: first by Panamanian cuppers, then, under new code numbers, by an international jury of green-coffee buyers, while an outside auditing firm oversees the process.",
+    "source": "https://bestofpanama.org/competition",
+    "match": {
+      "origins": [
+        "panama",
+        "panamá"
+      ]
+    }
+  },
+  {
+    "id": "origin-panama-esmeralda-gesha-2004",
+    "topic": "origin",
+    "about": "Hacienda La Esmeralda's 2004 Gesha lot",
+    "text": "Hacienda La Esmeralda in Boquete first planted Gesha for its resistance to disease. In 2004 the Petersons separated their harvest by plot for the first time, and a pure Gesha lot from their high Jaramillo farm won the Best of Panama.",
+    "source": "https://haciendaesmeralda.com/our-story/",
+    "match": {
+      "origins": [
+        "panama",
+        "panamá"
+      ],
+      "varieties": [
+        "gesha",
+        "geisha"
+      ]
+    }
+  },
+  {
+    "id": "origin-philippines-1828-coffee-prize",
+    "topic": "origin",
+    "about": "The Philippines' 1828 coffee-planting prize",
+    "text": "In 1828 the Philippines' Royal Economic Society offered a prize to whoever could plant and ripen 60,000 square feet of coffee, about 6,000 trees. Paul de La Gironière won its 1,000 pesos with his estate at Jala-Jala.",
+    "source": "https://philcoffeeboard.com/philippine-coffee/",
+    "match": {
+      "origins": [
+        "philippines"
+      ]
+    }
+  },
+  {
+    "id": "origin-philippines-barako-amadeo",
+    "topic": "origin",
+    "about": "Barako, the Philippines' Liberica",
+    "text": "In the Philippines, Liberica is known as barako. The first seedlings were planted in Amadeo, Cavite, in 1876, and its big cherries and beans come mainly from Batangas and Cavite.",
+    "source": "https://philcoffeeboard.com/philippine-coffee/",
+    "match": {
+      "origins": [
+        "philippines",
+        "batangas",
+        "cavite"
+      ]
+    }
+  },
+  {
+    "id": "origin-png-four-highland-provinces",
+    "topic": "origin",
+    "about": "PNG's four coffee-growing highland provinces",
+    "text": "Most of Papua New Guinea's coffee is grown in a cluster of four highland provinces at the heart of the country: Western Highlands around Mount Hagen, Eastern Highlands around Goroka and Kainantu, and Jiwaka and Chimbu between them.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-india-and-the-pacific/papua-new-guinea/",
+    "match": {
+      "origins": [
+        "papua new guinea",
+        "png",
+        "western highlands",
+        "eastern highlands",
+        "jiwaka",
+        "chimbu",
+        "simbu",
+        "waghi",
+        "wahgi",
+        "goroka",
+        "mount hagen",
+        "kainantu"
+      ]
+    }
+  },
+  {
+    "id": "origin-png-grade-y",
+    "topic": "origin",
+    "about": "PNG's coffee grades, from A and B to Y",
+    "text": "Papua New Guinea's grades long showed who grew the coffee: estate lots from mills near the highlands' only highway carried grades such as A and B, while bulked village coffee went all the way down to grade Y.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-india-and-the-pacific/papua-new-guinea/",
+    "match": {
+      "origins": [
+        "papua new guinea",
+        "png"
+      ]
+    }
+  },
+  {
+    "id": "origin-png-plantation-partnerships",
+    "topic": "origin",
+    "about": "PNG's plantation partnerships, 1950s-70s",
+    "text": "From the 1950s to the 1970s, Papua New Guinea's coffee grew through partnerships: European plantation owners taught highland farmers to grow and pick ripe cherries, and set up mills and buyer networks for them. That support faded around independence in 1975.",
+    "source": "https://www.curtin.edu.au/news/reviving-the-coffee-industry-in-papua-new-guinea/",
+    "match": {
+      "origins": [
+        "papua new guinea",
+        "png"
+      ]
+    }
+  },
+  {
+    "id": "origin-png-smallholder-gardens",
+    "topic": "origin",
+    "about": "Papua New Guinea's smallholder gardens",
+    "text": "More than 85 percent of Papua New Guinea's coffee comes from village smallholders, who grow it in gardens of up to two hectares. Coffee is a key source of income for more than 2.5 million people there.",
+    "source": "https://www.curtin.edu.au/news/reviving-the-coffee-industry-in-papua-new-guinea/",
+    "match": {
+      "origins": [
+        "papua new guinea",
+        "png"
+      ]
+    }
+  },
+  {
+    "id": "origin-puerto-rico-1896",
+    "topic": "origin",
+    "about": "Puerto Rico, sixth-largest producer in 1896",
+    "text": "Puerto Rico was a coffee heavyweight in the 1800s: in 1896 the island ranked sixth among all the world's coffee producers.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/puerto-rico/",
+    "match": {
+      "origins": [
+        "puerto rico"
+      ]
+    }
+  },
+  {
+    "id": "origin-quindio-born-1966",
+    "topic": "origin",
+    "about": "Quindío's committee and the Parque del Café",
+    "text": "Quindío's coffee growers' committee was founded in 1966, the same year as the department itself. The opening of the Parque del Café in 1995 was a turning point for the region's tourism.",
+    "source": "https://publicaciones.cenicafe.org/index.php/atl/article/view/3002",
+    "match": {
+      "origins": [
+        "quindío",
+        "quindio"
+      ]
+    }
+  },
+  {
+    "id": "origin-santander-shade-grown",
+    "topic": "origin",
+    "about": "Santander's shade-grown coffee",
+    "text": "Santander's coffee zone is known above all for growing coffee under shade, which keeps temperatures even so the cherries ripen slowly. That shade system is part of Café de Santander's denomination of origin, granted in 2014.",
+    "source": "https://cafedecolombia.com/en/regional-designation-of-origin/",
+    "match": {
+      "origins": [
+        "santander"
+      ]
+    }
+  },
+  {
+    "id": "origin-sierra-nevada-indigenous-growers",
+    "topic": "origin",
+    "about": "Indigenous coffee in the Sierra Nevada",
+    "text": "In the Sierra Nevada de Santa Marta, indigenous communities took up coffee in the late 20th century. It has since become the area's main crop, grown in the shade of native and fruit trees, much of it organically.",
+    "source": "https://publicaciones.cenicafe.org/index.php/atl/article/view/2998",
+    "match": {
+      "origins": [
+        "sierra nevada",
+        "santa marta"
+      ]
+    }
+  },
+  {
+    "id": "origin-sumatra-mandheling-market-name",
+    "topic": "origin",
+    "about": "Mandheling as a broad Sumatran trade name",
+    "text": "On a bag, 'Mandheling' is more a trade name than a place: it is often used for any wet-hulled coffee from Sumatra, even coffee grown in Aceh.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-india-and-the-pacific/sumatra/",
+    "match": {
+      "origins": [
+        "mandheling",
+        "mandailing"
+      ]
+    }
+  },
+  {
+    "id": "origin-taiwan-alishan-tea-pickers",
+    "topic": "origin",
+    "about": "Alishan's tea pickers turned coffee pickers",
+    "text": "Alishan, in Taiwan's Chiayi County, made its name with tea as well as coffee, and many of its coffee pickers used to pick tea; one local expert says they found coffee the easier job. Its farms lie at about 1,000 to 1,400 m.",
+    "source": "https://sprudge.com/for-coffee-growers-in-taiwan-the-future-is-now-210859.html",
+    "match": {
+      "origins": [
+        "taiwan",
+        "alishan"
+      ]
+    }
+  },
+  {
+    "id": "origin-taiwan-sl34-genetic-test",
+    "topic": "origin",
+    "about": "Taiwan's 'Typica' that turned out to be SL34",
+    "text": "The Japanese first planted Typica in Taiwan, and most of the island's coffee trees were assumed to be Typica. Genetic tests, one local expert says, showed that many are in fact SL34, a variety that looks very similar.",
+    "source": "https://sprudge.com/for-coffee-growers-in-taiwan-the-future-is-now-210859.html",
+    "match": {
+      "origins": [
+        "taiwan"
+      ]
+    }
+  },
+  {
+    "id": "origin-tarrazu-coopetarrazu-1960",
+    "topic": "origin",
+    "about": "CoopeTarrazú's founding in 1960",
+    "text": "Tarrazú's big co-op, CoopeTarrazú, was founded on 13 October 1960 by 228 small growers. Its first mill was an old one with outdated machinery, where it took in its first 6,000 fanegas of coffee; in the 2018–19 harvest it received 272,000.",
+    "source": "https://www.larepublica.net/noticia/coopetarrazu-y-la-cosecha-sesenta-de-su-historia",
+    "match": {
+      "origins": [
+        "tarrazu",
+        "tarrazú",
+        "los santos"
+      ]
+    }
+  },
+  {
+    "id": "origin-thailand-doi-chaang-akha",
+    "topic": "origin",
+    "about": "Doi Chaang's Akha growers and their own brand",
+    "text": "In Doi Chaang village in Chiang Rai, mostly Akha growers, helped by a Canadian businessman, did something unusual for smallholders: they sold nearly all their coffee roasted, under the Doi Chaang name, in Thailand, elsewhere in Asia and in Canada.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-india-and-the-pacific/thailand/",
+    "match": {
+      "origins": [
+        "doi chaang",
+        "chiang rai"
+      ]
+    }
+  },
+  {
+    "id": "origin-thailand-royal-project",
+    "topic": "origin",
+    "about": "Thailand's Royal Project and arabica",
+    "text": "Thailand's Royal Project, set up by King Bhumibol after a 1969 visit to Chiang Mai province, has worked with other agencies to bring more than 150 new crops to highland farmers who grew opium poppies. Arabica coffee is one of them.",
+    "source": "https://hongkong.thaiembassy.org/en/content/art-poppy",
+    "match": {
+      "origins": [
+        "thailand"
+      ]
+    }
+  },
+  {
+    "id": "origin-timor-leste-organic-groves",
+    "topic": "origin",
+    "about": "Timor-Leste's de facto organic coffee",
+    "text": "Most of Timor-Leste's coffee trees are arabica-robusta crosses, tended by smallholders. Decades of neglect left many groves free of farm chemicals, so its coffee has often been certified organic.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-india-and-the-pacific/timor/",
+    "match": {
+      "origins": [
+        "timor-leste",
+        "timor leste",
+        "east timor"
+      ]
+    }
+  },
+  {
+    "id": "origin-tolima-two-flowerings",
+    "topic": "origin",
+    "about": "Tolima's two flowerings a year",
+    "text": "Tolima's warm climate lets its coffee trees flower twice a year, one of the traits behind Café del Tolima's denomination of origin, protected since 2017.",
+    "source": "https://cafedecolombia.com/en/regional-designation-of-origin/",
+    "match": {
+      "origins": [
+        "tolima"
+      ]
+    }
+  },
+  {
+    "id": "origin-toraja-key-coffee-revival",
+    "topic": "origin",
+    "about": "Key Coffee's 1970s Toraja revival",
+    "text": "Toraja's coffee farms were abandoned in the Second World War. When an executive of Japan's Kimura Coffee, now Key Coffee, reached the highlands in 1973, he found farmers still growing a little, and in 1978 it returned to market as Toarco Toraja.",
+    "source": "https://www.keycoffee.co.jp/toarcotoraja/english/history.html",
+    "match": {
+      "origins": [
+        "toraja",
+        "tana toraja",
+        "toarco"
+      ]
+    }
+  },
+  {
+    "id": "origin-toraja-name-kalossi",
+    "topic": "origin",
+    "about": "Where the Toraja and Kalossi names come from",
+    "text": "Toraja coffee is named after the Toraja people of Sulawesi's highlands, and Tana Toraja means 'Torajaland'. In Dutch colonial days the same coffee went by Kalossi, the name of a regional market town.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-india-and-the-pacific/sulawesi-celebes/",
+    "match": {
+      "origins": [
+        "toraja",
+        "tana toraja",
+        "kalosi",
+        "kalossi"
+      ]
+    }
+  },
+  {
+    "id": "origin-venezuela-coffee-overtakes-cacao",
+    "topic": "origin",
+    "about": "Venezuela's coffee overtakes cacao, 1809",
+    "text": "In 1809 Venezuela exported more than 7 million pounds of coffee, enough to draw level with cacao, which then fell further and further behind.",
+    "source": "https://bibliofep.fundacionempresaspolar.org/dhv/entradas/c/cafe/",
+    "match": {
+      "origins": [
+        "venezuela"
+      ]
+    }
+  },
+  {
+    "id": "origin-venezuela-orinoco-missions",
+    "topic": "origin",
+    "about": "Coffee's arrival in Venezuela's Orinoco, 1730",
+    "text": "Coffee reached Venezuela in 1730 with the religious missions of the Orinoco region. In 1741 José Gumilla wrote that he had planted it himself and found the land well suited to plentiful harvests.",
+    "source": "https://bibliofep.fundacionempresaspolar.org/dhv/entradas/c/cafe/",
+    "match": {
+      "origins": [
+        "venezuela"
+      ]
+    }
+  },
+  {
+    "id": "origin-veracruz-appellation-2000",
+    "topic": "origin",
+    "about": "Café Veracruz appellation of origin, 2000",
+    "text": "In 2000 Mexico protected 'Café Veracruz' as a designation of origin covering the whole state. The declaration credits deep volcanic soils, a humid, cloudy climate and a long local habit of fermenting coffee straight after pulping.",
+    "source": "https://www.wipo.int/wipolex/en/legislation/details/9312",
+    "match": {
+      "origins": [
+        "veracruz"
+      ]
+    }
+  },
+  {
+    "id": "origin-vietnam-1986-robusta",
+    "topic": "origin",
+    "about": "Vietnam's 1986 bet on coffee",
+    "text": "In 1986 Vietnam's government chose coffee as one of a few crops to invest in, and production grew steadily through the late 1980s and 1990s. About 95 percent of Vietnam's coffee is robusta.",
+    "source": "https://baristamagazine.com/an-unfiltered-history-of-vietnamese-coffee",
+    "match": {
+      "origins": [
+        "vietnam",
+        "viet nam"
+      ]
+    }
+  },
+  {
+    "id": "origin-vietnam-condensed-milk",
+    "topic": "origin",
+    "about": "Why Vietnamese coffee uses condensed milk",
+    "text": "Vietnam's condensed-milk coffee dates from coffee's arrival in the 19th century, when fresh milk was hard to find and condensed milk kept without refrigeration.",
+    "source": "https://baristamagazine.com/an-unfiltered-history-of-vietnamese-coffee",
+    "match": {
+      "origins": [
+        "vietnam",
+        "viet nam"
+      ]
+    }
+  },
+  {
+    "id": "origin-vietnam-phin-chicory",
+    "topic": "origin",
+    "about": "Vietnam's phin filter and dark roast",
+    "text": "Traditional Vietnamese coffee is usually roasted dark and made in a phin filter, and some of it is mixed with chicory or corn.",
+    "source": "https://baristamagazine.com/an-unfiltered-history-of-vietnamese-coffee",
+    "match": {
+      "origins": [
+        "vietnam",
+        "viet nam"
+      ]
+    }
+  },
+  {
+    "id": "origin-villa-rica-denomination",
+    "topic": "origin",
+    "about": "Café Villa Rica's denomination of origin",
+    "text": "In 2010 Peru's intellectual property office, Indecopi, made Café Villa Rica a denomination of origin. It covers coffee from the Villa Rica district of Oxapampa province, in Pasco, central Peru.",
+    "source": "https://andina.pe/agencia/noticia-dia-del-cafe-peruano-conoce-las-dos-denominaciones-origen-cafes-pasco-y-cusco-907348.aspx",
+    "match": {
+      "origins": [
+        "villa rica",
+        "oxapampa",
+        "pasco"
+      ]
+    }
+  },
+  {
+    "id": "origin-west-valley-villa-sarchi",
+    "topic": "origin",
+    "about": "Villa Sarchí, a Bourbon mutant from the West Valley",
+    "text": "Villa Sarchí, a compact mutant of Bourbon that arose naturally, was first singled out in Costa Rica's West Valley. It is sometimes sold on its own, unmixed with other varieties.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/geographic-origins/coffees-from-the-americas/costa-rica/",
+    "match": {
+      "origins": [
+        "west valley",
+        "valle occidental"
+      ]
+    }
+  },
+  {
+    "id": "origin-yayu-coffee-forest",
+    "topic": "origin",
+    "about": "Yayu's wild coffee forest reserve",
+    "text": "Yayu, in Ethiopia's Illubabor zone, keeps one of the last patches of montane rainforest where Arabica still grows wild. Since 2010 it has been a UNESCO biosphere reserve, and its core and buffer zones are officially recognised as a place to conserve forest coffee.",
+    "source": "https://www.unesco.org/en/mab/yayu",
+    "match": {
+      "origins": [
+        "yayu",
+        "illubabor",
+        "ilubabor"
+      ]
+    }
+  },
+  {
+    "id": "origin-yunnan-lietard-zhukula",
+    "topic": "origin",
+    "about": "Father Liétard's coffee trees in Zhukula",
+    "text": "Coffee came to Yunnan with a French missionary, Father Alfred Liétard, who grew it beside his church. In 2022, 24 coffee trees more than a century old still stood in Zhukula, a village outside Dali.",
+    "source": "https://www.theworldofchinese.com/2022/03/coffee-testing-grounds/",
+    "match": {
+      "origins": [
+        "yunnan",
+        "china",
+        "dali",
+        "binchuan",
+        "zhukula"
+      ]
+    }
+  },
+  {
+    "id": "origin-yunnan-most-of-china",
+    "topic": "origin",
+    "about": "Yunnan's share of China's coffee",
+    "text": "About 98 percent of China's coffee is grown in Yunnan, in the south-west, with Hainan and Fujian provinces growing the rest.",
+    "source": "https://www.theworldofchinese.com/2022/03/coffee-testing-grounds/",
+    "match": {
+      "origins": [
+        "china",
+        "yunnan"
+      ]
+    }
+  },
+  {
+    "id": "origin-yunnan-nestle-catimor-1988",
+    "topic": "origin",
+    "about": "Nestlé, Yunnan and Catimor in 1988",
+    "text": "In 1988 Nestlé joined Yunnan's government in planting Catimor across the province, a rust-resistant variety that a government programme had brought in from Portugal in the 1980s.",
+    "source": "https://www.theworldofchinese.com/2022/03/coffee-testing-grounds/",
+    "match": {
+      "origins": [
+        "yunnan",
+        "china"
+      ]
+    }
+  },
+  {
+    "id": "process-anaerobic-any-style",
+    "topic": "process",
+    "about": "Anaerobic: a ferment, not a whole process",
+    "text": "'Anaerobic' on a bag describes the fermentation, not the whole process: a ferment sealed off from oxygen can lead into a natural, a honey or a washed coffee.",
+    "source": "https://baristamagazine.com/understanding-the-process-anaerobic-processing",
+    "match": {
+      "processes": [
+        "anaerobic"
+      ]
+    }
+  },
+  {
+    "id": "process-anaerobic-one-way-valve",
+    "topic": "process",
+    "about": "Anaerobic barrels and the one-way valve",
+    "text": "In anaerobic processing, coffee ferments in sealed barrels topped with a one-way valve: the gases fermentation gives off push the oxygen out, and no fresh air can get back in.",
+    "source": "https://baristamagazine.com/understanding-the-process-anaerobic-processing",
+    "match": {
+      "processes": [
+        "anaerobic"
+      ]
+    }
+  },
+  {
+    "id": "process-best-of-panama-additives",
+    "topic": "process",
+    "about": "Best of Panama's 2024 additive ban",
+    "text": "In 2024 the Best of Panama competition barred coffees found to have been altered with foreign additives, saying it wanted to safeguard the identity of Panama's coffee. The decision drew mixed reactions.",
+    "source": "https://perfectdailygrind.com/2025/11/co-ferment-coffee-yeast-inoculation-differences/",
+    "match": {
+      "processes": [
+        "co-ferment",
+        "co-fermented",
+        "infused"
+      ]
+    }
+  },
+  {
+    "id": "process-carbonic-maceration-from-wine",
+    "topic": "process",
+    "about": "Carbonic maceration's winemaking roots",
+    "text": "Carbonic maceration borrows its name from winemaking, where whole bunches of grapes ferment in tanks. In coffee, whole cherries are shut in airtight tanks and flooded with carbon dioxide, which drives the oxygen out.",
+    "source": "https://www.baristamagazine.com/understanding-the-process-carbonic-maceration/",
+    "match": {
+      "processes": [
+        "carbonic maceration",
+        "carbonic"
+      ]
+    }
+  },
+  {
+    "id": "process-carbonic-maceration-sestic-2015",
+    "topic": "process",
+    "about": "Saša Šestić's 2015 carbonic maceration win",
+    "text": "Saša Šestić of Australia won the 2015 World Barista Championship in Seattle with a routine that included a cappuccino made from half natural and half washed carbonic maceration coffee.",
+    "source": "https://sprudge.com/sasa-sestic-of-australia-wins-the-2015-world-barista-championship-75365.html",
+    "match": {
+      "processes": [
+        "carbonic maceration",
+        "carbonic"
+      ]
+    }
+  },
+  {
+    "id": "process-co-ferment-new-sugar",
+    "topic": "process",
+    "about": "Co-ferments vs yeast-inoculated coffees",
+    "text": "What makes a co-ferment different from a yeast-inoculated coffee? As Diego Robelo of Costa Rica's Aquiares Estate puts it, a co-ferment adds not only new microbes but a new sugar source, such as fresh fruit pulp.",
+    "source": "https://perfectdailygrind.com/2025/11/co-ferment-coffee-yeast-inoculation-differences/",
+    "match": {
+      "processes": [
+        "co-ferment",
+        "co-fermented",
+        "co-fermentation"
+      ]
+    }
+  },
+  {
+    "id": "process-co2-decaf-zosel",
+    "topic": "process",
+    "about": "Kurt Zosel's chance CO2 decaf find",
+    "text": "CO2 decaf was found by accident: in 1967 Kurt Zosel of Germany's Max Planck Institute for Coal Research, studying new ways to separate mixtures, noticed that caffeine dissolves in supercritical carbon dioxide.",
+    "source": "https://www.mpg.de/8365156/coffee-decaffeination-processes",
+    "match": {
+      "processes": [
+        "co2"
+      ]
+    }
+  },
+  {
+    "id": "process-costa-rica-eco-pulper",
+    "topic": "process",
+    "about": "Costa Rica's eco-pulpers",
+    "text": "An eco-pulper rubs the sticky fruit flesh off the beans by machine instead of fermenting it away. Mario Arroyo of ICAFE, Costa Rica's coffee institute, describes it as mechanical demucilaging that cuts water use.",
+    "source": "https://www.coffeereview.com/costa-rica-2016-innovation-success-changing-market",
+    "match": {
+      "origins": [
+        "costa rica"
+      ],
+      "processes": [
+        "honey"
+      ]
+    }
+  },
+  {
+    "id": "process-costa-rica-micromills",
+    "topic": "process",
+    "about": "Costa Rica's micro-mill revolution",
+    "text": "Costa Rican farmers used to deliver their cherries to large central mills, where coffee was bulked by region. Farms with their own small mills changed that, a shift exporter Francisco Mena dubbed the 'micromill revolution'.",
+    "source": "https://www.coffeereview.com/costa-rica-2016-innovation-success-changing-market",
+    "match": {
+      "origins": [
+        "costa rica"
+      ]
+    }
+  },
+  {
+    "id": "process-ethiopia-washing-1970s",
+    "topic": "process",
+    "about": "Ethiopia's late start with washed coffee",
+    "text": "Until the 1970s, all of Ethiopia's coffee was natural, dried in the fruit. Washing came to southern Ethiopia only then, though Yirgacheffe and Sidamo went on to be best known for washed coffees.",
+    "source": "https://www.coffeereview.com/dried-in-the-fruit-refinement-ethiopia-and-yemen-naturals/",
+    "match": {
+      "origins": [
+        "ethiopia"
+      ]
+    }
+  },
+  {
+    "id": "process-honey-brazil-pulped-natural",
+    "topic": "process",
+    "about": "Pulped natural in Brazil, honey in Costa Rica",
+    "text": "Brazil pioneered drying pulped coffee with its fruit layer still on, and still calls it 'pulped natural'. Costa Rica popularised the name honey, and the idea of using the method for small, carefully made lots.",
+    "source": "https://www.coffeereview.com/honey-processed-coffees/",
+    "match": {
+      "processes": [
+        "honey",
+        "pulped natural"
+      ]
+    }
+  },
+  {
+    "id": "process-honey-colours-no-recipe",
+    "topic": "process",
+    "about": "How mills make yellow, red and black honeys",
+    "text": "Honey colours have no single recipe. Many mills set yellow, red or black by how much mucilage a machine strips off; Costa Rica's Las Lajas leaves it all on and steers the colour by how it dries the coffee.",
+    "source": "https://www.baristamagazine.com/hello-honey-look-costa-rican-process-thats-making-coffee-colorful/",
+    "match": {
+      "processes": [
+        "honey"
+      ]
+    }
+  },
+  {
+    "id": "process-honey-las-lajas-earthquake",
+    "topic": "process",
+    "about": "Las Lajas and the 2008 earthquake",
+    "text": "When a 2008 earthquake left Costa Rica's Las Lajas mill without water for weeks in the middle of harvest, Oscar Chacón looked to dry-process countries such as Brazil and Ethiopia for ideas, and switched to honeys.",
+    "source": "https://www.baristamagazine.com/hello-honey-look-costa-rican-process-thats-making-coffee-colorful/",
+    "match": {
+      "processes": [
+        "honey"
+      ]
+    }
+  },
+  {
+    "id": "process-honey-no-honey",
+    "topic": "process",
+    "about": "Why the honey process is called honey",
+    "text": "No honey goes into honey-process coffee. The name comes from the sticky mucilage left on the beans while they dry, which people likened to honey.",
+    "source": "https://sprudge.com/what-is-honey-processed-coffee-184876.html",
+    "match": {
+      "processes": [
+        "honey"
+      ]
+    }
+  },
+  {
+    "id": "process-infused-terms-blur",
+    "topic": "process",
+    "about": "Infused, flavoured or co-fermented",
+    "text": "Infused coffees, which can have extracts or essential oils added, appeared in the late 2010s alongside co-ferments. The words 'infused', 'flavoured' and 'co-fermented' are often used as if they meant the same thing.",
+    "source": "https://perfectdailygrind.com/2025/11/co-ferment-coffee-yeast-inoculation-differences/",
+    "match": {
+      "processes": [
+        "infused",
+        "co-ferment",
+        "co-fermented"
+      ]
+    }
+  },
+  {
+    "id": "process-kenya-channel-grading",
+    "topic": "process",
+    "about": "Kenya's washing channels and paddles",
+    "text": "Kenyan factories finish washing in concrete channels, where workers push the parchment against running water with wooden paddles. The same step sorts the coffee by weight into grades.",
+    "source": "https://www.fao.org/4/x6939e/x6939e11.htm",
+    "match": {
+      "origins": [
+        "kenya"
+      ]
+    }
+  },
+  {
+    "id": "process-kenya-double-washing-origin",
+    "topic": "process",
+    "about": "Why Kenya began double washing",
+    "text": "Kenya's 'double washing' began as a way to wait for space: when the drying beds were full, washed parchment was held underwater, where it stayed cool and out of insects' reach, until there was room to dry it.",
+    "source": "https://baristamagazine.com/understanding-the-process-double-fermentation",
+    "match": {
+      "origins": [
+        "kenya"
+      ],
+      "processes": [
+        "double washed",
+        "double fermented",
+        "kenyan process"
+      ]
+    }
+  },
+  {
+    "id": "process-kenya-dry-method-rejects",
+    "topic": "process",
+    "about": "Where Kenya's sorted-out cherries go",
+    "text": "At Kenyan factories, cherries sorted out before pulping go to the dry method: they are dried whole, then hulled, losing their dried pulp and parchment in a single step.",
+    "source": "https://www.fao.org/4/x6939e/x6939e11.htm",
+    "match": {
+      "origins": [
+        "kenya"
+      ]
+    }
+  },
+  {
+    "id": "process-kenya-drying-stages",
+    "topic": "process",
+    "about": "Kenya's named drying stages",
+    "text": "In Kenya, drying parchment passes through named stages: skin drying, then the white stage, soft black and hard black, as its moisture falls from about 55% to about 12%.",
+    "source": "https://www.fao.org/4/x6939e/x6939e11.htm",
+    "match": {
+      "origins": [
+        "kenya"
+      ]
+    }
+  },
+  {
+    "id": "process-kenya-gritty-parchment",
+    "topic": "process",
+    "about": "The gritty test for Kenyan fermentation",
+    "text": "At Kenyan coffee factories, fermenting off the mucilage takes one to four days, faster in warm weather. Workers know it is done when a rinsed sample of parchment feels gritty.",
+    "source": "https://www.fao.org/4/x6939e/x6939e11.htm",
+    "match": {
+      "origins": [
+        "kenya"
+      ]
+    }
+  },
+  {
+    "id": "process-lactic-bacteria-before-tank",
+    "topic": "process",
+    "about": "Lactic bacteria before the fermentation tank",
+    "text": "Microbes get going before the fermentation tank: on an experimental farm in Ecuador, researchers found lactic acid bacteria already thriving while the picked cherries were gathered and waited to be pulped.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6414394",
+    "match": {
+      "processes": [
+        "washed"
+      ]
+    }
+  },
+  {
+    "id": "process-long-ferment-lactobacillus",
+    "topic": "process",
+    "about": "Longer ferments and Lactobacillus in Ecuador",
+    "text": "In an Ecuadorian trial, stretching a washed fermentation from 16 to 64 hours shifted the tank from Leuconostoc to Lactobacillus bacteria, and the green beans ended up with five times as much lactic acid.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6414394",
+    "match": {
+      "processes": [
+        "washed",
+        "extended fermentation"
+      ]
+    }
+  },
+  {
+    "id": "process-monsooned-malabar-swelling",
+    "topic": "process",
+    "about": "How Monsooned Malabar is made",
+    "text": "Monsooned Malabar is made from June to September in open-sided warehouses on India's south-west coast. Over 12 to 16 weeks in the damp monsoon air, the beans swell to nearly twice their size and turn straw yellow.",
+    "source": "https://coffeeboard.gov.in/Specialitycoffee.aspx",
+    "match": {
+      "processes": [
+        "monsooned",
+        "monsoon malabar"
+      ]
+    }
+  },
+  {
+    "id": "process-monsooning-sailing-ships",
+    "topic": "process",
+    "about": "Monsooning's sailing-ship origin story",
+    "text": "India's Coffee Board traces monsooning to the days of sail, when coffee shipped to Europe met the monsoon winds and arrived swollen and changed in colour. Today the beans are monsooned on land, on purpose.",
+    "source": "https://coffeeboard.gov.in/Specialitycoffee.aspx",
+    "match": {
+      "processes": [
+        "monsooned",
+        "monsoon malabar"
+      ]
+    }
+  },
+  {
+    "id": "process-natural-little-water",
+    "topic": "process",
+    "about": "Natural process: little water, dry climates",
+    "text": "Drying coffee in its fruit takes little water or electricity, unlike running a wet mill, but it only suits places with reliably dry weather.",
+    "source": "https://www.baristamagazine.com/understanding-the-process-part-1-natural-dry/",
+    "match": {
+      "processes": [
+        "natural",
+        "dry process",
+        "sun-dried",
+        "sun dried"
+      ]
+    }
+  },
+  {
+    "id": "process-natural-two-to-six-weeks",
+    "topic": "process",
+    "about": "How long natural coffee dries",
+    "text": "A natural coffee dries whole, cherry and all, for two to six weeks in the sun, spread in thin layers and turned regularly to slow fermentation and keep mould and rot away.",
+    "source": "https://www.baristamagazine.com/understanding-the-process-part-1-natural-dry/",
+    "match": {
+      "processes": [
+        "natural",
+        "dry process",
+        "sun-dried",
+        "sun dried"
+      ]
+    }
+  },
+  {
+    "id": "process-reposo-parchment-rest",
+    "topic": "process",
+    "about": "Reposo: resting coffee in parchment",
+    "text": "Once dried, coffee often rests in its parchment for about six to eight weeks before export, a stage called reposo. In a study of Bolivian lots, rested coffee kept a slightly steadier water activity, reacting less to swings in humidity and temperature.",
+    "source": "https://www.roastmagazine.com/stories/reposos-impact-shelf-life"
+  },
+  {
+    "id": "process-roselius-kaffee-hag",
+    "topic": "process",
+    "about": "Ludwig Roselius and Kaffee HAG",
+    "text": "Decaf began in Bremen: coffee merchant Ludwig Roselius patented a method using benzene as the solvent in 1905, and founded Kaffee HAG the following year.",
+    "source": "https://www.mpg.de/8365156/coffee-decaffeination-processes",
+    "match": {
+      "processes": [
+        "decaf",
+        "decaffeinated"
+      ]
+    }
+  },
+  {
+    "id": "process-sugarcane-decaf-steps",
+    "topic": "process",
+    "about": "How sugarcane (EA) decaf is made",
+    "text": "For 'sugarcane' decaf, green beans are steamed for half an hour, then bathed in water and ethyl acetate made by fermenting sugarcane, the tank drained and refilled over about eight hours. A last steaming drives off the solvent.",
+    "source": "https://cdn.cafeimports.com/images/Sugarcane_EA_Decaf_Diagram-2.pdf",
+    "match": {
+      "processes": [
+        "sugarcane",
+        "ethyl acetate",
+        "ea decaf"
+      ]
+    }
+  },
+  {
+    "id": "process-swiss-water-charcoal",
+    "topic": "process",
+    "about": "Swiss Water decaf: hot water and charcoal",
+    "text": "The Swiss Water Process, made commercially viable by the Swiss firm Coffex in the 1980s, uses no solvents: hot water draws the caffeine out of green beans and activated charcoal catches it.",
+    "source": "https://www.coffeereview.com/coffee-reference/coffee-categories/decaffeinated-coffee/swiss-water-process/",
+    "match": {
+      "processes": [
+        "swiss water"
+      ]
+    }
+  },
+  {
+    "id": "process-thermal-shock-rinses",
+    "topic": "process",
+    "about": "Thermal shock: hot and cold rinses",
+    "text": "In thermal shock processing, fermented beans get hot and then cold rinses. For one Colombian lot from Wilton Benitez, the aim was to help the beans take up what fermentation produced and to stop the fermentation.",
+    "source": "https://www.coffeereview.com/review/colombia-wilton-benitez-thermal-shock-caturra/",
+    "match": {
+      "processes": [
+        "thermal shock",
+        "thermo shock",
+        "thermo-shock"
+      ]
+    }
+  },
+  {
+    "id": "process-underwater-hypoxia",
+    "topic": "process",
+    "about": "Low oxygen in underwater fermentation",
+    "text": "Even a classic washed fermentation runs low on oxygen once the coffee is under water. Researchers found that a longer ferment strengthened the effect of that hypoxia on the beans' own metabolism.",
+    "source": "https://sca.coffee/sca-news/25-magazine/issue-10/english/the-fermentation-effect-25-magazine-issue-10-bw558",
+    "match": {
+      "processes": [
+        "washed",
+        "anaerobic"
+      ]
+    }
+  },
+  {
+    "id": "process-water-activity-range",
+    "topic": "process",
+    "about": "Water activity vs moisture in green coffee",
+    "text": "Moisture content counts all the water in a green bean; water activity gauges how much of it is free to take part in reactions, on a scale where pure water is 1.0. One long-term study put the best range for green coffee at about 0.45 to 0.55.",
+    "source": "https://dailycoffeenews.com/2021/06/23/an-introduction-to-water-activity-in-green-coffee/"
+  },
+  {
+    "id": "process-water-activity-why",
+    "topic": "process",
+    "about": "Why water activity matters in storage",
+    "text": "Water activity matters in stored green coffee: with too much free water, moulds and fungi can grow; with too little, the living seed lacks the water its enzymes need.",
+    "source": "https://dailycoffeenews.com/2021/06/23/an-introduction-to-water-activity-in-green-coffee/"
+  },
+  {
+    "id": "process-wet-hulled-blue-green",
+    "topic": "process",
+    "about": "The blue-green look of wet-hulled beans",
+    "text": "Wet-hulled green coffee is easy to spot: the beans come out a dark, mottled green, and some people describe them as blue.",
+    "source": "https://perfectdailygrind.com/2015/10/indonesian-wet-hulled-coffee-your-one-stop-guide/",
+    "match": {
+      "processes": [
+        "wet-hulled",
+        "wet hulled",
+        "giling basah"
+      ]
+    }
+  },
+  {
+    "id": "process-wet-hulled-dries-faster",
+    "topic": "process",
+    "about": "Why wet-hulled coffee dries faster",
+    "text": "In Indonesia's humid climate, hulling early pays off: with the parchment gone, the sun reaches the bean directly and it dries two to three times faster.",
+    "source": "https://perfectdailygrind.com/2015/10/indonesian-wet-hulled-coffee-your-one-stop-guide/",
+    "match": {
+      "processes": [
+        "wet-hulled",
+        "wet hulled",
+        "giling basah"
+      ]
+    }
+  },
+  {
+    "id": "process-wet-hulled-goats-nail",
+    "topic": "process",
+    "about": "Kuku kambing, the 'goat's nail' split",
+    "text": "Hulling beans that are still soft and full of water takes care, as the machines can split them at the ends. In Indonesia a bean split this way is called kuku kambing, 'goat's nail', after its shape.",
+    "source": "https://perfectdailygrind.com/2015/10/indonesian-wet-hulled-coffee-your-one-stop-guide/",
+    "match": {
+      "processes": [
+        "wet-hulled",
+        "wet hulled",
+        "giling basah"
+      ]
+    }
+  },
+  {
+    "id": "process-wet-hulled-mid-drying",
+    "topic": "process",
+    "about": "Wet-hulling: parchment off mid-drying",
+    "text": "Wet-hulled coffee is stripped of its parchment halfway through drying, while the beans still hold about 20 to 40% moisture. They finish drying bare, down to about 12 to 13%.",
+    "source": "https://www.coffeereview.com/elegant-earth-wet-hulled-sumatras-and-one-sulawesi/",
+    "match": {
+      "processes": [
+        "wet-hulled",
+        "wet hulled",
+        "giling basah"
+      ]
+    }
+  },
+  {
+    "id": "process-yeast-inoculation-brewing",
+    "topic": "process",
+    "about": "Yeast inoculation, borrowed from brewing",
+    "text": "Yeast-inoculated coffees borrow a trick from brewing and winemaking: producers add chosen strains of yeast to the coffee before or during fermentation.",
+    "source": "https://perfectdailygrind.com/2025/11/co-ferment-coffee-yeast-inoculation-differences/",
+    "match": {
+      "processes": [
+        "yeast",
+        "inoculated",
+        "yeast inoculated",
+        "yeast inoculation"
+      ]
+    }
+  },
+  {
+    "id": "process-yemen-millstones",
+    "topic": "process",
+    "about": "Yemen's millstone hulling, camels to engines",
+    "text": "In Yemen, dried coffee cherries have long been husked between millstones. The stones were once turned by camels; engines do the job now.",
+    "source": "https://www.coffeereview.com/dried-in-the-fruit-refinement-ethiopia-and-yemen-naturals/",
+    "match": {
+      "origins": [
+        "yemen"
+      ]
+    }
+  },
+  {
+    "id": "roaster-3fe-harmon-irish-champion",
+    "topic": "roaster",
+    "about": "Colin Harmon's four Irish barista titles",
+    "text": "Colin Harmon of Dublin's 3fe won the Irish Barista Championship four times.",
+    "source": "https://sprudge.com/an-interview-with-colin-harmon-41848.html",
+    "match": {
+      "roasters": [
+        "3fe"
+      ]
+    }
+  },
+  {
+    "id": "roaster-3fe-third-floor-espresso",
+    "topic": "roaster",
+    "about": "How 3fe (Third Floor Espresso) got its name",
+    "text": "3fe is short for Third Floor Espresso: founder Colin Harmon trained for the 2009 World Barista Championship in a room of his third-floor flat, and his designers suggested naming the shop after it.",
+    "source": "https://sprudge.com/5-cafe-names-that-have-outrageous-backstories4-will-freak-you-out-77827.html",
+    "match": {
+      "roasters": [
+        "3fe"
+      ]
+    }
+  },
+  {
+    "id": "roaster-black-white-back-alley",
+    "topic": "roaster",
+    "about": "Black & White's start with Back Alley Coffee",
+    "text": "Lem Butler won the US Barista Championship in 2016 and Kyle Ramage in 2017; after Ramage's win the pair bought Back Alley Coffee Roasters in Wake Forest, North Carolina, as the start of Black & White.",
+    "source": "https://www.baristamagazine.com/u-s-barista-champs-lem-butler-kyle-ramage-open-new-roasting-company/",
+    "match": {
+      "roasters": [
+        "black & white coffee roasters",
+        "black and white coffee roasters"
+      ]
+    }
+  },
+  {
+    "id": "roaster-black-white-two-champions",
+    "topic": "roaster",
+    "about": "Black & White's two barista-champion founders",
+    "text": "Black & White Coffee Roasters was founded in 2017 by Kyle Ramage and Lem Butler, two US Barista Champions who wanted more people to drink the kind of coffee they had met in competition.",
+    "source": "https://www.blackwhiteroasters.com/pages/about-us",
+    "match": {
+      "roasters": [
+        "black & white coffee roasters",
+        "black and white coffee roasters"
+      ]
+    }
+  },
+  {
+    "id": "roaster-blue-bottle-clarinettist",
+    "topic": "roaster",
+    "about": "Blue Bottle's clarinettist founder and potting shed",
+    "text": "Blue Bottle's founder James Freeman spent about ten years as a working clarinettist around the Bay Area before turning to coffee; the company began in a tiny former potting shed beside his Oakland flat, where he roasted the beans.",
+    "source": "https://fortune.com/2011/09/23/blue-bottle-the-best-coffee-you-may-ever-drink",
+    "match": {
+      "roasters": [
+        "blue bottle coffee",
+        "blue bottle"
+      ]
+    }
+  },
+  {
+    "id": "roaster-blue-bottle-farmers-market-cart",
+    "topic": "roaster",
+    "about": "Blue Bottle's first bag at Old Oakland market",
+    "text": "Blue Bottle's founder James Freeman sold his first bag of coffee at the Old Oakland Farmers Market, which was the first in the Bay Area to let his new roasting business take a stall.",
+    "source": "https://sprudge.com/blue-bottle-old-oakland-123799.html",
+    "match": {
+      "roasters": [
+        "blue bottle coffee",
+        "blue bottle"
+      ]
+    }
+  },
+  {
+    "id": "roaster-coffee-collective-jaegersborggade",
+    "topic": "roaster",
+    "about": "Coffee Collective's first days on Jægersborggade",
+    "text": "Coffee Collective first served coffee to the public at a farmers' market on Copenhagen's Jægersborggade in August 2007, while roasting near Kastrup Airport; its first shop opened on the same street in February 2008.",
+    "source": "https://sprudge.com/?p=124849",
+    "match": {
+      "roasters": [
+        "coffee collective"
+      ]
+    }
+  },
+  {
+    "id": "roaster-coffee-collective-thomsen",
+    "topic": "roaster",
+    "about": "Coffee Collective's founding and Klaus Thomsen",
+    "text": "Copenhagen's Coffee Collective was founded in 2007, and one of its founders, Klaus Thomsen, is a former World Barista Champion.",
+    "source": "https://coffeecollective.dk/pages/about-us",
+    "match": {
+      "roasters": [
+        "coffee collective"
+      ]
+    }
+  },
+  {
+    "id": "roaster-counter-culture-first-bag",
+    "topic": "roaster",
+    "about": "Counter Culture's first bag, sold in Durham",
+    "text": "Counter Culture Coffee sold its very first bag in 1995 to Pop's Trattoria, a restaurant in Durham, North Carolina, just three months after Brett Smith and Fred Houk came up with the idea for the company.",
+    "source": "https://www.teaandcoffee.net/feature/20488/on-a-relentless-pursuit-of-coffee-perfection/",
+    "match": {
+      "roasters": [
+        "counter culture coffee",
+        "counter culture"
+      ]
+    }
+  },
+  {
+    "id": "roaster-counter-culture-flavour-wheel",
+    "topic": "roaster",
+    "about": "Counter Culture's 2013 tasters' flavour wheel",
+    "text": "In 2013 Counter Culture's coffee-buying team drew up its own tasters' flavour wheel as a learning aid for anyone who tastes coffee; for a word on it that is new to a taster, a reference can probably be found at a local supermarket.",
+    "source": "https://counterculturecoffee.com/blogs/counter-culture-coffee/flavor-wheel",
+    "match": {
+      "roasters": [
+        "counter culture coffee",
+        "counter culture"
+      ]
+    }
+  },
+  {
+    "id": "roaster-drop-coffee-joanna-alm",
+    "topic": "roaster",
+    "about": "Joanna Alm's roasting titles",
+    "text": "Drop Coffee's Joanna Alm is a three-time Swedish Coffee Roasting Champion and has more than once finished in the top three at the World Coffee Roasting Championship.",
+    "source": "https://www.dropcoffee.com/pages/about",
+    "match": {
+      "roasters": [
+        "drop coffee"
+      ]
+    }
+  },
+  {
+    "id": "roaster-drop-coffee-mariatorget",
+    "topic": "roaster",
+    "about": "Drop Coffee's start near Mariatorget",
+    "text": "Drop Coffee opened in 2009 as a coffee bar near Mariatorget in Stockholm; a year later it started roasting on a 1 kg roaster at the back of the shop, and moved up to a 25 kg Diedrich in 2012.",
+    "source": "https://www.dropcoffee.com/pages/about",
+    "match": {
+      "roasters": [
+        "drop coffee"
+      ]
+    }
+  },
+  {
+    "id": "roaster-gardelli-home-stove",
+    "topic": "roaster",
+    "about": "How Rubens Gardelli started roasting",
+    "text": "Rubens Gardelli caught the roasting bug after spotting a roaster on show in a bar in California; back in Italy in October 2008, he began experimenting with a small copper roaster on his home stove.",
+    "source": "https://shop.gardellicoffee.com/content/gsc-story",
+    "match": {
+      "roasters": [
+        "gardelli specialty coffees",
+        "gardelli"
+      ]
+    }
+  },
+  {
+    "id": "roaster-gardelli-italian-roasting-titles",
+    "topic": "roaster",
+    "about": "Rubens Gardelli's roasting titles",
+    "text": "Rubens Gardelli of Forlì won the Italian Roasting Championship every year from 2014 to 2017, and in 2014 he also came second in the world at the Brewers Cup.",
+    "source": "https://shop.gardellicoffee.com/content/gsc-story",
+    "match": {
+      "roasters": [
+        "gardelli specialty coffees",
+        "gardelli"
+      ]
+    }
+  },
+  {
+    "id": "roaster-george-howell-cup-of-excellence",
+    "topic": "roaster",
+    "about": "George Howell and the Cup of Excellence",
+    "text": "George Howell co-founded the Cup of Excellence in 1999, setting up the first international competition and online auction for coffees from single estates.",
+    "source": "https://georgehowellcoffee.com/pages/george-howell",
+    "match": {
+      "roasters": [
+        "george howell coffee",
+        "george howell"
+      ]
+    }
+  },
+  {
+    "id": "roaster-george-howell-extract-mojo",
+    "topic": "roaster",
+    "about": "George Howell Coffee and Extract MoJo",
+    "text": "George Howell Coffee helped finance and introduce Extract MoJo, which it calls the first refractometer-and-software system made for coffee.",
+    "source": "https://georgehowellcoffee.com/pages/about",
+    "match": {
+      "roasters": [
+        "george howell coffee",
+        "george howell"
+      ]
+    }
+  },
+  {
+    "id": "roaster-intelligentsia-lakeview-1995",
+    "topic": "roaster",
+    "about": "Intelligentsia's first café in Lakeview, Chicago",
+    "text": "On 9 October 1995 Doug Zell and Emily Mange opened Intelligentsia, a café and roastery in Chicago's Lakeview neighbourhood, where they roasted the beans in the shop on a Probat L12.",
+    "source": "https://www.intelligentsia.com/pages/our-story",
+    "match": {
+      "roasters": [
+        "intelligentsia coffee",
+        "intelligentsia"
+      ]
+    }
+  },
+  {
+    "id": "roaster-intelligentsia-phillips-wbc-2010",
+    "topic": "roaster",
+    "about": "Michael Phillips, first American world barista champion",
+    "text": "In June 2010 Intelligentsia barista Michael Phillips won the World Barista Championship in London, ahead of competitors from 52 other countries, and became the first American to take the title.",
+    "source": "https://www.nbcchicago.com/news/local/worlds-best-barista-found-in-chicago/1878901/",
+    "match": {
+      "roasters": [
+        "intelligentsia coffee",
+        "intelligentsia"
+      ]
+    }
+  },
+  {
+    "id": "roaster-koppi-founders",
+    "topic": "roaster",
+    "about": "Koppi's founders in Helsingborg",
+    "text": "Koppi was founded in Helsingborg, Sweden, in 2007 by Anne Lunell and Charles Nystrand, a pair of barista and brewing competition champions.",
+    "source": "https://koppi.se/pages/about",
+    "match": {
+      "roasters": [
+        "koppi"
+      ]
+    }
+  },
+  {
+    "id": "roaster-koppi-industrial-roastery",
+    "topic": "roaster",
+    "about": "Koppi's move from coffee bar to roastery",
+    "text": "Koppi began as a coffee bar in the heart of Helsingborg with its roaster right in the shop; in 2016 it moved into an old industrial building to concentrate on roasting alone.",
+    "source": "https://koppi.se/pages/about",
+    "match": {
+      "roasters": [
+        "koppi"
+      ]
+    }
+  },
+  {
+    "id": "roaster-la-cabra-aarhus-2011",
+    "topic": "roaster",
+    "about": "La Cabra's start in Aarhus",
+    "text": "La Cabra was set up in Aarhus, Denmark, in 2011 and began sourcing and roasting its own coffee two years later, in 2013.",
+    "source": "https://lacabra.com/pages/about-la-cabra",
+    "match": {
+      "roasters": [
+        "la cabra"
+      ]
+    }
+  },
+  {
+    "id": "roaster-la-cabra-single-profile",
+    "topic": "roaster",
+    "about": "La Cabra's one roast profile per coffee",
+    "text": "La Cabra settles on one roast profile for each coffee at the cupping table, rather than roasting it one way for filter and another for espresso.",
+    "source": "https://lacabra.com/pages/about-la-cabra",
+    "match": {
+      "roasters": [
+        "la cabra"
+      ]
+    }
+  },
+  {
+    "id": "roaster-market-lane-founded-2009",
+    "topic": "roaster",
+    "about": "Market Lane's founding in Melbourne",
+    "text": "Fleur Studd and Jason Scheltus founded Market Lane in Melbourne in 2009, when, as they tell it, coffee that was fresh, seasonal and traceable was nearly impossible to find in Australia.",
+    "source": "https://marketlane.com.au/pages/our-story",
+    "match": {
+      "roasters": [
+        "market lane coffee",
+        "market lane"
+      ]
+    }
+  },
+  {
+    "id": "roaster-market-lane-prahran-market",
+    "topic": "roaster",
+    "about": "Market Lane's first shop in Prahran Market",
+    "text": "Market Lane opened its first shop and roastery inside Melbourne's Prahran Market, among shoppers who hunt for good produce and care about where and when it was grown.",
+    "source": "https://marketlane.com.au/pages/our-story",
+    "match": {
+      "roasters": [
+        "market lane coffee",
+        "market lane"
+      ]
+    }
+  },
+  {
+    "id": "roaster-ona-canberra-garage",
+    "topic": "roaster",
+    "about": "ONA Coffee's garage start in Canberra",
+    "text": "ONA Coffee began in 2008, when Saša Šestić, a former Olympic handball player, started roasting coffee in his garage in Canberra.",
+    "source": "https://onacoffee.com.au/pages/about",
+    "match": {
+      "roasters": [
+        "ona coffee"
+      ]
+    }
+  },
+  {
+    "id": "roaster-ona-world-titles",
+    "topic": "roaster",
+    "about": "ONA's world titles: Šestić and Chu",
+    "text": "ONA's founder Saša Šestić won the World Barista Championship in 2015, and ONA's Charlie Chu became World Cup Tasters Champion in 2021.",
+    "source": "https://onacoffee.com.au/pages/about",
+    "match": {
+      "roasters": [
+        "ona coffee"
+      ]
+    }
+  },
+  {
+    "id": "roaster-onyx-2020-championships",
+    "topic": "roaster",
+    "about": "Onyx at the 2020 US coffee championships",
+    "text": "At the 2020 US coffee championships in California, Onyx Coffee Lab's Andrea Allen won the US Barista Championship, while her Onyx colleagues Elika Liftee and Lance Hedrick came first and second in the Brewers Cup.",
+    "source": "https://dailycoffeenews.com/2020/02/24/here-are-the-2020-us-barista-and-brewers-cup-champions",
+    "match": {
+      "roasters": [
+        "onyx coffee lab",
+        "onyx"
+      ]
+    }
+  },
+  {
+    "id": "roaster-onyx-springdale-2012",
+    "topic": "roaster",
+    "about": "Onyx Coffee Lab's start in Springdale",
+    "text": "Jon and Andrea Allen started Onyx Coffee Lab in May 2012 as a small café in Springdale, Arkansas, with a staff of ten.",
+    "source": "https://talkbusiness.net/?p=170310",
+    "match": {
+      "roasters": [
+        "onyx coffee lab",
+        "onyx"
+      ]
+    }
+  },
+  {
+    "id": "roaster-peets-major-dickason",
+    "topic": "roaster",
+    "about": "How Major Dickason's Blend got its name",
+    "text": "Peet's Major Dickason's Blend is named after Key Dickason, a retired army sergeant and friend of Alfred Peet who suggested the idea in 1969; the finished blend was thought good enough to promote him to major.",
+    "source": "https://peets.com/blogs/peets/the-history-of-peets-coffee",
+    "match": {
+      "roasters": [
+        "peet's coffee",
+        "peet's",
+        "peets"
+      ]
+    }
+  },
+  {
+    "id": "roaster-peets-vine-and-walnut-1966",
+    "topic": "roaster",
+    "about": "Peet's first shop at Vine and Walnut, 1966",
+    "text": "Alfred Peet, who learned the trade looking after the roasting machinery at his father's small coffee firm in the Netherlands, opened his own coffee shop on 1 April 1966 at the corner of Vine and Walnut streets in Berkeley, California.",
+    "source": "https://peets.com/blogs/peets/the-history-of-peets-coffee",
+    "match": {
+      "roasters": [
+        "peet's coffee",
+        "peet's",
+        "peets"
+      ]
+    }
+  },
+  {
+    "id": "roaster-phil-sebastian-lab-partners",
+    "topic": "roaster",
+    "about": "How Phil and Sebastian met",
+    "text": "Sebastian Sztabzyb and his business partner Phil met in 1996, paired as lab partners in a digital circuits class while both studied engineering at the University of Calgary, years before they opened Phil & Sebastian in 2007.",
+    "source": "https://philsebastian.com/pages/epic-story",
+    "match": {
+      "roasters": [
+        "phil & sebastian coffee roasters",
+        "phil & sebastian",
+        "phil and sebastian"
+      ]
+    }
+  },
+  {
+    "id": "roaster-phil-sebastian-probat-ug15",
+    "topic": "roaster",
+    "about": "Phil & Sebastian's rebuilt Probat UG-15",
+    "text": "Phil & Sebastian's first production roaster was a 55-year-old Probat UG-15, rebuilt by Giesen in the Netherlands; it arrived coated in surface rust, and after 15 hours of scrubbing the first test roasts ran in June 2009.",
+    "source": "https://philsebastian.com/pages/epic-story",
+    "match": {
+      "roasters": [
+        "phil & sebastian coffee roasters",
+        "phil & sebastian",
+        "phil and sebastian"
+      ]
+    }
+  },
+  {
+    "id": "roaster-pilot-leslieville-garage",
+    "topic": "roaster",
+    "about": "Pilot Coffee Roasters' garage start",
+    "text": "Pilot Coffee Roasters began in May 2009, when Andy Wilkin, newly qualified as a Q Grader, and Jessie Holmes opened a café and micro-roastery in a former car garage in Toronto's Leslieville.",
+    "source": "https://pilotcoffeeroasters.com/pages/our-story",
+    "match": {
+      "roasters": [
+        "pilot coffee roasters"
+      ]
+    }
+  },
+  {
+    "id": "roaster-pilot-te-aro-roasted",
+    "topic": "roaster",
+    "about": "Pilot's first name, Te Aro Roasted",
+    "text": "Pilot started life as Te Aro Roasted, a café inspired by the ones Andy Wilkin had admired in his home town, Te Aro in Wellington, New Zealand; by 2013 it had become Pilot Coffee Roasters.",
+    "source": "https://pilotcoffeeroasters.com/pages/our-story",
+    "match": {
+      "roasters": [
+        "pilot coffee roasters"
+      ]
+    }
+  },
+  {
+    "id": "roaster-square-mile-founded-2008",
+    "topic": "roaster",
+    "about": "Square Mile's founders and founding year",
+    "text": "Square Mile Coffee Roasters was founded in London in 2008 by Anette Moldvaer and James Hoffmann.",
+    "source": "https://shop.squaremilecoffee.com/pages/about-us",
+    "match": {
+      "roasters": [
+        "square mile coffee roasters",
+        "square mile coffee",
+        "square mile"
+      ]
+    }
+  },
+  {
+    "id": "roaster-square-mile-hoffmann-wbc-2007",
+    "topic": "roaster",
+    "about": "James Hoffmann's 2007 world title in Tokyo",
+    "text": "Square Mile co-founder James Hoffmann won the World Barista Championship in Tokyo in 2007, competing as the UK's barista champion.",
+    "source": "https://www.baristamagazine.com/and-the-winner-is/",
+    "match": {
+      "roasters": [
+        "square mile coffee roasters",
+        "square mile coffee",
+        "square mile"
+      ]
+    }
+  },
+  {
+    "id": "roaster-stumptown-ford-pinto",
+    "topic": "roaster",
+    "about": "Stumptown's one-person start in 1999",
+    "text": "Stumptown began in Portland in 1999 with a staff of one, a small vintage Probat roaster and a Ford Pinto to deliver the beans.",
+    "source": "https://www.stumptowncoffee.com/pages/our-story",
+    "match": {
+      "roasters": [
+        "stumptown coffee roasters",
+        "stumptown"
+      ]
+    }
+  },
+  {
+    "id": "roaster-stumptown-hair-bender",
+    "topic": "roaster",
+    "about": "Stumptown's Hair Bender café and blend",
+    "text": "Stumptown's first café opened on Portland's Division Street in 1999 in what had been a beauty parlour called Hair Bender, and founder Duane Sorenson kept the name for the house espresso blend.",
+    "source": "https://www.stumptowncoffee.com/pages/portland-division-cafe",
+    "match": {
+      "roasters": [
+        "stumptown coffee roasters",
+        "stumptown"
+      ]
+    }
+  },
+  {
+    "id": "roaster-tim-wendelboe-champion-runs",
+    "topic": "roaster",
+    "about": "Tim Wendelboe's competition record",
+    "text": "Tim Wendelboe came second at the World Barista Championship in 2001 and 2002 and won it in 2004, a run that later helped him open his own café and roastery in Oslo's Grünerløkka. He was also World Cup Tasters Champion in 2005.",
+    "source": "https://www.visitnorway.com/things-to-do/food-and-drink/tim-wendelboe/",
+    "match": {
+      "roasters": [
+        "tim wendelboe"
+      ]
+    }
+  },
+  {
+    "id": "roaster-tim-wendelboe-finca-el-suelo",
+    "topic": "roaster",
+    "about": "Tim Wendelboe's farm, Finca El Suelo",
+    "text": "Tim Wendelboe owns and runs Finca El Suelo, a 7-hectare farm at about 1,650–1,700 m in El Pital, Huila, Colombia, which he treats as a learning project in regenerative farming; its first cherries were picked in 2021.",
+    "source": "https://timwendelboe.no/pages/finca-el-suelo",
+    "match": {
+      "roasters": [
+        "tim wendelboe"
+      ]
+    }
+  },
+  {
+    "id": "roasting-agtron-whole-and-ground",
+    "topic": "roasting",
+    "about": "Agtron numbers, whole bean and ground",
+    "text": "On the Agtron scale, a higher number means a lighter roast. Coffee Review reads each coffee both as whole beans and ground: the lightest roasts score about 70 as beans but about 95 once ground.",
+    "source": "https://www.coffeereview.com/roast-definitions/"
+  },
+  {
+    "id": "roasting-burns-corn-popper",
+    "topic": "roasting",
+    "about": "Jabez Burns and the corn popper",
+    "text": "Jabez Burns invented the continuous roaster, forerunner of today's production machines, yet he claimed a simple corn popper had roasted some of the best coffee he ever drank.",
+    "source": "https://coffeereview.com/?p=5570"
+  },
+  {
+    "id": "roasting-chaff-silverskin",
+    "topic": "roasting",
+    "about": "Chaff, the silverskin shed in the roast",
+    "text": "The papery flakes a roaster blows out are chaff: the silverskin, the thin outer layer of the coffee bean, which loosens and comes away in the heat of the roast.",
+    "source": "https://perfectdailygrind.com/2019/03/what-happens-during-coffee-roasting-the-physical-changes/"
+  },
+  {
+    "id": "roasting-cooling-under-four-minutes",
+    "topic": "roasting",
+    "about": "Cooling a roast in under four minutes",
+    "text": "Beans keep roasting on their own heat once they leave the drum, so roasters aim to cool them to room temperature in under about four minutes. Most drum roasters use a perforated tray, a stirring arm and a fan drawing room air through.",
+    "source": "https://perfectdailygrind.com/2024/07/what-roasters-need-to-know-about-cooling-coffee/"
+  },
+  {
+    "id": "roasting-crack-acoustics",
+    "topic": "roasting",
+    "about": "The sound of first and second crack",
+    "text": "A University of Texas acoustics study recorded beans as they roasted: first crack was louder and lower-pitched than second crack, whose pops came thick and fast. The aim was to see whether a machine could follow a roast by ear.",
+    "source": "https://pubs.aip.org/jasa/article/135/6/EL265/607104/Coffee-roasting-acoustics"
+  },
+  {
+    "id": "roasting-dark-roast-oil",
+    "topic": "roasting",
+    "about": "Why very dark roasts look oily",
+    "text": "Pressure inside a roasting bean pushes its oils from the middle of each cell towards the surface. In very dark roasts that oil can make it all the way out, where you can see it on the beans.",
+    "source": "https://perfectdailygrind.com/2019/03/what-happens-during-coffee-roasting-the-physical-changes/",
+    "match": {
+      "roastLevels": [
+        "dark"
+      ]
+    }
+  },
+  {
+    "id": "roasting-density-porosity",
+    "topic": "roasting",
+    "about": "Roasted beans: less dense, more porous",
+    "text": "A roasting bean swells even as it loses weight, so its density falls the whole way through. The roast also opens up pores inside it, leaving the bean far more soluble than it was when green.",
+    "source": "https://perfectdailygrind.com/2019/03/what-happens-during-coffee-roasting-the-physical-changes/"
+  },
+  {
+    "id": "roasting-development-time-ratio",
+    "topic": "roasting",
+    "about": "Development time ratio",
+    "text": "Development time ratio is the share of a roast that comes after first crack. End a ten-and-a-half-minute roast 40 seconds into first crack, and the ratio is about 6%.",
+    "source": "https://perfectdailygrind.com/2020/06/what-is-bean-development-in-coffee-roasting-and-how-to-control-it/"
+  },
+  {
+    "id": "roasting-falling-rate-of-rise",
+    "topic": "roasting",
+    "about": "A falling rate of rise",
+    "text": "Many roasters aim for a rate of rise that falls steadily through a roast: the beans keep getting hotter, but each minute adds a little less, so the curve gently flattens.",
+    "source": "https://perfectdailygrind.com/2020/02/bean-temperature-the-coffee-roasting-curve-and-roast-graph/"
+  },
+  {
+    "id": "roasting-first-crack-193c",
+    "topic": "roasting",
+    "about": "First crack at about 193 °C",
+    "text": "First crack comes at a bean temperature of roughly 193 °C, as moisture inside the bean turns to steam and its cells swell.",
+    "source": "https://sprudge.com/what-does-first-crack-mean-for-coffee-205533.html"
+  },
+  {
+    "id": "roasting-maillard-caramelisation-temps",
+    "topic": "roasting",
+    "about": "Maillard and caramelisation temperatures",
+    "text": "In the roaster, Maillard reactions between carbohydrates and amino acids get going at about 150 °C, and caramelisation follows from about 170 °C.",
+    "source": "https://perfectdailygrind.com/2020/02/bean-temperature-the-coffee-roasting-curve-and-roast-graph/"
+  },
+  {
+    "id": "roasting-melanoidins-colour",
+    "topic": "roasting",
+    "about": "Why roasting turns beans brown",
+    "text": "Unroasted coffee is really blue-green. It turns brown in the roaster thanks to melanoidins, large molecules built when sugars and amino acids join together under heat.",
+    "source": "https://perfectdailygrind.com/2019/03/what-happens-during-coffee-roasting-the-physical-changes/"
+  },
+  {
+    "id": "roasting-moisture-12-to-2-percent",
+    "topic": "roasting",
+    "about": "Water in green and roasted beans",
+    "text": "Green coffee is about 10 to 12% water, and a roast brings that down to around 2.5%. Not all the steam was there at the start: the roast's own chemical reactions make extra water along the way.",
+    "source": "https://perfectdailygrind.com/2019/03/what-happens-during-coffee-roasting-the-physical-changes/"
+  },
+  {
+    "id": "roasting-probat-emmerich-1868",
+    "topic": "roasting",
+    "about": "Probat's 1868 start in Emmerich",
+    "text": "Probat began in 1868 in Emmerich, Germany, as a machine works and iron foundry, and built its Emmerich Spherical Roaster in 1870. The company only took the name Probat in 1959.",
+    "source": "https://www.probat.com/company/history/"
+  },
+  {
+    "id": "roasting-quakers-unripe",
+    "topic": "roasting",
+    "about": "Quakers, pale beans from unripe cherries",
+    "text": "Quakers are beans from unripe cherries. They are hard to spot while green, but roast to a paler brown than the rest of the batch, because they have fewer of the sugars the Maillard reaction needs.",
+    "source": "https://perfectdailygrind.com/2017/11/a-home-roasters-dictionary-from-first-crack-to-silverskin/"
+  },
+  {
+    "id": "roasting-roast-names-vary",
+    "topic": "roasting",
+    "about": "Roast names follow no standard",
+    "text": "Roast names like French, Italian or Viennese follow no agreed standard, so one roaster's Viennese can be quite unlike another's, as Coffee Review points out.",
+    "source": "https://www.coffeereview.com/roast-definitions/"
+  },
+  {
+    "id": "roasting-sample-roasting",
+    "topic": "roasting",
+    "about": "Sample roasting before buying green coffee",
+    "text": "Before buying green coffee, roasters sample-roast small lots, typically 50 to 200 g, often on multi-barrel drum roasters that handle several samples at once, then cup them within 8 to 24 hours.",
+    "source": "https://perfectdailygrind.com/2018/08/roaster-basics-a-guide-to-sample-roasting/"
+  },
+  {
+    "id": "roasting-second-crack-gas-pressure",
+    "topic": "roasting",
+    "about": "What causes second crack",
+    "text": "Second crack is driven by gases, mostly carbon dioxide, building up inside the bean until its structure gives way. There is no third crack: after the second, beans simply keep darkening.",
+    "source": "https://sprudge.com/what-does-first-crack-mean-for-coffee-205533.html"
+  },
+  {
+    "id": "roasting-sivetz-fluid-bed",
+    "topic": "roasting",
+    "about": "Michael Sivetz and fluid-bed roasters",
+    "text": "Hot-air, or fluid-bed, roasters trace back to a 1970s design by engineer Michael Sivetz. In place of a drum, a strong blower keeps the beans moving through hot air, so almost no heat reaches them by contact.",
+    "source": "https://baristamagazine.com/roasting-machines-explained-hot-air-roasters-part-one"
+  },
+  {
+    "id": "roasting-turning-point",
+    "topic": "roasting",
+    "about": "The turning point on a roast graph",
+    "text": "On a roast graph, bean temperature dips at the start before it climbs. The beans are warming all along: the cool batch is simply drawing heat from the drum and the probe. The low point is called the turning point.",
+    "source": "https://perfectdailygrind.com/2020/02/bean-temperature-the-coffee-roasting-curve-and-roast-graph/"
+  },
+  {
+    "id": "roasting-water-quenching",
+    "topic": "roasting",
+    "about": "Water quenching at the end of a roast",
+    "text": "Some roasteries stop a roast with a spray of water as well as air, which is called quenching. It is mostly kept for commercial-grade coffee rather than specialty lots.",
+    "source": "https://perfectdailygrind.com/2024/07/what-roasters-need-to-know-about-cooling-coffee/"
+  },
+  {
+    "id": "roasting-weight-loss-12-20-percent",
+    "topic": "roasting",
+    "about": "Weight lost in the roast",
+    "text": "Beans leave the roaster about 12 to 20% lighter, from lost water and from solid matter turned into gas. Many roasters track that loss, and an odd number flags a batch for a closer look.",
+    "source": "https://perfectdailygrind.com/2019/03/what-happens-during-coffee-roasting-the-physical-changes/"
+  },
+  {
+    "id": "science-brewing-control-chart-1957",
+    "topic": "science",
+    "about": "Lockhart's 1957 brewing control chart",
+    "text": "The brewing chart baristas still train with dates from 1957, when Lockhart tied coffee quality to two numbers: strength, the share of the drink that is dissolved coffee, and extraction, the share of the grounds dissolved. Its 'ideal' box: 1.15–1.35% and 18–22%.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7536440/"
+  },
+  {
+    "id": "science-channeling-fine-grind",
+    "topic": "science",
+    "about": "Why yields fall at the finest grinds",
+    "text": "A 2020 model of espresso predicted that grinding finer should always extract more, but experiments found yields falling at the finest settings, a sign that water was no longer flowing evenly through the puck.",
+    "source": "https://researchportal.port.ac.uk/en/publications/systematically-improving-espresso-insights-from-mathematical-mode/"
+  },
+  {
+    "id": "science-cold-beans-grind-evenly",
+    "topic": "science",
+    "about": "Grinding cold beans for a narrower spread",
+    "text": "Cold beans shatter more evenly: a 2016 study ground coffee at 20 °C, −19 °C, −79 °C and −196 °C (room, freezer, dry ice and liquid nitrogen), and grinding cold gave a narrower spread of particle sizes and a smaller average.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4834475/"
+  },
+  {
+    "id": "science-crema-bicarbonate-water",
+    "topic": "science",
+    "about": "Bicarbonate in water as a source of crema gas",
+    "text": "Not all of crema's gas comes from the beans: bicarbonate in the brewing water also gives off CO2, both as it breaks down in the heat and as coffee's own acids neutralise it.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3140933/"
+  },
+  {
+    "id": "science-crema-bubbles-short-rise",
+    "topic": "science",
+    "about": "Why crema's bubbles stay tiny",
+    "text": "Crema's bubbles stay tiny partly because they have so little room: in a standard espresso cup they rise only about 1.5 to 2 cm, and specks of coffee and cell-wall fragments in the drink may act as seeds for them.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3140933/"
+  },
+  {
+    "id": "science-crema-co2-supersaturation",
+    "topic": "science",
+    "about": "How dissolved CO2 may make crema",
+    "text": "A 2011 review suggests crema starts in the puck: hot water under pressure dissolves the coffee's CO2, and by the authors' estimate the shot then holds about twice the gas it can keep at normal pressure, so it fizzes into tiny bubbles.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3140933/"
+  },
+  {
+    "id": "science-crema-fades-evaporation",
+    "topic": "science",
+    "about": "Why crema fades",
+    "text": "One suggested reason crema thins: the hot drink evaporates water from the films between its bubbles until they break. A review of espresso foam says it should still last at least a couple of minutes before a dark spot shows.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3140933/"
+  },
+  {
+    "id": "science-crema-gas-from-roasting",
+    "topic": "science",
+    "about": "Espresso as a fast transfer of CO2",
+    "text": "A 2011 review of espresso foam likened espresso brewing to a fast transfer of CO2 from ground coffee into a cup. The gas comes from roasting: CO2 makes up about 87% of the gases roasted coffee gives off.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3140933/"
+  },
+  {
+    "id": "science-crema-particle-coated-bubbles",
+    "topic": "science",
+    "about": "Coffee particles coating crema bubbles",
+    "text": "Under a microscope, a bubble in freshly made espresso foam can be seen coated with coffee particles smaller than 50 microns, which researchers think may help hold crema together.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3140933/"
+  },
+  {
+    "id": "science-degassing-weighed",
+    "topic": "science",
+    "about": "Weighing the gas that roasted coffee gives off",
+    "text": "Roasting fills coffee's porous beans with gas, much of it CO2. Some escapes in the roaster; the rest seeps out slowly in storage and in a rush at grinding. Swiss researchers tracked it by weighing coffee on a precision balance as the gas left.",
+    "source": "https://pubmed.ncbi.nlm.nih.gov/29091435/"
+  },
+  {
+    "id": "science-distilled-water-machines",
+    "topic": "science",
+    "about": "Distilled water in espresso machines",
+    "text": "Distilled water is a poor choice for an espresso machine: very pure water is corrosive under heat and pressure, and La Marzocco notes its machines may not even recognise it, flashing the water light with a full tank.",
+    "source": "https://lamarzocco.com/ie/en/technical-questions/la-marzocco-water-specifications/"
+  },
+  {
+    "id": "science-fines-surface-area",
+    "topic": "science",
+    "about": "Why fines extract fastest",
+    "text": "In ground coffee the tiniest particles provide most of the surface water can reach, so they extract faster than the bigger pieces, a 2016 grinding study notes; a few very large particles still matter too.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4834475/"
+  },
+  {
+    "id": "science-grinding-releases-co2",
+    "topic": "science",
+    "about": "How much CO2 grinding releases",
+    "text": "Grinding breaks open the cells that hold roasted coffee's CO2: one study found more than 70% of the gas escaped when beans were ground to 500-micron particles, which is why espresso is brewed soon after grinding.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3140933/"
+  },
+  {
+    "id": "science-headspace-de1",
+    "topic": "science",
+    "about": "Headspace and extraction on a Decent DE1",
+    "text": "Headspace matters: when the gap above the puck was reduced on a Decent DE1, a dark-roast 1:1 ristretto averaged an extraction yield 3.4% higher over ten shots, probably because the puck prewetted more evenly.",
+    "source": "https://fast.decentespresso.com/f/0/gagne_espresso_shower_screens.pdf"
+  },
+  {
+    "id": "science-nine-bar-lever-spring",
+    "topic": "science",
+    "about": "Why espresso is brewed at 9 bar",
+    "text": "Why 9 bar? Decent's blog traces it to the springs of Achille Gaggia's late-1940s lever machines, which happened to give about 8 to 10 bar, and finds no documented testing behind the number.",
+    "source": "https://decentespresso.com/blog/the_nine_bar_question"
+  },
+  {
+    "id": "science-puck-screens-edges",
+    "topic": "science",
+    "about": "Puck screens and water at the basket's edges",
+    "text": "Puck screens, coarse metal meshes laid on the coffee, add little resistance but can reshape how water spreads. With a traditional basket, one test found extraction about 1.8% higher, likely because the mesh sends water toward the edges.",
+    "source": "https://fast.decentespresso.com/f/0/gagne_espresso_shower_screens.pdf"
+  },
+  {
+    "id": "science-rdt-espresso-concentration",
+    "topic": "science",
+    "about": "How the Ross droplet technique changed espresso",
+    "text": "Wetting the beans changed the espresso too: in a 2023 study, dark roasts ground with a few drops of water ran slower and gave shots at least 15% more concentrated.",
+    "source": "https://arxiv.org/html/2312.03103v3"
+  },
+  {
+    "id": "science-rdt-halves-static",
+    "topic": "science",
+    "about": "The Ross droplet technique and static",
+    "text": "The 'Ross droplet technique' means wetting beans with a few drops of water before grinding. In a 2023 study, 20 to 30 microlitres per gram cut the static charge on the grounds by at least half.",
+    "source": "https://arxiv.org/html/2312.03103v3"
+  },
+  {
+    "id": "science-refractometer-vst",
+    "topic": "science",
+    "about": "How a coffee refractometer works",
+    "text": "A coffee refractometer reads strength from how much a sample bends light, measuring its temperature at the same time; VST, the company of Vince Fedele, made the first one designed specifically for coffee.",
+    "source": "https://freshcup.com/the-refractometer"
+  },
+  {
+    "id": "science-sca-brewer-temperature",
+    "topic": "science",
+    "about": "SCA home-brewer temperature rule",
+    "text": "When a 2020 study was written, SCA home-brewer certification required a drip coffee maker to reach 92 °C within the first minute of brewing, hold at least that for the rest of the cycle and never exceed 96 °C.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7536440/"
+  },
+  {
+    "id": "science-static-volcanic-ash",
+    "topic": "science",
+    "about": "Static on ground coffee, like volcanic ash",
+    "text": "Freshly ground coffee can carry static charge on the scale of volcanic ash and thundercloud ice, a 2023 study found, and some dark roasts even let off millimetre-long sparks.",
+    "source": "https://arxiv.org/html/2312.03103v3"
+  },
+  {
+    "id": "science-water-window-limescale",
+    "topic": "science",
+    "about": "La Marzocco's water specification",
+    "text": "La Marzocco asks for water with 90 to 150 ppm of dissolved solids, 70 to 100 ppm total hardness and 40 to 80 ppm alkalinity; much more mineral-rich water tends to coat the machine in limescale.",
+    "source": "https://lamarzocco.com/ie/en/technical-questions/la-marzocco-water-specifications/"
+  },
+  {
+    "id": "science-wdt-john-weiss",
+    "topic": "science",
+    "about": "WDT and John Weiss",
+    "text": "WDT is the Weiss Distribution Technique, after John Weiss, who holds a biochemistry doctorate and taught computer science; he shared it online in December 2005, stirring the grounds with a dissecting needle inside a cut-down yoghurt cup.",
+    "source": "https://dailycoffeenews.com/2022/12/14/what-is-wdt-in-espresso-we-talked-to-its-creator-john-weiss"
+  },
+  {
+    "id": "variety-arabica-natural-hybrid",
+    "topic": "variety",
+    "about": "Arabica, a natural hybrid of two species",
+    "text": "Arabica is itself a natural hybrid: its parents were two other coffee species, Coffea canephora (robusta) and Coffea eugenioides. A 2024 genome study dates the event that founded it to roughly 350,000 to 610,000 years ago.",
+    "source": "https://pubmed.ncbi.nlm.nih.gov/38622339/"
+  },
+  {
+    "id": "variety-batian-2010",
+    "topic": "variety",
+    "about": "Batian, Kenya's 2010 variety",
+    "text": "Batian, released in Kenya in 2010, was bred at the Ruiru coffee research station from a mix of parents including SL28, SL34, Rume Sudan and the Timor Hybrid, to stand up to both coffee leaf rust and coffee berry disease.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/batian",
+    "match": {
+      "varieties": [
+        "batian"
+      ]
+    }
+  },
+  {
+    "id": "variety-bourbon-brazil-descendants",
+    "topic": "variety",
+    "about": "Bourbon in Brazil and its descendants",
+    "text": "The Bourbon variety reached Brazil around 1860 and spread north through South and Central America, where its own descendants, Caturra, Catuaí and Mundo Novo among them, have since taken over most of its ground.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/bourbon",
+    "match": {
+      "varieties": [
+        "bourbon"
+      ]
+    }
+  },
+  {
+    "id": "variety-bourbon-island-name",
+    "topic": "variety",
+    "about": "Bourbon's name and Réunion island",
+    "text": "Red and yellow Bourbon owe their name to an island: French missionaries took the Bourbon variety from Yemen to Bourbon Island, now La Réunion, in the early 1700s, and it did not leave the island until the mid-19th century.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/bourbon",
+    "match": {
+      "varieties": [
+        "bourbon"
+      ]
+    }
+  },
+  {
+    "id": "variety-catimor-a-group",
+    "topic": "variety",
+    "about": "Catimor: a group, not one variety",
+    "text": "Catimor is often taken for a single variety, but it is a whole group of distinct varieties sharing the same kind of parentage: Caturra crossed with the Timor Hybrid. The original crosses were made at CIFC, Portugal's coffee rust research centre.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/t8667",
+    "match": {
+      "varieties": [
+        "catimor"
+      ]
+    }
+  },
+  {
+    "id": "variety-catuai-very-good",
+    "topic": "variety",
+    "about": "Catuaí: a 1949 cross named 'very good'",
+    "text": "Catuaí was bred in Brazil in 1949 by crossing yellow Caturra with Mundo Novo. Its name comes from a Guarani phrase meaning 'very good', and it comes in both yellow- and red-fruited forms.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/catuai",
+    "match": {
+      "varieties": [
+        "catuai",
+        "catuaí"
+      ]
+    }
+  },
+  {
+    "id": "variety-caturra-close-planting",
+    "topic": "variety",
+    "about": "Caturra's spread and close planting",
+    "text": "Caturra was never officially released in Brazil, where it was found, yet it became common across Central America. Breeders were drawn to its small size, which lets the trees be planted closer together.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/caturra",
+    "match": {
+      "varieties": [
+        "caturra"
+      ]
+    }
+  },
+  {
+    "id": "variety-caturra-colombia-castillo",
+    "topic": "variety",
+    "about": "Colombia's renewal from Caturra to Castillo",
+    "text": "Caturra was once thought to make up nearly half of Colombia's coffee, until a government programme from 2008 encouraged farmers to replace more than three billion trees with Castillo, a rust-resistant variety with Caturra in its parentage.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/caturra",
+    "match": {
+      "varieties": [
+        "caturra",
+        "castillo"
+      ]
+    }
+  },
+  {
+    "id": "variety-caturra-guarani-small",
+    "topic": "variety",
+    "about": "Caturra: the Guarani word for small",
+    "text": "Caturra takes its name from a Guarani word meaning 'small'. Found on a farm in Minas Gerais, Brazil, between 1915 and 1918, it is a natural mutant of Bourbon whose single altered gene keeps the plant compact.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/caturra",
+    "match": {
+      "varieties": [
+        "caturra"
+      ]
+    }
+  },
+  {
+    "id": "variety-centroamericano-yield",
+    "topic": "variety",
+    "about": "Centroamericano, a 2010 F1 hybrid",
+    "text": "Centroamericano, an F1 hybrid of T5296 and Rume Sudan, was released for Central American farmers in 2010. In breeding trials it out-yielded the region's standard varieties by 22 to 47%, and it was bred to resist coffee leaf rust.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/centroamericano",
+    "match": {
+      "varieties": [
+        "centroamericano"
+      ]
+    }
+  },
+  {
+    "id": "variety-ethiopia-cbd-resistant-selections",
+    "topic": "variety",
+    "about": "Ethiopia's berry-disease-resistant varieties",
+    "text": "Since the 1970s, Ethiopia has released coffee varieties developed to resist coffee berry disease, and many were planted in and around its wild coffee forests, which scientists warn could let them interbreed with, and replace, the original wild gene pool.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3689350/",
+    "match": {
+      "varieties": [
+        "74110",
+        "74112",
+        "jarc"
+      ]
+    }
+  },
+  {
+    "id": "variety-ethiopia-heirloom-landrace",
+    "topic": "variety",
+    "about": "'Heirloom' and 'landrace' on Ethiopian bags",
+    "text": "'Heirloom' on an Ethiopian coffee is a loose label for arabica whose exact variety is hard to pin down: Ethiopia has thousands of coffee varieties. Several roasters now call them 'landrace' instead.",
+    "source": "https://sprudge.com/what-is-heirloom-coffee-190755.html",
+    "match": {
+      "varieties": [
+        "heirloom",
+        "heirlooms",
+        "ethiopian heirloom",
+        "landrace",
+        "landraces",
+        "ethiopian landrace"
+      ]
+    }
+  },
+  {
+    "id": "variety-excelsa-liberica-split",
+    "topic": "variety",
+    "about": "Excelsa and the proposed liberica split",
+    "text": "Excelsa has generally been classed as a variety of liberica, Coffea liberica var. dewevrei, but a 2025 genomic study proposes splitting liberica into three species: Coffea liberica, Coffea dewevrei (excelsa) and Coffea klainei.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12449269/",
+    "match": {
+      "varieties": [
+        "liberica",
+        "excelsa"
+      ]
+    }
+  },
+  {
+    "id": "variety-gesha-best-of-panama",
+    "topic": "variety",
+    "about": "Gesha's Best of Panama breakthrough",
+    "text": "Gesha's big break came when the Peterson family of Boquete, Panama, entered it in the Best of Panama competition and auction: it scored remarkably well and fetched what was then a record price for green coffee at auction.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/geisha-panama",
+    "match": {
+      "varieties": [
+        "gesha",
+        "geisha"
+      ]
+    }
+  },
+  {
+    "id": "variety-gesha-brittle-branches",
+    "topic": "variety",
+    "about": "Gesha's brittle branches in 1960s Panama",
+    "text": "Gesha was handed out across Panama in the 1960s for its tolerance of leaf rust, yet few farmers planted it: they disliked its brittle branches.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/geisha-panama",
+    "match": {
+      "varieties": [
+        "gesha",
+        "geisha"
+      ]
+    }
+  },
+  {
+    "id": "variety-gesha-journey",
+    "topic": "variety",
+    "about": "Gesha's route from Ethiopia to CATIE",
+    "text": "Gesha took the long road: collected from Ethiopian coffee forests in the 1930s, it went to Tanzania's Lyamungu research station, then in 1953 to the CATIE research centre in Central America, where it was logged as accession T2722.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/geisha-panama",
+    "match": {
+      "varieties": [
+        "gesha",
+        "geisha"
+      ]
+    }
+  },
+  {
+    "id": "variety-gesha-malawi",
+    "topic": "variety",
+    "about": "Gesha grown widely in Malawi",
+    "text": "Gesha is not only a Panamanian story: World Coffee Research notes that the variety is also grown widely in Malawi.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/geisha-panama",
+    "match": {
+      "varieties": [
+        "gesha",
+        "geisha"
+      ]
+    }
+  },
+  {
+    "id": "variety-gesha-spelling",
+    "topic": "variety",
+    "about": "Gesha or Geisha: the spelling",
+    "text": "Gesha or Geisha? Early gene-bank records wrote 'Geisha', but the Ethiopian forest where it was collected lies near a mountain usually written 'Gesha' in English, so many in coffee now prefer that spelling.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/geisha-panama",
+    "match": {
+      "varieties": [
+        "gesha",
+        "geisha"
+      ]
+    }
+  },
+  {
+    "id": "variety-java-ethiopian-roots",
+    "topic": "variety",
+    "about": "The Java variety's Ethiopian roots",
+    "text": "Despite its name, the Java variety is an Ethiopian landrace selection: the Dutch took it from Ethiopia straight to the island of Java in the early 19th century. Panama, in 2016, was the first Central American country to recognise it officially.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/java",
+    "match": {
+      "varieties": [
+        "java"
+      ]
+    }
+  },
+  {
+    "id": "variety-laurina-bourbon-pointu",
+    "topic": "variety",
+    "about": "Bourbon Pointu (Laurina), the pointed bean",
+    "text": "Bourbon Pointu, botanically Laurina, is a natural mutation of Bourbon first selected on Réunion. 'Pointu' means pointed, after its small beans that taper at the ends, and the variety is known for being naturally low in caffeine.",
+    "source": "https://www.coffeereview.com/review/pointu-laurina/",
+    "match": {
+      "varieties": [
+        "bourbon pointu",
+        "laurina",
+        "pointu"
+      ]
+    }
+  },
+  {
+    "id": "variety-maragogipe-1870",
+    "topic": "variety",
+    "about": "Maragogipe, the big-bean Typica mutant",
+    "text": "Maragogipe, a natural Typica mutant found near the Brazilian city of that name in 1870, does everything big: its beans, its leaves and the lengths of stem between them are all especially large.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/maragogipe",
+    "match": {
+      "varieties": [
+        "maragogipe",
+        "maragogype",
+        "maragojipe"
+      ]
+    }
+  },
+  {
+    "id": "variety-mundo-novo-1943",
+    "topic": "variety",
+    "about": "Mundo Novo, found in São Paulo in 1943",
+    "text": "Mundo Novo is a natural cross of Bourbon and Typica that turned up in 1943 in São Paulo state, Brazil. It has been handed out to Brazilian farmers since 1952.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/mundo-novo",
+    "match": {
+      "varieties": [
+        "mundo novo"
+      ]
+    }
+  },
+  {
+    "id": "variety-pacamara-unstable",
+    "topic": "variety",
+    "about": "Pacamara's unstable generations",
+    "text": "Pacamara, a cross of Pacas and Maragogipe selected by El Salvador's coffee research institute, is a restless variety: its plants vary and do not breed true from one generation to the next.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/pacamara",
+    "match": {
+      "varieties": [
+        "pacamara"
+      ]
+    }
+  },
+  {
+    "id": "variety-pacas-family-farm",
+    "topic": "variety",
+    "about": "Pacas and the Pacas family farm",
+    "text": "Pacas, a natural mutant of Bourbon, turned up in 1949 on a farm in El Salvador's Santa Ana region owned by a family of the same name.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/pacas",
+    "match": {
+      "varieties": [
+        "pacas"
+      ]
+    }
+  },
+  {
+    "id": "variety-pink-bourbon-ethiopian-landrace",
+    "topic": "variety",
+    "about": "Pink Bourbon's name and its genetic tests",
+    "text": "Pink Bourbon got its name from a Colombian producer whose tall, gangly trees grew among Bourbon. Genetic tests commissioned by the importer Cafe Imports in 2017 and 2023 suggest it is no Bourbon at all, but an Ethiopian landrace.",
+    "source": "https://www.cafeimports.com/north-america/blog/?p=52997",
+    "match": {
+      "varieties": [
+        "pink bourbon",
+        "bourbon rosado"
+      ]
+    }
+  },
+  {
+    "id": "variety-robusta-cross-pollinates",
+    "topic": "variety",
+    "about": "Why robusta must cross-pollinate",
+    "text": "A robusta plant cannot pollinate its own flowers: the species must cross-pollinate, and which plants can fertilise one another is set by their genes.",
+    "source": "https://varieties.worldcoffeeresearch.org/robusta-2/history-of-robusta",
+    "match": {
+      "varieties": [
+        "robusta",
+        "canephora",
+        "conilon"
+      ]
+    }
+  },
+  {
+    "id": "variety-ruiru-11-hand-pollinated",
+    "topic": "variety",
+    "about": "Ruiru 11, Kenya's hand-pollinated hybrid",
+    "text": "Ruiru 11, released in Kenya in 1985 and named after the coffee research station at Ruiru, is made by hand: its first-generation hybrid seed comes from breeders carrying pollen from the father lines to the mother plants.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/ruiru-11",
+    "match": {
+      "varieties": [
+        "ruiru 11",
+        "ruiru-11",
+        "ruiru11"
+      ]
+    }
+  },
+  {
+    "id": "variety-sidra-debated-origins",
+    "topic": "variety",
+    "about": "Sidra's debated family tree",
+    "text": "Sidra's family tree is debated. It was first reported to be a Typica and Bourbon cross from Ecuador, but some DNA tests found samples close to Ethiopian heirloom coffees, and World Coffee Research suggests the name may cover several varieties.",
+    "source": "https://perfectdailygrind.com/2022/10/what-is-sidra-coffee/",
+    "match": {
+      "varieties": [
+        "sidra"
+      ]
+    }
+  },
+  {
+    "id": "variety-sl-scott-laboratories",
+    "topic": "variety",
+    "about": "SL28 and SL34 from Scott Labs",
+    "text": "The SL in SL28 and SL34 stands for Scott Laboratories, the Kenyan research labs where single trees picked out between 1935 and 1939 got the prefix SL. Forty-two trees of various origins were studied there for yield, quality, drought and disease.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/sl28",
+    "match": {
+      "varieties": [
+        "sl28",
+        "sl-28",
+        "sl 28",
+        "sl34",
+        "sl-34",
+        "sl 34"
+      ]
+    }
+  },
+  {
+    "id": "variety-sl28-tanganyika-tour",
+    "topic": "variety",
+    "about": "SL28 and A.D. Trench's Tanganyika tour",
+    "text": "SL28's story begins on a 1931 tour of Tanganyika, now Tanzania, by A.D. Trench of Kenya's Scott Labs. He brought back seed of a drought-resistant coffee, and in 1935 SL28 was selected from a single tree of it.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/sl28",
+    "match": {
+      "varieties": [
+        "sl28",
+        "sl-28",
+        "sl 28"
+      ]
+    }
+  },
+  {
+    "id": "variety-sl34-french-mission",
+    "topic": "variety",
+    "about": "SL34's 'French Mission' puzzle",
+    "text": "SL34 was picked from a single tree on Loresho Estate in Kabete, Kenya, labelled 'French Mission', a name usually taken to mean Bourbon. Yet genetic tests tie SL34 to the Typica group, so its origin story may be wrong.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/sl34",
+    "match": {
+      "varieties": [
+        "sl34",
+        "sl-34",
+        "sl 34"
+      ]
+    }
+  },
+  {
+    "id": "variety-starmaya-grown-from-seed",
+    "topic": "variety",
+    "about": "Starmaya, an F1 hybrid grown from seed",
+    "text": "Most F1 coffee hybrids have to be cloned or pollinated by hand, but seed producers can grow Starmaya from seed. Its mother, an Ethiopian or Sudanese landrace, is male-sterile and makes no pollen, so it is crossed with the father, Marsellesa, rather than pollinating itself.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/starmaya",
+    "match": {
+      "varieties": [
+        "starmaya"
+      ]
+    }
+  },
+  {
+    "id": "variety-stenophylla-rediscovered",
+    "topic": "variety",
+    "about": "Stenophylla's rediscovery in Sierra Leone",
+    "text": "Coffea stenophylla, named for its narrow leaves, was once farmed across Upper West Africa, but had not been seen in the wild in Sierra Leone since 1954 until scientists rediscovered it there in 2018.",
+    "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7248357/",
+    "match": {
+      "varieties": [
+        "stenophylla"
+      ]
+    }
+  },
+  {
+    "id": "variety-timor-hybrid-1920s",
+    "topic": "variety",
+    "about": "The Timor Hybrid and Catimor rust resistance",
+    "text": "The Timor Hybrid is a natural cross of arabica and robusta that sprang up by itself on the island of Timor in the 1920s. Its robusta genes carried resistance to coffee leaf rust into the Catimor varieties bred from it.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/t8667",
+    "match": {
+      "varieties": [
+        "timor hybrid",
+        "hibrido de timor",
+        "híbrido de timor",
+        "catimor"
+      ]
+    }
+  },
+  {
+    "id": "variety-typica-1940s",
+    "topic": "variety",
+    "about": "Typica's decline in the Americas",
+    "text": "Typica was the coffee on most South and Central American plantations until the 1940s. Its low yields and weakness against the major coffee diseases have since seen it slowly give way across much of the Americas.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/typica",
+    "match": {
+      "varieties": [
+        "typica"
+      ]
+    }
+  },
+  {
+    "id": "variety-typica-jamaica-1730",
+    "topic": "variety",
+    "about": "Typica's arrival in Jamaica in 1730",
+    "text": "In 1730 the English carried Typica to Jamaica from Martinique. Jamaica still plants it widely, and there it goes by the name Jamaica Blue Mountain.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/typica",
+    "match": {
+      "varieties": [
+        "typica"
+      ]
+    }
+  },
+  {
+    "id": "variety-villa-sarchi-wind",
+    "topic": "variety",
+    "about": "Villa Sarchi and the Sarchimor name",
+    "text": "Villa Sarchi, a dwarf Bourbon mutant, was found in Costa Rica's Alajuela province in the 1950s or 60s. It stands up to strong winds and lends half its name to the Sarchimor group of coffees.",
+    "source": "https://varieties.worldcoffeeresearch.org/varieties/villa-sarchi",
+    "match": {
+      "varieties": [
+        "villa sarchi",
+        "villa sarchí",
+        "villasarchi"
+      ]
+    }
+  },
+  {
+    "id": "variety-wild-coffee-species-threatened",
+    "topic": "variety",
+    "about": "Wild coffee species at risk of extinction",
+    "text": "Arabica and robusta are just two of many: a 2019 assessment of all 124 wild coffee species then known found that at least 60% of them are threatened with extinction.",
+    "source": "https://pubmed.ncbi.nlm.nih.gov/30746478/"
+  },
+  {
+    "id": "variety-wush-wush-place-name",
+    "topic": "variety",
+    "about": "Wush Wush, named after a place",
+    "text": "Like many Ethiopian heirloom coffees, Wush Wush is named after the place where it was first found: Wushwush, a small area in south-west Ethiopia. It reached South America around 1990.",
+    "source": "https://perfectdailygrind.com/2021/03/unlike-anything-i-had-ever-tasted-before-what-is-wush-wush-coffee/",
+    "match": {
+      "varieties": [
+        "wush wush",
+        "wushwush",
+        "wush-wush"
+      ]
+    }
+  },
+  {
+    "id": "variety-yellow-bourbon-1930",
+    "topic": "variety",
+    "about": "Yellow Bourbon's debated beginnings",
+    "text": "Yellow Bourbon is thought to have turned up in 1930 among the Red Bourbon on a farm near Pederneiras, in Brazil's São Paulo state. Many think it began as a natural cross of Red Bourbon with Yellow Botucatu, though some researchers suspect a mutation instead.",
+    "source": "https://dailycoffeenews.com/2019/04/18/the-fascinating-history-and-renewal-of-brazils-yellow-bourbon",
+    "match": {
+      "varieties": [
+        "yellow bourbon",
+        "bourbon amarelo"
+      ]
+    }
+  }
+]

@@ -1,6 +1,25 @@
 # Good morning: CafAI after your answers (2026-10-04)
 
-**Newest (2026-10-15, evening):** four more items of the gap review, built
+**Newest (2026-10-16 to 22):** fun facts (D197-D203, branch
+`feat/fun-facts`, merged into `main`): once you keep a recipe, a shot that
+runs like the last one on it gets one fun fact, in a quiet card between the
+coach's line and the taste question, instead of only "it ran the same".
+**Settings > Coach > Fun facts** picks where facts come from: Off, CafAI's
+facts (its own checked list, free), CafAI's and the coach's (the default:
+the coach adds one about your bag when it is sure of it), or with a web
+search too (Anthropic's, about a cent a search; through CafAI Bridge,
+Claude Code searches on your plan). Three builders made it side by side;
+ten researchers and five checkers wrote and checked the list, the usage
+limit stopped them twice, and you stopped the research at 340 checked facts
+to save usage (QUESTIONS 24). One fresh reviewer found four defects, all
+fixed with tests (the worst: a web search waiting beside a card could have
+left a chat stuck on Retry). On the final code: typecheck, lint, 4441 unit
+tests, the build and the release zip pass; Playwright passed all 472 tests (8 skipped by design). Not yet seen: the
+real coach writing a fact (the e2e and mock mode use the scripted coach),
+and Anthropic's web search with an API key (none here; the Bridge's search
+ran once, for real, through Claude Code).
+
+**Before that (2026-10-15, evening):** four more items of the gap review, built
 side by side by four agents and merged on branch `feat/gap-review-batch`
 (D161-D196), then into `main`: overlaid shot curves, TDS and EY on the shot
 card, °F, and care reminders set by your water. You put off Clean, Descale
@@ -119,6 +138,52 @@ pushed.
 | Drift watch (`npm run decaid:watch`) | exit 4 on 2026-10-11: every check passes for v0.8.8 and Decaid's `main` (`af4e995`), whose spec changes are additions; files CafAI depends on changed on `main` (camera access for skins, the Visualizer plugin), so on GitHub it would open a `decaid-read` issue (D105) |
 | Live API test (`npm run test:live`) | skipped here (no key on this machine); its dry run against the scripted coach passes |
 | Fresh-eyes verifier | 2026-10-11, your list (D123-D128): one reviewer, no critical or high findings; 2 medium (an unknown verdict in a stored chat stopped the coach for that bag; the taste-wording guard missed common promises and read only `expectedEffect`) and 8 low, with nits; all fixed in `8720050` but the screenshot script's fake clock, which only its own pictures meet (they are made deterministic another way). 2026-10-10, Decaid alignment: three reviewers (update safety; engine and storage; UI) found 25 defects, 7 of them important, each verified with a test or Decaid's source; all fixed (`197520d`, brief `docs/briefs/verify-decaid-alignment.md`). 2026-10-08, the UX rework: 2 major, 5 minor and 8 polish; 13 fixed, 1 kept by design, 1 open (below). Chat first: not run yet (its brief is `docs/briefs/verify-chat-first.md`). Earlier rounds: all fixed |
+
+## New: fun facts (2026-10-16)
+
+Your ask: once a profile works, a shot that runs the same should bring a
+fact about the roaster, the process, the origin, the flavours or the science,
+and failing those latte art, cleaning, roasting, growing and fermenting. You
+chose the source in Settings, the fact in a block of its own before the taste
+question, and a checked list of about 500; the research stopped at 340
+(`docs/superpowers/specs/2026-10-16-fun-facts-design.md`).
+
+- **When (D197).** Only after you Keep a recipe, and only for a shot that
+  ran like the last one on it: pour time within 3 s, yield within 1.5 g,
+  peak pressure within 1 bar, first drop within 3 s (timed from the pour),
+  the same stop, no new channeling flag. A shot that ran differently gets
+  the coach's usual read and no fact. One fact per shot.
+- **Settings > Coach > Fun facts (D198).** Off; CafAI's facts; CafAI's and
+  the coach's (the default); CafAI's, the coach's and a web search. Saved
+  with the Coach section, kept and restored like the temperature unit.
+- **CafAI's list (D199).** 340 facts in CafAI's own words, each with the
+  page it was checked against: 113 about origins, 40 each about processes,
+  varieties and roasters, 45 about roasting and growing, 45 about flavour
+  and espresso science, 17 about history. A fact never says what your cup
+  tastes like; one that names a flavour shows only for a bag whose notes say
+  that word.
+- **Which one (D200).** Facts about the bag first (roaster, variety, origin,
+  process, notes, roast level), turn about with general ones; each told once
+  on this device (localStorage, never in Decaid's backup or an export)
+  until every fitting fact has been told.
+- **The coach's (D201).** A new tool, `share_fun_fact`: the coach shares a
+  fact about your bag only when it is sure of it, beside the taste question,
+  and CafAI shows one of its own when it shares none. Ask it for a fun fact
+  any time.
+- **The card (D202).** "Fun fact", the fact, and "Source: sca.coffee" when
+  there is a site; no icon, no accent, nothing to tap.
+- **Web search (D203).** Anthropic's web search on the coach's requests in
+  that mode, one search a request, kept in the transcript exactly as it came;
+  through CafAI Bridge, Claude Code's own WebSearch (the only built-in tool it
+  turns on). A refused search falls back to the coach's mode, said once. The
+  sites the coach's own words cite show under them.
+- **What it cost.** About 7M tokens of agents, most of it the fact research
+  and its checks; the code was about 2M. The brief, the drafts, the checks
+  and the merge script stay in `E:\source\cafai-facts-research`, and 45 more
+  drafted facts wait only for their check.
+- **Calls of mine to check:** QUESTIONS 22-25 (the "like the last one"
+  numbers, the default, growing the list, region words that catch a
+  neighbour).
 
 ## New: four from the gap review (2026-10-15)
 

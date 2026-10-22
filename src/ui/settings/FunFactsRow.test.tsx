@@ -14,7 +14,7 @@ import { SettingsScreen } from './SettingsScreen.tsx';
 
 // What each choice does, as the spec words it (section 4).
 const OFF = 'No fun facts.';
-const LIST = "From CafAI's own list of about 500 checked facts, picked for the bag where one fits. Free, and works without the coach.";
+const LIST = "From CafAI's own list of over 300 checked facts, picked for the bag where one fits. Free, and works without the coach.";
 const COACH = "The coach shares a fact about this bag when it knows one for sure; the rest come from CafAI's list.";
 const WEB =
   'The coach may also look the roaster, farm or producer up on the web: one search per fact, about one US cent each, plus a few cents for the pages it reads.';
