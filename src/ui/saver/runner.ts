@@ -45,12 +45,16 @@ export function stepFor(instance: SaverInstance, ms: number, stepMs = 1000 / SAV
  */
 export function playFor(instance: SaverInstance, ms: number, stepMs = 1000 / SAVER_FPS): void {
   instance.draw();
-  let left = ms;
-  while (left > 0) {
-    const dt = Math.min(stepMs, left);
-    instance.step(dt);
+  // Whole frames counted, not subtracted, so no sliver of a frame is left over to draw once more.
+  const whole = Math.floor(ms / stepMs + 1e-9);
+  for (let i = 0; i < whole; i += 1) {
+    instance.step(stepMs);
     instance.draw();
-    left -= dt;
+  }
+  const rest = ms - whole * stepMs;
+  if (rest > 1e-6) {
+    instance.step(rest);
+    instance.draw();
   }
 }
 

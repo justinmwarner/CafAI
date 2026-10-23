@@ -134,6 +134,13 @@ describe('playFor', () => {
     expect(saver.draws()).toBe(5);
   });
 
+  it('leaves no sliver of a frame to step again when the time is whole frames', () => {
+    const saver = recorder();
+    playFor(saver.instance, 100);
+    expect(saver.steps).toHaveLength(3);
+    expect(saver.draws()).toBe(4);
+  });
+
   it('draws once for no time at all', () => {
     const saver = recorder();
     playFor(saver.instance, 0);

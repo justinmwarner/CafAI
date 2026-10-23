@@ -16,31 +16,11 @@
 import { useEffect, useRef } from 'react';
 import Box from '@mui/material/Box';
 import { TID } from '../testIds.ts';
-import { backingScale, runSaver, SAVER_FPS, sizeSaver, type SaverRun } from './runner.ts';
+import { backingScale, playFor, runSaver, sizeSaver, type SaverRun } from './runner.ts';
 import type { CanvasSaver, SaverEnv, SaverInstance } from './types.ts';
 
 /** Under reduced motion the still is painted again this often: a screen never holds one picture all night. */
 export const STILL_EVERY_MS = 60_000;
-
-/**
- * Plays a screensaver to `ms` as its loop would at 30 fps, every frame drawn:
- * the first frame only draws, each after it steps a frame's time and draws.
- */
-export function playTo(instance: SaverInstance, ms: number): void {
-  const frame = 1000 / SAVER_FPS;
-  instance.draw();
-  // Whole frames counted, not subtracted, so no sliver of a frame is left over to draw once more.
-  const whole = Math.floor(ms / frame + 1e-9);
-  for (let i = 0; i < whole; i += 1) {
-    instance.step(frame);
-    instance.draw();
-  }
-  const rest = ms - whole * frame;
-  if (rest > 1e-6) {
-    instance.step(rest);
-    instance.draw();
-  }
-}
 
 export interface SaverCanvasProps {
   saver: CanvasSaver;
@@ -153,7 +133,7 @@ function OneCanvas({ saver, env, still, at, onFail, onPainted }: SaverCanvasProp
           }
         }, STILL_EVERY_MS);
       } else if (at !== null) {
-        playTo(instance, at);
+        playFor(instance, at);
         paintedOnce();
       } else {
         // The loop's first frame only draws: that is the first picture.
