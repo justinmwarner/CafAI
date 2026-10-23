@@ -85,6 +85,23 @@ describe('the drinks’ screens as live state', () => {
     expect(store.get().hotWater.goBack).toBe(false);
   });
 
+  it('keeps a refused change on screen after another change saves, until it saves itself', async () => {
+    const repo = fakeSettingsRepo(defaultSettings(MODEL));
+    const store = createDrinkScreensStore(repo);
+    repo.fail = true;
+    await expect(store.set('steam', { goBack: false })).rejects.toThrow('The disk is full.');
+    repo.fail = false;
+    await store.set('steam', { scene: 'whirlpool' });
+    expect(store.get().steam).toEqual({ scene: 'whirlpool', goBack: false, goBackSeconds: 10 });
+    await store.reload();
+    expect(store.get().steam.goBack).toBe(false);
+    await store.set('steam', { goBack: false });
+    expect((await repo.get()).drinkScreens?.steam).toEqual({ scene: 'whirlpool', goBack: false });
+    repo.replace({ ...defaultSettings(MODEL), drinkScreens: { steam: { goBack: true } } });
+    await store.reload();
+    expect(store.get().steam.goBack).toBe(true);
+  });
+
   it('reads the saved choices again after an import or a restore', async () => {
     const repo = fakeSettingsRepo(defaultSettings(MODEL));
     const store = createDrinkScreensStore(repo);

@@ -368,10 +368,20 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
     },
     settings: {
       get: async () => settings,
-      // As the real one, the care block field by field (D187).
-      update: async ({ care: carePatch, ...patch }) => {
+      // As the real one, the care block field by field (D187), and each drink's screen too (D-BACK-2).
+      update: async ({ care: carePatch, drinkScreens: screensPatch, ...patch }) => {
         const careEdits = Object.entries(carePatch ?? {}).filter(([, value]) => value !== undefined);
-        settings = { ...settings, ...patch, ...(carePatch ? { care: { ...(settings.care ?? DEFAULT_CARE), ...Object.fromEntries(careEdits) } } : {}) };
+        const screens = { ...settings.drinkScreens };
+        for (const [kind, edit] of Object.entries(screensPatch ?? {}) as [keyof typeof screens, Record<string, unknown> | undefined][]) {
+          const edits = Object.entries(edit ?? {}).filter(([, value]) => value !== undefined);
+          screens[kind] = { ...screens[kind], ...Object.fromEntries(edits) };
+        }
+        settings = {
+          ...settings,
+          ...patch,
+          ...(carePatch ? { care: { ...(settings.care ?? DEFAULT_CARE), ...Object.fromEntries(careEdits) } } : {}),
+          ...(screensPatch ? { drinkScreens: screens } : {}),
+        };
         return settings;
       },
     },

@@ -55,13 +55,21 @@ const sameChoices = (a: DrinkScreenChoices, b: DrinkScreenChoices) =>
 
 /** `initial`: what was saved, or nothing (every default). */
 export function createDrinkScreensStore(settings: SettingsRepository, initial?: DrinkScreensSettings): DrinkScreensStore {
-  let current = resolveDrinkScreens(initial);
+  let saved = resolveDrinkScreens(initial);
+  /** Changes a save refused: kept on screen for the session, over whatever is saved later. */
+  const unsaved: DrinkScreensSettings = {};
+  let current = saved;
   let latest = 0;
   const listeners = new Set<() => void>();
   const show = (next: DrinkScreenChoices) => {
     if (sameChoices(next, current)) return;
     current = next;
     for (const listener of [...listeners]) listener();
+  };
+  const withUnsaved = (choices: DrinkScreenChoices): DrinkScreenChoices => {
+    const shown = { ...choices };
+    for (const kind of DRINK_SCREEN_KINDS) shown[kind] = { ...choices[kind], ...unsaved[kind] };
+    return shown;
   };
   return {
     get: () => current,
@@ -72,12 +80,23 @@ export function createDrinkScreensStore(settings: SettingsRepository, initial?: 
     async set(kind, change) {
       const ticket = ++latest;
       show({ ...current, [kind]: { ...current[kind], ...change } });
-      const saved = await settings.update({ drinkScreens: { [kind]: change } });
+      let result;
+      try {
+        result = await settings.update({ drinkScreens: { [kind]: change } });
+      } catch (error) {
+        unsaved[kind] = { ...unsaved[kind], ...change };
+        throw error;
+      }
+      // Saved now: no longer one to keep over what storage holds.
+      const left = Object.entries(unsaved[kind] ?? {}).filter(([field]) => !(field in change));
+      unsaved[kind] = Object.fromEntries(left);
+      saved = resolveDrinkScreens(result.drinkScreens);
       // A later change may have been made while this one was saving: that one's save says what holds.
-      if (ticket === latest) show(resolveDrinkScreens(saved.drinkScreens));
+      if (ticket === latest) show(withUnsaved(saved));
     },
     async reload() {
-      show(resolveDrinkScreens((await settings.get()).drinkScreens));
+      saved = resolveDrinkScreens((await settings.get()).drinkScreens);
+      show(withUnsaved(saved));
     },
   };
 }
