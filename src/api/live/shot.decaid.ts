@@ -7,7 +7,8 @@
  * before its pour (D204). Every reply and every frame of the shot is checked against the
  * pinned spec and for drift. A simulator only (D104): it refuses to run unless
  * Decaid simulates the machine and no real machine is connected, because
- * espresso moves water. `npm test` never runs it.
+ * espresso moves water. It runs in gateway mode Tracking, set from Disabled
+ * and put back after. `npm test` never runs it.
  *
  *   DECAID_URL=http://localhost:8080 DECAID_SIM=1 npm run test:decaid
  *
@@ -76,6 +77,19 @@ describeDecaid('shot', ({ url, require }) => {
     }
     if (settings.gatewayMode === 'full') {
       throw new Error('Decaid’s gateway mode is Full, so it would not stop the shot at its target weight: set Tracking or Disabled.');
+    }
+    // In Disabled, a fresh Decaid's default, Decaid opens its own shot screen for a run and tracks no other run until
+    // that screen's Back is pressed (de1_state_manager.dart:703-740 at aab5f93), so the suite's second run would go
+    // untracked: it runs in Tracking, and puts back what it found.
+    const mode = settings.gatewayMode;
+    if (mode !== 'tracking') {
+      if (typeof mode !== 'string') throw new Error(`GET /api/v1/settings sent no gatewayMode (${typeof mode}).`);
+      undo.add('gateway mode', async () => {
+        const now = await live.client.updateSettings({ gatewayMode: mode });
+        if (now.gatewayMode !== mode) throw new Error(`gatewayMode stayed ${String(now.gatewayMode)}, not ${mode}.`);
+      });
+      const now = await live.client.updateSettings({ gatewayMode: 'tracking' });
+      if (now.gatewayMode !== 'tracking') throw new Error(`gatewayMode stayed ${String(now.gatewayMode)}, not tracking.`);
     }
     // Listening before the shot: shotState replays where it is, and every frame of the shot is checked at the end.
     for (const path of SHOT_CHANNELS) watches.push(watchChannel(live.client.wsOrigin, path));

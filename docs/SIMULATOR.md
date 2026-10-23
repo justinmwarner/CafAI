@@ -193,8 +193,11 @@ system menu (the window icon, or right-click the title bar).
 
 **During a shot:** Settings > Advanced > **Gateway Mode** decides what Decaid
 does. **Disabled** (the default) opens Decaid's own shot screen in its window,
-over CafAI when CafAI runs inside it. (Not seen with the default skin: a shot
-started over the API left streamline.js on screen. Not tried with CafAI.)
+over CafAI when CafAI runs inside it, and tracks no other shot until that
+screen's Back is pressed: the next espresso runs with no shotState and no
+record (seen on 0.8.8, and on 0.9.0 in the release run of 2026-10-23). (Not
+seen with the default skin: a shot started over the API left streamline.js
+on screen. Not tried with CafAI.)
 **Tracking** leaves the skin on screen. Both stop the shot at the target
 weight. **Full** does not, and CafAI never stops a shot itself, so do not use
 Full.
@@ -291,10 +294,13 @@ What each switch adds:
 - **`DECAID_SIM=1`** (writes too): one simulated shot with the profile Decaid
   has loaded, **Next step** once during the shot (the machine must move on a
   step, or end the shot from its last one), notes and a rating written on
-  it, a TDS and its EY written and then cleared with null, then idle. It
-  needs the simulated scale, and gateway mode Disabled or
-  Tracking. The shot stays in Decaid's history, with "CafAI contract test"
-  in its notes.
+  it, a TDS and its EY written and then cleared with null, then idle; then
+  espresso and idle at once, a run Decaid aborts before its pour (D204). It
+  needs the simulated scale, and gateway mode Disabled or Tracking, and runs
+  in Tracking: from Disabled it sets Tracking and puts Disabled back after,
+  as Disabled tracks no shot after the first until Decaid's own shot
+  screen's Back is pressed. The shot stays in Decaid's history, with "CafAI
+  contract test" in its notes.
 - **`DECAID_REQUIRE=1`** (CI sets it): a check that cannot run fails
   instead of being skipped, so a missing `DECAID_URL` or switch fails the run.
 
