@@ -67,7 +67,24 @@ import { buildProfileRecord, normalizeProfile, profileHash, type DecaidProfileRe
 import { newestSteamsFirst, steamNotFound, steamWithoutMeasurements, type MockSteamRecord, type MockSteamSummary } from './steams.ts';
 import { normalizeWorkflow, validateWorkflowPatch } from './workflow.ts';
 
-export type MockChannel = 'machine' | 'scale' | 'devices' | 'shotState' | 'waterLevels' | 'shotSettings' | 'timeToReady';
+export type MockChannel = 'machine' | 'scale' | 'devices' | 'shotState' | 'waterLevels' | 'shotSettings' | 'timeToReady' | 'display';
+
+/** Decaid's DisplayState (ws/v1/display, GET /api/v1/display), as Decaid 0.8.8 sends it. */
+export interface MockDisplayState {
+  /** Decaid's own wake lock (the machine connected and awake) or a skin's. */
+  wakeLockEnabled: boolean;
+  wakeLockOverride: boolean;
+  brightness: number;
+  requestedBrightness: number;
+  lowBatteryBrightnessActive: boolean;
+  platformSupported: { brightness: boolean; wakeLock: boolean };
+}
+
+/** A command a display socket sent, as the mock took it. */
+export interface MockDisplayCommand {
+  command: string;
+  brightness?: number;
+}
 
 export interface MockFrames {
   machine: MachineSnapshot;
@@ -77,6 +94,7 @@ export interface MockFrames {
   waterLevels: WaterLevels;
   shotSettings: ShotSettings;
   timeToReady: TimeToReadyFrame;
+  display: MockDisplayState;
 }
 
 export interface MockDecaidOptions {
@@ -330,6 +348,19 @@ export interface MockDecaid {
   /** time-to-ready.reaplugin's channel (D5); shotPlayer.ts drives it on a wake from sleep. */
   publishTimeToReady(frame: TimeToReadyFrame): void;
 
+  // Display (ws/v1/display, the screensaver's dim and wake lock: D-SAVER-2)
+  getDisplayState(): MockDisplayState;
+  /** Every command the display sockets sent, in order. */
+  readonly displayCommands: MockDisplayCommand[];
+  /**
+   * A display socket's message, applied as Decaid applies it: the new state
+   * (broadcast to every display socket too), or an error for that socket alone.
+   * `owner` is the socket: a wake lock it asked for goes when it closes.
+   */
+  displayCommand(owner: object, message: unknown): MockDisplayState | { error: string };
+  /** A display socket closed: Decaid lets go of the wake lock it asked for. */
+  displaySocketClosed(owner: object): void;
+
   // Faults and logs (for tests and Playwright)
   failNext(fault: MockFault): void;
   takeFault(method: string, path: string): MockFault | null;
@@ -432,9 +463,19 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
     waterLevels: new Set(),
     shotSettings: new Set(),
     timeToReady: new Set(),
+    display: new Set(),
   };
   const dropListeners = new Set<(channel: MockChannel | null) => void>();
-  const sockets: Record<MockChannel, number> = { machine: 0, scale: 0, devices: 0, shotState: 0, waterLevels: 0, shotSettings: 0, timeToReady: 0 };
+  const sockets: Record<MockChannel, number> = {
+    machine: 0,
+    scale: 0,
+    devices: 0,
+    shotState: 0,
+    waterLevels: 0,
+    shotSettings: 0,
+    timeToReady: 0,
+    display: 0,
+  };
 
   function emit<C extends MockChannel>(channel: C, frame: MockFrames[C]): void {
     for (const listener of [...listeners[channel]]) listener(clone(frame));
@@ -682,6 +723,26 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
     if (!occurrence || key === null || !sleptThrough.has(key)) return occurrence;
     sleptThrough.set(key, occurrence);
     return null;
+  }
+
+  // ---- display (ws/v1/display) ---------------------------------------------------------
+  // Android's own brightness to start with, as Decaid reads it; the wake locks the display sockets asked for.
+  let requestedBrightness = 100;
+  const wakeLockOwners = new Set<object>();
+  const displayCommands: MockDisplayCommand[] = [];
+
+  function displayState(): MockDisplayState {
+    const override = wakeLockOwners.size > 0;
+    // Decaid's own wake lock: the machine connected and awake (display_controller.dart).
+    const awake = machineConnected && snapshot.state.state !== 'sleeping';
+    return {
+      wakeLockEnabled: override || awake,
+      wakeLockOverride: override,
+      brightness: requestedBrightness,
+      requestedBrightness,
+      lowBatteryBrightnessActive: false,
+      platformSupported: { brightness: true, wakeLock: true },
+    };
   }
 
   const mock: MockDecaid = {
@@ -1357,6 +1418,36 @@ export function createMockDecaid(options: MockDecaidOptions = {}): MockDecaid {
     },
     publishTimeToReady(frame) {
       emit('timeToReady', frame);
+    },
+
+    // ---- display --------------------------------------------------------------------------
+    getDisplayState: () => displayState(),
+    displayCommands,
+    displayCommand(owner, message) {
+      const record = isPlainObject(message) ? message : {};
+      const command = typeof record['command'] === 'string' ? record['command'] : String(record['command']);
+      const brightness = record['brightness'];
+      displayCommands.push(typeof brightness === 'number' ? { command, brightness } : { command });
+      if (command === 'setBrightness') {
+        if (typeof brightness !== 'number' || !Number.isInteger(brightness) || brightness < 0 || brightness > 100) {
+          return { error: 'brightness must be an integer 0-100' };
+        }
+        requestedBrightness = brightness;
+      } else if (command === 'requestWakeLock') {
+        wakeLockOwners.add(owner);
+      } else if (command === 'releaseWakeLock') {
+        wakeLockOwners.delete(owner);
+      } else {
+        return { error: `Unknown command: ${command}` };
+      }
+      // Decaid sends the state after every command, changed or not.
+      const state = displayState();
+      emit('display', state);
+      return state;
+    },
+    displaySocketClosed(owner) {
+      if (!wakeLockOwners.delete(owner)) return;
+      emit('display', displayState());
     },
 
     // ---- faults and logs ------------------------------------------------------------------

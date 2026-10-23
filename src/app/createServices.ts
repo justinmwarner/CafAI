@@ -8,6 +8,7 @@ import {
   defaultGatewayOrigin,
   detectHost,
 } from '../api/index.ts';
+import { createDisplayChannel } from '../api/display.ts';
 import { createPluginDirectory, watchPlugins } from '../api/plugins.ts';
 import { createToldList } from '../coach/facts/told.ts';
 import { DEFAULT_MODEL, MODELS } from '../llm/index.ts';
@@ -20,6 +21,7 @@ import { createAppearanceStore } from './appearance.ts';
 import { createCareService, localTotalsCache } from './care/careService.ts';
 import { withCoachCredential } from './coachAccess.ts';
 import { createCoachEngine, type CoachEngine } from './engine/engine.ts';
+import { createSaverScreen } from './saverScreen.ts';
 import { createScreensaverSettingStore } from './screensaverSetting.ts';
 import { createTemperatureUnitStore } from './temperatureUnit.ts';
 import type { Services } from './types.ts';
@@ -78,6 +80,12 @@ export async function createServices(win: Window): Promise<AppServices> {
   } catch {
     // Storage blocked: every page counts afresh.
   }
+  // The tablet's screen while a screensaver shows (D-SAVER-2), through Decaid's display socket: inside Decaid only.
+  // A dim left over from a page unloaded while one showed is put back now, so it is never kept as the barista's own.
+  const saverScreen = host.insideDecaid
+    ? createSaverScreen(createDisplayChannel({ wsOrigin: decaid.wsOrigin, visibility: win.document }), deviceStorage)
+    : undefined;
+  saverScreen?.restore();
   const care = createCareService({ storage, decaid, telemetry, cache: localTotalsCache(deviceStorage), visibility });
   await care.start();
 
@@ -173,6 +181,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     appearance,
     temperatureUnit,
     screensaver,
+    saverScreen,
     plugins,
     coachSource,
     care,
@@ -185,6 +194,7 @@ export async function createServices(win: Window): Promise<AppServices> {
       stopCodeWatch?.();
       coach.dispose();
       care.dispose();
+      saverScreen?.dispose();
       telemetry.stop();
     },
   };
