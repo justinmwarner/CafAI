@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { backingScale, MAX_STEP_MS, runSaver, stepFor, type FrameClock } from './runner.ts';
+import { backingScale, MAX_STEP_MS, playFor, runSaver, stepFor, type FrameClock } from './runner.ts';
 import type { SaverInstance } from './types.ts';
 
 /** A clock whose frames come only when the test says, every `every` ms. */
@@ -123,6 +123,22 @@ describe('stepFor', () => {
     expect(saver.steps[3]).toBeCloseTo(10, 9);
     expect(saver.steps.reduce((sum, dt) => sum + dt, 0)).toBeCloseTo(110, 9);
     expect(saver.draws()).toBe(0);
+  });
+});
+
+describe('playFor', () => {
+  it('draws first, then steps and draws each 30 fps frame', () => {
+    const saver = recorder();
+    playFor(saver.instance, 110);
+    expect(saver.steps).toHaveLength(4);
+    expect(saver.draws()).toBe(5);
+  });
+
+  it('draws once for no time at all', () => {
+    const saver = recorder();
+    playFor(saver.instance, 0);
+    expect(saver.steps).toEqual([]);
+    expect(saver.draws()).toBe(1);
   });
 });
 

@@ -6,7 +6,7 @@
 //          [--still 1] [--tint crema] [--numbers 9.0,36.4,28] [--fps 1 --wait 3000]
 //          [--width 962 --height 602 --scale 1.33] [--out .verify/beanfield.png]
 //
-// --at steps to that millisecond and holds the frame; without it the animation runs,
+// --at plays to that millisecond (every frame stepped and drawn) and holds it; without it the animation runs,
 // and --wait lets it run that long first (with --fps 1 it prints the frame timing).
 import { chromium } from '@playwright/test';
 

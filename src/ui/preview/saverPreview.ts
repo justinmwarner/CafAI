@@ -8,7 +8,8 @@
  *
  * saver:   an id from src/ui/saver/registry.ts (default: the first there)
  * seed:    the seed (default 1)
- * at:      milliseconds to step to, then that one frame, held
+ * at:      milliseconds to play to (every frame stepped and drawn, so trails
+ *          build), then held there
  * still=1: the screensaver's still, as under reduced motion
  * tint:    crema (default), matcha, cold-brew, blueberry, plum, cherry,
  *          tamper, or a hue 0-359
@@ -20,7 +21,7 @@
 import '../fonts.ts';
 import { paletteFor } from '../appearance.ts';
 import { CANVAS_SAVERS, canvasSaver } from '../saver/registry.ts';
-import { backingScale, runSaver, sizeSaver, stepFor } from '../saver/runner.ts';
+import { backingScale, playFor, runSaver, sizeSaver } from '../saver/runner.ts';
 import type { SaverEnv, SaverInstance } from '../saver/types.ts';
 
 const params = new URLSearchParams(window.location.search);
@@ -67,7 +68,9 @@ function timed(instance: SaverInstance): SaverInstance {
 }
 
 async function start() {
-  await document.fonts.ready;
+  // Nothing on this page sets text in Figtree, so it would only start to load
+  // at a screensaver's first fillText, after the frame was painted.
+  await Promise.all(['400 16px "Figtree"', '800 16px "Figtree"', 'italic 800 16px "Figtree"'].map((font) => document.fonts.load(font)));
   const created = saver.create(canvas, env);
   if (!created) {
     document.body.textContent = `${saver.label} could not get its ${saver.context} context here.`;
@@ -79,8 +82,7 @@ async function start() {
   if (params.get('still') === '1') {
     instance.still();
   } else if (params.has('at')) {
-    stepFor(instance, Number(params.get('at')));
-    instance.draw();
+    playFor(instance, Number(params.get('at')));
   } else {
     window.addEventListener('resize', fit);
     runSaver(instance, {

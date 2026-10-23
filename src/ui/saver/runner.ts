@@ -37,6 +37,23 @@ export function stepFor(instance: SaverInstance, ms: number, stepMs = 1000 / SAV
   }
 }
 
+/**
+ * Steps and draws a screensaver through `ms`, a 30 fps frame at a time, as
+ * the loop would have: the picture a moment into a showing, trails and all
+ * (Brew Rain and Rising Steam build theirs by drawing every frame, so
+ * stepFor and one draw would leave them bare). Draws at least once.
+ */
+export function playFor(instance: SaverInstance, ms: number, stepMs = 1000 / SAVER_FPS): void {
+  instance.draw();
+  let left = ms;
+  while (left > 0) {
+    const dt = Math.min(stepMs, left);
+    instance.step(dt);
+    instance.draw();
+    left -= dt;
+  }
+}
+
 export interface FrameClock {
   now(): number;
   request(callback: () => void): number;
