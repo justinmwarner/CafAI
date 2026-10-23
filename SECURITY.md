@@ -100,11 +100,17 @@ is the first).
   eleven coach steps and five tags (`src/usage/`); where the device's time
   zone or language points to Europe, only after **Yes, share** (the README's
   Privacy section says what and where). Clarity sees the page's layout,
-  where it was tapped and the screen's name in the address
-  (`?screen=history-bag`, never a bag's id). The project is set to Strict
-  masking, which replaces every word before upload. No tag holds anything a
-  person typed, and nothing ties a session to a person: CafAI makes no
-  `identify` call.
+  where it was tapped and the page's address: the screen's name
+  (`?screen=history-bag`) and CafAI's route, which in a bag's History view
+  holds that bag's random id (`#/history/<id>`, naming no coffee and no
+  person). The project is set to Strict masking, which replaces every word
+  before upload. No tag holds anything a person typed, and nothing ties a
+  session to a person: CafAI makes no `identify` call.
+- Clarity records every link's address on the page, masked or not. While the
+  device shares, **On Visualizer**, whose address leads to the barista's shot,
+  is a button that goes there on a tap instead, so the address is never on
+  the page; CafAI's other links lead to its own screens, the care videos,
+  the README and Decaid's settings.
 - The chat's root (its transcript, every card, the prompt row and the
   composer's lane) and Settings > Log carry `data-clarity-mask="true"`,
   which hides their text and images, children included, even if the
@@ -129,8 +135,11 @@ is the first).
 - Clarity's script comes from `https://www.clarity.ms/tag/<id>`, once the
   app has rendered. A load that fails or is blocked logs nothing, because
   Decaid serves a skin's console to the network. Turning sharing off in
-  Settings > About calls `consent(false)`, which erases Clarity's cookies,
-  and `stop`: nothing more is sent from that page. CafAI has no
+  Settings > About (or **Turn off**, **No thanks**) stops Clarity first, then
+  erases its cookies itself and takes the screen out of the address, so
+  nothing more is sent from that page. It never calls Clarity's
+  `consent(false)`, which would start Clarity again without cookies. A
+  Clarity script that had not run yet starts nothing. CafAI has no
   Content-Security-Policy; one added later must allow `https://*.clarity.ms`
   and `https://c.bing.com`.
 

@@ -3635,10 +3635,21 @@ uses the coach.
   otherwise; a change is the device's answer. The calls
   (`src/usage/service.ts`): after an ask-first yes, `consentv2` with
   `analytics_Storage: 'granted'` and `ad_Storage: 'denied'`; under the
-  notice, `consentv2` with `ad_Storage: 'denied'` only; off,
-  `consent(false)`, which erases Clarity's cookies, then `stop`, after which
-  the screen parameter goes and nothing more is sent; on again in the same
-  page, `start` and the consent call again. The README's Privacy section
+  notice, `consentv2` with `ad_Storage: 'denied'` only; off, `stop` first,
+  then CafAI erases Clarity's cookies (`_clck`, `_clsk`) itself and takes
+  the screen parameter out, so nothing more is sent; on again in the same
+  page, `start` and the consent call again. The order matters, and
+  `consent(false)` is never called (clarity-js `core/history.ts` and
+  `queue.ts`, read 2026-10-22):
+  - while Clarity runs, its own hook on the address stops and restarts it
+    at every change of the address, and calls made meanwhile wait for the
+    restart;
+  - its `consent(false)` erases the cookies but starts it again without
+    them;
+  - a Clarity whose script has not run yet has its waiting calls dropped
+    for a lone `stop`, and its queue marked as another Clarity tag's
+    ("CL001"), so the script starts nothing.
+  The README's Privacy section
   says what Clarity's terms ask a site to say: Microsoft may use the data,
   including for advertising, with a link to Microsoft's privacy statement.
   If the test run (D-USAGE-7) shows Clarity cannot keep ads off without the
@@ -3681,8 +3692,9 @@ uses the coach.
   `profile_loaded`, `shot_read`, `taste_given`, `change_confirmed`,
   `recipe_kept`; Clarity's funnels count sessions, not people. Up to 50
   events counted before `start()` on a device that shares wait for Clarity.
-  The tags (`clarity('set', key, value)`), set once a page and again when
-  one changes: `cafai_version`; `coach_source`, `api-key`, `bridge` or
+  The tags (`clarity('set', key, value)`) are set when Clarity starts, again
+  when one changes, and again after each screen's new page view, since
+  Clarity clears them with the last one: `cafai_version`; `coach_source`, `api-key`, `bridge` or
   `none` (none until the chosen source has its key or code); `host`,
   Decaid's platform from `__DECENT_HOST__` (`android`, `windows`, `macos`,
   `ios`) or `browser`; `layout`, `tablet` or `phone`; and `rule`, `ask` or
@@ -3719,7 +3731,18 @@ uses the coach.
   records `<meta>` elements (clarity-js, read 2026-10-22), so Decaid's
   account-proxy token, in the `reaprime-proxy-token` meta, stays on the
   device; `window.__REA_PROXY_TOKEN__` is a script variable, and Clarity
-  does not read those. No tag holds anything a person typed. Replays go
+  does not read those. No tag holds anything a person typed. Clarity does
+  record every link's address (`href`), and each page's whole address with
+  its hash, whatever the masking (clarity-js, read 2026-10-22).
+  - While the device shares, **On Visualizer** is a button that goes to the
+    shot's page on a tap, as the link does, so that address, which leads to
+    the barista's shot, is never on the page (`VisualizerLink`).
+  - CafAI's other links lead to its own screens, the care videos, the README
+    and Decaid's settings.
+  - A bag's History view keeps the bag's random id in its route
+    (`#/history/<id>`), so Clarity records that id with the page. It names
+    no coffee and no person, and the `screen` parameter never holds it.
+  Replays go
   without CafAI's own stylesheet: Clarity's player fetches a `<link>`'s
   stylesheet from the page's address, which only the tablet itself reaches
   at `localhost`. MUI's styles are recorded anyway, as Clarity reads
@@ -3772,8 +3795,9 @@ uses the coach.
   screen; a shot on the simulated machine, with Clarity and without, shows
   what it costs in CPU and upload; nothing about the key or code fields
   appears in the uploads; `consentv2` with only `ad_Storage: 'denied'`
-  leaves analytics at Clarity's default, `consent(false)` with `stop` ends
-  the uploads, and `start` resumes them in the same page. Then the zip goes
+  leaves analytics at Clarity's default, Turn off's `stop` ends the uploads
+  with nothing after it (no restart, a tag that had not loaded starting
+  nothing), and `start` resumes them in the same page. Then the zip goes
   on the owner's tablet (Skins > + > ZIP file) for a day of ordinary use,
   watching for crashes (an open Clarity issue reports Android WebView
   crashes) and lag on the shot screen. Only then does the owner set the

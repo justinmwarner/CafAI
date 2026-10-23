@@ -587,8 +587,11 @@ troubleshooting.
   replaced before it leaves the device, the chat and Settings > Log are
   masked as well, and no field you type in reaches Clarity at all, not even
   as a hash: the API key, the pairing code, what you write to the coach, a
-  bag's details, a TDS, a grind setting. Nothing ties a
-  session to you. CafAI asks first, and loads nothing from Clarity before
+  bag's details, a TDS, a grind setting. A shot's link to Visualizer is
+  never on the page while the device shares (**On Visualizer** opens it on
+  a tap), and a bag's History view gives Clarity only the bag's random id,
+  which names no coffee and no person. Nothing ties a session to you. CafAI
+  asks first, and loads nothing from Clarity before
   **Yes, share**, where the device's time zone is European (any `Europe/*`
   zone, or Cyprus, the Canaries, Madeira, the Azores, Iceland, the Faroes,
   Ceuta, Svalbard or France's overseas regions) or says nothing (UTC,

@@ -141,8 +141,16 @@ off otherwise. Changing it records a choice.
     CafAI makes no consent call under the notice rule.
   - Either way, the README says what Clarity's terms require it to say:
     Microsoft may use the data, including for advertising.
-- **Off:** `consent(false)`, which erases Clarity's cookies, then `stop`.
-  CafAI sends no more events and drops the screen parameter.
+- **Off:** `stop` first, then CafAI erases Clarity's cookies (`_clck`,
+  `_clsk`) itself and drops the screen parameter, and sends no more events.
+  It never calls `consent(false)`, which starts Clarity again without
+  cookies. The order follows clarity-js (`core/history.ts`, `queue.ts`,
+  read in review, 2026-10-22):
+  - while Clarity runs, a change of the address stops and restarts it, and
+    calls made meanwhile wait for the restart;
+  - a Clarity whose script has not run yet has its waiting calls dropped for
+    a lone `stop`, and its queue marked as another tag's ("CL001"), so the
+    script starts nothing.
   - If the test run shows uploads still go out, CafAI reloads the page the
     next time no shot or coach turn is running.
 
@@ -289,7 +297,8 @@ is not available anyway.
   - Loads nothing without an ID, in mock mode or the demo, or for an unset
     ask-first device.
   - The script and each `consentv2` call per section 4.
-  - `consent(false)` and `stop` on off.
+  - On off, `stop` before the address changes, the cookies erased, and
+    never `consent(false)`.
   - No event or tag while off.
 - **Screens:** `replaceState` keeps every other parameter, the parameter
   goes on off, and `history-bag` never holds an id.
@@ -326,7 +335,8 @@ its ID in a local release build:
 6. **Consent calls.**
    - `consentv2` with only `ad_Storage: 'denied'` leaves analytics at
      Clarity's default.
-   - `consent(false)` with `stop` ends the uploads.
+   - Turn off's `stop` ends the uploads, and nothing follows it: no restart,
+     and a tag that had not loaded starts nothing.
    - Turned on again in the same page, `start` resumes them.
 7. **The tablet.** The owner installs that zip on the tablet (Skins > + >
    ZIP file) for a day of ordinary use. Check for crashes (an open Clarity
