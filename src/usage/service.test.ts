@@ -1,20 +1,21 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CHOICE_KEY } from './choice.ts';
-import type { ClarityCall } from './clarity.ts';
+import type { ClarityHandle } from './clarity.ts';
 import type { RegionSignals } from './region.ts';
 import { createUsageService, type UsageService } from './service.ts';
 
 const EUROPE: RegionSignals = { timeZone: 'Europe/Berlin', languages: ['de-DE'] };
 const AMERICA: RegionSignals = { timeZone: 'America/Chicago', languages: ['en-US'] };
 
+/** Every call into Clarity, a halt as ['halt'], in order. */
 let calls: unknown[][];
 let loads: number;
 let store: Map<string, string>;
 const storage = { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => void store.set(key, value) };
-const load = (): ClarityCall => {
+const load = (): ClarityHandle => {
   loads += 1;
-  return (...args) => void calls.push(args);
+  return { call: (...args) => void calls.push(args), halt: () => void calls.push(['halt']) };
 };
 /** Every service a test made, disposed after it, so no field guard outlives its test. */
 const made: UsageService[] = [];
@@ -89,14 +90,23 @@ describe('usage sharing (D-USAGE-3)', () => {
     expect(named('consentv2')).toHaveLength(1);
   });
 
-  it('Turn off erases and stops Clarity, takes the screen out and sends nothing more', () => {
+  it('Turn off stops Clarity before it touches the address, erases its cookies and sends nothing more', () => {
     const usage = service(AMERICA);
     usage.start();
     usage.screen('settings');
     expect(window.location.search).toBe('?screen=settings');
+    document.cookie = '_clck=user1; path=/';
+    // The address changes only after the halt: Clarity's own hook would start it again otherwise.
+    const replaceState = window.history.replaceState.bind(window.history);
+    vi.spyOn(window.history, 'replaceState').mockImplementation((...args) => {
+      calls.push(['replaceState']);
+      replaceState(...args);
+    });
     usage.choose(false);
-    expect(named('consent')).toEqual([['consent', false]]);
-    expect(named('stop')).toEqual([['stop']]);
+    expect(calls.slice(-2)).toEqual([['halt'], ['replaceState']]);
+    // Never Clarity's consent(false), which starts it again without cookies: CafAI erases them itself.
+    expect(named('consent')).toEqual([]);
+    expect(document.cookie).not.toContain('_clck');
     expect(window.location.search).toBe('');
     usage.track('shot_read');
     usage.tag('layout', 'phone');
@@ -131,6 +141,28 @@ describe('usage sharing (D-USAGE-3)', () => {
     usage.start();
     expect(usage.getState()).toEqual({ sharing: true, prompt: null, rule: 'ask' });
     expect(calls[0]).toEqual(['consentv2', { ad_Storage: 'denied' }]);
+  });
+
+  it("sends the tags again after each screen's new page view, since Clarity clears them with the last one", () => {
+    const usage = service(AMERICA);
+    usage.tag('cafai_version', '0.1.3');
+    usage.start();
+    usage.screen('settings');
+    usage.screen('settings');
+    const versionTags = () => named('set').filter((call) => call[1] === 'cafai_version');
+    // Once at the start, once for the settings page view; the same screen again changes nothing.
+    expect(versionTags()).toHaveLength(2);
+    expect(named('set').filter((call) => call[1] === 'rule')).toHaveLength(2);
+  });
+
+  it('puts the screen in the address before Clarity starts, so its first page view is that screen', () => {
+    const usage = service(EUROPE);
+    usage.start();
+    usage.screen('history');
+    expect(window.location.search).toBe('');
+    usage.choose(true);
+    expect(window.location.search).toBe('?screen=history');
+    expect(named('set').filter((call) => call[1] === 'rule')).toHaveLength(1);
   });
 
   it('sends each tag once, and again only when it changes', () => {

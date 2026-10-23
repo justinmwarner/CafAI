@@ -6,7 +6,7 @@
  */
 import { mirrorScreen } from './address.ts';
 import { readChoice, WORDING, writeChoice, type UsageChoice } from './choice.ts';
-import { loadClarity, type ClarityCall } from './clarity.ts';
+import { forgetClarityCookies, loadClarity, type ClarityHandle } from './clarity.ts';
 import { guardFields } from './fields.ts';
 import { consentRule, readRegionSignals, type ConsentRule, type RegionSignals } from './region.ts';
 import type { UsageEvent, UsageTag, UsageTracker } from './types.ts';
@@ -41,7 +41,7 @@ export interface UsageDeps {
   storage: Pick<globalThis.Storage, 'getItem' | 'setItem'> | null;
   now(): Date;
   /** Clarity's loader (the real one by default). */
-  load?: (win: Window, projectId: string) => ClarityCall;
+  load?: (win: Window, projectId: string) => ClarityHandle;
   /** What the device says about where it is (read from it by default). */
   signals?: RegionSignals;
 }
@@ -61,7 +61,7 @@ export function createUsageService(deps: UsageDeps): UsageService {
   let choice = readChoice(storage);
   let state = stateFor(choice, rule);
   let started = false;
-  let clarity: ClarityCall | null = null;
+  let clarity: ClarityHandle | null = null;
   /** Stopped in this page: turned on again, Clarity starts over. */
   let stopped = false;
   const early: UsageEvent[] = [];
@@ -78,35 +78,46 @@ export function createUsageService(deps: UsageDeps): UsageService {
     if (!clarity || stopped) return;
     for (const [key, value] of tags) {
       if (sent.get(key) === value) continue;
-      clarity('set', key, value);
+      clarity.call('set', key, value);
       sent.set(key, value);
     }
+  }
+
+  /** Clarity starts a page view at each change of the address and clears the tags with the last one: set them again. */
+  function resendTags(): void {
+    sent.clear();
+    sendTags();
   }
 
   function begin(): void {
     // Before Clarity loads, so the guard's observer comes before Clarity's and runs first.
     if (!unguard) unguard = guardFields(win.document);
+    // The screen in the address before Clarity starts, so its first page view is this screen's.
+    if (screenName !== null) mirrorScreen(win, screenName);
     if (!clarity) clarity = load(win, projectId);
-    else if (stopped) clarity('start');
+    else if (stopped) clarity.call('start');
     stopped = false;
     // Analytics consent only where CafAI asked and heard yes; elsewhere it claims none, and keeps ads off (D-USAGE-3).
-    if (choice?.choice === 'yes' && choice.rule === 'ask') clarity('consentv2', { analytics_Storage: 'granted', ad_Storage: 'denied' });
-    else clarity('consentv2', { ad_Storage: 'denied' });
+    if (choice?.choice === 'yes' && choice.rule === 'ask') clarity.call('consentv2', { analytics_Storage: 'granted', ad_Storage: 'denied' });
+    else clarity.call('consentv2', { ad_Storage: 'denied' });
     sendTags();
-    if (screenName !== null) mirrorScreen(win, screenName);
-    for (const event of early.splice(0)) clarity('event', event);
+    for (const event of early.splice(0)) clarity.call('event', event);
   }
 
   function end(): void {
     early.length = 0;
-    mirrorScreen(win, null);
     unguard?.();
     unguard = null;
-    if (!clarity || stopped) return;
-    clarity('consent', false);
-    clarity('stop');
-    stopped = true;
-    sent.clear();
+    // Stop first, then change the address: Clarity's own hook on the address restarts it while it runs, and
+    // calls made meanwhile wait for the restart. Its consent(false) would start it again too, without
+    // cookies, so CafAI erases the cookies itself (clarity-js core/history.ts, queue.ts, read 2026-10-22).
+    if (clarity && !stopped) {
+      clarity.halt();
+      stopped = true;
+      sent.clear();
+    }
+    forgetClarityCookies(win.document, win.location.hostname);
+    mirrorScreen(win, null);
   }
 
   return {
@@ -134,7 +145,7 @@ export function createUsageService(deps: UsageDeps): UsageService {
     },
     track(event) {
       if (!state.sharing) return;
-      if (live()) clarity!('event', event);
+      if (live()) clarity!.call('event', event);
       else if (!started && early.length < EARLY_CAP) early.push(event);
     },
     tag(key, value) {
@@ -143,7 +154,7 @@ export function createUsageService(deps: UsageDeps): UsageService {
     },
     screen(name) {
       screenName = name;
-      if (state.sharing && live()) mirrorScreen(win, name);
+      if (state.sharing && live() && mirrorScreen(win, name)) resendTags();
     },
     dispose() {
       unguard?.();

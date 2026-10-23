@@ -24,9 +24,9 @@ describe('mirrorScreen', () => {
   it('replaces the history entry only when the address changes', () => {
     const replaceState = vi.fn();
     const win = { location: { href: 'http://localhost:24800/#/' }, history: { state: null, replaceState } };
-    mirrorScreen(win as unknown as Window, null);
+    expect(mirrorScreen(win as unknown as Window, null)).toBe(false);
     expect(replaceState).not.toHaveBeenCalled();
-    mirrorScreen(win as unknown as Window, 'coach');
+    expect(mirrorScreen(win as unknown as Window, 'coach')).toBe(true);
     expect(replaceState).toHaveBeenCalledWith(null, '', 'http://localhost:24800/?screen=coach#/');
   });
 
@@ -40,6 +40,6 @@ describe('mirrorScreen', () => {
         },
       },
     };
-    expect(() => mirrorScreen(win as unknown as Window, 'coach')).not.toThrow();
+    expect(mirrorScreen(win as unknown as Window, 'coach')).toBe(false);
   });
 });

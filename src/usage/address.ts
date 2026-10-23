@@ -16,12 +16,15 @@ export function withScreen(href: string, screen: string | null): string {
   return url.toString();
 }
 
-export function mirrorScreen(win: Pick<Window, 'location' | 'history'>, screen: string | null): void {
+/** Put the screen in the address; whether the address changed. */
+export function mirrorScreen(win: Pick<Window, 'location' | 'history'>, screen: string | null): boolean {
   const next = withScreen(win.location.href, screen);
-  if (next === win.location.href) return;
+  if (next === win.location.href) return false;
   try {
     win.history.replaceState(win.history.state, '', next);
+    return true;
   } catch {
     // A page that may not rewrite its address keeps it: the screen stays out of it.
+    return false;
   }
 }

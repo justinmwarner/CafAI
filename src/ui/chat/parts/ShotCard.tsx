@@ -14,6 +14,7 @@ import { SHOT_VERDICTS, SHOT_VERDICT_WORDS, type ShotBaseline, type ShotVerdict 
 import { pourTime } from '../../../coach/summary/pourClock.ts';
 import type { ShotSummary } from '../../../coach/types.ts';
 import { TID } from '../../testIds.ts';
+import { useUsage } from '../../usage/useUsage.ts';
 import { describeChannelingFlag, formatBar, formatGrams, formatRatio, formatSeconds, shotRatio } from '../format.ts';
 import { ShotSparkline } from './ShotSparkline.tsx';
 import { ShotTds } from './ShotTds.tsx';
@@ -31,13 +32,34 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** Its own width in a grid row too (History's shot rows). */
+const visualizerLinkSx = { minHeight: 48, mt: 0.5, justifySelf: 'start' } as const;
+
 /**
  * "On Visualizer" (6.4): a plain link to the shot's page, which Decaid opens
  * in the system browser. Only a Visualizer shot page is linked, whatever an
- * imported record says.
+ * imported record says. While the device shares usage it is a button that
+ * goes there on a tap instead, the way a link does: Clarity records every
+ * link's address on the page, masked or not, and this one leads to the
+ * barista's shot (D-USAGE-5).
  */
 export function VisualizerLink({ url }: { url: string | null | undefined }) {
+  const sharing = useUsage().state?.sharing ?? false;
   if (!isVisualizerShotUrl(url)) return null;
+  if (sharing) {
+    return (
+      <Button
+        variant="text"
+        color="primary"
+        endIcon={<OpenInNewRoundedIcon />}
+        data-testid={TID.visualizerLink}
+        onClick={() => window.location.assign(url)}
+        sx={visualizerLinkSx}
+      >
+        On Visualizer
+      </Button>
+    );
+  }
   return (
     <Button
       component="a"
@@ -47,8 +69,7 @@ export function VisualizerLink({ url }: { url: string | null | undefined }) {
       color="primary"
       endIcon={<OpenInNewRoundedIcon />}
       data-testid={TID.visualizerLink}
-      // Its own width in a grid row too (History's shot rows).
-      sx={{ minHeight: 48, mt: 0.5, justifySelf: 'start' }}
+      sx={visualizerLinkSx}
     >
       On Visualizer
     </Button>

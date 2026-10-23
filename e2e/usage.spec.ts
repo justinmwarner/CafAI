@@ -65,15 +65,18 @@ test.describe('elsewhere', () => {
     await expect.poll(() => clarityCalls(page)).toContainEqual(['consentv2', { ad_Storage: 'denied' }]);
     expect(await clarityCalls(page)).not.toContainEqual(['consentv2', { analytics_Storage: 'granted', ad_Storage: 'denied' }]);
 
+    const before = (await clarityCalls(page)).length;
     await page.getByTestId(TID.usageNo).click();
     await expect(page.getByTestId(TID.usagePrompt)).toHaveCount(0);
     await expect.poll(() => clarityCalls(page)).toContainEqual(['stop']);
-    expect(await clarityCalls(page)).toContainEqual(['consent', false]);
+    // Stopped, and nothing after: no consent(false), which would start Clarity again without cookies.
+    expect((await clarityCalls(page)).slice(before)).toEqual([['stop']]);
     expect(screenInAddress(page)).toBeNull();
 
     await goTo(page, 'settings');
     await expect(page.getByTestId(TID.usageSwitch)).not.toBeChecked();
     expect(screenInAddress(page)).toBeNull();
+    expect((await clarityCalls(page)).slice(before)).toEqual([['stop']]);
   });
 
   test('never in the demo, nor in mock mode without the switch', async ({ page }) => {

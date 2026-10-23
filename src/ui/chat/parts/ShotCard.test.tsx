@@ -7,6 +7,8 @@ import type { ShotRecord } from '../../../api/types.ts';
 import shot01 from '../../../coach/__fixtures__/decaid-mcp/shot-01.json';
 import { summarizeShot } from '../../../coach/summary/summarize.ts';
 import { TID } from '../../testIds.ts';
+import { createFakeUsage } from '../../testing/fakeServices.ts';
+import { UsageContextForTests } from '../../usage/useUsage.ts';
 import { renderThemed } from '../testing/render.tsx';
 import { sampleSummary } from '../testing/fixtures.ts';
 import { ShotCard } from './ShotCard.tsx';
@@ -249,6 +251,21 @@ describe('ShotCard Visualizer link (6.4)', () => {
     expect(link).not.toHaveAttribute('target');
     expect(link).toHaveTextContent('On Visualizer');
     expect(screen.getByRole('link', { name: 'On Visualizer' })).toBe(link);
+  });
+
+  it("keeps the shot's address out of the page while the device shares usage: a button that goes there on a tap (D-USAGE-5)", () => {
+    const state = { sharing: true, prompt: null, rule: 'notice' } as const;
+    const { usage } = createFakeUsage(state);
+    renderThemed(
+      <UsageContextForTests value={usage}>
+        <ShotCard summary={sampleSummary()} visualizerUrl={url} />
+      </UsageContextForTests>,
+    );
+    const button = screen.getByTestId(TID.visualizerLink);
+    expect(button.tagName).toBe('BUTTON');
+    expect(button).not.toHaveAttribute('href');
+    expect(screen.getByRole('button', { name: 'On Visualizer' })).toBe(button);
+    expect(document.body.innerHTML).not.toContain(url);
   });
 
   it('shows no link before the upload, nor one that does not lead to Visualizer', () => {
