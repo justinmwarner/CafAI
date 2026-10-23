@@ -269,7 +269,17 @@ export function DrinkView({ kind, back, onGoBack }: DrinkViewProps) {
         {live ? null : (
           <Box ref={actions} sx={{ flex: ownRow ? '1 0 100%' : 'none', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 1 }}>
             {countdown === null ? null : (
-              <Button data-testid={TID.drinkStay} aria-label="Stay on this screen" onClick={stay} sx={{ flex: 'none', px: 1.75 }}>
+              <Button
+                data-testid={TID.drinkStay}
+                aria-label="Stay on this screen"
+                // Stay keeps the view as it is pressed: a press the zero lands in the middle of still keeps it.
+                onPointerDown={stay}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') stay();
+                }}
+                onClick={stay}
+                sx={{ flex: 'none', px: 1.75 }}
+              >
                 Stay
               </Button>
             )}

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '../chat/testing/setup.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { formatLocalTimestamp } from '../../../mock/decaid/clock.ts';
 import type { MachineFrame } from '../../api/types.ts';
@@ -230,6 +230,31 @@ describe('DrinkView going back by itself (D-BACK-1)', () => {
     expect(back).toHaveFocus();
     wait(20_000);
     expect(onGoBack).not.toHaveBeenCalled();
+  });
+
+  it('a press on Stay keeps the view as it starts, even when the zero falls before it is let go', () => {
+    const { onGoBack, send } = renderView('steam');
+    fakeClock();
+    send(frame('steam', 'pouring'));
+    send(frame('idle', 'idle'));
+    wait(9900);
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Stay on this screen' }));
+    wait(200);
+    expect(onGoBack).not.toHaveBeenCalled();
+    expect(seconds()).toBeNull();
+    expect(screen.getByRole('button', { name: 'Go back to Settings' })).toHaveFocus();
+  });
+
+  it('Enter or Space on Stay keeps the view as the key goes down', () => {
+    const { onGoBack, send } = renderView('steam');
+    fakeClock();
+    send(frame('steam', 'pouring'));
+    send(frame('idle', 'idle'));
+    wait(9900);
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Stay on this screen' }), { key: ' ' });
+    wait(200);
+    expect(onGoBack).not.toHaveBeenCalled();
+    expect(seconds()).toBeNull();
   });
 
   it('a tap anywhere on the view keeps it, and does what it was for', async () => {

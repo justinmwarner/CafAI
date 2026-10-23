@@ -56,6 +56,7 @@ function mount(props: DialProps, mode: 'dark' | 'light' = 'dark') {
   const send = (f: MachineFrame) => act(() => services.telemetry.setState({ machine: f }));
   const dial = within(container).getByTestId(TID.drinkDial);
   return {
+    services,
     send,
     dial,
     palette,
@@ -107,6 +108,32 @@ describe('DrinkDial', () => {
     expect(tea.stroke).toBe(asWritten(css(tea.colors.warmCold)));
     const americano = at(95);
     expect(americano.stroke).toBe(asWritten(css(americano.colors.warmHot)));
+  });
+
+  it('keeps a finished hot water’s colour when the temperature is set for the next one', () => {
+    const presets = { ...PRESETS, hotWaterData: { ...PRESETS.hotWaterData, targetTemperature: 95 } };
+    const { services, send, arc, colors } = mount({ kind: 'hotWater', scene: 'pour', target: 200, presets });
+    send(frame('hotWater', 'pouring', { flow: 8 }));
+    send(frame('hotWater', 'pouring', { flow: 8 }));
+    send(frame('idle', 'idle'));
+    const warm = asWritten(css(colors.warmHot));
+    expect(arc.style.stroke).toBe(warm);
+    act(() =>
+      services.telemetry.setState({
+        shotSettings: {
+          steamSetting: 0,
+          targetSteamTemp: 150,
+          targetSteamDuration: 50,
+          targetHotWaterTemp: 40,
+          targetHotWaterVolume: 200,
+          targetHotWaterDuration: 30,
+          targetShotVolume: 36,
+          groupTemp: 93,
+        },
+      }),
+    );
+    send(frame('idle', 'idle'));
+    expect(arc.style.stroke).toBe(warm);
   });
 
   it('sets the done check above the figures without moving them, centred where the scene cuts out its circle', () => {

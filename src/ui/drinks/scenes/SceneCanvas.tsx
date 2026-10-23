@@ -229,9 +229,12 @@ export function SceneCanvas({ kind, scene, run, target, sets, size }: SceneCanva
     };
 
     const input = read();
-    note(input, performance.now());
-    // Nothing live and the scene never moved on (a run over before it was made, or none yet): it comes to rest at once.
-    show(input, MAX_STEP_S, !input.live && !current.moved && !still ? REST_STEPS : 0);
+    const at = performance.now();
+    note(input, at);
+    // Nothing live and the scene never moved on (a run over before it was made, or none yet), or past its
+    // settling and still mid-motion (the run ended while the page was hidden): it comes to rest at once.
+    const overdue = current.moved && current.endedAt !== null && at - current.endedAt >= SETTLE_MS && current.scene.settling();
+    show(input, MAX_STEP_S, !input.live && !still && (!current.moved || overdue) ? REST_STEPS : 0);
     if (still) {
       if (run === null || !input.live || hidden) return undefined;
       return trace.onData((changed) => {

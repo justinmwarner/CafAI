@@ -20,7 +20,7 @@
  * still on every reading; the arc and the number still move, because they
  * are the readings.
  */
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { keyframes, useTheme, type Theme } from '@mui/material/styles';
@@ -36,6 +36,7 @@ import { sceneFor } from './scenes/catalog.ts';
 import { css, sceneColors, themeColorSource, warmthColor } from './scenes/colors.ts';
 import { SceneCanvas } from './scenes/SceneCanvas.tsx';
 import { sceneInput, sceneSets } from './scenes/sceneInput.ts';
+import type { SceneSets } from './scenes/types.ts';
 
 const RING = 112;
 /** The done check at the dial's full size; it scales with the dial, as the figures and the scene do. */
@@ -96,8 +97,14 @@ export function DrinkDial({ kind, run, target, size, scene, presets }: DrinkDial
   const colors = sceneColors(themeColorSource(theme));
   const shotSettings = useTelemetry((s) => s.shotSettings);
   // What the drink was set to: the run's first frame gives the flush its target, which holds through the run.
-  const sets = useMemo(() => sceneSets(kind, shotSettings, presets, run?.latest ?? null), [kind, shotSettings, presets, run]);
+  const liveSets = useMemo(() => sceneSets(kind, shotSettings, presets, run?.latest ?? null), [kind, shotSettings, presets, run]);
   const live = run?.live ?? false;
+  // A run's sets as it ran, as the view holds its target: a temperature set once it is over is for the next run, not this one's colour.
+  const [held, setHeld] = useState<{ runId: number; sets: SceneSets } | null>(null);
+  useEffect(() => {
+    if (run !== null && live) setHeld({ runId: run.id, sets: liveSets });
+  }, [run, live, liveSets]);
+  const sets = run !== null && !live && held?.runId === run.id ? held.sets : liveSets;
   // A run the machine's going away cut short is not done: no check for it.
   const done = run !== null && !run.live && !run.lost;
   const root = useRef<HTMLDivElement>(null);

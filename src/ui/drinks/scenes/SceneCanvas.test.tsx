@@ -329,6 +329,22 @@ describe('SceneCanvas', () => {
     expect(frames.size).toBe(1);
   });
 
+  it('brings a scene to rest when the page shows again past its settling, its run having ended while the page was hidden', () => {
+    settles = true;
+    const { send } = mount();
+    send(frame('steam'));
+    runFor(100);
+    const scene = made.at(-1)!;
+    setVisibility('hidden');
+    send(frame('idle', 'idle'));
+    clock += 5000;
+    const before = scene.update.mock.calls.length;
+    setVisibility('visible');
+    expect(scene.update.mock.calls.length - before).toBe(60);
+    expect(lastDraw(scene)[1].phase).toBe('done');
+    expect(frames.size, 'no loop: it is past its settling').toBe(0);
+  });
+
   it('cancels its frame when it goes', () => {
     const { send, unmount } = mount();
     send(frame('steam'));
