@@ -6,6 +6,8 @@ workflow checks against it. Settings > About shows the version you run.
 
 ## Unreleased
 
+## 0.1.3 (2026-10-23)
+
 ### Usage sharing
 
 - From the first release built with CafAI's Clarity project (after a test
