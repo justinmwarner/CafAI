@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { drinkStarted, goBackLabel, goBackRoute, NO_ORIGIN } from './drinkFocus.ts';
+import { drinkStarted, goBackLabel, goBackRoute, goBackWords, NO_ORIGIN } from './drinkFocus.ts';
 
 describe('drinkStarted', () => {
   it("switches to the drink's view and remembers the screen it took over", () => {
@@ -47,5 +47,16 @@ describe('Go back', () => {
     expect(goBackLabel({ name: 'history' })).toBe('Go back to History');
     expect(goBackLabel({ name: 'settings' })).toBe('Go back to Settings');
     expect(goBackLabel({ name: 'care', routine: 'daily' })).toBe('Go back to Machine care');
+    expect(goBackLabel({ name: 'drink', drink: 'flush' })).toBe('Go back');
+  });
+
+  it('names where it goes in words, for the status as the view counts down to it (D-BACK-1)', () => {
+    expect(goBackWords({ name: 'coach' })).toBe('the coach');
+    expect(goBackWords({ name: 'shot' })).toBe('the shot');
+    expect(goBackWords({ name: 'history', bagId: 'b1' })).toBe('History');
+    expect(goBackWords({ name: 'settings' })).toBe('Settings');
+    expect(goBackWords({ name: 'care', routine: 'weekly' })).toBe('Machine care');
+    // Never where Go back goes (the screen taken over is never a drink's view): nothing to name.
+    expect(goBackWords({ name: 'drink', drink: 'steam' })).toBeNull();
   });
 });

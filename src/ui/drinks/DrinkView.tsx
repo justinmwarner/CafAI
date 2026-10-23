@@ -20,11 +20,19 @@
  * Stop is not here: it stays in the top bar, in the running start's place
  * (D90). Every part keeps its place in the tree in every layout, so a rotation
  * keeps a half-typed setting.
+ *
+ * Once a run the view saw ends with Done, it goes back by itself (D-BACK-1,
+ * useDrinkReturn.ts), unless that drink's Go back by itself is off: Go back
+ * counts the seconds down after its label over a wash of the accent that
+ * drains with them, and Stay sits before it. Stay, or any pointer down or key
+ * press in the view, keeps the view for that run; the status says once where
+ * it is going, never second by second.
  */
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement, type SyntheticEvent } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
+import { keyframes } from '@mui/material/styles';
 import AirRounded from '@mui/icons-material/AirRounded';
 import ArrowBackRounded from '@mui/icons-material/ArrowBackRounded';
 import CheckRounded from '@mui/icons-material/CheckRounded';
@@ -37,13 +45,15 @@ import { useDrinkPresets } from '../settings/useDrinkPresets.ts';
 import { LiveDot } from '../shell/ShotTime.tsx';
 import { TID } from '../testIds.ts';
 import { DrinkDial } from './DrinkDial.tsx';
-import { goBackLabel } from './drinkFocus.ts';
+import { goBackLabel, goBackWords } from './drinkFocus.ts';
 import { drinkTarget, hotWaterTimeLimit, phaseWords } from './drinkModel.ts';
 import { DrinkReadouts } from './DrinkReadouts.tsx';
 import { DrinkSettingsCard } from './DrinkSettingsCard.tsx';
 import { DrinkTraceChart } from './DrinkTraceChart.tsx';
 import { drinkTraceFor, type DrinkRun } from './drinkTrace.ts';
 import type { DrinkKind } from './kinds.ts';
+import type { GoBackOptions } from './useDrinkFocus.ts';
+import { useDrinkReturn } from './useDrinkReturn.ts';
 import { useDrinkScreen } from './useDrinkScreens.ts';
 
 const MAX_WIDTH = 960;
@@ -71,6 +81,36 @@ const DRINK: Record<DrinkKind, { name: string; icon: ReactElement }> = {
 };
 
 const DIAL_SIZE: Record<Arrangement, number> = { wide: 272, narrow: 212, short: 184 };
+
+const REDUCED_MOTION = '@media (prefers-reduced-motion: reduce)';
+
+/**
+ * Under this width the header has no room for Stay and the counting Go back
+ * beside the drink's name and phase (an upright phone; hot water's, the
+ * widest, takes 447 px): from the countdown until the view goes or the drink
+ * runs again, they take a row of their own under them, so nothing below moves
+ * as the barista keeps the view.
+ */
+const COUNTDOWN_ROW = 470;
+
+/** Room for the countdown beside the name; assumed before the header is measured, and without layout. */
+const countdownFits = (width: number) => width === 0 || width >= COUNTDOWN_ROW;
+
+/** Go back's wash of the accent, full to nothing, its right edge moving left. */
+const drain = keyframes`
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+`;
+
+const visuallyHidden = {
+  position: 'absolute',
+  // Strings: in sx a bare 1 is 100%.
+  width: '1px',
+  height: '1px',
+  overflow: 'hidden',
+  clipPath: 'inset(50%)',
+  whiteSpace: 'nowrap',
+} as const;
 
 const viewSx = (layout: Arrangement) =>
   ({
@@ -115,8 +155,12 @@ const viewSx = (layout: Arrangement) =>
           }),
   }) as const;
 
-/** The phase in words, a polite status: it changes a few times a run, never with every frame. */
-function Phase({ kind, run }: { kind: DrinkKind; run: DrinkRun | null }) {
+/**
+ * The phase in words, a polite status: it changes a few times a run, never
+ * with every frame. While the view counts down to going back, a screen reader
+ * hears where to (`going`) after Done, once; the seconds are on Go back.
+ */
+function Phase({ kind, run, going }: { kind: DrinkKind; run: DrinkRun | null; going: string | null }) {
   const words = useTelemetry((s) => phaseWords(kind, run, s.machineConnected ? s.machine : null));
   const done = words === 'Done';
   return (
@@ -131,6 +175,11 @@ function Phase({ kind, run }: { kind: DrinkKind; run: DrinkRun | null }) {
       {words ? <span aria-hidden>·</span> : null}
       {done ? <CheckRounded aria-hidden sx={{ fontSize: 18 }} /> : null}
       {words}
+      {done && going !== null ? (
+        <Box component="span" sx={visuallyHidden}>
+          {`. ${going}`}
+        </Box>
+      ) : null}
     </Typography>
   );
 }
@@ -139,7 +188,8 @@ export interface DrinkViewProps {
   kind: DrinkKind;
   /** Where Go back goes, for its name. */
   back: Route;
-  onGoBack(): void;
+  /** `{ auto: true }` when the view goes back by itself, which guards the pane it returns to. */
+  onGoBack(options?: GoBackOptions): void;
 }
 
 export function DrinkView({ kind, back, onGoBack }: DrinkViewProps) {
@@ -166,27 +216,106 @@ export function DrinkView({ kind, back, onGoBack }: DrinkViewProps) {
   const timeSet = kept ? kept.timeSet : liveTimeSet;
   const { name, icon } = DRINK[kind];
 
+  const returning = useDrinkReturn(run, screen, () => onGoBack({ auto: true }));
+  const { countdown } = returning;
+  const head = useRef<HTMLDivElement>(null);
+  const roomy = useOwnLayout(head, countdownFits);
+  // Short of room, Stay and the counting Go back go under the name, and stay there once the barista keeps the view.
+  const ownRow = !roomy && !live && (countdown !== null || returning.kept);
+  const actions = useRef<HTMLDivElement>(null);
+  const goBackButton = useRef<HTMLButtonElement>(null);
+  // Any pointer down or key press in the view keeps it, but on Stay and Go back, which do what they say by their clicks.
+  const keepUnlessActions = (event: SyntheticEvent) => {
+    if (!(event.target instanceof Node && actions.current?.contains(event.target))) returning.keep();
+  };
+  const stay = () => {
+    // Stay goes with the countdown: the focus moves on to Go back rather than to nothing.
+    goBackButton.current?.focus();
+    returning.keep();
+  };
+  const where = goBackWords(back);
+  const going = countdown === null ? null : `Going back${where === null ? '' : ` to ${where}`} in ${countdown.seconds} seconds.`;
+
   return (
-    <Box ref={view} data-testid={TID.drinkView} data-drink={kind} sx={viewSx(layout)}>
-      <Box sx={{ gridArea: 'head', display: 'flex', alignItems: 'center', gap: 1.25, minHeight: 48, minWidth: 0 }}>
+    <Box
+      ref={view}
+      data-testid={TID.drinkView}
+      data-drink={kind}
+      onPointerDownCapture={countdown === null ? undefined : keepUnlessActions}
+      onKeyDownCapture={countdown === null ? undefined : keepUnlessActions}
+      sx={viewSx(layout)}
+    >
+      <Box
+        ref={head}
+        sx={{
+          gridArea: 'head',
+          display: 'flex',
+          flexWrap: ownRow ? 'wrap' : 'nowrap',
+          alignItems: 'center',
+          columnGap: 1.25,
+          rowGap: 1,
+          minHeight: 48,
+          minWidth: 0,
+        }}
+      >
         {live ? <LiveDot size={9} /> : null}
         <Box sx={{ display: 'flex', color: 'text.secondary', flex: 'none' }}>{icon}</Box>
         <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 700, flex: 'none' }}>
           {name}
         </Typography>
-        <Phase kind={kind} run={run} />
-        <Box sx={{ flex: '1 1 auto' }} />
+        <Phase kind={kind} run={run} going={going} />
+        {/* 48 px tall, so the name stays put when the countdown takes a row of its own under it. */}
+        <Box sx={{ flex: '1 1 auto', minHeight: 48 }} />
         {live ? null : (
-          <Button
-            data-testid={TID.drinkGoBack}
-            variant="tonal"
-            aria-label={goBackLabel(back)}
-            startIcon={<ArrowBackRounded />}
-            onClick={onGoBack}
-            sx={{ flex: 'none', px: 2 }}
-          >
-            Go back
-          </Button>
+          <Box ref={actions} sx={{ flex: ownRow ? '1 0 100%' : 'none', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 1 }}>
+            {countdown === null ? null : (
+              <Button data-testid={TID.drinkStay} aria-label="Stay on this screen" onClick={stay} sx={{ flex: 'none', px: 1.75 }}>
+                Stay
+              </Button>
+            )}
+            <Button
+              ref={goBackButton}
+              data-testid={TID.drinkGoBack}
+              variant="tonal"
+              aria-label={goBackLabel(back)}
+              startIcon={<ArrowBackRounded />}
+              onClick={() => onGoBack()}
+              // A stacking context and edges of its own: the countdown's wash sits under the label, inside the corners.
+              sx={{ flex: 'none', px: 2, isolation: 'isolate', overflow: 'hidden' }}
+            >
+              {countdown === null ? null : (
+                <Box
+                  key={countdown.until}
+                  component="span"
+                  aria-hidden
+                  sx={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    left: 0,
+                    zIndex: -1,
+                    bgcolor: 'cafai.accentSoft',
+                    transformOrigin: 'left',
+                    animation: `${drain} ${countdown.seconds}s linear forwards`,
+                    // A wash that cannot drain says nothing: under reduced motion the seconds count alone.
+                    [REDUCED_MOTION]: { display: 'none' },
+                  }}
+                />
+              )}
+              Go back
+              {countdown === null ? null : (
+                <Box
+                  component="span"
+                  data-testid={TID.drinkGoBackSeconds}
+                  // As wide as "10 s" and then some, so the button keeps its width as the seconds fall.
+                  sx={{ ml: 1, minWidth: '2.6em', textAlign: 'right', color: 'text.secondary', fontWeight: 550, fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {countdown.left} s
+                </Box>
+              )}
+            </Button>
+          </Box>
         )}
       </Box>
       <Box sx={{ gridArea: 'dial', alignSelf: 'center', justifySelf: 'center' }}>

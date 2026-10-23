@@ -25,8 +25,11 @@ function Harness() {
       <output data-testid="route">{route.name === 'drink' ? `drink:${route.drink}` : route.name}</output>
       <output data-testid="guard">{guardUntil === null ? 'none' : String(guardUntil)}</output>
       <output data-testid="back">{back.name}</output>
-      <button type="button" onClick={goBack}>
+      <button type="button" onClick={() => goBack()}>
         Go back
+      </button>
+      <button type="button" onClick={() => goBack({ auto: true })}>
+        Go back by itself
       </button>
       <textarea aria-label="Draft" />
     </div>
@@ -109,7 +112,7 @@ describe('useDrinkFocus', () => {
     }
   });
 
-  it('does not switch back by itself when the run ends', async () => {
+  it("does not switch back as the run ends: going back by itself is the view's own countdown (D-BACK-1)", async () => {
     const services = renderHarness();
     send(services, frame('flush'));
     await settle();
@@ -138,6 +141,31 @@ describe('useDrinkFocus', () => {
     send(services, frame('steam'));
     expect(text('guard')).toBe(String(at + GUARD_MS));
     act(() => vi.advanceTimersByTime(GUARD_MS));
+    expect(text('guard')).toBe('none');
+  });
+
+  it(`going back by itself guards the pane it returns to for ${GUARD_MS} ms, as a switch does; Go back tapped does not`, () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const services = renderHarness();
+    const entries = window.history.length;
+    send(services, frame('steam'));
+    send(services, frame('idle', 'idle'));
+    act(() => vi.advanceTimersByTime(GUARD_MS));
+    expect(text('guard')).toBe('none');
+
+    const at = Date.now();
+    act(() => screen.getByRole('button', { name: 'Go back by itself' }).click());
+    expect(window.location.hash).toBe('#/settings');
+    expect(window.history.length).toBe(entries);
+    expect(text('guard')).toBe(String(at + GUARD_MS));
+    act(() => vi.advanceTimersByTime(GUARD_MS));
+    expect(text('guard')).toBe('none');
+
+    send(services, frame('flush'));
+    send(services, frame('idle', 'idle'));
+    act(() => vi.advanceTimersByTime(GUARD_MS));
+    act(() => screen.getByRole('button', { name: 'Go back' }).click());
+    expect(window.location.hash).toBe('#/settings');
     expect(text('guard')).toBe('none');
   });
 

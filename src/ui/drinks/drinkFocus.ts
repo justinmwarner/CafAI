@@ -5,10 +5,12 @@
  *
  * A run's start switches to its drink's view, unless the barista is typing (a
  * phone's keyboard may be up, a sentence half written), is following Decent's
- * video on the Care screen (D156), or the view is already on screen. The screen the view took over is remembered for Go back: the
- * last screen that was not a drink's view, so hot water after a flush still
- * goes back to the coach. There is no return of its own (the owner's choice,
- * 2026-10-13): the view stays, with the result, until the barista leaves it.
+ * video on the Care screen (D156), or the view is already on screen. The
+ * screen the view took over is remembered for Go back: the last screen that
+ * was not a drink's view, so hot water after a flush still goes back to the
+ * coach. Once the run is done the view goes back there by itself, unless the
+ * barista keeps it or turned that off (drinkReturn.ts, D-BACK-1); off, it
+ * stays, with the result, until the barista leaves it.
  */
 import type { Route } from '../router.ts';
 import type { DrinkKind } from './kinds.ts';
@@ -48,20 +50,26 @@ export function goBackRoute(state: DrinkFocusState): Route {
   return state.origin ?? { name: 'coach' };
 }
 
-/** Go back's name for a screen reader, which says where. */
-export function goBackLabel(route: Route): string {
+/** Where Go back goes, in words ("the coach", "Settings"); null for a drink's view, which it never goes to. */
+export function goBackWords(route: Route): string | null {
   switch (route.name) {
     case 'coach':
-      return 'Go back to the coach';
+      return 'the coach';
     case 'shot':
-      return 'Go back to the shot';
+      return 'the shot';
     case 'history':
-      return 'Go back to History';
+      return 'History';
     case 'settings':
-      return 'Go back to Settings';
+      return 'Settings';
     case 'care':
-      return 'Go back to Machine care';
+      return 'Machine care';
     case 'drink':
-      return 'Go back';
+      return null;
   }
+}
+
+/** Go back's name for a screen reader, which says where. */
+export function goBackLabel(route: Route): string {
+  const words = goBackWords(route);
+  return words === null ? 'Go back' : `Go back to ${words}`;
 }
