@@ -37,6 +37,13 @@ are the visual reference for anything that plots a shot.
 - Glassy gradients, glassmorphism and glow for decoration.
 - A cartoon coffee shop: mascots, latte-art clip art, novelty fonts.
 
+The one place for play is the screensaver (D-SAVER-4), shown only while the
+machine sleeps and nobody is there: classic screensavers (the bouncing DVD
+logo, Starfield, the lava lamp, the falling code) redrawn in code with coffee,
+always dark and dimmed. Still never clip art, mascots or novelty fonts, and
+its motion is the one exception to the short, never bouncy motion everywhere
+else.
+
 ## Design Principles
 
 1. **The shot comes first.** While a shot runs, the graph and Stop own the

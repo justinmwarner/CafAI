@@ -208,6 +208,27 @@ export interface Settings {
    * none, which it may fill.
    */
   funFacts?: FunFactsSource;
+  /**
+   * Settings > Screensaver (D-SAVER-3): whether a screensaver covers CafAI
+   * while the machine sleeps, and which. Absent until someone changes it on
+   * this device, and read as DEFAULT_SCREENSAVER (settings.ts), on and a
+   * different one each day: like temperatureUnit, storage never writes it as
+   * a default, so a merge (an import, a restore) can tell a choice made here,
+   * which it keeps, from none, which it may fill.
+   */
+  screensaver?: ScreensaverSetting;
+}
+
+/** Settings > Screensaver (D-SAVER-3). */
+export interface ScreensaverSetting {
+  on: boolean;
+  /**
+   * A screensaver's id (src/ui/saver/registry.ts), or 'daily' for "A
+   * different one each day". Storage keeps any short string, so a pick from a
+   * newer CafAI survives the round trip; the screen reads one this build does
+   * not know as 'daily' (src/ui/saver/daily.ts).
+   */
+  pick: string;
 }
 
 /** An edit of the settings: what it names changes, the care block field by field (D187). */

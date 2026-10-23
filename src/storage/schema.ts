@@ -19,7 +19,7 @@ import type { ProfileJson, ShotSummary } from '../coach/types.ts';
 import type { TemperatureUnit } from '../coach/temperature.ts';
 import type { LlmMessage } from '../llm/types.ts';
 import type { CoachUiMessage } from '../app/types.ts';
-import type { Appearance, AppliedChange, CareSettings, Feedback } from './types.ts';
+import type { Appearance, AppliedChange, CareSettings, Feedback, ScreensaverSetting } from './types.ts';
 
 /** Checked against `shape`, but the original value is kept, untouched. */
 function exact<T>(shape: z.ZodType) {
@@ -135,6 +135,8 @@ export const SettingsSchema = z.object({
   care: exact<CareSettings>(z.unknown()).optional(),
   /** Where fun facts come from (D198); absent from exports made before them. Not shape-checked here, as temperatureUnit. */
   funFacts: exact<FunFactsSource>(z.unknown()).optional(),
+  /** The screensaver (D-SAVER-3); absent from exports made before it. Re-validated by normalizeScreensaver, as care is. */
+  screensaver: exact<ScreensaverSetting>(z.unknown()).optional(),
 });
 
 export const BagSchema = z.object({

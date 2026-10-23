@@ -25,6 +25,7 @@ import type {
   Workflow,
 } from '../../api/types.ts';
 import { createAppearanceStore, type AppearanceStore } from '../../app/appearance.ts';
+import { createScreensaverSettingStore, type ScreensaverSettingStore } from '../../app/screensaverSetting.ts';
 import { createTemperatureUnitStore, type TemperatureUnitStore } from '../../app/temperatureUnit.ts';
 import { clone } from '../../util/clone.ts';
 import type { CoachController, CoachState, Services } from '../../app/types.ts';
@@ -545,6 +546,8 @@ export interface FakeServices extends Services {
   appearance: AppearanceStore;
   /** The real store too: `storage.settings.temperatureUnit` starts it (D172). */
   temperatureUnit: TemperatureUnitStore;
+  /** The real store too: `storage.settings.screensaver` starts it (D-SAVER-3). */
+  screensaver: ScreensaverSettingStore;
   plugins: FakePluginDirectory;
 }
 
@@ -584,6 +587,7 @@ export function createFakeServices(options: {
     appVersion: '0.1.0-test',
     appearance: createAppearanceStore(storage.settings, options.storage?.settings?.appearance),
     temperatureUnit: createTemperatureUnitStore(storage.settings, options.storage?.settings?.temperatureUnit),
+    screensaver: createScreensaverSettingStore(storage.settings, options.storage?.settings?.screensaver),
     plugins: createFakePluginDirectory(),
   };
 }

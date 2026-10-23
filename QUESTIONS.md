@@ -6,9 +6,9 @@ came out of the morning session of 2026-10-04, 9-13 out of the Decaid
 alignment of 2026-10-09, 14-16 out of Claude on your computer of
 2026-10-11, 17 out of your list of 2026-10-11, 18-21 out of the gap
 review's four items of 2026-10-15, 22-23 out of the simulator pre-run of
-2026-10-16 and 24-27 out of fun facts of 2026-10-16 (each ranked the same
-way, in its own section); the questions you answered are in "Answered" at
-the end.
+2026-10-16, 24-27 out of fun facts of 2026-10-16 and 28-31 out of the
+screensavers of 2026-10-22 (each ranked the same way, in its own section);
+the questions you answered are in "Answered" at the end.
 
 1. **Does Decaid's barrier behave on a real DE1 the way its source says?**
    CafAI now waits for `POST /api/v1/machine/profile` after every load and
@@ -255,6 +255,30 @@ the end.
     that would catch more (bare "San Marcos", "Volcán", "Origin" as a
     roaster). If one shows where it should not, the fix is that fact's
     match words in `src/coach/facts/facts.json`.
+
+## From the screensavers (2026-10-22)
+
+28. **Is 30 the right brightness (D-SAVER-2)?** The screensaver dims the
+    tablet to 30 on Decaid's 0-100 (or leaves a lower brightness of yours
+    alone). Too dim and it reads as off from across the kitchen; too bright
+    and it lights the room at night. The tablet session (section 20 of
+    docs/HARDWARE_TEST_PLAN.md) shows it; it is one number,
+    `SAVER_BRIGHTNESS` in `src/ui/saver/policy.ts`.
+29. **Is a minute untouched the right wait (D-SAVER-1)?** With the machine
+    asleep, the screensaver comes up after 60 s without a touch, so a tap
+    on Sleep does not cover what you were reading. Shorter and it comes up
+    while you read; longer and an unattended screen stays bright longer.
+    One number too, `SAVER_IDLE_MS`.
+30. **"A different one each day" as the default (D-SAVER-3)?** Anyone who
+    never opens Settings gets a new one each day, Nightstand among them. If
+    one stays your favourite, or a quieter default suits more people,
+    Nightstand could be the default instead; a choice made in Settings is
+    kept either way.
+31. **Do Brew Rain's katakana show on the tablet (D-SAVER-5)?** The rain's
+    glyphs (コーヒー, エスプレッソ) come from the device's own fonts, which
+    Android has; a tablet without a Japanese font would show empty boxes.
+    If it does, the rain falls in digits and Latin letters instead, or
+    carries a small font of its own.
 
 ## Answered
 

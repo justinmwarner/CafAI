@@ -144,4 +144,43 @@ describe('Decaid WebSocket channels', () => {
     });
     machine.socket.close();
   });
+
+  it("display: its state on connect and after every command, to every display socket, the commands recorded, and a socket's wake lock gone with it (D-SAVER-2)", async () => {
+    const display = open('/display');
+    const other = open('/display');
+    expect((await display.waitFor(1))[0]).toEqual({
+      wakeLockEnabled: expect.any(Boolean),
+      wakeLockOverride: false,
+      brightness: 100,
+      requestedBrightness: 100,
+      lowBatteryBrightnessActive: false,
+      platformSupported: { brightness: true, wakeLock: true },
+    });
+    await other.waitFor(1);
+
+    display.socket.send(JSON.stringify({ command: 'requestWakeLock' }));
+    expect((await display.waitFor(2))[1]).toMatchObject({ wakeLockOverride: true, wakeLockEnabled: true });
+    display.socket.send(JSON.stringify({ command: 'setBrightness', brightness: 30 }));
+    expect((await display.waitFor(3))[2]).toMatchObject({ brightness: 30, requestedBrightness: 30 });
+    // Every display socket hears of each change.
+    expect((await other.waitFor(3))[2]).toMatchObject({ requestedBrightness: 30, wakeLockOverride: true });
+    // A brightness Decaid refuses is an error for that socket alone.
+    display.socket.send(JSON.stringify({ command: 'setBrightness', brightness: 150 }));
+    expect((await display.waitFor(4))[3]).toEqual({ error: 'brightness must be an integer 0-100' });
+    expect(mock.state.displayCommands.slice(-3)).toEqual([
+      { command: 'requestWakeLock' },
+      { command: 'setBrightness', brightness: 30 },
+      { command: 'setBrightness', brightness: 150 },
+    ]);
+
+    // The socket that asked for the wake lock closes: it goes, the brightness stays.
+    display.socket.close();
+    await display.closed;
+    expect((await other.waitFor(4))[3]).toMatchObject({ wakeLockOverride: false, requestedBrightness: 30 });
+    expect(mock.state.getDisplayState()).toMatchObject({ wakeLockOverride: false, requestedBrightness: 30 });
+    other.socket.send(JSON.stringify({ command: 'setBrightness', brightness: 100 }));
+    await other.waitFor(5);
+    other.socket.close();
+    await other.closed;
+  });
 });

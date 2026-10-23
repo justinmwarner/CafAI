@@ -8,10 +8,12 @@ import {
   applySettingsPatch,
   DEFAULT_APPEARANCE,
   DEFAULT_CARE,
+  DEFAULT_SCREENSAVER,
   defaultSettings,
   fillBlankSettings,
   normalizeAppearance,
   normalizeCareSettings,
+  normalizeScreensaver,
   normalizeSettings,
   sameAppearance,
 } from './settings.ts';
@@ -632,5 +634,95 @@ describe('where fun facts come from (D198)', () => {
     const data = Object.fromEntries([...entries].map(([key, text]) => [key, JSON.parse(text)]));
     const restored = exportFromMirror(data, { appVersion: '1.2.3', defaultModel: MODEL, now: () => new Date(0) });
     expect(restored?.settings.funFacts).toBe('list');
+  });
+});
+
+describe('the screensaver (D-SAVER-3)', () => {
+  function setup() {
+    const handle = createDbHandle((onLost) => openCafaiDb(uniqueDbName(), onLost));
+    const db = () => handle.get();
+    const repos = createRepositories({ db, onWrite: () => undefined, defaultModel: MODEL });
+    const porter = createDataPorter({
+      db,
+      careDb: careDbOfItsOwn(),
+      secrets: { getApiKey: async () => null },
+      mirror: { schedulePush: () => undefined },
+      appVersion: '1.2.3',
+      defaultModel: MODEL,
+      now: () => new Date('2026-10-22T09:30:00.000Z'),
+    });
+    return { repos, porter };
+  }
+  const exportWith = (settings: unknown): CafaiExport =>
+    ({
+      format: 'cafai-export',
+      schemaVersion: 1,
+      exportedAt: '2026-10-22T09:00:00.000Z',
+      appVersion: '1.2.3',
+      settings,
+      bags: [],
+      versions: [],
+      iterations: [],
+      conversations: [],
+    }) as CafaiExport;
+
+  it('is absent until changed here, and reads as on, a different one each day', () => {
+    expect(DEFAULT_SCREENSAVER).toEqual({ on: true, pick: 'daily' });
+    expect(defaultSettings(MODEL)).not.toHaveProperty('screensaver');
+    expect(normalizeSettings(makeSettings(), MODEL)).not.toHaveProperty('screensaver');
+    expect(applySettingsPatch(makeSettings(), { activeBagId: 'bag_1' }, MODEL)).not.toHaveProperty('screensaver');
+  });
+
+  it('reads the switch and the pick leniently, field by field', () => {
+    expect(normalizeScreensaver(undefined)).toEqual(DEFAULT_SCREENSAVER);
+    expect(normalizeScreensaver('off')).toEqual(DEFAULT_SCREENSAVER);
+    expect(normalizeScreensaver({ on: false, pick: 'beanfield' })).toEqual({ on: false, pick: 'beanfield' });
+    // A pick this build does not know is kept: a newer CafAI's choice survives, and the screen shows the day's.
+    expect(normalizeScreensaver({ on: true, pick: 'pipes' })).toEqual({ on: true, pick: 'pipes' });
+    expect(normalizeScreensaver({ on: 'no', pick: 7 })).toEqual(DEFAULT_SCREENSAVER);
+    expect(normalizeScreensaver({ on: false, pick: '' })).toEqual({ on: false, pick: 'daily' });
+    expect(normalizeScreensaver({ on: false, pick: 'x'.repeat(40) }).pick).toBe('x'.repeat(40));
+    expect(normalizeScreensaver({ on: false, pick: 'x'.repeat(41) }).pick).toBe('daily');
+    expect(normalizeSettings({ ...makeSettings(), screensaver: { pick: 'rain' } }, MODEL).screensaver).toEqual({ on: true, pick: 'rain' });
+    // Once changed it stays, the default's values included: that is a choice too.
+    expect(normalizeSettings({ ...makeSettings(), screensaver: DEFAULT_SCREENSAVER }, MODEL).screensaver).toEqual(DEFAULT_SCREENSAVER);
+    expect(normalizeSettings({ ...makeSettings(), screensaver: true }, MODEL)).not.toHaveProperty('screensaver');
+  });
+
+  it('is patched whole like any other setting, and kept across other edits', () => {
+    const next = applySettingsPatch(makeSettings(), { screensaver: { on: false, pick: 'steam' } }, MODEL);
+    expect(next.screensaver).toEqual({ on: false, pick: 'steam' });
+    expect(applySettingsPatch(next, { grinderSetting: '14' }, MODEL).screensaver).toEqual({ on: false, pick: 'steam' });
+    expect(applySettingsPatch(next, { screensaver: { on: true, pick: 'daily' } }, MODEL).screensaver).toEqual(DEFAULT_SCREENSAVER);
+  });
+
+  it('keeps a choice made on this device, turned off as much as on, and fills only a device that never chose', () => {
+    const off = makeSettings({ screensaver: { on: false, pick: 'daily' } });
+    const lava = makeSettings({ screensaver: { on: true, pick: 'lava' } });
+    expect(fillBlankSettings(off, lava, MODEL).screensaver).toEqual({ on: false, pick: 'daily' });
+    expect(fillBlankSettings(lava, off, MODEL).screensaver).toEqual({ on: true, pick: 'lava' });
+    expect(fillBlankSettings(makeSettings(), lava, MODEL).screensaver).toEqual({ on: true, pick: 'lava' });
+    expect(fillBlankSettings(makeSettings(), makeSettings(), MODEL)).not.toHaveProperty('screensaver');
+  });
+
+  it('is stored, exported and imported with the other settings, a pick from a newer CafAI included', async () => {
+    const { repos, porter } = setup();
+    await repos.settings.update({ screensaver: { on: false, pick: 'portafilter' } });
+    expect((await repos.settings.get()).screensaver).toEqual({ on: false, pick: 'portafilter' });
+    const exported = await porter.exportAll();
+    expect(exported.settings.screensaver).toEqual({ on: false, pick: 'portafilter' });
+    for (const mode of ['replace', 'merge'] as const) {
+      const other = setup();
+      await other.porter.importAll(exportWith({ ...exported.settings, screensaver: { on: true, pick: 'latteArt' } }), mode);
+      expect((await other.repos.settings.get()).screensaver, mode).toEqual({ on: true, pick: 'latteArt' });
+    }
+  });
+
+  it('survives the Decaid mirror round trip', () => {
+    const settings = makeSettings({ screensaver: { on: false, pick: 'nightstand' } });
+    const { entries } = buildMirrorEntries({ settings, bags: [], versions: [], iterations: [], conversations: [] }, null, MODEL);
+    const data = Object.fromEntries([...entries].map(([key, text]) => [key, JSON.parse(text)]));
+    const restored = exportFromMirror(data, { appVersion: '1.2.3', defaultModel: MODEL, now: () => new Date(0) });
+    expect(restored?.settings.screensaver).toEqual({ on: false, pick: 'nightstand' });
   });
 });
