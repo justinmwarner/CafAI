@@ -20,10 +20,28 @@
 import { isFunFactsSource } from '../coach/facts/types.ts';
 import { isTemperatureUnit } from '../coach/temperature.ts';
 import { containsKeyLike, redactKeyLike } from './redact.ts';
-import type { Appearance, AppearanceMode, CareSettings, IntakeFilter, Settings, SettingsPatch, WaterBand } from './types.ts';
+import type {
+  Appearance,
+  AppearanceMode,
+  CareSettings,
+  IntakeFilter,
+  ScreensaverSetting,
+  Settings,
+  SettingsPatch,
+  WaterBand,
+} from './types.ts';
 
 /** Today's look. */
 export const DEFAULT_APPEARANCE: Appearance = { mode: 'dark', tint: 'crema' };
+
+/**
+ * The screensaver before anyone changes it on this device (D-SAVER-3): on,
+ * a different one each day. Read `settings.screensaver ?? DEFAULT_SCREENSAVER`.
+ */
+export const DEFAULT_SCREENSAVER: ScreensaverSetting = { on: true, pick: 'daily' };
+
+/** The longest pick storage keeps: a screensaver's id is a word or two. */
+const MAX_PICK_CHARS = 40;
 
 /**
  * Machine care before anyone answers (D187): the water and the filter not
@@ -112,6 +130,20 @@ export function normalizeCareSettings(raw: unknown): CareSettings {
   };
 }
 
+/**
+ * A stored screensaver setting, read leniently, field by field: on unless it
+ * says off, and a pick of 1 to 40 characters kept whatever it names (one this
+ * build does not know shows as "A different one each day"), else 'daily'.
+ */
+export function normalizeScreensaver(raw: unknown): ScreensaverSetting {
+  if (!isRecord(raw)) return DEFAULT_SCREENSAVER;
+  const pick = raw['pick'];
+  return {
+    on: typeof raw['on'] === 'boolean' ? raw['on'] : DEFAULT_SCREENSAVER.on,
+    pick: typeof pick === 'string' && pick.length >= 1 && pick.length <= MAX_PICK_CHARS ? pick : DEFAULT_SCREENSAVER.pick,
+  };
+}
+
 export function sameAppearance(a: Appearance, b: Appearance): boolean {
   if (a.mode !== b.mode) return false;
   if (typeof a.tint === 'string' || typeof b.tint === 'string') return a.tint === b.tint;
@@ -139,6 +171,8 @@ export function normalizeSettings(raw: unknown, defaultModel: string): Settings 
   if (isRecord(raw['care'])) settings.care = normalizeCareSettings(raw['care']);
   // Where fun facts come from (D198), as the unit: one this build does not know reads as none chosen.
   if (isFunFactsSource(raw['funFacts'])) settings.funFacts = raw['funFacts'];
+  // The screensaver (D-SAVER-3), as care: the block once someone changed it here, the default's values included.
+  if (isRecord(raw['screensaver'])) settings.screensaver = normalizeScreensaver(raw['screensaver']);
   return settings;
 }
 
@@ -153,6 +187,7 @@ const FIELDS: ReadonlyArray<keyof Settings> = [
   'temperatureUnit',
   'care',
   'funFacts',
+  'screensaver',
 ];
 
 /** `undefined` means "not part of this edit", never "clear it"; clearing takes an explicit null. */
@@ -186,8 +221,9 @@ function isBlank(value: string | null | undefined): boolean {
  * The appearance, like the model, is adopted only while it is still the default.
  * The key's copy in Decaid (D99) is the user's choice wherever this device
  * holds one, off as much as on; only a device that never chose takes it.
- * The temperature unit (D172), machine care's answers (D187) and the source
- * of fun facts (D198) follow the same rule, the care block whole.
+ * The temperature unit (D172), machine care's answers (D187), the source
+ * of fun facts (D198) and the screensaver (D-SAVER-3) follow the same rule,
+ * the care block and the screensaver's whole.
  */
 export function fillBlankSettings(local: Settings, incoming: Settings, defaultModel: string): Settings {
   const pick = (mine: string | null, theirs: string | null) => (isBlank(mine) && !isBlank(theirs) ? theirs : mine);
@@ -216,5 +252,8 @@ export function fillBlankSettings(local: Settings, incoming: Settings, defaultMo
   // Fun facts (D198), as the unit: a choice made here wins, Off as much as any other.
   const facts = local.funFacts ?? incoming.funFacts;
   if (facts !== undefined) merged.funFacts = facts;
+  // The screensaver (D-SAVER-3), as care: a choice made here wins whole, turned off as much as on.
+  const saver = local.screensaver ?? incoming.screensaver;
+  if (saver !== undefined) merged.screensaver = saver;
   return merged;
 }
