@@ -171,6 +171,8 @@ export function createPortafilterModel(seed: number, start?: PortafilterStart): 
       const nextX = Math.max(0, width - model.w);
       const nextY = Math.max(0, height - model.h);
       if (!placed) {
+        // Nothing to set it down on until the screen has a size.
+        if (width <= 0 || height <= 0) return;
         placed = true;
         place(nextX, nextY);
       } else if (nextX !== rangeX || nextY !== rangeY) {

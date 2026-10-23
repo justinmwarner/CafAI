@@ -96,15 +96,23 @@ describe('the badge', () => {
       const made = model(seed);
       const dts = createRandom(seed + 10);
       let time = 0;
+      let leastX = Infinity;
+      let leastY = Infinity;
+      let mostRight = -Infinity;
+      let mostBottom = -Infinity;
       while (time < 30 * 60_000) {
         const dt = 8 + dts() * 92;
         made.step(dt);
         time += dt;
-        expect(made.x).toBeGreaterThanOrEqual(0);
-        expect(made.y).toBeGreaterThanOrEqual(0);
-        expect(made.x + made.w).toBeLessThanOrEqual(made.width + 1e-9);
-        expect(made.y + made.h).toBeLessThanOrEqual(made.height + 1e-9);
+        leastX = Math.min(leastX, made.x);
+        leastY = Math.min(leastY, made.y);
+        mostRight = Math.max(mostRight, made.x + made.w);
+        mostBottom = Math.max(mostBottom, made.y + made.h);
       }
+      expect(leastX, `seed ${seed}`).toBeGreaterThanOrEqual(0);
+      expect(leastY, `seed ${seed}`).toBeGreaterThanOrEqual(0);
+      expect(mostRight, `seed ${seed}`).toBeLessThanOrEqual(made.width + 1e-9);
+      expect(mostBottom, `seed ${seed}`).toBeLessThanOrEqual(made.height + 1e-9);
     }
   });
 
@@ -119,6 +127,17 @@ describe('the badge', () => {
     made.resize(400, 300);
     expect(made.x + made.w).toBeLessThanOrEqual(400 + 1e-9);
     expect(made.y + made.h).toBeLessThanOrEqual(300 + 1e-9);
+  });
+
+  it('is set down only once the screen has a size', () => {
+    const made = createPortafilterModel(2);
+    made.resize(0, 0);
+    made.step(1000);
+    expect(made.firstCornerMs).toBeNull();
+    made.resize(962, 602);
+    expect(made.firstCornerMs).not.toBeNull();
+    expect(made.x).toBeGreaterThan(0);
+    expect(snapshot(made)).toEqual(snapshot(model(2)));
   });
 
   it('copes with a screen shorter than the badge', () => {
