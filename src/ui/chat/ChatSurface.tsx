@@ -479,7 +479,7 @@ const shortPromptRowSx = { ...promptRowSx, flexShrink: 1, minHeight: 0, overflow
  * taste question is open Taste words and Need help? (D127). A tap on Stats
  * posts the stats card at the end of the thread; a taste word goes into the
  * draft. Nothing is sent, and the composer's draft is never lost. Usage
- * sharing's card or notice (D-USAGE-3) leads the row, on a line of its own,
+ * sharing's card or notice (D212) leads the row, on a line of its own,
  * once no coach turn or shot runs.
  */
 function PromptRow() {
@@ -773,7 +773,7 @@ export function ChatSurface(props: ChatSurfaceProps) {
         maxRows: 4,
         onKeyDown: onComposerKeyDown,
         'data-testid': TID.composerInput,
-        // Never the barista's words, not even Clarity's hash of them (D-USAGE-5).
+        // Never the barista's words, not even Clarity's hash of them (D214).
         ...SECRET_FIELD,
       } as ChatBoxSlotProps['composerInput'],
       composerSendButton: {
@@ -787,7 +787,7 @@ export function ChatSurface(props: ChatSurfaceProps) {
 
   return (
     <PartsContext.Provider value={partsContext}>
-      {/* Every word and picture in the chat stays out of Clarity's recordings (D-USAGE-5). */}
+      {/* Every word and picture in the chat stays out of Clarity's recordings (D214). */}
       <Box ref={rootRef} data-testid={TID.chat} data-busy={busy || undefined} {...MASK} sx={chatSx}>
         <ChatBox
           adapter={adapter}

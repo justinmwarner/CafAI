@@ -79,7 +79,7 @@ describe('ChatSurface', () => {
     expect(screen.getByTestId(TID.chat)).toBeInTheDocument();
   });
 
-  it('masks the chat for Clarity and keeps the composer out of it entirely (D-USAGE-5)', () => {
+  it('masks the chat for Clarity and keeps the composer out of it entirely (D214)', () => {
     renderSurface();
     expect(screen.getByTestId(TID.chat)).toHaveAttribute('data-clarity-mask', 'true');
     expect(screen.getByTestId(TID.composerInput)).toHaveAttribute('data-private', 'secret');

@@ -38,7 +38,7 @@ function rememberRoute(route: Route): void {
 }
 
 /**
- * Usage sharing's hooks into the app (D-USAGE-4, D-USAGE-6): it starts once
+ * Usage sharing's hooks into the app (D213, D215): it starts once
  * the app has rendered, then hears each screen and the layout.
  */
 function UsageTracking({ route }: { route: Route }) {

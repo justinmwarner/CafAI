@@ -1,5 +1,5 @@
 /**
- * Usage sharing's vocabulary (D-USAGE-4): the coach steps CafAI counts, each
+ * Usage sharing's vocabulary (D213): the coach steps CafAI counts, each
  * a Clarity custom event a funnel can use (Clarity takes up to 20), and the
  * tags a session carries for Clarity's filters.
  */

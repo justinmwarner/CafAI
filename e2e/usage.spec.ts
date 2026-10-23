@@ -4,11 +4,11 @@ import { TID } from '../src/ui/testIds.ts';
 import { goTo, openAppWithSwitches, recordRequests, saveApiKey, sendChat, type SeenRequest } from './helpers.ts';
 
 /**
- * Usage sharing (D-USAGE-1 to D-USAGE-6) through mock mode's ?mockUsage=1: a
+ * Usage sharing (D210-D215) through mock mode's ?mockUsage=1: a
  * stand-in Clarity project whose tag the mock's service worker answers with
  * a stand-in that records every call (mock/clarity.ts), so nothing leaves
  * the browser. The time zone and the language decide whether CafAI asks
- * first (D-USAGE-2).
+ * first (D211).
  */
 const CLARITY = /^https:\/\/([a-z0-9-]+\.)*clarity\.ms\//;
 

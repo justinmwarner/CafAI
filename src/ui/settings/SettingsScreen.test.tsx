@@ -119,7 +119,7 @@ describe('SettingsScreen API key', () => {
     for (const call of [...log.mock.calls, ...error.mock.calls]) expect(JSON.stringify(call)).not.toContain(SECRET);
   });
 
-  it('keeps the key field out of Clarity, shown or hidden, and counts a saved key (D-USAGE-4, D-USAGE-5)', async () => {
+  it('keeps the key field out of Clarity, shown or hidden, and counts a saved key (D213, D214)', async () => {
     const services = renderSettings({ coach: { hasApiKey: false } });
     const { usage, tracked } = createFakeUsage();
     // The screen reads the services again at every render: the next keystroke sees it.

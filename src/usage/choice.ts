@@ -1,5 +1,5 @@
 /**
- * The device's answer about usage sharing (D-USAGE-3), in the device's own
+ * The device's answer about usage sharing (D212), in the device's own
  * storage under cafai.usage.choice, as the told fun facts are (D200): never
  * mirrored to Decaid or exported, so each device decides for itself.
  * Storage that is blocked or holds something else reads as no answer, and an

@@ -913,7 +913,7 @@ describe('coach engine', () => {
     expect(engine.getState().phase).toBe('awaiting_confirmation');
   }
 
-  describe('usage events (D-USAGE-4)', () => {
+  describe('usage events (D213)', () => {
     let events: string[];
     const count = (name: string) => events.filter((event) => event === name).length;
 
@@ -4390,7 +4390,7 @@ describe('coach engine', () => {
     const lastRun = () => runs[runs.length - 1]!;
     const offered = (run: RunRequest) => run.tools.map((tool) => tool.definition.name);
 
-    it('counts a kept recipe, never as a change, and a fact shown, for usage sharing (D-USAGE-4)', async () => {
+    it('counts a kept recipe, never as a change, and a fact shown, for usage sharing (D213)', async () => {
       const events: string[] = [];
       await rebuild({ usage: { track: (event) => void events.push(event) } });
       await throughKept();

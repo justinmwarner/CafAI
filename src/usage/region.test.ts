@@ -3,7 +3,7 @@ import { consentRule, regionOf } from './region.ts';
 
 const rule = (timeZone: string | undefined, languages: string[] = ['en-US']) => consentRule({ timeZone, languages });
 
-describe('consentRule (D-USAGE-2)', () => {
+describe('consentRule (D211)', () => {
   it('asks first in every European zone', () => {
     for (const zone of ['Europe/Berlin', 'Europe/London', 'Europe/Zurich', 'Europe/Dublin', 'Europe/Istanbul', 'Europe/Kyiv']) {
       expect(rule(zone), zone).toBe('ask');

@@ -12,7 +12,7 @@ export function UsageContextForTests({ value, children }: { value: UsageService 
 const unchanging = () => () => undefined;
 const nothing = () => null;
 
-/** Usage sharing and its state (D-USAGE-3), or nulls where the build shares nothing or outside a ServicesProvider. */
+/** Usage sharing and its state (D212), or nulls where the build shares nothing or outside a ServicesProvider. */
 export function useUsage(): { usage: UsageService | null; state: UsageState | null } {
   const override = useContext(UsageOverride);
   const services = useOptionalServices();

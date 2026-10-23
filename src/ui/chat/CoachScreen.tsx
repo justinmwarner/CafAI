@@ -223,7 +223,7 @@ function EmptyState({ children }: { children: ReactNode }) {
         <Paper variant="outlined" sx={{ p: 3, maxWidth: 460, width: '100%', textAlign: 'center', bgcolor: 'background.paper' }}>
           {children}
         </Paper>
-        {/* Usage sharing's card or notice (D-USAGE-3): asked before the coach is set up, not after. */}
+        {/* Usage sharing's card or notice (D212): asked before the coach is set up, not after. */}
         <UsagePrompt placement="panel" />
         <Box sx={{ width: '100%' }}>
           <StatsCard />

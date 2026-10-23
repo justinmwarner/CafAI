@@ -591,7 +591,7 @@ export function createFakeServices(options: {
 }
 
 /**
- * Usage sharing that records the steps it is told (D-USAGE-4): sharing, with
+ * Usage sharing that records the steps it is told (D213): sharing, with
  * nothing waiting in the chat unless `state` says so. Its state is one
  * object, as the real service's is between changes.
  */

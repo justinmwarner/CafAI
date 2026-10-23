@@ -1,5 +1,5 @@
 /**
- * Usage sharing (D-USAGE-1 to D-USAGE-6): the rule this device is under, its
+ * Usage sharing (D210-D215): the rule this device is under, its
  * answer, Clarity's loading and consent, and the events, tags and screens
  * that go to Clarity while the device shares. Nothing loads before start(),
  * which the app calls once it has rendered.
@@ -68,7 +68,7 @@ export function createUsageService(deps: UsageDeps): UsageService {
   const tags = new Map<UsageTag, string>([['rule', rule]]);
   const sent = new Map<UsageTag, string>();
   let screenName: string | null = null;
-  /** The form fields' guard while the device shares (D-USAGE-5), or null. */
+  /** The form fields' guard while the device shares (D214), or null. */
   let unguard: (() => void) | null = null;
   const listeners = new Set<() => void>();
 
@@ -97,7 +97,7 @@ export function createUsageService(deps: UsageDeps): UsageService {
     if (!clarity) clarity = load(win, projectId);
     else if (stopped) clarity.call('start');
     stopped = false;
-    // Analytics consent only where CafAI asked and heard yes; elsewhere it claims none, and keeps ads off (D-USAGE-3).
+    // Analytics consent only where CafAI asked and heard yes; elsewhere it claims none, and keeps ads off (D212).
     if (choice?.choice === 'yes' && choice.rule === 'ask') clarity.call('consentv2', { analytics_Storage: 'granted', ad_Storage: 'denied' });
     else clarity.call('consentv2', { ad_Storage: 'denied' });
     sendTags();

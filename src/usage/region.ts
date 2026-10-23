@@ -1,5 +1,5 @@
 /**
- * Where CafAI asks before sharing usage (D-USAGE-2). Clarity enforces a
+ * Where CafAI asks before sharing usage (D211). Clarity enforces a
  * consent signal for visitors in the EEA, the UK and Switzerland; CafAI
  * decides on the device, from its time zone and languages, and asks whenever
  * it is unsure: asking someone who did not need asking costs one tap. A

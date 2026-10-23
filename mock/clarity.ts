@@ -1,5 +1,5 @@
 /**
- * Microsoft Clarity in mock mode (D-USAGE-6): with ?mockUsage=1 usage sharing
+ * Microsoft Clarity in mock mode (D215): with ?mockUsage=1 usage sharing
  * reports to a stand-in project, and its tag is answered here by the mock's
  * service worker, so nothing leaves the browser. The stand-in keeps every
  * call on window.__clarityCalls, those queued before it ran first, for the

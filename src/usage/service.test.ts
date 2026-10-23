@@ -38,7 +38,7 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('usage sharing (D-USAGE-3)', () => {
+describe('usage sharing (D212)', () => {
   it('asks first in Europe and loads nothing until yes', () => {
     const usage = service(EUROPE);
     expect(usage.getState()).toEqual({ sharing: false, prompt: 'card', rule: 'ask' });
@@ -180,7 +180,7 @@ describe('usage sharing (D-USAGE-3)', () => {
     ]);
   });
 
-  it('keeps every form field out of Clarity while the device shares, and only then (D-USAGE-5)', async () => {
+  it('keeps every form field out of Clarity while the device shares, and only then (D214)', async () => {
     const settle = () => new Promise<void>((resolve) => queueMicrotask(resolve));
     const before = document.body.appendChild(document.createElement('input'));
     const usage = service(EUROPE);

@@ -1,6 +1,6 @@
 /**
  * Every form field kept out of Clarity entirely while the device shares
- * (D-USAGE-5). Clarity sends a short hash of a text field's value when it
+ * (D214). Clarity sends a short hash of a text field's value when it
  * changes, and a short value (a TDS, a grind setting, a bag's name) is easy
  * to find again from one; it sends nothing of a field one of whose attribute
  * values holds a word such as "secret" (its MaskExcludeList). So every input,

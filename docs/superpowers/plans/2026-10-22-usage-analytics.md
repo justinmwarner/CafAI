@@ -30,7 +30,7 @@
 91 target), Vitest 5 (jsdom), Playwright 1.63.
 
 **Spec:** `docs/superpowers/specs/2026-10-22-usage-analytics-design.md`
-(decisions D-USAGE-1 to D-USAGE-7, numbered after the merge).
+(decisions D210-D216).
 
 **Work in:** `E:\source\cafai-usage-analytics` (branch `feat/usage-analytics`,
 off `main` at ccf48e2). Run every command from that folder.
@@ -84,7 +84,7 @@ import { consentRule, regionOf } from './region.ts';
 
 const rule = (timeZone: string | undefined, languages: string[] = ['en-US']) => consentRule({ timeZone, languages });
 
-describe('consentRule (D-USAGE-2)', () => {
+describe('consentRule (D211)', () => {
   it('asks first in every European zone', () => {
     for (const zone of ['Europe/Berlin', 'Europe/London', 'Europe/Zurich', 'Europe/Dublin', 'Europe/Istanbul', 'Europe/Kyiv']) {
       expect(rule(zone), zone).toBe('ask');
@@ -142,7 +142,7 @@ Expected: FAIL, `Failed to resolve import "./region.ts"`.
 ```ts
 // src/usage/region.ts
 /**
- * Where CafAI asks before sharing usage (D-USAGE-2). Clarity enforces a
+ * Where CafAI asks before sharing usage (D211). Clarity enforces a
  * consent signal for visitors in the EEA, the UK and Switzerland; CafAI
  * decides on the device, from its time zone and languages, and asks whenever
  * it is unsure: asking someone who did not need asking costs one tap. A
@@ -258,7 +258,7 @@ Expected: PASS (6 tests).
 
 ```bash
 git add src/usage/region.ts src/usage/region.test.ts
-git commit -m "feat: usage sharing's region rule: a European time zone or language, or none that says anything, asks first (D-USAGE-2)"
+git commit -m "feat: usage sharing's region rule: a European time zone or language, or none that says anything, asks first (D211)"
 ```
 
 ### Task 2: The device's answer
@@ -281,7 +281,7 @@ function memory(initial: Record<string, string> = {}) {
 
 const YES: UsageChoice = { choice: 'yes', at: '2026-10-22T08:00:00.000Z', wording: WORDING, rule: 'ask' };
 
-describe('the device choice (D-USAGE-3)', () => {
+describe('the device choice (D212)', () => {
   it('reads back what was written, under cafai.usage.choice', () => {
     const storage = memory();
     writeChoice(storage, YES);
@@ -323,7 +323,7 @@ Expected: FAIL, `Failed to resolve import "./choice.ts"`.
 ```ts
 // src/usage/choice.ts
 /**
- * The device's answer about usage sharing (D-USAGE-3), in the device's own
+ * The device's answer about usage sharing (D212), in the device's own
  * storage under cafai.usage.choice, as the told fun facts are (D200): never
  * mirrored to Decaid or exported, so each device decides for itself.
  * Storage that is blocked or holds something else reads as no answer, and an
@@ -380,7 +380,7 @@ Expected: PASS (3 tests).
 
 ```bash
 git add src/usage/choice.ts src/usage/choice.test.ts
-git commit -m "feat: usage sharing's answer, kept on the device only, never mirrored or exported (D-USAGE-3)"
+git commit -m "feat: usage sharing's answer, kept on the device only, never mirrored or exported (D212)"
 ```
 
 ### Task 3: The loader, the address and the masks
@@ -403,7 +403,7 @@ afterEach(() => {
   delete (window as Stubbed).clarity;
 });
 
-describe('loadClarity (D-USAGE-6)', () => {
+describe('loadClarity (D215)', () => {
   it("adds Clarity's tag once, async, and queues the calls made before it runs", () => {
     const call = loadClarity(window, 'abc123');
     loadClarity(window, 'abc123');
@@ -431,7 +431,7 @@ describe('loadClarity (D-USAGE-6)', () => {
 import { describe, expect, it, vi } from 'vitest';
 import { mirrorScreen, withScreen } from './address.ts';
 
-describe('withScreen (D-USAGE-4)', () => {
+describe('withScreen (D213)', () => {
   it("sets the screen beside Decaid's cache buster and the hash", () => {
     expect(withScreen('http://localhost:24800/?_=1730000000000#/settings', 'settings')).toBe(
       'http://localhost:24800/?_=1730000000000&screen=settings#/settings',
@@ -485,7 +485,7 @@ Expected: FAIL, the imports do not resolve.
 ```ts
 // src/usage/types.ts
 /**
- * Usage sharing's vocabulary (D-USAGE-4): the coach steps CafAI counts, each
+ * Usage sharing's vocabulary (D213): the coach steps CafAI counts, each
  * a Clarity custom event a funnel can use (Clarity takes up to 20), and the
  * tags a session carries for Clarity's filters.
  */
@@ -518,7 +518,7 @@ export const NO_USAGE: UsageTracker = { track: () => undefined };
 ```ts
 // src/usage/clarity.ts
 /**
- * Microsoft Clarity's tag, loaded by CafAI itself (D-USAGE-6): the queue stub
+ * Microsoft Clarity's tag, loaded by CafAI itself (D215): the queue stub
  * Clarity's own snippet defines, then one async script, so calls made before
  * the script arrives wait in the queue. A load that fails or is blocked
  * changes nothing on screen and logs nothing: Decaid serves the console to
@@ -561,7 +561,7 @@ export function loadClarity(win: Window, projectId: string): ClarityCall {
 ```ts
 // src/usage/address.ts
 /**
- * The screen in the page's address (D-USAGE-4). CafAI routes by hash, and
+ * The screen in the page's address (D213). CafAI routes by hash, and
  * Clarity starts a page view only when the rest of the address changes, so
  * while the device shares, the open screen also sits in the query as
  * `screen`, set with history.replaceState: no reload, no hash change, no new
@@ -592,7 +592,7 @@ export function mirrorScreen(win: Pick<Window, 'location' | 'history'>, screen: 
 ```ts
 // src/usage/mask.ts
 /**
- * What Clarity must never see (D-USAGE-5), as attributes it obeys
+ * What Clarity must never see (D214), as attributes it obeys
  * (clarity-js, read 2026-10-22). MASK hides an element's text and images,
  * its children's too. Clarity ignores it on a form field. It drops a field
  * entirely (no value, no hash of one) only when one of the field's
@@ -612,7 +612,7 @@ Expected: PASS (6 tests).
 
 ```bash
 git add src/usage/types.ts src/usage/clarity.ts src/usage/address.ts src/usage/mask.ts src/usage/clarity.test.ts src/usage/address.test.ts
-git commit -m "feat: usage sharing's Clarity loader, the screen in the address and the attributes Clarity obeys (D-USAGE-4 to D-USAGE-6)"
+git commit -m "feat: usage sharing's Clarity loader, the screen in the address and the attributes Clarity obeys (D213-D215)"
 ```
 
 ### Task 4: The project ID
@@ -633,7 +633,7 @@ const at = (search: string) => ({ location: { search } }) as unknown as Window;
 
 afterEach(() => vi.unstubAllEnvs());
 
-describe('clarityProjectId (D-USAGE-6)', () => {
+describe('clarityProjectId (D215)', () => {
   it("is a production build's VITE_CLARITY_PROJECT_ID, trimmed", () => {
     vi.stubEnv('MODE', 'production');
     vi.stubEnv('VITE_CLARITY_PROJECT_ID', ' abc123 ');
@@ -673,7 +673,7 @@ Expected: FAIL, `Failed to resolve import "./projectId.ts"`.
 ```ts
 // src/usage/projectId.ts
 /**
- * Which Clarity project this build reports to (D-USAGE-6), or null. Only a
+ * Which Clarity project this build reports to (D215), or null. Only a
  * production build reads VITE_CLARITY_PROJECT_ID (release.yml sets it from a
  * repository variable, so a fork's build has none), never dev or the tests,
  * whatever the shell holds. Mock mode reports to a stand-in only when the e2e
@@ -699,7 +699,7 @@ Append to `src/vite-env.d.ts`:
 ```ts
 
 interface ImportMetaEnv {
-  /** Microsoft Clarity's project for release builds (D-USAGE-6), from release.yml; read by production builds only. */
+  /** Microsoft Clarity's project for release builds (D215), from release.yml; read by production builds only. */
   readonly VITE_CLARITY_PROJECT_ID?: string;
 }
 ```
@@ -713,7 +713,7 @@ Expected: PASS (4 tests).
 
 ```bash
 git add src/usage/projectId.ts src/usage/projectId.test.ts src/vite-env.d.ts
-git commit -m "feat: usage sharing's project ID: a production build's VITE_CLARITY_PROJECT_ID, the e2e's stand-in in mock mode, nothing anywhere else (D-USAGE-6)"
+git commit -m "feat: usage sharing's project ID: a production build's VITE_CLARITY_PROJECT_ID, the e2e's stand-in in mock mode, nothing anywhere else (D215)"
 ```
 
 ### Task 5: The service
@@ -754,7 +754,7 @@ beforeEach(() => {
   window.history.replaceState(null, '', '/#/');
 });
 
-describe('usage sharing (D-USAGE-3)', () => {
+describe('usage sharing (D212)', () => {
   it('asks first in Europe and loads nothing until yes', () => {
     const usage = service(EUROPE);
     expect(usage.getState()).toEqual({ sharing: false, prompt: 'card', rule: 'ask' });
@@ -882,7 +882,7 @@ Expected: FAIL, `Failed to resolve import "./service.ts"`.
 ```ts
 // src/usage/service.ts
 /**
- * Usage sharing (D-USAGE-1 to D-USAGE-6): the rule this device is under, its
+ * Usage sharing (D210-D215): the rule this device is under, its
  * answer, Clarity's loading and consent, and the events, tags and screens
  * that go to Clarity while the device shares. Nothing loads before start(),
  * which the app calls once it has rendered.
@@ -965,7 +965,7 @@ export function createUsageService(deps: UsageDeps): UsageService {
     if (!clarity) clarity = load(win, projectId);
     else if (stopped) clarity('start');
     stopped = false;
-    // Analytics consent only where CafAI asked and heard yes; elsewhere it claims none, and keeps ads off (D-USAGE-3).
+    // Analytics consent only where CafAI asked and heard yes; elsewhere it claims none, and keeps ads off (D212).
     if (choice?.choice === 'yes' && choice.rule === 'ask') clarity('consentv2', { analytics_Storage: 'granted', ad_Storage: 'denied' });
     else clarity('consentv2', { ad_Storage: 'denied' });
     sendTags();
@@ -1032,7 +1032,7 @@ Expected: PASS (10 tests).
 
 ```bash
 git add src/usage/service.ts src/usage/service.test.ts
-git commit -m "feat: usage sharing's service: the card in Europe, the notice elsewhere, analytics consent only where asked, ads off, Turn off erases and stops Clarity (D-USAGE-3)"
+git commit -m "feat: usage sharing's service: the card in Europe, the notice elsewhere, analytics consent only where asked, ads off, Turn off erases and stops Clarity (D212)"
 ```
 
 ### Task 6: Wiring
@@ -1052,7 +1052,7 @@ git commit -m "feat: usage sharing's service: the card in Europe, the notice els
 import { describe, expect, it } from 'vitest';
 import { screenOf } from './screens.ts';
 
-describe('screenOf (D-USAGE-4)', () => {
+describe('screenOf (D213)', () => {
   it("names every route, and never a bag's id", () => {
     expect(screenOf({ name: 'coach' })).toBe('coach');
     expect(screenOf({ name: 'shot' })).toBe('shot');
@@ -1076,7 +1076,7 @@ Expected: FAIL, the import does not resolve.
 // src/ui/usage/screens.ts
 import type { Route } from '../router.ts';
 
-/** A route's name in the address while the device shares usage (D-USAGE-4): never a bag's id. */
+/** A route's name in the address while the device shares usage (D213): never a bag's id. */
 export function screenOf(route: Route): string {
   switch (route.name) {
     case 'history':
@@ -1096,7 +1096,7 @@ Expected: PASS.
 
 ```ts
   /**
-   * Usage sharing with Microsoft Clarity (D-USAGE-1): only in a build with
+   * Usage sharing with Microsoft Clarity (D210): only in a build with
    * Clarity's project ID (src/usage/projectId.ts). Fakes, previews and
    * every other build leave it out, and then no card, notice or switch shows.
    */
@@ -1118,7 +1118,7 @@ import { createUsageService } from '../usage/service.ts';
 After the `deviceStorage` block (the `try { deviceStorage = win.localStorage; }` lines), add:
 
 ```ts
-  // Usage sharing (D-USAGE-1): a build with Clarity's project ID only, and nothing loads before the
+  // Usage sharing (D210): a build with Clarity's project ID only, and nothing loads before the
   // app has rendered (App.tsx). Its answer lives in the device's own storage, like the care counts' cache.
   const clarityProject = clarityProjectId(win);
   const usage = clarityProject ? createUsageService({ win, projectId: clarityProject, storage: deviceStorage, now: () => new Date() }) : undefined;
@@ -1132,7 +1132,7 @@ argument, after `told: createToldList(deviceStorage),`.
 After `await coach.start();`, add:
 
 ```ts
-  // Which coach this device runs, for Clarity's filters (D-USAGE-4): none until the chosen source has its key or code.
+  // Which coach this device runs, for Clarity's filters (D213): none until the chosen source has its key or code.
   let sourceKind = (await coachSource?.get().catch(() => null))?.kind ?? 'anthropic';
   const tagCoachSource = () =>
     usage?.tag('coach_source', !coach.getState().hasApiKey ? 'none' : sourceKind === 'computer' ? 'bridge' : 'api-key');
@@ -1168,7 +1168,7 @@ two into one import line. Add, above `Routed`:
 
 ```tsx
 /**
- * Usage sharing's hooks into the app (D-USAGE-4, D-USAGE-6): it starts once
+ * Usage sharing's hooks into the app (D213, D215): it starts once
  * the app has rendered, then hears each screen and the layout.
  */
 function UsageTracking({ route }: { route: Route }) {
@@ -1199,7 +1199,7 @@ In `Routed`, return the tracker beside the shell:
 ```yaml
       - run: npm run release:zip
         env:
-          # Usage sharing's Clarity project (D-USAGE-6): a repository variable, so a fork's build has none.
+          # Usage sharing's Clarity project (D215): a repository variable, so a fork's build has none.
           VITE_CLARITY_PROJECT_ID: ${{ vars.CLARITY_PROJECT_ID }}
 ```
 
@@ -1210,7 +1210,7 @@ In `src/app/createServices.test.ts`, inside its existing top-level
 nearest test that awaits `createServices(window)`:
 
 ```ts
-  it('has no usage sharing without a Clarity project (D-USAGE-6)', async () => {
+  it('has no usage sharing without a Clarity project (D215)', async () => {
     const services = await createServices(window);
     expect(services.usage).toBeUndefined();
     services.dispose();
@@ -1229,7 +1229,7 @@ Run: `npx vitest run src/app src/ui/usage src/usage` (expected: PASS)
 
 ```bash
 git add src/app/types.ts src/app/createServices.ts src/app/App.tsx src/ui/usage/screens.ts src/ui/usage/screens.test.ts src/app/createServices.test.ts .github/workflows/release.yml
-git commit -m "feat: usage sharing wired in: created only with a project ID, started after the first render, told each screen, the layout, the version, the host and the coach source; release builds take the ID from a repository variable (D-USAGE-1, D-USAGE-4, D-USAGE-6)"
+git commit -m "feat: usage sharing wired in: created only with a project ID, started after the first render, told each screen, the layout, the version, the host and the coach source; release builds take the ID from a repository variable (D210, D213, D215)"
 ```
 
 ### Task 7: The coach engine's events
@@ -1241,7 +1241,7 @@ git commit -m "feat: usage sharing wired in: created only with a project ID, sta
 - [ ] **Step 1: Write the failing test.** Add it at the end of `describe('coach engine', ...)`, so it uses that block's `build`, `throughTemplatePick`, `throughShot`, `throughProposal`, `scripts` and `telemetry`:
 
 ```ts
-  describe('usage events (D-USAGE-4)', () => {
+  describe('usage events (D213)', () => {
     let events: string[];
     const count = (name: string) => events.filter((event) => event === name).length;
 
@@ -1329,7 +1329,7 @@ Import: `import { NO_USAGE, type UsageTracker } from '../../usage/types.ts';`
 `EngineDeps`, after `facts?`:
 
 ```ts
-  /** Usage sharing's counts (D-USAGE-4); nothing by default. */
+  /** Usage sharing's counts (D213); nothing by default. */
   usage?: UsageTracker;
 ```
 
@@ -1400,7 +1400,7 @@ Expected: no output.
 
 ```bash
 git add src/app/engine/engine.ts src/app/engine/engine.test.ts
-git commit -m "feat: the coach's steps counted for usage sharing: a message, the bag's first details, every load, a shot read, a taste, a confirmed change or a kept recipe, an undo, a fun fact and a coach error (D-USAGE-4)"
+git commit -m "feat: the coach's steps counted for usage sharing: a message, the bag's first details, every load, a shot read, a taste, a confirmed change or a kept recipe, an undo, a fun fact and a coach error (D213)"
 ```
 
 ### Task 8: The card, the notice, the switch and the masks
@@ -1413,7 +1413,7 @@ git commit -m "feat: the coach's steps counted for usage sharing: a message, the
 - [ ] **Step 1: The test IDs** (`src/ui/testIds.ts`, a new group before the closing `}` of `TID`)
 
 ```ts
-  // Usage sharing (D-USAGE-3)
+  // Usage sharing (D212)
   usagePrompt: 'usage-prompt',
   usageYes: 'usage-yes',
   usageNo: 'usage-no',
@@ -1451,7 +1451,7 @@ const renderWith = (usage: UsageService | null) =>
     </UsageContextForTests>,
   );
 
-describe('UsagePrompt (D-USAGE-3)', () => {
+describe('UsagePrompt (D212)', () => {
   it('asks first, and Yes, share or No thanks answers', async () => {
     const usage = fakeUsage({ sharing: false, prompt: 'card', rule: 'ask' });
     renderWith(usage);
@@ -1495,7 +1495,7 @@ import { UsageContextForTests } from '../usage/useUsage.ts';
 import type { UsageService } from '../../usage/service.ts';
 import { TID } from '../testIds.ts';
 
-describe('UsageRow (D-USAGE-3)', () => {
+describe('UsageRow (D212)', () => {
   it('shows the device sharing and turns it off', async () => {
     const choose = vi.fn();
     const usage: UsageService = {
@@ -1564,9 +1564,9 @@ export function useUsage(): { usage: UsageService | null; state: UsageState | nu
 ```tsx
 // src/ui/usage/UsagePrompt.tsx
 /**
- * Usage sharing's card and notice (D-USAGE-3), at the foot of the chat in
+ * Usage sharing's card and notice (D212), at the foot of the chat in
  * the prompt row: the device's, never the bag's, so never in a transcript,
- * the backup or an export. The card asks first (Europe, D-USAGE-2); the
+ * the backup or an export. The card asks first (Europe, D211); the
  * notice tells, elsewhere. Each stays until answered, and nothing waits on it.
  */
 import Box from '@mui/material/Box';
@@ -1635,7 +1635,7 @@ Check `outsideLinkProps`'s parameter type in `src/ui/care/videoPlace.ts`
 
 ```tsx
 // src/ui/settings/UsageRow.tsx
-/** Settings > About's usage switch (D-USAGE-3): on every device, under either rule; a change is the device's answer. */
+/** Settings > About's usage switch (D212): on every device, under either rule; a change is the device's answer. */
 import Box from '@mui/material/Box';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
@@ -1740,7 +1740,7 @@ Expected: PASS.
 
 - `src/ui/chat/ChatSurface.test.tsx`, using the file's own render helper:
   ```tsx
-  it('masks the chat for Clarity and keeps the composer out of it entirely (D-USAGE-5)', () => {
+  it('masks the chat for Clarity and keeps the composer out of it entirely (D214)', () => {
     // render as the file's other cases do
     expect(screen.getByTestId(TID.chat)).toHaveAttribute('data-clarity-mask', 'true');
     expect(screen.getByTestId(TID.composerInput)).toHaveAttribute('data-private', 'secret');
@@ -1770,7 +1770,7 @@ Expected: no output.
 
 ```bash
 git add src/ui src/usage
-git commit -m "feat: usage sharing on screen: the card in Europe and the notice elsewhere in the chat's prompt row, the switch in Settings > About, coach_setup on a saved key or Bridge, the chat and the log masked, and the key, the code and the composer kept out of Clarity entirely (D-USAGE-3, D-USAGE-5)"
+git commit -m "feat: usage sharing on screen: the card in Europe and the notice elsewhere in the chat's prompt row, the switch in Settings > About, coach_setup on a saved key or Bridge, the chat and the log masked, and the key, the code and the composer kept out of Clarity entirely (D212, D214)"
 ```
 
 ### Task 9: The e2e
@@ -1787,7 +1787,7 @@ import { TID } from '../src/ui/testIds.ts';
 import { openAppWithSwitches, recordRequests } from './helpers.ts';
 
 /**
- * Usage sharing (D-USAGE-1 to D-USAGE-6) through mock mode's ?mockUsage=1:
+ * Usage sharing (D210-D215) through mock mode's ?mockUsage=1:
  * Clarity's hosts answer with a stub that records every call, and nothing
  * real leaves the machine.
  */
@@ -1870,7 +1870,7 @@ Expected: 3 passed. The first run builds the mock bundle, which takes a few minu
 
 ```bash
 git add e2e/usage.spec.ts
-git commit -m "test: usage sharing end to end: the card in Europe with nothing from Clarity before yes, the notice and Turn off elsewhere, and never in the demo or plain mock mode (D-USAGE-2, D-USAGE-3, D-USAGE-6)"
+git commit -m "test: usage sharing end to end: the card in Europe with nothing from Clarity before yes, the notice and Turn off elsewhere, and never in the demo or plain mock mode (D211, D212, D215)"
 ```
 
 ### Task 10: The docs
@@ -1878,7 +1878,7 @@ git commit -m "test: usage sharing end to end: the card in Europe with nothing f
 Write them in the project's voice. The decisions are the record.
 
 - **DECISIONS.md:** a `### Usage analytics (2026-10-22)` section at the end,
-  with D-USAGE-1 to D-USAGE-7 as the spec's sections 2 to 10 decide them. Say
+  with D210-D216 as the spec's sections 2 to 10 decide them. Say
   why for each, in the file's style.
 - **README.md:**
   - Privacy: a bullet on usage sharing covering:
@@ -1901,11 +1901,11 @@ Write them in the project's voice. The decisions are the record.
 - **DESIGN.md:** the card and notice (prompt row, full width, Paper
   outlined, 48 px buttons) and the About row.
 - **CHANGELOG.md:** one entry under `## Unreleased`.
-- **QUESTIONS.md:** the test run (D-USAGE-7) as the next step for the owner,
+- **QUESTIONS.md:** the test run (D216) as the next step for the owner,
   needing their Clarity project ID and a `CLARITY_PROJECT_ID` repository
   variable.
 
-Commit: `docs: usage sharing in DECISIONS (D-USAGE-1 to D-USAGE-7), the README's privacy, first run and Settings, SECURITY, DESIGN, the changelog and QUESTIONS`
+Commit: `docs: usage sharing in DECISIONS (D210-D216), the README's privacy, first run and Settings, SECURITY, DESIGN, the changelog and QUESTIONS`
 
 ### Task 11: Verify, review and land
 
@@ -1923,7 +1923,7 @@ Commit: `docs: usage sharing in DECISIONS (D-USAGE-1 to D-USAGE-7), the README's
   main: `git commit-tree`, then `git update-ref refs/heads/main <new> <old>`.
   Never push unless asked.
 
-### Task 12 (the owner): the test run (D-USAGE-7)
+### Task 12 (the owner): the test run (D216)
 
 Needs a Clarity project (clarity.microsoft.com, Strict masking). With its ID:
 

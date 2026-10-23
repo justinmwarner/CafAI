@@ -41,7 +41,7 @@ const visualizerLinkSx = { minHeight: 48, mt: 0.5, justifySelf: 'start' } as con
  * imported record says. While the device shares usage it is a button that
  * goes there on a tap instead, the way a link does: Clarity records every
  * link's address on the page, masked or not, and this one leads to the
- * barista's shot (D-USAGE-5).
+ * barista's shot (D214).
  */
 export function VisualizerLink({ url }: { url: string | null | undefined }) {
   const sharing = useUsage().state?.sharing ?? false;

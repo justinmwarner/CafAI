@@ -96,7 +96,7 @@ describe('CoachScreen', () => {
     expect(screen.queryByTestId(TID.chat)).toBeNull();
   });
 
-  it('asks about usage sharing under the key panel, before the coach is set up (D-USAGE-3)', () => {
+  it('asks about usage sharing under the key panel, before the coach is set up (D212)', () => {
     const services = createFakeServices({ coach: { ...coachStateFor('diff'), hasApiKey: false } });
     services.usage = createFakeUsage({ sharing: false, prompt: 'card', rule: 'ask' }).usage;
     renderWithServices(<CoachScreen />, services);

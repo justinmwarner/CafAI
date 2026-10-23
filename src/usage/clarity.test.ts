@@ -9,7 +9,7 @@ afterEach(() => {
   delete (window as Stubbed).clarity;
 });
 
-describe('loadClarity (D-USAGE-6)', () => {
+describe('loadClarity (D215)', () => {
   it("adds Clarity's tag once, async, and queues the calls made before it runs", () => {
     const { call } = loadClarity(window, 'abc123');
     loadClarity(window, 'abc123');
@@ -39,7 +39,7 @@ describe('loadClarity (D-USAGE-6)', () => {
   });
 });
 
-describe('halt (D-USAGE-3)', () => {
+describe('halt (D212)', () => {
   it("stops a Clarity whose script has run", () => {
     const { halt } = loadClarity(window, 'abc123');
     const heard: unknown[][] = [];
@@ -59,7 +59,7 @@ describe('halt (D-USAGE-3)', () => {
   });
 });
 
-describe('forgetClarityCookies (D-USAGE-3)', () => {
+describe('forgetClarityCookies (D212)', () => {
   it("erases Clarity's cookies and leaves the others", () => {
     document.cookie = '_clck=user1; path=/';
     document.cookie = '_clsk=session1; path=/';

@@ -1,5 +1,5 @@
 /**
- * Microsoft Clarity's tag, loaded by CafAI itself (D-USAGE-6): the queue stub
+ * Microsoft Clarity's tag, loaded by CafAI itself (D215): the queue stub
  * Clarity's own snippet defines, then one async script, so calls made before
  * the script arrives wait in the queue. A load that fails or is blocked
  * changes nothing on screen and logs nothing: Decaid serves the console to
@@ -13,7 +13,7 @@ export interface ClarityHandle {
   /** Call Clarity; until its script has run, the call waits in the queue. */
   call: ClarityCall;
   /**
-   * Stop Clarity for the rest of the page (D-USAGE-3). Once its script has
+   * Stop Clarity for the rest of the page (D212). Once its script has
    * run: `stop`. Before: the calls waiting in the queue are dropped for a
    * lone `stop`, and the stub gets a version, which Clarity's script takes
    * for another Clarity tag already running ("CL001"), so it starts nothing.
@@ -72,7 +72,7 @@ function cookieDomains(host: string): string[] {
 }
 
 /**
- * Erase Clarity's cookies (Turn off, D-USAGE-3): the host's own and any set on
+ * Erase Clarity's cookies (Turn off, D212): the host's own and any set on
  * a parent domain. CafAI does it itself, since Clarity's consent(false), which
  * also erases them, starts Clarity again without cookies.
  */

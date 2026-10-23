@@ -49,7 +49,7 @@ export interface Services {
    */
   care?: CareService;
   /**
-   * Usage sharing with Microsoft Clarity (D-USAGE-1): only in a build with
+   * Usage sharing with Microsoft Clarity (D210): only in a build with
    * Clarity's project ID (src/usage/projectId.ts). Fakes, previews and every
    * other build leave it out, and then no card, notice or switch shows.
    */

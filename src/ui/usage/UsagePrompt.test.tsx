@@ -29,7 +29,7 @@ const renderWith = (usage: UsageService | null) =>
     </UsageContextForTests>,
   );
 
-describe('UsagePrompt (D-USAGE-3)', () => {
+describe('UsagePrompt (D212)', () => {
   it('asks first, and Yes, share or No thanks answers', async () => {
     const { usage, choose } = fakeUsage({ sharing: false, prompt: 'card', rule: 'ask' });
     renderWith(usage);

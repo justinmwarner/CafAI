@@ -911,7 +911,7 @@ General, "Read repository contents and packages permissions") can stay.
   usage sharing's Clarity project from the repository variable
   `CLARITY_PROJECT_ID`, under Settings > Secrets and variables > Actions >
   Variables ([Privacy](#privacy)); without it a release shares nothing. Set
-  it only after the test run in [QUESTIONS.md](QUESTIONS.md) (D-USAGE-7).
+  it only after the test run in [QUESTIONS.md](QUESTIONS.md) (D216).
 - **Scheduled runs stop after 60 days without activity** in a public
   repository; re-enable them on the Actions tab.
 - **Private vulnerability reporting**, in the repository's security

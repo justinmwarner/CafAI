@@ -316,7 +316,7 @@ function CoachSourceForm({ store }: { store: CoachSourceStore }) {
                 inputLabel: { shrink: true },
                 htmlInput: {
                   'data-testid': TID.computerCode,
-                  // Out of Clarity entirely, shown or hidden (D-USAGE-5).
+                  // Out of Clarity entirely, shown or hidden (D214).
                   ...SECRET_FIELD,
                   autoComplete: 'off',
                   autoCapitalize: 'characters',

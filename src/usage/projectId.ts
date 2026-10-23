@@ -1,5 +1,5 @@
 /**
- * Which Clarity project this build reports to (D-USAGE-6), or null. Only a
+ * Which Clarity project this build reports to (D215), or null. Only a
  * production build reads VITE_CLARITY_PROJECT_ID (release.yml sets it from a
  * repository variable, so a fork's build has none), never dev or the tests,
  * whatever the shell holds. Mock mode reports to a stand-in only when the e2e

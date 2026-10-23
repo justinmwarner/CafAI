@@ -1,4 +1,4 @@
-/** Settings > About's usage switch (D-USAGE-3): on every device, under either rule; a change is the device's answer. */
+/** Settings > About's usage switch (D212): on every device, under either rule; a change is the device's answer. */
 import Box from '@mui/material/Box';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';

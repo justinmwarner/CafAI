@@ -253,7 +253,7 @@ describe('ShotCard Visualizer link (6.4)', () => {
     expect(screen.getByRole('link', { name: 'On Visualizer' })).toBe(link);
   });
 
-  it("keeps the shot's address out of the page while the device shares usage: a button that goes there on a tap (D-USAGE-5)", () => {
+  it("keeps the shot's address out of the page while the device shares usage: a button that goes there on a tap (D214)", () => {
     const state = { sharing: true, prompt: null, rule: 'notice' } as const;
     const { usage } = createFakeUsage(state);
     renderThemed(

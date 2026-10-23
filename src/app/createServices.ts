@@ -80,7 +80,7 @@ export async function createServices(win: Window): Promise<AppServices> {
   const care = createCareService({ storage, decaid, telemetry, cache: localTotalsCache(deviceStorage), visibility });
   await care.start();
 
-  // Usage sharing (D-USAGE-1): a build with Clarity's project ID only, and nothing loads before the app has
+  // Usage sharing (D210): a build with Clarity's project ID only, and nothing loads before the app has
   // rendered (App.tsx). The answer lives in the device's own storage, like the care counts' cache.
   const clarityProject = clarityProjectId(win);
   const usage = clarityProject
@@ -116,7 +116,7 @@ export async function createServices(win: Window): Promise<AppServices> {
   telemetry.start();
   await coach.start();
 
-  // Which coach this device runs, for Clarity's filters (D-USAGE-4): none until the chosen source has its key or code.
+  // Which coach this device runs, for Clarity's filters (D213): none until the chosen source has its key or code.
   let sourceKind = (await coachSource?.get().catch(() => null))?.kind ?? 'anthropic';
   const tagCoachSource = () =>
     usage?.tag('coach_source', !coach.getState().hasApiKey ? 'none' : sourceKind === 'computer' ? 'bridge' : 'api-key');

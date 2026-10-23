@@ -193,7 +193,7 @@ function ApiKeySection() {
             inputLabel: { shrink: true },
             htmlInput: {
               'data-testid': TID.apiKeyInput,
-              // Out of Clarity entirely, shown or hidden: the key leaves only for Anthropic (D-USAGE-5).
+              // Out of Clarity entirely, shown or hidden: the key leaves only for Anthropic (D214).
               ...SECRET_FIELD,
               autoComplete: 'off',
               autoCapitalize: 'off',

@@ -1,9 +1,9 @@
 /**
- * Usage sharing's card and notice (D-USAGE-3): at the foot of the chat in
+ * Usage sharing's card and notice (D212): at the foot of the chat in
  * the prompt row, or under the coach screen's panel before there is a chat
  * (no key, no bag yet). The device's, never the bag's, so never in a
  * transcript, the backup or an export. The card asks first (Europe,
- * D-USAGE-2); the notice tells, elsewhere. Each stays until answered, and
+ * D211); the notice tells, elsewhere. Each stays until answered, and
  * nothing waits on it.
  */
 import { useEffect, useState, useSyncExternalStore } from 'react';

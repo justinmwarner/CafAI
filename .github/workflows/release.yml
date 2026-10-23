@@ -78,7 +78,7 @@ jobs:
 
       - run: npm run release:zip
         env:
-          # Usage sharing's Clarity project (D-USAGE-6): a repository variable, so a fork's build has none.
+          # Usage sharing's Clarity project (D215): a repository variable, so a fork's build has none.
           VITE_CLARITY_PROJECT_ID: ${{ vars.CLARITY_PROJECT_ID }}
 
       # A manual run (workflow_dispatch) publishes nothing; keep the zip to download.

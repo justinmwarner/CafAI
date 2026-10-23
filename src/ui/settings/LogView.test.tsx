@@ -43,7 +43,7 @@ afterEach(() => {
 });
 
 describe('LogView', () => {
-  it("keeps what it shows out of Clarity's recordings (D-USAGE-5)", () => {
+  it("keeps what it shows out of Clarity's recordings (D214)", () => {
     seed();
     openLogView();
     renderWithServices(<LogView />);

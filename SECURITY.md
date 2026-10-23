@@ -131,7 +131,7 @@ is the first).
 - So the key still leaves the device only as the `x-api-key` header to
   `https://api.anthropic.com`, and the code only for the bridge. Before a
   release carries a Clarity project, a test run checks the uploads for both
-  fields (D-USAGE-7).
+  fields (D216).
 - Clarity's script comes from `https://www.clarity.ms/tag/<id>`, once the
   app has rendered. A load that fails or is blocked logs nothing, because
   Decaid serves a skin's console to the network. Turning sharing off in

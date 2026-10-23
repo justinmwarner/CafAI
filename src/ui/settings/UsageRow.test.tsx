@@ -7,7 +7,7 @@ import { TID } from '../testIds.ts';
 import { UsageContextForTests } from '../usage/useUsage.ts';
 import { UsageRow } from './UsageRow.tsx';
 
-describe('UsageRow (D-USAGE-3)', () => {
+describe('UsageRow (D212)', () => {
   it('shows the device sharing and turns it off', async () => {
     const choose = vi.fn();
     // One object, as the service keeps it between changes: useSyncExternalStore loops on a new one each read.

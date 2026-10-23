@@ -55,7 +55,7 @@
  * - Everything is persisted as it happens (the WebView may be unloaded after
  *   ten minutes in the background without warning). Progress notices are the
  *   exception: they are never stored.
- * - Each coach step is counted for usage sharing (D-USAGE-4): a message, a
+ * - Each coach step is counted for usage sharing (D213): a message, a
  *   bag's first details, a load, a shot read, a taste, a confirmed change or
  *   a kept recipe, an undo, a fun fact, a coach error. It goes nowhere unless
  *   the build and the device share.
@@ -237,7 +237,7 @@ export interface EngineDeps {
   told?: ToldList;
   /** CafAI's own fun facts (D199), read only when one is due; facts.json by default. */
   facts?: () => Promise<readonly FunFact[]>;
-  /** Usage sharing's counts (D-USAGE-4); nothing by default. */
+  /** Usage sharing's counts (D213); nothing by default. */
   usage?: UsageTracker;
 }
 

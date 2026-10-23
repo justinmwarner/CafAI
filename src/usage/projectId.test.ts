@@ -7,7 +7,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('clarityProjectId (D-USAGE-6)', () => {
+describe('clarityProjectId (D215)', () => {
   it("is a production build's VITE_CLARITY_PROJECT_ID, trimmed", () => {
     vi.stubEnv('MODE', 'production');
     vi.stubEnv('VITE_CLARITY_PROJECT_ID', ' abc123 ');

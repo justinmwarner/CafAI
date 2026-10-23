@@ -254,7 +254,7 @@ function LogViewContent() {
   return (
     <Box
       data-testid={TID.logView}
-      // What CafAI said to Decaid and the coach stays out of Clarity's recordings (D-USAGE-5).
+      // What CafAI said to Decaid and the coach stays out of Clarity's recordings (D214).
       {...MASK}
       sx={{
         display: 'flex',

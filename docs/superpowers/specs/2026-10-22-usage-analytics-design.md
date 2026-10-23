@@ -8,8 +8,7 @@ Date: 2026-10-22. Status: approved by the owner (2026-10-22). It covers:
 - A switch in Settings > About on every device.
 - A test run on the simulator and the owner's tablet before it ships.
 
-Decisions D-USAGE-1 to D-USAGE-7, numbered after the merge
-(`.verify/renumber-decisions.mjs`).
+Decisions D210-D216.
 
 ## 1. The ask
 
@@ -27,29 +26,29 @@ coach.
 
 ## 2. What changes
 
-- **Usage sharing (D-USAGE-1).** Release builds send Microsoft Clarity how
+- **Usage sharing (D210).** Release builds send Microsoft Clarity how
   CafAI is used: the screens that open, taps and scrolls, and a short list of
   coach steps. Every word is hidden. Clarity gives the owner people and
   sessions, heatmaps, funnels and replays, free.
-- **Where CafAI asks first (D-USAGE-2).** A European time zone or language,
+- **Where CafAI asks first (D211).** A European time zone or language,
   or no usable time zone, means ask first. Everywhere else sharing is on, with
   a notice.
-- **The card, the notice and the switch (D-USAGE-3).** One card asks or tells
+- **The card, the notice and the switch (D212).** One card asks or tells
   once. A switch in Settings > About changes the choice on any device. The
   choice stays on the device.
-- **Screens, events and tags (D-USAGE-4).** The screen is mirrored into the
+- **Screens, events and tags (D213).** The screen is mirrored into the
   address so heatmaps split by screen. Eleven coach events serve as funnel
   steps, and five tags allow filtering.
-- **What stays hidden (D-USAGE-5).** Strict masking. The chat and the log
+- **What stays hidden (D214).** Strict masking. The chat and the log
   are marked as well, and the key, the code and the composer are kept out of
   Clarity entirely. Nothing identifies a person.
-- **Loading (D-USAGE-6).** Clarity loads after the app starts, and its
+- **Loading (D215).** Clarity loads after the app starts, and its
   failures are silent. It never loads in dev, tests, the demo, plain mock
   mode or a fork.
-- **The test run (D-USAGE-7).** The test run on the simulator and the owner's
+- **The test run (D216).** The test run on the simulator and the owner's
   tablet comes before the first release that carries it.
 
-## 3. Where CafAI asks first (D-USAGE-2)
+## 3. Where CafAI asks first (D211)
 
 Since 2025-10-31 Clarity enforces a consent signal for visitors in the EEA,
 the UK and Switzerland. Without one it sets no cookies and counts each page
@@ -88,7 +87,7 @@ Notes on the rule:
   asking first (South Korea, China, Brazil) are left out, because the owner
   asked for the EU, the UK and Switzerland.
 
-## 4. The card, the notice and the switch (D-USAGE-3)
+## 4. The card, the notice and the switch (D212)
 
 The choice is kept per device under `cafai.usage.choice` in the device's own
 storage: `{ choice: 'yes' | 'no', at, wording, rule: 'ask' | 'notice' }`. Like
@@ -154,7 +153,7 @@ off otherwise. Changing it records a choice.
   - If the test run shows uploads still go out, CafAI reloads the page the
     next time no shot or coach turn is running.
 
-## 5. Screens, events and tags (D-USAGE-4)
+## 5. Screens, events and tags (D213)
 
 **Screens.** CafAI routes by hash (`src/ui/router.ts`), and Clarity ignores
 hash-only changes. While sharing is on, CafAI keeps `screen=<name>` in the
@@ -207,7 +206,7 @@ itself only "Decent", so that report says nothing.
 to a person. Over plain http on a LAN address, the hash that `identify` needs
 is not available anyway.
 
-## 6. What stays hidden (D-USAGE-5)
+## 6. What stays hidden (D214)
 
 - **Strict masking.** The Clarity project is set to Strict. Every word on the
   page is replaced before upload, in recordings and heatmaps alike. Inputs are
@@ -246,7 +245,7 @@ is not available anyway.
   would not bring the fonts. So replays go without it: fonts fall back, and
   the shot graph, a canvas, shows blank.
 
-## 7. Loading (D-USAGE-6)
+## 7. Loading (D215)
 
 - **The project ID.** It comes from `VITE_CLARITY_PROJECT_ID` at build time,
   set from a GitHub Actions variable in `release.yml` only. Only a production
@@ -270,7 +269,7 @@ is not available anyway.
 
 ## 8. Docs
 
-- **DECISIONS:** D-USAGE-1 to D-USAGE-7 in a "Usage analytics (2026-10-22)"
+- **DECISIONS:** D210-D216 in a "Usage analytics (2026-10-22)"
   section.
 - **README:**
   - Privacy: what goes to Microsoft Clarity, what is hidden, the region rule,
@@ -318,7 +317,7 @@ is not available anyway.
 - `npm run smoke:chrome91` still passes. Its build has no project, and the
   lint rules hold the new code to Chromium 91.
 
-## 10. The test run first (D-USAGE-7)
+## 10. The test run first (D216)
 
 It needs the owner's Clarity project (clarity.microsoft.com, a Microsoft
 account), with Strict masking set in its settings. Any site URL will do. With

@@ -13,7 +13,7 @@ own section); the questions you answered are in "Answered" at the end.
 ## Your next step: usage analytics (2026-10-22)
 
 28. **Does Microsoft Clarity work inside Decaid and on your tablet, and keep
-    to what CafAI promises (D-USAGE-7)?** Nobody has run it there yet: the
+    to what CafAI promises (D216)?** Nobody has run it there yet: the
     masking and the consent calls CafAI relies on were read in clarity-js,
     never seen on the wire, and whether Clarity counts Decaid's "Decent"
     user agent as a person is unknown. Releases carry no Clarity project

@@ -8,7 +8,7 @@ function memory(initial: Record<string, string> = {}) {
 
 const YES: UsageChoice = { choice: 'yes', at: '2026-10-22T08:00:00.000Z', wording: WORDING, rule: 'ask' };
 
-describe('the device choice (D-USAGE-3)', () => {
+describe('the device choice (D212)', () => {
   it('reads back what was written, under cafai.usage.choice', () => {
     const storage = memory();
     writeChoice(storage, YES);

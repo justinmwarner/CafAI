@@ -89,12 +89,12 @@ describe('createServices: bags and the key back from Decaid (D99, D100)', () => 
       .messages.flatMap((m) => m.parts)
       .flatMap((part) => (part.kind === 'notice' ? [part.text] : []));
 
-  it('has no usage sharing without a Clarity project (D-USAGE-6)', async () => {
+  it('has no usage sharing without a Clarity project (D215)', async () => {
     services = await createServices(window);
     expect(services.usage).toBeUndefined();
   });
 
-  it('has usage sharing in a production build with a project, loading nothing until the app starts it (D-USAGE-1, D-USAGE-6)', async () => {
+  it('has usage sharing in a production build with a project, loading nothing until the app starts it (D210, D215)', async () => {
     vi.stubEnv('MODE', 'production');
     vi.stubEnv('VITE_CLARITY_PROJECT_ID', 'abc123');
     try {

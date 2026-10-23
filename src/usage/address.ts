@@ -1,5 +1,5 @@
 /**
- * The screen in the page's address (D-USAGE-4). CafAI routes by hash, and
+ * The screen in the page's address (D213). CafAI routes by hash, and
  * Clarity starts a page view only when the rest of the address changes, so
  * while the device shares, the open screen also sits in the query as
  * `screen`, set with history.replaceState: no reload, no hash change, no new

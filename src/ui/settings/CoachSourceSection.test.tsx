@@ -121,7 +121,7 @@ describe('CoachSourceSection', () => {
     expect(field).toHaveAttribute('type', 'password');
   });
 
-  it('keeps the code field out of Clarity and counts a saved bridge (D-USAGE-4, D-USAGE-5)', async () => {
+  it('keeps the code field out of Clarity and counts a saved bridge (D213, D214)', async () => {
     const { services } = renderSection({ kind: 'computer' });
     const { usage, tracked } = createFakeUsage();
     // The form reads the services again at every render: the next keystroke sees it.

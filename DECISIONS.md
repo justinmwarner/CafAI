@@ -3552,17 +3552,17 @@ zip once per install or update, so they are a floor on installs (3 for
 v0.1.0, 2 for v0.1.1 and 1 for v0.1.2 on 2026-10-22), and nothing said who
 uses the coach.
 
-- **D-USAGE-1. Release builds share how CafAI is used with Microsoft
+- **D210. Release builds share how CafAI is used with Microsoft
   Clarity, under CafAI's own project.** The screens that open, taps and
-  scrolls, eleven coach steps and five tags (D-USAGE-4) go to the owner's
-  Clarity project with every word hidden (D-USAGE-5), as the device's rule
-  and answer allow (D-USAGE-2, D-USAGE-3). `src/usage/` holds the region
+  scrolls, eleven coach steps and five tags (D213) go to the owner's
+  Clarity project with every word hidden (D214), as the device's rule
+  and answer allow (D211, D212). `src/usage/` holds the region
   rule, the device's answer, CafAI's own loader, the screen in the address,
   the attributes Clarity obeys, the form fields' guard and the service
   (`createUsageService` in `service.ts`), a state machine that loads nothing
   before `start()`.
   `createServices` makes the service only in a build with Clarity's project
-  ID (`Services.usage`, D-USAGE-6), and the engine counts the coach's steps
+  ID (`Services.usage`, D215), and the engine counts the coach's steps
   through a `UsageTracker`, a no-op by default (`NO_USAGE` in `types.ts`).
   Left out: an identity or a profile for anyone, a server of CafAI's own,
   the CafAI Bridge (it sends no usage), Clarity's numbers shown inside
@@ -3571,7 +3571,7 @@ uses the coach.
   Clarity gives people and sessions, heatmaps, funnels and replays, free and
   with no server to run, where the download counts are a floor on installs
   and say nothing of use.
-- **D-USAGE-2. CafAI asks first where the time zone or a language points to
+- **D211. CafAI asks first where the time zone or a language points to
   Europe, or the time zone says nothing; elsewhere it shares, with a
   notice.** `consentRule` (`src/usage/region.ts`) reads only what the device
   already says. It asks first for any `Europe/*` time zone
@@ -3598,11 +3598,11 @@ uses the coach.
   nobody finishing. Deciding on the device needs no lookup, and asking
   whenever it is unsure costs one tap from someone who did not need asking.
   A tablet in a European home left on another time zone is still covered:
-  outside the ask-first case CafAI claims no consent (D-USAGE-3), so
+  outside the ask-first case CafAI claims no consent (D212), so
   Clarity's own check of the upload's address keeps its cookies off. South
   Korea, China and Brazil, which also lean toward asking first, are left
   out, because the owner asked for the EU, the UK and Switzerland.
-- **D-USAGE-3. A card asks, or a notice tells, once on the coach screen; a
+- **D212. A card asks, or a notice tells, once on the coach screen; a
   switch in Settings > About changes the answer on any device; the answer
   stays on the device.** The answer is kept under `cafai.usage.choice` in
   the device's own localStorage as
@@ -3652,7 +3652,7 @@ uses the coach.
   The README's Privacy section
   says what Clarity's terms ask a site to say: Microsoft may use the data,
   including for advertising, with a link to Microsoft's privacy statement.
-  If the test run (D-USAGE-7) shows Clarity cannot keep ads off without the
+  If the test run (D216) shows Clarity cannot keep ads off without the
   analytics claim, CafAI makes no consent call under the notice rule; if
   uploads still go out after `stop`, CafAI reloads the page the next time no
   shot or coach turn runs. Why: the owner's "ask first" for the EU, the UK
@@ -3664,7 +3664,7 @@ uses the coach.
   nobody gave it, and keeps ads storage off everywhere, as it shows no ads.
   Browser storage and Clarity's cookies are each device's own, so the answer
   is too, and the switch lets anyone change their mind on any device.
-- **D-USAGE-4. The screen goes into the address, and eleven coach events and
+- **D213. The screen goes into the address, and eleven coach events and
   five tags go with it.** CafAI routes by hash (`src/ui/router.ts`), and
   Clarity ignores a change of the hash alone. So while the device shares,
   the open screen also sits in the query as `screen`, set with
@@ -3706,7 +3706,7 @@ uses the coach.
   Clarity's own device report, which says nothing, as Decaid's WebView calls
   itself only "Decent"; and over plain http on a LAN address `identify`
   could not hash an ID anyway.
-- **D-USAGE-5. Every word stays hidden: Strict masking, the chat and the log
+- **D214. Every word stays hidden: Strict masking, the chat and the log
   masked as well, and every form field kept out of Clarity entirely.** The Clarity project is set to Strict: every word on the page
   is replaced before upload, in recordings and heatmaps alike, and inputs
   are masked in every mode. The chat's root (its transcript, every card, the
@@ -3755,7 +3755,7 @@ uses the coach.
   and the attributes keep them hidden if the setting changes and keep every
   field out of every upload. Inlining the stylesheet would not bring
   the fonts, so replays would gain little from it.
-- **D-USAGE-6. Clarity loads only in a release build that has the project
+- **D215. Clarity loads only in a release build that has the project
   ID, after the app has rendered, and fails silently.** The ID is
   `VITE_CLARITY_PROJECT_ID` at build time, which `release.yml` sets from the
   repository variable `CLARITY_PROJECT_ID` (`clarityProjectId` in
@@ -3784,7 +3784,7 @@ uses the coach.
   start or write to a console anyone on the network can read; and the e2e
   checks the card, the notice and Turn off with nothing real leaving the
   machine.
-- **D-USAGE-7. A test run on the simulator and the owner's tablet comes
+- **D216. A test run on the simulator and the owner's tablet comes
   before the first release that carries the ID.** It needs the owner's
   Clarity project (clarity.microsoft.com, a Microsoft account; any site URL
   will do) with Strict masking set, and its ID in a local release build:

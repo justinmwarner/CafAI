@@ -97,7 +97,7 @@ async function startMocks(): Promise<void> {
   // Spread: the demo's timing and voice options, empty outside the demo.
   const coachOptions = { speed: plan.coachSpeed, ...plan.coachOptions };
   // The same scripted coach behind CafAI Bridge on this computer (127.0.0.1:8877), for "Claude on my computer";
-  // and Clarity's stand-in tag for ?mockUsage=1 (D-USAGE-6), so mock mode never reaches Clarity.
+  // and Clarity's stand-in tag for ?mockUsage=1 (D215), so mock mode never reaches Clarity.
   const coach = [...anthropicHandlers(coachOptions), ...bridgeHandlers(coachOptions), ...clarityHandlers()];
   if (!plan.decaid) {
     const note = demoIgnoredNote(window.location.search);
