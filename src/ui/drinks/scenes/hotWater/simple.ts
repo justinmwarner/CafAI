@@ -1,6 +1,6 @@
 /**
  * Hot water: Simple, the stream and water of D149 (docs/superpowers/specs/
- * 2026-10-22-drink-scenes-design.md, section 4; D-SCENE-1), drawn on the
+ * 2026-10-22-drink-scenes-design.md, section 4; D217), drawn on the
  * canvas as the dial drew them in SVG before the scenes: the water's wash
  * filling the inside of the ring to the progress, a wave in the flow's blue
  * along its surface, sliding while the machine runs, and a dashed stream in

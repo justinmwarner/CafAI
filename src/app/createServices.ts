@@ -61,7 +61,7 @@ export async function createServices(win: Window): Promise<AppServices> {
   const appearance = createAppearanceStore(storage.settings, (await storage.settings.get()).appearance);
   // °C or °F (D172): the screens read it, and so does every request's prompt (D175).
   const temperatureUnit = createTemperatureUnitStore(storage.settings, (await storage.settings.get()).temperatureUnit);
-  // Each drink's scene and going back by itself (D-BACK-1): the drinks' views read them.
+  // Each drink's scene and going back by itself (D221): the drinks' views read them.
   const drinkScreens = createDrinkScreensStore(storage.settings, (await storage.settings.get()).drinkScreens);
 
   // Machine care's steps (D183-D190): read now, counted from Decaid's totals behind the start.

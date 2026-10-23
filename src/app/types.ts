@@ -37,8 +37,8 @@ export interface Services {
   /** °C or °F where the barista reads or sets a temperature (D172), as live state. */
   temperatureUnit: TemperatureUnitStore;
   /**
-   * Each drink's scene and whether its view goes back by itself (D-SCENE-1,
-   * D-BACK-1), as live state. Optional: previews leave it out, and then every
+   * Each drink's scene and whether its view goes back by itself (D217,
+   * D221), as live state. Optional: previews leave it out, and then every
    * drink draws its default scene and goes back after 10 s.
    */
   drinkScreens?: DrinkScreensStore;

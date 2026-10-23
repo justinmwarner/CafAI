@@ -1,6 +1,6 @@
 /**
  * Each drink's scenes, as Settings > Drink screens lists them (the design's
- * sections 4 and 6, D-SCENE-1): the default first and Simple, the drink's
+ * sections 4 and 6, D217): the default first and Simple, the drink's
  * scene before these (D149), last. An id is what storage keeps; a name is
  * what the barista reads.
  */

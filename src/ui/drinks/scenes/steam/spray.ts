@@ -1,5 +1,5 @@
 /**
- * Steam's Wand and spray, the default (the design's section 4, D-SCENE-1):
+ * Steam's Wand and spray, the default (the design's section 4, D217):
  * the pitcher from the side, as the mockup's Spray draws it. The wand dips in
  * from the right, its tip just under the milk at first (the stretch) and
  * deeper as the milk grows. Steam jets from the tip, its spray and the milk's

@@ -6,7 +6,7 @@
  * GUARD_MS (TapGuard.tsx); a run already under way when the app starts (after
  * Decaid reloads the skin) takes the screen too. Go back returns, the same
  * way, to the screen the view took over; when the view goes back by itself
- * (useDrinkReturn.ts, D-BACK-1), that is a switch of the app's too, and the
+ * (useDrinkReturn.ts, D221), that is a switch of the app's too, and the
  * pane it returns to is guarded as well.
  *
  * It never sends anything to the machine.

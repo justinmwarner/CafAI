@@ -125,7 +125,7 @@ export function normalizeCareSettings(raw: unknown): CareSettings {
 
 export const DRINK_SCREEN_KINDS: readonly DrinkScreenKind[] = ['steam', 'hotWater', 'flush'];
 
-/** Go back by itself's time (D-BACK-1): whole seconds, 5-60. */
+/** Go back by itself's time (D221): whole seconds, 5-60. */
 export const GO_BACK_SECONDS = { min: 5, max: 60 } as const;
 
 /**
@@ -181,7 +181,7 @@ export function normalizeSettings(raw: unknown, defaultModel: string): Settings 
   if (isRecord(raw['care'])) settings.care = normalizeCareSettings(raw['care']);
   // Where fun facts come from (D198), as the unit: one this build does not know reads as none chosen.
   if (isFunFactsSource(raw['funFacts'])) settings.funFacts = raw['funFacts'];
-  // Each drink's screen (D-BACK-2), as care: the block once someone chose, and only the fields that read.
+  // Each drink's screen (D222), as care: the block once someone chose, and only the fields that read.
   if (isRecord(raw['drinkScreens'])) settings.drinkScreens = normalizeDrinkScreens(raw['drinkScreens']);
   return settings;
 }
@@ -212,7 +212,7 @@ export function applySettingsPatch(current: Settings, patch: SettingsPatch, defa
     const edits = Object.entries(patch.care).filter(([, value]) => value !== undefined);
     next['care'] = { ...(current.care ?? DEFAULT_CARE), ...Object.fromEntries(edits) };
   }
-  // Each drink's screen changes field by field too: picking a scene never resets going back by itself (D-BACK-2).
+  // Each drink's screen changes field by field too: picking a scene never resets going back by itself (D222).
   if (isRecord(patch.drinkScreens)) {
     const screens: Record<string, unknown> = { ...(current.drinkScreens ?? {}) };
     for (const kind of DRINK_SCREEN_KINDS) {
@@ -243,7 +243,7 @@ function isBlank(value: string | null | undefined): boolean {
  * The key's copy in Decaid (D99) is the user's choice wherever this device
  * holds one, off as much as on; only a device that never chose takes it.
  * The temperature unit (D172), machine care's answers (D187), the source of
- * fun facts (D198) and the drinks' screens (D-BACK-2) follow the same rule,
+ * fun facts (D198) and the drinks' screens (D222) follow the same rule,
  * the care and drink screens blocks whole.
  */
 export function fillBlankSettings(local: Settings, incoming: Settings, defaultModel: string): Settings {
@@ -273,7 +273,7 @@ export function fillBlankSettings(local: Settings, incoming: Settings, defaultMo
   // Fun facts (D198), as the unit: a choice made here wins, Off as much as any other.
   const facts = local.funFacts ?? incoming.funFacts;
   if (facts !== undefined) merged.funFacts = facts;
-  // The drinks' screens (D-BACK-2), as care: choices made here win whole; a device that never chose takes the incoming ones.
+  // The drinks' screens (D222), as care: choices made here win whole; a device that never chose takes the incoming ones.
   const screens = local.drinkScreens ?? incoming.drinkScreens;
   if (screens !== undefined) merged.drinkScreens = screens;
   return merged;

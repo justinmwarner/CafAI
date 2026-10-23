@@ -1,5 +1,5 @@
 /**
- * When a drink's view goes back by itself (D-BACK-1). A pure reducer, as
+ * When a drink's view goes back by itself (D221). A pure reducer, as
  * drinkFocus.ts is: useDrinkReturn.ts feeds it the runs the view saw and the
  * clock, and carries out what it says.
  *

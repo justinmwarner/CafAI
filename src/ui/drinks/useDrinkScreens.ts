@@ -1,5 +1,5 @@
 /**
- * Each drink's screen as the views and Settings read it (D-SCENE-1, D-BACK-1):
+ * Each drink's screen as the views and Settings read it (D217, D221):
  * the scene resolved against what the drink offers (scenes/catalog.ts), and
  * going back by itself. Outside a ServicesProvider, or with no store (a
  * preview), every drink's default.

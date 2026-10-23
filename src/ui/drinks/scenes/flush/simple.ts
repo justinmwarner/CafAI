@@ -1,6 +1,6 @@
 /**
  * Flush: Simple, the screen and streaks of D149 (docs/superpowers/specs/
- * 2026-10-22-drink-scenes-design.md, section 4; D-SCENE-1), drawn on the
+ * 2026-10-22-drink-scenes-design.md, section 4; D217), drawn on the
  * canvas as the dial drew them in SVG before the scenes: the shower screen, a
  * bar in the muted ink, and five dashed streaks in the flow's blue fanning out
  * from under it to the floor of the ring while the machine runs, gone once it

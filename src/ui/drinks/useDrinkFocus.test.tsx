@@ -112,7 +112,7 @@ describe('useDrinkFocus', () => {
     }
   });
 
-  it("does not switch back as the run ends: going back by itself is the view's own countdown (D-BACK-1)", async () => {
+  it("does not switch back as the run ends: going back by itself is the view's own countdown (D221)", async () => {
     const services = renderHarness();
     send(services, frame('flush'));
     await settle();

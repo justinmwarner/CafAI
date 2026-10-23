@@ -1,5 +1,5 @@
 /**
- * The scenes' colours (palette.scene, D-SCENE-4) in OKLab, read once per
+ * The scenes' colours (palette.scene, D220) in OKLab, read once per
  * look, so a scene mixes a ramp every frame (the milk from cold to warm,
  * the ring) without parsing hex; css() writes a colour out as the canvas
  * takes it. The Simple scenes (D149's) also take the dial's washes, the

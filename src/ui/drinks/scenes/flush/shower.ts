@@ -1,6 +1,6 @@
 /**
  * Flush: Shower, the default (docs/superpowers/specs/2026-10-22-drink-scenes-design.md,
- * section 4; D-SCENE-1, D-SCENE-2). The group from the side: the group head
+ * section 4; D217, D218). The group from the side: the group head
  * and its shower screen at the top, thirteen streams falling from it, fanning
  * out a little, to the drip tray's grate, and splashing there; the streams and
  * the splash are cut out behind the figures.

@@ -209,7 +209,7 @@ export interface Settings {
    */
   funFacts?: FunFactsSource;
   /**
-   * Each drink's screen (D-SCENE-1, D-BACK-2): the scene its dial draws and
+   * Each drink's screen (D217, D222): the scene its dial draws and
    * whether its view goes back by itself, set in Settings > Drink screens.
    * Absent until someone chooses on this device, and each drink's fields too:
    * whatever is absent reads as the default (the drink's first scene, on,
@@ -227,7 +227,7 @@ export type DrinkScreenKind = 'steam' | 'hotWater' | 'flush';
 export interface DrinkScreen {
   /** The scene its dial draws (src/ui/drinks/scenes/catalog.ts); one this build does not know reads as the drink's default. */
   scene: string;
-  /** Whether its view goes back by itself once the drink is done (D-BACK-1). */
+  /** Whether its view goes back by itself once the drink is done (D221). */
   goBack: boolean;
   /** After how many seconds, 5-60. */
   goBackSeconds: number;
@@ -236,7 +236,7 @@ export interface DrinkScreen {
 /** What was chosen on this device, drink by drink and field by field. */
 export type DrinkScreensSettings = Partial<Record<DrinkScreenKind, Partial<DrinkScreen>>>;
 
-/** An edit of the settings: what it names changes, the care block and each drink's screen field by field (D187, D-BACK-2). */
+/** An edit of the settings: what it names changes, the care block and each drink's screen field by field (D187, D222). */
 export type SettingsPatch = Omit<Partial<Settings>, 'care'> & { care?: Partial<CareSettings> };
 
 /** How a care step's last time came about: marked done on the Care screen, or a cycle CafAI saw run (D186). */

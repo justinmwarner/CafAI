@@ -101,7 +101,7 @@ export interface Palette {
   accentSoft: string;
   /**
    * A stronger wash of the accent over the raised fill: Go back's countdown
-   * draining (D-BACK-1). accentSoft is all but the raised fill in light mode.
+   * draining (D221). accentSoft is all but the raised fill in light mode.
    */
   countdownWash: string;
   /** Text and icons on the accent. */
@@ -119,12 +119,12 @@ export interface Palette {
   /** The milk inside the steam dial: the ink washed over the page. */
   milkWash: string;
   graph: GraphPalette;
-  /** The drinks' scenes inside the dial (D-SCENE-4). */
+  /** The drinks' scenes inside the dial (D220). */
   scene: ScenePalette;
 }
 
 /**
- * The drinks' scenes inside the dial (D-SCENE-4, docs/superpowers/specs/
+ * The drinks' scenes inside the dial (D220, docs/superpowers/specs/
  * 2026-10-22-drink-scenes-design.md, section 5): the same in every tint, as
  * the graph's colours are, one set per mode. A pair named cold and warm (or
  * shallow and deep) is a ramp a scene mixes in OKLab as a run goes

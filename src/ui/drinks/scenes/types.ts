@@ -1,6 +1,6 @@
 /**
  * A drink's scene (docs/superpowers/specs/2026-10-22-drink-scenes-design.md,
- * D-SCENE-1 to D-SCENE-4): what the dial draws inside its ring while the
+ * D217-D220): what the dial draws inside its ring while the
  * machine steams, pours hot water or flushes, the barista's choice per drink
  * in Settings > Drink screens.
  *

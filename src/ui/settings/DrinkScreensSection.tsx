@@ -1,8 +1,8 @@
 /**
- * Settings > Drink screens (D-SCENE-1, D-BACK-2): what each drink's view
+ * Settings > Drink screens (D217, D222): what each drink's view
  * shows while it runs, one of the drink's scenes (scenes/catalog.ts), and
  * whether the view goes back by itself once the drink is done, and after how
- * long (D-BACK-1). The section after Steam, hot water and flush: those are
+ * long (D221). The section after Steam, hot water and flush: those are
  * Decaid's, held while the machine runs; these are CafAI's, kept on this
  * device and live whatever the machine does. Each change applies at once and
  * is saved with CafAI's settings, as the temperature unit is

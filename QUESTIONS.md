@@ -258,14 +258,14 @@ the end.
 
 ## From the drink scenes (2026-10-22)
 
-28. **Rosetta in dark mode (D-SCENE-1, D-SCENE-3).** Its leaves grow behind
+28. **Rosetta in dark mode (D217, D219).** Its leaves grow behind
     the figures, so in dark mode the figures carry a halo of the crema
     colour to read on the white milk, and the small "of 50 s" line under the
     number still reads worst of any scene. It is offered in both modes, as
     you asked for every scene. If it bothers you on the tablet, either leave
     it out in dark mode (steam then draws Wand and spray there) or lift the
     figures above the leaves in that scene alone.
-29. **How warm is warm (D-SCENE-2)?** The scenes and the ring run from cold
+29. **How warm is warm (D218)?** The scenes and the ring run from cold
     to warm: steam with its time (the milk warming), hot water by the
     temperature set, from 40 °C (cold) to 95 °C (warm), the flush by the
     group from 20 °C under its target (cold) to the target (warm). Each

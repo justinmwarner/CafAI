@@ -1,6 +1,6 @@
 /**
  * Flush: Screen (docs/superpowers/specs/2026-10-22-drink-scenes-design.md,
- * section 4; D-SCENE-1, D-SCENE-2). The shower screen from below: its holes
+ * section 4; D217, D218). The shower screen from below: its holes
  * in seven rings, and drops swelling out of them and falling toward the
  * barista, as many as the strength says, coloured as in Shower by the warmth
  * (the group against its target). The steel under the figures keeps their

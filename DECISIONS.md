@@ -3543,11 +3543,11 @@ The owner's ask of 2026-10-22, built on branch `feat/drink-scenes`
 (`docs/superpowers/specs/2026-10-22-drink-scenes-design.md`, the mockup
 beside it, and the plan in `docs/superpowers/plans/`).
 
-- **D-SCENE-1. Each drink's dial draws a scene the barista picks.** Steam:
+- **D217. Each drink's dial draws a scene the barista picks.** Steam:
   Wand and spray (the default), Whirlpool, Rosetta and Simple; hot water:
   Pour (the default), From above and Simple; flush: Shower (the default),
   Screen and Simple, where Simple is the drink's scene of D149. Picked per
-  drink in Settings > Drink screens (D-BACK-2); an id this build does not
+  drink in Settings > Drink screens (D222); an id this build does not
   know reads as the drink's default (`scenes/catalog.ts`). Why: the owner
   asked to "make it look better than it is now", naming "latte art kinda
   thing, or more of a nozzle->spray"; shown three steam scenes side by side,
@@ -3556,7 +3556,7 @@ beside it, and the plan in `docs/superpowers/plans/`).
   "Give all three the new treatment". Wand and spray leads because it shows
   what the machine reports; the rosetta grows behind the figures and reads
   worst in dark mode.
-- **D-SCENE-2. A scene follows the machine's numbers, and the ring takes
+- **D218. A scene follows the machine's numbers, and the ring takes
   the drink's warmth.** One input a frame (`scenes/sceneInput.ts`): the
   phase; progress, the dial's share; strength, the flow over its set (times
   the pressure over 1.8 bar for steam), 0 unless the drink works, at most
@@ -3575,7 +3575,7 @@ beside it, and the plan in `docs/superpowers/plans/`).
   knows neither the milk's amount nor how cold it started, and does not show
   a number it cannot know. During hot water the snapshot's temperature is
   not the water's (D148), so hot water's warmth is the one set.
-- **D-SCENE-3. Scenes are drawn on a canvas under the ring, and move only
+- **D219. Scenes are drawn on a canvas under the ring, and move only
   while the machine works.** `SceneCanvas.tsx` draws the scene on a canvas
   under the SVG ring (ticks, track, arc and tip stay as D149 drew them), at
   up to twice the device's pixel ratio, frame by frame while the drink runs
@@ -3599,7 +3599,7 @@ beside it, and the plan in `docs/superpowers/plans/`).
   what D149's SVG and CSS loops cannot draw cheaply; D149's rules (a
   legible number, motion only while the machine runs, a still alternative)
   carry over.
-- **D-SCENE-4. The scenes' colours are palette roles, the same in every
+- **D220. The scenes' colours are palette roles, the same in every
   tint.** `palette.scene` (`ScenePalette`): the warmth ramp, the milk, foam,
   steam, steel, the whirlpool's milk, crema and the rosetta's milk, water,
   the cup from above, the flush's water and the shower screen, per mode,
@@ -3616,10 +3616,10 @@ beside it, and the plan in `docs/superpowers/plans/`).
   the tint (DESIGN.md), and neither should milk, water or steel; a fill
   under the figures is held to the figures' own contrast, as D149's washes
   are.
-- **D-BACK-1. A drink's view goes back by itself once the drink is done,
+- **D221. A drink's view goes back by itself once the drink is done,
   unless the barista keeps it.** When a run the view saw live ends by the
   machine's word (not "Connection lost") and that drink's Go back by itself
-  is on (D-BACK-2), Go back shows the seconds left after its label over a
+  is on (D222), Go back shows the seconds left after its label over a
   fill draining behind it, with **Stay** before it (on a phone upright, the
   two in a row of their own under the name); at
   zero it does what Go back does (D146): `location.replace` to the screen
@@ -3637,7 +3637,7 @@ beside it, and the plan in `docs/superpowers/plans/`).
   their answer. This changes D146's "There is no return of its own" at the
   owner's word; with the switch off the view stays, as D146 has it. A view
   opened on a finished run never counts down: nobody was waiting on it.
-- **D-BACK-2. Settings > Drink screens holds each drink's scene and its
+- **D222. Settings > Drink screens holds each drink's scene and its
   going back by itself.** A section after Steam, hot water and flush,
   because these are CafAI's (kept on this device, live whatever the machine
   does) and those are Decaid's (held while the machine runs). Per drink:

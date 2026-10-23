@@ -178,7 +178,7 @@ describe('DrinkView', () => {
   });
 });
 
-describe('DrinkView going back by itself (D-BACK-1)', () => {
+describe('DrinkView going back by itself (D221)', () => {
   /** The countdown's clock; the presets load, and taps land, on real timers. */
   const fakeClock = () => vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
   const wait = (ms: number) => act(() => vi.advanceTimersByTime(ms));

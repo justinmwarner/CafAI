@@ -480,7 +480,7 @@ this bag's, and the banner offers Retry to load the bag's version.
     `/api/v1/workflow` -> `context.beanBatchId` is that batch, and
     `coffeeName` and `coffeeRoaster` are the bean's.
 
-## 13. Steam, hot water and flush views (D146-D150, D-SCENE-1 to D-SCENE-3, D-BACK-1)
+## 13. Steam, hot water and flush views (D146-D150, D217-D219, D221)
 
 Only the mock and Decaid's source say what a DE1 sends while it steams,
 pours hot water or flushes; these checks say what a real one does. Keep the

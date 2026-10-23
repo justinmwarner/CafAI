@@ -1,5 +1,5 @@
 /**
- * Steam's Rosetta (the design's section 4, D-SCENE-1): latte art, the cup
+ * Steam's Rosetta (the design's section 4, D217): latte art, the cup
  * from above, as the mockup's Art draws it. Crema, and a rosetta pouring in:
  * twelve leaves, one per twelfth of the steam time, the newest wiggling in as
  * the pitcher does; once the steam is done, the pull-through draws its stem.

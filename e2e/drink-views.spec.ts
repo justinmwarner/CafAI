@@ -10,7 +10,7 @@ import { isPhone, machineRow, openApp } from './helpers.ts';
  * couple of seconds.
  *
  * Once done, a view goes back by itself after 10 s, unless the barista keeps
- * it (D-BACK-1). The mock compresses the drink, not the countdown: the tests
+ * it (D221). The mock compresses the drink, not the countdown: the tests
  * about it wait the 10 s out, and every other test acts within a few seconds
  * of the end, or taps the view.
  */

@@ -1,6 +1,6 @@
 /**
  * Hot water: Pour, the default (docs/superpowers/specs/2026-10-22-drink-scenes-design.md,
- * section 4; D-SCENE-1, D-SCENE-2). The cup from the side: a steel spout at
+ * section 4; D217, D218). The cup from the side: a steel spout at
  * the top, and a stream falling from it, behind the figures and cut out there,
  * into water that rises toward the volume as the progress does, staying under
  * the figures.

@@ -1,5 +1,5 @@
 /**
- * Steam's Whirlpool (the design's section 4, D-SCENE-1): looking down into the
+ * Steam's Whirlpool (the design's section 4, D217): looking down into the
  * pitcher, as the mockup's Whirl draws it. The milk turns, foam spiralling in
  * from the rim, as fast as the strength; the tip sits off centre, where a
  * barista holds it, churning while it steams; specks big early, finer later.

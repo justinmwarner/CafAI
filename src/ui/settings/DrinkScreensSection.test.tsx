@@ -36,7 +36,7 @@ const goBack = (kind: DrinkKind) => screen.getByTestId(TID.drinkGoBackSwitch(kin
 /** After, the drinks' stepper named for its drink ("Steam go back after"); null while Go back by itself is off. */
 const after = (drink: string) => screen.queryByRole('spinbutton', { name: `${drink} go back after` });
 
-describe('Settings > Drink screens (D-SCENE-1, D-BACK-2)', () => {
+describe('Settings > Drink screens (D217, D222)', () => {
   it('has a group for each drink, as the section above, each on its default scene and going back after 10 s', () => {
     renderSection();
     expect(screen.getByRole('region', { name: 'Drink screens' })).toBeInTheDocument();

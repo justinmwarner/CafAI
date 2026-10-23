@@ -135,7 +135,7 @@ export const SettingsSchema = z.object({
   care: exact<CareSettings>(z.unknown()).optional(),
   /** Where fun facts come from (D198); absent from exports made before them. Not shape-checked here, as temperatureUnit. */
   funFacts: exact<FunFactsSource>(z.unknown()).optional(),
-  /** Each drink's screen (D-BACK-2); absent from exports made before them. Re-validated by normalizeDrinkScreens, as care is. */
+  /** Each drink's screen (D222); absent from exports made before them. Re-validated by normalizeDrinkScreens, as care is. */
   drinkScreens: exact<DrinkScreensSettings>(z.unknown()).optional(),
 });
 

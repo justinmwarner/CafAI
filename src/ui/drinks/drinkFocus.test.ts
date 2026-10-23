@@ -50,7 +50,7 @@ describe('Go back', () => {
     expect(goBackLabel({ name: 'drink', drink: 'flush' })).toBe('Go back');
   });
 
-  it('names where it goes in words, for the status as the view counts down to it (D-BACK-1)', () => {
+  it('names where it goes in words, for the status as the view counts down to it (D221)', () => {
     expect(goBackWords({ name: 'coach' })).toBe('the coach');
     expect(goBackWords({ name: 'shot' })).toBe('the shot');
     expect(goBackWords({ name: 'history', bagId: 'b1' })).toBe('History');

@@ -1,5 +1,5 @@
 /**
- * The numbers a drink's scene follows (the design's section 3, D-SCENE-2), as
+ * The numbers a drink's scene follows (the design's section 3, D218), as
  * pure functions of the run (drinkTrace.ts), what the dial counts toward and
  * what the drink was set to: its phase, how far it has gone, how hard the
  * machine works, how much steam it gives off, and its colour from cold to

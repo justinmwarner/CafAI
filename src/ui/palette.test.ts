@@ -119,7 +119,7 @@ const PAIRS: readonly (readonly [string, number, (p: Palette) => readonly (reado
   ['inkMuted on background, surface, raised', 4.5, (p) => [[p.inkMuted, p.background], [p.inkMuted, p.surface], [p.inkMuted, p.raised]]],
   ['accent on background and surface', 4.5, (p) => [[p.accent, p.background], [p.accent, p.surface]]],
   ['accent on accentSoft', 4.5, (p) => [[p.accent, p.accentSoft]]],
-  // Go back's label and its seconds over the countdown's wash (D-BACK-1).
+  // Go back's label and its seconds over the countdown's wash (D221).
   ['ink and inkMuted on countdownWash', 4.5, (p) => [[p.ink, p.countdownWash], [p.inkMuted, p.countdownWash]]],
   // The wash must show on the tonal button it drains across.
   ['countdownWash off the raised fill', 1.15, (p) => [[p.countdownWash, p.raised]]],
@@ -179,7 +179,7 @@ const PAIRS: readonly (readonly [string, number, (p: Palette) => readonly (reado
   // "of" line in ink-muted sit over the water and the milk inside the ring.
   ['ink on the dial’s water and milk', 7, (p) => [[p.ink, p.waterWash], [p.ink, p.milkWash]]],
   ['inkMuted on the dial’s water and milk', 4.5, (p) => [[p.inkMuted, p.waterWash], [p.inkMuted, p.milkWash]]],
-  // The drinks' scenes (D-SCENE-4): the fills a scene puts under the figures.
+  // The drinks' scenes (D220): the fills a scene puts under the figures.
   // A ramp's mix runs between its ends in lightness, so the ends stand for it.
   // The rosetta's figures sit on its white milk in dark mode with a halo of
   // the crema behind them, so dark mode's crema stands for what they read on.

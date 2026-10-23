@@ -1,11 +1,11 @@
 /**
  * The dial of a drink's view (the design's section 5, D149; the drink scenes,
- * D-SCENE-1 to D-SCENE-3): a ring that fills toward what stops the drink (the
+ * D217-D219): a ring that fills toward what stops the drink (the
  * steam time, the hot water volume, the flush time), the number in the
  * middle, and inside the ring the drink's scene, the barista's choice in
  * Settings > Drink screens, drawn on a canvas under the ring
  * (scenes/SceneCanvas.tsx). The ring's arc and its tip take the drink's
- * warmth, cold to warm (D-SCENE-2): the milk warming with the steam time, the
+ * warmth, cold to warm (D218): the milk warming with the steam time, the
  * hot water's temperature set, the group against its target.
  *
  * Frames never re-render it: it draws each one from the drinks' recording
@@ -86,7 +86,7 @@ export interface DrinkDialProps {
   size: number;
   /** The scene it draws inside the ring, one the drink has (scenes/catalog.ts, Settings > Drink screens). */
   scene: string;
-  /** The drink's settings in Decaid's workflow, for the flow and temperature its scene follows (D-SCENE-2). */
+  /** The drink's settings in Decaid's workflow, for the flow and temperature its scene follows (D218). */
   presets: DrinkPresets | null;
 }
 

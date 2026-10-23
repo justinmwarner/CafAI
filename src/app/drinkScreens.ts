@@ -1,5 +1,5 @@
 /**
- * The drinks' screens (D-SCENE-1, D-BACK-1, D-BACK-2) as live state, as the
+ * The drinks' screens (D217, D221, D222) as live state, as the
  * temperature unit is (temperatureUnit.ts): each drink's scene and whether
  * its view goes back by itself, read by the drink's view and changed in
  * Settings > Drink screens, a change showing at once and saved with the

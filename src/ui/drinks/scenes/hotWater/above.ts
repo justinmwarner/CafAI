@@ -1,6 +1,6 @@
 /**
  * Hot water: From above (docs/superpowers/specs/2026-10-22-drink-scenes-design.md,
- * section 4; D-SCENE-1, D-SCENE-2). Looking down into the cup: rings spread
+ * section 4; D217, D218). Looking down into the cup: rings spread
  * from where the stream lands, off centre above and right of the figures, as
  * often as the strength says; the water deepens with the progress, in tones
  * the figures keep their contrast on (palette.test.ts); vapour drifts over it

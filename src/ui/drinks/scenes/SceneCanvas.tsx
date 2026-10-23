@@ -1,6 +1,6 @@
 /**
- * The scene inside a drink's dial (the design's sections 4 and 8, D-SCENE-1
- * to D-SCENE-3): a canvas under the dial's ring, the whole dial's size, its
+ * The scene inside a drink's dial (the design's sections 4 and 8, D217
+ * to D219): a canvas under the dial's ring, the whole dial's size, its
  * backing store at up to twice the device's pixel ratio. It makes one scene
  * (registry.ts) per run, and another when the barista picks another, and
  * feeds it one SceneInput a frame, read from the run as it stands; the scene

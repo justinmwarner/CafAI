@@ -520,7 +520,7 @@ export function HistoryScreen({ bagId, onSelectBag = hashNavigate }: HistoryScre
         appearance.reload().catch(() => undefined);
         // And a temperature unit, on a device that never chose one (D172).
         temperatureUnit.reload().catch(() => undefined);
-        // And the drinks' screens, on a device that never chose them (D-BACK-2).
+        // And the drinks' screens, on a device that never chose them (D222).
         drinkScreens?.reload().catch(() => undefined);
         // And machine care's last times (D189).
         care?.reload().catch(() => undefined);

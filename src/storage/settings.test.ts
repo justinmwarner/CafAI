@@ -636,7 +636,7 @@ describe('where fun facts come from (D198)', () => {
   });
 });
 
-describe('the drinks’ screens (D-BACK-2)', () => {
+describe('the drinks’ screens (D222)', () => {
   it('is absent until chosen, so a record saved before it, or by a device that never chose, is unchanged', () => {
     expect(defaultSettings(MODEL)).not.toHaveProperty('drinkScreens');
     expect(normalizeSettings(makeSettings(), MODEL)).not.toHaveProperty('drinkScreens');

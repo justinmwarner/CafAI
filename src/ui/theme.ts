@@ -22,14 +22,14 @@ export const TOUCH_TARGET = 48;
 export interface CafaiColors {
   raised: string;
   accentSoft: string;
-  /** Go back's countdown, draining over the raised fill (D-BACK-1). */
+  /** Go back's countdown, draining over the raised fill (D221). */
   countdownWash: string;
   live: string;
   graph: GraphPalette;
   /** The drinks' dial: its water and its milk (DrinkDial.tsx). */
   waterWash: string;
   milkWash: string;
-  /** The drinks' scenes inside the dial (src/ui/drinks/scenes, D-SCENE-4). */
+  /** The drinks' scenes inside the dial (src/ui/drinks/scenes, D220). */
   scene: ScenePalette;
 }
 

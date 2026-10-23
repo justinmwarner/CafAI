@@ -368,7 +368,7 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
     },
     settings: {
       get: async () => settings,
-      // As the real one, the care block field by field (D187), and each drink's screen too (D-BACK-2).
+      // As the real one, the care block field by field (D187), and each drink's screen too (D222).
       update: async ({ care: carePatch, drinkScreens: screensPatch, ...patch }) => {
         const careEdits = Object.entries(carePatch ?? {}).filter(([, value]) => value !== undefined);
         const screens = { ...settings.drinkScreens };
@@ -556,7 +556,7 @@ export interface FakeServices extends Services {
   appearance: AppearanceStore;
   /** The real store too: `storage.settings.temperatureUnit` starts it (D172). */
   temperatureUnit: TemperatureUnitStore;
-  /** The real store too: `storage.settings.drinkScreens` starts it (D-BACK-2). */
+  /** The real store too: `storage.settings.drinkScreens` starts it (D222). */
   drinkScreens: DrinkScreensStore;
   plugins: FakePluginDirectory;
 }

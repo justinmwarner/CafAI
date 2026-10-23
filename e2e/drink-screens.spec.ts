@@ -3,7 +3,7 @@ import { TID } from '../src/ui/testIds.ts';
 import { machineRow, openApp } from './helpers.ts';
 
 /**
- * Settings > Drink screens (D-SCENE-1, D-BACK-2), on the tablets and the
+ * Settings > Drink screens (D217, D222), on the tablets and the
  * phones: a scene picked there is the one the drink's next run draws, kept
  * after a reload, and a drink whose Go back by itself is off stays on its
  * view once done. The mock runs each drink compressed 25 times

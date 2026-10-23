@@ -164,10 +164,10 @@ export const TID = {
   drinkReadout: (key: string) => `drink-readout-${slug(key)}`,
   drinkTrace: 'drink-trace',
   drinkSettingsCard: 'drink-settings-card',
-  // Going back by itself (D-BACK-1): Stay, and the seconds left on Go back
+  // Going back by itself (D221): Stay, and the seconds left on Go back
   drinkStay: 'drink-stay',
   drinkGoBackSeconds: 'drink-go-back-seconds',
-  // Settings > Drink screens (D-BACK-2): each drink's scene and its going back by itself
+  // Settings > Drink screens (D222): each drink's scene and its going back by itself
   drinkScreens: 'drink-screens',
   drinkScene: (kind: string) => `drink-scene-${slug(kind)}`,
   drinkGoBackSwitch: (kind: string) => `drink-go-back-switch-${slug(kind)}`,

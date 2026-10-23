@@ -1,5 +1,5 @@
 /**
- * Steam's Simple scene (the design's section 4, D-SCENE-1): the dial's scene
+ * Steam's Simple scene (the design's section 4, D217): the dial's scene
  * before the drink scenes (D149), as it was, drawn on the canvas. The milk's
  * wash fills the bottom of the ring's inside, rising from 17% of it to 32%
  * with the steam time, its wave sliding one length in 2.2 s while the machine
