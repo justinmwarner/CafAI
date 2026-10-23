@@ -43,6 +43,13 @@ afterEach(() => {
 });
 
 describe('LogView', () => {
+  it("keeps what it shows out of Clarity's recordings (D-USAGE-5)", () => {
+    seed();
+    openLogView();
+    renderWithServices(<LogView />);
+    expect(screen.getByTestId(TID.logView)).toHaveAttribute('data-clarity-mask', 'true');
+  });
+
   it('renders nothing, and listens to nothing, while closed', () => {
     const subscribe = vi.spyOn(trafficLog, 'subscribe');
     seed();

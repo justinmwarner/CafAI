@@ -79,6 +79,12 @@ describe('ChatSurface', () => {
     expect(screen.getByTestId(TID.chat)).toBeInTheDocument();
   });
 
+  it('masks the chat for Clarity and keeps the composer out of it entirely (D-USAGE-5)', () => {
+    renderSurface();
+    expect(screen.getByTestId(TID.chat)).toHaveAttribute('data-clarity-mask', 'true');
+    expect(screen.getByTestId(TID.composerInput)).toHaveAttribute('data-private', 'secret');
+  });
+
   it('renders every part kind through the cafai part components', () => {
     renderSurface({ messages: conversation('applied') });
     expect(screen.getByTestId(TID.templateCard('blooming-espresso'))).toBeInTheDocument();

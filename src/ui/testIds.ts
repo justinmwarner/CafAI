@@ -239,4 +239,10 @@ export const TID = {
   logDetail: 'log-detail',
   logShowAll: 'log-show-all',
   logMore: 'log-more',
+
+  // Usage sharing (D-USAGE-3): the card or the notice at the foot of the chat, and Settings > About's switch
+  usagePrompt: 'usage-prompt',
+  usageYes: 'usage-yes',
+  usageNo: 'usage-no',
+  usageSwitch: 'usage-switch',
 } as const;

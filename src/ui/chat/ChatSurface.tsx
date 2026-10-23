@@ -62,6 +62,8 @@ import { createFollowNewest, type FollowNewest, type NewestMessage } from './fol
 import { promptChipSx } from './promptChip.ts';
 import { TastePrompts } from './TasteWords.tsx';
 import { tasteQuestionOpen } from './tasteWords.ts';
+import { MASK, SECRET_FIELD } from '../../usage/mask.ts';
+import { UsagePrompt } from '../usage/UsagePrompt.tsx';
 
 export interface ChatSurfaceProps {
   messages: readonly CoachUiMessage[];
@@ -476,13 +478,16 @@ const shortPromptRowSx = { ...promptRowSx, flexShrink: 1, minHeight: 0, overflow
  * The prompts above the composer: Stats (D91), on every chat, and while the
  * taste question is open Taste words and Need help? (D127). A tap on Stats
  * posts the stats card at the end of the thread; a taste word goes into the
- * draft. Nothing is sent, and the composer's draft is never lost.
+ * draft. Nothing is sent, and the composer's draft is never lost. Usage
+ * sharing's card or notice (D-USAGE-3) leads the row, on a line of its own,
+ * while no coach turn runs.
  */
 function PromptRow() {
-  const { actions, hasStats, tasteOpen } = usePartsContext();
+  const { actions, busy, hasStats, tasteOpen } = usePartsContext();
   const short = useLayout().nav === 'rail';
   return (
     <Box sx={short ? shortPromptRowSx : promptRowSx}>
+      {busy ? null : <UsagePrompt />}
       {hasStats ? (
         <Chip
           variant="outlined"
@@ -768,6 +773,8 @@ export function ChatSurface(props: ChatSurfaceProps) {
         maxRows: 4,
         onKeyDown: onComposerKeyDown,
         'data-testid': TID.composerInput,
+        // Never the barista's words, not even Clarity's hash of them (D-USAGE-5).
+        ...SECRET_FIELD,
       } as ChatBoxSlotProps['composerInput'],
       composerSendButton: {
         disabled: sendBlocked,
@@ -780,7 +787,8 @@ export function ChatSurface(props: ChatSurfaceProps) {
 
   return (
     <PartsContext.Provider value={partsContext}>
-      <Box ref={rootRef} data-testid={TID.chat} data-busy={busy || undefined} sx={chatSx}>
+      {/* Every word and picture in the chat stays out of Clarity's recordings (D-USAGE-5). */}
+      <Box ref={rootRef} data-testid={TID.chat} data-busy={busy || undefined} {...MASK} sx={chatSx}>
         <ChatBox
           adapter={adapter}
           messages={chatMessages}

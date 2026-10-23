@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { createMemoryCoachSourceStore, type CoachSource } from '../../storage/coachSource.ts';
 import { renderWithServices } from '../chat/testing/render.tsx';
-import { createFakeServices, type FakeServices } from '../testing/fakeServices.ts';
+import { createFakeServices, createFakeUsage, type FakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
 import { CoachSourceSection } from './CoachSourceSection.tsx';
 import { SettingsScreen } from './SettingsScreen.tsx';
@@ -119,6 +119,20 @@ describe('CoachSourceSection', () => {
     expect(field).toHaveAttribute('type', 'text');
     await userEvent.click(screen.getByRole('button', { name: 'Hide code' }));
     expect(field).toHaveAttribute('type', 'password');
+  });
+
+  it('keeps the code field out of Clarity and counts a saved bridge (D-USAGE-4, D-USAGE-5)', async () => {
+    const { services } = renderSection({ kind: 'computer' });
+    const { usage, tracked } = createFakeUsage();
+    // The form reads the services again at every render: the next keystroke sees it.
+    services.usage = usage;
+    const code = await screen.findByTestId(TID.computerCode);
+    expect(code).toHaveAttribute('data-private', 'secret');
+    await userEvent.type(screen.getByTestId(TID.computerAddress), '192.168.1.20');
+    await userEvent.type(code, 'abcd efgh');
+    await userEvent.click(screen.getByTestId(TID.computerSave));
+    expect(await screen.findByText('Saved on this device.')).toBeInTheDocument();
+    expect(tracked).toEqual(['coach_setup']);
   });
 
   it('saves the address and the code as the bridge needs them, and shows what was saved', async () => {

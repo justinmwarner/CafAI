@@ -27,6 +27,7 @@ import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { CHANNEL_LABEL, DIRECTION_ARROW, entryLine, formatBytes, formatClock, prettyBody } from '../../traffic/format.ts';
 import { safeSlice, trafficLog, type TrafficEntry } from '../../traffic/recorder.ts';
+import { MASK } from '../../usage/mask.ts';
 import { TID } from '../testIds.ts';
 import { LogActions } from './LogActions.tsx';
 import { closeLogView, useLogViewOpen } from './logShare.ts';
@@ -253,6 +254,8 @@ function LogViewContent() {
   return (
     <Box
       data-testid={TID.logView}
+      // What CafAI said to Decaid and the coach stays out of Clarity's recordings (D-USAGE-5).
+      {...MASK}
       sx={{
         display: 'flex',
         flexDirection: 'column',
