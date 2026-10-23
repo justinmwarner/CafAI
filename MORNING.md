@@ -1,6 +1,38 @@
 # Good morning: CafAI after your answers (2026-10-04)
 
-**Newest (2026-10-22):** steam, hot water and flush draw new scenes in
+**Newest (2026-10-23):** usage sharing with Microsoft Clarity (D210-D216,
+branch `feat/usage-analytics`, merged into `main`).
+
+- **Why.** You asked how to see how many people use CafAI and the coach,
+  and how they use it, with heatmaps and funnels. Then you asked to ask
+  first in the EU, the UK and Switzerland, and to share by default
+  elsewhere.
+- **Asking.** Where the device's time zone or language points to Europe,
+  or its time zone says nothing, a card on the coach screen asks "Help
+  improve CafAI?", and nothing loads before **Yes, share**. Elsewhere a
+  notice says CafAI shares, with **OK** and **Turn off**. **Settings > About
+  > Share usage with CafAI's developer** changes the answer on any device.
+- **What Clarity gets.** The screens, put in the address as `?screen=` so
+  each has its own heatmap. Taps and scrolls. Eleven coach steps for
+  funnels, from a key set up to a recipe kept. Five tags.
+- **What it never gets.** Any word: Strict masking, the chat and the log
+  masked, every form field kept out, and On Visualizer a button while
+  sharing.
+- **Dormant until you act.** Releases carry no Clarity project until you
+  set the repository variable `CLARITY_PROJECT_ID`. QUESTIONS 34 is the
+  test run to do first: your own Clarity project with Strict masking, a
+  local build in the simulator and Chrome, then a day on the tablet.
+- **Review.** One reviewer found five defects in how Clarity's own script
+  behaves, all fixed with tests. The worst: Turn off still let Clarity send
+  a page view or two, because its `consent(false)` starts it again.
+- **Checks.** On the final code, merged with the drink scenes and the
+  screensavers, these pass: typecheck, lint, 4994 unit tests, the build and
+  the release zip. Playwright passed all 555 tests (8 skipped by design),
+  and Chromium 91 shows the notice with no error.
+- **Until then.** GitHub's download counts are the only signal: 3, 2 and 1
+  for v0.1.0 to v0.1.2.
+
+**Before that (2026-10-22):** steam, hot water and flush draw new scenes in
 their dial, and their views go back by themselves (D217-D222, branch
 `feat/drink-scenes`, merged into `main`). You asked for a better steaming
 animation, its colours following the machine's numbers, and a setting to go
