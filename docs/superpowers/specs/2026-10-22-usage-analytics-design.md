@@ -101,10 +101,12 @@ A phone that opens CafAI decides for itself.
 | Notice | Clarity loads, with the notice; `consentv2` with ads denied only. | As before; the notice goes. | Clarity stops (below). |
 
 **Where the card and the notice show.** Each is a quiet card at the foot of
-the coach's chat, above the composer, and it belongs to the device, not to
-the bag. It never enters a transcript, the backup or an export. It shows when
-the coach screen is open and no shot or coach turn is running, and it stays
-until answered. Nothing waits on it.
+the coach's chat, above the composer. Before there is a chat (no key, no bag
+yet), it sits under the coach screen's panel instead, so Europe is asked
+before the coach is set up. It belongs to the device, not to the bag, and
+never enters a transcript, the backup or an export. It first shows while no
+coach turn or shot runs, then stays put until answered, so nothing moves
+under a thumb. Nothing waits on it.
 
 **The card (ask first):**
 
@@ -123,7 +125,7 @@ until answered. Nothing waits on it.
   > About turns it off."
 - **OK** and **Turn off**, and the same link.
 
-**The switch.** Settings > About, under the version: **Share usage with
+**The switch.** Settings > About, after the versions: **Share usage with
 CafAI's developer**, with the line "Screens, taps and coach steps go to
 Microsoft Clarity, with all text hidden." It is on every device, under either
 rule. It reads on for a yes, or for nobody-chose under the notice rule, and
@@ -166,7 +168,7 @@ of 20 custom events usable as funnel steps:
 | `coach_setup` | A key is saved, or the Bridge is paired, on this device. |
 | `coach_message` | The barista starts a coach turn: a typed message or a tapped choice. |
 | `bag_started` | A new bag's details are saved: from the library, a photo or words. |
-| `profile_loaded` | v1 or a confirmed version is loaded on the machine. |
+| `profile_loaded` | A version is loaded on the machine: v1, a confirmed version, an undo, a bag switch, Retry, or a load that waited for the machine. |
 | `shot_read` | A shot is read into the bag's dial-in. |
 | `taste_given` | A taste answer is sent. |
 | `change_confirmed` | A proposed change is confirmed. |
@@ -216,6 +218,11 @@ is not available anyway.
   - The API key and the pairing code become plain text when **Show** is
     tapped, so both carry `data-private="secret"` in either state.
   - So does the composer: "never your words" means not even a hash of them.
+  - While the device shares, every other field gets the same attribute
+    (`src/usage/fields.ts`): the fields on the page at once, and each one
+    added later. An observer made before Clarity's own does it, so it runs
+    first on every change. A short value (a TDS, a grind setting, a bag's
+    name) is easy to find again from a hash.
   - SECURITY.md promises the key leaves only for `api.anthropic.com`. The
     test run checks that nothing about these fields leaves the device.
 - **Decaid's account token.** Clarity never records `<meta>` elements (as
