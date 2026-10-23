@@ -3536,3 +3536,254 @@ wrong thing (its section 19.6).
   a window Decaid may no longer hold, which was the defect. A wake time
   firing, or the machine going to sleep, while the section is open still
   shows at the next change or the next visit.
+
+### Usage analytics (2026-10-22)
+
+The owner's ask of 2026-10-22: "How can we add on analytics to track how
+many people are using it? Can we use Microsoft Clarity at all so we can see
+how many people actually use the coaching? how they use the app? heatmap /
+funnels, etc." Offered three choices (ask first, on by default, or only the
+owner's devices), the owner asked: "Is there a way we can determine if it's
+EU/UK/Swiss? Then in that case ask first, but on everywhere else by
+default?", and approved the design that answers it
+(`docs/superpowers/specs/2026-10-22-usage-analytics-design.md`). Until now
+GitHub's download counts were the only signal. Decaid downloads the release
+zip once per install or update, so they are a floor on installs (3 for
+v0.1.0, 2 for v0.1.1 and 1 for v0.1.2 on 2026-10-22), and nothing said who
+uses the coach.
+
+- **D-USAGE-1. Release builds share how CafAI is used with Microsoft
+  Clarity, under CafAI's own project.** The screens that open, taps and
+  scrolls, eleven coach steps and five tags (D-USAGE-4) go to the owner's
+  Clarity project with every word hidden (D-USAGE-5), as the device's rule
+  and answer allow (D-USAGE-2, D-USAGE-3). `src/usage/` holds the region
+  rule, the device's answer, CafAI's own loader, the screen in the address,
+  the attributes Clarity obeys, the form fields' guard and the service
+  (`createUsageService` in `service.ts`), a state machine that loads nothing
+  before `start()`.
+  `createServices` makes the service only in a build with Clarity's project
+  ID (`Services.usage`, D-USAGE-6), and the engine counts the coach's steps
+  through a `UsageTracker`, a no-op by default (`NO_USAGE` in `types.ts`).
+  Left out: an identity or a profile for anyone, a server of CafAI's own,
+  the CafAI Bridge (it sends no usage), Clarity's numbers shown inside
+  CafAI, and asking first beyond the EEA, the UK and Switzerland. Why: the
+  owner wants to see how many people use the coach and how they use the app;
+  Clarity gives people and sessions, heatmaps, funnels and replays, free and
+  with no server to run, where the download counts are a floor on installs
+  and say nothing of use.
+- **D-USAGE-2. CafAI asks first where the time zone or a language points to
+  Europe, or the time zone says nothing; elsewhere it shares, with a
+  notice.** `consentRule` (`src/usage/region.ts`) reads only what the device
+  already says. It asks first for any `Europe/*` time zone
+  (`Intl.DateTimeFormat().resolvedOptions().timeZone`) and for the European
+  zones outside that prefix: Cyprus (`Asia/Nicosia`, `Asia/Famagusta`), the
+  Canaries, Madeira, the Azores, Iceland and the Faroes (their `Atlantic/*`
+  zones), `Africa/Ceuta`, Svalbard (`Arctic/Longyearbyen`) and France's
+  overseas regions (`America/Cayenne`, `America/Guadeloupe`,
+  `America/Martinique`, `America/Marigot`, `Indian/Reunion`,
+  `Indian/Mayotte`). It asks first when the zone says nothing: missing,
+  `UTC`, `GMT` or one of their aliases, an `Etc/*` zone, or a check that
+  throws. And it asks first when any of `navigator.languages` names a region
+  in the EEA, `GB`, `CH`, Gibraltar, the Isle of Man, Jersey or Guernsey;
+  `UK`, the codes of the EU's own regions (Åland, the Canaries, Ceuta and
+  Melilla, France's overseas regions), the Faroes, Svalbard, `EU` and `150`
+  (Europe) count too. Anything else gets the notice. While nobody has
+  answered on the device the rule runs again at every start, so a device
+  that moves into an ask-first zone before answering gets the card instead
+  of the notice; once someone has answered, the answer stands. The rule and
+  its lists live in one module with its tests, and adding a country is one
+  line. Why: since 2025-10-31 Clarity enforces a consent signal for visitors
+  in the EEA, the UK and Switzerland; without one it sets no cookies and
+  counts each page view as a new person and a new session, so a funnel shows
+  nobody finishing. Deciding on the device needs no lookup, and asking
+  whenever it is unsure costs one tap from someone who did not need asking.
+  A tablet in a European home left on another time zone is still covered:
+  outside the ask-first case CafAI claims no consent (D-USAGE-3), so
+  Clarity's own check of the upload's address keeps its cookies off. South
+  Korea, China and Brazil, which also lean toward asking first, are left
+  out, because the owner asked for the EU, the UK and Switzerland.
+- **D-USAGE-3. A card asks, or a notice tells, once on the coach screen; a
+  switch in Settings > About changes the answer on any device; the answer
+  stays on the device.** The answer is kept under `cafai.usage.choice` in
+  the device's own localStorage as
+  `{choice: 'yes' | 'no', at, wording, rule: 'ask' | 'notice'}`
+  (`src/usage/choice.ts`; `wording` is 1, a record of the words answered).
+  Like the told fun facts (D200) it is never mirrored to Decaid or exported,
+  and a phone that opens CafAI decides for itself. Under the ask-first rule,
+  until someone answers, nothing from Clarity loads and the card asks
+  (`src/ui/usage/UsagePrompt.tsx`): "Help improve CafAI?", then "Share how
+  you use CafAI with its developer through Microsoft Clarity: the screens
+  you open, where you tap and scroll, and steps such as a shot read or a
+  change confirmed. All text is hidden: never your words, your coffee or
+  your key. Settings > About turns it off.", with **Yes, share** and **No
+  thanks**. Under the notice rule Clarity loads from the start, and the
+  notice says "CafAI shares how you use it with its developer through
+  Microsoft Clarity: screens, taps and steps such as a shot read, with all
+  text hidden. Settings > About turns it off.", with **OK** and **Turn
+  off**. Each ends its row with "What is shared", a link to the README's
+  Privacy section that opens the system browser inside Decaid. Each sits on
+  the coach screen: at the foot of the chat, in the prompt row above the
+  composer, or, while there is no chat yet (no key or no bag), under the
+  screen's panel. It belongs to the device, not the bag: it never enters a
+  bag's chat, the backup or an export. It first shows while no coach turn
+  or shot runs, then stays put until answered, so nothing moves under a
+  thumb mid-reply or mid-shot; nothing waits on it. The switch, **Share usage
+  with CafAI's developer** in Settings > About, with the line "Screens, taps
+  and coach steps go to Microsoft Clarity, with all text hidden."
+  (`src/ui/settings/UsageRow.tsx`), is on every device under either rule: on
+  after a yes, or under the notice rule while nobody has chosen, and off
+  otherwise; a change is the device's answer. The calls
+  (`src/usage/service.ts`): after an ask-first yes, `consentv2` with
+  `analytics_Storage: 'granted'` and `ad_Storage: 'denied'`; under the
+  notice, `consentv2` with `ad_Storage: 'denied'` only; off,
+  `consent(false)`, which erases Clarity's cookies, then `stop`, after which
+  the screen parameter goes and nothing more is sent; on again in the same
+  page, `start` and the consent call again. The README's Privacy section
+  says what Clarity's terms ask a site to say: Microsoft may use the data,
+  including for advertising, with a link to Microsoft's privacy statement.
+  If the test run (D-USAGE-7) shows Clarity cannot keep ads off without the
+  analytics claim, CafAI makes no consent call under the notice rule; if
+  uploads still go out after `stop`, CafAI reloads the page the next time no
+  shot or coach turn runs. Why: the owner's "ask first" for the EU, the UK
+  and Switzerland and "on everywhere else by default"; on the coach screen
+  the card is seen without standing in the way, and from the first start, so
+  it is asked before the coach is set up, not after: the notice comes before
+  much is shared, and on an ask-first device `coach_setup` can count. It is
+  the device's question, not the bag's. CafAI never claims analytics consent
+  nobody gave it, and keeps ads storage off everywhere, as it shows no ads.
+  Browser storage and Clarity's cookies are each device's own, so the answer
+  is too, and the switch lets anyone change their mind on any device.
+- **D-USAGE-4. The screen goes into the address, and eleven coach events and
+  five tags go with it.** CafAI routes by hash (`src/ui/router.ts`), and
+  Clarity ignores a change of the hash alone. So while the device shares,
+  the open screen also sits in the query as `screen`, set with
+  `history.replaceState` (`src/usage/address.ts`): no reload, no new history
+  entry, and every other parameter (Decaid's `?_=<ms>`, the mock switches)
+  as it was. Its values (`screenOf`, `src/ui/usage/screens.ts`) are `coach`,
+  `shot`, `history`, `history-bag` (never with the bag's id), `settings`,
+  `care`, `steam`, `hot-water` and `flush`. Clarity starts a page view on
+  each change, so each screen has its own heatmap: filter "URL contains
+  `screen=settings`", whatever the device's host and port. The router reads
+  only the hash, so a reload in a LAN browser behaves as before, and turning
+  sharing off takes the parameter out. The events
+  (`clarity('event', name)`), each from its place in the engine or Settings:
+  `coach_setup` (a key, or the Bridge's address and code, saved on this
+  device), `coach_message` (a coach turn the barista starts, with a typed
+  message or a tapped choice), `bag_started` (a new bag's first details,
+  from the library, a photo or words, so a correction does not count again),
+  `profile_loaded` (each version the machine takes: v1, a confirmed change,
+  an undo, a bag switch, a Retry), `shot_read` (a shot read into the bag's
+  dial-in), `taste_given` (a taste answer sent), `change_confirmed`,
+  `change_undone`, `recipe_kept` (the barista's Keep on a "none" change,
+  D197, counted instead of `change_confirmed`), `fun_fact_shown` (D202) and
+  `coach_error` (a coach turn that ends in an error the chat shows). The
+  funnel the owner asked for runs `coach_setup`, `bag_started`,
+  `profile_loaded`, `shot_read`, `taste_given`, `change_confirmed`,
+  `recipe_kept`; Clarity's funnels count sessions, not people. Up to 50
+  events counted before `start()` on a device that shares wait for Clarity.
+  The tags (`clarity('set', key, value)`), set once a page and again when
+  one changes: `cafai_version`; `coach_source`, `api-key`, `bridge` or
+  `none` (none until the chosen source has its key or code); `host`,
+  Decaid's platform from `__DECENT_HOST__` (`android`, `windows`, `macos`,
+  `ios`) or `browser`; `layout`, `tablet` or `phone`; and `rule`, `ask` or
+  `notice`. There is no `identify` call: Clarity's cookie counts people, and
+  nothing ties a session to a person. Why: a heatmap per screen needs more
+  of the address than its hash to change; eleven named steps stay under
+  Clarity's limit of 20 custom events a funnel can use, and follow the
+  coach's loop from setup to a kept recipe; the `host` tag stands in for
+  Clarity's own device report, which says nothing, as Decaid's WebView calls
+  itself only "Decent"; and over plain http on a LAN address `identify`
+  could not hash an ID anyway.
+- **D-USAGE-5. Every word stays hidden: Strict masking, the chat and the log
+  masked as well, and every form field kept out of Clarity entirely.** The Clarity project is set to Strict: every word on the page
+  is replaced before upload, in recordings and heatmaps alike, and inputs
+  are masked in every mode. The chat's root (its transcript, every card, the
+  prompt row and the composer's lane) and the log's view (Settings > Log,
+  `LogView.tsx`) carry `data-clarity-mask="true"` (`MASK` in
+  `src/usage/mask.ts`), which hides their text and images, children
+  included, even if the project's setting is ever changed. Clarity ignores
+  that attribute on a form field (an input, a select or a textarea): it
+  replaces the field's value, then sends a short hash of it when it changes.
+  It drops a field entirely, no value and no hash, only when one of the
+  field's attribute values holds a word on its list, "password", "secret",
+  "pass", "social", "ssn", "code" or "hidden" (clarity-js `MaskExcludeList`,
+  read 2026-10-22), and it decides when the field first appears. So the API
+  key field, the pairing code field and the composer carry
+  `data-private="secret"` (`SECRET_FIELD`) in every state, **Show**
+  included, which turns the key and the code into plain text. While the
+  device shares, every other field gets it too (`guardFields`,
+  `src/usage/fields.ts`): the fields on the page at once, and each one added
+  later, by an observer made before Clarity's own, which therefore runs
+  first on every change. A short value (a TDS, a grind setting, a bag's
+  name, an "Other" answer) is easy to find again from Clarity's hash. Clarity never
+  records `<meta>` elements (clarity-js, read 2026-10-22), so Decaid's
+  account-proxy token, in the `reaprime-proxy-token` meta, stays on the
+  device; `window.__REA_PROXY_TOKEN__` is a script variable, and Clarity
+  does not read those. No tag holds anything a person typed. Replays go
+  without CafAI's own stylesheet: Clarity's player fetches a `<link>`'s
+  stylesheet from the page's address, which only the tablet itself reaches
+  at `localhost`. MUI's styles are recorded anyway, as Clarity reads
+  Emotion's rules from the page, and CafAI's stylesheet (2.8 KB) holds only
+  the fonts' `@font-face` rules and the graph library's, so in a replay the
+  fonts fall back and the shot graph, a canvas, shows blank. Why: the card
+  promises "never your words, your coffee or your key", which means not even
+  a hash of the barista's words, and SECURITY.md that the key leaves the
+  device only for `api.anthropic.com`; Strict masking alone hides the words,
+  and the attributes keep them hidden if the setting changes and keep every
+  field out of every upload. Inlining the stylesheet would not bring
+  the fonts, so replays would gain little from it.
+- **D-USAGE-6. Clarity loads only in a release build that has the project
+  ID, after the app has rendered, and fails silently.** The ID is
+  `VITE_CLARITY_PROJECT_ID` at build time, which `release.yml` sets from the
+  repository variable `CLARITY_PROJECT_ID` (`clarityProjectId` in
+  `src/usage/projectId.ts`). Only a production build reads it, never dev or
+  `npm test`, whatever the shell holds; without it (a fork's build, or a zip
+  built without the variable) CafAI loads nothing and shows no card, notice
+  or switch. Mock mode reports to a stand-in project (`cafai-e2e`) only when
+  the e2e asks with `?mockUsage=1`, on the mock Decaid, whose service worker
+  answers Clarity's tag with a stand-in that records every call
+  (`mock/clarity.ts`), so mock mode never reaches Clarity. The demo, the
+  coach-only mock against a real Decaid (`?mockDecaid=0`) and plain mock
+  mode never load it. The loader is CafAI's own
+  (`src/usage/clarity.ts`): Clarity's queue stub and one async script tag,
+  `https://www.clarity.ms/tag/<id>`, with no new dependency. It runs from
+  `start()`, which the app calls once it has rendered (`UsageTracking` in
+  `src/app/App.tsx`), never before. A load that fails or is blocked changes
+  nothing on screen and logs nothing, because Decaid serves the console to
+  the network, and a call into Clarity that throws is swallowed. CafAI has
+  no Content-Security-Policy; one added later must allow
+  `https://*.clarity.ms` and `https://c.bing.com`. Clarity stops recording a
+  page after about 2 h, 128 uploads or 10 MB, until the next reload, and
+  Decaid reloads the skin when it comes back from the background: together
+  these bound what a tablet left on all day uploads. Why: the owner's
+  project should count only CafAI's releases in use, never a fork, a
+  developer's build or the tests; nothing of Clarity's may slow CafAI's
+  start or write to a console anyone on the network can read; and the e2e
+  checks the card, the notice and Turn off with nothing real leaving the
+  machine.
+- **D-USAGE-7. A test run on the simulator and the owner's tablet comes
+  before the first release that carries the ID.** It needs the owner's
+  Clarity project (clarity.microsoft.com, a Microsoft account; any site URL
+  will do) with Strict masking set, and its ID in a local release build:
+  `VITE_CLARITY_PROJECT_ID=<id> npm run release:zip`. In the Decaid
+  simulator on Windows and in Chrome on `localhost`: sessions and the coach
+  events reach Clarity's live view, with the "Decent" user agent not dropped
+  as a bot; a replay looks like CafAI; `?screen=` gives one heatmap per
+  screen; a shot on the simulated machine, with Clarity and without, shows
+  what it costs in CPU and upload; nothing about the key or code fields
+  appears in the uploads; `consentv2` with only `ad_Storage: 'denied'`
+  leaves analytics at Clarity's default, `consent(false)` with `stop` ends
+  the uploads, and `start` resumes them in the same page. Then the zip goes
+  on the owner's tablet (Skins > + > ZIP file) for a day of ordinary use,
+  watching for crashes (an open Clarity issue reports Android WebView
+  crashes) and lag on the shot screen. Only then does the owner set the
+  repository variable, so releases carry the ID (QUESTIONS #28). If no data
+  arrives, or the tablet crashes, Clarity is dropped: the region rule, the
+  card, the switch and the events stay, and sending moves to PostHog or a
+  small counter of CafAI's own, in a new decision. If a shot costs too much,
+  Clarity stops while a shot runs and starts again after, if its API allows;
+  otherwise it is dropped the same way. Why: Clarity has never run inside
+  Decaid's WebView or on a Decent tablet, and a release goes to every
+  install that updates, so a crash or a lagging shot screen would reach them
+  all; and the masking and consent this design relies on were read in
+  clarity-js, not yet watched on the wire.

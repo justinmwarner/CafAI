@@ -6,6 +6,23 @@ workflow checks against it. Settings > About shows the version you run.
 
 ## Unreleased
 
+### Usage sharing
+
+- From the first release built with CafAI's Clarity project (after a test
+  run on a tablet), CafAI shares how it is used with its developer through
+  Microsoft Clarity: the screens you open, where you tap and scroll, and
+  steps such as a shot read or a change confirmed, with all text hidden; no
+  field you type in (the API key, the pairing code, what you write to the
+  coach, a bag's details) reaches Clarity at all. Where the device's time
+  zone or language points to Europe,
+  or its time zone says nothing, a card on the coach screen asks first,
+  "Help improve CafAI?", and nothing loads before **Yes, share**; elsewhere
+  a notice says so, with **OK** and **Turn off**. **Settings > About > Share
+  usage with CafAI's developer** changes the answer on each device.
+  Microsoft may use the data, including for advertising; the README's
+  Privacy section says what is shared. Dev builds, a fork's build, the demo
+  and mock mode never load Clarity.
+
 ### The coach
 
 - Fun facts: once you have kept a recipe, a shot that runs like the last

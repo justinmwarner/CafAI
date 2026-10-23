@@ -145,6 +145,15 @@ settings page.
 5. **A bag.** On the coach, "Which coffee is it?" lists the coffees in
    Decaid's bean library. Pick one, photograph the bag, or describe it; pick
    one of the starting profiles; pull a shot.
+6. **Usage sharing** (CafAI's releases). From the first start, a card on the
+   coach screen asks "Help improve CafAI?" where the device's time zone or
+   language points to Europe, or its time zone says nothing: **Yes, share**
+   or **No thanks**, and nothing goes to Microsoft Clarity before Yes.
+   Elsewhere a notice in its place says CafAI shares how it is used, with
+   all text hidden: **OK** or **Turn off**. It sits under the screen's first
+   card until there is a chat, then at the chat's foot, above the composer;
+   it stays until you answer and holds nothing up. **Settings > About**
+   changes the answer later ([Privacy](#privacy)).
 
 To see it first without a machine, run `npm run demo` on a computer: CafAI
 with a dial-in already under way, on the built-in mocks, with no Decaid and
@@ -423,7 +432,11 @@ machine by itself.
   0.8.8)", with a note when yours is older); anything Decaid sent that
   CafAI did not expect, with **Copy report** (Decaid's routes and field
   names, with counts and both versions, never your notes or the key); and
-  when CafAI last backed up to Decaid.
+  when CafAI last backed up to Decaid. In CafAI's releases, last, **Share
+  usage with CafAI's developer** ("Screens, taps and coach steps go to
+  Microsoft Clarity, with all text hidden."): on while this device shares;
+  off stops it at once and on starts it again, and each device keeps its own
+  answer ([Privacy](#privacy)).
 - **Settings > Log**: what CafAI sends to and gets from Decaid (its REST
   calls and WebSocket frames) and the coach, as it went ("214 entries
   since 21:04, 1.2 MB"). **Open log** shows it full screen, newest first,
@@ -563,6 +576,34 @@ troubleshooting.
   producer of the bag you are dialing in) go to Anthropic's web search, or,
   through CafAI Bridge, to Claude Code's. The facts CafAI told stay in the
   device's own storage, never in Decaid's backup or an export.
+- **Usage sharing** (CafAI's releases only). CafAI shares how it is used
+  with its developer through Microsoft Clarity: the screens you open, where
+  you tap and scroll, eleven coach steps (a key or CafAI Bridge set up, a
+  message to the coach, a bag started, a profile loaded, a shot read, a
+  taste given, a change confirmed or undone, a recipe kept, a fun fact
+  shown, a coach error) and five tags (CafAI's version, where the coach
+  runs, Decaid's platform or a browser, the tablet or phone layout, and
+  whether the device was asked first). All text is hidden: every word is
+  replaced before it leaves the device, the chat and Settings > Log are
+  masked as well, and no field you type in reaches Clarity at all, not even
+  as a hash: the API key, the pairing code, what you write to the coach, a
+  bag's details, a TDS, a grind setting. Nothing ties a
+  session to you. CafAI asks first, and loads nothing from Clarity before
+  **Yes, share**, where the device's time zone is European (any `Europe/*`
+  zone, or Cyprus, the Canaries, Madeira, the Azores, Iceland, the Faroes,
+  Ceuta, Svalbard or France's overseas regions) or says nothing (UTC,
+  `Etc/*`, or none), or where one of its languages names a country of the
+  EEA, the UK, Switzerland, Gibraltar, the Isle of Man, Jersey or Guernsey;
+  elsewhere it shares from the start, with a notice. A tablet in a European
+  home set to another time zone is still covered: CafAI claims no consent
+  there, so Clarity's own check of where the upload comes from keeps its
+  cookies off. Microsoft may use the data, including for advertising: see
+  [Microsoft's privacy statement](https://www.microsoft.com/privacy/privacystatement).
+  **Share usage with CafAI's developer** in Settings > About turns it off on
+  that device (Clarity's cookies are erased and nothing more is sent) or on
+  again; the answer stays on the device, never in Decaid's backup or an
+  export. Development builds, the tests, a fork's build, the demo and mock
+  mode never load Clarity: only CafAI's releases carry its project.
 - The report in Settings > About names Decaid's routes and fields and what
   was wrong with them, never your notes, your coffee or the key.
 - Settings > Log keeps the last 1000 entries (requests, replies, frames)
@@ -800,6 +841,7 @@ Mile. URL switches, read once at start (the full list is in
 | `?mockDrift=1` | the machine's group temperature arrives as `groupTemp`, as from a Decaid that renamed it, so Settings > About lists what CafAI did not expect |
 | `?mockDecaid=0` | no mock Decaid: only the scripted Claude, and every Decaid call goes to a real Decaid (`npm run dev:sim` opens it) |
 | `?mockPersist=1` | keep the mock's store across page loads |
+| `?mockUsage=1` | usage sharing, reporting to a stand-in Clarity project, so the card, the notice and the switch show: the e2e's switch. The mock's service worker answers Clarity's tag with a stand-in that records every call (`mock/clarity.ts`), so nothing reaches Clarity; ignored with `?demo=1` or `?mockDecaid=0` (`src/usage/projectId.ts`) |
 | `?demo=1` | the demo (`npm run demo`) |
 
 The production build never contains the mocks or a service worker.
@@ -862,7 +904,11 @@ General, "Read repository contents and packages permissions") can stay.
   checks and e2e, and publishes
   `cafai-<version>.zip` as a GitHub Release, the asset Decaid installs, with
   the tag's message and GitHub's generated notes. A manual run publishes
-  nothing and keeps the zip as a workflow artifact.
+  nothing and keeps the zip as a workflow artifact. The zip's build takes
+  usage sharing's Clarity project from the repository variable
+  `CLARITY_PROJECT_ID`, under Settings > Secrets and variables > Actions >
+  Variables ([Privacy](#privacy)); without it a release shares nothing. Set
+  it only after the test run in [QUESTIONS.md](QUESTIONS.md) (D-USAGE-7).
 - **Scheduled runs stop after 60 days without activity** in a public
   repository; re-enable them on the Actions tab.
 - **Private vulnerability reporting**, in the repository's security
@@ -880,6 +926,7 @@ General, "Read repository contents and packages permissions") can stay.
 | `src/llm` | `LlmProvider` interface, streaming Anthropic client (fetch + SSE), tool-loop runner, the one request that reads a bag photo, the CafAI Bridge client |
 | `src/storage` | IndexedDB repositories, the key store (and the key's optional copy in Decaid), where the coach runs, export/import, mirror to Decaid's KV store |
 | `src/traffic` | The traffic log behind Settings > Log: the recorder, what it never keeps (the key, the pairing code, image data), and the text Share, Email and Copy send |
+| `src/usage` | Usage sharing with Microsoft Clarity: the region rule, the device's answer, CafAI's own loader, the screen in the address, and the attributes that keep words and fields out of Clarity |
 | `src/app` | The coach engine, services, app composition |
 | `src/ui` | Shell, machine row, stats card and alert, live graph, chat surface, history, settings and the cleaning guide |
 | `mock` | MSW mocks of Decaid, Claude and CafAI Bridge, the demo, and fixtures |
