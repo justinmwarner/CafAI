@@ -160,6 +160,10 @@ needs nothing installed beside Claude Code (D130). Left:
 
 - Teaching mode, personas, cross-user learning, voice. (Bag photos came
   with the Decaid alignment, 2026-10-10: D120.)
-- A screensaver. (Steam, hot water and flush settings, Connect for a
-  dropped machine or scale, and the link to Decaid's bean and batch
-  entities came with the Decaid alignment: D114, D111, D102.)
+- Two more screensavers: Espresso Pipes, after Windows' 3D Pipes, in
+  WebGL; and Latte Art, poured by a simulation, behind a gate of its own
+  (docs/superpowers/specs/2026-10-22-screensavers-design.md, D228).
+  (The screensaver came on 2026-10-22 with six to choose from:
+  D223-D227. Steam, hot water and flush settings, Connect for a dropped
+  machine or scale, and the link to Decaid's bean and batch entities came
+  with the Decaid alignment: D114, D111, D102.)

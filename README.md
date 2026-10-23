@@ -405,6 +405,17 @@ machine by itself.
   list. Decaid keeps them and acts on them while it runs, CafAI open or
   not, and only while the machine is connected; its own Sleep & Wake page
   shows the same. Changes go to Decaid at once.
+- **Settings > Screensaver**: on the Decent tablet, once Decaid says the
+  machine is asleep and nobody has touched the screen for a minute, a
+  screensaver covers CafAI: **Nightstand** (a bedside clock with the next
+  wake time, the bag and the last shot), **Bouncing Portafilter**,
+  **Beanfield**, **Rising Steam**, **Lava Latte** or **Brew Rain**, or **A
+  different one each day** (the default). The screen stays on, dimmed, for
+  30 minutes, then goes dark as Android's timeout has it. A tap clears it
+  and wakes the machine, as Wake does; the tap never reaches what is under
+  it. **Preview** shows one now, anywhere, and a tap closes it without waking
+  anything. Turn it off with the switch; under reduced motion each shows a
+  still picture.
 - **Settings > Machine care**: **Cleaning guide** opens Decent's routine for
   the DE1, one at a time: **Daily** (purge the wand, flush the group head,
   wipe the shower screen, rinse the wand), **Weekly** (detergent, Rinza, the
@@ -874,11 +885,24 @@ screen and what each answer does.
 the demo at a fixed time, time zone and locale on a 1280x800 tablet and a
 390x844 phone, and writes the README's pictures to `docs/images/` (each
 under 300 KB). `SCREENSHOTS_PORT` moves its server from port 4176. Run it
-after a change to the screens, and commit the pictures.
+after a change to the screens, and commit the pictures. Its screensaver
+scene (`e2e/screenshots/screensaver.shots.ts`) writes Settings > Screensaver
+and one frame of each screensaver at 962x602 to the git-ignored
+`test-results-screenshots/screensavers/`, for looking at, not for the README.
 
 **Tablet viewports.** `dev/tablet.html` frames the app at Decent tablet
 sizes (962x602, 1007x602, 1140x712), at 1280x800, 1920x1200 and an iPad
 Pro, and injects safe-area insets.
+
+**Screensavers.** `dev/preview-saver.html` (with `npm run dev` running, at
+`http://localhost:5173/dev/preview-saver.html`) runs one canvas screensaver
+on the whole window: `?saver=beanfield&seed=1`, `&at=6000` for one moment
+held, `&still=1` for its reduced-motion still, `&tint=matcha`, `&fps=1` for
+its frame time (the options are in `src/ui/preview/saverPreview.ts`).
+`node scripts/shoot-saver.mjs --port 5173 --saver beanfield --at 6000`
+screenshots it into `.verify/`. A mock build opens the app's own Preview at
+start with `?saverPreview=<id>&saverAt=<ms>`, held at that moment, with
+`data-testid="saver-ready"` once painted.
 
 **Chromium 91.** `npm ci --prefix tools/chrome91` once (it downloads a real
 Chromium 91 through puppeteer 9), then `npm run build:mock`, and:
@@ -887,7 +911,11 @@ Chromium 91 through puppeteer 9), then `npm run build:mock`, and:
   error, a failed request, or no ready marker;
 - `npm run smoke:chrome91:loop` drives the whole coach loop (settings, new
   bag with "Which coffee is it?" and Something else, templates, v1, scripted
-  shot, taste chip, confirmed v2) in that engine.
+  shot, taste chip, confirmed v2) in that engine;
+- a screensaver runs there through the mock's Preview, from
+  `tools/chrome91`: `node smoke.mjs --dist ../../dist-mock --wait
+  "document.querySelector('[data-testid=saver-ready]')" --hash
+  "?mockSpeed=25&saverPreview=beanfield&saverAt=3000#/" --name saver-beanfield`.
 
 Screenshots land in `tools/chrome91/out/`.
 
@@ -938,14 +966,14 @@ General, "Read repository contents and packages permissions") can stay.
 
 | Path | What |
 |---|---|
-| `src/api` | Decaid REST client, WebSocket telemetry, KV, heartbeat, host/exit; the readers that check each reply, and the drift log; what Decaid's plugins leave (DYE2's setups, Visualizer's last upload) |
+| `src/api` | Decaid REST client, WebSocket telemetry, the display socket (the screensaver's dim and wake lock), KV, heartbeat, host/exit; the readers that check each reply, and the drift log; what Decaid's plugins leave (DYE2's setups, Visualizer's last upload) |
 | `src/coach` | Pure logic: templates and levers, bounded validator, profile hashing, shot summarizer and query tools, roast age, prompt |
 | `src/llm` | `LlmProvider` interface, streaming Anthropic client (fetch + SSE), tool-loop runner, the one request that reads a bag photo, the CafAI Bridge client |
 | `src/storage` | IndexedDB repositories, the key store (and the key's optional copy in Decaid), where the coach runs, export/import, mirror to Decaid's KV store |
 | `src/traffic` | The traffic log behind Settings > Log: the recorder, what it never keeps (the key, the pairing code, image data), and the text Share, Email and Copy send |
 | `src/usage` | Usage sharing with Microsoft Clarity: the region rule, the device's answer, CafAI's own loader, the screen in the address, and the attributes that keep words and fields out of Clarity |
 | `src/app` | The coach engine, services, app composition |
-| `src/ui` | Shell, machine row, stats card and alert, live graph, chat surface, history, settings and the cleaning guide |
+| `src/ui` | Shell, machine row, stats card and alert, live graph, chat surface, history, settings, the cleaning guide and the screensavers (`src/ui/saver`) |
 | `mock` | MSW mocks of Decaid, Claude and CafAI Bridge, the demo, and fixtures |
 | `bridge` | CafAI Bridge: the coach on your own Claude Code ([bridge/README.md](bridge/README.md)) |
 | `contract/decaid` | Decaid's specs at the pinned release, the types generated from them, and the checks `npm run typecheck` runs, with the recorded spec errors; Decaid's agent skill and API notes at the same release |
@@ -953,7 +981,7 @@ General, "Read repository contents and packages permissions") can stay.
 | `e2e-real` | The Playwright check against a running Decaid (`npm run e2e:real`) |
 | `scripts` | The release zip, the Decaid contract and drift watch, and the headless Decaid for CI |
 | `tools/chrome91` | The Chromium 91 smoke test and coach loop (puppeteer 9) |
-| `dev` | `tablet.html` (the app at Decent tablet sizes) and preview pages |
+| `dev` | `tablet.html` (the app at Decent tablet sizes) and preview pages, one screensaver's (`preview-saver.html`) included |
 | `docs` | Research, verified platform facts, audits, the Crema port plan, the simulator and hardware plans, workstream briefs, and `images/` |
 | `.github` | CI, the drift watch, Decaid live and the release; issue forms |
 | `.claude/skills` | Skills for coding agents: `decaid-runtime` drives a running Decaid from CafAI |

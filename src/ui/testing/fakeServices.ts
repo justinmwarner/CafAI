@@ -26,6 +26,7 @@ import type {
 } from '../../api/types.ts';
 import { createAppearanceStore, type AppearanceStore } from '../../app/appearance.ts';
 import { createDrinkScreensStore, type DrinkScreensStore } from '../../app/drinkScreens.ts';
+import { createScreensaverSettingStore, type ScreensaverSettingStore } from '../../app/screensaverSetting.ts';
 import { createTemperatureUnitStore, type TemperatureUnitStore } from '../../app/temperatureUnit.ts';
 import { clone } from '../../util/clone.ts';
 import type { CoachController, CoachState, Services } from '../../app/types.ts';
@@ -560,6 +561,8 @@ export interface FakeServices extends Services {
   temperatureUnit: TemperatureUnitStore;
   /** The real store too: `storage.settings.drinkScreens` starts it (D222). */
   drinkScreens: DrinkScreensStore;
+  /** The real store too: `storage.settings.screensaver` starts it (D225). */
+  screensaver: ScreensaverSettingStore;
   plugins: FakePluginDirectory;
 }
 
@@ -600,6 +603,7 @@ export function createFakeServices(options: {
     appearance: createAppearanceStore(storage.settings, options.storage?.settings?.appearance),
     temperatureUnit: createTemperatureUnitStore(storage.settings, options.storage?.settings?.temperatureUnit),
     drinkScreens: createDrinkScreensStore(storage.settings, options.storage?.settings?.drinkScreens),
+    screensaver: createScreensaverSettingStore(storage.settings, options.storage?.settings?.screensaver),
     plugins: createFakePluginDirectory(),
   };
 }

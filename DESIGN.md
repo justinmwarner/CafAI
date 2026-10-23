@@ -929,6 +929,18 @@ Settings > Machine care (`src/ui/settings/CareSection.tsx`, D152) and the screen
 - **A drink meanwhile** (D156): while the video is open, a drink starting leaves Care on screen (Stop takes its place in the top bar as always); with the video closed, the drink's view takes the screen as anywhere, and Go back returns to Machine care. A shot takes the screen either way.
 - **Links**: inside Decaid plain links, which Decaid opens in the system browser; in a browser a new tab, so CafAI stays open.
 
+### Screensaver
+
+`src/ui/saver/` (D223-D228, docs/superpowers/specs/2026-10-22-screensavers-design.md). The one place for play (PRODUCT.md): classic screensavers redrawn in code with coffee, shown only while the machine sleeps and nobody is at it. Never clip art, mascots or novelty fonts there either.
+
+- **The overlay** (`SaverOverlay.tsx`): the shell's last child, drawn through a portal over everything, the top bar and any dialog left open included, the whole screen edge to edge. Inside Decaid only, once Decaid has confirmed the machine asleep for 3 s without a break and the screen has gone a minute untouched. It dims the tablet to 30 (or leaves the barista's lower brightness) and holds the screen on; 30 minutes on it turns black (#000) and lets the screen go, for Android's own timeout; the page shown again starts it over. Named "Wake the machine" for assistive tech ("Close the preview" for a Preview).
+- **The tap**: anywhere, a press, a touch or a click, and any key, is swallowed whole: nothing underneath ever sees it, and a clear sheet stays until the finger lifts and 350 ms after. It clears the screensaver and wakes the machine with the Wake button's own command, so Wake's spinner and any error show in the top bar and the machine alert, as always; while no wake can be sent it only clears.
+- **Colours**: always the dark palette of the barista's tint, whatever the mode: the page's dark colour behind everything, ink and ink-muted for words and outlines. The colours that carry meaning elsewhere (pressure green, flow blue) may be used as colours here, and roasts' browns, each at least 3:1 on the page.
+- **Drawn in code**: Canvas 2D as Chromium 91 has it (no `roundRect`, `createConicGradient`, `reset` or `letterSpacing`), Figtree and the device's own fonts, no images and no libraries. At most 30 frames a second, a backing scale of the device's pixel ratio up to 1.5, a fresh canvas for each start, paused while the page is hidden. A screensaver that cannot start, or throws, gives way to Nightstand for the rest of that showing.
+- **Nightstand**: a bedside clock, text drawn by React. The time in 24 hours, 20 % of the screen's shorter side (64 to 200 px), weight 300, tabular, in ink; under it, 3.2 % of the shorter side (16 to 28 px) in ink-muted, the next wake time ("Wakes at 06:00", "Wakes Sunday at 06:30" beyond a day), the bag on the machine and the last shot as History writes it ("Last shot: 28.1 s · 18.0 g → 36.4 g · 1:2.0 · peak 8.9 bar"), each only when known. The block jumps each minute to a seeded place at least a tenth of the screen from every edge.
+- **The canvas ones**: Bouncing Portafilter, Beanfield, Rising Steam, Lava Latte and Brew Rain, as the design's section 7 draws them; Espresso Pipes (WebGL) and Latte Art, behind a gate of its own (D228), to come.
+- **Settings > Screensaver** (`src/ui/settings/ScreensaverSection.tsx`): after Sleep and wake, applied at once, no Save. **Screensaver**, a switch in a 48 px row, on by default; **Which**, an outlined native select 48 px tall with its label raised: "A different one each day" first (the default, its helper "Today: Beanfield"), then the six by name, one that needs WebGL where it cannot start greyed out with "Espresso Pipes needs WebGL, which can't start on this device." under the line; the line in body-small and ink-muted: "Shows once the machine has been asleep and the screen untouched for a minute. A tap wakes the machine. The screen stays on, dimmed, for 30 minutes.", and on a phone or a computer "Only on the Decent tablet: here, Preview shows it."; then **Preview** (tonal, a play icon): today's or the chosen one, full screen, a tap closes it; it never dims, holds the screen or wakes the machine. A save that fails says "Could not save the screensaver: …" in an error Alert under it.
+
 ### Motion
 
 - **State changes take 150 to 250 ms and ease out.** The coach's note and the live strip enter over 200 ms ease-out (a fade with a 6 px rise for the note, a 4 px drop for the strip). The Mode segments, the words of a shot's rating and the tint swatches change in 200 ms (MUI's `shorter`, its standard curve); the composer's focus border in 250 ms.
@@ -939,6 +951,7 @@ Settings > Machine care (`src/ui/settings/CareSection.tsx`, D152) and the screen
 - **Press feedback**: MUI's ripple on buttons, which animates only when the device has no reduced-motion preference; the tint swatches scale to 0.94 instead.
 - **No bounce, spring, parallax or route transitions.** Screens swap in one frame. An automatic swap (a shot starting, the coach coming back) uses `location.replace`, so Back goes where the barista went, and is followed by the 350 ms tap guard on the main pane, never the top bar.
 - **Every animation has a still alternative** under `prefers-reduced-motion: reduce`: CafAI's own animations switch off (`animation: none`), and a global CssBaseline rule settles everything else at once, MUI's spinners and indeterminate progress bars included. Their meaning is always in the words beside them ("Thinking… 12 s", "Loading v5 onto the machine…").
+- **The screensaver** (D226): shown only while the machine sleeps and nobody is there, it moves for as long as it shows, slowly, at 30 frames a second, as the drinks' dial does while a drink runs, and it is the one place that may bounce (the portafilter off the screen's edges). The CSS rule cannot still a canvas, so under reduced motion each screensaver paints its still instead, again each minute; Nightstand jumps to its new place as always (a jump is not motion).
 
 ## 6. Do's and Don'ts
 
@@ -957,7 +970,7 @@ Settings > Machine care (`src/ui/settings/CareSection.tsx`, D152) and the screen
 - **Do follow the machine's own state for what it is doing** (Heating, Ready); a plugin may add a number, never the state.
 - **Do show a change in plain words and wait for a tap** before anything reaches the machine; put the decision before the reasoning.
 - **Do keep Exit and Decaid settings on every screen**, in every layout, during a shot too.
-- **Do give every animation a still alternative** under reduced motion, and keep motion between 150 and 250 ms.
+- **Do give every animation a still alternative** under reduced motion, and keep motion between 150 and 250 ms (the drinks' dial while a drink runs and the screensaver move for as long as they show: D219, D226).
 - **Do check new screens at 962x602** (the smallest Decent tablet) and at 390x844 and 844x390, in dark and light, in Crema, Matcha and Tamper.
 
 ### Don't

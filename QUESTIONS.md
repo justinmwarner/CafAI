@@ -1,19 +1,20 @@
 # Open questions
 
 Ranked by the cost of a wrong guess (most expensive first). Each says what
-CafAI assumes now and what would change if the guess is wrong. Question 30,
+CafAI assumes now and what would change if the guess is wrong. Question 34,
 out of usage analytics of 2026-10-22, comes first: it is your next step.
 Questions 1-8 came out of the morning session of 2026-10-04, 9-13 out of the
 Decaid alignment of 2026-10-09, 14-16 out of Claude on your computer of
 2026-10-11, 17 out of your list of 2026-10-11, 18-21 out of the gap review's
 four items of 2026-10-15, 22-23 out of the simulator pre-run of 2026-10-16,
-24-27 out of fun facts of 2026-10-16 and 28-29 out of the drink scenes of
-2026-10-22 (each ranked the same way, in its own section); the questions you
-answered are in "Answered" at the end.
+24-27 out of fun facts of 2026-10-16, 28-29 out of the drink scenes of
+2026-10-22 and 30-33 out of the screensavers of 2026-10-22 (each ranked the
+same way, in its own section); the questions you answered are in "Answered"
+at the end.
 
 ## Your next step: usage analytics (2026-10-22)
 
-30. **Does Microsoft Clarity work inside Decaid and on your tablet, and keep
+34. **Does Microsoft Clarity work inside Decaid and on your tablet, and keep
     to what CafAI promises (D216)?** Nobody has run it there yet: the
     masking and the consent calls CafAI relies on were read in clarity-js,
     never seen on the wire, and whether Clarity counts Decaid's "Decent"
@@ -307,6 +308,32 @@ answered are in "Answered" at the end.
     group from 20 °C under its target (cold) to the target (warm). Each
     range is a number or two in `src/ui/drinks/scenes/sceneInput.ts`; tea
     water at 80 °C draws about three quarters warm.
+
+## From the screensavers (2026-10-22)
+
+30. **Is 30 the right brightness (D224)?** The screensaver dims the
+    tablet to 30 on Decaid's 0-100 (or leaves a lower brightness of yours
+    alone). Too dim and it reads as off from across the kitchen; too bright
+    and it lights the room at night. On Android's automatic brightness,
+    which Decaid reads as 100, CafAI cannot see how dim the room has set the
+    screen, so at night 30 may even be brighter than it was. The tablet
+    session (section 20 of docs/HARDWARE_TEST_PLAN.md) shows it; it is one
+    number, `SAVER_BRIGHTNESS` in `src/ui/saver/policy.ts`.
+31. **Is a minute untouched the right wait (D223)?** With the machine
+    asleep, the screensaver comes up after 60 s without a touch, so a tap
+    on Sleep does not cover what you were reading. Shorter and it comes up
+    while you read; longer and an unattended screen stays bright longer.
+    One number too, `SAVER_IDLE_MS`.
+32. **"A different one each day" as the default (D225)?** Anyone who
+    never opens Settings gets a new one each day, Nightstand among them. If
+    one stays your favourite, or a quieter default suits more people,
+    Nightstand could be the default instead; a choice made in Settings is
+    kept either way.
+33. **Do Brew Rain's katakana show on the tablet (D227)?** The rain's
+    glyphs (コーヒー, エスプレッソ) come from the device's own fonts, which
+    Android has; a tablet without a Japanese font would show empty boxes.
+    If it does, the rain falls in digits and Latin letters instead, or
+    carries a small font of its own.
 
 ## Answered
 

@@ -61,6 +61,7 @@ import { dismissEngineWarning, engineWarning, isEngineWarningDismissed, readEngi
 import { watchSafeArea } from '../platform/safeArea.ts';
 import { useHeartbeatOnInteraction } from '../platform/useHeartbeatOnInteraction.ts';
 import { placeOf, type Route, type RouteName } from '../router.ts';
+import { SaverOverlay } from '../saver/SaverOverlay.tsx';
 import { TID } from '../testIds.ts';
 import { layoutFor, useLayout, type Layout } from './layout.ts';
 import { LiveStrip } from './LiveStrip.tsx';
@@ -678,6 +679,8 @@ function Shell({ route, onNavigate, children }: AppShellProps) {
         </Box>
         {bar ? <Tabs route={route} onNavigate={onNavigate} rail={false} /> : null}
       </Box>
+      {/* Last: the screensaver, while the machine sleeps, over everything, the top bar included (D223). */}
+      <SaverOverlay />
     </Box>
   );
 }

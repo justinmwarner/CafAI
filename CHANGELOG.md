@@ -61,6 +61,16 @@ workflow checks against it. Settings > About shows the version you run.
   counts down from 10 s and returns to where you were; **Stay**, or a tap
   on the view, keeps it. Settings > Drink screens turns it off, or sets the
   time (5 to 60 s), for each drink.
+- Screensavers: on the Decent tablet, once the machine is asleep and nobody
+  has touched the screen for a minute, a screensaver covers CafAI, classic
+  ones redrawn with coffee: Nightstand (a bedside clock with the next wake
+  time, the bag and the last shot), Bouncing Portafilter, Beanfield, Rising
+  Steam, Lava Latte and Brew Rain, a different one each day unless you pick
+  one in **Settings > Screensaver**, where Preview shows it now and the
+  switch turns it off. The screen stays on, dimmed, for 30 minutes, then
+  goes dark as it did before; a tap clears it and wakes the machine, and
+  never reaches what is under it. Always dark, and a still picture under
+  reduced motion. Espresso Pipes and Latte Art are to come.
 - A shot's card draws the shot its question asks about faintly under its
   own curves (your previous shot, or for a bag's first shot your last shot
   of another coffee), as a pale band in the same colours, with a third key

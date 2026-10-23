@@ -60,6 +60,7 @@ import {
   type GrinderLibrary,
 } from './grinderPicker.ts';
 import { revealInColumn } from './reveal.ts';
+import { ScreensaverSection } from './ScreensaverSection.tsx';
 import { Section } from './Section.tsx';
 import { SleepWakeSection } from './SleepWakeSection.tsx';
 import { UsageRow } from './UsageRow.tsx';
@@ -602,6 +603,7 @@ export function SettingsScreen() {
         <DrinkSettingsSection />
         <DrinkScreensSection />
         <SleepWakeSection />
+        <ScreensaverSection />
         <CareSection />
         <AboutSection />
         <LogSection />

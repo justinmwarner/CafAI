@@ -1,15 +1,20 @@
 /**
- * MSW WebSocket handlers for the six Decaid channels CafAI opens.
+ * MSW WebSocket handlers for the Decaid channels CafAI opens: the six of
+ * telemetry, time-to-ready.reaplugin's, and the display's.
  *
  * Each socket gets what Decaid replays on connect (machine and scale
  * snapshot channels bind to the live device; devices and shotState are
  * BehaviorSubjects): the latest machine frame, a scale status frame, the
  * devices state, the latest shot state (idle between shots), water levels
- * and shot settings. Machine channels stay open and silent while the machine
- * is away, like Decaid. Clients are tracked per channel here rather than with
- * MSW's cross-tab client manager, so frames never leak between tabs. A
- * machine reading the mock renames (?mockDrift=1, drift.ts) goes out under
- * its new name, replay included.
+ * and shot settings, and the display's state. Machine channels stay open and
+ * silent while the machine is away, like Decaid. Clients are tracked per
+ * channel here rather than with MSW's cross-tab client manager, so frames
+ * never leak between tabs. A machine reading the mock renames (?mockDrift=1,
+ * drift.ts) goes out under its new name, replay included.
+ *
+ * Two channels take commands: devices (scan, connect) and the display
+ * (setBrightness, requestWakeLock, releaseWakeLock: the screensaver's,
+ * D224), whose wake lock goes with the socket that asked for it.
  */
 import { ws, type WebSocketHandler } from 'msw';
 import type { MachineSnapshot } from '../../src/api/types.ts';
@@ -26,6 +31,7 @@ export const WS_CHANNEL_PATHS: Readonly<Record<MockChannel, string>> = {
   waterLevels: '/ws/v1/machine/waterLevels',
   shotSettings: '/ws/v1/machine/shotSettings',
   timeToReady: '/ws/v1/plugins/time-to-ready.reaplugin/timeToReady',
+  display: '/ws/v1/display',
 };
 
 interface ClientLike {
@@ -57,7 +63,23 @@ function replay(state: MockDecaid, channel: MockChannel): unknown[] {
       // A plugin's emitted events are a plain stream (pluginManager.emitStream), not a
       // BehaviorSubject: a new client gets nothing until the next frame fires.
       return [];
+    case 'display':
+      // Decaid 0.8.8 sends the display's state as the socket opens (seen on its simulator, 2026-10-22).
+      return [state.getDisplayState()];
   }
+}
+
+/** ws/v1/display takes the screensaver's three commands; the state they make goes to every display socket. */
+function handleDisplayCommand(state: MockDecaid, client: ClientLike, data: unknown): void {
+  let message: unknown;
+  try {
+    message = JSON.parse(String(data));
+  } catch {
+    client.send(JSON.stringify({ error: 'Invalid JSON' }));
+    return;
+  }
+  const result = state.displayCommand(client, message);
+  if ('error' in result) client.send(JSON.stringify(result));
 }
 
 /** ws/v1/devices also takes commands; answer the two CafAI could send. */
@@ -93,6 +115,7 @@ export function decaidWsHandlers(state: MockDecaid): WebSocketHandler[] {
     waterLevels: new Set(),
     shotSettings: new Set(),
     timeToReady: new Set(),
+    display: new Set(),
   };
 
   const handlers: WebSocketHandler[] = [];
@@ -109,9 +132,14 @@ export function decaidWsHandlers(state: MockDecaid): WebSocketHandler[] {
         state.noteSocket(channel, 1);
         client.addEventListener('close', () => {
           if (clients[channel].delete(client)) state.noteSocket(channel, -1);
+          // The wake lock a display socket asked for goes with it.
+          if (channel === 'display') state.displaySocketClosed(client);
         });
         if (channel === 'devices') {
           client.addEventListener('message', (event) => handleDevicesCommand(state, client, event.data));
+        }
+        if (channel === 'display') {
+          client.addEventListener('message', (event) => handleDisplayCommand(state, client, event.data));
         }
         for (const frame of replay(state, channel)) client.send(JSON.stringify(sent(state, channel, frame)));
       }),
@@ -125,6 +153,7 @@ export function decaidWsHandlers(state: MockDecaid): WebSocketHandler[] {
         clients[channel].delete(client);
         state.noteSocket(channel, -1);
         client.close(1000, 'mock drop');
+        if (channel === 'display') state.displaySocketClosed(client);
       }
     }
   });
