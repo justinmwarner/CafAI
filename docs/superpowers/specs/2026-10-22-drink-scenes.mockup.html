@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CafAI: drink scenes, and going back by itself</title>
+<style>
+  @font-face { font-family: 'Figtree'; font-weight: 300 900; font-style: normal; src: url('../../../node_modules/@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2') format('woff2'); }
+
+  /* Crema, dark and light, from src/ui/palette.ts. */
+  .t-dark { --bg:#140e09; --surface:#1c160f; --raised:#282018; --ink:#f4ede6; --muted:#b8afa6; --line:#2f2924; --grid:#26201b; --field:#504c46; --disabled:#5c554f; --accent:#d5a776; --accent-soft:#3a2d1f; --on-accent:#1e1408; --success:#6ad895; --error:#f47b74; --on-error:#1e1311; --live:#f75d59; --pressure:#5ed99e; --flow:#65b2f1; }
+  .t-light { --bg:#faf6f2; --surface:#fffdfb; --raised:#f2ece5; --ink:#261d14; --muted:#66584a; --line:#dcd8d3; --grid:#e9e5e0; --field:#b9b2aa; --disabled:#b5aea6; --accent:#835928; --accent-soft:#f1e8de; --on-accent:#fffdfa; --success:#007742; --error:#be2e31; --on-error:#fff; --live:#d73337; --pressure:#008758; --flow:#006bb9; }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 0 32px 48px; background: #101010; color: #d8d8d8; font-family: 'Figtree', system-ui, sans-serif; }
+  .board { display: flex; flex-direction: column; gap: 36px; width: 1440px; }
+  .intro { padding-top: 32px; }
+  .intro h1 { font-size: 26px; font-weight: 700; margin: 0 0 8px; color: #fff; }
+  .intro p { font-size: 15.5px; line-height: 1.55; margin: 0 0 6px; color: #bdbdbd; max-width: 1240px; }
+  .intro b { color: #fff; font-weight: 650; }
+
+  /* The run's controls: one simulated steam for every dial on the page. */
+  .controls { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 12px 16px; background: #181818; border: 1px solid #2c2c2c; border-radius: 12px; font-size: 14.5px; }
+  .controls button { height: 36px; min-width: 84px; padding: 0 14px; border-radius: 10px; border: 1px solid #3a3a3a; background: #262626; color: #fff; font: inherit; font-weight: 650; cursor: pointer; }
+  .controls input[type=range] { width: 360px; accent-color: #d5a776; }
+  .controls select { height: 34px; border-radius: 8px; background: #262626; color: #fff; border: 1px solid #3a3a3a; font: inherit; padding: 0 8px; }
+  .controls label { display: inline-flex; align-items: center; gap: 8px; color: #bdbdbd; }
+  .controls .clock { min-width: 210px; color: #fff; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .controls .nums { min-width: 330px; color: #bdbdbd; font-variant-numeric: tabular-nums; }
+
+  .drink-h { font-size: 22px; font-weight: 700; color: #fff; margin: 4px 0 -16px; padding-top: 18px; border-top: 1px solid #2c2c2c; }
+  .sel { height: 48px; border: 1px solid var(--field); border-radius: 12px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 14px; font-size: 16px; color: var(--ink); }
+  .swrow.sm { min-height: 48px; margin: 4px 0 6px; font-size: 15px; gap: 6px; }
+  .concept { display: grid; grid-template-columns: 420px 320px 320px; gap: 28px; align-items: center; }
+  .cap { font-size: 14.5px; line-height: 1.5; color: #bdbdbd; }
+  .cap h2 { margin: 2px 0 6px; font-size: 21px; color: #fff; font-weight: 700; }
+  .cap b { color: #fff; font-weight: 650; }
+  .cap ul { margin: 6px 0 0; padding-left: 18px; }
+  .cap li { margin: 4px 0; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 650; letter-spacing: .02em; color: #fff; background: #2a2a2a; border-radius: 6px; padding: 2px 8px; margin-bottom: 6px; }
+  .tag.rec { background: #3a2d1f; color: #f0d2ad; }
+  .panel { width: 320px; height: 320px; border-radius: 18px; background: var(--bg); color: var(--ink); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 1px #2c2c2c; }
+
+  /* The dial: ticks, track and arc in SVG over the scene, which is a canvas clipped to the inside of the ring. */
+  .dial { position: relative; flex: none; width: 272px; height: 272px; }
+  .dial > canvas, .dial > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .dial > svg { overflow: visible; }
+  .dial .ctr { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+  .big { font-size: 46px; font-weight: 650; letter-spacing: -.02em; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink); }
+  .big .u { font-size: .5em; font-weight: 550; color: var(--muted); margin-left: 4px; letter-spacing: 0; }
+  .of { margin-top: 8px; font-size: 13px; font-weight: 550; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ctr .ok { position: absolute; top: 22.5%; left: calc(50% - 14px); width: 28px; height: 28px; fill: var(--success); }
+  .dial.halo .big, .dial.halo .of { text-shadow: 0 0 1px var(--halo), 0 0 2px var(--halo), 0 0 3px var(--halo), 0 0 6px var(--halo), 0 0 12px var(--halo); }
+  .tick { stroke: var(--grid); stroke-width: 2; stroke-linecap: round; }
+  .tick.major { stroke: var(--line); stroke-width: 2.5; }
+  .track { fill: none; stroke: var(--raised); stroke-width: 10; }
+  .arc { fill: none; stroke-width: 10; stroke-linecap: round; }
+  .head { stroke: var(--bg); stroke-width: 3; }
+
+  /* ---------- The drink view in context (from the drink views mockup) ---------- */
+  .rowf { display: flex; gap: 32px; align-items: flex-start; }
+  .frame { position: relative; overflow: hidden; background: var(--bg); color: var(--ink); box-shadow: 0 0 0 1px #2c2c2c, 0 18px 40px rgba(0,0,0,.45); font-size: 16px; display: flex; flex-direction: column; }
+  .tab { width: 962px; height: 602px; border-radius: 12px; }
+  .ic { width: 22px; height: 22px; fill: currentColor; flex: none; }
+  .tb { height: 56px; flex: none; display: flex; align-items: center; gap: 4px; padding: 0 12px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .brand { display: flex; align-items: center; gap: 6px; color: var(--accent); font-weight: 750; font-size: 19px; margin-right: 6px; }
+  .nav-i { height: 48px; padding: 0 8px; display: inline-flex; align-items: center; gap: 8px; border-radius: 12px; color: var(--muted); font-weight: 600; font-size: 16px; white-space: nowrap; }
+  .nav-i .ic { width: 20px; height: 20px; }
+  .nav-i.cur { color: var(--accent); background: var(--accent-soft); }
+  .grow { flex: 1 1 auto; }
+  .mrow { display: flex; gap: 2px; }
+  .mb { width: 54px; height: 48px; border-radius: 12px; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; color: var(--ink); font-size: 11.5px; font-weight: 600; }
+  .mb .ic { width: 21px; height: 21px; }
+  .mb.off { color: var(--disabled); }
+  .mb.stop { background: var(--error); color: var(--on-error); font-weight: 700; }
+  .sep { width: 1px; height: 30px; background: var(--line); margin: 0 4px; }
+  .ib { width: 48px; height: 48px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
+  .exit { height: 48px; padding: 0 12px; display: inline-flex; align-items: center; gap: 8px; border-radius: 12px; background: var(--raised); color: var(--ink); font-weight: 600; font-size: 16px; }
+  .exit small { display: block; font-size: 13px; color: var(--muted); font-weight: 400; line-height: 1.2; }
+  .exit span { line-height: 1.1; }
+  .main { position: relative; flex: 1 1 auto; min-height: 0; display: flex; }
+  .dv { flex: 1 1 auto; min-width: 0; min-height: 0; max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; padding: 14px 20px; overflow: hidden; }
+  .dv-h { flex: none; display: flex; align-items: center; gap: 10px; min-height: 48px; }
+  .dv-h .dicon { width: 24px; height: 24px; color: var(--muted); }
+  .dv-h .name { font-size: 17px; font-weight: 700; }
+  .dv-h .state { font-size: 15px; color: var(--muted); font-weight: 550; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+  .dv-h .state.done { color: var(--success); }
+  .dv-h .state .ic { width: 18px; height: 18px; }
+  .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--live); flex: none; animation: pulse 1.6s ease-in-out infinite; }
+  .dv-body { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 32px; align-items: center; }
+  .dv-side { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+  .ro { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 18px; }
+  .r .lab { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 550; color: var(--muted); white-space: nowrap; }
+  .sw { width: 12px; height: 3px; border-radius: 2px; flex: none; }
+  .r .v { font-size: 30px; font-weight: 650; letter-spacing: -.01em; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .r .v .u { font-size: .6em; font-weight: 550; color: var(--muted); margin-left: 3px; letter-spacing: 0; }
+  .r .c { font-size: 13px; color: var(--muted); min-height: 18px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .trace { position: relative; height: 104px; }
+  .trace svg { width: 100%; height: 100%; display: block; overflow: visible; }
+  .trace .g { stroke: var(--grid); stroke-width: 1; }
+  .trace .t { font-size: 12px; fill: var(--muted); font-family: inherit; }
+  .trace .p { fill: none; stroke: var(--pressure); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+  .trace .f { fill: none; stroke: var(--flow); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+  .set { flex: none; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px 16px 14px; }
+  .set-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .set-h b { font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .set-h span { font-size: 15px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .set-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 16px; }
+  .fl { font-size: 13px; font-weight: 550; color: var(--muted); margin-bottom: 6px; }
+  .stp { height: 48px; border: 1px solid var(--field); border-radius: 12px; display: flex; align-items: center; }
+  .stp .b { flex: 0 0 30%; min-width: 48px; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--ink); }
+  .stp .b .ic { width: 24px; height: 24px; }
+  .stp .val { flex: 1 1 auto; text-align: center; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .stp .val .u { font-size: 13px; font-weight: 550; color: var(--muted); margin-left: 3px; }
+  .stp.dis { border-color: var(--line); }
+  .stp.dis .b { color: var(--disabled); }
+  .stp.dis .val { color: var(--muted); }
+
+  /* Go back, counting down: the button drains toward the moment it goes; Stay keeps the view. */
+  .actions { display: inline-flex; align-items: center; gap: 8px; flex: none; }
+  .stay { height: 48px; padding: 0 14px; border-radius: 12px; display: inline-flex; align-items: center; color: var(--accent); font-weight: 600; font-size: 16px; background: none; border: 0; font-family: inherit; cursor: pointer; }
+  .goback { position: relative; overflow: hidden; height: 48px; padding: 0 16px 0 12px; border-radius: 12px; display: inline-flex; align-items: center; gap: 8px; background: var(--raised); color: var(--ink); font-weight: 600; font-size: 16px; white-space: nowrap; border: 0; font-family: inherit; cursor: pointer; }
+  .goback .drain { position: absolute; inset: 0; background: var(--accent-soft); transform-origin: left center; }
+  .goback .ic, .goback .lbl, .goback .secs { position: relative; }
+  .goback .ic { width: 20px; height: 20px; }
+  .goback .secs { color: var(--muted); font-weight: 550; font-variant-numeric: tabular-nums; min-width: 2.6em; text-align: right; }
+
+  /* What the screen goes back to, in the mockup: the coach, quietly. */
+  .coach-pane { position: absolute; inset: 0; background: var(--bg); display: none; flex-direction: column; }
+  .coach-pane .bag { height: 64px; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-bottom: 1px solid var(--line); font-size: 19px; font-weight: 700; }
+  .coach-pane .bag small { font-size: 15px; font-weight: 400; color: var(--muted); }
+  .coach-pane .thread { flex: 1 1 auto; width: 680px; margin: 0 auto; padding: 18px 0; display: flex; flex-direction: column; gap: 14px; }
+  .coach-pane .who { font-size: 13px; font-weight: 550; color: var(--muted); }
+  .coach-pane .msg { font-size: 16px; line-height: 1.5; }
+  .coach-pane .note { margin-top: auto; text-align: center; font-size: 13px; color: var(--muted); padding-bottom: 16px; }
+
+  /* ---------- Settings: Steam, hot water and flush, with the new row ---------- */
+  .setmocks { display: flex; gap: 28px; align-items: flex-start; }
+  .sec { width: 760px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+  .sec-t { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+  .sec-help { font-size: 15px; color: var(--muted); margin-bottom: 16px; }
+  .groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+  .gh { display: flex; align-items: center; gap: 8px; color: var(--muted); margin-bottom: 12px; }
+  .gh .ic { width: 20px; height: 20px; }
+  .gh b { color: var(--ink); font-size: 15px; font-weight: 600; }
+  .gf { margin-bottom: 12px; }
+  .hr { height: 1px; background: var(--line); margin: 6px 0 12px; }
+  .swrow { min-height: 48px; display: flex; align-items: center; gap: 12px; font-size: 16px; }
+  .swi { position: relative; width: 58px; height: 38px; flex: none; }
+  .swi .trk { position: absolute; left: 12px; top: 12px; width: 34px; height: 14px; border-radius: 7px; background: #6b6560; }
+  .swi .thb { position: absolute; left: 9px; top: 9px; width: 20px; height: 20px; border-radius: 50%; background: #e8e2dc; box-shadow: 0 1px 2px rgba(0,0,0,.5); }
+  .swi.on .trk { background: var(--accent); opacity: .5; }
+  .swi.on .thb { left: 29px; background: var(--accent); }
+  .ret-line { font-size: 15px; color: var(--muted); margin: 0 0 10px 70px; max-width: 560px; }
+  .ret-row { display: grid; grid-template-columns: max-content 184px; justify-content: space-between; align-items: center; margin-left: 70px; font-size: 15px; }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-brand" viewBox="0 0 24 24"><path d="M20 3H6c-1.1 0-2 .9-2 2v8c0 2.21 1.790 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2m0 5h-2V5h2zM3 21h16c.55 0 1-.45 1-1s-.45-1-1-1H3c-.55 0-1 .45-1 1s.45 1 1 1"/></symbol>
+    <symbol id="i-coach" viewBox="0 0 24 24"><path d="M20 6h-1v8c0 .55-.45 1-1 1H6v1c0 1.1.9 2 2 2h10l4 4V8c0-1.1-.9-2-2-2m-3 5V4c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v13l4-4h9c1.1 0 2-.9 2-2"/></symbol>
+    <symbol id="i-shot" viewBox="0 0 24 24"><path d="m4.2 17.78 5.3-5.3 3.25 3.25c.41.41 1.07.39 1.45-.04l7.17-8.07c.35-.39.33-.99-.04-1.37-.4-.4-1.07-.39-1.45.04l-6.39 7.18-3.29-3.29a.996.996 0 0 0-1.410 0l-6.09 6.1c-.39.39-.39 1.02 0 1.41l.09.09c.39.39 1.03.39 1.41 0"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18m-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8z"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6"/></symbol>
+    <symbol id="i-espresso" viewBox="0 0 24 24"><path d="M18.5 3H6c-1.1 0-2 .9-2 2v5.71c0 3.83 2.95 7.18 6.78 7.29 3.96.12 7.22-3.06 7.22-7v-1h.5c1.93 0 3.5-1.57 3.5-3.5S20.43 3 18.5 3M16 5v3H6V5zm2.5 3H18V5h.5c.83 0 1.5.67 1.5 1.5S19.33 8 18.5 8M4 19h16v2H4z"/></symbol>
+    <symbol id="i-steam" viewBox="0 0 24 24"><path d="M14.5 17c0 1.65-1.35 3-3 3s-3-1.35-3-3h2c0 .55.45 1 1 1s1-.45 1-1-.45-1-1-1H2v-2h9.5c1.65 0 3 1.35 3 3M19 6.5C19 4.57 17.43 3 15.5 3S12 4.57 12 6.5h2c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S16.33 8 15.5 8H2v2h13.5c1.93 0 3.5-1.57 3.5-3.5m-.5 4.5H2v2h16.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5v2c1.93 0 3.5-1.57 3.5-3.5S20.43 11 18.5 11"/></symbol>
+    <symbol id="i-flush" viewBox="0 0 24 24"><path d="M12 3c-.55 0-1 .45-1 1v1.07C7.06 5.56 4 8.92 4 13h16c0-4.08-3.06-7.44-7-7.93V4c0-.55-.45-1-1-1M8 15a1 1 0 1 0 0 2 1 1 0 0 0 0-2m4 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2m4 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2m-6 3a1 1 0 1 0 0 2 1 1 0 0 0 0-2m4 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2"/></symbol>
+    <symbol id="i-water" viewBox="0 0 24 24"><path d="M12 2.69 6.34 8.35a8 8 0 1 0 11.32 0z"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+    <symbol id="i-open" viewBox="0 0 24 24"><path d="M18 19H6c-.55 0-1-.45-1-1V6c0-.55.45-1 1-1h5c.55 0 1-.45 1-1s-.45-1-1-1H5c-1.11 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-6c0-.55-.45-1-1-1s-1 .45-1 1v5c0 .55-.45 1-1 1M14 4c0 .55.45 1 1 1h2.59l-9.13 9.13a.996.996 0 1 0 1.41 1.41L19 6.41V9c0 .55.45 1 1 1s1-.45 1-1V4c0-.55-.45-1-1-1h-5c-.55 0-1 .45-1 1"/></symbol>
+    <symbol id="i-exit" viewBox="0 0 24 24"><path d="M5 5h6c.55 0 1-.45 1-1s-.45-1-1-1H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h6c.55 0 1-.45 1-1s-.45-1-1-1H5z"/><path d="m20.65 11.65-2.79-2.79c-.32-.32-.86-.1-.86.35V11h-7c-.55 0-1 .45-1 1s.45 1 1 1h7v1.79c0 .45.54.67.85.35l2.79-2.79c.2-.19.2-.51.01-.7"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></symbol>
+    <symbol id="i-check-circle" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2M9.29 16.29 5.7 12.7a.996.996 0 0 1 0-1.41c.39-.39 1.02-.39 1.41 0L10 14.17l6.88-6.88c.39-.39 1.02-.39 1.41 0s.39 1.02 0 1.41l-7.59 7.590c-.38.39-1.02.39-1.41 0"/></symbol>
+    <symbol id="i-add" viewBox="0 0 24 24"><path d="M18 13h-5v5c0 .55-.45 1-1 1s-1-.45-1-1v-5H6c-.55 0-1-.45-1-1s.45-1 1-1h5V6c0-.55.45-1 1-1s1 .45 1 1v5h5c.55 0 1 .45 1 1s-.45 1-1 1"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 11H7.83l4.88-4.88c.39-.39.39-1.03 0-1.42a.996.996 0 0 0-1.41 0l-6.59 6.59c-.39.39-.39 1.02 0 1.41l6.59 6.59c.39.39 1.02.39 1.41 0s.39-1.02 0-1.41L7.83 13H19c.55 0 1-.45 1-1s-.45-1-1-1"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5z"/></symbol>
+    <symbol id="i-remove" viewBox="0 0 24 24"><path d="M18 13H6c-.55 0-1-.45-1-1s.45-1 1-1h12c.55 0 1 .45 1 1s-.45 1-1 1"/></symbol>
+  </defs>
+</svg>
+
+<div class="board">
+  <div class="intro">
+    <h1>Drink scenes: a choice of animations for steam, hot water and flush, and going back by itself</h1>
+    <p>Asked: "make the steaming animation look better, maybe with the colours changing based on the numbers we get back; maybe latte art, or more of a nozzle and spray", and for pour, rinse and steam "a setting to go back by itself after some time, which can be turned off and on, with its time". Answered on the first draft of this page: <b>every scene is an option</b>, picked per drink in Settings, and hot water and flush get the same treatment; going back by itself is <b>per drink</b>, <b>on, after 10 s</b>, out of the box.</p>
+    <p>One made-up run per drink plays in every dial at once: <b>Heating</b>, the drink at work (a 50 s steam, 200 ml of hot water, a 10 s flush, all slowed to the same 50 s here), steam's <b>Purging</b>, then <b>Done</b>. The machine's numbers drive each scene: <b>flow and pressure</b> against what is set (how hard it works), the <b>heater</b> (how much steam rises; for hot water, the temperature set), and a colour from cold to warm that the ring takes too: <b>steam's milk warms with its time</b>, <b>hot water's colour is the temperature set</b>, <b>the flush's is the group against its target</b>. Try <b>Machine: Weak</b> and <b>Strong</b>, and <b>Reduced motion</b>, which stills every scene and keeps the colours and the levels, because they are readings. Whatever moves fades out behind the figures, and the fills under them keep the contrast the figures need. Each drink keeps today's scene too, as <b>Simple</b> (not drawn here).</p>
+  </div>
+
+  <div class="controls">
+    <button id="play">Pause</button>
+    <input id="scrub" type="range" min="0" max="66" step="0.1" value="0" aria-label="Where the run is">
+    <span class="clock" id="clock"></span>
+    <span class="nums" id="nums"></span>
+    <label>Speed <select id="speed"><option value="1">1×</option><option value="2" selected>2×</option><option value="4">4×</option></select></label>
+    <label>Machine <select id="profile"><option value="weak">Weak: cooler, slower</option><option value="normal" selected>As set</option><option value="strong">Strong: hotter, faster</option></select></label>
+    <label><input type="checkbox" id="still"> Reduced motion</label>
+  </div>
+
+  <h2 class="drink-h">Steam</h2>
+  <section class="concept">
+    <div class="cap">
+      <span class="tag rec">STEAM · THE DEFAULT · NOZZLE AND SPRAY</span>
+      <h2>Wand and spray</h2>
+      The pitcher from the side: the wand dips in from the right, steam jets from its tip and rolls the milk.
+      <ul>
+        <li><b>Flow and pressure</b> set how hard it sprays and how fast the milk rolls; a wand that sputters, sputters here.</li>
+        <li><b>The heater against its set</b> sets how much steam rises: a cool heater (Weak) steams thinly.</li>
+        <li><b>The steam time</b> warms the milk from a cold blue-white to cream, and the ring with it; the milk grows as it takes air, fastest early, as a stretch does, and the tip sinks deeper as it rolls.</li>
+        <li>Hot milk steams: late in the run steam rises off the whole surface, not just the wand. Purging, a puff from the tip; done, the milk settles, glossy.</li>
+      </ul>
+    </div>
+    <div class="panel t-dark"><div class="dial" data-concept="spray" data-mode="dark"></div></div>
+    <div class="panel t-light"><div class="dial" data-concept="spray" data-mode="light"></div></div>
+  </section>
+
+  <section class="concept">
+    <div class="cap">
+      <span class="tag">STEAM · A CHOICE · FROM ABOVE</span>
+      <h2>Whirlpool</h2>
+      Looking down into the pitcher: the milk turns in a whirlpool and foam spirals in from the rim. The tip sits off centre, where a barista holds it.
+      <ul>
+        <li><b>Flow and pressure</b> set how fast it turns; the bubbles start big and get finer as the milk textures.</li>
+        <li><b>The steam time</b> warms the milk from cold to cream; behind the number it stays a tone the figures read on, and the foam fades out there.</li>
+        <li>Done: the whirlpool coasts to a stop and the surface goes glossy.</li>
+      </ul>
+    </div>
+    <div class="panel t-dark"><div class="dial" data-concept="whirl" data-mode="dark"></div></div>
+    <div class="panel t-light"><div class="dial" data-concept="whirl" data-mode="light"></div></div>
+  </section>
+
+  <section class="concept">
+    <div class="cap">
+      <span class="tag">STEAM · A CHOICE · LATTE ART</span>
+      <h2>Rosetta</h2>
+      A cup from above: a rosetta pours in, a leaf for every ninth of the steam time, the newest one wiggling in as the pitcher does. Done, the pull-through draws its stem.
+      <ul>
+        <li><b>The steam time</b> grows it and warms the milk; nothing in a cup follows flow or pressure, so they don't show here.</li>
+        <li>The cost: the rosetta grows behind the number. In dark mode the figures carry a halo of crema so they still read; the small "of 50 s" line reads worst.</li>
+      </ul>
+    </div>
+    <div class="panel t-dark"><div class="dial" data-concept="art" data-mode="dark"></div></div>
+    <div class="panel t-light"><div class="dial" data-concept="art" data-mode="light"></div></div>
+  </section>
+
+  <h2 class="drink-h">Hot water</h2>
+  <section class="concept">
+    <div class="cap">
+      <span class="tag rec">HOT WATER · THE DEFAULT · FROM THE SIDE</span>
+      <h2>Pour</h2>
+      A stream falls from the spout into the cup, and the water rises toward the volume set.
+      <ul>
+        <li><b>Flow</b> sets the stream's width and how fast it runs; the splash and the rings it sends across the surface follow it.</li>
+        <li><b>The temperature set</b> sets how much the water steams, and its colour: cooler water bluer, hotter warmer, the ring too. The machine reports no live temperature for hot water, so this is the one set.</li>
+        <li>Done: the stream stops, the surface settles, and the water steams on a while.</li>
+      </ul>
+    </div>
+    <div class="panel t-dark"><div class="dial" data-drink="hotWater" data-concept="pour" data-mode="dark"></div></div>
+    <div class="panel t-light"><div class="dial" data-drink="hotWater" data-concept="pour" data-mode="light"></div></div>
+  </section>
+
+  <section class="concept">
+    <div class="cap">
+      <span class="tag">HOT WATER · A CHOICE · FROM ABOVE</span>
+      <h2>From above</h2>
+      Looking down into the cup: rings spread from where the stream lands, and the water deepens as it fills.
+      <ul>
+        <li><b>Flow</b> sets how often the rings go out; <b>the volume</b> deepens the water; <b>the temperature set</b>, how much vapour drifts over it.</li>
+        <li>Under the number the water stays a tone the figures read on, and the rings fade out there.</li>
+      </ul>
+    </div>
+    <div class="panel t-dark"><div class="dial" data-drink="hotWater" data-concept="above" data-mode="dark"></div></div>
+    <div class="panel t-light"><div class="dial" data-drink="hotWater" data-concept="above" data-mode="light"></div></div>
+  </section>
+
+  <h2 class="drink-h">Flush</h2>
+  <section class="concept">
+    <div class="cap">
+      <span class="tag rec">FLUSH · THE DEFAULT · FROM THE SIDE</span>
+      <h2>Shower</h2>
+      The group head's shower screen at the top, water streaming down to the drip tray's grate and splashing there.
+      <ul>
+        <li><b>Flow</b> sets how fast the streams run and how much they splash.</li>
+        <li><b>The group's temperature against its target</b> colours the water and the ring: blue while the group is cool, warm as it reaches the target, which is what a flush before a shot is for.</li>
+      </ul>
+    </div>
+    <div class="panel t-dark"><div class="dial" data-drink="flush" data-concept="shower" data-mode="dark"></div></div>
+    <div class="panel t-light"><div class="dial" data-drink="flush" data-concept="shower" data-mode="light"></div></div>
+  </section>
+
+  <section class="concept">
+    <div class="cap">
+      <span class="tag">FLUSH · A CHOICE · FROM BELOW</span>
+      <h2>Screen</h2>
+      The shower screen seen from below, its holes in rings; drops swell out of them and fall toward you.
+      <ul>
+        <li><b>Flow</b> sets how many drops fall; <b>the group's temperature</b> colours them, as in Shower.</li>
+        <li>Behind the number the screen stays plain, so the figures read.</li>
+      </ul>
+    </div>
+    <div class="panel t-dark"><div class="dial" data-drink="flush" data-concept="screen" data-mode="dark"></div></div>
+    <div class="panel t-light"><div class="dial" data-drink="flush" data-concept="screen" data-mode="light"></div></div>
+  </section>
+
+  <!-- ===================== In context: the steam view, then going back by itself ===================== -->
+  <div class="rowf">
+    <div class="frame tab t-dark" id="ctx">
+      <div class="tb">
+        <div class="brand"><svg class="ic"><use href="#i-brand"/></svg>CafAI</div>
+        <span class="nav-i" id="nav-coach"><svg class="ic"><use href="#i-coach"/></svg>Coach</span>
+        <span class="nav-i"><svg class="ic"><use href="#i-shot"/></svg>Shot</span>
+        <span class="nav-i"><svg class="ic"><use href="#i-history"/></svg>History</span>
+        <span class="nav-i"><svg class="ic"><use href="#i-settings"/></svg>Settings</span>
+        <span class="grow"></span>
+        <div class="mrow">
+          <span class="mb" id="mb-espresso"><svg class="ic"><use href="#i-espresso"/></svg>Espresso</span>
+          <span class="mb" id="mb-steam"><svg class="ic"><use href="#i-steam"/></svg>Steam</span>
+          <span class="mb" id="mb-flush"><svg class="ic"><use href="#i-flush"/></svg>Flush</span>
+          <span class="mb" id="mb-water"><svg class="ic"><use href="#i-water"/></svg>Hot water</span>
+        </div>
+        <span class="sep"></span>
+        <span class="ib"><svg class="ic"><use href="#i-open"/></svg></span>
+        <span class="exit"><svg class="ic"><use href="#i-exit"/></svg><span>Exit<small>to Decaid</small></span></span>
+      </div>
+      <div class="main">
+        <div class="dv">
+          <div class="dv-h">
+            <span class="live-dot" id="ctx-dot"></span>
+            <svg class="ic dicon"><use href="#i-steam"/></svg>
+            <span class="name">Steam</span>
+            <span class="state" id="ctx-phase">· Steaming</span>
+            <span class="grow"></span>
+            <span class="actions" id="ctx-actions">
+              <button class="stay" id="ctx-stay">Stay</button>
+              <button class="goback" id="ctx-back" aria-label="Go back to the coach"><span class="drain" id="ctx-drain"></span><svg class="ic"><use href="#i-back"/></svg><span class="lbl">Go back</span><span class="secs" id="ctx-secs">10 s</span></button>
+            </span>
+          </div>
+          <div class="dv-body">
+            <div class="dial" data-concept="spray" data-mode="dark"></div>
+            <div class="dv-side">
+              <div class="ro">
+                <div class="r"><div class="lab">Steam</div><div class="v"><span id="ro-t">150</span><span class="u">°C</span></div><div class="c" id="ro-tc">set 150</div></div>
+                <div class="r"><div class="lab"><span class="sw" style="background:var(--pressure)"></span>Pressure</div><div class="v"><span id="ro-p">1.9</span><span class="u">bar</span></div><div class="c" id="ro-pc">&nbsp;</div></div>
+                <div class="r"><div class="lab"><span class="sw" style="background:var(--flow)"></span>Flow</div><div class="v"><span id="ro-f">0.8</span><span class="u">ml/s</span></div><div class="c" id="ro-fc">set 0.8</div></div>
+              </div>
+              <div class="trace"><svg viewBox="0 0 560 104" preserveAspectRatio="none" id="ctx-trace"></svg></div>
+            </div>
+          </div>
+          <div class="set">
+            <div class="set-h"><b>Steam settings</b><span id="ctx-setline">Change these once it stops: the machine is using them now.</span></div>
+            <div class="set-grid">
+              <div><div class="fl">Temperature</div><div class="stp dis"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">150<span class="u">°C</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div></div>
+              <div><div class="fl">Time</div><div class="stp dis"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">50<span class="u">s</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div></div>
+              <div><div class="fl">Flow</div><div class="stp dis"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">0.8<span class="u">ml/s</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="coach-pane" id="ctx-coach">
+          <div class="bag">Kiambu AA <small>v4 · Blooming Espresso</small></div>
+          <div class="thread">
+            <div><div class="who">Coach</div><div class="msg">Shot 4 ran 31.2 s to 38.4 g: right where we aimed. How does it taste next to the last one?</div></div>
+          </div>
+          <div class="note">(Mockup: back on the coach, the screen the steam view took over.)</div>
+        </div>
+      </div>
+    </div>
+    <div class="cap" style="max-width:430px">
+      <span class="tag">TABLET · STEAM, THEN GOING BACK BY ITSELF</span><br>
+      <b>Steam's default scene in its place</b>, with the readouts and trace moving with the same run.
+      <ul>
+        <li><b>Done</b>, with <b>Go back by itself</b> on: Go back counts down beside its label ("8 s") and drains toward the moment it goes; <b>Stay</b> beside it keeps the view, as does any tap on the view (a stepper, say). Tap Go back to go at once.</li>
+        <li>At zero it returns to the screen the view took over, as Go back does, with <code>location.replace</code> and the tap guard. A screen reader hears it once, as the run ends ("Going back to the coach in 10 seconds"), never every second.</li>
+        <li>It only goes back from a view CafAI switched to by itself, and never while a field has the keyboard, a new drink or a shot starts, or the connection was lost (the view says so).</li>
+        <li>Per drink: each has its own switch and time in Settings &gt; Drink screens. Off, nothing changes from today: the view stays, with Go back.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="setmocks">
+    <div class="sec t-dark">
+      <div class="sec-t">Drink screens</div>
+      <div class="sec-help">What each drink's screen shows while it runs, and whether it goes back by itself once it's done. Kept on this device.</div>
+      <div class="groups">
+        <div>
+          <div class="gh"><svg class="ic"><use href="#i-steam"/></svg><b>Steam</b></div>
+          <div class="gf"><div class="fl">Animation</div><div class="sel">Wand and spray<svg class="ic"><use href="#i-down"/></svg></div></div>
+          <div class="swrow sm"><span class="swi on"><span class="trk"></span><span class="thb"></span></span>Go back by itself</div>
+          <div class="gf"><div class="fl">After</div><div class="stp"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">10<span class="u">s</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div></div>
+        </div>
+        <div>
+          <div class="gh"><svg class="ic"><use href="#i-water"/></svg><b>Hot water</b></div>
+          <div class="gf"><div class="fl">Animation</div><div class="sel">Pour<svg class="ic"><use href="#i-down"/></svg></div></div>
+          <div class="swrow sm"><span class="swi on"><span class="trk"></span><span class="thb"></span></span>Go back by itself</div>
+          <div class="gf"><div class="fl">After</div><div class="stp"><span class="b"><svg class="ic"><use href="#i-remove"/></svg></span><span class="val">10<span class="u">s</span></span><span class="b"><svg class="ic"><use href="#i-add"/></svg></span></div></div>
+        </div>
+        <div>
+          <div class="gh"><svg class="ic"><use href="#i-flush"/></svg><b>Flush</b></div>
+          <div class="gf"><div class="fl">Animation</div><div class="sel">Shower<svg class="ic"><use href="#i-down"/></svg></div></div>
+          <div class="swrow sm"><span class="swi"><span class="trk"></span><span class="thb"></span></span>Go back by itself</div>
+          <div class="gf"><div class="fl" style="min-height:48px">The screen stays until you tap Go back.</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap" style="max-width:520px">
+      <span class="tag">SETTINGS · DRINK SCREENS</span><br>
+      <b>A section of its own</b>, after Steam, hot water and flush: those are Decaid's (held while the machine runs, written to Decaid), these are CafAI's (kept on this device, and live whatever the machine is doing). Laid out as that section is: a group per drink, side by side on a tablet, one row per setting on a phone.
+      <ul>
+        <li><b>Animation</b>: a native select. Steam: Wand and spray, Whirlpool, Rosetta, Simple. Hot water: Pour, From above, Simple. Flush: Shower, Screen, Simple. Simple is today's scene.</li>
+        <li><b>Go back by itself</b>: a switch, as Sleep when idle's; on, <b>After</b> under it with the drinks' stepper (5 to 60 s, 5 a tap, any whole second typed); off, "The screen stays until you tap Go back." Flush is off here only to show it.</li>
+        <li>On, after 10 s, until someone changes it; each change applies at once, as the temperature unit does.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  // Mockup only: one made-up run per drink drives every dial; the scenes are drawn as the app would draw them, on a canvas inside the ring.
+  const TAU = Math.PI * 2, C = 136, IN = 99, rand = Math.random;
+
+  // ---------- Colour, in OKLab (as src/ui/color.ts mixes) ----------
+  const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const gam = (c) => { const v = c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055; return Math.round(Math.min(1, Math.max(0, v)) * 255); };
+  function hexLab(hex) {
+    const n = parseInt(hex.slice(1), 16), r = lin((n >> 16) & 255), g = lin((n >> 8) & 255), b = lin(n & 255);
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+  }
+  const lch = (L, c, h) => [L, c * Math.cos((h * Math.PI) / 180), c * Math.sin((h * Math.PI) / 180)];
+  function rgb([L, a, b]) {
+    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+    const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+    const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+    return [gam(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s), gam(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s), gam(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)];
+  }
+  const mix = (x, y, t) => [x[0] + (y[0] - x[0]) * t, x[1] + (y[1] - x[1]) * t, x[2] + (y[2] - x[2]) * t];
+  const rgba = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
+
+  // The scenes' colours per mode. Cold to warm runs blue-white to cream (amber for the flush's water); a fill that sits under
+  // the figures (the whirlpool's milk, the cup from above, the shower screen) keeps a tone the figures read on.
+  const MODES = {
+    dark: {
+      bg: '#140e09',
+      arcCold: lch(0.9, 0.035, 235), arcWarm: lch(0.85, 0.09, 68),
+      milkCold: lch(0.6, 0.03, 235), milkWarm: lch(0.77, 0.05, 82), foamA: lch(0.95, 0.015, 85),
+      diskCold: lch(0.325, 0.014, 240), diskWarm: lch(0.37, 0.036, 72), foamB: lch(0.76, 0.025, 80), troughB: lch(0.24, 0.02, 60), sheen: lch(0.95, 0.01, 80), sheenA: 1,
+      steam: lch(0.97, 0.006, 80), steamA: 1.3,
+      steel: lch(0.6, 0.008, 250), steelHi: lch(0.85, 0.006, 250), steelLo: lch(0.4, 0.01, 250), hole: lch(0.18, 0.01, 250),
+      crema: lch(0.34, 0.045, 62), cremaRim: lch(0.24, 0.04, 55), cremaHi: lch(0.42, 0.055, 66),
+      artCold: lch(0.93, 0.012, 240), artWarm: lch(0.92, 0.04, 85),
+      waterCold: lch(0.44, 0.075, 242), waterWarm: lch(0.46, 0.05, 220), waterLineCold: lch(0.8, 0.09, 240), waterLineWarm: lch(0.84, 0.06, 215),
+      shallow: lch(0.35, 0.045, 232), deep: lch(0.28, 0.06, 245), ringLine: lch(0.8, 0.07, 235),
+      flushCold: lch(0.78, 0.1, 240), flushWarm: lch(0.8, 0.12, 52),
+      screenSteel: lch(0.31, 0.006, 250), screenBevel: lch(0.44, 0.008, 250), screenHole: lch(0.19, 0.005, 250),
+    },
+    light: {
+      bg: '#faf6f2',
+      arcCold: lch(0.46, 0.075, 240), arcWarm: lch(0.56, 0.13, 48),
+      milkCold: lch(0.85, 0.028, 235), milkWarm: lch(0.875, 0.048, 82), foamA: lch(0.995, 0.004, 85),
+      diskCold: lch(0.93, 0.014, 240), diskWarm: lch(0.9, 0.04, 80), foamB: lch(0.995, 0.004, 85), troughB: lch(0.8, 0.03, 70), sheen: lch(1, 0, 0), sheenA: 3,
+      steam: lch(0.74, 0.014, 250), steamA: 1.5,
+      steel: lch(0.72, 0.008, 250), steelHi: lch(0.93, 0.004, 250), steelLo: lch(0.52, 0.01, 250), hole: lch(0.3, 0.01, 250),
+      crema: lch(0.86, 0.045, 70), cremaRim: lch(0.79, 0.05, 66), cremaHi: lch(0.9, 0.04, 75),
+      artCold: lch(0.99, 0.005, 240), artWarm: lch(0.985, 0.022, 85),
+      waterCold: lch(0.83, 0.055, 240), waterWarm: lch(0.85, 0.04, 220), waterLineCold: lch(0.5, 0.12, 245), waterLineWarm: lch(0.52, 0.08, 220),
+      shallow: lch(0.935, 0.025, 232), deep: lch(0.875, 0.045, 242), ringLine: lch(0.55, 0.1, 240),
+      flushCold: lch(0.54, 0.14, 245), flushWarm: lch(0.6, 0.16, 45),
+      screenSteel: lch(0.915, 0.004, 250), screenBevel: lch(0.82, 0.006, 250), screenHole: lch(0.7, 0.006, 250),
+    },
+  };
+  for (const P of Object.values(MODES)) for (const [k, v] of Object.entries({ ...P })) if (Array.isArray(v)) P[k + 'RGB'] = rgb(v);
+
+  // ---------- One run per drink, made up but shaped like a DE1's, on one clock ----------
+  const T_WORK = 1.5, WORK_S = 50, T_WORK_END = T_WORK + WORK_S, T_DONE = T_WORK_END + 2.5, BACK_S = 10, T_BACK = T_DONE + BACK_S, T_END = T_BACK + 2;
+  const MACHINE = {
+    weak: { steam: { p: 1.2, f: 0.5, T: 139 }, hotWater: { f: 6, T: 60 }, flush: { f: 4, g0: 70, g1: 84 } },
+    normal: { steam: { p: 1.85, f: 0.82, T: 150 }, hotWater: { f: 9.5, T: 85 }, flush: { f: 6, g0: 80, g1: 93 } },
+    strong: { steam: { p: 2.4, f: 1.15, T: 158 }, hotWater: { f: 11, T: 95 }, flush: { f: 7.5, g0: 88, g1: 94 } },
+  };
+  /** What the dial counts toward, as the machine's settings say: 50 s of steam, 200 ml of hot water, a 10 s flush. */
+  const DRINK = { steam: { target: 50, unit: 's', words: 'Steaming' }, hotWater: { target: 200, unit: 'ml', words: 'Pouring' }, flush: { target: 10, unit: 's', words: 'Flushing' } };
+  const clamp01 = (x) => Math.max(0, Math.min(1, x));
+  const ease = (x) => 1 - (1 - x) * (1 - x);
+  function sample(t, profile, drink) {
+    const M = MACHINE[profile][drink];
+    let phase = 'done', elapsed = WORK_S, pressure = 0, flow = 0, temp;
+    const u = t - T_WORK, ramp = Math.min(1, Math.max(0, u) / 1.2);
+    if (t < T_WORK) { phase = 'heating'; elapsed = 0; }
+    else if (t < T_WORK_END) { phase = 'working'; elapsed = u; }
+    else if (t < T_DONE && drink === 'steam') phase = 'purging';
+    if (t >= T_BACK) phase = 'back';
+    if (drink === 'steam') {
+      temp = phase === 'heating' ? M.T - 7 + 4 * t : M.T - 4 * clamp01(u / WORK_S) + (phase === 'working' ? 1.2 * Math.sin(u * 0.9) : 0);
+      if (phase === 'working') { pressure = ramp * (M.p + 0.26 * Math.sin(u * 1.7) + 0.1 * Math.sin(u * 5.3)); flow = ramp * (M.f + 0.07 * Math.sin(u * 2.3 + 1)); }
+      if (phase === 'purging') { pressure = 0.7 + 0.4 * Math.sin((t - T_WORK_END) * 9); flow = 0.3; }
+    } else if (drink === 'hotWater') {
+      temp = M.T;
+      if (phase === 'working') flow = ramp * (M.f + 0.35 * Math.sin(u * 1.9) + 0.15 * Math.sin(u * 5.1));
+    } else {
+      temp = M.g0 + (M.g1 - M.g0) * ease(clamp01(u / WORK_S));
+      if (phase === 'working') flow = ramp * (M.f + 0.2 * Math.sin(u * 2.7));
+    }
+    const share = elapsed / WORK_S;
+    // How hard the drink works (flow and pressure against what is set), how much vapour it carries, and its colour, cold to warm:
+    // steam's milk warms with its time; hot water's colour is the temperature set; the flush's is the group against its target.
+    const strength = phase !== 'working' ? 0 : drink === 'steam' ? Math.min(2.2, (flow / 0.82) * (pressure / 1.85)) : drink === 'hotWater' ? flow / 10 : flow / 6;
+    const heat = drink === 'steam' ? Math.min(1.15, Math.max(0.2, (temp - 120) / 30)) : drink === 'hotWater' ? clamp01((temp - 40) / 55) : clamp01((temp - 73) / 20);
+    const warmth = drink === 'steam' ? share : heat;
+    const live = phase === 'heating' || phase === 'working' || phase === 'purging';
+    const value = drink === 'hotWater' ? String(Math.round(share * DRINK.hotWater.target)) : (share * DRINK[drink].target).toFixed(1);
+    return { t, drink, phase, elapsed, share, value, pressure, flow, temp, strength, heat, warmth, live };
+  }
+
+  // ---------- The figures: whatever moves fades out behind the number and its line, and the check once done ----------
+  const FIG = { x: 136, y: 138, rx: 84, ry: 50, fade: 1.4 }, CHECK = { x: 136, y: 75, rx: 20, ry: 20, fade: 1.7 };
+  function figuresMask(px, k, done) {
+    const c = document.createElement('canvas'); c.width = c.height = px;
+    const x = c.getContext('2d'); x.scale(k, k);
+    for (const b of done ? [FIG, CHECK] : [FIG]) {
+      x.save(); x.translate(b.x, b.y); x.scale(1, b.ry / b.rx);
+      const g = x.createRadialGradient(0, 0, b.rx, 0, 0, b.rx * b.fade);
+      g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      x.fillStyle = g; x.beginPath(); x.arc(0, 0, b.rx * b.fade, 0, TAU); x.fill(); x.restore();
+    }
+    return c;
+  }
+  function cutFigures(d, L, amount) {
+    L.save(); L.setTransform(1, 0, 0, 1, 0, 0); L.globalCompositeOperation = 'destination-out'; L.globalAlpha = amount;
+    L.drawImage(d.done ? d.maskDone : d.mask, 0, 0); L.restore();
+  }
+  function layer(d) { const c = d.octx; c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, d.off.width, d.off.height); c.setTransform(d.k, 0, 0, d.k, 0, 0); return c; }
+  function blit(ctx, d) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(d.off, 0, 0); ctx.restore(); }
+  const clipInside = (ctx) => { ctx.beginPath(); ctx.arc(C, C, IN, 0, TAU); ctx.clip(); };
+  function drawPuff(L, p, P) {
+    const env = Math.min(1, p.age / 0.45) * Math.min(1, (p.max - p.age) / 1.3), a = p.a * env * P.steamA;
+    if (a <= 0.003) return;
+    const gr = L.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
+    gr.addColorStop(0, rgba(P.steamRGB, a)); gr.addColorStop(0.55, rgba(P.steamRGB, a * 0.55)); gr.addColorStop(1, rgba(P.steamRGB, 0));
+    L.fillStyle = gr; L.beginPath(); L.arc(p.x, p.y, p.r, 0, TAU); L.fill();
+  }
+  const smooth = (cur, target, dt, tau) => cur + (target - cur) * (1 - Math.exp(-dt / tau));
+
+  // ---------- Steam A. Wand and spray, from the side ----------
+  const WAND0 = { x: 266, y: 136 }, TIP = { x: 184, y: 205 };
+  const WDIR = (() => { const dx = TIP.x - WAND0.x, dy = TIP.y - WAND0.y, l = Math.hypot(dx, dy); return { x: dx / l, y: dy / l }; })();
+  class Spray {
+    constructor() { this.jets = []; this.bubbles = []; this.puffs = []; this.pops = []; this.s = 0; this.ph1 = 0; this.ph2 = 0; this.acc = { j: 0, w: 0, f: 0, o: 0, h: 0, p: 0 }; this.t = 0; }
+    level(share) { return 203 - 13 * ease(share); }
+    wandX(level) { const u = (level - WAND0.y) / (TIP.y - WAND0.y); return WAND0.x + (TIP.x - WAND0.x) * u; }
+    surf(x, level, s, back) {
+      const A1 = 1 + 2.6 * s, A2 = 0.3 + 1.3 * s;
+      if (back) return level - 2.5 + 0.8 * A1 * Math.sin(x * 0.038 - this.ph1 * 0.8 + 1.7);
+      const xw = this.wandX(level), dimple = (1.2 + 2.2 * s) * Math.exp(-(((x - xw) / 9) ** 2));
+      return level + A1 * Math.sin(x * 0.045 + this.ph1) + A2 * Math.sin(x * 0.11 - this.ph2 * 1.3) + dimple;
+    }
+    path(ctx, level, s, back) { ctx.moveTo(28, this.surf(28, level, s, back)); for (let x = 32; x <= 244; x += 4) ctx.lineTo(x, this.surf(x, level, s, back)); }
+    update(dt, st) {
+      this.t += dt;
+      const working = st.phase === 'working';
+      this.s = smooth(this.s, working ? st.strength : 0, dt, 0.35);
+      const s = this.s;
+      this.ph1 += dt * (0.25 * (st.live ? 1 : 0) + 1.4 * s); this.ph2 += dt * (0.4 * (st.live ? 1 : 0) + 2.3 * s);
+      const level = this.level(st.share);
+      this.geo = { level, cy: level + (236 - level) * 0.5, rx: 66, ry: (236 - level) * 0.36 };
+      if (working) {
+        this.acc.j += dt * 95 * s * Math.min(1, st.heat);
+        while (this.acc.j >= 1) {
+          this.acc.j -= 1;
+          const a = Math.atan2(WDIR.y, WDIR.x) + (rand() - 0.5) * 0.9, v = (50 + 70 * rand()) * (0.55 + 0.55 * s);
+          this.jets.push({ x: TIP.x + WDIR.x * 2, y: TIP.y + WDIR.y * 2, vx: Math.cos(a) * v, vy: Math.sin(a) * v, age: 0, max: 0.2 + 0.2 * rand() });
+        }
+      }
+      for (const j of this.jets) {
+        j.x += j.vx * dt; j.y += j.vy * dt; const k = Math.exp(-5 * dt); j.vx *= k; j.vy *= k; j.age += dt;
+        if (j.age >= j.max && rand() < 0.8) this.bubble(j.x, j.y, st);
+      }
+      this.jets = this.jets.filter((j) => j.age < j.max);
+      for (const b of this.bubbles) { b.th += dt * b.w * (0.35 + 1.5 * s); b.age += dt; }
+      this.bubbles = this.bubbles.filter((b) => b.age < b.max);
+      if (working && st.share < 0.35) { this.acc.o += dt * 8 * s; while (this.acc.o >= 1) { this.acc.o -= 1; this.pops.push({ x: 160 + 44 * rand(), age: 0, max: 0.35 }); } }
+      for (const p of this.pops) p.age += dt;
+      this.pops = this.pops.filter((p) => p.age < p.max);
+      // Steam rising: around the wand with the steam's strength, off the whole surface as the milk gets hot.
+      if (working) { this.acc.w += dt * 9 * Math.max(0.2, s) * st.heat; this.acc.f += dt * 9 * st.share * (0.5 + 0.5 * Math.min(1, s)); }
+      if (st.phase === 'purging') this.acc.p += dt * 26;
+      if (st.phase === 'heating') this.acc.h += dt * 2.2;
+      while (this.acc.w >= 1) { this.acc.w -= 1; this.puff(176 + 40 * rand(), level - 2, 1, st); }
+      while (this.acc.f >= 1) { this.acc.f -= 1; this.puff(64 + 140 * rand(), level - 3, 0.8, st); }
+      while (this.acc.p >= 1) { this.acc.p -= 1; this.puffs.push({ x: TIP.x - 6 + 12 * rand(), y: TIP.y - 10, vx: -14 + 28 * rand(), vy: -(44 + 30 * rand()), r: 4 + 3 * rand(), gr: 12 + 6 * rand(), age: 0, max: 1.3 + 0.6 * rand(), a: 0.22 + 0.1 * rand(), seed: rand() * 6 }); }
+      while (this.acc.h >= 1) { this.acc.h -= 1; this.puffs.push({ x: TIP.x - 1 + 2 * rand(), y: TIP.y - 7, vx: -2 + 4 * rand(), vy: -(9 + 6 * rand()), r: 2.5, gr: 4, age: 0, max: 2, a: 0.09, seed: rand() * 6 }); }
+      for (const p of this.puffs) { p.age += dt; p.x += (p.vx + 6 * Math.sin(this.t * 0.8 + p.seed)) * dt; p.y += p.vy * dt; p.vy *= Math.exp(-0.1 * dt); p.r += p.gr * dt; }
+      this.puffs = this.puffs.filter((p) => p.age < p.max);
+    }
+    puff(x, y, weight, st) {
+      this.puffs.push({ x, y, vx: (rand() - 0.5) * 7, vy: -(16 + 14 * rand()) * (0.75 + 0.4 * Math.min(1.4, this.s)), r: 7 + 5 * rand(), gr: 8 + 5 * rand(), age: 0, max: 4 + 2 * rand(), a: (0.1 + 0.08 * rand()) * Math.min(1, st.heat) * weight, seed: rand() * 6 });
+    }
+    bubble(x, y, st) {
+      const g = this.geo, dx = (x - C) / g.rx, dy = (y - g.cy) / g.ry;
+      const big = st.share < 0.3;
+      const rf = Math.min(1, Math.max(0.2, Math.hypot(dx, dy) + (rand() - 0.5) * 0.35));
+      this.bubbles.push({ th: Math.atan2(dy, dx), rf, w: 0.9 + 0.7 * rand(), jx: (rand() - 0.5) * 10, jy: (rand() - 0.5) * 6, age: 0, max: 1.4 + 1.6 * rand(), r: big ? 0.9 + 1.0 * rand() : 0.5 + 0.6 * rand(), a: 0.25 + 0.3 * rand() });
+    }
+    draw(ctx, st, P, d) {
+      const s = d.still ? 0 : this.s;
+      const level = this.level(st.share);
+      const g = this.geo ?? { level, cy: level + (236 - level) * 0.5, rx: 66, ry: (236 - level) * 0.36 };
+      const milkLab = mix(P.milkCold, P.milkWarm, st.warmth), milk = rgb(milkLab);
+      const back = rgb(mix(milkLab, hexLab(P.bg), 0.3)), foam = rgb(mix(P.foamA, milkLab, 0.2));
+      ctx.save(); clipInside(ctx);
+      const L = layer(d);
+      for (const p of this.puffs) drawPuff(L, p, P);
+      cutFigures(d, L, 0.9);
+      blit(ctx, d);
+      // The milk's far side, then the wand, then the near side a little see-through, so the tip shows under the surface.
+      ctx.fillStyle = rgba(back); ctx.beginPath(); this.path(ctx, level, s, true); ctx.lineTo(244, 240); ctx.lineTo(28, 240); ctx.closePath(); ctx.fill();
+      this.wand(ctx, P);
+      ctx.beginPath(); this.path(ctx, level, s, false); ctx.lineTo(244, 240); ctx.lineTo(28, 240); ctx.closePath();
+      ctx.fillStyle = rgba(milk, 0.93); ctx.fill();
+      ctx.save(); ctx.clip();
+      const gl = ctx.createLinearGradient(0, level - 5, 0, level + 14);
+      gl.addColorStop(0, rgba(foam, d.mode === 'dark' ? 0.32 : 0.7)); gl.addColorStop(1, rgba(foam, 0));
+      ctx.fillStyle = gl; ctx.fillRect(28, level - 8, 216, 24);
+      if (s > 0.02) {
+        const bl = ctx.createRadialGradient(TIP.x - 6, TIP.y + 4, 0, TIP.x - 6, TIP.y + 4, 26);
+        bl.addColorStop(0, rgba(foam, 0.42 * Math.min(1, s))); bl.addColorStop(1, rgba(foam, 0));
+        ctx.fillStyle = bl; ctx.fillRect(TIP.x - 34, TIP.y - 24, 56, 56);
+      }
+      for (const b of this.bubbles) {
+        const a = b.a * Math.min(1, b.age / 0.15) * Math.min(1, (b.max - b.age) / 0.5);
+        const x = C + g.rx * b.rf * Math.cos(b.th) + b.jx, y = g.cy + g.ry * b.rf * Math.sin(b.th) + b.jy;
+        ctx.fillStyle = rgba(foam, a); ctx.beginPath(); ctx.arc(x, y, b.r, 0, TAU); ctx.fill();
+      }
+      ctx.lineCap = 'round'; ctx.lineWidth = 1.5;
+      for (const j of this.jets) {
+        ctx.strokeStyle = rgba(foam, 0.85 * (1 - j.age / j.max));
+        ctx.beginPath(); ctx.moveTo(j.x, j.y); ctx.lineTo(j.x - j.vx * 0.045, j.y - j.vy * 0.045); ctx.stroke();
+      }
+      ctx.restore();
+      ctx.beginPath(); this.path(ctx, level, s, false); ctx.strokeStyle = rgba(foam, st.live ? 0.55 : 0.75); ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.lineWidth = 1;
+      for (const p of this.pops) {
+        const u = p.age / p.max; ctx.strokeStyle = rgba(foam, 0.6 * (1 - u));
+        ctx.beginPath(); ctx.arc(p.x, this.surf(p.x, level, s) - 1, 0.5 + 3.5 * u, 0, TAU); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    wand(ctx, P) {
+      const lx = -Math.abs(WDIR.y), ly = -Math.abs(WDIR.x); // across the wand, toward its lit upper left edge
+      const neck = { x: TIP.x - WDIR.x * 8, y: TIP.y - WDIR.y * 8 };
+      const seg = (dx, dy) => { ctx.beginPath(); ctx.moveTo(WAND0.x + dx, WAND0.y + dy); ctx.lineTo(neck.x + dx, neck.y + dy); ctx.stroke(); };
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = rgba(P.steelRGB); ctx.lineWidth = 7; seg(0, 0);
+      ctx.strokeStyle = rgba(P.steelHiRGB, 0.85); ctx.lineWidth = 1.5; seg(lx * 2.2, ly * 2.2);
+      ctx.strokeStyle = rgba(P.steelLoRGB, 0.9); ctx.lineWidth = 1.5; seg(-lx * 2.4, -ly * 2.4);
+      const nx = TIP.x - WDIR.x * 3, ny = TIP.y - WDIR.y * 3;
+      ctx.fillStyle = rgba(P.steelRGB); ctx.beginPath(); ctx.arc(nx, ny, 5, 0, TAU); ctx.fill();
+      const lit = Math.atan2(ly, lx);
+      ctx.strokeStyle = rgba(P.steelHiRGB, 0.7); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(nx, ny, 3.6, lit - 0.9, lit + 0.9); ctx.stroke();
+      ctx.fillStyle = rgba(P.holeRGB); ctx.beginPath(); ctx.arc(TIP.x + WDIR.x * 1.2, TIP.y + WDIR.y * 1.2, 1.5, 0, TAU); ctx.fill();
+    }
+  }
+
+  // ---------- Steam B. Whirlpool, from above ----------
+  const TIPB = { x: 183, y: 83 }, SHAFTB = { x: 244, y: 22 };
+  class Whirl {
+    constructor() {
+      this.streaks = Array.from({ length: 46 }, () => this.streak(true));
+      this.specks = Array.from({ length: 150 }, () => this.speck(true));
+      this.s = 0; this.vis = 1; this.sheen = 0.35; this.t = 0; this.acc = 0;
+    }
+    streak(init) { return { r: init ? 24 + 72 * rand() : 92 + 6 * rand(), a: rand() * TAU, len: 0.35 + 0.75 * rand(), w: 0.9 + 1.7 * rand(), alpha: 0.3 + 0.5 * rand(), inward: 0.5 + 0.9 * rand(), curl: 3 + 6 * rand() }; }
+    speck(init) { return { r: init ? 14 + 84 * rand() : 90 + 8 * rand(), a: rand() * TAU, alpha: 0.35 + 0.55 * rand(), inward: 0.8 + 1.4 * rand(), k: rand() }; }
+    update(dt, st) {
+      this.t += dt;
+      const working = st.phase === 'working', done = !st.live;
+      this.s = smooth(this.s, working ? st.strength : 0, dt, working ? 0.6 : 1.4);
+      const s = this.s, w0 = (working ? 0.12 : 0) + 2.1 * s;
+      this.vis = smooth(this.vis, done ? 0.3 : 1, dt, 1.5);
+      this.sheen = smooth(this.sheen, done ? 1 : 0.35, dt, 1.2);
+      for (const k of this.streaks) { k.a += dt * w0 * (1.3 - (0.6 * k.r) / IN); k.r -= dt * k.inward * (0.6 + 5 * s) * (working ? 1 : 0.3); }
+      this.streaks = this.streaks.map((k) => (k.r < 16 ? this.streak(false) : k));
+      for (const p of this.specks) { p.a += dt * w0 * (1.35 - (0.6 * p.r) / IN); p.r -= dt * p.inward * (0.8 + 7 * s) * (working ? 1 : 0.3); }
+      this.specks = this.specks.map((p) => (p.r < 10 ? this.speck(false) : p));
+      if (working) {
+        this.acc += dt * 30 * s;
+        while (this.acc >= 1) {
+          this.acc -= 1;
+          const dx = TIPB.x - C + (rand() - 0.5) * 12, dy = TIPB.y - C + (rand() - 0.5) * 12, sp = this.speck(false);
+          sp.r = Math.hypot(dx, dy); sp.a = Math.atan2(dy, dx); this.specks.push(sp);
+          if (this.specks.length > 240) this.specks.shift();
+        }
+      }
+    }
+    spiral(L, k, dr) {
+      L.beginPath();
+      for (let j = 0; j <= 8; j++) { const th = k.a + (k.len * j) / 8, r = k.r + dr - (k.curl * j) / 8, x = C + Math.cos(th) * r, y = C + Math.sin(th) * r; if (j) L.lineTo(x, y); else L.moveTo(x, y); }
+    }
+    draw(ctx, st, P, d) {
+      const disk = rgb(mix(P.diskCold, P.diskWarm, st.warmth));
+      ctx.save(); clipInside(ctx);
+      ctx.fillStyle = rgba(disk); ctx.fillRect(30, 30, 212, 212);
+      const rim = ctx.createRadialGradient(C, C, 62, C, C, IN);
+      rim.addColorStop(0, rgba(P.troughBRGB, 0)); rim.addColorStop(1, rgba(P.troughBRGB, 0.55));
+      ctx.fillStyle = rim; ctx.fillRect(30, 30, 212, 212);
+      const L = layer(d);
+      L.lineCap = 'round'; L.lineJoin = 'round';
+      for (const k of this.streaks) {
+        const a = k.alpha * this.vis * Math.min(1, (IN - k.r) / 8 + 0.15);
+        this.spiral(L, k, 1.8); L.strokeStyle = rgba(P.troughBRGB, a * 0.5); L.lineWidth = k.w + 0.6; L.stroke();
+        this.spiral(L, k, 0); L.strokeStyle = rgba(P.foamBRGB, a); L.lineWidth = k.w; L.stroke();
+      }
+      const size0 = 1.9 - 1.3 * st.share;
+      for (const p of this.specks) {
+        L.fillStyle = rgba(P.foamBRGB, p.alpha * this.vis);
+        L.beginPath(); L.arc(C + Math.cos(p.a) * p.r, C + Math.sin(p.a) * p.r, size0 * (0.6 + 0.8 * p.k), 0, TAU); L.fill();
+      }
+      const sx = C - 36, sy = C - 42, sh = L.createRadialGradient(sx, sy, 4, sx, sy, 58);
+      sh.addColorStop(0, rgba(P.sheenRGB, 0.1 * this.sheen * P.sheenA)); sh.addColorStop(1, rgba(P.sheenRGB, 0));
+      L.fillStyle = sh; L.fillRect(30, 30, 212, 212);
+      cutFigures(d, L, 1);
+      blit(ctx, d);
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = rgba(P.steelRGB); ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(SHAFTB.x, SHAFTB.y); ctx.lineTo(TIPB.x, TIPB.y); ctx.stroke();
+      ctx.strokeStyle = rgba(P.steelHiRGB, 0.8); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(SHAFTB.x - 2, SHAFTB.y - 2); ctx.lineTo(TIPB.x - 2, TIPB.y - 2); ctx.stroke();
+      const churn = d.still ? 0 : Math.min(1, this.s);
+      for (let i = 0; i < 7; i++) {
+        const a0 = this.t * (4 + 2 * churn) + (i * TAU) / 7;
+        ctx.strokeStyle = rgba(P.foamBRGB, 0.55 * churn); ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.arc(TIPB.x, TIPB.y, 8.5 + (i % 3) * 1.6, a0, a0 + 0.7); ctx.stroke();
+      }
+      ctx.fillStyle = rgba(P.steelRGB); ctx.beginPath(); ctx.arc(TIPB.x, TIPB.y, 5.2, 0, TAU); ctx.fill();
+      ctx.fillStyle = rgba(P.holeRGB); ctx.beginPath(); ctx.arc(TIPB.x, TIPB.y, 1.8, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // ---------- Steam C. Rosetta, in the cup ----------
+  const LEAVES = 12;
+  class Art {
+    constructor() { this.g = new Array(LEAVES).fill(0); this.t = 0; this.pull = 0; this.flecks = Array.from({ length: 70 }, () => ({ r: 20 + 76 * Math.sqrt(rand()), a: rand() * TAU, s: 0.6 + 1.4 * rand(), al: 0.25 + 0.4 * rand() })); }
+    update(dt, st) {
+      this.t += dt;
+      const n = st.share * LEAVES;
+      for (let i = 0; i < LEAVES; i++) this.g[i] = smooth(this.g[i], Math.max(0, Math.min(1, n - i)), dt, 0.3);
+      this.pull = st.live ? 0 : Math.min(1, this.pull + dt / 0.8);
+    }
+    paint(c, col, still, st) {
+      const n = st.share * LEAVES, g = still ? this.g.map((_, i) => Math.max(0, Math.min(1, n - i))) : this.g, pull = still ? (st.live ? 0 : 1) : this.pull;
+      c.lineCap = 'round';
+      if (g[0] > 0.01) { const u = Math.min(1, g[0] * 1.5); c.fillStyle = rgba(col, u); c.beginPath(); c.ellipse(C, 214, 26 * (0.5 + 0.5 * u), 8 * (0.5 + 0.5 * u), 0, 0, TAU); c.fill(); }
+      for (let i = 0; i < LEAVES; i++) {
+        const gi = g[i]; if (gi <= 0.01) continue;
+        const y = 194 - i * 10.8, w = (46 - 2.3 * i) * (0.65 + 0.35 * gi), h = w * 0.62, t = (4.8 - 0.18 * i) * (0.6 + 0.4 * gi);
+        const cx = C + (still ? 0 : Math.sin(this.t * 10 + i) * 3.2 * (1 - gi));
+        c.fillStyle = rgba(col, Math.min(1, gi * 1.4));
+        c.beginPath();
+        c.ellipse(cx, y + h, w, h, 0, Math.PI + 0.16, TAU - 0.16);
+        c.ellipse(cx, y + h + t, w * 0.94, h * 0.92, 0, TAU - 0.28, Math.PI + 0.28, true);
+        c.closePath(); c.fill();
+      }
+      if (g[LEAVES - 1] > 0.6) { c.fillStyle = rgba(col, (g[LEAVES - 1] - 0.6) / 0.4); c.beginPath(); c.ellipse(C, 64, 6, 7, 0, 0, TAU); c.fill(); }
+      if (pull > 0) { c.strokeStyle = rgba(col); c.lineWidth = 2; c.beginPath(); c.moveTo(C, 58); c.lineTo(C, 58 + 166 * ease(pull)); c.stroke(); }
+    }
+    draw(ctx, st, P, d) {
+      ctx.save(); clipInside(ctx);
+      const gr = ctx.createRadialGradient(C - 10, C - 14, 10, C, C, IN);
+      gr.addColorStop(0, rgba(rgb(mix(P.crema, P.cremaHi, 0.5)))); gr.addColorStop(0.72, rgba(P.cremaRGB)); gr.addColorStop(1, rgba(P.cremaRimRGB));
+      ctx.fillStyle = gr; ctx.fillRect(30, 30, 212, 212);
+      const L0 = layer(d);
+      for (const f of this.flecks) { L0.fillStyle = rgba(P.cremaHiRGB, f.al); L0.beginPath(); L0.arc(C + Math.cos(f.a) * f.r, C + Math.sin(f.a) * f.r, f.s, 0, TAU); L0.fill(); }
+      cutFigures(d, L0, 1); blit(ctx, d);
+      this.paint(ctx, rgb(mix(P.artCold, P.artWarm, st.warmth)), d.still, st);
+      ctx.restore();
+      // Dark mode: the figures sit on white milk, so they carry a halo of crema.
+      if (d.mode === 'dark' && !d.el.classList.contains('halo')) { d.el.classList.add('halo'); d.el.style.setProperty('--halo', rgba(P.cremaRGB)); }
+    }
+  }
+
+  // ---------- Hot water A. Pour, from the side ----------
+  const SPOUT_Y = 56;
+  class Pour {
+    constructor() { this.t = 0; this.s = 0; this.ph = 0; this.flow = 0; this.bubbles = []; this.drops = []; this.rings = []; this.puffs = []; this.acc = { b: 0, d: 0, r: 0, v: 0 }; }
+    level(share) { return 228 - 36 * share; }
+    surf(x, level, s) { return level + (0.7 + 1.5 * s) * Math.sin(x * 0.05 + this.ph) + (0.3 + 0.9 * s) * Math.sin(x * 0.13 - this.ph * 1.7); }
+    path(ctx, level, s) { ctx.moveTo(28, this.surf(28, level, s)); for (let x = 32; x <= 244; x += 4) ctx.lineTo(x, this.surf(x, level, s)); }
+    update(dt, st) {
+      this.t += dt;
+      const working = st.phase === 'working';
+      this.s = smooth(this.s, working ? st.strength : 0, dt, 0.25);
+      const s = this.s, level = this.level(st.share);
+      this.ph += dt * (0.3 * (st.live ? 1 : 0) + 1.6 * s); this.flow += dt * (70 + 130 * s);
+      if (s > 0.05) {
+        this.acc.b += dt * 38 * s;
+        while (this.acc.b >= 1) { this.acc.b -= 1; this.bubbles.push({ x: C + (rand() - 0.5) * 8, y: level + 2, vx: (rand() - 0.5) * 40, vy: 40 + 60 * rand() * Math.min(1.3, s), age: 0, max: 0.9 + 0.6 * rand(), r: 0.6 + 1.1 * rand() }); }
+        this.acc.d += dt * 22 * s;
+        while (this.acc.d >= 1) { this.acc.d -= 1; const a = -Math.PI / 2 + (rand() - 0.5) * 2.4, v = 25 + 45 * rand(); this.drops.push({ x: C + (rand() - 0.5) * 5, y: level - 1, vx: Math.cos(a) * v, vy: Math.sin(a) * v, age: 0, max: 0.7 }); }
+        this.acc.r += dt * 2.6 * Math.min(1.4, s);
+        while (this.acc.r >= 1) { this.acc.r -= 1; this.rings.push({ age: 0, max: 1.5 }); }
+      }
+      // Hot water steams, the more the hotter it was set.
+      this.acc.v += dt * st.heat * (working ? 6 : st.live ? 0 : 2.5);
+      while (this.acc.v >= 1) { this.acc.v -= 1; this.puffs.push({ x: 66 + 140 * rand(), y: level - 3, vx: (rand() - 0.5) * 5, vy: -(12 + 10 * rand()), r: 6 + 4 * rand(), gr: 7 + 5 * rand(), age: 0, max: 3.6 + 1.6 * rand(), a: (0.07 + 0.06 * rand()) * st.heat, seed: rand() * 6 }); }
+      for (const b of this.bubbles) { b.age += dt; b.x += b.vx * dt; b.y += b.vy * dt; b.vy -= 170 * dt; b.vx *= Math.exp(-3 * dt); }
+      this.bubbles = this.bubbles.filter((b) => b.age < b.max && b.y > level);
+      for (const p of this.drops) { p.age += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 320 * dt; }
+      this.drops = this.drops.filter((p) => p.age < p.max && p.y <= level + 1);
+      for (const r of this.rings) r.age += dt;
+      this.rings = this.rings.filter((r) => r.age < r.max);
+      for (const p of this.puffs) { p.age += dt; p.x += (p.vx + 5 * Math.sin(this.t * 0.8 + p.seed)) * dt; p.y += p.vy * dt; p.r += p.gr * dt; }
+      this.puffs = this.puffs.filter((p) => p.age < p.max);
+    }
+    draw(ctx, st, P, d) {
+      const s = d.still ? 0 : this.s, level = this.level(st.share);
+      const water = rgb(mix(P.waterCold, P.waterWarm, st.warmth)), line = rgb(mix(P.waterLineCold, P.waterLineWarm, st.warmth));
+      ctx.save(); clipInside(ctx);
+      const V = layer(d);
+      for (const p of this.puffs) drawPuff(V, p, P);
+      cutFigures(d, V, 0.9); blit(ctx, d);
+      ctx.beginPath(); this.path(ctx, level, s); ctx.lineTo(244, 240); ctx.lineTo(28, 240); ctx.closePath();
+      ctx.fillStyle = rgba(water); ctx.fill();
+      ctx.save(); ctx.clip();
+      const gl = ctx.createLinearGradient(0, level - 4, 0, level + 14); gl.addColorStop(0, rgba(line, 0.32)); gl.addColorStop(1, rgba(line, 0));
+      ctx.fillStyle = gl; ctx.fillRect(28, level - 6, 216, 22);
+      ctx.lineWidth = 0.9;
+      for (const b of this.bubbles) { ctx.strokeStyle = rgba(line, 0.7 * (1 - b.age / b.max)); ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.stroke(); }
+      ctx.restore();
+      ctx.beginPath(); this.path(ctx, level, s); ctx.strokeStyle = rgba(line, 0.85); ctx.lineWidth = 1.6; ctx.stroke();
+      // The stream, its splash and the rings it sends out: the stream passes behind the figures.
+      const L = layer(d), on = d.still ? (st.phase === 'working' ? 1 : 0) : Math.min(1, this.s * 1.6);
+      if (on > 0.02) {
+        const w = 1.6 + 4.2 * Math.min(1.3, d.still ? st.strength : this.s);
+        L.fillStyle = rgba(line, 0.8 * on); L.fillRect(C - w / 2, SPOUT_Y + 2, w, level - SPOUT_Y - 1);
+        L.setLineDash([5, 11]); L.lineDashOffset = -this.flow; L.strokeStyle = rgba(P.foamARGB, 0.75 * on); L.lineWidth = 1;
+        L.beginPath(); L.moveTo(C - w * 0.18, SPOUT_Y + 2); L.lineTo(C - w * 0.18, level); L.stroke(); L.setLineDash([]);
+      }
+      for (const r of this.rings) { const u = r.age / r.max, rx = 5 + 74 * u; L.strokeStyle = rgba(line, 0.55 * (1 - u)); L.lineWidth = 1.1; L.beginPath(); L.ellipse(C, level + 0.5, rx, rx * 0.13, 0, 0, TAU); L.stroke(); }
+      for (const p of this.drops) { L.fillStyle = rgba(line, 0.85 * (1 - p.age / p.max)); L.beginPath(); L.arc(p.x, p.y, 1.2, 0, TAU); L.fill(); }
+      cutFigures(d, L, 1); blit(ctx, d);
+      // The spout: a steel tube down from the top, its mouth above the figures.
+      ctx.fillStyle = rgba(P.steelRGB); ctx.fillRect(C - 6, 28, 12, SPOUT_Y - 28);
+      ctx.fillStyle = rgba(P.steelHiRGB, 0.85); ctx.fillRect(C - 4.5, 28, 1.5, SPOUT_Y - 28);
+      ctx.fillStyle = rgba(P.steelLoRGB, 0.9); ctx.fillRect(C + 3.2, 28, 1.5, SPOUT_Y - 28);
+      ctx.fillStyle = rgba(P.holeRGB); ctx.beginPath(); ctx.ellipse(C, SPOUT_Y, 4.6, 1.6, 0, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // ---------- Hot water B. From above ----------
+  const LAND = { x: 186, y: 78 };
+  class Above {
+    constructor() { this.t = 0; this.s = 0; this.rings = []; this.puffs = []; this.acc = { r: 0, v: 0 }; }
+    update(dt, st) {
+      this.t += dt;
+      const working = st.phase === 'working';
+      this.s = smooth(this.s, working ? st.strength : 0, dt, 0.25);
+      if (working) { this.acc.r += dt * (1 + 2.4 * this.s); while (this.acc.r >= 1) { this.acc.r -= 1; this.rings.push({ age: 0, max: 2.8 + 0.6 * rand(), a: 0.6 + 0.4 * rand() }); } }
+      for (const r of this.rings) r.age += dt;
+      this.rings = this.rings.filter((r) => r.age < r.max);
+      this.acc.v += dt * 2.2 * st.heat * (working ? 1 : st.live ? 0 : 0.5);
+      while (this.acc.v >= 1) { this.acc.v -= 1; this.puffs.push({ x: 50 + 172 * rand(), y: 50 + 172 * rand(), vx: 6 + 6 * rand(), vy: -(3 + 4 * rand()), r: 14 + 10 * rand(), gr: 5 + 4 * rand(), age: 0, max: 4 + 2 * rand(), a: (0.05 + 0.05 * rand()) * st.heat, seed: rand() * 6 }); }
+      for (const p of this.puffs) { p.age += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.r += p.gr * dt; }
+      this.puffs = this.puffs.filter((p) => p.age < p.max);
+    }
+    draw(ctx, st, P, d) {
+      ctx.save(); clipInside(ctx);
+      ctx.fillStyle = rgba(rgb(mix(P.shallow, P.deep, st.share))); ctx.fillRect(30, 30, 212, 212);
+      const rim = ctx.createRadialGradient(C, C, 64, C, C, IN); rim.addColorStop(0, rgba(P.deepRGB, 0)); rim.addColorStop(1, rgba(P.deepRGB, 0.6));
+      ctx.fillStyle = rim; ctx.fillRect(30, 30, 212, 212);
+      const L = layer(d);
+      for (const r of this.rings) {
+        const u = r.age / r.max, rad = 5 + 160 * ease(u), a = r.a * (1 - u) ** 1.4;
+        L.strokeStyle = rgba(P.ringLineRGB, 0.6 * a); L.lineWidth = 1.6; L.beginPath(); L.arc(LAND.x, LAND.y, rad, 0, TAU); L.stroke();
+        L.strokeStyle = rgba(P.ringLineRGB, 0.25 * a); L.lineWidth = 1; L.beginPath(); L.arc(LAND.x, LAND.y, rad * 0.86, 0, TAU); L.stroke();
+      }
+      for (const p of this.puffs) drawPuff(L, p, P);
+      cutFigures(d, L, 1); blit(ctx, d);
+      // Where the stream lands: its column seen end on, ringed while it pours.
+      const on = d.still ? (st.phase === 'working' ? 1 : 0) : Math.min(1, this.s * 1.6);
+      if (on > 0.02) {
+        const sp = ctx.createRadialGradient(LAND.x, LAND.y, 0, LAND.x, LAND.y, 11);
+        sp.addColorStop(0, rgba(P.foamARGB, 0.85 * on)); sp.addColorStop(1, rgba(P.foamARGB, 0));
+        ctx.fillStyle = sp; ctx.beginPath(); ctx.arc(LAND.x, LAND.y, 11, 0, TAU); ctx.fill();
+        ctx.fillStyle = rgba(P.ringLineRGB, on); ctx.beginPath(); ctx.arc(LAND.x, LAND.y, 2 + 1.8 * Math.min(1.3, this.s), 0, TAU); ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  // ---------- Flush A. Shower, from the side ----------
+  const TRAY = 214, STREAMS = 13;
+  class Shower {
+    constructor() { this.t = 0; this.s = 0; this.fall = 0; this.splash = []; this.acc = 0; }
+    streamX(i, y) { const x0 = 92 + (i * 88) / (STREAMS - 1); return x0 + (x0 - C) * 0.28 * ((y - 56) / (TRAY - 56)); }
+    update(dt, st) {
+      this.t += dt;
+      const working = st.phase === 'working';
+      this.s = smooth(this.s, working ? st.strength : 0, dt, 0.2);
+      this.fall += dt * (90 + 150 * Math.min(1.3, this.s));
+      if (this.s > 0.05) {
+        this.acc += dt * 70 * this.s;
+        while (this.acc >= 1) { this.acc -= 1; const xb = this.streamX(Math.floor(rand() * STREAMS), TRAY); this.splash.push({ x: xb + (rand() - 0.5) * 3, y: TRAY - 1, vx: (rand() - 0.5) * 60, vy: -(25 + 55 * rand()), age: 0, max: 0.5 }); }
+      }
+      for (const p of this.splash) { p.age += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 340 * dt; }
+      this.splash = this.splash.filter((p) => p.age < p.max && p.y <= TRAY);
+    }
+    draw(ctx, st, P, d) {
+      const col = rgb(mix(P.flushCold, P.flushWarm, st.warmth));
+      ctx.save(); clipInside(ctx);
+      // The group head and its shower screen at the top, the drip tray's grate at the bottom.
+      ctx.fillStyle = rgba(P.steelLoRGB); ctx.fillRect(70, 20, 132, 28);
+      ctx.fillStyle = rgba(P.steelRGB); ctx.beginPath(); ctx.roundRect(84, 46, 104, 9, 4.5); ctx.fill();
+      ctx.fillStyle = rgba(P.steelHiRGB, 0.7); ctx.fillRect(90, 47, 92, 1.4);
+      ctx.strokeStyle = rgba(P.steelRGB); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(40, TRAY + 2); ctx.lineTo(232, TRAY + 2); ctx.stroke();
+      ctx.strokeStyle = rgba(P.steelLoRGB); ctx.lineWidth = 2;
+      for (let x = 50; x < 226; x += 9) { ctx.beginPath(); ctx.moveTo(x, TRAY + 6); ctx.lineTo(x, TRAY + 13); ctx.stroke(); }
+      const L = layer(d), on = d.still ? (st.phase === 'working' ? 1 : 0) : Math.min(1, this.s * 1.5);
+      if (on > 0.02) {
+        L.lineCap = 'round'; L.lineWidth = 1.7; L.strokeStyle = rgba(col, 0.85 * on);
+        for (let i = 0; i < STREAMS; i++) {
+          L.setLineDash([6 + (i % 3), 8 + ((i * 7) % 5)]); L.lineDashOffset = -(this.fall * (1 + 0.08 * (i % 4))) - i * 5;
+          L.beginPath(); L.moveTo(this.streamX(i, 56), 56); L.lineTo(this.streamX(i, TRAY), TRAY); L.stroke();
+        }
+        L.setLineDash([]);
+      }
+      for (const p of this.splash) { L.fillStyle = rgba(col, 0.85 * (1 - p.age / p.max)); L.beginPath(); L.arc(p.x, p.y, 1.1, 0, TAU); L.fill(); }
+      cutFigures(d, L, 1); blit(ctx, d);
+      ctx.restore();
+    }
+  }
+
+  // ---------- Flush B. The shower screen from below ----------
+  class ScreenBelow {
+    constructor() {
+      this.holes = [];
+      for (let k = 1; k <= 7; k++) { const r = 11.5 * k, n = Math.round((TAU * r) / 9.5); for (let j = 0; j < n; j++) { const a = (j / n) * TAU + k * 0.3; this.holes.push({ x: C + Math.cos(a) * r, y: C + Math.sin(a) * r }); } }
+      this.drops = []; this.s = 0; this.acc = 0; this.t = 0;
+    }
+    update(dt, st) {
+      this.t += dt;
+      const working = st.phase === 'working';
+      this.s = smooth(this.s, working ? st.strength : 0, dt, 0.2);
+      if (this.s > 0.03) {
+        this.acc += dt * 90 * this.s;
+        while (this.acc >= 1) { this.acc -= 1; const h = this.holes[Math.floor(rand() * this.holes.length)]; this.drops.push({ x: h.x, y: h.y, age: 0, max: 0.5 + 0.35 * rand() }); }
+      }
+      for (const p of this.drops) p.age += dt;
+      this.drops = this.drops.filter((p) => p.age < p.max);
+    }
+    draw(ctx, st, P, d) {
+      const colLab = mix(P.flushCold, P.flushWarm, st.warmth), col = rgb(colLab);
+      ctx.save(); clipInside(ctx);
+      ctx.fillStyle = rgba(P.screenSteelRGB); ctx.fillRect(30, 30, 212, 212);
+      const bev = ctx.createRadialGradient(C, C, 86, C, C, IN);
+      bev.addColorStop(0, rgba(P.screenBevelRGB, 0)); bev.addColorStop(0.5, rgba(P.screenBevelRGB, 0.9)); bev.addColorStop(1, rgba(P.screenHoleRGB, 0.8));
+      ctx.fillStyle = bev; ctx.fillRect(30, 30, 212, 212);
+      const L = layer(d);
+      L.fillStyle = rgba(P.screenHoleRGB, 0.9);
+      for (const h of this.holes) { L.beginPath(); L.arc(h.x, h.y, 1.25, 0, TAU); L.fill(); }
+      // Drops falling toward you from the holes: each one swells as it comes, and goes.
+      const drops = d.still ? (st.phase === 'working' ? this.holes.filter((_, i) => i % 6 === 0).map((h) => ({ ...h, age: 0.4, max: 1 })) : []) : this.drops;
+      for (const p of drops) {
+        const u = p.age / p.max, r = 0.8 + 4.4 * u, a = 0.9 * (1 - u) ** 1.2;
+        const x = p.x + (p.x - C) * 0.06 * u, y = p.y + (p.y - C) * 0.06 * u;
+        L.fillStyle = rgba(rgb(mix(colLab, P.foamA, 0.4)), a * 0.85); L.beginPath(); L.arc(x, y, r, 0, TAU); L.fill();
+        L.strokeStyle = rgba(col, a); L.lineWidth = 1; L.stroke();
+        L.fillStyle = rgba(P.foamARGB, a); L.beginPath(); L.arc(x - r * 0.32, y - r * 0.32, r * 0.28, 0, TAU); L.fill();
+      }
+      cutFigures(d, L, 1); blit(ctx, d);
+      ctx.restore();
+    }
+  }
+
+  // ---------- The dials ----------
+  const NS = 'http://www.w3.org/2000/svg';
+  const SCENES = { spray: Spray, whirl: Whirl, art: Art, pour: Pour, above: Above, shower: Shower, screen: ScreenBelow };
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const dials = [...document.querySelectorAll('.dial')].map((el) => {
+    const drink = el.dataset.drink ?? 'steam';
+    el.innerHTML = `<svg viewBox="0 0 272 272"><g class="ticks"></g><circle class="track" cx="136" cy="136" r="112"/><circle class="arc" cx="136" cy="136" r="112" pathLength="100" transform="rotate(-90 136 136)"/><circle class="head" r="8" cx="136" cy="24"/></svg><div class="ctr"><svg class="ok" viewBox="0 0 24 24"><use href="#i-check-circle"/></svg><div class="big"><span class="n">0.0</span><span class="u">${DRINK[drink].unit}</span></div><div class="of">of ${DRINK[drink].target} ${DRINK[drink].unit}</div></div>`;
+    const ticks = el.querySelector('.ticks');
+    for (let i = 0; i < 60; i++) {
+      const a = (i / 60) * TAU - Math.PI / 2, major = i % 5 === 0, r1 = major ? 120 : 124, l = document.createElementNS(NS, 'line');
+      l.setAttribute('x1', C + Math.cos(a) * r1); l.setAttribute('y1', C + Math.sin(a) * r1); l.setAttribute('x2', C + Math.cos(a) * 133); l.setAttribute('y2', C + Math.sin(a) * 133);
+      l.setAttribute('class', major ? 'tick major' : 'tick'); ticks.appendChild(l);
+    }
+    const canvas = document.createElement('canvas'), px = Math.round(272 * dpr);
+    canvas.width = canvas.height = px; el.prepend(canvas);
+    const off = document.createElement('canvas'); off.width = off.height = px;
+    return { el, drink, canvas, ctx: canvas.getContext('2d'), off, octx: off.getContext('2d'), k: dpr, mask: figuresMask(px, dpr, false), maskDone: figuresMask(px, dpr, true), done: false, scene: new SCENES[el.dataset.concept](), mode: el.dataset.mode, arc: el.querySelector('.arc'), head: el.querySelector('.head'), num: el.querySelector('.n'), ok: el.querySelector('.ok'), still: false };
+  });
+
+  function drawDial(d, st) {
+    const P = MODES[d.mode], ctx = d.ctx;
+    d.done = !st.live;
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, d.canvas.width, d.canvas.height); ctx.setTransform(d.k, 0, 0, d.k, 0, 0);
+    d.scene.draw(ctx, st, P, d);
+    const col = rgba(rgb(mix(P.arcCold, P.arcWarm, st.warmth)));
+    d.arc.style.display = st.share > 0 ? '' : 'none';
+    d.arc.style.strokeDasharray = `${(st.share * 100).toFixed(2)} 100`; d.arc.style.stroke = col;
+    const a = st.share * TAU - Math.PI / 2;
+    d.head.setAttribute('cx', (C + Math.cos(a) * 112).toFixed(1)); d.head.setAttribute('cy', (C + Math.sin(a) * 112).toFixed(1));
+    d.head.style.fill = col; d.head.style.display = st.live ? '' : 'none';
+    d.num.textContent = st.value;
+    d.ok.style.display = st.live ? 'none' : '';
+  }
+
+  // ---------- The steam view in context ----------
+  const $ = (id) => document.getElementById(id);
+  const ctxEls = { dot: $('ctx-dot'), phase: $('ctx-phase'), actions: $('ctx-actions'), stay: $('ctx-stay'), back: $('ctx-back'), drain: $('ctx-drain'), secs: $('ctx-secs'), coach: $('ctx-coach'), setline: $('ctx-setline'), trace: $('ctx-trace') };
+  let stayed = false;
+  ctxEls.stay.addEventListener('click', () => { stayed = true; });
+  ctxEls.back.addEventListener('click', () => { simT = Math.max(simT, T_BACK); });
+  const phaseWords = (st) => (st.phase === 'heating' ? 'Heating' : st.phase === 'purging' ? 'Purging' : st.live ? DRINK[st.drink].words : 'Done');
+  function drawTrace(st) {
+    const W = 560, H = 88, y = (v) => (H - (Math.max(0, Math.min(3, v)) / 3) * H).toFixed(1);
+    let p = '', f = '';
+    const end = Math.min(st.t, T_WORK_END);
+    for (let t = T_WORK; t <= end; t += 0.25) { const s = sample(t, profile, 'steam'), x = (((t - T_WORK) / WORK_S) * W).toFixed(1); p += `${p ? 'L' : 'M'}${x},${y(s.pressure)}`; f += `${f ? 'L' : 'M'}${x},${y(s.flow)}`; }
+    let html = '';
+    for (const k of [0, 0.5, 1]) html += `<line class="g" x1="0" x2="${W}" y1="${(H * k).toFixed(1)}" y2="${(H * k).toFixed(1)}"/>`;
+    if (p) html += `<path class="f" d="${f}"/><path class="p" d="${p}"/>`;
+    html += `<text class="t" x="0" y="102">0 s</text><text class="t" x="${W}" y="102" text-anchor="end">50 s</text>`;
+    ctxEls.trace.innerHTML = html;
+  }
+  function updateContext(st) {
+    const done = !st.live;
+    ctxEls.dot.style.display = st.live ? '' : 'none';
+    ctxEls.phase.className = done ? 'state done' : 'state';
+    ctxEls.phase.innerHTML = done ? '· <svg class="ic"><use href="#i-check"/></svg>Done' : `· ${phaseWords(st)}`;
+    $('mb-steam').className = st.live ? 'mb stop' : 'mb';
+    $('mb-steam').innerHTML = st.live ? '<svg class="ic"><use href="#i-stop"/></svg>Stop' : '<svg class="ic"><use href="#i-steam"/></svg>Steam';
+    for (const id of ['mb-espresso', 'mb-flush', 'mb-water']) $(id).className = st.live ? 'mb off' : 'mb';
+    ctxEls.actions.style.display = done ? '' : 'none';
+    const counting = st.phase === 'done' && !stayed;
+    ctxEls.stay.style.display = counting ? '' : 'none';
+    ctxEls.secs.style.display = counting ? '' : 'none';
+    ctxEls.drain.style.display = counting ? '' : 'none';
+    if (counting) { const left = T_BACK - st.t; ctxEls.secs.textContent = `${Math.ceil(left)} s`; ctxEls.drain.style.transform = `scaleX(${(left / BACK_S).toFixed(3)})`; }
+    const back = st.phase === 'back' && !stayed;
+    ctxEls.coach.style.display = back ? 'flex' : 'none';
+    $('nav-coach').className = back ? 'nav-i cur' : 'nav-i';
+    ctxEls.setline.textContent = st.live ? 'Change these once it stops: the machine is using them now.' : 'Changes go to Decaid at once.';
+    document.querySelectorAll('#ctx .stp').forEach((el) => el.classList.toggle('dis', st.live));
+    const M = MACHINE[profile].steam;
+    $('ro-t').textContent = Math.round(st.temp); $('ro-tc').textContent = done ? 'at the end' : 'set 150';
+    $('ro-p').textContent = (done ? M.p : st.pressure).toFixed(1); $('ro-pc').textContent = done ? 'average' : ' ';
+    $('ro-f').textContent = (done ? M.f : st.flow).toFixed(1); $('ro-fc').textContent = done ? 'average' : 'set 0.8';
+    drawTrace(st);
+  }
+
+  // ---------- Controls and the loop ----------
+  const params = new URLSearchParams(location.search);
+  let simT = Number(params.get('t') ?? 0), playing = params.get('play') !== '0', speed = 2, profile = params.get('profile') ?? 'normal', still = params.get('still') === '1';
+  const play = $('play'), scrub = $('scrub');
+  scrub.max = T_END;
+  play.textContent = playing ? 'Pause' : 'Play';
+  play.addEventListener('click', () => { playing = !playing; play.textContent = playing ? 'Pause' : 'Play'; });
+  scrub.addEventListener('input', () => { simT = Number(scrub.value); if (simT < T_DONE) stayed = false; });
+  $('speed').addEventListener('change', (e) => { speed = Number(e.target.value); });
+  $('profile').value = profile;
+  $('profile').addEventListener('change', (e) => { profile = e.target.value; });
+  $('still').checked = still;
+  const clearParticles = (scene) => { for (const k of ['jets', 'bubbles', 'puffs', 'pops', 'drops', 'rings', 'splash']) if (Array.isArray(scene[k])) scene[k] = []; };
+  $('still').addEventListener('change', (e) => { still = e.target.checked; for (const d of dials) { d.still = still; if (still) clearParticles(d.scene); } });
+  for (const d of dials) d.still = still;
+  // A screenshot at a given moment needs a scene already under way.
+  if (!still) for (const d of dials) { const st0 = sample(simT, profile, d.drink); for (let i = 0; i < 240; i++) d.scene.update(1 / 60, st0); }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now;
+    if (playing) { simT += dt * speed; if (simT >= T_END) { simT -= T_END; stayed = false; } }
+    const runs = { steam: sample(simT, profile, 'steam'), hotWater: sample(simT, profile, 'hotWater'), flush: sample(simT, profile, 'flush') };
+    for (const d of dials) { const st = runs[d.drink]; if (!still && playing) d.scene.update(dt, st); drawDial(d, st); }
+    updateContext(runs.steam);
+    scrub.value = simT.toFixed(1);
+    const st = runs.steam;
+    $('clock').textContent = `${simT.toFixed(1)} s · ${st.phase === 'back' ? 'Done (back on the coach)' : phaseWords(st)}`;
+    $('nums').textContent = `Steam ${Math.round(st.temp)} °C, ${st.pressure.toFixed(1)} bar, ${st.flow.toFixed(1)} ml/s · Hot water ${runs.hotWater.flow.toFixed(1)} ml/s, set ${Math.round(runs.hotWater.temp)} °C · Group ${runs.flush.temp.toFixed(1)} °C`;
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

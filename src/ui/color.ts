@@ -1,21 +1,28 @@
 /**
  * Colour maths for the palette: OKLCH to sRGB hex (with gamut mapping),
- * blending, and WCAG contrast. Pure functions, no DOM.
+ * blending, WCAG contrast, and OKLab for the drinks' scenes, which mix a
+ * colour from cold to warm every frame. Pure functions, no DOM.
  *
  * The palette is designed in OKLCH, where equal lightness steps look equal
  * across hues, so a green CafAI is as legible as the brown one. Every colour
- * leaves this module as plain #rrggbb: the Chromium 91 WebView of the oldest
- * Decent tablets understands neither oklch() nor color-mix().
+ * leaves this module as plain #rrggbb or bytes: the Chromium 91 WebView of
+ * the oldest Decent tablets understands neither oklch() nor color-mix().
  */
 
 /** Linear sRGB, 0-1 per channel, before gamma encoding and before clamping to a byte. */
 type LinearRgb = readonly [number, number, number];
 
+/** OKLab: lightness 0-1, then the two opponent axes (a green to red, b blue to yellow). */
+export type Oklab = readonly [l: number, a: number, b: number];
+
 /** OKLCH (L 0-1, C 0 and up, h in degrees) to linear sRGB, unclamped. */
 function oklchToLinearSrgb(l: number, c: number, h: number): LinearRgb {
   const hr = (h * Math.PI) / 180;
-  const a = c * Math.cos(hr);
-  const b = c * Math.sin(hr);
+  return oklabToLinearSrgb(l, c * Math.cos(hr), c * Math.sin(hr));
+}
+
+/** OKLab to linear sRGB, unclamped. */
+function oklabToLinearSrgb(l: number, a: number, b: number): LinearRgb {
   const lms = [
     (l + 0.3963377774 * a + 0.2158037573 * b) ** 3,
     (l - 0.1055613458 * a - 0.0638541728 * b) ** 3,
@@ -106,4 +113,36 @@ export function contrastRatio(a: string, b: string): number {
   const x = relativeLuminance(a);
   const y = relativeLuminance(b);
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+
+/** "#rrggbb" in OKLab. */
+export function hexToOklab(hex: string): Oklab {
+  const [red, green, blue] = parseHex(hex);
+  const r = byteToLinear(red);
+  const g = byteToLinear(green);
+  const b = byteToLinear(blue);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ];
+}
+
+/**
+ * An OKLab colour as sRGB bytes, each channel clamped: a mix of two sRGB
+ * colours in OKLab stays all but inside sRGB, so clamping is enough here
+ * where `oklch` maps a designed colour's chroma instead.
+ */
+export function oklabToRgb([l, a, b]: Oklab): readonly [number, number, number] {
+  const rgb = oklabToLinearSrgb(l, a, b);
+  return [linearToByte(rgb[0]), linearToByte(rgb[1]), linearToByte(rgb[2])];
+}
+
+/** Two OKLab colours mixed: `t` 0 is `from`, 1 is `to`, clamped between. */
+export function mixOklab(from: Oklab, to: Oklab, t: number): Oklab {
+  const k = Math.min(1, Math.max(0, t));
+  return [from[0] + (to[0] - from[0]) * k, from[1] + (to[1] - from[1]) * k, from[2] + (to[2] - from[2]) * k];
 }

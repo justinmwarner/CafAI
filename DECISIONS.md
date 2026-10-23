@@ -3536,3 +3536,118 @@ wrong thing (its section 19.6).
   a window Decaid may no longer hold, which was the defect. A wake time
   firing, or the machine going to sleep, while the section is open still
   shows at the next change or the next visit.
+
+### Drink scenes and going back by itself (2026-10-22)
+
+The owner's ask of 2026-10-22, built on branch `feat/drink-scenes`
+(`docs/superpowers/specs/2026-10-22-drink-scenes-design.md`, the mockup
+beside it, and the plan in `docs/superpowers/plans/`).
+
+- **D217. Each drink's dial draws a scene the barista picks.** Steam:
+  Wand and spray (the default), Whirlpool, Rosetta and Simple; hot water:
+  Pour (the default), From above and Simple; flush: Shower (the default),
+  Screen and Simple, where Simple is the drink's scene of D149. Picked per
+  drink in Settings > Drink screens (D222); an id this build does not
+  know reads as the drink's default (`scenes/catalog.ts`). Why: the owner
+  asked to "make it look better than it is now", naming "latte art kinda
+  thing, or more of a nozzle->spray"; shown three steam scenes side by side,
+  they answered "Let's have options and let the user change it in the
+  settings. Same with the other animations", and for hot water and flush
+  "Give all three the new treatment". Wand and spray leads because it shows
+  what the machine reports; the rosetta grows behind the figures and reads
+  worst in dark mode.
+- **D218. A scene follows the machine's numbers, and the ring takes
+  the drink's warmth.** One input a frame (`scenes/sceneInput.ts`): the
+  phase; progress, the dial's share; strength, the flow over its set (times
+  the pressure over 1.8 bar for steam), 0 unless the drink works, at most
+  2.2; heat, the steam heater against its set, the hot water's set
+  temperature, or the group against its target; and warmth, cold to warm:
+  steam's progress (the milk warms with its time), the hot water's set
+  temperature, the group against its target. A reading the machine did not
+  send counts as the set one (the group's: the run's last reading, else its
+  target), and a set nobody gave as Decaid's defaults, so a missing number
+  never jolts a scene. The arc and its tip take the warmth
+  colour for every drink, where D149 drew ink for steam and the flow's blue
+  for water. Why: the owner asked for "the colors change based on the
+  numbers we get back", and kept all three mappings offered (the time warms
+  the milk and the ring; flow and pressure drive the spray; the heater
+  drives the steam). The milk's warmth is its time, not a temperature: CafAI
+  knows neither the milk's amount nor how cold it started, and does not show
+  a number it cannot know. During hot water the snapshot's temperature is
+  not the water's (D148), so hot water's warmth is the one set.
+- **D219. Scenes are drawn on a canvas under the ring, and move only
+  while the machine works.** `SceneCanvas.tsx` draws the scene on a canvas
+  under the SVG ring (ticks, track, arc and tip stay as D149 drew them), at
+  up to twice the device's pixel ratio, frame by frame while the drink runs
+  and for at most 3 s after it while a scene settles (a whirlpool coasting,
+  the pull-through, the last drops); paused while the page is hidden; its
+  frames never re-render React; a frame's step clamped to 0-50 ms. Under
+  reduced motion nothing loops: each reading draws one still frame, so the
+  level, the leaves and the colours still follow the run. Anything that
+  moves, and every line, is cut out behind the figures with a soft edge (an
+  ellipse round the number and its line, and the check's circle once done;
+  steam and vapour may show there at a tenth). The done check sits above
+  the figures instead of pushing them down 17 px, scaled with the dial (28,
+  22 and 19 px) where the scenes cut its circle out. A scene that throws
+  stops drawing, its canvas cleared, rather than take the view down. Simple
+  steam's milk rises 12% of the inside, where D149's 15% reached the "of"
+  line. In dark mode Rosetta's
+  figures carry a halo of the crema colour, because its white milk sits
+  behind them. The canvas is Chromium 91's: no roundRect (lint refuses it),
+  the cut-outs drawn once per size with radial gradients. Why: particles,
+  soft steam and a colour mixed every frame are what was asked for, and
+  what D149's SVG and CSS loops cannot draw cheaply; D149's rules (a
+  legible number, motion only while the machine runs, a still alternative)
+  carry over.
+- **D220. The scenes' colours are palette roles, the same in every
+  tint.** `palette.scene` (`ScenePalette`): the warmth ramp, the milk, foam,
+  steam, steel, the whirlpool's milk, crema and the rosetta's milk, water,
+  the cup from above, the flush's water and the shower screen, per mode,
+  mixed in OKLab (`hexToOklab`, `oklabToRgb`, `mixOklab` in
+  `src/ui/color.ts`). The contrast sweep checks ink at 7:1 and ink-muted at
+  4.5:1 on every fill that sits under the figures (the whirlpool's milk, the
+  cup from above, the screen's steel, the rosetta's crema, and its milk in
+  light mode), and the warmth ramp at 3:1 on the page, in every tint and
+  both modes; light mode's crema went from L 0.86 to 0.88 to pass at hues
+  151 and 152. Light mode's warm end is an orange, not Crema's brown
+  accent. DESIGN.md's "the only gradients are the hue rail and the Custom
+  swatch" gains the soft fades inside a drink's dial (steam, vapour, a
+  surface's gloss, a pitcher's rim). Why: the graph's colours do not follow
+  the tint (DESIGN.md), and neither should milk, water or steel; a fill
+  under the figures is held to the figures' own contrast, as D149's washes
+  are.
+- **D221. A drink's view goes back by itself once the drink is done,
+  unless the barista keeps it.** When a run the view saw live ends by the
+  machine's word (not "Connection lost") and that drink's Go back by itself
+  is on (D222), Go back shows the seconds left after its label over a
+  fill draining behind it, with **Stay** before it (on a phone upright, the
+  two in a row of their own under the name); at
+  zero it does what Go back does (D146): `location.replace` to the screen
+  the view took over, or the coach, then the 350 ms tap guard. Stay, any
+  pointer down or key press on the view, the drink starting again, another
+  drink or a shot taking the screen, and a text field focused at zero each
+  keep the view, Go back staying as before. A screen reader hears once
+  "Done. Going back to the coach in 10 seconds.", never a count; the screen
+  reads Done. The fill is a new role, `countdownWash`, the accent at 16% over
+  the raised fill in dark mode and 14% in light, ink and ink-muted keeping
+  4.5:1 on it: `accentSoft` all but vanished on the tonal button in light
+  mode. Why: the
+  owner's ask for "a setting to have it auto-go-back after some time and let
+  the user turn it off/on and specify time", per drink and on after 10 s by
+  their answer. This changes D146's "There is no return of its own" at the
+  owner's word; with the switch off the view stays, as D146 has it. A view
+  opened on a finished run never counts down: nobody was waiting on it.
+- **D222. Settings > Drink screens holds each drink's scene and its
+  going back by itself.** A section after Steam, hot water and flush,
+  because these are CafAI's (kept on this device, live whatever the machine
+  does) and those are Decaid's (held while the machine runs). Per drink:
+  Animation (a native select), Go back by itself (a switch), and while it
+  is on, After (the drinks' stepper, 5-60 s, 5 a tap). Stored as
+  `Settings.drinkScreens`, each drink's fields absent until chosen and read
+  as the defaults (the drink's first scene, on, 10 s); an edit changes one
+  field of one drink; an import or a restore fills the block only on a
+  device that never chose, whole, as care's (D187); mirrored and exported
+  with the other settings; read live through `src/app/drinkScreens.ts`, as
+  the temperature unit is (D172), and reloaded after an import or a
+  restore. Why: per drink, as the owner answered; a section of its own keeps
+  "Changes go to Decaid at once" true of the section above it.

@@ -24,10 +24,12 @@ describe('theme', () => {
     expect(t.palette.cafai).toEqual({
       raised: p.raised,
       accentSoft: p.accentSoft,
+      countdownWash: p.countdownWash,
       live: p.live,
       graph: p.graph,
       waterWash: p.waterWash,
       milkWash: p.milkWash,
+      scene: p.scene,
     });
   });
 

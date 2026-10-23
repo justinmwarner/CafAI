@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blend, contrastRatio, oklch, parseHex } from './color.ts';
+import { blend, contrastRatio, hexToOklab, mixOklab, oklabToRgb, oklch, parseHex } from './color.ts';
 
 /**
  * An inverse derived independently of color.ts (Ottosson's
@@ -141,5 +141,37 @@ describe('contrastRatio', () => {
 
   it('does not depend on the order', () => {
     expect(contrastRatio('#14100d', '#c8a27a')).toBe(contrastRatio('#c8a27a', '#14100d'));
+  });
+});
+
+describe('OKLab', () => {
+  it('reads white and black at the ends of the lightness axis, with no colour', () => {
+    const white = hexToOklab('#ffffff');
+    expect(white[0]).toBeCloseTo(1, 4);
+    expect(Math.abs(white[1]) + Math.abs(white[2])).toBeLessThan(1e-4);
+    expect(hexToOklab('#000000')).toEqual([0, 0, 0]);
+  });
+
+  it('comes back to the same bytes', () => {
+    for (const hex of ['#3a7bd5', '#140e09', '#faf6f2', '#d5a776', '#6ad895']) {
+      expect(oklabToRgb(hexToOklab(hex))).toEqual(parseHex(hex));
+    }
+  });
+
+  it('agrees with oklch on a designed colour', () => {
+    const hex = oklch(0.6, 0.1, 240);
+    const [l, a, b] = hexToOklab(hex);
+    expect(l).toBeCloseTo(0.6, 2);
+    expect(Math.hypot(a, b)).toBeCloseTo(0.1, 2);
+  });
+
+  it('mixes from one colour to the other, clamped at the ends', () => {
+    const cold = hexToOklab('#3a7bd5');
+    const warm = hexToOklab('#d5a776');
+    expect(mixOklab(cold, warm, 0)).toEqual(cold);
+    expect(mixOklab(cold, warm, 1)).toEqual(warm);
+    expect(mixOklab(cold, warm, -1)).toEqual(cold);
+    expect(mixOklab(cold, warm, 2)).toEqual(warm);
+    expect(mixOklab(cold, warm, 0.5)[0]).toBeCloseTo((cold[0] + warm[0]) / 2, 10);
   });
 });

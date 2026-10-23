@@ -1,6 +1,34 @@
 # Good morning: CafAI after your answers (2026-10-04)
 
-**Newest (2026-10-22):** fun facts (D197-D203, branch `feat/fun-facts`,
+**Newest (2026-10-22):** steam, hot water and flush draw new scenes in
+their dial, and their views go back by themselves (D217-D222, branch
+`feat/drink-scenes`, merged into `main`). You asked for a better steaming
+animation, its colours following the machine's numbers, and a setting to go
+back after a while; shown three steam scenes, you chose to have them all as
+options, for every drink. **Settings > Drink screens** picks each drink's
+**Animation** (steam: Wand and spray, the default, Whirlpool, Rosetta or
+Simple; hot water: Pour, From above or Simple; flush: Shower, Screen or
+Simple, where Simple is the scene before) and its **Go back by itself** (on,
+after 10 s; 5 to 60 s). A scene moves as hard as the machine works (the
+flow, and steam's pressure, against what is set), its steam follows the
+heater (hot water's vapour, the temperature set), and its colour, with the
+ring's, runs cold to warm: the milk as it steams, hot water by the
+temperature set, the flush as the group reaches its target. Once a drink is
+done, Go back counts down and returns; **Stay**, or a tap on the view, keeps
+it. Four builders made it side by side from one groundwork; one reviewer
+found three small defects, all fixed with tests (the worst: a scene could
+stay frozen mid-motion when its run ended while the screen was off). On the
+final code: typecheck, lint, 4693 unit tests, the build and the release zip
+pass; Playwright passed all 525 tests (8 skipped by design), and its drink
+and Settings specs again after the review's fixes; Chromium 91 runs a steam,
+a hot water and a flush with their scenes and no error. The decisions are
+D217-D222 because usage sharing's branch already holds D210-D216. Calls to
+check: QUESTIONS 28 (Rosetta in dark mode, whose "of 50 s" line reads worst
+of any scene) and 29 (how warm is warm). Not yet seen: the scenes on a
+Decent tablet (are they smooth at 272 px?), section 13 of
+`docs/HARDWARE_TEST_PLAN.md`, steps 8 and 9.
+
+**Before that (2026-10-22):** fun facts (D197-D203, branch `feat/fun-facts`,
 merged into `main`): once you keep a recipe, a shot that runs like the last
 one on it gets one fun fact, in a quiet card between the coach's line and
 the taste question, instead of only "it ran the same". **Settings > Coach >

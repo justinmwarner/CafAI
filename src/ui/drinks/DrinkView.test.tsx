@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '../chat/testing/setup.ts';
-import { describe, expect, it, vi } from 'vitest';
-import { act, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { formatLocalTimestamp } from '../../../mock/decaid/clock.ts';
 import type { MachineFrame } from '../../api/types.ts';
@@ -149,15 +149,13 @@ describe('DrinkView', () => {
     expect(screen.getByTestId(TID.drinkDialValue)).toHaveTextContent('—');
   });
 
-  it('keeps the loops still once the run is over, and no water falls', () => {
+  it('keeps the loops still once the run is over', () => {
     const { send } = renderView('hotWater');
     send(frame('hotWater', 'pouring'));
     const dial = screen.getByTestId(TID.drinkDial);
     expect(dial).toHaveAttribute('data-moving', 'true');
-    expect(getComputedStyle(dial.querySelector('.stream')!).display).not.toBe('none');
     send(frame('idle', 'idle'));
     expect(dial).toHaveAttribute('data-moving', 'false');
-    expect(getComputedStyle(dial.querySelector('.stream')!).display).toBe('none');
   });
 
   it('sets the done check above the number, not over the whole dial as the drawing is', () => {
@@ -167,7 +165,7 @@ describe('DrinkView', () => {
     const dial = screen.getByTestId(TID.drinkDial);
     const check = dial.querySelector('.done-check');
     expect(check).not.toBeNull();
-    expect(getComputedStyle(check!).position).not.toBe('absolute');
+    expect(getComputedStyle(check!).width).not.toBe('100%');
     expect(getComputedStyle(dial.querySelector(':scope > svg')!).position).toBe('absolute');
   });
 
@@ -177,5 +175,160 @@ describe('DrinkView', () => {
     send(frame('flush', 'pouring', { flow: 6 }));
     const trace = screen.getByTestId(TID.drinkTrace);
     expect(within(trace).getByTestId('trace-flow').getAttribute('d')).toMatch(/^M0,/);
+  });
+});
+
+describe('DrinkView going back by itself (D221)', () => {
+  /** The countdown's clock; the presets load, and taps land, on real timers. */
+  const fakeClock = () => vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+  const wait = (ms: number) => act(() => vi.advanceTimersByTime(ms));
+  const seconds = () => screen.queryByTestId(TID.drinkGoBackSeconds);
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('once a steam it saw is done, counts down on Go back, says once where it goes, and goes back by itself after 10 s', () => {
+    const { onGoBack, send } = renderView('steam');
+    fakeClock();
+    send(frame('steam', 'pouring'));
+    send(frame('steam', 'pouring'));
+    expect(seconds()).toBeNull();
+    expect(screen.queryByTestId(TID.drinkStay)).toBeNull();
+    send(frame('idle', 'idle'));
+    expect(seconds()).toHaveTextContent('10 s');
+    expect(screen.getByTestId(TID.drinkPhase)).toHaveTextContent('Done. Going back to Settings in 10 seconds.');
+    // Go back keeps its name, the seconds inside it; Stay sits before it.
+    const back = screen.getByRole('button', { name: 'Go back to Settings' });
+    expect(back).toContainElement(seconds());
+    expect(screen.getByRole('button', { name: 'Stay on this screen' })).toHaveTextContent('Stay');
+
+    wait(1000);
+    expect(seconds()).toHaveTextContent('9 s');
+    // Said once, never second by second.
+    expect(screen.getByTestId(TID.drinkPhase)).toHaveTextContent('Done. Going back to Settings in 10 seconds.');
+    wait(8999);
+    expect(seconds()).toHaveTextContent('1 s');
+    expect(onGoBack).not.toHaveBeenCalled();
+    wait(1);
+    expect(onGoBack).toHaveBeenCalledTimes(1);
+    expect(onGoBack).toHaveBeenCalledWith({ auto: true });
+  });
+
+  it('Stay keeps the view: no going back, no seconds, Go back as it was, and the focus on it', async () => {
+    const { onGoBack, send } = renderView('steam');
+    fakeClock();
+    send(frame('steam', 'pouring'));
+    send(frame('idle', 'idle'));
+    wait(3000);
+    await userEvent.click(screen.getByRole('button', { name: 'Stay on this screen' }));
+    expect(seconds()).toBeNull();
+    expect(screen.queryByTestId(TID.drinkStay)).toBeNull();
+    expect(screen.getByTestId(TID.drinkPhase).textContent).toBe('·Done');
+    const back = screen.getByRole('button', { name: 'Go back to Settings' });
+    expect(back).toHaveTextContent(/^Go back$/);
+    expect(back).toHaveFocus();
+    wait(20_000);
+    expect(onGoBack).not.toHaveBeenCalled();
+  });
+
+  it('a press on Stay keeps the view as it starts, even when the zero falls before it is let go', () => {
+    const { onGoBack, send } = renderView('steam');
+    fakeClock();
+    send(frame('steam', 'pouring'));
+    send(frame('idle', 'idle'));
+    wait(9900);
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Stay on this screen' }));
+    wait(200);
+    expect(onGoBack).not.toHaveBeenCalled();
+    expect(seconds()).toBeNull();
+    expect(screen.getByRole('button', { name: 'Go back to Settings' })).toHaveFocus();
+  });
+
+  it('Enter or Space on Stay keeps the view as the key goes down', () => {
+    const { onGoBack, send } = renderView('steam');
+    fakeClock();
+    send(frame('steam', 'pouring'));
+    send(frame('idle', 'idle'));
+    wait(9900);
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Stay on this screen' }), { key: ' ' });
+    wait(200);
+    expect(onGoBack).not.toHaveBeenCalled();
+    expect(seconds()).toBeNull();
+  });
+
+  it('a tap anywhere on the view keeps it, and does what it was for', async () => {
+    const { services, onGoBack, send } = renderView('steam');
+    await screen.findByText('Changes go to Decaid at once.');
+    fakeClock();
+    send(frame('steam', 'pouring'));
+    send(frame('idle', 'idle'));
+    await userEvent.click(screen.getByRole('button', { name: 'More steam time' }));
+    expect(seconds()).toBeNull();
+    expect(services.decaid.calls.find((call) => call.method === 'updateWorkflow')?.args).toEqual([{ steamSettings: { duration: 55 } }]);
+    wait(20_000);
+    expect(onGoBack).not.toHaveBeenCalled();
+  });
+
+  it('a key press in the view keeps it', async () => {
+    const { onGoBack, send } = renderView('steam');
+    await screen.findByText('Changes go to Decaid at once.');
+    fakeClock();
+    send(frame('steam', 'pouring'));
+    send(frame('idle', 'idle'));
+    act(() => screen.getByRole('button', { name: 'More steam time' }).focus());
+    await userEvent.keyboard('{Shift}');
+    expect(seconds()).toBeNull();
+    wait(20_000);
+    expect(onGoBack).not.toHaveBeenCalled();
+  });
+
+  it('a press on Go back while it counts goes back at once, as the barista asked', async () => {
+    const { onGoBack, send } = renderView('hotWater');
+    fakeClock();
+    send(frame('hotWater', 'pouring'));
+    send(frame('idle', 'idle'));
+    await userEvent.click(screen.getByRole('button', { name: 'Go back to Settings' }));
+    expect(onGoBack).toHaveBeenCalledTimes(1);
+    expect(onGoBack).toHaveBeenCalledWith();
+  });
+
+  it('with going back by itself off, it is Done and stays, with Go back', async () => {
+    const services = createFakeServices();
+    await services.drinkScreens.set('steam', { goBack: false });
+    const { onGoBack, send } = renderView('steam', services);
+    fakeClock();
+    send(frame('steam', 'pouring'));
+    send(frame('idle', 'idle'));
+    expect(screen.getByTestId(TID.drinkPhase).textContent).toBe('·Done');
+    expect(seconds()).toBeNull();
+    expect(screen.queryByTestId(TID.drinkStay)).toBeNull();
+    wait(20_000);
+    expect(onGoBack).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Go back to Settings' })).toBeInTheDocument();
+  });
+
+  it('never counts down after a run the machine going away cut short', () => {
+    const { services, onGoBack, send } = renderView('steam');
+    fakeClock();
+    send(frame('steam', 'pouring'));
+    act(() => services.telemetry.setState({ machineConnected: false }));
+    expect(screen.getByTestId(TID.drinkPhase)).toHaveTextContent('Connection lost');
+    expect(seconds()).toBeNull();
+    wait(20_000);
+    expect(onGoBack).not.toHaveBeenCalled();
+  });
+
+  it('never counts down on a view opened after the run was over', () => {
+    const services = createFakeServices();
+    drinkTraceFor(services.telemetry);
+    services.telemetry.setState({ machine: frame('flush', 'pouring') });
+    services.telemetry.setState({ machine: frame('idle', 'idle') });
+    const { onGoBack } = renderView('flush', services);
+    fakeClock();
+    expect(screen.getByTestId(TID.drinkPhase)).toHaveTextContent('Done');
+    expect(seconds()).toBeNull();
+    wait(20_000);
+    expect(onGoBack).not.toHaveBeenCalled();
   });
 });
