@@ -119,6 +119,10 @@ const PAIRS: readonly (readonly [string, number, (p: Palette) => readonly (reado
   ['inkMuted on background, surface, raised', 4.5, (p) => [[p.inkMuted, p.background], [p.inkMuted, p.surface], [p.inkMuted, p.raised]]],
   ['accent on background and surface', 4.5, (p) => [[p.accent, p.background], [p.accent, p.surface]]],
   ['accent on accentSoft', 4.5, (p) => [[p.accent, p.accentSoft]]],
+  // Go back's label and its seconds over the countdown's wash (D-BACK-1).
+  ['ink and inkMuted on accentWash', 4.5, (p) => [[p.ink, p.accentWash], [p.inkMuted, p.accentWash]]],
+  // The wash must show on the tonal button it drains across.
+  ['accentWash off the raised fill', 1.15, (p) => [[p.accentWash, p.raised]]],
   ['onAccent on accent', 4.5, (p) => [[p.onAccent, p.accent]]],
   [
     'status colours on background and surface',

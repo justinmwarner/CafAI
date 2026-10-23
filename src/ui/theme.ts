@@ -22,6 +22,8 @@ export const TOUCH_TARGET = 48;
 export interface CafaiColors {
   raised: string;
   accentSoft: string;
+  /** Go back's countdown, draining over the raised fill (D-BACK-1). */
+  accentWash: string;
   live: string;
   graph: GraphPalette;
   /** The drinks' dial: its water and its milk (DrinkDial.tsx). */
@@ -91,6 +93,7 @@ export function createCafaiTheme(palette: Palette = buildPalette('dark', namedTi
       cafai: {
         raised: palette.raised,
         accentSoft: palette.accentSoft,
+        accentWash: palette.accentWash,
         live: palette.live,
         graph: palette.graph,
         waterWash: palette.waterWash,

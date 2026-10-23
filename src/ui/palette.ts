@@ -99,6 +99,11 @@ export interface Palette {
   accent: string;
   /** A wash of the accent, behind the current navigation item. */
   accentSoft: string;
+  /**
+   * A stronger wash of the accent over the raised fill: Go back's countdown
+   * draining (D-BACK-1). accentSoft is all but the raised fill in light mode.
+   */
+  accentWash: string;
   /** Text and icons on the accent. */
   onAccent: string;
   success: string;
@@ -345,6 +350,7 @@ export function buildPalette(mode: ThemeMode, tint: Tint): Palette {
     line: blend(ink, background, dark ? 0.12 : 0.14),
     accent,
     accentSoft: blend(accent, surface, dark ? 0.16 : 0.12),
+    accentWash: blend(accent, neutral('raised'), dark ? 0.16 : 0.14),
     onAccent: dark ? oklch(0.2, tint.neutral * 2, tint.hue) : oklch(0.99, 0.005, tint.hue),
     success: fixed('success'),
     warning: fixed('warning'),
