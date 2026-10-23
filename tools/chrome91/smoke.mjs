@@ -4,6 +4,7 @@
 //
 // usage: node smoke.mjs [--dist ../../dist] [--wait "<js expression>"]
 //                       [--hash "#/"] [--name probe] [--timeout 20000]
+//                       [--motion reduce]   (prefers-reduced-motion: reduce)
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -56,6 +57,7 @@ const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] 
 const version = await browser.version();
 const page = await browser.newPage();
 await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1.125, hasTouch: true });
+if (args.motion === 'reduce') await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
 const problems = [];
 page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 page.on('console', (m) => {

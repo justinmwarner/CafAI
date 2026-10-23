@@ -17,6 +17,8 @@ import type { CoachSourceStore } from '../storage/coachSource.ts';
 import type { Bag, ProfileVersion, Storage } from '../storage/types.ts';
 import type { AppearanceStore } from './appearance.ts';
 import type { DrinkScreensStore } from './drinkScreens.ts';
+import type { SaverScreen } from './saverScreen.ts';
+import type { ScreensaverSettingStore } from './screensaverSetting.ts';
 import type { TemperatureUnitStore } from './temperatureUnit.ts';
 import type { CareService } from './care/careService.ts';
 
@@ -36,6 +38,14 @@ export interface Services {
   appearance: AppearanceStore;
   /** °C or °F where the barista reads or sets a temperature (D172), as live state. */
   temperatureUnit: TemperatureUnitStore;
+  /** Settings > Screensaver (D225), as live state. */
+  screensaver: ScreensaverSettingStore;
+  /**
+   * The tablet's screen while a screensaver shows (D224): dimmed and
+   * held on through Decaid's display socket. Only inside Decaid, whose
+   * display it is; absent elsewhere, and in fakes and previews.
+   */
+  saverScreen?: SaverScreen;
   /**
    * Each drink's scene and whether its view goes back by itself (D217,
    * D221), as live state. Optional: previews leave it out, and then every

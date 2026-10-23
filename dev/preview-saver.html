@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>CafAI screensaver preview</title>
+    <!--
+      Dev only (served by `vite dev`, never built): one canvas screensaver on
+      the whole window. Options are listed in src/ui/preview/saverPreview.ts.
+        http://localhost:5181/dev/preview-saver.html?saver=beanfield&seed=1
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+      }
+      #fps {
+        position: fixed;
+        right: 8px;
+        bottom: 6px;
+        font: 12px/1 monospace;
+        color: #9c9;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="saver"></canvas>
+    <div id="fps" hidden></div>
+    <script type="module" src="/src/ui/preview/saverPreview.ts"></script>
+  </body>
+</html>

@@ -19,7 +19,7 @@ import type { ProfileJson, ShotSummary } from '../coach/types.ts';
 import type { TemperatureUnit } from '../coach/temperature.ts';
 import type { LlmMessage } from '../llm/types.ts';
 import type { CoachUiMessage } from '../app/types.ts';
-import type { Appearance, AppliedChange, CareSettings, DrinkScreensSettings, Feedback } from './types.ts';
+import type { Appearance, AppliedChange, CareSettings, DrinkScreensSettings, Feedback, ScreensaverSetting } from './types.ts';
 
 /** Checked against `shape`, but the original value is kept, untouched. */
 function exact<T>(shape: z.ZodType) {
@@ -137,6 +137,8 @@ export const SettingsSchema = z.object({
   funFacts: exact<FunFactsSource>(z.unknown()).optional(),
   /** Each drink's screen (D222); absent from exports made before them. Re-validated by normalizeDrinkScreens, as care is. */
   drinkScreens: exact<DrinkScreensSettings>(z.unknown()).optional(),
+  /** The screensaver (D225); absent from exports made before it. Re-validated by normalizeScreensaver, as care is. */
+  screensaver: exact<ScreensaverSetting>(z.unknown()).optional(),
 });
 
 export const BagSchema = z.object({

@@ -3651,3 +3651,117 @@ beside it, and the plan in `docs/superpowers/plans/`).
   the temperature unit is (D172), and reloaded after an import or a
   restore. Why: per drink, as the owner answered; a section of its own keeps
   "Changes go to Decaid at once" true of the section above it.
+
+### Screensavers (2026-10-22)
+
+The owner's ask of 2026-10-22: screensavers that play off the old ones (the
+DVD logo bouncing, the pipes) and coffee, latte art among them
+(`docs/superpowers/specs/2026-10-22-screensavers-design.md`). Of fifteen
+offered, the owner chose eight: Nightstand, Bouncing Portafilter, Espresso
+Pipes, Beanfield, Rising Steam, Lava Latte, Brew Rain and Latte Art; a tap
+wakes the machine; the screen stays on, dimmed, for 30 minutes; it shows only
+while the machine is confirmed asleep; and "A different one each day" for
+anyone who never opens Settings. The host and six screensavers first,
+Espresso Pipes and Latte Art after a check-in with the owner.
+
+- **D223. A screensaver covers CafAI on the tablet only while Decaid
+  confirms the machine asleep and nobody has touched the screen for a
+  minute; a tap clears it and wakes the machine.** Up when it is on in
+  Settings, CafAI runs inside Decaid's WebView (`host.insideDecaid`), the
+  machine is connected, Decaid reachable and `sleeping` in its frames, and
+  has been for 3 s without a break, and no `pointerdown` or `keydown` has
+  reached the window for 60 s, counted from the page's load at first
+  (`src/ui/saver/policy.ts`); down by itself as soon as any of that stops.
+  The 3 s (after the review, 2026-10-22): across a dropped link the store
+  keeps the last frame, which goes on saying asleep when the machine comes
+  back until a fresh frame arrives, so a machine that came back awake would
+  flash the screensaver up, dim and all. The overlay (`src/ui/saver/SaverOverlay.tsx`)
+  is the shell's last child, drawn through a portal over everything, the top
+  bar and a dialog left open included. It swallows the tap whole as
+  TapGuard does (native, capture, non-passive listeners on the press, the
+  touch and the click, and a clear sheet until the finger lifts and 350 ms
+  after), then sends the Wake button's own command (`sleepWake()`), so its
+  spinner and any error show where they always do; when no wake can be sent
+  just then, the tap only clears it. Why: Decaid's display API drives the
+  tablet's screen, so a phone or a computer has nothing to dim or hold; the
+  other skins (streamline, MSL, decaid-zen) show theirs only while the
+  machine is confirmed asleep and wake it on a tap; never from CafAI's own
+  commands, so a Sleep that failed never raises one; the minute keeps it
+  from jumping up while the barista who tapped Sleep goes on reading; and a
+  tap that landed on what is underneath (Steam, say) would be the worst way
+  to wake a machine.
+- **D224. The screen held on, dimmed to 30, for 30 minutes, through
+  Decaid's display socket, then let go.** Inside Decaid only, CafAI opens
+  `/ws/v1/display` while it needs it (`src/api/display.ts`, the first socket
+  CafAI sends on): from Decaid's first frame it remembers
+  `requestedBrightness` in this device's storage (`cafai.saver.brightness`,
+  unless one is remembered already), sets the brightness to 30 (or leaves a
+  lower one) and asks for the wake lock, both again after a reconnect. After
+  30 minutes the screensaver turns black and the socket closes, which lets
+  the lock go so that Android's own timeout turns the screen off, the dim
+  kept; the page shown again starts it over. As it goes, the brightness goes
+  back (100 is Android's own) and is forgotten once a frame Decaid sent
+  after that shows it back; a value left over at start (a page unloaded
+  while dimmed) is put back (`src/app/saverScreen.ts`). Decaid's frames trail
+  the commands, so once a dim has gone out the brightness is always sent
+  back, whatever the last frame says, and a hold right behind a restore
+  dims again (after the review, 2026-10-22: a screensaver gone before
+  Decaid's frame showed the dim left the tablet dimmed for good). A socket
+  that fails changes nothing on screen. Seen on Decaid 0.8.8's simulator
+  (2026-10-22): one frame as the socket opens, one or two after each
+  command, and the lock gone with the socket, the brightness kept
+  (docs/verified/02-api.md says so now). Why:
+  Decaid lets go of its own wake lock while the machine sleeps, so without
+  one Android blanks the screen within minutes; the socket's lock goes with
+  the socket, where the REST one outlives CafAI (docs/verified/01-platform.md,
+  rule 20); 30 minutes covers a glance across the kitchen without keeping a
+  screen lit all night; and a dim must never be kept, or later put back, as
+  if it were the barista's own brightness.
+- **D225. Settings > Screensaver: on, and "A different one each day"
+  unless the barista picks one.** A section after Sleep and wake, applied at
+  once (`src/ui/settings/ScreensaverSection.tsx`): the switch, the choice ("A
+  different one each day", naming today's, then the six), the line saying
+  when it shows, and Preview, the chosen one (or today's) full screen,
+  anywhere, never dimming, holding or waking. The day's pick is the
+  screensavers this device can run in a fixed shuffled order, one each local
+  calendar day, the day's number its seed too (`src/ui/saver/daily.ts`).
+  `Settings.screensaver` (`{ on, pick }`) is absent until changed on this
+  device and read as on and daily, a pick this build does not know as daily;
+  it travels with the other settings to Decaid's backup and the export, a
+  choice made here winning a merge. Why: a feature nobody has to go and
+  find; each comes round in turn and none two days running; and absent until
+  chosen, so a restore can tell a choice from none, as the temperature unit
+  and the fun facts do.
+- **D226. Drawn in code, always dark, still under reduced motion: the
+  one place for play.** Every screensaver draws with the dark palette of the
+  barista's tint (`paletteFor({ mode: 'dark', tint }, false)`), whatever
+  their mode; no images, no fonts beyond Figtree and the device's own, no
+  libraries; at most 30 frames a second on the shared loop
+  (`src/ui/saver/runner.ts`), paused while the page is hidden, a backing
+  scale of the pixel ratio up to 1.5, a fresh canvas for each start; seeded,
+  so the same seed and steps give the same picture. Under
+  `prefers-reduced-motion` each paints its still, again each minute
+  (Nightstand jumps to its new place as always); one that cannot start, or
+  throws, gives way to Nightstand. PRODUCT.md and DESIGN.md say it: the one
+  place for play, never clip art, and the one exception to short, never
+  bouncy motion. Why: a dim, dark screen is the point at night; D10's one
+  bundle stays small and nothing is clip art; Chromium 91's canvas is the
+  floor; and every animation has a still, which CSS cannot give a canvas.
+- **D227. Eight screensavers, six in the first step.** Nightstand is
+  React text: a bedside clock with the next wake time, the bag on the
+  machine and the last shot, jumping each minute to a seeded place. Bouncing
+  Portafilter, Beanfield, Rising Steam, Lava Latte and Brew Rain are canvas
+  modules behind one interface (`src/ui/saver/types.ts`, `registry.ts`),
+  after the DVD logo, Starfield, Flurry, the lava lamp and the Matrix's
+  falling code (the design's section 7). Espresso Pipes (WebGL1, written by
+  hand) follows the check-in, greyed out in Settings and left out of the
+  days where WebGL cannot start. Why: the owner's pick, built in the order of
+  their chance on a weak tablet: the 2D ones first, WebGL after.
+- **D228. Latte Art behind a gate of its own.** The cup from above and
+  an unseen pitcher pouring a heart, a tulip, a rosetta and a swan, from a
+  field of foam moved on the CPU (no fluid dynamics). The heart and the tulip
+  first, tuned from screenshots and judged by the owner on the tablet; the
+  rosetta and the swan only after them; a pour that does not look right is
+  left out, and if the heart and the tulip do not pass, Latte Art does not
+  ship. Why: it is the one that can look wrong, latte-art clip art is what
+  PRODUCT.md rules out, and the owner's eye is the test.

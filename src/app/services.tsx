@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useSyncExternalStore, type Reac
 import type { CoachState, Services } from './types.ts';
 import type { TelemetryState } from '../api/types.ts';
 import { DEFAULT_TEMPERATURE_UNIT, type TemperatureUnit } from '../coach/temperature.ts';
-import type { Appearance } from '../storage/types.ts';
+import type { Appearance, ScreensaverSetting } from '../storage/types.ts';
 
 const ServicesContext = createContext<Services | null>(null);
 
@@ -41,6 +41,12 @@ export function useCoach<T>(selector: (state: CoachState) => T): T {
 export function useAppearance(): Appearance {
   const { appearance } = useServices();
   return useSyncExternalStore(appearance.subscribe, appearance.get);
+}
+
+/** Settings > Screensaver (D225): on or off, and which. */
+export function useScreensaverSetting(): ScreensaverSetting {
+  const { screensaver } = useServices();
+  return useSyncExternalStore(screensaver.subscribe, screensaver.get);
 }
 
 const unchanging = () => () => undefined;

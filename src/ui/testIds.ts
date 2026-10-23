@@ -187,6 +187,20 @@ export const TID = {
   wakeDialogKeepAwake: 'wake-dialog-keep-awake',
   wakeDialogSave: 'wake-dialog-save',
   wakeDialogDelete: 'wake-dialog-delete',
+  // Settings > Screensaver, and the screensaver over the shell (D223-D227)
+  saverSection: 'saver-section',
+  saverOn: 'saver-on',
+  saverPick: 'saver-pick',
+  saverPreview: 'saver-preview',
+  /** The screensaver (or a Preview) covering CafAI; data-saver names which, data-phase says showing or black. */
+  saver: 'saver',
+  /** The clear sheet that takes the rest of the waking tap, for a moment after the screensaver went. */
+  saverGuard: 'saver-guard',
+  /** Inside the screensaver once its first picture is painted (the screenshots and the Chromium 91 smoke wait for it). */
+  saverReady: 'saver-ready',
+  saverCanvas: 'saver-canvas',
+  nightstand: 'nightstand',
+  nightstandTime: 'nightstand-time',
   // Settings > Machine care and its cleaning guide (D152-D155)
   careSection: 'care-section',
   careOpen: 'care-open',
