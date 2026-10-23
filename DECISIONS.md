@@ -3664,7 +3664,7 @@ while the machine is confirmed asleep; and "A different one each day" for
 anyone who never opens Settings. The host and six screensavers first,
 Espresso Pipes and Latte Art after a check-in with the owner.
 
-- **D-SAVER-1. A screensaver covers CafAI on the tablet only while Decaid
+- **D223. A screensaver covers CafAI on the tablet only while Decaid
   confirms the machine asleep and nobody has touched the screen for a
   minute; a tap clears it and wakes the machine.** Up when it is on in
   Settings, CafAI runs inside Decaid's WebView (`host.insideDecaid`), the
@@ -3690,7 +3690,7 @@ Espresso Pipes and Latte Art after a check-in with the owner.
   from jumping up while the barista who tapped Sleep goes on reading; and a
   tap that landed on what is underneath (Steam, say) would be the worst way
   to wake a machine.
-- **D-SAVER-2. The screen held on, dimmed to 30, for 30 minutes, through
+- **D224. The screen held on, dimmed to 30, for 30 minutes, through
   Decaid's display socket, then let go.** Inside Decaid only, CafAI opens
   `/ws/v1/display` while it needs it (`src/api/display.ts`, the first socket
   CafAI sends on): from Decaid's first frame it remembers
@@ -3717,7 +3717,7 @@ Espresso Pipes and Latte Art after a check-in with the owner.
   rule 20); 30 minutes covers a glance across the kitchen without keeping a
   screen lit all night; and a dim must never be kept, or later put back, as
   if it were the barista's own brightness.
-- **D-SAVER-3. Settings > Screensaver: on, and "A different one each day"
+- **D225. Settings > Screensaver: on, and "A different one each day"
   unless the barista picks one.** A section after Sleep and wake, applied at
   once (`src/ui/settings/ScreensaverSection.tsx`): the switch, the choice ("A
   different one each day", naming today's, then the six), the line saying
@@ -3732,7 +3732,7 @@ Espresso Pipes and Latte Art after a check-in with the owner.
   find; each comes round in turn and none two days running; and absent until
   chosen, so a restore can tell a choice from none, as the temperature unit
   and the fun facts do.
-- **D-SAVER-4. Drawn in code, always dark, still under reduced motion: the
+- **D226. Drawn in code, always dark, still under reduced motion: the
   one place for play.** Every screensaver draws with the dark palette of the
   barista's tint (`paletteFor({ mode: 'dark', tint }, false)`), whatever
   their mode; no images, no fonts beyond Figtree and the device's own, no
@@ -3747,7 +3747,7 @@ Espresso Pipes and Latte Art after a check-in with the owner.
   bouncy motion. Why: a dim, dark screen is the point at night; D10's one
   bundle stays small and nothing is clip art; Chromium 91's canvas is the
   floor; and every animation has a still, which CSS cannot give a canvas.
-- **D-SAVER-5. Eight screensavers, six in the first step.** Nightstand is
+- **D227. Eight screensavers, six in the first step.** Nightstand is
   React text: a bedside clock with the next wake time, the bag on the
   machine and the last shot, jumping each minute to a seeded place. Bouncing
   Portafilter, Beanfield, Rising Steam, Lava Latte and Brew Rain are canvas
@@ -3757,7 +3757,7 @@ Espresso Pipes and Latte Art after a check-in with the owner.
   hand) follows the check-in, greyed out in Settings and left out of the
   days where WebGL cannot start. Why: the owner's pick, built in the order of
   their chance on a weak tablet: the 2D ones first, WebGL after.
-- **D-SAVER-6. Latte Art behind a gate of its own.** The cup from above and
+- **D228. Latte Art behind a gate of its own.** The cup from above and
   an unseen pitcher pouring a heart, a tulip, a rosetta and a swan, from a
   field of foam moved on the CPU (no fluid dynamics). The heart and the tulip
   first, tuned from screenshots and judged by the owner on the tablet; the

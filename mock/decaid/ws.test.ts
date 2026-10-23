@@ -145,7 +145,7 @@ describe('Decaid WebSocket channels', () => {
     machine.socket.close();
   });
 
-  it("display: its state on connect and after every command, to every display socket, the commands recorded, and a socket's wake lock gone with it (D-SAVER-2)", async () => {
+  it("display: its state on connect and after every command, to every display socket, the commands recorded, and a socket's wake lock gone with it (D224)", async () => {
     const display = open('/display');
     const other = open('/display');
     expect((await display.waitFor(1))[0]).toEqual({

@@ -1,5 +1,5 @@
 /**
- * The tablet's screen while a screensaver shows (D-SAVER-2), through
+ * The tablet's screen while a screensaver shows (D224), through
  * Decaid's display socket (src/api/display.ts), inside Decaid only:
  *
  * - hold(), as it comes up: from Decaid's first frame, remember the

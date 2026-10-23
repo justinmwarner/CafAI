@@ -219,7 +219,7 @@ export interface Settings {
    */
   drinkScreens?: DrinkScreensSettings;
   /**
-   * Settings > Screensaver (D-SAVER-3): whether a screensaver covers CafAI
+   * Settings > Screensaver (D225): whether a screensaver covers CafAI
    * while the machine sleeps, and which. Absent until someone changes it on
    * this device, and read as DEFAULT_SCREENSAVER (settings.ts), on and a
    * different one each day: like temperatureUnit, storage never writes it as
@@ -229,7 +229,7 @@ export interface Settings {
   screensaver?: ScreensaverSetting;
 }
 
-/** Settings > Screensaver (D-SAVER-3). */
+/** Settings > Screensaver (D225). */
 export interface ScreensaverSetting {
   on: boolean;
   /**

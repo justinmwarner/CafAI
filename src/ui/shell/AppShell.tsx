@@ -679,7 +679,7 @@ function Shell({ route, onNavigate, children }: AppShellProps) {
         </Box>
         {bar ? <Tabs route={route} onNavigate={onNavigate} rail={false} /> : null}
       </Box>
-      {/* Last: the screensaver, while the machine sleeps, over everything, the top bar included (D-SAVER-1). */}
+      {/* Last: the screensaver, while the machine sleeps, over everything, the top bar included (D223). */}
       <SaverOverlay />
     </Box>
   );

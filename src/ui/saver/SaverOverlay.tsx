@@ -1,5 +1,5 @@
 /**
- * The screensaver over CafAI (D-SAVER-1 to D-SAVER-4), mounted as the last
+ * The screensaver over CafAI (D223-D226), mounted as the last
  * child of the shell's root and drawn through a portal over everything, the
  * top bar and any dialog left open included.
  *

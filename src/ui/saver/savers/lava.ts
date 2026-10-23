@@ -1,5 +1,5 @@
 /**
- * Lava Latte, after the lava lamp (D-SAVER-5): a tall glass of coffee seen
+ * Lava Latte, after the lava lamp (D227): a tall glass of coffee seen
  * from the side, a little tapered, with blobs of cream rising and sinking in
  * it, merging and splitting. The motion and the field are lavaModel.ts; this
  * file colours the field, scales it up smoothly from its coarse grid, clips it
@@ -26,7 +26,7 @@ import {
   type LavaModel,
 } from './lavaModel.ts';
 
-/** The still is the frame at this moment (D-SAVER-5): the blobs are well on their way. */
+/** The still is the frame at this moment (D227): the blobs are well on their way. */
 const STILL_MS = 20_000;
 
 /**

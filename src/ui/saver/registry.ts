@@ -1,6 +1,6 @@
 /**
  * Every screensaver, in the order Settings > Screensaver lists them
- * (D-SAVER-5): Nightstand first, the quiet one, then the canvas ones.
+ * (D227): Nightstand first, the quiet one, then the canvas ones.
  */
 import { beanfield } from './savers/beanfield.ts';
 import { lava } from './savers/lava.ts';

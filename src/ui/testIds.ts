@@ -187,7 +187,7 @@ export const TID = {
   wakeDialogKeepAwake: 'wake-dialog-keep-awake',
   wakeDialogSave: 'wake-dialog-save',
   wakeDialogDelete: 'wake-dialog-delete',
-  // Settings > Screensaver, and the screensaver over the shell (D-SAVER-1 to D-SAVER-5)
+  // Settings > Screensaver, and the screensaver over the shell (D223-D227)
   saverSection: 'saver-section',
   saverOn: 'saver-on',
   saverPick: 'saver-pick',

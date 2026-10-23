@@ -1,5 +1,5 @@
 /**
- * Brew Rain's columns (D-SAVER-5) as pure code: a head falls down each column
+ * Brew Rain's columns (D227) as pure code: a head falls down each column
  * at 6 to 14 rows a second, a new glyph in each cell it enters, and the
  * drawing (rain.ts) keeps the classic trail by fading the whole canvas a
  * little each frame and painting only what the model reports. Every few

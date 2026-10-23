@@ -348,7 +348,7 @@ export interface MockDecaid {
   /** time-to-ready.reaplugin's channel (D5); shotPlayer.ts drives it on a wake from sleep. */
   publishTimeToReady(frame: TimeToReadyFrame): void;
 
-  // Display (ws/v1/display, the screensaver's dim and wake lock: D-SAVER-2)
+  // Display (ws/v1/display, the screensaver's dim and wake lock: D224)
   getDisplayState(): MockDisplayState;
   /** Every command the display sockets sent, in order. */
   readonly displayCommands: MockDisplayCommand[];

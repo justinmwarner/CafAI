@@ -559,7 +559,7 @@ export interface FakeServices extends Services {
   temperatureUnit: TemperatureUnitStore;
   /** The real store too: `storage.settings.drinkScreens` starts it (D222). */
   drinkScreens: DrinkScreensStore;
-  /** The real store too: `storage.settings.screensaver` starts it (D-SAVER-3). */
+  /** The real store too: `storage.settings.screensaver` starts it (D225). */
   screensaver: ScreensaverSettingStore;
   plugins: FakePluginDirectory;
 }

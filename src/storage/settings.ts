@@ -38,7 +38,7 @@ import type {
 export const DEFAULT_APPEARANCE: Appearance = { mode: 'dark', tint: 'crema' };
 
 /**
- * The screensaver before anyone changes it on this device (D-SAVER-3): on,
+ * The screensaver before anyone changes it on this device (D225): on,
  * a different one each day. Read `settings.screensaver ?? DEFAULT_SCREENSAVER`.
  */
 export const DEFAULT_SCREENSAVER: ScreensaverSetting = { on: true, pick: 'daily' };
@@ -207,7 +207,7 @@ export function normalizeSettings(raw: unknown, defaultModel: string): Settings 
   if (isFunFactsSource(raw['funFacts'])) settings.funFacts = raw['funFacts'];
   // Each drink's screen (D222), as care: the block once someone chose, and only the fields that read.
   if (isRecord(raw['drinkScreens'])) settings.drinkScreens = normalizeDrinkScreens(raw['drinkScreens']);
-  // The screensaver (D-SAVER-3), as care: the block once someone changed it here, the default's values included.
+  // The screensaver (D225), as care: the block once someone changed it here, the default's values included.
   if (isRecord(raw['screensaver'])) settings.screensaver = normalizeScreensaver(raw['screensaver']);
   return settings;
 }
@@ -271,7 +271,7 @@ function isBlank(value: string | null | undefined): boolean {
  * holds one, off as much as on; only a device that never chose takes it.
  * The temperature unit (D172), machine care's answers (D187), the source of
  * fun facts (D198), the drinks' screens (D222) and the screensaver
- * (D-SAVER-3) follow the same rule, the care, drink screens and screensaver
+ * (D225) follow the same rule, the care, drink screens and screensaver
  * blocks whole.
  */
 export function fillBlankSettings(local: Settings, incoming: Settings, defaultModel: string): Settings {
@@ -304,7 +304,7 @@ export function fillBlankSettings(local: Settings, incoming: Settings, defaultMo
   // The drinks' screens (D222), as care: choices made here win whole; a device that never chose takes the incoming ones.
   const screens = local.drinkScreens ?? incoming.drinkScreens;
   if (screens !== undefined) merged.drinkScreens = screens;
-  // The screensaver (D-SAVER-3), as care: a choice made here wins whole, turned off as much as on.
+  // The screensaver (D225), as care: a choice made here wins whole, turned off as much as on.
   const saver = local.screensaver ?? incoming.screensaver;
   if (saver !== undefined) merged.screensaver = saver;
   return merged;

@@ -1,5 +1,5 @@
 /**
- * Settings > Screensaver's Preview (D-SAVER-3): the screensaver to show now,
+ * Settings > Screensaver's Preview (D225): the screensaver to show now,
  * full screen, anywhere (a phone and a computer too). The overlay
  * (SaverOverlay.tsx) shows it until a tap closes it; a preview never dims
  * the screen, never holds it on and never wakes the machine.

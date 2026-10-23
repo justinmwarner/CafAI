@@ -1,5 +1,5 @@
 /**
- * Rising Steam, after Flurry and Mystify (D-SAVER-5): a cup and its saucer
+ * Rising Steam, after Flurry and Mystify (D227): a cup and its saucer
  * drawn as a quiet outline at the bottom centre, and steam rising from the
  * rim in slow curls that leave faint trails. The motion is steamModel.ts; this
  * file turns its density into ink at low alpha, smoothly scaled up from a
@@ -11,7 +11,7 @@ import type { Palette } from '../../palette.ts';
 import type { CanvasSaver, SaverEnv, SaverInstance } from '../types.ts';
 import { advanceSteam, CELL, COLS, createSteamModel, LEFT, RIM_HALF_WIDTH, ROWS, TOP, type SteamModel } from './steamModel.ts';
 
-/** The still is the frame at this moment (D-SAVER-5): the steam has reached its full height and the trails have built up. */
+/** The still is the frame at this moment (D227): the steam has reached its full height and the trails have built up. */
 const STILL_MS = 12_000;
 
 /** Density to alpha: soft, so overlapping wisps thicken without ever turning solid. */

@@ -1,5 +1,5 @@
 /**
- * The model behind Lava Latte (D-SAVER-5), pure: no canvas, no clock. Seven to
+ * The model behind Lava Latte (D227), pure: no canvas, no clock. Seven to
  * nine blobs of cream drift in a glass of coffee as they do in a lava lamp:
  * warmed at the bottom each rises, cooled at the top each sinks, wobbling
  * sideways as it goes, at about 15 px/s. The blobs are metaballs: the field

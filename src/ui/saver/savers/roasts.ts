@@ -2,7 +2,7 @@
  * The seven roasts of a coffee bean, green to French, and their colours: the
  * Bouncing Portafilter's badge steps along them (one roast a wall), and the
  * beans of Beanfield and of the portafilter's corner burst are drawn in them
- * (D-SAVER-5). Fixed colours whatever the tint, as a roast is a roast, built
+ * (D227). Fixed colours whatever the tint, as a roast is a roast, built
  * with oklch() so they reach the canvas as plain #rrggbb.
  */
 import { oklch } from '../../color.ts';

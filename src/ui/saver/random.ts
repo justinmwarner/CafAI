@@ -1,5 +1,5 @@
 /**
- * The seeded random every screensaver draws from (D-SAVER-4): the same seed
+ * The seeded random every screensaver draws from (D226): the same seed
  * gives the same numbers in the same order, so a day's screensaver, a still
  * and a test's frame can be made again exactly. Mulberry32: tiny, fast, and
  * plenty for pictures (not for anything secret).

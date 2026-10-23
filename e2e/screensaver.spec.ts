@@ -5,7 +5,7 @@ import { TID } from '../src/ui/testIds.ts';
 import { goTo, machineRow, openApp } from './helpers.ts';
 
 /**
- * The screensaver (D-SAVER-1 to D-SAVER-4) on the mock Decaid: inside Decaid's
+ * The screensaver (D223-D226) on the mock Decaid: inside Decaid's
  * WebView, as e2e/care.spec.ts pretends, with the page's clock for the minute
  * and the 30 minutes, and the mock's display socket (ws/v1/display) for the
  * dim and the wake lock.

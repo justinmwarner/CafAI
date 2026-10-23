@@ -39,7 +39,7 @@ are the visual reference for anything that plots a shot.
   steam dial's Rosetta, a scene the barista picks, draws its leaves from
   the steam's time: a reading, not clip art.)
 
-The one place for play is the screensaver (D-SAVER-4), shown only while the
+The one place for play is the screensaver (D226), shown only while the
 machine sleeps and nobody is there: classic screensavers (the bouncing DVD
 logo, Starfield, the lava lamp, the falling code) redrawn in code with coffee,
 always dark and dimmed. Still never clip art, mascots or novelty fonts. Like

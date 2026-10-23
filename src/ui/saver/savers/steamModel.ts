@@ -1,5 +1,5 @@
 /**
- * The model behind Rising Steam (D-SAVER-5), pure: no canvas, no clock. A few
+ * The model behind Rising Steam (D227), pure: no canvas, no clock. A few
  * hundred particles are born at the cup's rim, rise at about 35 px/s on a
  * curl-noise flow that drifts slowly with time, live 6 to 10 s and fade in
  * and out. Each step lays a short soft stroke from where a particle was to

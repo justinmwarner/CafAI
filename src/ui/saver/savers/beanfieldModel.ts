@@ -1,5 +1,5 @@
 /**
- * Beanfield's beans (D-SAVER-5) as pure code: about 180 of them in a deep box
+ * Beanfield's beans (D227) as pure code: about 180 of them in a deep box
  * coming toward the viewer, each from far away to past the viewer in about 8 s
  * and then, far away again, at a new place. The drawing (beanfield.ts) paints
  * what is here; every random number comes from the seed and every change from

@@ -1,5 +1,5 @@
 /**
- * "A different one each day" (D-SAVER-3), the pick for anyone who never
+ * "A different one each day" (D225), the pick for anyone who never
  * opens Settings > Screensaver: the screensavers this device can run, in a
  * fixed shuffled order, one a day by the local calendar day (random.ts's
  * localDayNumber), so each comes round in turn and none shows two days

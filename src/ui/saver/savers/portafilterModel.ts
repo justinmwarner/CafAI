@@ -1,5 +1,5 @@
 /**
- * The bounce of the Bouncing Portafilter (D-SAVER-5) as pure code: where the
+ * The bounce of the Bouncing Portafilter (D227) as pure code: where the
  * badge is, how it turns at the walls, which roast it wears, the corners it
  * has found and the beans a corner throws. The drawing (portafilter.ts) only
  * paints what is here; every random number comes from the seed and every

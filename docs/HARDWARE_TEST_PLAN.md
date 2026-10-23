@@ -711,7 +711,7 @@ laptop on the same network for steps 4 and 5. Put any setting back after.
    card's line "Weekly clean due: … shots since …", and a tap opens Weekly
    on that step.
 
-## 20. Screensavers (D-SAVER-1 to D-SAVER-5)
+## 20. Screensavers (D223-D227)
 
 Once Decaid says the DE1 is asleep and nobody has touched the tablet for a
 minute, a screensaver covers CafAI; it dims the screen to 30 and holds it on

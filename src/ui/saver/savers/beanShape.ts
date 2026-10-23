@@ -1,5 +1,5 @@
 /**
- * One coffee bean on a canvas (D-SAVER-5), centred on the origin with its
+ * One coffee bean on a canvas (D227), centred on the origin with its
  * long axis along x: an oval of about 1.45:1 with a lighter rim, so the
  * darkest roasts show on the dark page, and on its front a darker S-shaped
  * crease. Beanfield draws these once into sprites; the Bouncing Portafilter's

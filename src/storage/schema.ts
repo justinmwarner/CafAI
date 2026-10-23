@@ -137,7 +137,7 @@ export const SettingsSchema = z.object({
   funFacts: exact<FunFactsSource>(z.unknown()).optional(),
   /** Each drink's screen (D222); absent from exports made before them. Re-validated by normalizeDrinkScreens, as care is. */
   drinkScreens: exact<DrinkScreensSettings>(z.unknown()).optional(),
-  /** The screensaver (D-SAVER-3); absent from exports made before it. Re-validated by normalizeScreensaver, as care is. */
+  /** The screensaver (D225); absent from exports made before it. Re-validated by normalizeScreensaver, as care is. */
   screensaver: exact<ScreensaverSetting>(z.unknown()).optional(),
 });
 

@@ -1,6 +1,6 @@
 /**
- * When a screensaver covers CafAI (D-SAVER-1) and how far it dims the
- * tablet (D-SAVER-2), as pure functions of what the overlay knows: the
+ * When a screensaver covers CafAI (D223) and how far it dims the
+ * tablet (D224), as pure functions of what the overlay knows: the
  * design's section 3, row by row
  * (docs/superpowers/specs/2026-10-22-screensavers-design.md).
  *

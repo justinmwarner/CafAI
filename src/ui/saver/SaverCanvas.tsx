@@ -1,5 +1,5 @@
 /**
- * One canvas screensaver on a canvas filling the overlay (D-SAVER-4, D-SAVER-5):
+ * One canvas screensaver on a canvas filling the overlay (D226, D227):
  * sized at the device's pixel ratio (at most 1.5) and again as the canvas
  * changes size, run on the shared 30 fps loop (runner.ts) and paused while
  * the page is hidden. Under reduced motion it paints the screensaver's still

@@ -1,5 +1,5 @@
 /**
- * Beanfield, after Windows' Starfield (D-SAVER-5): about 180 coffee beans
+ * Beanfield, after Windows' Starfield (D227): about 180 coffee beans
  * coming toward you through a deep box, small and faint far away, large as
  * they pass, each turning slowly and tumbling so that it now and then shows its
  * back. The beans are pre-drawn into small sprites (one a roast, front and

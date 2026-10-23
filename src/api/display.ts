@@ -1,5 +1,5 @@
 /**
- * Decaid's display socket, ws/v1/display (D-SAVER-2): the tablet's
+ * Decaid's display socket, ws/v1/display (D224): the tablet's
  * brightness and its wake lock, for the screensaver (src/app/saverScreen.ts).
  *
  * Decaid sends the display's state as it opens and after every change (and

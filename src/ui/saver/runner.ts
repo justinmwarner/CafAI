@@ -1,5 +1,5 @@
 /**
- * The frame loop a screensaver runs on (D-SAVER-4), shared by the overlay
+ * The frame loop a screensaver runs on (D226), shared by the overlay
  * and the dev preview: at most 30 frames a second, each a step by the time
  * since the last frame, then a draw. A gap longer than MAX_STEP_MS (a slow
  * frame, the page hidden and back) is stepped as MAX_STEP_MS, so nothing

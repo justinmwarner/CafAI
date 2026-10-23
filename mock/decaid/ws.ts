@@ -14,7 +14,7 @@
  *
  * Two channels take commands: devices (scan, connect) and the display
  * (setBrightness, requestWakeLock, releaseWakeLock: the screensaver's,
- * D-SAVER-2), whose wake lock goes with the socket that asked for it.
+ * D224), whose wake lock goes with the socket that asked for it.
  */
 import { ws, type WebSocketHandler } from 'msw';
 import type { MachineSnapshot } from '../../src/api/types.ts';

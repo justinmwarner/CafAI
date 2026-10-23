@@ -1,5 +1,5 @@
 /**
- * Settings > Screensaver (D-SAVER-3): whether a screensaver covers CafAI on
+ * Settings > Screensaver (D225): whether a screensaver covers CafAI on
  * the tablet while the machine sleeps, which one, and a Preview of it. Applied
  * at once, as the temperature unit is (no Save), through the setting's store
  * (src/app/screensaverSetting.ts); its error shows as TemperatureUnitRow's.

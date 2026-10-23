@@ -1,5 +1,5 @@
 /**
- * What a screensaver is to the host that shows it (D-SAVER-5): a module that
+ * What a screensaver is to the host that shows it (D227): a module that
  * draws on a canvas the host owns, stepped by the host's clock, so the same
  * seed and the same steps always give the same picture. The host
  * (SaverOverlay, and the dev preview in src/ui/preview/saverPreview.ts) sizes
@@ -20,7 +20,7 @@ export type CanvasSaverId = Exclude<SaverId, 'nightstand'>;
 
 /** What the host gives a screensaver to draw with. */
 export interface SaverEnv {
-  /** The dark palette of the barista's tint, whatever their light or dark mode (D-SAVER-4). */
+  /** The dark palette of the barista's tint, whatever their light or dark mode (D226). */
   palette: Palette;
   /** The same seed gives the same screensaver: the day's number on the tablet, a fixed one in tests. */
   seed: number;
@@ -50,7 +50,7 @@ export interface SaverInstance {
   resize(width: number, height: number, scale: number): void;
   /**
    * Paints one picture that stands for this screensaver, for reduced motion
-   * (D-SAVER-4). It may step a fresh state of its own to get there. The host
+   * (D226). It may step a fresh state of its own to get there. The host
    * calls it in place of step and draw, and again each minute.
    */
   still(): void;

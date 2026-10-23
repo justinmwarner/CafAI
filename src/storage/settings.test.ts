@@ -698,7 +698,7 @@ describe('the drinks’ screens (D222)', () => {
   });
 });
 
-describe('the screensaver (D-SAVER-3)', () => {
+describe('the screensaver (D225)', () => {
   function setup() {
     const handle = createDbHandle((onLost) => openCafaiDb(uniqueDbName(), onLost));
     const db = () => handle.get();

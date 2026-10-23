@@ -4,7 +4,7 @@ import { TID } from '../../src/ui/testIds.ts';
 import { goTo } from '../helpers.ts';
 
 /**
- * The screensavers' pictures (D-SAVER-5), for looking at them: Settings >
+ * The screensavers' pictures (D227), for looking at them: Settings >
  * Screensaver, and one frame of each screensaver through the mock builds'
  * held Preview (`?saverPreview=<id>&saverAt=<ms>`, src/ui/saver/preview.ts),
  * on the Decent tablet's own screen, 962x602 CSS px at DPR 1.33, at a pinned

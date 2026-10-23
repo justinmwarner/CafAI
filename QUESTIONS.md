@@ -275,7 +275,7 @@ ranked the same way, in its own section); the questions you answered are in
 
 ## From the screensavers (2026-10-22)
 
-30. **Is 30 the right brightness (D-SAVER-2)?** The screensaver dims the
+30. **Is 30 the right brightness (D224)?** The screensaver dims the
     tablet to 30 on Decaid's 0-100 (or leaves a lower brightness of yours
     alone). Too dim and it reads as off from across the kitchen; too bright
     and it lights the room at night. On Android's automatic brightness,
@@ -283,17 +283,17 @@ ranked the same way, in its own section); the questions you answered are in
     screen, so at night 30 may even be brighter than it was. The tablet
     session (section 20 of docs/HARDWARE_TEST_PLAN.md) shows it; it is one
     number, `SAVER_BRIGHTNESS` in `src/ui/saver/policy.ts`.
-31. **Is a minute untouched the right wait (D-SAVER-1)?** With the machine
+31. **Is a minute untouched the right wait (D223)?** With the machine
     asleep, the screensaver comes up after 60 s without a touch, so a tap
     on Sleep does not cover what you were reading. Shorter and it comes up
     while you read; longer and an unattended screen stays bright longer.
     One number too, `SAVER_IDLE_MS`.
-32. **"A different one each day" as the default (D-SAVER-3)?** Anyone who
+32. **"A different one each day" as the default (D225)?** Anyone who
     never opens Settings gets a new one each day, Nightstand among them. If
     one stays your favourite, or a quieter default suits more people,
     Nightstand could be the default instead; a choice made in Settings is
     kept either way.
-33. **Do Brew Rain's katakana show on the tablet (D-SAVER-5)?** The rain's
+33. **Do Brew Rain's katakana show on the tablet (D227)?** The rain's
     glyphs (コーヒー, エスプレッソ) come from the device's own fonts, which
     Android has; a tablet without a Japanese font would show empty boxes.
     If it does, the rain falls in digits and Latin letters instead, or

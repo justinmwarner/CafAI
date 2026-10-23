@@ -1,5 +1,5 @@
 /**
- * Seeded smooth noise for the screensavers (D-SAVER-4, D-SAVER-5): Perlin's
+ * Seeded smooth noise for the screensavers (D226, D227): Perlin's
  * gradient noise in three dimensions, its table shuffled by the seeded
  * random, so the same seed gives the same field. Rising Steam asks it for a
  * potential and takes the curl of that: a flow that swirls and curls but

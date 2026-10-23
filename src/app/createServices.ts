@@ -66,7 +66,7 @@ export async function createServices(win: Window): Promise<AppServices> {
   const temperatureUnit = createTemperatureUnitStore(storage.settings, (await storage.settings.get()).temperatureUnit);
   // Each drink's scene and going back by itself (D221): the drinks' views read them.
   const drinkScreens = createDrinkScreensStore(storage.settings, (await storage.settings.get()).drinkScreens);
-  // Settings > Screensaver (D-SAVER-3): the overlay over the shell acts on it at once.
+  // Settings > Screensaver (D225): the overlay over the shell acts on it at once.
   const screensaver = createScreensaverSettingStore(storage.settings, (await storage.settings.get()).screensaver);
 
   // Machine care's steps (D183-D190): read now, counted from Decaid's totals behind the start.
@@ -83,7 +83,7 @@ export async function createServices(win: Window): Promise<AppServices> {
   } catch {
     // Storage blocked: every page counts afresh.
   }
-  // The tablet's screen while a screensaver shows (D-SAVER-2), through Decaid's display socket: inside Decaid only.
+  // The tablet's screen while a screensaver shows (D224), through Decaid's display socket: inside Decaid only.
   // A dim left over from a page unloaded while one showed is put back now, so it is never kept as the barista's own.
   const saverScreen = host.insideDecaid
     ? createSaverScreen(createDisplayChannel({ wsOrigin: decaid.wsOrigin, visibility: win.document }), deviceStorage)

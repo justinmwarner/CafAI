@@ -1,5 +1,5 @@
 /**
- * Brew Rain, after The Matrix's falling code (D-SAVER-5): columns of katakana
+ * Brew Rain, after The Matrix's falling code (D227): columns of katakana
  * (the letters of コーヒー, エスプレッソ, ラテ and カフェ) and digits fall down the
  * dark screen, a near-white head ahead of a trail in the shot graph's pressure
  * green, and every few seconds one column spells a coffee word, or one of the

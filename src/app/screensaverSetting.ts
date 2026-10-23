@@ -1,5 +1,5 @@
 /**
- * Settings > Screensaver (D-SAVER-3) as live state, as the temperature unit
+ * Settings > Screensaver (D225) as live state, as the temperature unit
  * is (temperatureUnit.ts): a change applies at once (the overlay and the
  * section read it) and is saved with the other settings, so it is mirrored to
  * Decaid and exported like them.

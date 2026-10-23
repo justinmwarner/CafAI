@@ -1,5 +1,5 @@
 /**
- * Bouncing Portafilter, after the DVD logo's bounce (D-SAVER-5): a badge,
+ * Bouncing Portafilter, after the DVD logo's bounce (D227): a badge,
  * "CafAI" in Figtree over a flat oval with ESPRESSO cut out of it in the page's
  * colour, drifts about and bounces off the edges. Each wall it meets turns it
  * one roast along, green to French; a corner throws a dozen beans and shows

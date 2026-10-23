@@ -1,6 +1,6 @@
 /**
  * Whether the device asks for reduced motion, live: for the screensavers'
- * canvases (D-SAVER-4), which the theme's CSS rule cannot still. Decaid's
+ * canvases (D226), which the theme's CSS rule cannot still. Decaid's
  * WebView may never report it; then the screensavers move.
  */
 import { useSyncExternalStore } from 'react';

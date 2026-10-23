@@ -1,10 +1,10 @@
 /**
- * Nightstand (D-SAVER-5), after a bedside clock, and the screensaver every
+ * Nightstand (D227), after a bedside clock, and the screensaver every
  * other one falls back to: text drawn by React, not a canvas. The time,
  * large, 24-hour as CafAI writes times; under it, when they are known, the
  * next wake time from Decaid's wake times, the bag on the machine and the
  * last shot in one line, as History writes one. The time in ink, the rest in
- * muted ink, on the page's dark colour (D-SAVER-4).
+ * muted ink, on the page's dark colour (D226).
  *
  * The block jumps to a new place each minute, seeded, well inside the edges,
  * so nothing stays lit in one spot all night. A jump is not motion: it

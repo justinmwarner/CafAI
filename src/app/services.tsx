@@ -43,7 +43,7 @@ export function useAppearance(): Appearance {
   return useSyncExternalStore(appearance.subscribe, appearance.get);
 }
 
-/** Settings > Screensaver (D-SAVER-3): on or off, and which. */
+/** Settings > Screensaver (D225): on or off, and which. */
 export function useScreensaverSetting(): ScreensaverSetting {
   const { screensaver } = useServices();
   return useSyncExternalStore(screensaver.subscribe, screensaver.get);

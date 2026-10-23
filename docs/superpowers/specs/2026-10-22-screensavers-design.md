@@ -5,7 +5,7 @@ screensavers, a tap wakes the machine, the screen held on, dimmed, for 30
 minutes, shown only while the machine sleeps, and "A different one each day"
 for anyone who never opens Settings. Built in steps: first the host and six
 screensavers, then a check-in with the owner (results and token spend)
-before Espresso Pipes and Latte Art. Decisions D-SAVER-1 to D-SAVER-6,
+before Espresso Pipes and Latte Art. Decisions D223-D228,
 numbered at the merge.
 
 ## 1. The ask
@@ -30,19 +30,19 @@ art and wants a still for every animation.
 ## 2. What changes
 
 - **A screensaver covers CafAI on the tablet** while Decaid confirms the
-  machine is asleep and nobody has touched the screen for a minute (D-SAVER-1).
+  machine is asleep and nobody has touched the screen for a minute (D223).
 - **A tap clears it and wakes the machine**, as the Wake button does.
 - **The tablet's screen stays on for 30 minutes, dimmed**, then goes black
-  and is let go, for Android's own timeout to turn off (D-SAVER-2).
+  and is let go, for Android's own timeout to turn off (D224).
 - **Settings > Screensaver**: on or off, which one (or a different one each
-  day), and a Preview (D-SAVER-3).
-- **Drawn in code, always dark, still under reduced motion** (D-SAVER-4).
-- **Eight screensavers**, six in the first step (D-SAVER-5), Latte Art behind
-  a gate of its own (D-SAVER-6).
+  day), and a Preview (D225).
+- **Drawn in code, always dark, still under reduced motion** (D226).
+- **Eight screensavers**, six in the first step (D227), Latte Art behind
+  a gate of its own (D228).
 - **PRODUCT.md and DESIGN.md** say the screensaver is the one place for play,
   and the one exception to the motion rules.
 
-## 3. When it shows (D-SAVER-1)
+## 3. When it shows (D223)
 
 | Thing | Rule |
 |---|---|
@@ -53,7 +53,7 @@ art and wants a still for every animation.
 | Down by itself | The machine is anything but confirmed asleep: woken by a wake time, the group head, another skin or Decaid's own screen, or the link dropped. Also when the screensaver is turned off in Settings. |
 | Again | The tap is a touch, so the rule above brings it back only after another minute untouched with the machine still asleep (a wake that failed, say). |
 
-## 4. The screen (D-SAVER-2)
+## 4. The screen (D224)
 
 CafAI opens Decaid's display socket, `/ws/v1/display`, only while it needs
 it, and only inside Decaid. It is the first socket CafAI sends on; Decaid
@@ -76,7 +76,7 @@ lock taken on the socket goes when the socket closes
 
 Preview never dims and never takes the wake lock.
 
-## 5. Settings > Screensaver (D-SAVER-3)
+## 5. Settings > Screensaver (D225)
 
 A section of its own, after Sleep and wake, applied at once as the
 temperature unit is (no Save):
@@ -106,7 +106,7 @@ choice made here from none, as the temperature unit and the fun facts do. A
 pick this build does not know reads as `'daily'`. It travels with the other
 settings to Decaid's backup and the export.
 
-## 6. How they look (D-SAVER-4)
+## 6. How they look (D226)
 
 - **Dark**: every screensaver draws with the dark palette of the barista's
   tint (`paletteFor({mode: 'dark', tint}, false)`), whatever their light or
@@ -132,7 +132,7 @@ settings to Decaid's backup and the export.
 - **Falls back**: a screensaver that cannot get its context, or throws, is
   replaced by Nightstand for the rest of that showing.
 
-## 7. The screensavers (D-SAVER-5)
+## 7. The screensavers (D227)
 
 Each canvas screensaver is a module (`src/ui/saver/savers/<id>.ts`)
 implementing `CanvasSaver` (`src/ui/saver/types.ts`): `create(canvas, env)`
@@ -160,9 +160,9 @@ frame on a desktop at 962×602 (the tablet is several times slower).
 | Screensaver | After | What it draws |
 |---|---|---|
 | **Espresso Pipes** | 3D Pipes | WebGL1, written by hand (no library). Copper, brass and chrome pipes grow through a 3D grid from a fixed camera; ball joints at the turns; about one joint in thirty is a coffee fitting instead (a pressure gauge, a valve wheel, a small cup); at 60% full or after 4 minutes it fades and starts again. Its still: one grown frame. |
-| **Latte Art** | (its own) | See D-SAVER-6. |
+| **Latte Art** | (its own) | See D228. |
 
-## 8. Latte Art (D-SAVER-6, a later step)
+## 8. Latte Art (D228, a later step)
 
 The cup seen from above (its rim, a saucer, the handle). An unseen pitcher
 pours, in turn, a heart, a tulip, a rosetta and a swan: about 25 s a pour, 12
