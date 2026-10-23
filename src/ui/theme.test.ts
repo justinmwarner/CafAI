@@ -28,6 +28,7 @@ describe('theme', () => {
       graph: p.graph,
       waterWash: p.waterWash,
       milkWash: p.milkWash,
+      scene: p.scene,
     });
   });
 

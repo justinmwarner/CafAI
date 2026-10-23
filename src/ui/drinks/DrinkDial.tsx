@@ -24,7 +24,7 @@ import type { SystemStyleObject } from '@mui/system';
 import CheckCircleRounded from '@mui/icons-material/CheckCircleRounded';
 import { useServices } from '../../app/services.tsx';
 import { TID } from '../testIds.ts';
-import { dialReading, dialSpoken } from './drinkModel.ts';
+import { dialReading, dialSpoken, type DrinkPresets } from './drinkModel.ts';
 import { drinkTraceFor, type DrinkRun } from './drinkTrace.ts';
 import type { DrinkKind } from './kinds.ts';
 
@@ -142,9 +142,13 @@ export interface DrinkDialProps {
   target: number | null;
   /** Its size in px: 272 on a tablet, 212 on an upright phone, 184 on a phone on its side. */
   size: number;
+  /** The scene it draws inside the ring, one the drink has (scenes/catalog.ts, Settings > Drink screens). */
+  scene: string;
+  /** The drink's settings in Decaid's workflow, for the flow and temperature its scene follows (D-SCENE-2). */
+  presets: DrinkPresets | null;
 }
 
-export function DrinkDial({ kind, run, target, size }: DrinkDialProps) {
+export function DrinkDial({ kind, run, target, size, scene }: DrinkDialProps) {
   const { telemetry } = useServices();
   const trace = useMemo(() => drinkTraceFor(telemetry), [telemetry]);
   // SVG ids are document-wide; React's own ids hold characters url(#…) does not take.
@@ -200,6 +204,7 @@ export function DrinkDial({ kind, run, target, size }: DrinkDialProps) {
       role="img"
       data-testid={TID.drinkDial}
       data-moving={live ? 'true' : 'false'}
+      data-scene={scene}
       sx={(theme) => ({ width: size, height: size, ...dialStyles(theme, water) })}
     >
       <svg viewBox={`0 0 ${BOX} ${BOX}`} aria-hidden focusable="false">

@@ -12,6 +12,7 @@ import {
   fillBlankSettings,
   normalizeAppearance,
   normalizeCareSettings,
+  normalizeDrinkScreens,
   normalizeSettings,
   sameAppearance,
 } from './settings.ts';
@@ -632,5 +633,65 @@ describe('where fun facts come from (D198)', () => {
     const data = Object.fromEntries([...entries].map(([key, text]) => [key, JSON.parse(text)]));
     const restored = exportFromMirror(data, { appVersion: '1.2.3', defaultModel: MODEL, now: () => new Date(0) });
     expect(restored?.settings.funFacts).toBe('list');
+  });
+});
+
+describe('the drinks’ screens (D-BACK-2)', () => {
+  it('is absent until chosen, so a record saved before it, or by a device that never chose, is unchanged', () => {
+    expect(defaultSettings(MODEL)).not.toHaveProperty('drinkScreens');
+    expect(normalizeSettings(makeSettings(), MODEL)).not.toHaveProperty('drinkScreens');
+    expect(applySettingsPatch(makeSettings(), { activeBagId: 'bag_1' }, MODEL)).not.toHaveProperty('drinkScreens');
+  });
+
+  it('keeps each drink’s fields that read and leaves out the rest, so they read as the defaults', () => {
+    expect(
+      normalizeDrinkScreens({
+        steam: { scene: 'whirlpool', goBack: false, goBackSeconds: 20 },
+        hotWater: { scene: 'Pour!', goBack: 'yes', goBackSeconds: 'ten' },
+        flush: { goBackSeconds: 7.4 },
+        espresso: { scene: 'spray' },
+      }),
+    ).toEqual({ steam: { scene: 'whirlpool', goBack: false, goBackSeconds: 20 }, flush: { goBackSeconds: 7 } });
+    expect(normalizeDrinkScreens(null)).toEqual({});
+    expect(normalizeDrinkScreens({ steam: 'spray' })).toEqual({});
+  });
+
+  it('keeps a scene this build does not know, for the build that does', () => {
+    expect(normalizeDrinkScreens({ steam: { scene: 'tornado' } })).toEqual({ steam: { scene: 'tornado' } });
+  });
+
+  it('keeps the seconds whole and within 5-60', () => {
+    expect(normalizeDrinkScreens({ steam: { goBackSeconds: 2 } }).steam?.goBackSeconds).toBe(5);
+    expect(normalizeDrinkScreens({ steam: { goBackSeconds: 600 } }).steam?.goBackSeconds).toBe(60);
+    expect(normalizeDrinkScreens({ steam: { goBackSeconds: 12.5 } }).steam?.goBackSeconds).toBe(13);
+    expect(normalizeDrinkScreens({ steam: { goBackSeconds: Number.NaN } })).toEqual({});
+  });
+
+  it('is patched one field of one drink at a time, every other kept', () => {
+    const first = applySettingsPatch(makeSettings(), { drinkScreens: { steam: { scene: 'rosetta' } } }, MODEL);
+    expect(first.drinkScreens).toEqual({ steam: { scene: 'rosetta' } });
+    const second = applySettingsPatch(first, { drinkScreens: { steam: { goBack: false }, flush: { goBackSeconds: 5 } } }, MODEL);
+    expect(second.drinkScreens).toEqual({ steam: { scene: 'rosetta', goBack: false }, flush: { goBackSeconds: 5 } });
+    expect(applySettingsPatch(second, { grinderSetting: '14' }, MODEL).drinkScreens).toEqual(second.drinkScreens);
+    expect(applySettingsPatch(second, { drinkScreens: { steam: { scene: undefined } } }, MODEL).drinkScreens?.steam).toEqual({
+      scene: 'rosetta',
+      goBack: false,
+    });
+  });
+
+  it('keeps the choices made on this device whole, and fills only a device that never chose', () => {
+    const mine = makeSettings({ drinkScreens: { steam: { goBack: false } } });
+    const theirs = makeSettings({ drinkScreens: { flush: { scene: 'screen' } } });
+    expect(fillBlankSettings(mine, theirs, MODEL).drinkScreens).toEqual({ steam: { goBack: false } });
+    expect(fillBlankSettings(makeSettings(), theirs, MODEL).drinkScreens).toEqual({ flush: { scene: 'screen' } });
+    expect(fillBlankSettings(makeSettings(), makeSettings(), MODEL)).not.toHaveProperty('drinkScreens');
+  });
+
+  it('survives the Decaid mirror round trip', () => {
+    const settings = makeSettings({ drinkScreens: { hotWater: { scene: 'above', goBackSeconds: 30 } } });
+    const { entries } = buildMirrorEntries({ settings, bags: [], versions: [], iterations: [], conversations: [] }, null, MODEL);
+    const data = Object.fromEntries([...entries].map(([key, text]) => [key, JSON.parse(text)]));
+    const restored = exportFromMirror(data, { appVersion: '1.2.3', defaultModel: MODEL, now: () => new Date(0) });
+    expect(restored?.settings.drinkScreens).toEqual({ hotWater: { scene: 'above', goBackSeconds: 30 } });
   });
 });

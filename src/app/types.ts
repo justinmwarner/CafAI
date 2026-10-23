@@ -16,6 +16,7 @@ import type { ModelInfo } from '../llm/types.ts';
 import type { CoachSourceStore } from '../storage/coachSource.ts';
 import type { Bag, ProfileVersion, Storage } from '../storage/types.ts';
 import type { AppearanceStore } from './appearance.ts';
+import type { DrinkScreensStore } from './drinkScreens.ts';
 import type { TemperatureUnitStore } from './temperatureUnit.ts';
 import type { CareService } from './care/careService.ts';
 
@@ -35,6 +36,12 @@ export interface Services {
   appearance: AppearanceStore;
   /** °C or °F where the barista reads or sets a temperature (D172), as live state. */
   temperatureUnit: TemperatureUnitStore;
+  /**
+   * Each drink's scene and whether its view goes back by itself (D-SCENE-1,
+   * D-BACK-1), as live state. Optional: previews leave it out, and then every
+   * drink draws its default scene and goes back after 10 s.
+   */
+  drinkScreens?: DrinkScreensStore;
   /**
    * Where the coach runs: Anthropic, or CafAI Bridge on the user's computer
    * (src/app/coachAccess.ts). Optional: fakes and previews leave it out, and

@@ -20,7 +20,18 @@
 import { isFunFactsSource } from '../coach/facts/types.ts';
 import { isTemperatureUnit } from '../coach/temperature.ts';
 import { containsKeyLike, redactKeyLike } from './redact.ts';
-import type { Appearance, AppearanceMode, CareSettings, IntakeFilter, Settings, SettingsPatch, WaterBand } from './types.ts';
+import type {
+  Appearance,
+  AppearanceMode,
+  CareSettings,
+  DrinkScreen,
+  DrinkScreenKind,
+  DrinkScreensSettings,
+  IntakeFilter,
+  Settings,
+  SettingsPatch,
+  WaterBand,
+} from './types.ts';
 
 /** Today's look. */
 export const DEFAULT_APPEARANCE: Appearance = { mode: 'dark', tint: 'crema' };
@@ -112,6 +123,37 @@ export function normalizeCareSettings(raw: unknown): CareSettings {
   };
 }
 
+export const DRINK_SCREEN_KINDS: readonly DrinkScreenKind[] = ['steam', 'hotWater', 'flush'];
+
+/** Go back by itself's time (D-BACK-1): whole seconds, 5-60. */
+export const GO_BACK_SECONDS = { min: 5, max: 60 } as const;
+
+/**
+ * A stored drink screens block, read leniently: each drink's fields that
+ * read are kept and the rest left out, so they read as the defaults. A scene
+ * is kept whatever it names (a newer build's scene survives the round trip;
+ * the dial reads one it does not know as the drink's default); seconds are
+ * rounded and kept within 5-60.
+ */
+export function normalizeDrinkScreens(raw: unknown): DrinkScreensSettings {
+  const screens: DrinkScreensSettings = {};
+  if (!isRecord(raw)) return screens;
+  for (const kind of DRINK_SCREEN_KINDS) {
+    const stored = raw[kind];
+    if (!isRecord(stored)) continue;
+    const screen: Partial<DrinkScreen> = {};
+    const scene = stored['scene'];
+    if (typeof scene === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(scene)) screen.scene = scene;
+    if (typeof stored['goBack'] === 'boolean') screen.goBack = stored['goBack'];
+    const seconds = stored['goBackSeconds'];
+    if (typeof seconds === 'number' && Number.isFinite(seconds)) {
+      screen.goBackSeconds = Math.min(GO_BACK_SECONDS.max, Math.max(GO_BACK_SECONDS.min, Math.round(seconds)));
+    }
+    if (Object.keys(screen).length > 0) screens[kind] = screen;
+  }
+  return screens;
+}
+
 export function sameAppearance(a: Appearance, b: Appearance): boolean {
   if (a.mode !== b.mode) return false;
   if (typeof a.tint === 'string' || typeof b.tint === 'string') return a.tint === b.tint;
@@ -139,6 +181,8 @@ export function normalizeSettings(raw: unknown, defaultModel: string): Settings 
   if (isRecord(raw['care'])) settings.care = normalizeCareSettings(raw['care']);
   // Where fun facts come from (D198), as the unit: one this build does not know reads as none chosen.
   if (isFunFactsSource(raw['funFacts'])) settings.funFacts = raw['funFacts'];
+  // Each drink's screen (D-BACK-2), as care: the block once someone chose, and only the fields that read.
+  if (isRecord(raw['drinkScreens'])) settings.drinkScreens = normalizeDrinkScreens(raw['drinkScreens']);
   return settings;
 }
 
@@ -153,6 +197,7 @@ const FIELDS: ReadonlyArray<keyof Settings> = [
   'temperatureUnit',
   'care',
   'funFacts',
+  'drinkScreens',
 ];
 
 /** `undefined` means "not part of this edit", never "clear it"; clearing takes an explicit null. */
@@ -166,6 +211,17 @@ export function applySettingsPatch(current: Settings, patch: SettingsPatch, defa
   if (isRecord(patch.care)) {
     const edits = Object.entries(patch.care).filter(([, value]) => value !== undefined);
     next['care'] = { ...(current.care ?? DEFAULT_CARE), ...Object.fromEntries(edits) };
+  }
+  // Each drink's screen changes field by field too: picking a scene never resets going back by itself (D-BACK-2).
+  if (isRecord(patch.drinkScreens)) {
+    const screens: Record<string, unknown> = { ...(current.drinkScreens ?? {}) };
+    for (const kind of DRINK_SCREEN_KINDS) {
+      const edit = patch.drinkScreens[kind];
+      if (!isRecord(edit)) continue;
+      const edits = Object.entries(edit).filter(([, value]) => value !== undefined);
+      screens[kind] = { ...(current.drinkScreens?.[kind] ?? {}), ...Object.fromEntries(edits) };
+    }
+    next['drinkScreens'] = screens;
   }
   return normalizeSettings(next, defaultModel);
 }
@@ -186,8 +242,9 @@ function isBlank(value: string | null | undefined): boolean {
  * The appearance, like the model, is adopted only while it is still the default.
  * The key's copy in Decaid (D99) is the user's choice wherever this device
  * holds one, off as much as on; only a device that never chose takes it.
- * The temperature unit (D172), machine care's answers (D187) and the source
- * of fun facts (D198) follow the same rule, the care block whole.
+ * The temperature unit (D172), machine care's answers (D187), the source of
+ * fun facts (D198) and the drinks' screens (D-BACK-2) follow the same rule,
+ * the care and drink screens blocks whole.
  */
 export function fillBlankSettings(local: Settings, incoming: Settings, defaultModel: string): Settings {
   const pick = (mine: string | null, theirs: string | null) => (isBlank(mine) && !isBlank(theirs) ? theirs : mine);
@@ -216,5 +273,8 @@ export function fillBlankSettings(local: Settings, incoming: Settings, defaultMo
   // Fun facts (D198), as the unit: a choice made here wins, Off as much as any other.
   const facts = local.funFacts ?? incoming.funFacts;
   if (facts !== undefined) merged.funFacts = facts;
+  // The drinks' screens (D-BACK-2), as care: choices made here win whole; a device that never chose takes the incoming ones.
+  const screens = local.drinkScreens ?? incoming.drinkScreens;
+  if (screens !== undefined) merged.drinkScreens = screens;
   return merged;
 }

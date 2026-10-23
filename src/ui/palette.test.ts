@@ -11,8 +11,8 @@ const ALL_TINTS: readonly (readonly [string, Tint])[] = [
 ];
 
 function colours(palette: Palette): string[] {
-  const { mode: _mode, graph, ...flat } = palette;
-  return [...Object.values(flat), ...Object.values(graph)];
+  const { mode: _mode, graph, scene, ...flat } = palette;
+  return [...Object.values(flat), ...Object.values(graph), ...Object.values(scene)];
 }
 
 describe('the tints', () => {
@@ -94,6 +94,14 @@ describe('buildPalette', () => {
     expect(light.waterWash).toBe(blend(light.graph.flow, light.background, 0.16));
   });
 
+  it('keeps the scenes’ colours the same in every tint, one set per mode', () => {
+    for (const mode of MODES) {
+      const crema = buildPalette(mode, namedTint('crema'));
+      for (const tint of TINTS) expect(buildPalette(mode, tint).scene).toEqual(crema.scene);
+    }
+    expect(buildPalette('dark', namedTint('crema')).scene).not.toEqual(buildPalette('light', namedTint('crema')).scene);
+  });
+
   it('is dark on dark and light on light', () => {
     const dark = buildPalette('dark', namedTint('crema'));
     const light = buildPalette('light', namedTint('crema'));
@@ -167,7 +175,22 @@ const PAIRS: readonly (readonly [string, number, (p: Palette) => readonly (reado
   // "of" line in ink-muted sit over the water and the milk inside the ring.
   ['ink on the dial’s water and milk', 7, (p) => [[p.ink, p.waterWash], [p.ink, p.milkWash]]],
   ['inkMuted on the dial’s water and milk', 4.5, (p) => [[p.inkMuted, p.waterWash], [p.inkMuted, p.milkWash]]],
+  // The drinks' scenes (D-SCENE-4): the fills a scene puts under the figures.
+  // A ramp's mix runs between its ends in lightness, so the ends stand for it.
+  // The rosetta's figures sit on its white milk in dark mode with a halo of
+  // the crema behind them, so dark mode's crema stands for what they read on.
+  ['ink on the scenes’ fills under the figures', 7, (p) => sceneFills(p).map((fill) => [p.ink, fill] as const)],
+  ['inkMuted on the scenes’ fills under the figures', 4.5, (p) => sceneFills(p).map((fill) => [p.inkMuted, fill] as const)],
+  // The ring's arc and tip in the warmth ramp: a reading's graphic, as the graph's series.
+  ['the warmth ramp on the page', 3, (p) => [[p.scene.warmCold, p.background], [p.scene.warmHot, p.background]]],
 ];
+
+/** The scenes' fills that sit under the dial's figures, in this palette's mode. */
+function sceneFills(p: Palette): string[] {
+  const s = p.scene;
+  const rosetta = p.mode === 'dark' ? [s.crema] : [s.crema, s.artCold, s.artWarm];
+  return [s.swirlCold, s.swirlWarm, s.shallow, s.deep, s.screen, ...rosetta];
+}
 
 describe('contrast (WCAG AA) in every tint, at every hue, in both modes', () => {
   for (const [name, minimum, pairs] of PAIRS) {

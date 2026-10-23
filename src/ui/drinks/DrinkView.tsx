@@ -44,6 +44,7 @@ import { DrinkSettingsCard } from './DrinkSettingsCard.tsx';
 import { DrinkTraceChart } from './DrinkTraceChart.tsx';
 import { drinkTraceFor, type DrinkRun } from './drinkTrace.ts';
 import type { DrinkKind } from './kinds.ts';
+import { useDrinkScreen } from './useDrinkScreens.ts';
 
 const MAX_WIDTH = 960;
 /**
@@ -151,6 +152,7 @@ export function DrinkView({ kind, back, onGoBack }: DrinkViewProps) {
   const view = useRef<HTMLDivElement>(null);
   const layout = useOwnLayout(view, arrangement);
   const drinks = useDrinkPresets();
+  const screen = useDrinkScreen(kind);
   const shotSettings = useTelemetry((s) => s.shotSettings);
   const liveTarget = drinkTarget(kind, shotSettings, drinks.presets);
   const liveTimeSet = kind === 'hotWater' ? hotWaterTimeLimit(shotSettings, drinks.presets) : liveTarget;
@@ -188,7 +190,7 @@ export function DrinkView({ kind, back, onGoBack }: DrinkViewProps) {
         )}
       </Box>
       <Box sx={{ gridArea: 'dial', alignSelf: 'center', justifySelf: 'center' }}>
-        <DrinkDial kind={kind} run={run} target={target} size={DIAL_SIZE[layout]} />
+        <DrinkDial kind={kind} run={run} target={target} size={DIAL_SIZE[layout]} scene={screen.scene} presets={drinks.presets} />
       </Box>
       <Box sx={{ gridArea: 'side', alignSelf: 'center', minWidth: 0, display: 'flex', flexDirection: 'column', gap: layout === 'wide' ? 2 : 1.5 }}>
         <DrinkReadouts kind={kind} run={run} presets={drinks.presets} small={layout !== 'wide'} />

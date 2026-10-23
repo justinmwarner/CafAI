@@ -14,6 +14,7 @@ const chromium91Properties = [
   { object: 'navigator', property: 'mediaDevices', message: "Camera access needs Decaid's per-skin consent; CafAI uses <input type=file capture>." },
   { property: 'getUserMedia', message: "Camera access needs Decaid's per-skin consent; CafAI uses <input type=file capture>." },
   { object: 'Response', property: 'json', message: 'Static Response.json() is Chromium 105+.' },
+  { property: 'roundRect', message: 'Canvas roundRect is Chromium 99+. Draw the corners with arcs.' },
 ];
 
 const chromium91Syntax = [
