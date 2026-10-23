@@ -33,6 +33,7 @@ import { ChatSurface } from './ChatSurface.tsx';
 import { formatDateTime } from './format.ts';
 import type { OptionsPart } from './parts/types.ts';
 import { statsCardFor, statsCardShown } from './statsCard.ts';
+import { UsagePrompt } from '../usage/UsagePrompt.tsx';
 
 export interface CoachScreenProps {
   /** Where the "add your API key" card links. */
@@ -222,6 +223,8 @@ function EmptyState({ children }: { children: ReactNode }) {
         <Paper variant="outlined" sx={{ p: 3, maxWidth: 460, width: '100%', textAlign: 'center', bgcolor: 'background.paper' }}>
           {children}
         </Paper>
+        {/* Usage sharing's card or notice (D-USAGE-3): asked before the coach is set up, not after. */}
+        <UsagePrompt placement="panel" />
         <Box sx={{ width: '100%' }}>
           <StatsCard />
         </Box>

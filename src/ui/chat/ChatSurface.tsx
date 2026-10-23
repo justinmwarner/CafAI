@@ -480,14 +480,14 @@ const shortPromptRowSx = { ...promptRowSx, flexShrink: 1, minHeight: 0, overflow
  * posts the stats card at the end of the thread; a taste word goes into the
  * draft. Nothing is sent, and the composer's draft is never lost. Usage
  * sharing's card or notice (D-USAGE-3) leads the row, on a line of its own,
- * while no coach turn runs.
+ * once no coach turn or shot runs.
  */
 function PromptRow() {
   const { actions, busy, hasStats, tasteOpen } = usePartsContext();
   const short = useLayout().nav === 'rail';
   return (
     <Box sx={short ? shortPromptRowSx : promptRowSx}>
-      {busy ? null : <UsagePrompt />}
+      <UsagePrompt busy={busy} />
       {hasStats ? (
         <Chip
           variant="outlined"

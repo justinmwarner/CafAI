@@ -1,14 +1,18 @@
 /**
- * Usage sharing's card and notice (D-USAGE-3), at the foot of the chat in
- * the prompt row: the device's, never the bag's, so never in a transcript,
- * the backup or an export. The card asks first (Europe, D-USAGE-2); the
- * notice tells, elsewhere. Each stays until answered, and nothing waits on it.
+ * Usage sharing's card and notice (D-USAGE-3): at the foot of the chat in
+ * the prompt row, or under the coach screen's panel before there is a chat
+ * (no key, no bag yet). The device's, never the bag's, so never in a
+ * transcript, the backup or an export. The card asks first (Europe,
+ * D-USAGE-2); the notice tells, elsewhere. Each stays until answered, and
+ * nothing waits on it.
  */
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
+import { isShotRunning } from '../../api/workflow.ts';
 import { useOptionalServices } from '../../app/services.tsx';
 import { outsideLinkProps } from '../care/videoPlace.ts';
 import { TID } from '../testIds.ts';
@@ -30,10 +34,36 @@ const NOTICE = {
   no: 'Turn off',
 };
 
-export function UsagePrompt() {
+/** Where it sits: a line of its own in the chat's wrapping prompt row, or under the panel, as wide as it. */
+const PLACED = {
+  row: { flexBasis: '100%' },
+  panel: { width: '100%', maxWidth: 460 },
+} as const;
+
+const unchanging = () => () => undefined;
+const notRunning = () => false;
+
+/**
+ * `busy`: a coach turn runs. The card first shows while neither a coach turn
+ * nor a shot runs, then stays put until answered, so nothing moves under a
+ * thumb mid-reply or mid-shot.
+ */
+export function UsagePrompt({ placement = 'row', busy = false }: { placement?: keyof typeof PLACED; busy?: boolean }) {
   const { usage, state } = useUsage();
-  const insideDecaid = useOptionalServices()?.host.insideDecaid ?? false;
-  if (!usage || !state?.prompt) return null;
+  const services = useOptionalServices();
+  const insideDecaid = services?.host.insideDecaid ?? false;
+  const telemetry = services?.telemetry;
+  const shotRunning = useSyncExternalStore(
+    telemetry ? telemetry.subscribe : unchanging,
+    telemetry ? () => isShotRunning(telemetry.getState()) : notRunning,
+  );
+  const waiting = Boolean(usage && state?.prompt);
+  const idle = !busy && !shotRunning;
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (waiting && idle) setShown(true);
+  }, [waiting, idle]);
+  if (!usage || !state?.prompt || !(shown || idle)) return null;
   const words = state.prompt === 'card' ? CARD : NOTICE;
   return (
     <Paper
@@ -41,7 +71,7 @@ export function UsagePrompt() {
       component="section"
       aria-label="Usage sharing"
       data-testid={TID.usagePrompt}
-      sx={{ flexBasis: '100%', p: 1.5, bgcolor: 'background.paper' }}
+      sx={{ ...PLACED[placement], p: 1.5, bgcolor: 'background.paper' }}
     >
       {words.title ? (
         <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600, mb: 0.5 }}>

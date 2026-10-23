@@ -17,6 +17,7 @@ function fakeUsage(state: UsageState) {
     tag: vi.fn(),
     screen: vi.fn(),
     track: vi.fn(),
+    dispose: vi.fn(),
   };
   return { usage, choose };
 }
@@ -55,6 +56,21 @@ describe('UsagePrompt (D-USAGE-3)', () => {
     const link = screen.getByRole('link', { name: 'What is shared' });
     expect(link).toHaveAttribute('href', PRIVACY_URL);
     expect(link).toHaveAttribute('target', '_blank');
+  });
+
+  it('first shows once no coach turn runs, then stays put while one does', () => {
+    const { usage } = fakeUsage({ sharing: false, prompt: 'card', rule: 'ask' });
+    const at = (busy: boolean) => (
+      <UsageContextForTests value={usage}>
+        <UsagePrompt busy={busy} />
+      </UsageContextForTests>
+    );
+    const { rerender } = render(at(true));
+    expect(screen.queryByTestId(TID.usagePrompt)).toBeNull();
+    rerender(at(false));
+    expect(screen.getByTestId(TID.usagePrompt)).toBeInTheDocument();
+    rerender(at(true));
+    expect(screen.getByTestId(TID.usagePrompt)).toBeInTheDocument();
   });
 
   it('shows nothing once answered, or where the build shares nothing', () => {

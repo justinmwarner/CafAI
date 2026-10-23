@@ -608,6 +608,7 @@ export function createFakeUsage(state: UsageState = { sharing: true, prompt: nul
     tag: () => undefined,
     screen: () => undefined,
     track: (event) => void tracked.push(event),
+    dispose: () => undefined,
   };
   return { usage, tracked };
 }

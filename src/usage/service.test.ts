@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CHOICE_KEY } from './choice.ts';
 import type { ClarityCall } from './clarity.ts';
 import type { RegionSignals } from './region.ts';
-import { createUsageService } from './service.ts';
+import { createUsageService, type UsageService } from './service.ts';
 
 const EUROPE: RegionSignals = { timeZone: 'Europe/Berlin', languages: ['de-DE'] };
 const AMERICA: RegionSignals = { timeZone: 'America/Chicago', languages: ['en-US'] };
@@ -16,8 +16,13 @@ const load = (): ClarityCall => {
   loads += 1;
   return (...args) => void calls.push(args);
 };
-const service = (signals: RegionSignals) =>
-  createUsageService({ win: window, projectId: 'abc123', storage, now: () => new Date('2026-10-22T08:00:00Z'), load, signals });
+/** Every service a test made, disposed after it, so no field guard outlives its test. */
+const made: UsageService[] = [];
+const service = (signals: RegionSignals) => {
+  const usage = createUsageService({ win: window, projectId: 'abc123', storage, now: () => new Date('2026-10-22T08:00:00Z'), load, signals });
+  made.push(usage);
+  return usage;
+};
 const named = (name: string) => calls.filter((call) => call[0] === name);
 
 beforeEach(() => {
@@ -25,6 +30,11 @@ beforeEach(() => {
   loads = 0;
   store = new Map();
   window.history.replaceState(null, '', '/#/');
+});
+
+afterEach(() => {
+  for (const usage of made.splice(0)) usage.dispose();
+  document.body.innerHTML = '';
 });
 
 describe('usage sharing (D-USAGE-3)', () => {
@@ -136,6 +146,32 @@ describe('usage sharing (D-USAGE-3)', () => {
       ['set', 'coach_source', 'none'],
       ['set', 'coach_source', 'api-key'],
     ]);
+  });
+
+  it('keeps every form field out of Clarity while the device shares, and only then (D-USAGE-5)', async () => {
+    const settle = () => new Promise<void>((resolve) => queueMicrotask(resolve));
+    const before = document.body.appendChild(document.createElement('input'));
+    const usage = service(EUROPE);
+    usage.start();
+    expect(before).not.toHaveAttribute('data-private');
+    usage.choose(true);
+    expect(before).toHaveAttribute('data-private', 'secret');
+    const added = document.body.appendChild(document.createElement('textarea'));
+    await settle();
+    expect(added).toHaveAttribute('data-private', 'secret');
+    usage.choose(false);
+    const after = document.body.appendChild(document.createElement('input'));
+    await settle();
+    expect(after).not.toHaveAttribute('data-private');
+  });
+
+  it('stops watching the fields when disposed', async () => {
+    const usage = service(AMERICA);
+    usage.start();
+    usage.dispose();
+    const after = document.body.appendChild(document.createElement('input'));
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    expect(after).not.toHaveAttribute('data-private');
   });
 
   it('starts once', () => {

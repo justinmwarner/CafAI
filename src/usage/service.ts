@@ -7,6 +7,7 @@
 import { mirrorScreen } from './address.ts';
 import { readChoice, WORDING, writeChoice, type UsageChoice } from './choice.ts';
 import { loadClarity, type ClarityCall } from './clarity.ts';
+import { guardFields } from './fields.ts';
 import { consentRule, readRegionSignals, type ConsentRule, type RegionSignals } from './region.ts';
 import type { UsageEvent, UsageTag, UsageTracker } from './types.ts';
 
@@ -29,6 +30,8 @@ export interface UsageService extends UsageTracker {
   tag(key: UsageTag, value: string): void;
   /** The screen now open, by its name in the address. */
   screen(name: string): void;
+  /** Stop watching the page's fields (the services' dispose). Clarity itself goes with the page. */
+  dispose(): void;
 }
 
 export interface UsageDeps {
@@ -65,6 +68,8 @@ export function createUsageService(deps: UsageDeps): UsageService {
   const tags = new Map<UsageTag, string>([['rule', rule]]);
   const sent = new Map<UsageTag, string>();
   let screenName: string | null = null;
+  /** The form fields' guard while the device shares (D-USAGE-5), or null. */
+  let unguard: (() => void) | null = null;
   const listeners = new Set<() => void>();
 
   const live = () => clarity !== null && !stopped;
@@ -79,6 +84,8 @@ export function createUsageService(deps: UsageDeps): UsageService {
   }
 
   function begin(): void {
+    // Before Clarity loads, so the guard's observer comes before Clarity's and runs first.
+    if (!unguard) unguard = guardFields(win.document);
     if (!clarity) clarity = load(win, projectId);
     else if (stopped) clarity('start');
     stopped = false;
@@ -93,6 +100,8 @@ export function createUsageService(deps: UsageDeps): UsageService {
   function end(): void {
     early.length = 0;
     mirrorScreen(win, null);
+    unguard?.();
+    unguard = null;
     if (!clarity || stopped) return;
     clarity('consent', false);
     clarity('stop');
@@ -135,6 +144,11 @@ export function createUsageService(deps: UsageDeps): UsageService {
     screen(name) {
       screenName = name;
       if (state.sharing && live()) mirrorScreen(win, name);
+    },
+    dispose() {
+      unguard?.();
+      unguard = null;
+      listeners.clear();
     },
   };
 }

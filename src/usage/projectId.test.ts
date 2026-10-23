@@ -28,10 +28,11 @@ describe('clarityProjectId (D-USAGE-6)', () => {
     }
   });
 
-  it("is the e2e's stand-in in mock mode only with ?mockUsage=1, never in the demo", () => {
+  it("is the e2e's stand-in in mock mode only with ?mockUsage=1, never in the demo or against a real Decaid", () => {
     vi.stubEnv('MODE', 'mock');
     expect(clarityProjectId(at('?mockUsage=1'))).toBe(MOCK_PROJECT_ID);
     expect(clarityProjectId(at('?mockUsage=1&demo=1'))).toBeNull();
+    expect(clarityProjectId(at('?mockUsage=1&mockDecaid=0'))).toBeNull();
     expect(clarityProjectId(at('?mockSpeed=25'))).toBeNull();
   });
 });

@@ -20,6 +20,7 @@ describe('UsageRow (D-USAGE-3)', () => {
       tag: vi.fn(),
       screen: vi.fn(),
       track: vi.fn(),
+      dispose: vi.fn(),
     };
     render(
       <UsageContextForTests value={usage}>

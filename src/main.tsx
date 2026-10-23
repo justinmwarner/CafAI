@@ -82,6 +82,7 @@ async function startMocks(): Promise<void> {
     { startMockWorker },
     { startMockPersistence },
     { startDemo },
+    { clarityHandlers },
   ] = await Promise.all([
     import('../mock/plan.ts'),
     import('../mock/anthropic/handlers.ts'),
@@ -90,12 +91,14 @@ async function startMocks(): Promise<void> {
     import('../mock/browser.ts'),
     import('../mock/persist.ts'),
     import('../mock/demo/index.ts'),
+    import('../mock/clarity.ts'),
   ]);
   const plan = mockPlanFromUrl(window.location.search);
   // Spread: the demo's timing and voice options, empty outside the demo.
   const coachOptions = { speed: plan.coachSpeed, ...plan.coachOptions };
-  // The same scripted coach behind CafAI Bridge on this computer (127.0.0.1:8877), for "Claude on my computer".
-  const coach = [...anthropicHandlers(coachOptions), ...bridgeHandlers(coachOptions)];
+  // The same scripted coach behind CafAI Bridge on this computer (127.0.0.1:8877), for "Claude on my computer";
+  // and Clarity's stand-in tag for ?mockUsage=1 (D-USAGE-6), so mock mode never reaches Clarity.
+  const coach = [...anthropicHandlers(coachOptions), ...bridgeHandlers(coachOptions), ...clarityHandlers()];
   if (!plan.decaid) {
     const note = demoIgnoredNote(window.location.search);
     if (note) console.info(note);

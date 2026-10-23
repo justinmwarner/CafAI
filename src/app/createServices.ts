@@ -206,6 +206,7 @@ export async function createServices(win: Window): Promise<AppServices> {
       stopCodeWatch?.();
       stopSourceTag?.();
       stopCoachTag?.();
+      usage?.dispose();
       coach.dispose();
       care.dispose();
       telemetry.stop();
