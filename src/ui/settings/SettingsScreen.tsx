@@ -58,6 +58,7 @@ import {
   type GrinderLibrary,
 } from './grinderPicker.ts';
 import { revealInColumn } from './reveal.ts';
+import { ScreensaverSection } from './ScreensaverSection.tsx';
 import { Section } from './Section.tsx';
 import { SleepWakeSection } from './SleepWakeSection.tsx';
 
@@ -594,6 +595,7 @@ export function SettingsScreen() {
         <CoachSettingsSection column={column} />
         <DrinkSettingsSection />
         <SleepWakeSection />
+        <ScreensaverSection />
         <CareSection />
         <AboutSection />
         <LogSection />
