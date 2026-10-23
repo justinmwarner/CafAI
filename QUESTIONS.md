@@ -261,9 +261,11 @@ the questions you answered are in "Answered" at the end.
 28. **Is 30 the right brightness (D-SAVER-2)?** The screensaver dims the
     tablet to 30 on Decaid's 0-100 (or leaves a lower brightness of yours
     alone). Too dim and it reads as off from across the kitchen; too bright
-    and it lights the room at night. The tablet session (section 20 of
-    docs/HARDWARE_TEST_PLAN.md) shows it; it is one number,
-    `SAVER_BRIGHTNESS` in `src/ui/saver/policy.ts`.
+    and it lights the room at night. On Android's automatic brightness,
+    which Decaid reads as 100, CafAI cannot see how dim the room has set the
+    screen, so at night 30 may even be brighter than it was. The tablet
+    session (section 20 of docs/HARDWARE_TEST_PLAN.md) shows it; it is one
+    number, `SAVER_BRIGHTNESS` in `src/ui/saver/policy.ts`.
 29. **Is a minute untouched the right wait (D-SAVER-1)?** With the machine
     asleep, the screensaver comes up after 60 s without a touch, so a tap
     on Sleep does not cover what you were reading. Shorter and it comes up

@@ -153,6 +153,42 @@ describe('createSaverScreen', () => {
     expect(sockets.sockets).toHaveLength(1);
   });
 
+  it('restore() right behind hold(), before Decaid shows the dim, still puts the brightness back after it', () => {
+    const { sockets, storage, screen } = setup();
+    screen.hold();
+    const socket = sockets.latest(PATH);
+    const tablet = decaid(socket, 80);
+    // The dim is on its way; the last frame still says 80.
+    expect(socket.sentJson()).toEqual([{ command: 'requestWakeLock' }, { command: 'setBrightness', brightness: 30 }]);
+    screen.restore();
+    expect(socket.sentJson().slice(2)).toEqual([{ command: 'setBrightness', brightness: 80 }, { command: 'releaseWakeLock' }]);
+    expect(storage.values[SAVER_BRIGHTNESS_KEY]).toBe('80');
+    tablet.answer();
+    expect([tablet.requested, tablet.override]).toEqual([80, false]);
+    expect(storage.values).toEqual({});
+    expect(socket.closedByClient).toBe(true);
+  });
+
+  it('hold() right behind restore(), before Decaid shows the brightness back, dims and holds again', () => {
+    const { sockets, storage, screen } = setup();
+    screen.hold();
+    const socket = sockets.latest(PATH);
+    const tablet = decaid(socket, 80);
+    tablet.answer();
+    screen.restore();
+    screen.hold();
+    expect(socket.sentJson().slice(2)).toEqual([
+      { command: 'setBrightness', brightness: 80 },
+      { command: 'releaseWakeLock' },
+      { command: 'requestWakeLock' },
+      { command: 'setBrightness', brightness: 30 },
+    ]);
+    tablet.answer();
+    expect([tablet.requested, tablet.override]).toEqual([30, true]);
+    expect(storage.values[SAVER_BRIGHTNESS_KEY]).toBe('80');
+    expect(socket.closedByClient).toBe(false);
+  });
+
   it('restore() after release() opens the socket again to put the brightness back', () => {
     const { sockets, storage, screen } = setup();
     screen.hold();

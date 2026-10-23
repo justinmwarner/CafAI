@@ -39,6 +39,19 @@ function insideTheBox(model: BeanfieldModel): void {
   }
 }
 
+describe('a step of any length', () => {
+  it('takes no time from a broken or a backward step, and never hangs on an endless one', () => {
+    const model = createBeanfieldModel(5);
+    const before = model.beans.map((b) => b.z);
+    model.step(Number.NaN);
+    model.step(-1000);
+    expect(model.beans.map((b) => b.z)).toEqual(before);
+    model.step(Number.POSITIVE_INFINITY);
+    model.step(1e12);
+    insideTheBox(model);
+  });
+});
+
 describe('the beans', () => {
   it('number about 180, through the whole depth of the box from the first frame', () => {
     const model = createBeanfieldModel(1);

@@ -149,12 +149,26 @@ export function SaverOverlay({ preview = saverPreview, saverFor = canvasSaver }:
     if (request) preview.show(request.id, { at: request.at, seed: localDayNumber(new Date()) });
   }, [preview]);
 
-  // Up: checked again when the minute untouched would be over, for as long as the machine stays asleep.
+  // When Decaid's frames began saying asleep, this time: its word must stand a few seconds (SAVER_SETTLE_MS) before it counts.
+  // Before the effect below, which reads it as `asleep` turns true.
+  const asleepSince = useRef(Date.now());
+  useEffect(() => {
+    if (asleep) asleepSince.current = Date.now();
+  }, [asleep]);
+
+  // Up: checked again when the minute untouched (or the few seconds asleep) would be over, for as long as the machine stays asleep.
   useEffect(() => {
     if (shown !== null) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const check = () => {
-      const wait = msUntilWanted({ on: setting.on, insideDecaid: host.insideDecaid, asleep, untouchedMs: Date.now() - lastTouch.current });
+      const now = Date.now();
+      const wait = msUntilWanted({
+        on: setting.on,
+        insideDecaid: host.insideDecaid,
+        asleep,
+        untouchedMs: now - lastTouch.current,
+        asleepMs: now - asleepSince.current,
+      });
       if (wait === null) return;
       if (wait > 0) {
         timer = setTimeout(check, wait);

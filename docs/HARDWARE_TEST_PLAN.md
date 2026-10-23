@@ -721,7 +721,9 @@ rate and the fonts. Allow about an hour, most of it waiting. For steps 2 to
 2. **Up.** Back on "A different one each day", tap Sleep in the top bar
    and leave the tablet alone. Expected: a minute later the screensaver
    covers everything, the top bar included, and the screen dims;
-   `requestedBrightness` 30 and `wakeLockOverride` true.
+   `requestedBrightness` 30 and `wakeLockOverride` true. If the tablet is
+   on Android's automatic brightness, repeat this in a dark room and record
+   whether the "dim" made the screen brighter than it was (QUESTIONS 28).
 3. **Held on.** Leave it 10 minutes, past Android's own screen timeout.
    Expected: the screen stays on, dimmed, the screensaver moving.
 4. **A tap.** Tap the screensaver where Espresso is in the top bar.

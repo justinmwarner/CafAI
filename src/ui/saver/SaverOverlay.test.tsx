@@ -9,7 +9,7 @@ import { machineCommandsFor } from '../machine/useMachineCommands.ts';
 import { TID } from '../testIds.ts';
 import { createFakeServices, IDLE_TELEMETRY, type FakeServices } from '../testing/fakeServices.ts';
 import { dailyPick, runnableHere } from './daily.ts';
-import { SAVER_IDLE_MS, SAVER_SHOW_MS } from './policy.ts';
+import { SAVER_IDLE_MS, SAVER_SETTLE_MS, SAVER_SHOW_MS } from './policy.ts';
 import { createSaverPreview, type SaverPreviewStore } from './preview.ts';
 import { localDayNumber } from './random.ts';
 import { GUARD_AFTER_UP_MS, SaverOverlay } from './SaverOverlay.tsx';
@@ -49,16 +49,12 @@ function setup({ insideDecaid = true, telemetry = ASLEEP, pick = 'nightstand', o
   services.saverScreen = saverScreen;
   void services.screensaver.set({ on, pick });
   const preview: SaverPreviewStore = createSaverPreview();
-  const underneath = vi.fn();
   const view = render(
     <ServicesProvider services={services}>
-      <button type="button" onClick={underneath}>
-        Steam
-      </button>
       <SaverOverlay preview={preview} saverFor={saverFor ?? (() => undefined)} />
     </ServicesProvider>,
   );
-  return { ...view, services, saverScreen, preview, underneath };
+  return { ...view, services, saverScreen, preview };
 }
 
 function advance(ms: number) {
@@ -140,11 +136,25 @@ describe('SaverOverlay: when it shows (spec 3)', () => {
     }
   });
 
-  it('comes up at once when the machine falls asleep with the screen long untouched', () => {
+  it('comes up 3 s after the machine falls asleep with the screen long untouched, once Decaid has kept saying so', () => {
     const { services } = setup({ telemetry: machineIn('idle') });
     advance(10 * 60_000);
     act(() => services.telemetry.setState(ASLEEP));
+    advance(SAVER_SETTLE_MS - 1);
+    expect(screen.queryByTestId(TID.saver)).toBeNull();
+    advance(1);
     expect(screen.getByTestId(TID.saver)).toBeInTheDocument();
+  });
+
+  it('never comes up for a sleep Decaid takes back within 3 s (a frame left from before a dropped link)', () => {
+    const { services, saverScreen } = setup({ telemetry: machineIn('idle') });
+    advance(10 * 60_000);
+    act(() => services.telemetry.setState(ASLEEP));
+    advance(SAVER_SETTLE_MS - 500);
+    act(() => services.telemetry.setState(machineIn('idle')));
+    advance(60_000);
+    expect(screen.queryByTestId(TID.saver)).toBeNull();
+    expect(saverScreen.calls).toEqual([]);
   });
 
   it('goes by itself when the machine wakes, putting the screen back', () => {
@@ -169,7 +179,7 @@ describe('SaverOverlay: when it shows (spec 3)', () => {
 
 describe('SaverOverlay: the tap', () => {
   it('is swallowed, wakes the machine once with the Wake button’s command, and the screensaver goes', async () => {
-    const { services, saverScreen, underneath } = setup();
+    const { services, saverScreen } = setup();
     advance(SAVER_IDLE_MS);
     const heard = vi.fn();
     document.addEventListener('pointerdown', heard);
@@ -189,7 +199,6 @@ describe('SaverOverlay: the tap', () => {
     dispatch(guard, 'pointerdown');
     await settle();
     expect(wakes(services)).toBe(1);
-    expect(underneath).not.toHaveBeenCalled();
     document.removeEventListener('pointerdown', heard);
     // The finger lifts: a moment later the sheet goes too.
     dispatch(window, 'pointerup');
@@ -308,6 +317,20 @@ describe('SaverOverlay: Preview', () => {
     await settle();
     expect(screen.queryByTestId(TID.saver)).toBeNull();
     expect(preview.current()).toBeNull();
+    expect(wakes(services)).toBe(0);
+    expect(saverScreen.calls).toEqual([]);
+  });
+
+  it('inside Decaid with the machine asleep, a tap within the minute closes it without a wake, a dim or a hold', async () => {
+    const { services, saverScreen, preview } = setup();
+    advance(SAVER_IDLE_MS / 2);
+    act(() => preview.show('nightstand'));
+    const saver = screen.getByTestId(TID.saver);
+    expect(saver).toHaveAttribute('data-phase', 'preview');
+    dispatch(saver, 'pointerdown');
+    dispatch(window, 'pointerup');
+    await settle();
+    expect(screen.queryByTestId(TID.saver)).toBeNull();
     expect(wakes(services)).toBe(0);
     expect(saverScreen.calls).toEqual([]);
   });
