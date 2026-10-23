@@ -15,6 +15,7 @@ import type { BagPhoto } from '../llm/extractBag.ts';
 import type { ModelInfo } from '../llm/types.ts';
 import type { CoachSourceStore } from '../storage/coachSource.ts';
 import type { Bag, ProfileVersion, Storage } from '../storage/types.ts';
+import type { UsageService } from '../usage/service.ts';
 import type { AppearanceStore } from './appearance.ts';
 import type { TemperatureUnitStore } from './temperatureUnit.ts';
 import type { CareService } from './care/careService.ts';
@@ -47,6 +48,12 @@ export interface Services {
    * and then no step shows a last time and the stats card no line.
    */
   care?: CareService;
+  /**
+   * Usage sharing with Microsoft Clarity (D-USAGE-1): only in a build with
+   * Clarity's project ID (src/usage/projectId.ts). Fakes, previews and every
+   * other build leave it out, and then no card, notice or switch shows.
+   */
+  usage?: UsageService;
 }
 
 export type UiRole = 'user' | 'assistant' | 'system';

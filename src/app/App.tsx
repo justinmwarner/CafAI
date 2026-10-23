@@ -1,14 +1,16 @@
 import { useEffect } from 'react';
-import { ServicesProvider } from './services.tsx';
+import { ServicesProvider, useServices } from './services.tsx';
 import type { Services } from './types.ts';
 import { AppTheme } from '../ui/AppTheme.tsx';
 import { AppShell } from '../ui/shell/AppShell.tsx';
+import { useLayout } from '../ui/shell/layout.ts';
 import { isRemembered, navigate, replaceRoute, routeHref, useRoute, type Route } from '../ui/router.ts';
 import { CareScreen } from '../ui/care/CareScreen.tsx';
 import { CoachScreen } from '../ui/chat/CoachScreen.tsx';
 import { HistoryScreen } from '../ui/history/HistoryScreen.tsx';
 import { LogView } from '../ui/settings/LogView.tsx';
 import { SettingsScreen } from '../ui/settings/SettingsScreen.tsx';
+import { screenOf } from '../ui/usage/screens.ts';
 
 const ROUTE_KEY = 'cafai.route';
 
@@ -33,6 +35,19 @@ function rememberRoute(route: Route): void {
   } catch {
     // Not important enough to surface.
   }
+}
+
+/**
+ * Usage sharing's hooks into the app (D-USAGE-4, D-USAGE-6): it starts once
+ * the app has rendered, then hears each screen and the layout.
+ */
+function UsageTracking({ route }: { route: Route }) {
+  const { usage } = useServices();
+  const layout = useLayout().mode;
+  useEffect(() => usage?.start(), [usage]);
+  useEffect(() => usage?.screen(screenOf(route)), [usage, route]);
+  useEffect(() => usage?.tag('layout', layout), [usage, layout]);
+  return null;
 }
 
 function Routed() {
@@ -64,9 +79,12 @@ function Routed() {
     screen = <CoachScreen />;
   }
   return (
-    <AppShell route={route} onNavigate={navigate}>
-      {screen}
-    </AppShell>
+    <>
+      <UsageTracking route={route} />
+      <AppShell route={route} onNavigate={navigate}>
+        {screen}
+      </AppShell>
+    </>
   );
 }
 
