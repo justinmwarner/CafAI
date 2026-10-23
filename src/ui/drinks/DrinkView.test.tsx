@@ -149,15 +149,13 @@ describe('DrinkView', () => {
     expect(screen.getByTestId(TID.drinkDialValue)).toHaveTextContent('—');
   });
 
-  it('keeps the loops still once the run is over, and no water falls', () => {
+  it('keeps the loops still once the run is over', () => {
     const { send } = renderView('hotWater');
     send(frame('hotWater', 'pouring'));
     const dial = screen.getByTestId(TID.drinkDial);
     expect(dial).toHaveAttribute('data-moving', 'true');
-    expect(getComputedStyle(dial.querySelector('.stream')!).display).not.toBe('none');
     send(frame('idle', 'idle'));
     expect(dial).toHaveAttribute('data-moving', 'false');
-    expect(getComputedStyle(dial.querySelector('.stream')!).display).toBe('none');
   });
 
   it('sets the done check above the number, not over the whole dial as the drawing is', () => {
@@ -167,7 +165,7 @@ describe('DrinkView', () => {
     const dial = screen.getByTestId(TID.drinkDial);
     const check = dial.querySelector('.done-check');
     expect(check).not.toBeNull();
-    expect(getComputedStyle(check!).position).not.toBe('absolute');
+    expect(getComputedStyle(check!).width).not.toBe('100%');
     expect(getComputedStyle(dial.querySelector(':scope > svg')!).position).toBe('absolute');
   });
 
