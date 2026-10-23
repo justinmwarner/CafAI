@@ -20,6 +20,7 @@ import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import { useScreensaverSetting, useServices } from '../../app/services.tsx';
 import { canRun, DAILY, resolvePick, webglStarts } from '../saver/daily.ts';
 import { saverPreview, type SaverPreviewStore } from '../saver/preview.ts';
@@ -135,7 +136,7 @@ export function ScreensaverSection({ savers = SAVERS, webgl, preview = saverPrev
           </Typography>
         ) : null}
         <Box>
-          <Button variant="outlined" onClick={showPreview} data-testid={TID.saverPreview} sx={{ minHeight: 48 }}>
+          <Button variant="tonal" startIcon={<PlayArrowRoundedIcon />} onClick={showPreview} data-testid={TID.saverPreview} sx={{ minHeight: 48 }}>
             Preview
           </Button>
         </Box>
