@@ -24,6 +24,14 @@ export const SAVER_SHOW_MS = 30 * 60_000;
 /** The brightness it dims to, on Decaid's 0-100, unless the barista's own is lower. */
 export const SAVER_BRIGHTNESS = 30;
 
+/**
+ * Decaid's word that the machine sleeps must stand this long first. Across a
+ * dropped link the store keeps the last frame, which goes on saying asleep
+ * when the machine comes back until a fresh frame arrives, well within this;
+ * a machine that came back awake would otherwise flash the screensaver up.
+ */
+export const SAVER_SETTLE_MS = 3_000;
+
 export interface SaverInputs {
   /** Settings > Screensaver's switch. */
   on: boolean;
@@ -33,6 +41,8 @@ export interface SaverInputs {
   asleep: boolean;
   /** Since the last pointerdown or keydown on the window (the events the heartbeat counts), or the page's load. */
   untouchedMs: number;
+  /** How long `asleep` has been true without a break. */
+  asleepMs: number;
 }
 
 /** Whether the screensaver should be up now. */
@@ -48,7 +58,8 @@ export function saverWanted(inputs: SaverInputs): boolean {
 export function msUntilWanted(inputs: SaverInputs): number | null {
   if (!inputs.on || !inputs.insideDecaid || !inputs.asleep) return null;
   const untouched = Number.isFinite(inputs.untouchedMs) ? inputs.untouchedMs : 0;
-  return Math.max(0, SAVER_IDLE_MS - untouched);
+  const asleepFor = Number.isFinite(inputs.asleepMs) ? inputs.asleepMs : 0;
+  return Math.max(0, SAVER_IDLE_MS - untouched, SAVER_SETTLE_MS - asleepFor);
 }
 
 /**

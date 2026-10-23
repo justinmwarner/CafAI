@@ -3554,9 +3554,13 @@ Espresso Pipes and Latte Art after a check-in with the owner.
   minute; a tap clears it and wakes the machine.** Up when it is on in
   Settings, CafAI runs inside Decaid's WebView (`host.insideDecaid`), the
   machine is connected, Decaid reachable and `sleeping` in its frames, and
-  no `pointerdown` or `keydown` has reached the window for 60 s, counted from
-  the page's load at first (`src/ui/saver/policy.ts`); down by itself as
-  soon as any of that stops. The overlay (`src/ui/saver/SaverOverlay.tsx`)
+  has been for 3 s without a break, and no `pointerdown` or `keydown` has
+  reached the window for 60 s, counted from the page's load at first
+  (`src/ui/saver/policy.ts`); down by itself as soon as any of that stops.
+  The 3 s (after the review, 2026-10-22): across a dropped link the store
+  keeps the last frame, which goes on saying asleep when the machine comes
+  back until a fresh frame arrives, so a machine that came back awake would
+  flash the screensaver up, dim and all. The overlay (`src/ui/saver/SaverOverlay.tsx`)
   is the shell's last child, drawn through a portal over everything, the top
   bar and a dialog left open included. It swallows the tap whole as
   TapGuard does (native, capture, non-passive listeners on the press, the
@@ -3581,12 +3585,17 @@ Espresso Pipes and Latte Art after a check-in with the owner.
   30 minutes the screensaver turns black and the socket closes, which lets
   the lock go so that Android's own timeout turns the screen off, the dim
   kept; the page shown again starts it over. As it goes, the brightness goes
-  back (100 is Android's own) and is forgotten once Decaid's frame shows it
-  back; a value left over at start (a page unloaded while dimmed) is put
-  back (`src/app/saverScreen.ts`). A socket that fails changes nothing on
-  screen. Seen on Decaid 0.8.8's simulator (2026-10-22): one frame as the
-  socket opens (docs/verified/02-api.md says none), one or two after each
-  command, and the lock gone with the socket, the brightness kept. Why:
+  back (100 is Android's own) and is forgotten once a frame Decaid sent
+  after that shows it back; a value left over at start (a page unloaded
+  while dimmed) is put back (`src/app/saverScreen.ts`). Decaid's frames trail
+  the commands, so once a dim has gone out the brightness is always sent
+  back, whatever the last frame says, and a hold right behind a restore
+  dims again (after the review, 2026-10-22: a screensaver gone before
+  Decaid's frame showed the dim left the tablet dimmed for good). A socket
+  that fails changes nothing on screen. Seen on Decaid 0.8.8's simulator
+  (2026-10-22): one frame as the socket opens, one or two after each
+  command, and the lock gone with the socket, the brightness kept
+  (docs/verified/02-api.md says so now). Why:
   Decaid lets go of its own wake lock while the machine sleeps, so without
   one Android blanks the screen within minutes; the socket's lock goes with
   the socket, where the REST one outlives CafAI (docs/verified/01-platform.md,

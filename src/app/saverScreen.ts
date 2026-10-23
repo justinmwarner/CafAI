@@ -14,9 +14,18 @@
  *   so Android's own timeout turns the screen off. The dim stays.
  * - restore(), as it goes, and at start with a value left over: open the
  *   socket if it is closed, put the remembered brightness back (100 hands it
- *   back to Android), let the lock go, forget the value once Decaid's frame
- *   shows it back, and close the socket. Nothing remembered and no socket
- *   open: nothing to do, so a start with nothing left over opens nothing.
+ *   back to Android), let the lock go, forget the value once a frame Decaid
+ *   sent after that shows it back, and close the socket. Nothing remembered
+ *   and no socket open: nothing to do, so a start with nothing left over
+ *   opens nothing.
+ *
+ * Decaid's frames trail the commands: a dim just sent is not in the last
+ * frame yet. So what was asked for on this opening counts, not only what the
+ * last frame says: once a dim has gone out, restore() always sends the
+ * barista's brightness after it (a restore right behind a hold would
+ * otherwise see their brightness still in the frame, send nothing, and leave
+ * the dim to land after it), and a hold() right behind a restore() dims again
+ * though the frame still shows the dim.
  *
  * A socket that fails changes nothing on screen: the screensaver shows, only
  * not dimmed and not held on. Like the heartbeat, presence is a nicety,
@@ -62,10 +71,12 @@ export function createSaverScreen(channel: DisplayChannel, storage: BrightnessMe
     // Storage blocked: remembered for this page only.
   }
   let goal: Goal = 'none';
-  // What this opening of the socket has been sent already.
+  // On this opening of the socket: the wake lock asked for, the brightness last asked for, and Decaid's frames, counted.
   let locked = false;
-  let dimmed = false;
-  let putBack = false;
+  let commanded: number | null = null;
+  let frames = 0;
+  /** `frames` when `commanded` was sent: a frame after it may show it. */
+  let commandedAt = 0;
 
   function remember(value: number): void {
     remembered = value;
@@ -85,33 +96,45 @@ export function createSaverScreen(channel: DisplayChannel, storage: BrightnessMe
     }
   }
 
+  function setBrightness(value: number): boolean {
+    if (!channel.send({ command: 'setBrightness', brightness: value })) return false;
+    commanded = value;
+    commandedAt = frames;
+    return true;
+  }
+
+  function releaseLock(): void {
+    channel.send({ command: 'releaseWakeLock' });
+    locked = false;
+  }
+
   function act(): void {
+    if (!channel.isOpen()) return;
     if (goal === 'hold') {
-      if (!channel.isOpen()) return;
       if (!locked) locked = channel.send({ command: 'requestWakeLock' });
       const state = channel.state();
       if (state === null) return;
       if (remembered === null) remember(state.requestedBrightness);
-      if (!dimmed) {
-        const target = dimTo(state.requestedBrightness);
-        dimmed = target === state.requestedBrightness || channel.send({ command: 'setBrightness', brightness: target });
-      }
+      const target = dimTo(remembered ?? state.requestedBrightness);
+      // Asked for already on this opening, or Decaid there already with nothing else on its way.
+      if (commanded === target || (commanded === null && state.requestedBrightness === target)) return;
+      setBrightness(target);
       return;
     }
     if (goal === 'restore') {
-      if (!channel.isOpen()) return;
       const state = channel.state();
       if (state === null) return;
-      if (remembered !== null && state.requestedBrightness !== remembered) {
-        if (!putBack) {
-          putBack = channel.send({ command: 'setBrightness', brightness: remembered });
-          if (putBack && state.wakeLockOverride) channel.send({ command: 'releaseWakeLock' });
+      // Something asked for on this opening may still be on its way, whatever the last frame says.
+      if (remembered !== null && (commanded !== null || state.requestedBrightness !== remembered)) {
+        if (commanded !== remembered) {
+          if (!setBrightness(remembered)) return;
+          if (locked || state.wakeLockOverride) releaseLock();
         }
-        // Forgotten once a frame shows it back; a reconnect meanwhile sends it again.
-        return;
+        // Forgotten once a frame sent after it shows it back; a reconnect meanwhile sends it again.
+        if (frames === commandedAt || state.requestedBrightness !== remembered) return;
       }
       // Back where it was, or nothing to put back: let go of the lock (closing does too) and close.
-      if (state.wakeLockOverride) channel.send({ command: 'releaseWakeLock' });
+      if (state.wakeLockOverride) releaseLock();
       forget();
       goal = 'none';
       channel.want(false);
@@ -121,9 +144,11 @@ export function createSaverScreen(channel: DisplayChannel, storage: BrightnessMe
   const unsubscribe = channel.subscribe((event) => {
     if (event === 'open') {
       locked = false;
-      dimmed = false;
-      putBack = false;
+      commanded = null;
+      frames = 0;
+      commandedAt = 0;
     }
+    if (event === 'state') frames += 1;
     act();
   });
 
@@ -135,7 +160,7 @@ export function createSaverScreen(channel: DisplayChannel, storage: BrightnessMe
     },
     release() {
       goal = 'release';
-      if (channel.isOpen()) channel.send({ command: 'releaseWakeLock' });
+      if (channel.isOpen()) releaseLock();
       channel.want(false);
     },
     restore() {
@@ -146,7 +171,6 @@ export function createSaverScreen(channel: DisplayChannel, storage: BrightnessMe
         return;
       }
       goal = 'restore';
-      putBack = false;
       channel.want(true);
       act();
     },

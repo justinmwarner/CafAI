@@ -1,20 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import type { TelemetryState } from '../../api/types.ts';
 import { IDLE_TELEMETRY } from '../testing/fakeServices.ts';
-import { confirmedAsleep, dimTo, msUntilWanted, SAVER_BRIGHTNESS, SAVER_IDLE_MS, SAVER_SHOW_MS, saverWanted, type SaverInputs } from './policy.ts';
+import {
+  confirmedAsleep,
+  dimTo,
+  msUntilWanted,
+  SAVER_BRIGHTNESS,
+  SAVER_IDLE_MS,
+  SAVER_SETTLE_MS,
+  SAVER_SHOW_MS,
+  saverWanted,
+  type SaverInputs,
+} from './policy.ts';
 
 function telemetry(state: string | null, patch: Partial<TelemetryState> = {}): TelemetryState {
   const machine = state === null ? null : { ...IDLE_TELEMETRY.machine!, state: { state, substate: 'idle' } };
   return { ...IDLE_TELEMETRY, machineConnected: true, unreachable: false, machine, ...patch } as TelemetryState;
 }
 
-const UP: SaverInputs = { on: true, insideDecaid: true, asleep: true, untouchedMs: SAVER_IDLE_MS };
+const UP: SaverInputs = { on: true, insideDecaid: true, asleep: true, untouchedMs: SAVER_IDLE_MS, asleepMs: SAVER_IDLE_MS };
 
 describe('the numbers', () => {
-  it('a minute untouched, 30 minutes shown, dimmed to 30', () => {
+  it('a minute untouched, 30 minutes shown, dimmed to 30, asleep 3 s without a break', () => {
     expect(SAVER_IDLE_MS).toBe(60_000);
     expect(SAVER_SHOW_MS).toBe(1_800_000);
     expect(SAVER_BRIGHTNESS).toBe(30);
+    expect(SAVER_SETTLE_MS).toBe(3_000);
   });
 });
 
@@ -64,6 +75,13 @@ describe('saverWanted (spec 3)', () => {
   it('reads a broken count as just touched', () => {
     expect(saverWanted({ ...UP, untouchedMs: Number.NaN })).toBe(false);
   });
+
+  it('waits for Decaid to have said asleep 3 s without a break: a frame left from before a dropped link says it until a fresh one comes', () => {
+    expect(saverWanted({ ...UP, untouchedMs: 3_600_000, asleepMs: 0 })).toBe(false);
+    expect(saverWanted({ ...UP, untouchedMs: 3_600_000, asleepMs: SAVER_SETTLE_MS - 1 })).toBe(false);
+    expect(saverWanted({ ...UP, untouchedMs: 3_600_000, asleepMs: SAVER_SETTLE_MS })).toBe(true);
+    expect(saverWanted({ ...UP, untouchedMs: 3_600_000, asleepMs: Number.NaN })).toBe(false);
+  });
 });
 
 describe('msUntilWanted', () => {
@@ -74,6 +92,12 @@ describe('msUntilWanted', () => {
     expect(msUntilWanted({ ...UP, asleep: false })).toBeNull();
     expect(msUntilWanted({ ...UP, on: false })).toBeNull();
     expect(msUntilWanted({ ...UP, insideDecaid: false })).toBeNull();
+  });
+
+  it('counts down whichever is longer, the minute untouched or the 3 s asleep', () => {
+    expect(msUntilWanted({ ...UP, untouchedMs: 3_600_000, asleepMs: 1_000 })).toBe(2_000);
+    expect(msUntilWanted({ ...UP, untouchedMs: 59_000, asleepMs: 1_000 })).toBe(2_000);
+    expect(msUntilWanted({ ...UP, untouchedMs: 50_000, asleepMs: 1_000 })).toBe(10_000);
   });
 });
 

@@ -19,6 +19,8 @@ export const BEAN_COUNT = 180;
 export const Z_FAR = 1;
 export const Z_NEAR = 0.1;
 export const CROSSING_MS = 8000;
+/** The longest step taken in one go: the host's are a tenth of a second at most, and a broken or endless one must not hang it. */
+export const MAX_STEP_MS = 10_000;
 /** The box's half width and half height, in screen halves at the far end: a field that fills the middle of the screen far away, and the whole of it as it comes on. */
 export const BOX = 0.4;
 /**
@@ -151,7 +153,8 @@ export function createBeanfieldModel(seed: number, count = BEAN_COUNT): Beanfiel
     order,
     recycled: 0,
     step(dtMs) {
-      const ms = Math.max(0, dtMs);
+      // A broken time is none, and no step is longer than MAX_STEP_MS.
+      const ms = Number.isFinite(dtMs) ? Math.min(Math.max(0, dtMs), MAX_STEP_MS) : 0;
       const seconds = ms / 1000;
       const dz = (depth * ms) / CROSSING_MS;
       for (const bean of beans) {
@@ -160,8 +163,7 @@ export function createBeanfieldModel(seed: number, count = BEAN_COUNT): Beanfiel
         bean.z -= dz;
         if (bean.z < Z_NEAR) {
           // Past the viewer: far away again at a new place, keeping the part of the step it overshot by.
-          let z = bean.z;
-          while (z < Z_NEAR) z += depth;
+          const z = bean.z + depth * Math.ceil((Z_NEAR - bean.z) / depth);
           respawn(bean, Math.min(Z_FAR, z), random);
           model.recycled += 1;
         }
