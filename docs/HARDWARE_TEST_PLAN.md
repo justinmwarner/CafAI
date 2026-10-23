@@ -480,7 +480,7 @@ this bag's, and the banner offers Retry to load the bag's version.
     `/api/v1/workflow` -> `context.beanBatchId` is that batch, and
     `coffeeName` and `coffeeRoaster` are the bean's.
 
-## 13. Steam, hot water and flush views (D146-D150)
+## 13. Steam, hot water and flush views (D146-D150, D-SCENE-1 to D-SCENE-3, D-BACK-1)
 
 Only the mock and Decaid's source say what a DE1 sends while it steams,
 pours hot water or flushes; these checks say what a real one does. Keep the
@@ -511,8 +511,21 @@ traffic log on (Settings > Log) and share it after the section.
 6. **Typing keeps the screen.** Settings, tap in the API key field, start a
    flush on the machine. Expected: Settings stays.
 7. **Go back.** Start hot water from Settings (not typing), then Go back once
-   it is done. Expected: Settings again; after 1, Go back returns to the
-   coach.
+   it is done, before its countdown ends. Expected: Settings again; after 1,
+   Go back returns to the coach.
+8. **Going back by itself.** Start hot water from Settings and leave it.
+   Expected: once it is done, Go back counts down from 10 s, its fill
+   draining, and Settings comes back by itself. Again, and tap **Stay**:
+   the view stays, with Go back. Then turn Hot water's **Go back by itself**
+   off in Settings > Drink screens, run it again: the view stays.
+9. **The scenes on the tablet.** For each drink, pick each of its scenes in
+   Settings > Drink screens and run the drink once (a blind basket for the
+   flush, a pitcher for steam). Expected: the scene moves smoothly the whole
+   run, nothing crosses the number, steam's milk warms as it steams, the
+   flush's water warms as the group heats; under Android's Remove
+   animations, the scene holds still and still fills. Record any scene
+   that stutters, and how the tablet felt (warm, laggy) after a long
+   steam.
 
 ## 14. Machine care: the cleaning guide's video (D152-D155)
 
@@ -744,6 +757,8 @@ laptop on the same network for steps 4 and 5. Put any setting back after.
 | 13 | 5 | Flush: the dial's time against the flush time | | |
 | 13 | 6 | Typing keeps Settings | | |
 | 13 | 7 | Go back to Settings, and to the coach | | |
+| 13 | 8 | Back to Settings by itself after 10 s; Stay keeps the view; off, it stays | | |
+| 13 | 9 | Each scene smooth on the tablet; nothing over the number; the colours warm; still under Remove animations | | |
 | 14 | 1 | Care on Daily, Settings lit, the poster, nothing from YouTube | | |
 | 14 | 2 | 1:48 plays in place with sound; no browser opens | | |
 | 14 | 3 | 0:20 starts it again and takes the mark | | |
