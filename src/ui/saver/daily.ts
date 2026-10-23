@@ -63,6 +63,16 @@ export function runnableSavers(webgl: boolean): SaverId[] {
   return SAVERS.filter((saver) => canRun(saver, webgl)).map((saver) => saver.id);
 }
 
+/** Whether any screensaver needs WebGL: only then is it worth starting one to ask. */
+export function anyNeedsWebgl(): boolean {
+  return SAVERS.some((saver) => saver.context === 'webgl');
+}
+
+/** The screensavers this device can run, asking whether WebGL starts only when one needs it. */
+export function runnableHere(): SaverId[] {
+  return runnableSavers(anyNeedsWebgl() ? webglStarts() : false);
+}
+
 let webglAnswer: boolean | null = null;
 
 /**
