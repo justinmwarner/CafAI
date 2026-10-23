@@ -25,6 +25,7 @@ import type {
   Workflow,
 } from '../../api/types.ts';
 import { createAppearanceStore, type AppearanceStore } from '../../app/appearance.ts';
+import { createDrinkScreensStore, type DrinkScreensStore } from '../../app/drinkScreens.ts';
 import { createTemperatureUnitStore, type TemperatureUnitStore } from '../../app/temperatureUnit.ts';
 import { clone } from '../../util/clone.ts';
 import type { CoachController, CoachState, Services } from '../../app/types.ts';
@@ -369,10 +370,20 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
     },
     settings: {
       get: async () => settings,
-      // As the real one, the care block field by field (D187).
-      update: async ({ care: carePatch, ...patch }) => {
+      // As the real one, the care block field by field (D187), and each drink's screen too (D222).
+      update: async ({ care: carePatch, drinkScreens: screensPatch, ...patch }) => {
         const careEdits = Object.entries(carePatch ?? {}).filter(([, value]) => value !== undefined);
-        settings = { ...settings, ...patch, ...(carePatch ? { care: { ...(settings.care ?? DEFAULT_CARE), ...Object.fromEntries(careEdits) } } : {}) };
+        const screens = { ...settings.drinkScreens };
+        for (const [kind, edit] of Object.entries(screensPatch ?? {}) as [keyof typeof screens, Record<string, unknown> | undefined][]) {
+          const edits = Object.entries(edit ?? {}).filter(([, value]) => value !== undefined);
+          screens[kind] = { ...screens[kind], ...Object.fromEntries(edits) };
+        }
+        settings = {
+          ...settings,
+          ...patch,
+          ...(carePatch ? { care: { ...(settings.care ?? DEFAULT_CARE), ...Object.fromEntries(careEdits) } } : {}),
+          ...(screensPatch ? { drinkScreens: screens } : {}),
+        };
         return settings;
       },
     },
@@ -547,6 +558,8 @@ export interface FakeServices extends Services {
   appearance: AppearanceStore;
   /** The real store too: `storage.settings.temperatureUnit` starts it (D172). */
   temperatureUnit: TemperatureUnitStore;
+  /** The real store too: `storage.settings.drinkScreens` starts it (D222). */
+  drinkScreens: DrinkScreensStore;
   plugins: FakePluginDirectory;
 }
 
@@ -586,6 +599,7 @@ export function createFakeServices(options: {
     appVersion: '0.1.0-test',
     appearance: createAppearanceStore(storage.settings, options.storage?.settings?.appearance),
     temperatureUnit: createTemperatureUnitStore(storage.settings, options.storage?.settings?.temperatureUnit),
+    drinkScreens: createDrinkScreensStore(storage.settings, options.storage?.settings?.drinkScreens),
     plugins: createFakePluginDirectory(),
   };
 }

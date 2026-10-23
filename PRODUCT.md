@@ -35,7 +35,9 @@ are the visual reference for anything that plots a shot.
 
 - A SaaS dashboard: metric tiles, sidebars full of charts, enterprise chrome.
 - Glassy gradients, glassmorphism and glow for decoration.
-- A cartoon coffee shop: mascots, latte-art clip art, novelty fonts.
+- A cartoon coffee shop: mascots, latte-art clip art, novelty fonts. (The
+  steam dial's Rosetta, a scene the barista picks, draws its leaves from
+  the steam's time: a reading, not clip art.)
 
 ## Design Principles
 

@@ -10,7 +10,7 @@
 import type { CSSProperties } from 'react';
 import { createTheme, type Theme } from '@mui/material/styles';
 import { blend } from './color.ts';
-import { buildPalette, DEFAULT_TINT_ID, namedTint, type GraphPalette, type Palette } from './palette.ts';
+import { buildPalette, DEFAULT_TINT_ID, namedTint, type GraphPalette, type Palette, type ScenePalette } from './palette.ts';
 
 /** Figtree for everything; the arrows it lacks (→) come from the CafAI Symbols faces (fonts-symbols.css). */
 export const FONT_FAMILY = '"Figtree", "CafAI Symbols", system-ui, "Helvetica", "Arial", sans-serif';
@@ -22,11 +22,15 @@ export const TOUCH_TARGET = 48;
 export interface CafaiColors {
   raised: string;
   accentSoft: string;
+  /** Go back's countdown, draining over the raised fill (D221). */
+  countdownWash: string;
   live: string;
   graph: GraphPalette;
   /** The drinks' dial: its water and its milk (DrinkDial.tsx). */
   waterWash: string;
   milkWash: string;
+  /** The drinks' scenes inside the dial (src/ui/drinks/scenes, D220). */
+  scene: ScenePalette;
 }
 
 declare module '@mui/material/styles' {
@@ -89,10 +93,12 @@ export function createCafaiTheme(palette: Palette = buildPalette('dark', namedTi
       cafai: {
         raised: palette.raised,
         accentSoft: palette.accentSoft,
+        countdownWash: palette.countdownWash,
         live: palette.live,
         graph: palette.graph,
         waterWash: palette.waterWash,
         milkWash: palette.milkWash,
+        scene: palette.scene,
       },
     },
     shape: { borderRadius: 12 },

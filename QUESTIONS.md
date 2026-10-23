@@ -1,18 +1,19 @@
 # Open questions
 
 Ranked by the cost of a wrong guess (most expensive first). Each says what
-CafAI assumes now and what would change if the guess is wrong. Question 28,
+CafAI assumes now and what would change if the guess is wrong. Question 30,
 out of usage analytics of 2026-10-22, comes first: it is your next step.
 Questions 1-8 came out of the morning session of 2026-10-04, 9-13 out of the
 Decaid alignment of 2026-10-09, 14-16 out of Claude on your computer of
 2026-10-11, 17 out of your list of 2026-10-11, 18-21 out of the gap review's
-four items of 2026-10-15, 22-23 out of the simulator pre-run of 2026-10-16
-and 24-27 out of fun facts of 2026-10-16 (each ranked the same way, in its
-own section); the questions you answered are in "Answered" at the end.
+four items of 2026-10-15, 22-23 out of the simulator pre-run of 2026-10-16,
+24-27 out of fun facts of 2026-10-16 and 28-29 out of the drink scenes of
+2026-10-22 (each ranked the same way, in its own section); the questions you
+answered are in "Answered" at the end.
 
 ## Your next step: usage analytics (2026-10-22)
 
-28. **Does Microsoft Clarity work inside Decaid and on your tablet, and keep
+30. **Does Microsoft Clarity work inside Decaid and on your tablet, and keep
     to what CafAI promises (D216)?** Nobody has run it there yet: the
     masking and the consent calls CafAI relies on were read in clarity-js,
     never seen on the wire, and whether Clarity counts Decaid's "Decent"
@@ -290,6 +291,22 @@ own section); the questions you answered are in "Answered" at the end.
     that would catch more (bare "San Marcos", "Volcán", "Origin" as a
     roaster). If one shows where it should not, the fix is that fact's
     match words in `src/coach/facts/facts.json`.
+
+## From the drink scenes (2026-10-22)
+
+28. **Rosetta in dark mode (D217, D219).** Its leaves grow behind
+    the figures, so in dark mode the figures carry a halo of the crema
+    colour to read on the white milk, and the small "of 50 s" line under the
+    number still reads worst of any scene. It is offered in both modes, as
+    you asked for every scene. If it bothers you on the tablet, either leave
+    it out in dark mode (steam then draws Wand and spray there) or lift the
+    figures above the leaves in that scene alone.
+29. **How warm is warm (D218)?** The scenes and the ring run from cold
+    to warm: steam with its time (the milk warming), hot water by the
+    temperature set, from 40 °C (cold) to 95 °C (warm), the flush by the
+    group from 20 °C under its target (cold) to the target (warm). Each
+    range is a number or two in `src/ui/drinks/scenes/sceneInput.ts`; tea
+    water at 80 °C draws about three quarters warm.
 
 ## Answered
 

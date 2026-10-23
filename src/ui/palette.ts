@@ -99,6 +99,11 @@ export interface Palette {
   accent: string;
   /** A wash of the accent, behind the current navigation item. */
   accentSoft: string;
+  /**
+   * A stronger wash of the accent over the raised fill: Go back's countdown
+   * draining (D221). accentSoft is all but the raised fill in light mode.
+   */
+  countdownWash: string;
   /** Text and icons on the accent. */
   onAccent: string;
   success: string;
@@ -114,9 +119,151 @@ export interface Palette {
   /** The milk inside the steam dial: the ink washed over the page. */
   milkWash: string;
   graph: GraphPalette;
+  /** The drinks' scenes inside the dial (D220). */
+  scene: ScenePalette;
+}
+
+/**
+ * The drinks' scenes inside the dial (D220, docs/superpowers/specs/
+ * 2026-10-22-drink-scenes-design.md, section 5): the same in every tint, as
+ * the graph's colours are, one set per mode. A pair named cold and warm (or
+ * shallow and deep) is a ramp a scene mixes in OKLab as a run goes
+ * (src/ui/drinks/scenes/colors.ts). A fill that sits under the dial's figures
+ * keeps their contrast, and the warmth ramp 3:1 on the page (palette.test.ts).
+ */
+export interface ScenePalette {
+  /** The warmth ramp the ring's arc and its tip take, cold to warm. */
+  warmCold: string;
+  warmHot: string;
+  /** Wand and spray: the milk, cold and warm (below the figures), its foam and bubbles, and the steam over it. */
+  milkCold: string;
+  milkWarm: string;
+  foam: string;
+  steam: string;
+  /** Steel: a wand, a spout, a group head; its lit and shaded edges; an opening in it. */
+  steel: string;
+  steelLight: string;
+  steelDark: string;
+  steelHole: string;
+  /** Whirlpool: the milk from above, under the figures, cold and warm; its foam, the foam's trough, its gloss. */
+  swirlCold: string;
+  swirlWarm: string;
+  swirlFoam: string;
+  swirlTrough: string;
+  sheen: string;
+  /** Rosetta: the crema, its rim and its lighter flecks; the poured milk, cold and warm. */
+  crema: string;
+  cremaRim: string;
+  cremaLight: string;
+  artCold: string;
+  artWarm: string;
+  /** Pour: the water (below the figures), cold and warm, and its lines: surface, stream, rings, bubbles. */
+  waterCold: string;
+  waterWarm: string;
+  waterLineCold: string;
+  waterLineWarm: string;
+  /** From above: the water under the figures, shallow and deep, and the rings on it. */
+  shallow: string;
+  deep: string;
+  ripple: string;
+  /** Shower and Screen: the flush's water, cold and warm. */
+  flushCold: string;
+  flushWarm: string;
+  /** Screen: the shower screen's steel under the figures, its bevel and its holes. */
+  screen: string;
+  screenBevel: string;
+  screenHole: string;
 }
 
 type Lch = readonly [lightness: number, chroma: number, hue: number];
+
+/**
+ * The scenes' colours in OKLCH, per mode, as the mockup draws them. Dark mode's
+ * fills under the figures stay at or below lightness 0.37 and light mode's at
+ * or above 0.86, so ink and ink-muted keep 7:1 and 4.5:1 on them.
+ */
+const SCENE: Record<ThemeMode, Record<keyof ScenePalette, Lch>> = {
+  dark: {
+    warmCold: [0.9, 0.035, 235],
+    warmHot: [0.85, 0.09, 68],
+    milkCold: [0.6, 0.03, 235],
+    milkWarm: [0.77, 0.05, 82],
+    foam: [0.95, 0.015, 85],
+    steam: [0.97, 0.006, 80],
+    steel: [0.6, 0.008, 250],
+    steelLight: [0.85, 0.006, 250],
+    steelDark: [0.4, 0.01, 250],
+    steelHole: [0.18, 0.01, 250],
+    swirlCold: [0.325, 0.014, 240],
+    swirlWarm: [0.37, 0.036, 72],
+    swirlFoam: [0.76, 0.025, 80],
+    swirlTrough: [0.24, 0.02, 60],
+    sheen: [0.95, 0.01, 80],
+    crema: [0.34, 0.045, 62],
+    cremaRim: [0.24, 0.04, 55],
+    cremaLight: [0.42, 0.055, 66],
+    artCold: [0.93, 0.012, 240],
+    artWarm: [0.92, 0.04, 85],
+    waterCold: [0.44, 0.075, 242],
+    waterWarm: [0.46, 0.05, 220],
+    waterLineCold: [0.8, 0.09, 240],
+    waterLineWarm: [0.84, 0.06, 215],
+    shallow: [0.35, 0.045, 232],
+    deep: [0.28, 0.06, 245],
+    ripple: [0.8, 0.07, 235],
+    flushCold: [0.78, 0.1, 240],
+    flushWarm: [0.8, 0.12, 52],
+    screen: [0.31, 0.006, 250],
+    screenBevel: [0.44, 0.008, 250],
+    screenHole: [0.19, 0.005, 250],
+  },
+  light: {
+    warmCold: [0.46, 0.075, 240],
+    warmHot: [0.56, 0.13, 48],
+    milkCold: [0.85, 0.028, 235],
+    milkWarm: [0.875, 0.048, 82],
+    foam: [0.995, 0.004, 85],
+    steam: [0.74, 0.014, 250],
+    steel: [0.72, 0.008, 250],
+    steelLight: [0.93, 0.004, 250],
+    steelDark: [0.52, 0.01, 250],
+    steelHole: [0.3, 0.01, 250],
+    swirlCold: [0.93, 0.014, 240],
+    swirlWarm: [0.9, 0.04, 80],
+    swirlFoam: [0.995, 0.004, 85],
+    swirlTrough: [0.8, 0.03, 70],
+    sheen: [1, 0, 0],
+    crema: [0.88, 0.045, 70],
+    cremaRim: [0.79, 0.05, 66],
+    cremaLight: [0.9, 0.04, 75],
+    artCold: [0.99, 0.005, 240],
+    artWarm: [0.985, 0.022, 85],
+    waterCold: [0.83, 0.055, 240],
+    waterWarm: [0.85, 0.04, 220],
+    waterLineCold: [0.5, 0.12, 245],
+    waterLineWarm: [0.52, 0.08, 220],
+    shallow: [0.935, 0.025, 232],
+    deep: [0.875, 0.045, 242],
+    ripple: [0.55, 0.1, 240],
+    flushCold: [0.54, 0.14, 245],
+    flushWarm: [0.6, 0.16, 45],
+    screen: [0.915, 0.004, 250],
+    screenBevel: [0.82, 0.006, 250],
+    screenHole: [0.7, 0.006, 250],
+  },
+};
+
+/** Built once per mode: the scenes' colours do not follow the tint. */
+const builtScenes: Partial<Record<ThemeMode, Readonly<ScenePalette>>> = {};
+
+function scenePalette(mode: ThemeMode): Readonly<ScenePalette> {
+  const built = builtScenes[mode];
+  if (built) return built;
+  const roles = Object.entries(SCENE[mode]).map(([role, [l, c, h]]) => [role, oklch(l, c, h)] as const);
+  const scene = Object.freeze(Object.fromEntries(roles) as Record<keyof ScenePalette, string>);
+  builtScenes[mode] = scene;
+  return scene;
+}
 
 /** The colours that carry meaning: the same in every tint. */
 const FIXED: Record<ThemeMode, Record<'success' | 'warning' | 'error' | 'info' | 'live' | 'pressure' | 'flow' | 'weightFlow' | 'weight', Lch>> = {
@@ -203,6 +350,7 @@ export function buildPalette(mode: ThemeMode, tint: Tint): Palette {
     line: blend(ink, background, dark ? 0.12 : 0.14),
     accent,
     accentSoft: blend(accent, surface, dark ? 0.16 : 0.12),
+    countdownWash: blend(accent, neutral('raised'), dark ? 0.16 : 0.14),
     onAccent: dark ? oklch(0.2, tint.neutral * 2, tint.hue) : oklch(0.99, 0.005, tint.hue),
     success: fixed('success'),
     warning: fixed('warning'),
@@ -212,6 +360,7 @@ export function buildPalette(mode: ThemeMode, tint: Tint): Palette {
     live: fixed('live'),
     waterWash: blend(flow, background, dark ? 0.22 : 0.16),
     milkWash: blend(ink, background, 0.09),
+    scene: scenePalette(mode),
     graph: {
       pressure,
       flow,
