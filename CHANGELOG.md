@@ -10,9 +10,8 @@ workflow checks against it. Settings > About shows the version you run.
 
 ### Usage sharing
 
-- From the first release built with CafAI's Clarity project (after a test
-  run on a tablet), CafAI shares how it is used with its developer through
-  Microsoft Clarity: the screens you open, where you tap and scroll, and
+- CafAI shares how it is used with its developer through Microsoft
+  Clarity: the screens you open, where you tap and scroll, and
   steps such as a shot read or a change confirmed, with all text hidden; no
   field you type in (the API key, the pairing code, what you write to the
   coach, a bag's details) reaches Clarity at all. Where the device's time
