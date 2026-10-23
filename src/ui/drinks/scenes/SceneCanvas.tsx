@@ -105,10 +105,16 @@ function createPainter(canvas: HTMLCanvasElement, px: number): Painter | null {
   let done = false;
   const methods: Pick<SceneFrame, 'layer' | 'cutFigures' | 'blit'> = {
     layer() {
-      layer.ctx.setTransform(1, 0, 0, 1, 0, 0);
-      layer.ctx.clearRect(0, 0, px, px);
-      layer.ctx.setTransform(k, 0, 0, k, 0, 0);
-      return layer.ctx;
+      const l = layer.ctx;
+      l.setTransform(1, 0, 0, 1, 0, 0);
+      l.clearRect(0, 0, px, px);
+      // Cleared of whatever the last scene or frame left set, as a fresh layer would be.
+      l.globalAlpha = 1;
+      l.globalCompositeOperation = 'source-over';
+      l.setLineDash([]);
+      l.lineDashOffset = 0;
+      l.setTransform(k, 0, 0, k, 0, 0);
+      return l;
     },
     cutFigures(amount) {
       const l = layer.ctx;

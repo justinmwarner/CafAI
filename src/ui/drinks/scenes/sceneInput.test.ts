@@ -175,9 +175,15 @@ describe('sceneInput', () => {
     expect(flush(98).heat).toBe(1);
     expect(flush(93).warmth).toBe(1);
     expect(flush(60).warmth).toBe(0);
-    // A target nobody gave is 93 °C; a group the machine did not report reads cold.
+    // A target nobody gave is 93 °C.
     expect(flush(83, null).heat).toBe(0.5);
-    expect(flush(null).heat).toBe(0);
+    // A frame without the group's reading keeps the run's last one; a run with none reads as at its target.
+    const lastAt83 = sceneInput('flush', at('flush', 'flush', 'pouring', { groupTemperature: null }, { groupTemperature: [80, 83, null] }), 10, {
+      flow: 6,
+      temperature: 93,
+    });
+    expect(lastAt83.heat).toBe(0.5);
+    expect(flush(null).heat).toBe(1);
   });
 });
 

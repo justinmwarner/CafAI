@@ -17,8 +17,9 @@ import type { SceneFactory, SceneFrame, SceneInput } from '../types.ts';
 /** The inside of the ring: its floor and its depth. */
 const FLOOR = C + INSIDE;
 const DEPTH = INSIDE * 2;
+/** The milk fills the bottom of the room from 17% of its depth, rising 12% with the steam's time: D149's 15% reached the "of" line. */
 const MILK_FROM = 0.17;
-const MILK_RISE = 0.15;
+const MILK_RISE = 0.12;
 /** The wave: 80 units a length and 5 high, wide enough to slide one length and still cover the inside. */
 const WAVE = 80;
 const WAVE_S = 2.2;

@@ -87,13 +87,24 @@ function strengthOf(kind: DrinkKind, phase: ScenePhase, frame: MachineFrame | nu
   return clamp(strength, 0, MAX_STRENGTH);
 }
 
+/** The group's newest reading in the run, for a frame that carries none. */
+function lastGroupReading(run: DrinkRun | null): number | null {
+  const readings = run?.groupTemperature ?? [];
+  for (let i = readings.length - 1; i >= 0; i -= 1) {
+    const reading = finite(readings[i]);
+    if (reading !== null) return reading;
+  }
+  return null;
+}
+
 /**
  * How much steam or vapour the drink gives off: steam's heater against its
  * set, hot water's temperature set (it has no live temperature, D148), the
- * group against its target. A flush whose group the machine did not report
- * reads cold rather than claim the group is ready.
+ * group against its target. A frame without the group's reading keeps the
+ * run's last one, so the colour never jolts; a run with none at all reads as
+ * at its target, as every missing reading reads as set.
  */
-function heatOf(kind: DrinkKind, frame: MachineFrame | null, sets: SceneSets): number {
+function heatOf(kind: DrinkKind, run: DrinkRun | null, frame: MachineFrame | null, sets: SceneSets): number {
   switch (kind) {
     case 'steam': {
       const set = sets.temperature ?? DEFAULT_STEAM_SET;
@@ -103,7 +114,8 @@ function heatOf(kind: DrinkKind, frame: MachineFrame | null, sets: SceneSets): n
       return clamp(((sets.temperature ?? DEFAULT_HOT_WATER_SET) - 40) / 55, 0, 1);
     case 'flush': {
       const target = sets.temperature ?? DEFAULT_GROUP_TARGET;
-      return clamp(((finite(frame?.groupTemperature) ?? target - 20) - (target - 20)) / 20, 0, 1);
+      const group = finite(frame?.groupTemperature) ?? lastGroupReading(run) ?? target;
+      return clamp((group - (target - 20)) / 20, 0, 1);
     }
   }
 }
@@ -113,7 +125,7 @@ export function sceneInput(kind: DrinkKind, run: DrinkRun | null, target: number
   const phase = phaseOf(kind, run);
   const frame = run?.latest ?? null;
   const progress = progressOf(kind, run, target);
-  const heat = heatOf(kind, frame, sets);
+  const heat = heatOf(kind, run, frame, sets);
   return {
     kind,
     phase,

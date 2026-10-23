@@ -206,9 +206,9 @@ describe('Simple', () => {
     return named(frame.ctx, 'moveTo')[0]!.args;
   };
 
-  it('fills the milk from 17% of the inside to 32% with the steam time', () => {
+  it('fills the milk from 17% of the inside to 29% with the steam time, short of the "of" line', () => {
     expect(milkTop(0)[1]).toBeCloseTo(FLOOR - 0.17 * DEPTH, 6);
-    expect(milkTop(1)[1]).toBeCloseTo(FLOOR - 0.32 * DEPTH, 6);
+    expect(milkTop(1)[1]).toBeCloseTo(FLOOR - 0.29 * DEPTH, 6);
   });
 
   it('sends three wisps up only while it runs, and none drawn still', () => {
