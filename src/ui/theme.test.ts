@@ -24,7 +24,7 @@ describe('theme', () => {
     expect(t.palette.cafai).toEqual({
       raised: p.raised,
       accentSoft: p.accentSoft,
-      accentWash: p.accentWash,
+      countdownWash: p.countdownWash,
       live: p.live,
       graph: p.graph,
       waterWash: p.waterWash,

@@ -3564,8 +3564,9 @@ beside it, and the plan in `docs/superpowers/plans/`).
   temperature, or the group against its target; and warmth, cold to warm:
   steam's progress (the milk warms with its time), the hot water's set
   temperature, the group against its target. A reading the machine did not
-  send counts as the set one, and a set nobody gave as Decaid's defaults, so
-  a missing number never jolts a scene. The arc and its tip take the warmth
+  send counts as the set one (the group's: the run's last reading, else its
+  target), and a set nobody gave as Decaid's defaults, so a missing number
+  never jolts a scene. The arc and its tip take the warmth
   colour for every drink, where D149 drew ink for steam and the flow's blue
   for water. Why: the owner asked for "the colors change based on the
   numbers we get back", and kept all three mappings offered (the time warms
@@ -3586,7 +3587,11 @@ beside it, and the plan in `docs/superpowers/plans/`).
   moves, and every line, is cut out behind the figures with a soft edge (an
   ellipse round the number and its line, and the check's circle once done;
   steam and vapour may show there at a tenth). The done check sits above
-  the figures instead of pushing them down 17 px. In dark mode Rosetta's
+  the figures instead of pushing them down 17 px, scaled with the dial (28,
+  22 and 19 px) where the scenes cut its circle out. A scene that throws
+  stops drawing, its canvas cleared, rather than take the view down. Simple
+  steam's milk rises 12% of the inside, where D149's 15% reached the "of"
+  line. In dark mode Rosetta's
   figures carry a halo of the crema colour, because its white milk sits
   behind them. The canvas is Chromium 91's: no roundRect (lint refuses it),
   the cut-outs drawn once per size with radial gradients. Why: particles,
@@ -3615,13 +3620,18 @@ beside it, and the plan in `docs/superpowers/plans/`).
   unless the barista keeps it.** When a run the view saw live ends by the
   machine's word (not "Connection lost") and that drink's Go back by itself
   is on (D-BACK-2), Go back shows the seconds left after its label over a
-  fill in the accent's wash draining behind it, with **Stay** before it; at
+  fill draining behind it, with **Stay** before it (on a phone upright, the
+  two in a row of their own under the name); at
   zero it does what Go back does (D146): `location.replace` to the screen
   the view took over, or the coach, then the 350 ms tap guard. Stay, any
   pointer down or key press on the view, the drink starting again, another
   drink or a shot taking the screen, and a text field focused at zero each
   keep the view, Go back staying as before. A screen reader hears once
-  "Done. Going back to the coach in 10 seconds.", never a count. Why: the
+  "Done. Going back to the coach in 10 seconds.", never a count; the screen
+  reads Done. The fill is a new role, `countdownWash`, the accent at 16% over
+  the raised fill in dark mode and 14% in light, ink and ink-muted keeping
+  4.5:1 on it: `accentSoft` all but vanished on the tonal button in light
+  mode. Why: the
   owner's ask for "a setting to have it auto-go-back after some time and let
   the user turn it off/on and specify time", per drink and on after 10 s by
   their answer. This changes D146's "There is no return of its own" at the

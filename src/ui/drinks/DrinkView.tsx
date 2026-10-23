@@ -295,7 +295,7 @@ export function DrinkView({ kind, back, onGoBack }: DrinkViewProps) {
                     bottom: 0,
                     left: 0,
                     zIndex: -1,
-                    bgcolor: 'cafai.accentWash',
+                    bgcolor: 'cafai.countdownWash',
                     transformOrigin: 'left',
                     animation: `${drain} ${countdown.seconds}s linear forwards`,
                     // A wash that cannot drain says nothing: under reduced motion the seconds count alone.

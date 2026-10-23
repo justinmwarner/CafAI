@@ -75,7 +75,8 @@ newest machine frame, the target and the drink's settings. A pure function
 - A flow set nobody gave counts as Decaid's defaults (steam 0.8, hot water
   10, flush 6 ml/s); a temperature set nobody gave as steam 150 °C, hot water
   85 °C, the group 93 °C. A reading the machine did not send (null) counts as
-  the set one, so a missing number never jolts a scene.
+  the set one (the flush's group: the run's last reading first), so a missing
+  number never jolts a scene.
 - Hot water has no live temperature (D148): its warmth is the temperature
   set, constant through a run. That is still the drink's number: tea water at
   70 °C draws bluer than an americano's at 92 °C.
@@ -124,8 +125,9 @@ Steam:
   white warms with progress. Flow and pressure do not show (nothing in a cup
   follows them). In dark mode the figures carry a halo of the crema colour
   (a text shadow), so they read on the white leaves.
-- **Simple**: today's milk and three wisps (D149), as they were; the ring
-  takes the warmth.
+- **Simple**: today's milk and three wisps (D149), as they were but for the
+  milk, which stops short of the "of" line (12% of the inside, not 15%);
+  the ring takes the warmth.
 
 Hot water:
 
@@ -225,9 +227,11 @@ other settings.
   lost) while its view is on screen and saw the run live, and that drink's Go
   back by itself is on. A view opened later on a finished run never counts.
 - **The countdown**: Go back shows the seconds left after its label ("8 s",
-  tabular, ink-muted, 2.6em wide so the button keeps its width) and a fill in
-  the accent's wash behind it draining from right to left, linear, over the
-  time set. **Stay** (a text button in the accent, "Stay on this screen" to a
+  tabular, ink-muted, 2.6em wide so the button keeps its width) and a fill
+  behind it draining from right to left, linear, over the time set, in a new
+  role, `countdownWash` (the accent's wash, `accentSoft`, does not show on the
+  tonal button in light mode). On a phone upright, Stay and Go back take a
+  row of their own under the name. **Stay** (a text button in the accent, "Stay on this screen" to a
   screen reader) sits before it while it counts.
 - **It stops for this run**, Go back staying as today, on: Stay; any pointer
   down or key press inside the view (a stepper, a scroll); the run's drink
