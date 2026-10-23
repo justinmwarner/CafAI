@@ -1,0 +1,167 @@
+// @vitest-environment jsdom
+import { beforeEach, describe, expect, it } from 'vitest';
+import { CHOICE_KEY } from './choice.ts';
+import type { ClarityCall } from './clarity.ts';
+import type { RegionSignals } from './region.ts';
+import { createUsageService } from './service.ts';
+
+const EUROPE: RegionSignals = { timeZone: 'Europe/Berlin', languages: ['de-DE'] };
+const AMERICA: RegionSignals = { timeZone: 'America/Chicago', languages: ['en-US'] };
+
+let calls: unknown[][];
+let loads: number;
+let store: Map<string, string>;
+const storage = { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => void store.set(key, value) };
+const load = (): ClarityCall => {
+  loads += 1;
+  return (...args) => void calls.push(args);
+};
+const service = (signals: RegionSignals) =>
+  createUsageService({ win: window, projectId: 'abc123', storage, now: () => new Date('2026-10-22T08:00:00Z'), load, signals });
+const named = (name: string) => calls.filter((call) => call[0] === name);
+
+beforeEach(() => {
+  calls = [];
+  loads = 0;
+  store = new Map();
+  window.history.replaceState(null, '', '/#/');
+});
+
+describe('usage sharing (D-USAGE-3)', () => {
+  it('asks first in Europe and loads nothing until yes', () => {
+    const usage = service(EUROPE);
+    expect(usage.getState()).toEqual({ sharing: false, prompt: 'card', rule: 'ask' });
+    usage.start();
+    usage.track('shot_read');
+    usage.screen('coach');
+    expect(loads).toBe(0);
+    expect(window.location.search).toBe('');
+
+    usage.choose(true);
+    expect(loads).toBe(1);
+    expect(calls[0]).toEqual(['consentv2', { analytics_Storage: 'granted', ad_Storage: 'denied' }]);
+    expect(named('set')).toContainEqual(['set', 'rule', 'ask']);
+    expect(named('event')).toEqual([]);
+    expect(window.location.search).toBe('?screen=coach');
+    expect(usage.getState()).toEqual({ sharing: true, prompt: null, rule: 'ask' });
+    expect(JSON.parse(store.get(CHOICE_KEY)!)).toEqual({ choice: 'yes', at: '2026-10-22T08:00:00.000Z', wording: 1, rule: 'ask' });
+  });
+
+  it('No thanks loads nothing, now or at the next start', () => {
+    service(EUROPE).choose(false);
+    const again = service(EUROPE);
+    again.start();
+    expect(again.getState()).toEqual({ sharing: false, prompt: null, rule: 'ask' });
+    expect(loads).toBe(0);
+  });
+
+  it('shares elsewhere from the start, with the notice, claiming no consent', () => {
+    const usage = service(AMERICA);
+    expect(usage.getState()).toEqual({ sharing: true, prompt: 'notice', rule: 'notice' });
+    usage.track('coach_message');
+    usage.start();
+    expect(loads).toBe(1);
+    expect(calls[0]).toEqual(['consentv2', { ad_Storage: 'denied' }]);
+    // An event from before the start goes once Clarity is there.
+    expect(named('event')).toEqual([['event', 'coach_message']]);
+    usage.track('shot_read');
+    expect(named('event')).toEqual([
+      ['event', 'coach_message'],
+      ['event', 'shot_read'],
+    ]);
+  });
+
+  it('OK keeps sharing and puts the notice away', () => {
+    const usage = service(AMERICA);
+    usage.start();
+    usage.choose(true);
+    expect(usage.getState()).toEqual({ sharing: true, prompt: null, rule: 'notice' });
+    expect(named('consentv2')).toHaveLength(1);
+  });
+
+  it('Turn off erases and stops Clarity, takes the screen out and sends nothing more', () => {
+    const usage = service(AMERICA);
+    usage.start();
+    usage.screen('settings');
+    expect(window.location.search).toBe('?screen=settings');
+    usage.choose(false);
+    expect(named('consent')).toEqual([['consent', false]]);
+    expect(named('stop')).toEqual([['stop']]);
+    expect(window.location.search).toBe('');
+    usage.track('shot_read');
+    usage.tag('layout', 'phone');
+    usage.screen('coach');
+    expect(named('event')).toEqual([]);
+    expect(named('set').some((call) => call[1] === 'layout')).toBe(false);
+    expect(window.location.search).toBe('');
+  });
+
+  it('turned back on in the same page, starts Clarity again', () => {
+    const usage = service(AMERICA);
+    usage.start();
+    usage.choose(false);
+    usage.choose(true);
+    expect(loads).toBe(1);
+    expect(named('start')).toEqual([['start']]);
+    expect(named('consentv2')).toHaveLength(2);
+    expect(named('set').filter((call) => call[1] === 'rule')).toHaveLength(2);
+  });
+
+  it('a stored answer stands, under either rule', () => {
+    store.set(CHOICE_KEY, JSON.stringify({ choice: 'no', at: '2026-10-01T00:00:00.000Z', wording: 1, rule: 'notice' }));
+    const usage = service(AMERICA);
+    usage.start();
+    expect(usage.getState()).toEqual({ sharing: false, prompt: null, rule: 'notice' });
+    expect(loads).toBe(0);
+  });
+
+  it('a yes given to the notice never claims analytics consent, even from a zone that now asks', () => {
+    store.set(CHOICE_KEY, JSON.stringify({ choice: 'yes', at: '2026-10-01T00:00:00.000Z', wording: 1, rule: 'notice' }));
+    const usage = service(EUROPE);
+    usage.start();
+    expect(usage.getState()).toEqual({ sharing: true, prompt: null, rule: 'ask' });
+    expect(calls[0]).toEqual(['consentv2', { ad_Storage: 'denied' }]);
+  });
+
+  it('sends each tag once, and again only when it changes', () => {
+    const usage = service(AMERICA);
+    usage.tag('cafai_version', '0.1.3');
+    usage.start();
+    usage.tag('coach_source', 'none');
+    usage.tag('coach_source', 'none');
+    usage.tag('coach_source', 'api-key');
+    expect(named('set')).toEqual([
+      ['set', 'rule', 'notice'],
+      ['set', 'cafai_version', '0.1.3'],
+      ['set', 'coach_source', 'none'],
+      ['set', 'coach_source', 'api-key'],
+    ]);
+  });
+
+  it('starts once', () => {
+    const usage = service(AMERICA);
+    usage.start();
+    usage.start();
+    expect(loads).toBe(1);
+    expect(named('consentv2')).toHaveLength(1);
+  });
+
+  it('holds at most 50 early events', () => {
+    const usage = service(AMERICA);
+    for (let i = 0; i < 60; i += 1) usage.track('coach_message');
+    usage.start();
+    expect(named('event')).toHaveLength(50);
+  });
+
+  it('tells its listeners when the state changes', () => {
+    const usage = service(EUROPE);
+    let heard = 0;
+    const stop = usage.subscribe(() => {
+      heard += 1;
+    });
+    usage.choose(true);
+    stop();
+    usage.choose(false);
+    expect(heard).toBe(1);
+  });
+});
