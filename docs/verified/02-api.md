@@ -261,7 +261,7 @@ Every frame is a JSON text message. The server pushes; no subscription message i
 | `ws/v1/scale/snapshot` (primary scale) | `{status:"connected"\|"disconnected"}` or `WeightSnapshot` | A status frame | Stays open. Weight frames only while connected. Any non-connected state sends `disconnected`. | ws:72-85, 562-614; web/scale_handler.dart:236-289 |
 | `ws/v1/scales/{id}/snapshot` (primary or auxiliary) | status frames or `AddressedScaleSnapshot` | `{status:"connected"}`, or `{error:"Scale not found: …"}` and then close | Re-binds | ws:99-115, 586-604; web/scale_handler.dart:140-234 |
 | `ws/v1/devices` | `DevicesState`; `DeviceConnectResult`; `{error}` | Current state, replayed (BehaviorSubject) | Authoritative link state. Accepts `{command:"scan"\|"connect"\|"disconnect", …}`. | ws:189-209, 882-1057; web/devices_handler.dart:16-21,136-185,468-505 |
-| `ws/v1/display` | `DisplayState` | – | Accepts `setBrightness`, `requestWakeLock` and `releaseWakeLock`. The wake lock is released when the socket closes. | ws:210-223, 1059-1107 |
+| `ws/v1/display` | `DisplayState` | The current state (seen on the Decaid 0.8.8 simulator, 2026-10-22: one frame on connect, then one or two after each command) | Accepts `setBrightness`, `requestWakeLock` and `releaseWakeLock`. The wake lock is released when the socket closes; the brightness stays as set. | ws:210-223, 1059-1107 |
 
 ### Sample rate
 
