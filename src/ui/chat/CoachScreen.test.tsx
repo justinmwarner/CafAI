@@ -5,7 +5,7 @@ import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { CoachState, CoachUiMessage } from '../../app/types.ts';
 import type { LiveSample, ShotStateEvent } from '../../api/types.ts';
-import { createFakeServices, IDLE_TELEMETRY, type FakeServices } from '../testing/fakeServices.ts';
+import { createFakeServices, createFakeUsage, IDLE_TELEMETRY, type FakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
 import { CoachScreen } from './CoachScreen.tsx';
 import { BAG_FROM_PHOTO, BEAN_OPTIONS, KIAMBU, SANTOS, coachStateFor } from './testing/fixtures.ts';
@@ -94,6 +94,14 @@ describe('CoachScreen', () => {
     renderCoach({ ready: false });
     expect(screen.getByText('Loading your bags…')).toBeInTheDocument();
     expect(screen.queryByTestId(TID.chat)).toBeNull();
+  });
+
+  it('asks about usage sharing under the key panel, before the coach is set up (D212)', () => {
+    const services = createFakeServices({ coach: { ...coachStateFor('diff'), hasApiKey: false } });
+    services.usage = createFakeUsage({ sharing: false, prompt: 'card', rule: 'ask' }).usage;
+    renderWithServices(<CoachScreen />, services);
+    expect(screen.getByText('Add your Anthropic API key to start coaching')).toBeInTheDocument();
+    expect(screen.getByTestId(TID.usagePrompt)).toHaveTextContent('Help improve CafAI?');
   });
 
   it('asks for an API key before anything else', () => {

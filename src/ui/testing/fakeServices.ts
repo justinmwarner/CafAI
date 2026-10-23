@@ -32,6 +32,8 @@ import { clone } from '../../util/clone.ts';
 import type { CoachController, CoachState, Services } from '../../app/types.ts';
 import type { PluginDirectory } from '../../api/plugins.ts';
 import type { ModelInfo } from '../../llm/types.ts';
+import type { UsageService, UsageState } from '../../usage/service.ts';
+import type { UsageEvent } from '../../usage/types.ts';
 import type {
   Bag,
   CafaiExport,
@@ -604,4 +606,27 @@ export function createFakeServices(options: {
     screensaver: createScreensaverSettingStore(storage.settings, options.storage?.settings?.screensaver),
     plugins: createFakePluginDirectory(),
   };
+}
+
+/**
+ * Usage sharing that records the steps it is told (D213): sharing, with
+ * nothing waiting in the chat unless `state` says so. Its state is one
+ * object, as the real service's is between changes.
+ */
+export function createFakeUsage(state: UsageState = { sharing: true, prompt: null, rule: 'notice' }): {
+  usage: UsageService;
+  tracked: UsageEvent[];
+} {
+  const tracked: UsageEvent[] = [];
+  const usage: UsageService = {
+    getState: () => state,
+    subscribe: () => () => undefined,
+    start: () => undefined,
+    choose: () => undefined,
+    tag: () => undefined,
+    screen: () => undefined,
+    track: (event) => void tracked.push(event),
+    dispose: () => undefined,
+  };
+  return { usage, tracked };
 }

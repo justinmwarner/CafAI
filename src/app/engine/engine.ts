@@ -55,6 +55,10 @@
  * - Everything is persisted as it happens (the WebView may be unloaded after
  *   ten minutes in the background without warning). Progress notices are the
  *   exception: they are never stored.
+ * - Each coach step is counted for usage sharing (D213): a message, a
+ *   bag's first details, a load, a shot read, a taste, a confirmed change or
+ *   a kept recipe, an undo, a fun fact, a coach error. It goes nowhere unless
+ *   the build and the device share.
  *
  * Turn conventions: docs/briefs/ENGINE_PROTOCOL.md.
  */
@@ -117,6 +121,7 @@ import type {
   Settings,
   Storage,
 } from '../../storage/types.ts';
+import { NO_USAGE, type UsageTracker } from '../../usage/types.ts';
 import type {
   BeanChoice,
   BeanPickerOption,
@@ -232,6 +237,8 @@ export interface EngineDeps {
   told?: ToldList;
   /** CafAI's own fun facts (D199), read only when one is due; facts.json by default. */
   facts?: () => Promise<readonly FunFact[]>;
+  /** Usage sharing's counts (D213); nothing by default. */
+  usage?: UsageTracker;
 }
 
 /** The page's visibility: the WebView runs on with the page hidden behind another app or a dark screen. */
@@ -588,6 +595,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   const plugins = deps.plugins ?? NO_PLUGINS;
   const told = deps.told ?? createToldList(null);
   const facts = deps.facts ?? loadFacts;
+  const usage = deps.usage ?? NO_USAGE;
 
   let state: CoachState = {
     ready: false,
@@ -1148,6 +1156,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (!iteration.shotId) return;
     const words = tasteWords(selected, text);
     if (!words) return;
+    usage.track('taste_given');
     const version = s.versions.find((v) => v.id === iteration.profileVersionId);
     const taste: TasteNote = {
       bagId: s.bag.id,
@@ -1229,6 +1238,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
    * library: saved first, as the batch Decaid gets is read from the bag.
    */
   async function saveBagDetails(s: Session, details: SaveBagDetails): Promise<void> {
+    // The first details a bag gets, by the coach's tool or a confirmed photo: a dial-in has begun.
+    if (s.bag.name === NEW_BAG_NAME) usage.track('bag_started');
     await persistBag(s, {
       name: withoutKey(details.name.trim()) || NEW_BAG_NAME,
       roaster: withoutKey(details.roaster),
@@ -1381,6 +1392,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     const option = openBeanCard()?.options.find((o) => o.batchId === batchId);
     if (!s || !option) return;
     answerBeanCard({ kind: 'batch', batchId });
+    if (s.bag.name === NEW_BAG_NAME) usage.track('bag_started');
     await persistBag(s, {
       name: withoutKey(option.name) || NEW_BAG_NAME,
       roaster: withoutKey(option.roaster),
@@ -1554,6 +1566,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
 
   /** A fact in an assistant message of its own (D202), on the told list (D200) under `key`. */
   function showFact(s: Session, part: CoachUiPart, key: string): void {
+    usage.track('fun_fact_shown');
     addMessage('assistant', [part]);
     told.add({ key, bagId: s.bag.id, at: nowIso() });
     factShown = true;
@@ -1935,6 +1948,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     } catch (error) {
       setMessages(finishStreaming(state.messages));
       setError(describe(error), runModel);
+      usage.track('coach_error');
     } finally {
       state = { ...state, busy: false };
       await persistConversation(s);
@@ -2240,7 +2254,11 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       hideProgress(progressId);
     }
     setMachineLoad(versionId, outcome.status);
-    if (outcome.status === 'loaded' || outcome.status === 'assumed') uploadFailedFor = null;
+    if (outcome.status === 'loaded' || outcome.status === 'assumed') {
+      uploadFailedFor = null;
+      // Every load ends here: v1, a confirmed version, an undo, a bag switch, Retry, one that waited for the machine.
+      usage.track('profile_loaded');
+    }
     return outcome;
   }
 
@@ -2594,6 +2612,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       updatedAt: at,
     });
     addMessage('system', [shotPart(record.id, summary)]);
+    usage.track('shot_read');
     setMessages(fillBaselines(state.messages, others));
     watchVisualizer(s, record.id, iterationId);
     if (!saysWhichRan) {
@@ -2880,6 +2899,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (!s) return;
     const call = requireCall(s, requestId, TOOL.askUser);
     if (!call) return;
+    usage.track('coach_message');
     // Typed text, like a chat message: a pasted key never reaches the coach or Decaid (D37).
     const other = redactKeyLike(otherText?.trim() ?? '', '[API key removed]') || null;
     setMessages(
@@ -3006,6 +3026,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         });
       }
       setMessages(setDiffStatus(state.messages, requestId, 'applied'));
+      usage.track(plan.variable === 'none' ? 'recipe_kept' : 'change_confirmed');
     } catch (error) {
       // Nothing changed in Decaid (a shot was running, Decaid refused): keep
       // the proposal open so Confirm can simply be tapped again.
@@ -3158,6 +3179,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       ),
     );
     addMessage('system', [noticePart('info', `Back on ${parent.title}.`)]);
+    usage.track('change_undone');
     reportLoad(parent.id, parent.title, await confirmOnMachine(parent.id, parent.title, workflow.profile));
     state = { ...state, busy: false };
     emit();
@@ -3215,6 +3237,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   async function sendText(text: string): Promise<void> {
     const typed = text.trim();
     if (!typed) return;
+    usage.track('coach_message');
     const s = session ?? (await createBag(false));
     // The bag described in words instead of picked or read from a photo: those cards close (6.1, 6.8).
     for (const open of [isOpenBeanCard, isOpenBagConfirm]) {

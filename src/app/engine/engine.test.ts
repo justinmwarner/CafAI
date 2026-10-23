@@ -913,6 +913,71 @@ describe('coach engine', () => {
     expect(engine.getState().phase).toBe('awaiting_confirmation');
   }
 
+  describe('usage events (D213)', () => {
+    let events: string[];
+    const count = (name: string) => events.filter((event) => event === name).length;
+
+    beforeEach(async () => {
+      engine.dispose();
+      events = [];
+      engine = build({ usage: { track: (event) => void events.push(event) } });
+      await engine.start();
+    });
+
+    it('counts the first words, the bag, the load and the shot', async () => {
+      await throughShot();
+      expect(count('coach_message')).toBe(1);
+      expect(count('bag_started')).toBe(1);
+      expect(count('profile_loaded')).toBe(1);
+      expect(count('shot_read')).toBe(1);
+      expect(events.indexOf('bag_started')).toBeLessThan(events.indexOf('profile_loaded'));
+      expect(events.indexOf('profile_loaded')).toBeLessThan(events.indexOf('shot_read'));
+    });
+
+    it('counts a tapped taste as a taste and a message, then a confirmed change and its load, then an undo', async () => {
+      await throughProposal();
+      expect(count('taste_given')).toBe(1);
+      expect(count('coach_message')).toBe(2);
+      scripts.push(() => [text('Done. v2 is on the machine.')]);
+      await engine.confirmChange('t-adj');
+      expect(count('change_confirmed')).toBe(1);
+      expect(count('recipe_kept')).toBe(0);
+      expect(count('profile_loaded')).toBe(2);
+      scripts.push(() => [text('Back on v1.')]);
+      await engine.undo();
+      expect(count('change_undone')).toBe(1);
+      expect(count('profile_loaded')).toBe(3);
+    });
+
+    it('counts a coach turn that ends in an error', async () => {
+      await engine.newBag();
+      scripts.push(() => {
+        throw new Error('overloaded');
+      });
+      await engine.sendText('Kiambu AA');
+      expect(count('coach_message')).toBe(1);
+      expect(count('coach_error')).toBe(1);
+    });
+
+    it('counts a bag once, however often the coach corrects its details', async () => {
+      await throughTemplatePick();
+      scripts.push(() => [
+        toolUse('t-save-again', TOOL.saveBagDetails, {
+          name: 'Kiambu AA',
+          roaster: 'Square Mile',
+          origin: 'Kenya',
+          roastLevel: 'light',
+          process: 'washed',
+          notes: null,
+        }),
+      ]);
+      scripts.push(() => [text('Fixed.')]);
+      await engine.sendText('The roaster is Square Mile');
+      expect(count('bag_started')).toBe(1);
+      expect(count('coach_message')).toBe(2);
+    });
+  });
+
   it('starts a bag with the bean card, then the placeholder question, and sends the intake turn with context', async () => {
     await engine.newBag();
     const [card, question] = engine.getState().messages;
@@ -4324,6 +4389,16 @@ describe('coach engine', () => {
     const resultFor = (id: string) => lastUserTurn(requests).find((b) => b.type === 'tool_result' && b.tool_use_id === id);
     const lastRun = () => runs[runs.length - 1]!;
     const offered = (run: RunRequest) => run.tools.map((tool) => tool.definition.name);
+
+    it('counts a kept recipe, never as a change, and a fact shown, for usage sharing (D213)', async () => {
+      const events: string[] = [];
+      await rebuild({ usage: { track: (event) => void events.push(event) } });
+      await throughKept();
+      expect(events.filter((event) => event === 'recipe_kept')).toHaveLength(1);
+      expect(events).not.toContain('change_confirmed');
+      await pull('shot-2', () => [text('Same as the last one: 30 s, 50.2 g.'), shareFact('t-fact'), askTasteAs('t-ask-2')]);
+      expect(events.filter((event) => event === 'fun_fact_shown')).toHaveLength(1);
+    });
 
     it("shows the coach's fact between its words and its taste question, and keeps it on the told list (D201, D202)", async () => {
       await throughKept();

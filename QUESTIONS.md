@@ -1,15 +1,51 @@
 # Open questions
 
 Ranked by the cost of a wrong guess (most expensive first). Each says what
-CafAI assumes now and what would change if the guess is wrong. Questions 1-8
-came out of the morning session of 2026-10-04, 9-13 out of the Decaid
-alignment of 2026-10-09, 14-16 out of Claude on your computer of
-2026-10-11, 17 out of your list of 2026-10-11, 18-21 out of the gap
-review's four items of 2026-10-15, 22-23 out of the simulator pre-run of
-2026-10-16, 24-27 out of fun facts of 2026-10-16, 28-29 out of the drink
-scenes of 2026-10-22 and 30-33 out of the screensavers of 2026-10-22 (each
-ranked the same way, in its own section); the questions you answered are in
-"Answered" at the end.
+CafAI assumes now and what would change if the guess is wrong. Question 34,
+out of usage analytics of 2026-10-22, comes first: it is your next step.
+Questions 1-8 came out of the morning session of 2026-10-04, 9-13 out of the
+Decaid alignment of 2026-10-09, 14-16 out of Claude on your computer of
+2026-10-11, 17 out of your list of 2026-10-11, 18-21 out of the gap review's
+four items of 2026-10-15, 22-23 out of the simulator pre-run of 2026-10-16,
+24-27 out of fun facts of 2026-10-16, 28-29 out of the drink scenes of
+2026-10-22 and 30-33 out of the screensavers of 2026-10-22 (each ranked the
+same way, in its own section); the questions you answered are in "Answered"
+at the end.
+
+## Your next step: usage analytics (2026-10-22)
+
+34. **Does Microsoft Clarity work inside Decaid and on your tablet, and keep
+    to what CafAI promises (D216)?** Nobody has run it there yet: the
+    masking and the consent calls CafAI relies on were read in clarity-js,
+    never seen on the wire, and whether Clarity counts Decaid's "Decent"
+    user agent as a person is unknown. Releases carry no Clarity project
+    until the repository variable `CLARITY_PROJECT_ID` is set, so until then
+    none shares anything. What it needs, in order: a Clarity project of your
+    own (clarity.microsoft.com, a Microsoft account; any site URL will do)
+    with Strict masking set in its settings; a local build with its ID,
+    `VITE_CLARITY_PROJECT_ID=<id> npm run release:zip`; that zip in the
+    Decaid simulator on Windows and in Chrome on `localhost`, checking the
+    items of section 10 of
+    `docs/superpowers/specs/2026-10-22-usage-analytics-design.md` (sessions
+    and coach events in Clarity's live view, a replay that looks like CafAI,
+    one heatmap per `?screen=`, a shot's CPU and upload with Clarity and
+    without, nothing about the key or code fields in the uploads, and the
+    consent calls); the same zip on the tablet (Skins > + > ZIP file) for a
+    day of ordinary use, watching for crashes (an open Clarity issue reports
+    Android WebView crashes) and lag on the shot screen; and only then the
+    repository variable (Settings > Secrets and variables > Actions >
+    Variables), so the next release carries the ID.
+    What a wrong guess costs: the variable set without the run puts Clarity
+    on every install that updates, where a WebView crash or a lagging shot
+    screen would reach every tablet, a hash of the key or of the barista's
+    words in an upload would break what the card, the README and SECURITY.md
+    promise, and a "Decent" user agent dropped as a bot would leave the
+    project empty. If no data arrives, or the tablet suffers, Clarity is
+    dropped and sending moves to PostHog or a small counter of CafAI's own,
+    in a new decision; if a shot costs too much, Clarity stops while a shot
+    runs.
+
+## From the morning session (2026-10-04)
 
 1. **Does Decaid's barrier behave on a real DE1 the way its source says?**
    CafAI now waits for `POST /api/v1/machine/profile` after every load and

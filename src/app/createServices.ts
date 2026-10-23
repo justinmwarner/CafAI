@@ -15,6 +15,8 @@ import { DEFAULT_MODEL, MODELS } from '../llm/index.ts';
 import { createIdbStorage, restoreFromMirrorIfEmpty, startLateRestore } from '../storage/index.ts';
 import { openCoachSourceStore } from '../storage/coachSource.ts';
 import { rememberSecret } from '../traffic/recorder.ts';
+import { clarityProjectId } from '../usage/projectId.ts';
+import { createUsageService } from '../usage/service.ts';
 import { newId } from '../util/id.ts';
 import { createApiPort, createCoachPort, createLlmPort } from './adapters.ts';
 import { createAppearanceStore } from './appearance.ts';
@@ -92,6 +94,15 @@ export async function createServices(win: Window): Promise<AppServices> {
   const care = createCareService({ storage, decaid, telemetry, cache: localTotalsCache(deviceStorage), visibility });
   await care.start();
 
+  // Usage sharing (D210): a build with Clarity's project ID only, and nothing loads before the app has
+  // rendered (App.tsx). The answer lives in the device's own storage, like the care counts' cache.
+  const clarityProject = clarityProjectId(win);
+  const usage = clarityProject
+    ? createUsageService({ win, projectId: clarityProject, storage: deviceStorage, now: () => new Date() })
+    : undefined;
+  usage?.tag('cafai_version', APP_VERSION);
+  usage?.tag('host', host.platform ?? 'browser');
+
   const coach = createCoachEngine({
     // Its "is a key stored" means "has what the selected source needs".
     storage: withCoachCredential(storage, coachSource),
@@ -113,10 +124,24 @@ export async function createServices(win: Window): Promise<AppServices> {
     plugins,
     // The fun facts told, in the device's own storage beside the care counts' cache: never mirrored or exported (D200).
     told: createToldList(deviceStorage),
+    usage,
   });
 
   telemetry.start();
   await coach.start();
+
+  // Which coach this device runs, for Clarity's filters (D213): none until the chosen source has its key or code.
+  let sourceKind = (await coachSource?.get().catch(() => null))?.kind ?? 'anthropic';
+  const tagCoachSource = () =>
+    usage?.tag('coach_source', !coach.getState().hasApiKey ? 'none' : sourceKind === 'computer' ? 'bridge' : 'api-key');
+  const stopSourceTag = usage
+    ? coachSource?.subscribe((source) => {
+        sourceKind = source.kind;
+        tagCoachSource();
+      })
+    : undefined;
+  const stopCoachTag = usage ? coach.subscribe(() => tagCoachSource()) : undefined;
+  tagCoachSource();
 
   // Records that came back after start (D100): the chat, the look and machine care read them again.
   // The chat says the bags are back only when bags came back, not for machine care's last times alone (D189).
@@ -190,6 +215,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     plugins,
     coachSource,
     care,
+    usage,
     dispose() {
       win.document.removeEventListener('visibilitychange', onVisibility);
       stopPluginWatch();
@@ -197,6 +223,9 @@ export async function createServices(win: Window): Promise<AppServices> {
       stopTelemetryWatch();
       stopRestoredWatch();
       stopCodeWatch?.();
+      stopSourceTag?.();
+      stopCoachTag?.();
+      usage?.dispose();
       coach.dispose();
       care.dispose();
       saverScreen?.dispose();

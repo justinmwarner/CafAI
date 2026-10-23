@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event';
 import type { CoachState } from '../../app/types.ts';
 import { applySettingsPatch, DEFAULT_APPEARANCE, normalizeSettings } from '../../storage/settings.ts';
 import type { Settings } from '../../storage/types.ts';
-import { createFakeServices, type FakeServices } from '../testing/fakeServices.ts';
+import { createFakeServices, createFakeUsage, type FakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
 import { renderWithServices } from '../chat/testing/render.tsx';
 import { LIBRARY_HINT, MISSING_LINE, UNREACHABLE_LINE } from './grinderPicker.ts';
@@ -117,6 +117,20 @@ describe('SettingsScreen API key', () => {
     expect(document.body.innerHTML).not.toContain(SECRET);
     for (const field of document.querySelectorAll('input')) expect(field.value).not.toContain(SECRET);
     for (const call of [...log.mock.calls, ...error.mock.calls]) expect(JSON.stringify(call)).not.toContain(SECRET);
+  });
+
+  it('keeps the key field out of Clarity, shown or hidden, and counts a saved key (D213, D214)', async () => {
+    const services = renderSettings({ coach: { hasApiKey: false } });
+    const { usage, tracked } = createFakeUsage();
+    // The screen reads the services again at every render: the next keystroke sees it.
+    services.usage = usage;
+    expect(screen.getByTestId(TID.apiKeyInput)).toHaveAttribute('data-private', 'secret');
+    await userEvent.click(screen.getByRole('button', { name: 'Show key' }));
+    expect(screen.getByTestId(TID.apiKeyInput)).toHaveAttribute('type', 'text');
+    expect(screen.getByTestId(TID.apiKeyInput)).toHaveAttribute('data-private', 'secret');
+    await userEvent.type(screen.getByTestId(TID.apiKeyInput), SECRET);
+    await userEvent.click(screen.getByTestId(TID.apiKeySave));
+    await waitFor(() => expect(tracked).toEqual(['coach_setup']));
   });
 
   it('shows and hides what is being typed', async () => {

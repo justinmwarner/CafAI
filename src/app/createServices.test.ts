@@ -89,6 +89,24 @@ describe('createServices: bags and the key back from Decaid (D99, D100)', () => 
       .messages.flatMap((m) => m.parts)
       .flatMap((part) => (part.kind === 'notice' ? [part.text] : []));
 
+  it('has no usage sharing without a Clarity project (D215)', async () => {
+    services = await createServices(window);
+    expect(services.usage).toBeUndefined();
+  });
+
+  it('has usage sharing in a production build with a project, loading nothing until the app starts it (D210, D215)', async () => {
+    vi.stubEnv('MODE', 'production');
+    vi.stubEnv('VITE_CLARITY_PROJECT_ID', 'abc123');
+    try {
+      services = await createServices(window);
+      expect(services.usage).toBeDefined();
+      expect(services.usage!.getState().prompt).not.toBeNull();
+      expect(document.querySelector('script[data-cafai-clarity]')).toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('restores the bags at start when Decaid answers, and knows it did', async () => {
     decaid.backUp();
     services = await createServices(window);

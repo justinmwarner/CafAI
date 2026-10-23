@@ -35,6 +35,7 @@ import type { ModelInfo } from '../../llm/types.ts';
 import { useCoach, useServices } from '../../app/services.tsx';
 import { containsKeyLike } from '../../storage/redact.ts';
 import type { Settings } from '../../storage/types.ts';
+import { SECRET_FIELD } from '../../usage/mask.ts';
 import { TID } from '../testIds.ts';
 import { AboutDecaid } from './AboutDecaid.tsx';
 import { AddGrinder, type AddedGrinder } from './AddGrinder.tsx';
@@ -62,6 +63,7 @@ import { revealInColumn } from './reveal.ts';
 import { ScreensaverSection } from './ScreensaverSection.tsx';
 import { Section } from './Section.tsx';
 import { SleepWakeSection } from './SleepWakeSection.tsx';
+import { UsageRow } from './UsageRow.tsx';
 
 // The test id goes on the switch's checkbox input, the one element a test (or a keyboard) can focus and drive.
 declare module '@mui/material/Switch' {
@@ -96,7 +98,7 @@ const KEY_SAVED_COPY_LATER = "Key saved on this device. Decaid can't be reached 
 const KEY_GONE_DELETE_LATER = "The key is gone from this device. Decaid can't be reached right now, so CafAI will delete its copy there as soon as it can.";
 
 function ApiKeySection() {
-  const { storage, coach } = useServices();
+  const { storage, coach, usage } = useServices();
   const hasApiKeyInEngine = useCoach((s) => s.hasApiKey);
   // Shown only while the coach runs on Anthropic (D140); the key store still says while the engine catches up
   // with a choice just switched back (on the computer its "has a key" is the bridge's code, coachSourceView.ts).
@@ -142,6 +144,7 @@ function ApiKeySection() {
       setSavedHere(true);
       setMessage({ tone: 'success', text: copied ? 'Key saved on this device.' : KEY_SAVED_COPY_LATER });
       await coach.refresh();
+      usage?.track('coach_setup');
     } catch (error) {
       setMessage({ tone: 'error', text: `Could not save the key: ${errorText(error)}` });
     } finally {
@@ -192,6 +195,8 @@ function ApiKeySection() {
             inputLabel: { shrink: true },
             htmlInput: {
               'data-testid': TID.apiKeyInput,
+              // Out of Clarity entirely, shown or hidden: the key leaves only for Anthropic (D214).
+              ...SECRET_FIELD,
               autoComplete: 'off',
               autoCapitalize: 'off',
               autoCorrect: 'off',
@@ -575,6 +580,7 @@ function AboutSection() {
     <Section title="About">
       <Typography variant="body2">CafAI {appVersion}</Typography>
       <AboutDecaid decaidVersion={decaidVersion} />
+      <UsageRow />
     </Section>
   );
 }

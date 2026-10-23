@@ -33,6 +33,7 @@ import {
   type CoachSourceKind,
   type CoachSourceStore,
 } from '../../storage/coachSource.ts';
+import { SECRET_FIELD } from '../../usage/mask.ts';
 import { TID } from '../testIds.ts';
 import { Section } from './Section.tsx';
 
@@ -92,7 +93,7 @@ async function savedModel(settings: { get(): Promise<{ model: string }> }): Prom
 }
 
 function CoachSourceForm({ store }: { store: CoachSourceStore }) {
-  const { coach, storage } = useServices();
+  const { coach, storage, usage } = useServices();
   const [saved, setSaved] = useState<CoachSource | null>(null);
   const [address, setAddress] = useState('');
   const [code, setCode] = useState('');
@@ -178,6 +179,7 @@ function CoachSourceForm({ store }: { store: CoachSourceStore }) {
       setCode(fields.pairing.display);
       setMessage({ tone: 'success', text: 'Saved on this device.' });
       refreshCoach();
+      usage?.track('coach_setup');
     } catch (error) {
       setMessage({ tone: 'error', text: errorText(error) });
     } finally {
@@ -314,6 +316,8 @@ function CoachSourceForm({ store }: { store: CoachSourceStore }) {
                 inputLabel: { shrink: true },
                 htmlInput: {
                   'data-testid': TID.computerCode,
+                  // Out of Clarity entirely, shown or hidden (D214).
+                  ...SECRET_FIELD,
                   autoComplete: 'off',
                   autoCapitalize: 'characters',
                   autoCorrect: 'off',
