@@ -40,11 +40,12 @@ coach.
 - **Screens, events and tags (D-USAGE-4).** The screen is mirrored into the
   address so heatmaps split by screen. Eleven coach events serve as funnel
   steps, and five tags allow filtering.
-- **What stays hidden (D-USAGE-5).** Strict masking. The chat, the cards,
-  the log and both secret fields are marked as well. Nothing identifies a
-  person.
-- **Loading (D-USAGE-6).** Clarity loads after the app starts, its failures
-  are silent, and it never loads in dev, tests, mock mode, the demo or a fork.
+- **What stays hidden (D-USAGE-5).** Strict masking. The chat and the log
+  are marked as well, and the key, the code and the composer are kept out of
+  Clarity entirely. Nothing identifies a person.
+- **Loading (D-USAGE-6).** Clarity loads after the app starts, and its
+  failures are silent. It never loads in dev, tests, the demo, plain mock
+  mode or a fork.
 - **The test run (D-USAGE-7).** The test run on the simulator and the owner's
   tablet comes before the first release that carries it.
 
@@ -201,33 +202,45 @@ is not available anyway.
 - **Strict masking.** The Clarity project is set to Strict. Every word on the
   page is replaced before upload, in recordings and heatmaps alike. Inputs are
   masked in every mode.
-- **Marked as well.** The chat transcript, the composer, the bag and photo
-  cards, Settings > Log and both secret fields carry `data-clarity-mask="true"`.
-  They stay hidden even if the project's setting is ever changed.
-- **The API key and the pairing code.** Clarity sends a short hash of a text
-  field's value when it changes, unless the field looks secret. Both fields
-  become plain text when **Show** is tapped. Both carry a marker Clarity
-  treats as secret in either state, and the test run checks that nothing
-  about them leaves the device. SECURITY.md promises the key leaves only for
-  `api.anthropic.com`.
+- **Marked as well.** The chat's root (its transcript, every card, the prompt
+  row and the composer's lane) and Settings > Log carry
+  `data-clarity-mask="true"`. That hides their text and images, children
+  included, even if the project's setting is ever changed.
+- **Form fields.** Clarity ignores `data-clarity-mask` on a form field (an
+  input, select or textarea). It replaces a field's value, then sends a short
+  hash of it when it changes. It drops a field entirely (no value, no hash)
+  only when one of the field's attribute values holds a word on its list:
+  "password", "secret", "pass", "social", "ssn", "code" or "hidden"
+  (clarity-js `MaskExcludeList`, read 2026-10-22). It decides when the field
+  first appears.
+  - The API key and the pairing code become plain text when **Show** is
+    tapped, so both carry `data-private="secret"` in either state.
+  - So does the composer: "never your words" means not even a hash of them.
+  - SECURITY.md promises the key leaves only for `api.anthropic.com`. The
+    test run checks that nothing about these fields leaves the device.
 - **Decaid's account token.** Clarity never records `<meta>` elements (as
   clarity-js reads, 2026-10-22), so the `reaprime-proxy-token` meta stays on
   the device. `window.__REA_PROXY_TOKEN__` is a script variable, and Clarity
   does not read those.
 - **Tags.** No tag holds anything a person typed.
-- **Replays from `localhost`.** Clarity's player loads stylesheets from the
-  page's address, and only the tablet can reach `localhost`. MUI's styles are
-  recorded anyway, from Emotion's sheet. The release build inlines CafAI's one
-  stylesheet (2.8 KB) into `index.html`, so replays have its styles too. Fonts
-  fall back in replays, and the shot graph, a canvas, shows blank.
+- **Replays from `localhost`.** Clarity's player loads a `<link>`'s
+  stylesheet from the page's address, and only the tablet can reach
+  `localhost`. MUI's styles are recorded anyway, because Clarity reads
+  Emotion's rules from the page. CafAI's own stylesheet (2.8 KB) holds only
+  the fonts' `@font-face` rules and the graph library's, and inlining it
+  would not bring the fonts. So replays go without it: fonts fall back, and
+  the shot graph, a canvas, shows blank.
 
 ## 7. Loading (D-USAGE-6)
 
 - **The project ID.** It comes from `VITE_CLARITY_PROJECT_ID` at build time,
-  set from a GitHub Actions variable in `release.yml` only. Without it (dev,
-  `npm test`, the e2e, the demo, mock mode, any fork's build) CafAI loads
-  nothing and shows no card, notice or switch. Mock mode and the demo load
-  nothing even with an ID.
+  set from a GitHub Actions variable in `release.yml` only. Only a production
+  build reads it, never dev or `npm test`, whatever the shell holds. Without
+  it (any fork's build included) CafAI loads nothing and shows no card,
+  notice or switch.
+- **Mock mode.** It reports to a stand-in project only when the e2e asks
+  with `?mockUsage=1`, and the e2e routes Clarity's hosts to a stub. The demo
+  never does.
 - **The loader.** CafAI's own loader (Clarity's queue stub and one async
   script tag, `https://www.clarity.ms/tag/<id>`), with no new dependency.
   - It runs after the app has rendered, never before.
@@ -277,16 +290,17 @@ is not available anyway.
 - **Masking:** the attributes are on the chat, the composer, the cards, the
   log and both secret fields.
 
-**E2E (Playwright).** A build with a test project ID, with `*.clarity.ms`
-routed to a stub:
+**E2E (Playwright).** The mock build with `?mockUsage=1`, with
+`*.clarity.ms` routed to a stub that records every call:
 
 - `timezoneId: 'Europe/Berlin'`: the card shows, and nothing is requested
   from Clarity before **Yes, share**. After it, the tag is requested and a
   screen change carries `?screen=`.
 - `timezoneId: 'America/Chicago'`: the notice shows and the tag is requested.
   After **Turn off**, no request follows.
-- The demo and mock mode never request Clarity.
-- `npm run smoke:chrome91` passes with the stub.
+- The demo, and mock mode without the switch, never request Clarity.
+- `npm run smoke:chrome91` still passes. Its build has no project, and the
+  lint rules hold the new code to Chromium 91.
 
 ## 10. The test run first (D-USAGE-7)
 
@@ -302,9 +316,11 @@ its ID in a local release build:
 4. **Cost.** A shot on the simulated machine, with and without Clarity: the
    CPU and the upload size.
 5. **Secrets.** Nothing about the key or code fields appears in the uploads.
-6. **Consent calls.** `consentv2` with only `ad_Storage: 'denied'` leaves
-   analytics at Clarity's default, and `consent(false)` with `stop` ends the
-   uploads.
+6. **Consent calls.**
+   - `consentv2` with only `ad_Storage: 'denied'` leaves analytics at
+     Clarity's default.
+   - `consent(false)` with `stop` ends the uploads.
+   - Turned on again in the same page, `start` resumes them.
 7. **The tablet.** The owner installs that zip on the tablet (Skins > + >
    ZIP file) for a day of ordinary use. Check for crashes (an open Clarity
    issue reports Android WebView crashes) and lag on the shot screen.
