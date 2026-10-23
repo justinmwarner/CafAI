@@ -27,6 +27,23 @@ workflow checks against it. Settings > About shows the version you run.
 
 ### The everyday skin
 
+- Steam, hot water and flush draw a new scene in their dial, which you
+  pick for each drink in **Settings > Drink screens**: steam's **Wand and
+  spray** (the pitcher from the side, steam jetting from the wand's tip and
+  rolling the milk, which grows as it takes air), **Whirlpool** (the milk
+  turning, seen from above) or **Rosetta** (a rosetta pouring in as it
+  steams); hot water's **Pour** or **From above**; the flush's **Shower** or
+  **Screen** (the shower screen from below); or each drink's **Simple**
+  scene, as before. A scene moves as hard as the machine works (the flow,
+  and for steam the pressure, against what is set; a sputtering wand
+  sputters), its steam or vapour follows the heater or the temperature set,
+  and its colour, with the ring's, runs from cold to warm: as the milk
+  heats, by the hot water's temperature, or as the group reaches its
+  target. Under reduced motion each reading draws one still frame.
+- A drink's view now goes back by itself once the drink is done: Go back
+  counts down from 10 s and returns to where you were; **Stay**, or a tap
+  on the view, keeps it. Settings > Drink screens turns it off, or sets the
+  time (5 to 60 s), for each drink.
 - Screensavers: on the Decent tablet, once the machine is asleep and nobody
   has touched the screen for a minute, a screensaver covers CafAI, classic
   ones redrawn with coffee: Nightstand (a bedside clock with the next wake

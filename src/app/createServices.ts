@@ -21,6 +21,7 @@ import { createAppearanceStore } from './appearance.ts';
 import { createCareService, localTotalsCache } from './care/careService.ts';
 import { withCoachCredential } from './coachAccess.ts';
 import { createCoachEngine, type CoachEngine } from './engine/engine.ts';
+import { createDrinkScreensStore } from './drinkScreens.ts';
 import { createSaverScreen } from './saverScreen.ts';
 import { createScreensaverSettingStore } from './screensaverSetting.ts';
 import { createTemperatureUnitStore } from './temperatureUnit.ts';
@@ -63,6 +64,8 @@ export async function createServices(win: Window): Promise<AppServices> {
   const appearance = createAppearanceStore(storage.settings, (await storage.settings.get()).appearance);
   // °C or °F (D172): the screens read it, and so does every request's prompt (D175).
   const temperatureUnit = createTemperatureUnitStore(storage.settings, (await storage.settings.get()).temperatureUnit);
+  // Each drink's scene and going back by itself (D221): the drinks' views read them.
+  const drinkScreens = createDrinkScreensStore(storage.settings, (await storage.settings.get()).drinkScreens);
   // Settings > Screensaver (D-SAVER-3): the overlay over the shell acts on it at once.
   const screensaver = createScreensaverSettingStore(storage.settings, (await storage.settings.get()).screensaver);
 
@@ -121,6 +124,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     if (records) void coach.restored();
     void appearance.reload();
     void temperatureUnit.reload();
+    void drinkScreens.reload();
     void screensaver.reload();
     void care.reload();
   };
@@ -180,6 +184,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     appVersion: APP_VERSION,
     appearance,
     temperatureUnit,
+    drinkScreens,
     screensaver,
     saverScreen,
     plugins,

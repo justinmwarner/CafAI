@@ -271,12 +271,20 @@ machine by itself.
   water and flush take the screen the same way while they run, whoever
   started them (unless you are typing, or following Decent's cleaning video
   in Settings > Machine care): a dial fills toward the time or volume set
-  (steam rising from milk, water filling, the shower screen pouring, still
-  under reduced motion), with the machine's readings (steam temperature,
+  around the scene you pick for the drink (steam's wand spraying into the
+  milk, a whirlpool from above or a rosetta pouring; hot water pouring or
+  seen from above; the shower screen from the side or from below; or each
+  drink's simple scene), moving as hard as the machine works and turning
+  from cold to warm, with its ring, as the milk heats, by the hot water's
+  temperature, or as the group reaches its target (still under reduced
+  motion), with the machine's readings (steam temperature,
   pressure and flow; hot water's flow, the scale and the time; the flush's
   water, flow and group temperature), a trace of the run, and the drink's
   own settings, held while it runs and yours to change the moment it stops.
-  The view stays with its result; **Go back** returns to where you were. Problems
+  Once the drink is done, **Go back** counts down and returns to where you
+  were by itself after 10 s; **Stay**, or a tap on the view, keeps it with
+  its result (Settings > Drink screens turns this off, or sets the time,
+  for each drink). Problems
   (not connected, Decaid out of reach, water to refill, an error the machine
   or a device reports, a failed command, Decaid set to leave stopping shots
   to the skin, a scale that dropped) show in one slim alert under the top
@@ -373,6 +381,12 @@ machine by itself.
   answers, the fields show a dash, and a write that fails says why under
   its setting. Steam that is off in Decaid (below 135 °C) reads "Off in
   Decaid"; turning it on or off stays in Decaid.
+- **Settings > Drink screens**: for each drink, its **Animation** (steam:
+  Wand and spray, Whirlpool, Rosetta or Simple; hot water: Pour, From above
+  or Simple; flush: Shower, Screen or Simple) and **Go back by itself**,
+  with **After** its seconds (5 to 60; on, after 10 s, until you change
+  it). Kept on this device, mirrored and exported with the other settings,
+  and changeable while the machine runs.
 - **Settings > Sleep and wake**: what Decaid does with the machine when
   nobody is using it. **Sleep when idle**, with the minutes it waits (1 to
   240), and the **wake times**: each a time, its days (every day, weekdays,

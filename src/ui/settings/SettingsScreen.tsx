@@ -44,6 +44,7 @@ import { CareSection } from './CareSection.tsx';
 import { CoachSourceSection } from './CoachSourceSection.tsx';
 import { useApiKeyView, useCoachRunsOnComputer, useShowsApiKey } from './coachSourceView.ts';
 import { useDecaidVersion } from './decaidVersion.ts';
+import { DrinkScreensSection } from './DrinkScreensSection.tsx';
 import { DrinkSettingsSection } from './DrinkSettingsSection.tsx';
 import { FunFactsRow } from './FunFactsRow.tsx';
 import { GrinderFields } from './GrinderFields.tsx';
@@ -594,6 +595,7 @@ export function SettingsScreen() {
         {showsApiKey ? <ApiKeySection /> : null}
         <CoachSettingsSection column={column} />
         <DrinkSettingsSection />
+        <DrinkScreensSection />
         <SleepWakeSection />
         <ScreensaverSection />
         <CareSection />
