@@ -4314,3 +4314,97 @@ Nightstand, both still drawn in code and made for a screen dimmed to 30.
   legible while they look calm; the date is the one more thing a glance at
   a clock wants; a fade is calmer than a jump at night; and only the device
   knows how its barista writes a date.
+
+### Espresso Pipes: round 2 (2026-10-24)
+
+The owner's words after trying the first six screensavers (2026-10-23):
+"I'd like to continue the screensavers and finish writing up the others we
+planned to do." Espresso Pipes is the first of the two planned and not yet
+built (`docs/superpowers/specs/2026-10-22-screensavers-design.md`, section 7,
+Later steps): Windows' 3D Pipes redrawn with coffee, and the one screensaver
+that needs WebGL (D227).
+
+- **D-PIPES-1. Pipes grow as the classic's do, with coffee at their
+  joints.** A grid of 20 by 12 by 12 cells, seen from a fixed camera a
+  little above its middle (`src/ui/saver/savers/pipesModel.ts`). Three to
+  five pipes grow at once, as the seed says, each at a pace of its own, a
+  cell every 80 to 120 ms; the run a pipe is growing lengthens a fraction
+  of a cell every frame, never a whole segment at once. A pipe goes straight
+  on, turns one time in five where it could go on (a turn toward or away
+  from the camera a little less often) and wherever it must; boxed in by the
+  walls and the other pipes, it ends in a ball, and a new pipe starts at a
+  free cell 0.3 to 0.9 s later. A ball 1.45 times as wide as the pipe
+  stands at each turn and at both ends, growing in over 110 ms. About one
+  turn in thirty is a coffee fitting instead, growing out of its ball over
+  320 ms: where both pipes run across the screen, a pressure gauge (0 to 16
+  bar, the espresso band of 8 to 10 in the pressure green, the needle just
+  past 9) or a valve wheel, facing the camera; where both run level, a small
+  espresso cup on its saucer, crema in it, its handle on the side neither
+  pipe takes. A fitting due at a turn where it would not read waits for the
+  next turn where it does. Each pipe is one metal: copper, brass and chrome
+  dealt in a shuffled order three pipes at a time, the dark anodised one now
+  and then (12 %), never the same two running. At 60 % of the cells taken,
+  or 4 minutes into a layout, growth stops, the picture fades to the page
+  over 2.5 s, eased, the page stays empty for 0.7 s, and a new layout grows
+  from the seed's next numbers. At this pace a layout fills in 35 to 60 s;
+  the 4 minutes bound a grid that could not fill. Its still is a fresh
+  layout from the seed grown to 42 % of the grid. Why: the classic's look
+  and pace, as the owner chose it. The grid's size sets the cycle and how
+  wide a pipe looks: 16 by 10 by 10 filled in 20 to 35 s with thin-looking
+  pipes on a 962 px screen. A fitting reads only from where the camera
+  stands: a dial seen edge on, or a cup on its side, says nothing. And a
+  few long pipes fill most of a layout, so a metal drawn at random for each
+  pipe sometimes left a layout mostly the dark one; the deal keeps every
+  layout a mix.
+- **D-PIPES-2. WebGL1 written by hand, built as it grows.**
+  `src/ui/saver/savers/pipes.ts` and `pipesMesh.ts`: no library, no
+  extension needed, one program for everything. The finished parts (runs,
+  balls, fittings) are built on the CPU into vertex buffers as they come,
+  nine floats a vertex (place, smooth normal, texture coordinate, material),
+  and appended to the GPU's copy with `bufferSubData`, never rebuilt: in one
+  chunk where `OES_element_index_uint` is to be had, else in chunks of at
+  most 65,535 vertices with 16-bit indices. The runs being grown and the
+  joints growing in are drawn one by one from a small shared buffer, each
+  with a matrix of its own. At its fullest a layout is about 175,000
+  vertices and 255,000 triangles in one draw call (three with 16-bit
+  indices), plus about ten small ones; a frame's step and draw take 0.2 to
+  0.6 ms of the CPU, and with the GPU waited for, 1 ms early in a layout and
+  2 ms at its fullest on this PC's GTX 1060 (Chromium 91). A lost context
+  (`webglcontextlost`, or `isContextLost()` before the event comes) makes
+  the next step, draw or still throw "Espresso Pipes lost its WebGL
+  context.", so the host shows Nightstand for the rest of that showing;
+  nothing is restored. `dispose()` deletes every buffer, the texture and
+  the program; a shader that will not compile throws from `create()`
+  having deleted what it made, for the same fallback. The shaders keep to
+  GLSL ES 1.00's character set, comments included. Settings greys it out
+  where WebGL cannot start, and the day's pick passes it by (D225);
+  `src/ui/saver/daily.ts` now answers no at once where the page has no
+  `WebGLRenderingContext` at all (jsdom in the tests), without making a
+  canvas. Why: the design's choice (D227), and D10's one bundle; a buffer
+  that only grows costs one small upload a frame and a handful of draw
+  calls whatever the fill. Current Chromium, Chromium 91 (puppeteer 9) and
+  WebKit 26.6 (Playwright) draw the same picture without an error.
+  Playwright's own Chromium draws WebGL in software (SwiftShader): 19
+  frames a second early in a layout, 5 at its fullest, so the screenshot
+  scene holds Espresso Pipes 8 s in.
+- **D-PIPES-3. Polished metal under studio lights, sinking into the
+  page's dark.** The pipes reflect a studio made up in the fragment shader:
+  warm grey walls, lighter toward a soft horizon set a little below level,
+  a dark floor, a tall warm softbox in front on the left with a narrow strip
+  beside it, a cool one on the right, a dim light behind the camera, a strip
+  overhead and a low one behind the pipes that rims their edges; with
+  Blinn-Phong highlights from the key and the fill, Schlick's Fresnel and a
+  soft exponential tone curve. Copper, brass and chrome tint what they
+  reflect as real metals do, and the dark anodised one reflects little.
+  Porcelain, the crema (darker toward the cup's wall) and the dial (a 256
+  px canvas painted once, mipmapped, with a glint on its glass) are lit as
+  glazes are. Fog toward the page's colour (`env.palette.background`, so it
+  follows the tint) from the grid's middle to 90 % at its back;
+  `antialias: true`. The camera is fixed in front of the grid, 3.4 cells
+  above its middle, looking a little down; the grid's middle plane covers
+  the screen, its sides cut on a 4:3 iPad. Why: round 2's look, richer and
+  made for a dimmed screen, where the midtones and the highlights carry the
+  picture. A darker studio left chrome nearly black and the pipes standing
+  upright reflecting the floor, so the softboxes stand from below the
+  horizon to high up; a brighter, broader one washed the pipes flat, so the
+  gaps between the lights are what make a pipe read round.
