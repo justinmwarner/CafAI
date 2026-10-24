@@ -65,6 +65,7 @@ import { SaverOverlay } from '../saver/SaverOverlay.tsx';
 import { TID } from '../testIds.ts';
 import { layoutFor, useLayout, type Layout } from './layout.ts';
 import { LiveStrip } from './LiveStrip.tsx';
+import { ScreenModeContext } from './screenMode.ts';
 import { LiveDot, ShotTime, useShotLive, useShotTimeName } from './ShotTime.tsx';
 import { TapGuard } from './TapGuard.tsx';
 import { isTextEntry, useShotFocus } from './useShotFocus.ts';
@@ -672,7 +673,8 @@ function Shell({ route, onNavigate, children }: AppShellProps) {
               visibility: overlay === null ? 'visible' : 'hidden',
             }}
           >
-            {children}
+            {/* The screen lays itself out as the shell does (screenMode.ts): Settings' panes hold while the barista types too. */}
+            <ScreenModeContext.Provider value={layout.mode}>{children}</ScreenModeContext.Provider>
           </Box>
           {overlay === null ? null : <Box sx={overlaySx}>{overlay}</Box>}
           <TapGuard until={guardUntil} />
