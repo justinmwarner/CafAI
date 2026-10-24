@@ -49,8 +49,8 @@ const FIELD_DT = 1 / FIELD_HZ;
 export const ADMIRE_S = 12;
 export const CLEAR_S = 3;
 
-/** The pours that come round, in turn (D-LATTE-2): the swan is left out until it looks right. */
-export const IN_ROTATION: readonly PourId[] = ['heart', 'tulip', 'rosetta'];
+/** The pours that come round, in turn (D-LATTE-2). */
+export const IN_ROTATION: readonly PourId[] = ['heart', 'tulip', 'rosetta', 'swan'];
 
 /** The model moves on by this many milliseconds in one step at most, whatever it is asked. */
 const MAX_STEP_TOTAL_MS = 10_000;
@@ -70,6 +70,8 @@ const DRAG_CUTOFF = 4.5;
 const WALL_BAND = 0.1;
 /** A cell displaced by less than this (in cells) in a step stays put. */
 const STILL = 0.004;
+/** The foam is moved only within this many cells of where it is (and its first pass this many more): more than anything moves in a step, or all of it is. */
+const MARGIN = 10;
 
 // The foam coming up.
 /** How fast the foam comes up at full flow (a second), and how wide a patch of it under the stream. */
@@ -147,29 +149,67 @@ export function createSurface(): LatteSurface {
   return { foam: new Float32Array(GRID * GRID), tone: new Float32Array(TONE_GRID * TONE_GRID) };
 }
 
-/** Space one step of a pour works in, kept from step to step: displacements and MacCormack's in-betweens, for each grid. */
-interface Scratch {
+/** A grid's space for one step, kept from step to step: its displacements and MacCormack's in-betweens. */
+interface Passes {
   dx: Float32Array;
   dy: Float32Array;
-  toneDx: Float32Array;
-  toneDy: Float32Array;
   hat: Float32Array;
   low: Float32Array;
   high: Float32Array;
 }
 
+function passes(size: number): Passes {
+  const cells = size * size;
+  return { dx: new Float32Array(cells), dy: new Float32Array(cells), hat: new Float32Array(cells), low: new Float32Array(cells), high: new Float32Array(cells) };
+}
+
+/** Space one step of a pour works in: each grid's, and where the foam is with the boxes round it the two passes go over. */
+interface Scratch {
+  foam: Passes;
+  tone: Passes;
+  extent: Box;
+  inner: Box;
+  outer: Box;
+}
+
 function createScratch(): Scratch {
-  const size = GRID * GRID;
-  const toneSize = TONE_GRID * TONE_GRID;
-  return {
-    dx: new Float32Array(size),
-    dy: new Float32Array(size),
-    toneDx: new Float32Array(toneSize),
-    toneDy: new Float32Array(toneSize),
-    hat: new Float32Array(size),
-    low: new Float32Array(size),
-    high: new Float32Array(size),
-  };
+  return { foam: passes(GRID), tone: passes(TONE_GRID), extent: [0, -1, 0, -1], inner: [0, -1, 0, -1], outer: [0, -1, 0, -1] };
+}
+
+const ALL_FOAM: Box = [0, GRID - 1, 0, GRID - 1];
+const ALL_TONE: Box = [0, TONE_GRID - 1, 0, TONE_GRID - 1];
+
+/** The box of cells where `field` (the foam's grid) is not 0, into `out`; false where it is 0 everywhere. */
+function extentOf(field: Float32Array, out: Box): boolean {
+  let top = GRID;
+  let bottom = -1;
+  let left = GRID;
+  let right = -1;
+  for (let row = 0; row < GRID; row += 1) {
+    const start = row * GRID;
+    for (let col = 0; col < GRID; col += 1) {
+      if (field[start + col]! > 0) {
+        if (row < top) top = row;
+        bottom = row;
+        if (col < left) left = col;
+        if (col > right) right = col;
+      }
+    }
+  }
+  out[0] = top;
+  out[1] = bottom;
+  out[2] = left;
+  out[3] = right;
+  return bottom >= 0;
+}
+
+/** `box` grown by `by` cells all round, held to the grid, into `out`. */
+function grown(box: Box, by: number, out: Box): Box {
+  out[0] = Math.max(0, box[0] - by);
+  out[1] = Math.min(GRID - 1, box[1] + by);
+  out[2] = Math.max(0, box[2] - by);
+  out[3] = Math.min(GRID - 1, box[3] + by);
+  return out;
 }
 
 /** How low the pitcher is: 1 at the surface (the foam comes up), 0 high (the milk dives under). */
@@ -182,18 +222,21 @@ export function dragOf(flow: number, height: number): number {
   return DRAG * smoothstep(0, 0.3, flow) * smoothstep(0.1, 0.4, height) * (1 - 0.9 * smoothstep(0.6, 0.85, height));
 }
 
+/** Rows and columns of a grid, first to last, both in. */
+type Box = [top: number, bottom: number, left: number, right: number];
+
 /**
- * Writes the displacement, in cells, of each cell's surface over `dt` seconds
- * of the pour: the source where the stream lands, the drag of the stream
- * moving from `from` to `to` over the step, and the wall. Returns whether
- * anything moves.
+ * Writes the displacement, in its cells, of each cell of a grid's `box` over
+ * `dt` seconds of the pour: the source where the stream lands, the drag of
+ * the stream moving from `from` to `to` over the step, and the wall. Returns
+ * the furthest any of them moves, in cells.
  */
-function pourVelocity(from: PitcherState, to: PitcherState, dt: number, out: Scratch): boolean {
+function pourVelocity(from: PitcherState, to: PitcherState, dt: number, shape: Shape, dx: Float32Array, dy: Float32Array, box: Box): number {
+  const { size, first, last, wall } = shape;
+  const [top, bottom, left, right] = box;
   const flow = to.flow;
-  if (flow <= 0 && from.flow <= 0) return false;
-  const { dx, dy } = out;
-  const { first, last, wall } = FOAM_SHAPE;
-  const scale = dt / CELL;
+  const scale = (dt * size) / 2;
+  let furthest = 0;
 
   // The source, all over the cup: outward from where the stream lands, more of it forward when it leans.
   // (1 + lean cos θ) / r has no sinks or sources of its own, so it only moves the surface about.
@@ -203,16 +246,18 @@ function pourVelocity(from: PitcherState, to: PitcherState, dt: number, out: Scr
   const forwardX = Math.sin(to.heading);
   const forwardY = Math.cos(to.heading);
   const core2 = CORE * CORE;
-  for (let row = 0; row < GRID; row += 1) {
-    const oy = cellCentre(row) - to.y;
-    const end = last[row]!;
-    for (let col = first[row]!; col <= end; col += 1) {
-      const index = row * GRID + col;
-      const ox = cellCentre(col) - to.x;
+  for (let row = top; row <= bottom; row += 1) {
+    const oy = cellCentre(row, size) - to.y;
+    const end = Math.min(right, last[row]!);
+    for (let col = Math.max(left, first[row]!); col <= end; col += 1) {
+      const index = row * size + col;
+      const ox = cellCentre(col, size) - to.x;
       const d2 = ox * ox + oy * oy + core2;
       const s = (lean > 0 ? (gain * (1 + (lean * (ox * forwardX + oy * forwardY)) / Math.sqrt(d2))) / d2 : gain / d2) * wall[index]! * scale;
       dx[index] = s * ox;
       dy[index] = s * oy;
+      const most = Math.abs(s) * Math.max(Math.abs(ox), Math.abs(oy));
+      if (most > furthest) furthest = most;
     }
   }
 
@@ -220,26 +265,27 @@ function pourVelocity(from: PitcherState, to: PitcherState, dt: number, out: Scr
   const drag = dragOf(flow, to.height);
   const vx = (to.x - from.x) / dt;
   const vy = (to.y - from.y) / dt;
-  if (drag <= 0 || vx * vx + vy * vy < 1e-8) return true;
+  if (drag <= 0 || vx * vx + vy * vy < 1e-8) return furthest;
   // A thinner stream drags a narrower band.
   const reach = DRAG_REACH * Math.min(1.2, Math.max(0.4, Math.sqrt(flow / 0.45)));
-  const box = reach * DRAG_CUTOFF;
-  const firstRow = Math.max(0, Math.floor(((Math.min(from.y, to.y) - box + 1) * GRID) / 2));
-  const lastRow = Math.min(GRID - 1, Math.ceil(((Math.max(from.y, to.y) + box + 1) * GRID) / 2));
-  const firstCol = Math.max(0, Math.floor(((Math.min(from.x, to.x) - box + 1) * GRID) / 2));
-  const lastCol = Math.min(GRID - 1, Math.ceil(((Math.max(from.x, to.x) + box + 1) * GRID) / 2));
+  const near = reach * DRAG_CUTOFF;
+  const firstRow = Math.max(top, Math.floor(((Math.min(from.y, to.y) - near + 1) * size) / 2));
+  const lastRow = Math.min(bottom, Math.ceil(((Math.max(from.y, to.y) + near + 1) * size) / 2));
+  const firstCol = Math.max(left, Math.floor(((Math.min(from.x, to.x) - near + 1) * size) / 2));
+  const lastCol = Math.min(right, Math.ceil(((Math.max(from.x, to.x) + near + 1) * size) / 2));
   const sx = to.x - from.x;
   const sy = to.y - from.y;
   const length2 = sx * sx + sy * sy;
   const cutoff2 = DRAG_CUTOFF * DRAG_CUTOFF;
   const pushX = drag * vx * scale;
   const pushY = drag * vy * scale;
+  furthest += drag * Math.max(Math.abs(vx), Math.abs(vy)) * scale;
   for (let row = firstRow; row <= lastRow; row += 1) {
-    const y = cellCentre(row);
+    const y = cellCentre(row, size);
     const start = Math.max(firstCol, first[row]!);
     const end = Math.min(lastCol, last[row]!);
     for (let col = start; col <= end; col += 1) {
-      const x = cellCentre(col);
+      const x = cellCentre(col, size);
       // The distance to the stretch, in reaches.
       let t = length2 > 1e-12 ? ((x - from.x) * sx + (y - from.y) * sy) / length2 : 0;
       t = t < 0 ? 0 : t > 1 ? 1 : t;
@@ -248,27 +294,13 @@ function pourVelocity(from: PitcherState, to: PitcherState, dt: number, out: Scr
       const q = (ex * ex + ey * ey) / (reach * reach);
       if (q >= cutoff2) continue;
       // A cusp, sharpest on the path, so a cleft and a point come out as Vs.
-      const index = row * GRID + col;
+      const index = row * size + col;
       const k = Math.exp(-Math.sqrt(q)) * wall[index]!;
       dx[index] = dx[index]! + pushX * k;
       dy[index] = dy[index]! + pushY * k;
     }
   }
-  return true;
-}
-
-/** The tone's displacements: the foam's, four cells to one, in the tone's larger cells. */
-function toneVelocity(scratch: Scratch): void {
-  const { dx, dy, toneDx, toneDy } = scratch;
-  const { first, last } = TONE_SHAPE;
-  for (let row = 0; row < TONE_GRID; row += 1) {
-    const end = last[row]!;
-    for (let col = first[row]!; col <= end; col += 1) {
-      const at = 2 * row * GRID + 2 * col;
-      toneDx[row * TONE_GRID + col] = (dx[at]! + dx[at + 1]! + dx[at + GRID]! + dx[at + GRID + 1]!) / 8;
-      toneDy[row * TONE_GRID + col] = (dy[at]! + dy[at + 1]! + dy[at + GRID]! + dy[at + GRID + 1]!) / 8;
-    }
-  }
+  return furthest;
 }
 
 /**
@@ -277,19 +309,24 @@ function toneVelocity(scratch: Scratch): void {
  * from, bilinearly), then MacCormack's correction (the step undone, and half
  * the error put back), held between the values it came from, so nothing
  * overshoots and edges stay crisp where plain bilinear steps would blur them.
+ * The first pass goes over `outer`, the second, which reads what the first
+ * wrote a displacement away, over `inner`, a margin inside it: only `inner`
+ * changes.
  */
-function carry(field: Float32Array, shape: Shape, dx: Float32Array, dy: Float32Array, scratch: Scratch): void {
+function carry(field: Float32Array, shape: Shape, work: Passes, outer: Box, inner: Box): void {
   const { size, first, last } = shape;
-  const { hat, low, high } = scratch;
+  const { dx, dy, hat, low, high } = work;
   const edge = size - 1.001;
-  for (let row = 0; row < size; row += 1) {
+  for (let row = outer[0]; row <= outer[1]; row += 1) {
+    const start = first[row]!;
     const end = last[row]!;
-    for (let col = first[row]!; col <= end; col += 1) {
+    for (let col = outer[2]; col <= outer[3]; col += 1) {
       const index = row * size + col;
       const ddx = dx[index]!;
       const ddy = dy[index]!;
       const here = field[index]!;
-      if (ddx < STILL && ddx > -STILL && ddy < STILL && ddy > -STILL) {
+      // Off the coffee, and where nothing moves, the first pass keeps what is there.
+      if (col < start || col > end || (ddx < STILL && ddx > -STILL && ddy < STILL && ddy > -STILL)) {
         hat[index] = here;
         low[index] = here;
         high[index] = here;
@@ -319,9 +356,9 @@ function carry(field: Float32Array, shape: Shape, dx: Float32Array, dy: Float32A
       high[index] = hi;
     }
   }
-  for (let row = 0; row < size; row += 1) {
-    const end = last[row]!;
-    for (let col = first[row]!; col <= end; col += 1) {
+  for (let row = inner[0]; row <= inner[1]; row += 1) {
+    const end = Math.min(inner[3], last[row]!);
+    for (let col = Math.max(inner[2], first[row]!); col <= end; col += 1) {
       const index = row * size + col;
       const ddx = dx[index]!;
       const ddy = dy[index]!;
@@ -462,10 +499,23 @@ export function startPour(surface: LatteSurface, choreo: Choreography, stepSecon
       Object.assign(before, now);
       time += stepSeconds;
       pitcherAt(choreo, time, now);
-      if (pourVelocity(before, now, stepSeconds, scratch)) {
-        carry(surface.foam, FOAM_SHAPE, scratch.dx, scratch.dy, scratch);
-        toneVelocity(scratch);
-        carry(surface.tone, TONE_SHAPE, scratch.toneDx, scratch.toneDy, scratch);
+      if (now.flow > 0 || before.flow > 0) {
+        // The crema's tone, all over the cup, on its own coarser grid.
+        const { tone, foam, extent, inner, outer } = scratch;
+        pourVelocity(before, now, stepSeconds, TONE_SHAPE, tone.dx, tone.dy, ALL_TONE);
+        carry(surface.tone, TONE_SHAPE, tone, ALL_TONE, ALL_TONE);
+        // The foam, only round where it is: where there is none, none comes from anywhere it cannot reach in a step.
+        if (extentOf(surface.foam, extent)) {
+          grown(extent, MARGIN, inner);
+          grown(extent, 2 * MARGIN, outer);
+          if (pourVelocity(before, now, stepSeconds, FOAM_SHAPE, foam.dx, foam.dy, outer) <= MARGIN - 2) {
+            carry(surface.foam, FOAM_SHAPE, foam, outer, inner);
+          } else {
+            // Something moves further than the margin in this step: all of it, this once.
+            pourVelocity(before, now, stepSeconds, FOAM_SHAPE, foam.dx, foam.dy, ALL_FOAM);
+            carry(surface.foam, FOAM_SHAPE, foam, ALL_FOAM, ALL_FOAM);
+          }
+        }
       }
       rise(surface, before, now, stepSeconds);
     },

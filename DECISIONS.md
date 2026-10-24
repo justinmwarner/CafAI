@@ -4597,18 +4597,21 @@ section 8).
   disc grew backward over the next one's landing) nor the rosetta (a filled
   egg); the lean made both, and a drag on a stream at the surface washed the
   rosetta's zigzag out, so a low stream drags nothing.
-- **D-LATTE-2. The heart, the tulip and the rosetta come round in turn; the
-  swan waits.** Each was tuned from its pictures until it read at a glance:
-  the heart's round lobes, cleft and point; the tulip's four nested layers
-  under a small heart; the rosetta's thin leaves either side of its stem. The
-  swan, a rosetta's wing off to the right, a neck drawn up out of its body as
-  an S and a small heart for a head, reads as a swan but its wing's leaves
-  come out thick and its neck thin, so it is poured by the model and tested
-  but left out of the rotation (`IN_ROTATION`) until it looks right. The
-  still is the finished heart, poured at 5 steps a second (the same heart for
-  a third of the work, done in one go before the still paints). Why: D228's
-  gate; latte-art clip art is what PRODUCT.md rules out, so a pour that only
-  half reads is worse than three that do.
+- **D-LATTE-2. All four pours come round in turn: the heart, the tulip, the
+  rosetta and the swan.** Each was tuned from its pictures until it read at
+  a glance: the heart's round lobes, cleft and point; the tulip's four nested
+  layers under a small heart; the rosetta's thin leaves either side of its
+  stem; the swan's wing, a rosetta off to the right pulled through toward its
+  body, with a neck drawn up out of the body as an S and a small heart for a
+  head. The swan's first wing, not pulled through, came out as thick stacked
+  strokes, and was kept out of the rotation until the pull along it thinned
+  its leaves into feathers. A pour still left out goes from `IN_ROTATION`
+  (`latteModel.ts`) and nothing else changes. The still is the finished
+  heart, poured at 5 steps a second (the same heart for a third of the work,
+  done in one go before the still paints). Why: D228's gate; latte-art clip
+  art is what PRODUCT.md rules out, so a pour that only half reads would be
+  worse than one fewer. The owner's eye on the tablet is still the test
+  (QUESTIONS).
 - **D-LATTE-3. The cup from straight above, on its saucer, lit from the
   upper left.** A white glaze (warm, its light falling off from the upper
   left to the lower right), the saucer's rim rolled over with a glint and a
@@ -4628,13 +4631,21 @@ section 8).
   (crema, foam, glaze, none of them near black); and the drift so that no
   bright porcelain sits in one place for 30 minutes.
 - **D-LATTE-4. Under 4 ms a frame.** The field steps at 15 a second, so
-  every other frame; the tone at half the foam's resolution; the two small
-  canvases coloured only when the surface changed (a version the model
-  counts), never while a pour is admired; the foam coloured twice as fine as
-  its grid (each pixel from its four nearest cells) so its edge is smooth
-  before the canvas scales it up; the porcelain, the shadows and the names
-  drawn once a size; the table and the saucer painted again only when the
-  drift moves a whole device pixel, each frame redrawing the coffee, the lip
-  over its edge, the stream and the name's patch. Why: the brief's 4 ms at
-  962 by 602 and a backing scale of 1.33, with a tablet several times slower;
-  a first, plain version of the field cost about 9 ms a step.
+  every other frame. The tone has a grid of its own at half the foam's
+  resolution, with its own velocity. The foam is moved only in the box it is
+  in and a margin round it (where there is none, none can come from anywhere
+  it cannot reach in a step); a step that moves anything further than the
+  margin moves all of it, that once. The two small canvases are coloured
+  only when the surface changed (a version the model counts), never while a
+  pour is admired: the foam twice as fine as its grid, a cell at a time (its
+  four pixels from it and its neighbours, so the edge is smooth before the
+  canvas scales it up), only in the box it is in, each pixel one 32-bit word
+  from a table per step of light. The porcelain, the shadows and the names
+  are drawn once a size; the table and the saucer are painted again only when
+  the drift moves a whole device pixel, each frame redrawing the coffee, the
+  lip over its edge, the stream and the name's patch. Measured on this PC at
+  962 by 602 and a backing scale of 1.33: about 2.1 to 2.3 ms a frame at the
+  busiest moments of a pour (the disc growing, the pull-through, the
+  rosetta's wiggle), under 1 ms in the base pour, 0.13 ms while a pour is
+  admired. Why: the brief's 4 ms, with a tablet several times slower; a
+  first, plain version cost about 9 ms a field step and 6.6 ms a colouring.

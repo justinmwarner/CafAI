@@ -63,6 +63,10 @@ const GLAZE_DEEP = oklch(0.4, 0.016, 62);
 
 /** The foam is coloured twice as fine as its grid, so its edges come out smooth. */
 const FOAM_FINE = GRID * 2;
+/** The light on the foam (the window's, and its edges' bevel) in this many steps from LIFT_LOW to LIFT_HIGH: fine enough that no step shows. */
+const LIFT_LEVELS = 64;
+const LIFT_LOW = 0.78;
+const LIFT_HIGH = 1.22;
 
 /** How much the foam's edges are lit or shaded by the way they face, and the soft shadow it casts on the crema (how dark, how far in foam cells). */
 const FOAM_BEVEL = 0.12;
@@ -469,6 +473,8 @@ export const latte: CanvasSaver = {
     let [foamCanvas, foamContext]: [HTMLCanvasElement | null, CanvasRenderingContext2D | null] = foamLayer;
     let cremaImage: ImageData | null = cremaContext.createImageData(TONE_GRID, TONE_GRID);
     let foamImage: ImageData | null = foamContext.createImageData(FOAM_FINE, FOAM_FINE);
+    let cremaPixels: Uint32Array | null = new Uint32Array(cremaImage.data.buffer);
+    let foamPixels: Uint32Array | null = new Uint32Array(foamImage.data.buffer);
 
     // The crema's colours by tone, and how much of the wall's darker ring and the rim's shade each cell takes.
     const cremaRamp = ramp(CREMA_STOPS, 256);
@@ -486,8 +492,13 @@ export const latte: CanvasSaver = {
         cremaAlpha[row * TONE_GRID + col] = r < 1.06 ? 255 : 0;
       }
     }
-    // The foam's colour and opacity by its value: the brown line, then the white, thin to thick.
-    const foamTable = new Uint8ClampedArray(256 * 4);
+    // Pixels are written whole, as 32-bit words in the canvas's byte order (red first in memory).
+    const littleEndian = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
+    const pack = (red: number, green: number, blue: number, alpha: number) =>
+      (littleEndian ? (alpha << 24) | (blue << 16) | (green << 8) | red : (red << 24) | (green << 16) | (blue << 8) | alpha) >>> 0;
+    // The foam's colour and opacity by its value (the brown line, then the white, thin to thick), at each of
+    // LIFT_LEVELS lights from LIFT_LOW to LIFT_HIGH: a pixel is one look-up.
+    const foamPacked = new Uint32Array(LIFT_LEVELS * 256);
     {
       const line = hexToOklab(FOAM_LINE);
       const thin = hexToOklab(FOAM_THIN);
@@ -499,12 +510,14 @@ export const latte: CanvasSaver = {
         const alpha = white + edge;
         const milk = mixOklab(thin, thick, smooth(WHITE_FULL, 0.95, f));
         const [red, green, blue] = oklabToRgb(alpha > 0 ? mixOklab(line, milk, white / alpha) : line);
-        foamTable[i * 4] = red;
-        foamTable[i * 4 + 1] = green;
-        foamTable[i * 4 + 2] = blue;
-        foamTable[i * 4 + 3] = Math.round(alpha * 255);
+        for (let level = 0; level < LIFT_LEVELS; level += 1) {
+          const lift = LIFT_LOW + ((LIFT_HIGH - LIFT_LOW) * level) / (LIFT_LEVELS - 1);
+          const byte = (value: number) => Math.min(255, Math.round(value * lift));
+          foamPacked[level * 256 + i] = alpha > 0 ? pack(byte(red), byte(green), byte(blue), Math.round(alpha * 255)) : 0;
+        }
       }
     }
+    const liftScale = (LIFT_LEVELS - 1) / (LIFT_HIGH - LIFT_LOW);
     const foamInside = new Uint8Array(GRID * GRID);
     const foamLight = new Float32Array(GRID * GRID);
     for (let row = 0; row < GRID; row += 1) {
@@ -539,8 +552,7 @@ export const latte: CanvasSaver = {
 
     /** Colours the crema's canvas from its tone, shaded where the foam stands between it and the light. */
     const colourCrema = (surface: LatteSurface) => {
-      if (!cremaImage || !cremaContext) return;
-      const data = cremaImage.data;
+      if (!cremaImage || !cremaContext || !cremaPixels) return;
       const { tone, foam } = surface;
       for (let row = 0; row < TONE_GRID; row += 1) {
         const foamRow = Math.min(GRID - 1, Math.max(0, 2 * row + 1 + shadowRow));
@@ -550,57 +562,90 @@ export const latte: CanvasSaver = {
           const k = (level <= 0 ? 0 : level >= 1 ? 255 : (level * 255) | 0) * 3;
           const wall = toWall[i]!;
           const above = foam[foamRow * GRID + Math.min(GRID - 1, Math.max(0, 2 * col + 1 + shadowCol))]!;
-          const lit = cremaLight[i]! - FOAM_SHADOW * smooth(0.3, 0.7, above);
-          const o = i * 4;
-          data[o] = (cremaRamp[k]! + (wallRed - cremaRamp[k]!) * wall) * lit;
-          data[o + 1] = (cremaRamp[k + 1]! + (wallGreen - cremaRamp[k + 1]!) * wall) * lit;
-          data[o + 2] = (cremaRamp[k + 2]! + (wallBlue - cremaRamp[k + 2]!) * wall) * lit;
-          data[o + 3] = cremaAlpha[i]!;
+          const lit = cremaLight[i]! - FOAM_SHADOW * (above <= 0.3 ? 0 : above >= 0.7 ? 1 : smooth(0.3, 0.7, above));
+          cremaPixels[i] = pack(
+            ((cremaRamp[k]! + (wallRed - cremaRamp[k]!) * wall) * lit) | 0,
+            ((cremaRamp[k + 1]! + (wallGreen - cremaRamp[k + 1]!) * wall) * lit) | 0,
+            ((cremaRamp[k + 2]! + (wallBlue - cremaRamp[k + 2]!) * wall) * lit) | 0,
+            cremaAlpha[i]!,
+          );
         }
       }
       cremaContext.putImageData(cremaImage, 0, 0);
     };
 
+    // The cells the foam's canvas last showed foam in (none yet): outside them its pixels are clear already.
+    let boxTop = GRID;
+    let boxBottom = -1;
+    let boxLeft = GRID;
+    let boxRight = -1;
+
     /**
      * Colours the foam's canvas from its value, twice as fine as its grid (each
      * pixel from the four nearest cells, so the edge is smooth before it is
      * coloured, not stepped), its edges a little lit where they face the light
-     * and shaded where they face away.
+     * and shaded where they face away. Only the box the foam is in now, and the
+     * one it was in, are gone over.
      */
     const colourFoam = (surface: LatteSurface) => {
-      if (!foamImage || !foamContext) return;
-      const data = foamImage.data;
+      if (!foamImage || !foamContext || !foamPixels) return;
       const foam = surface.foam;
-      for (let row = 0; row < FOAM_FINE; row += 1) {
-        const cellRow = row >> 1;
-        const nearRow = (row & 1) === 0 ? cellRow - 1 : cellRow + 1;
-        for (let col = 0; col < FOAM_FINE; col += 1) {
-          const o = (row * FOAM_FINE + col) * 4;
-          const cellCol = col >> 1;
+      let top = GRID;
+      let bottom = -1;
+      let left = GRID;
+      let right = -1;
+      for (let row = 0; row < GRID; row += 1) {
+        const start = row * GRID;
+        for (let col = 0; col < GRID; col += 1) {
+          if (foam[start + col]! > 0) {
+            if (row < top) top = row;
+            bottom = row;
+            if (col < left) left = col;
+            if (col > right) right = col;
+          }
+        }
+      }
+      // A cell more all round: a pixel takes from its neighbours.
+      const fromRow = Math.max(1, Math.min(top, boxTop) - 1);
+      const toRow = Math.min(GRID - 2, Math.max(bottom, boxBottom) + 1);
+      const fromCol = Math.max(1, Math.min(left, boxLeft) - 1);
+      const toCol = Math.min(GRID - 2, Math.max(right, boxRight) + 1);
+      boxTop = top;
+      boxBottom = bottom;
+      boxLeft = left;
+      boxRight = right;
+      // A cell at a time: its four pixels each take from it and the three cells nearest them.
+      const shade = (value: number, base: number) => (value <= 0 ? 0 : foamPacked[base + (value >= 1 ? 255 : (value * 255) | 0)]!);
+      for (let cellRow = fromRow; cellRow <= toRow; cellRow += 1) {
+        const upper = 2 * cellRow * FOAM_FINE;
+        const lower = upper + FOAM_FINE;
+        for (let cellCol = fromCol; cellCol <= toCol; cellCol += 1) {
           const cell = cellRow * GRID + cellCol;
-          if (foamInside[cell] === 0) {
-            data[o + 3] = 0;
+          const c = foam[cell]!;
+          const n = foam[cell - GRID]!;
+          const s = foam[cell + GRID]!;
+          const w = foam[cell - 1]!;
+          const e = foam[cell + 1]!;
+          const nw = foam[cell - GRID - 1]!;
+          const ne = foam[cell - GRID + 1]!;
+          const sw = foam[cell + GRID - 1]!;
+          const se = foam[cell + GRID + 1]!;
+          const x = 2 * cellCol;
+          if (c + n + s + w + e + nw + ne + sw + se <= 0 || foamInside[cell] === 0) {
+            foamPixels[upper + x] = 0;
+            foamPixels[upper + x + 1] = 0;
+            foamPixels[lower + x] = 0;
+            foamPixels[lower + x + 1] = 0;
             continue;
           }
-          // (Cells inside the cup are never on the grid's border, so their neighbours are there.)
-          const nearCol = (col & 1) === 0 ? cellCol - 1 : cellCol + 1;
-          const a = foam[cell]!;
-          const b = foam[cellRow * GRID + nearCol]!;
-          const c = foam[nearRow * GRID + cellCol]!;
-          const d = foam[nearRow * GRID + nearCol]!;
-          const value = 0.5625 * a + 0.1875 * (b + c) + 0.0625 * d;
-          const k = (value <= 0 ? 0 : value >= 1 ? 255 : (value * 255) | 0) * 4;
-          const alpha = foamTable[k + 3]!;
-          if (alpha === 0) {
-            data[o + 3] = 0;
-            continue;
-          }
-          const facing = -((foam[cell + 1]! - foam[cell - 1]!) * LIGHT_X + (foam[cell + GRID]! - foam[cell - GRID]!) * LIGHT_Y);
-          const lift = foamLight[cell]! + FOAM_BEVEL * facing;
-          data[o] = foamTable[k]! * lift;
-          data[o + 1] = foamTable[k + 1]! * lift;
-          data[o + 2] = foamTable[k + 2]! * lift;
-          data[o + 3] = alpha;
+          const facing = -((e - w) * LIGHT_X + (s - n) * LIGHT_Y);
+          const level = ((foamLight[cell]! + FOAM_BEVEL * facing - LIFT_LOW) * liftScale + 0.5) | 0;
+          const base = (level < 0 ? 0 : level >= LIFT_LEVELS ? LIFT_LEVELS - 1 : level) * 256;
+          const middle = 0.5625 * c;
+          foamPixels[upper + x] = shade(middle + 0.1875 * (w + n) + 0.0625 * nw, base);
+          foamPixels[upper + x + 1] = shade(middle + 0.1875 * (e + n) + 0.0625 * ne, base);
+          foamPixels[lower + x] = shade(middle + 0.1875 * (w + s) + 0.0625 * sw, base);
+          foamPixels[lower + x + 1] = shade(middle + 0.1875 * (e + s) + 0.0625 * se, base);
         }
       }
       foamContext.putImageData(foamImage, 0, 0);
@@ -749,6 +794,8 @@ export const latte: CanvasSaver = {
         foamContext = null;
         cremaImage = null;
         foamImage = null;
+        cremaPixels = null;
+        foamPixels = null;
         under = null;
         over = null;
         model = null;

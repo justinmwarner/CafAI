@@ -187,11 +187,12 @@ const ROSETTA: Choreography = {
   ],
 };
 
-/** The swan's wing: from its body (where the first, widest leaves go) back to its tip. */
-const WING = { bodyX: 0.15, bodyY: 0.42, tipX: 0.38, tipY: -0.3 } as const;
+/** The swan's wing: from its body (where the first, widest leaves go) back to its tip; and the pull-through along it, tip to body. */
+const WING = { bodyX: 0.1, bodyY: 0.42, tipX: 0.32, tipY: -0.3 } as const;
+const WING_PULL = { fromX: 0.36, fromY: -0.42, toX: 0, toY: 0.62 } as const;
 /** Its neck, a cubic from the front of the body up to the head; the head, and where its beak points. */
-const NECK = [-0.12, 0.55, -0.85, 0.3, 0.25, -0.05, -0.25, -0.42] as const;
-const HEAD = { x: -0.28, y: -0.5, beakX: -0.56, beakY: -0.34 } as const;
+const NECK = [-0.17, 0.55, -0.9, 0.3, 0.2, -0.05, -0.3, -0.42] as const;
+const HEAD = { x: -0.33, y: -0.5, beakX: -0.61, beakY: -0.34 } as const;
 
 function swanKeys(): PitcherKey[] {
   // The wing's leaves are pushed from its tip toward its body.
@@ -199,15 +200,18 @@ function swanKeys(): PitcherKey[] {
   const keys: PitcherKey[] = [
     ...base(4.2),
     { t: 5, x: WING.bodyX * 0.7, y: WING.bodyY * 0.7, height: 1, flow: 0.7, wiggle: 0.126, heading },
-    // The wing: a rosetta off to the right, drawn back toward its tip.
+    // The wing: a rosetta off to the right, drawn back toward its tip, then pulled through toward its body.
     { t: 6, x: WING.bodyX, y: WING.bodyY, height: 0.05, flow: 0.9, wiggle: 0.14, heading, lean: 0.9 },
     { t: 13.5, x: WING.tipX, y: WING.tipY, height: 0.05, flow: 0.85, wiggle: 0.07, heading, lean: 0.9, pace: 'even' },
-    { t: 14, x: WING.tipX, y: WING.tipY, height: 1, flow: 0, wiggle: 0, heading },
+    { t: 13.8, x: WING_PULL.fromX, y: WING_PULL.fromY, height: 1, flow: 0, wiggle: 0, heading },
+    { t: 14.1, x: WING_PULL.fromX, y: WING_PULL.fromY, height: 0.55, flow: 0.2, wiggle: 0 },
+    { t: 15.4, x: WING_PULL.toX, y: WING_PULL.toY, height: 0.55, flow: 0.2, wiggle: 0 },
+    { t: 15.8, x: WING_PULL.toX, y: WING_PULL.toY, height: 1, flow: 0, wiggle: 0 },
   ];
   // The neck: a line drawn out of the front of the body as an S, the stream just
   // low enough to lay foam and lifted enough to drag it along.
-  const start = 15;
-  const end = 18;
+  const start = 16.4;
+  const end = 19;
   const points = 10;
   for (let i = 0; i <= points; i += 1) {
     const s = i / points;
@@ -215,28 +219,28 @@ function swanKeys(): PitcherKey[] {
     const x = u * u * u * NECK[0] + 3 * u * u * s * NECK[2] + 3 * u * s * s * NECK[4] + s * s * s * NECK[6];
     const y = u * u * u * NECK[1] + 3 * u * u * s * NECK[3] + 3 * u * s * s * NECK[5] + s * s * s * NECK[7];
     if (i === 0) {
-      keys.push({ t: start - 0.6, x, y, height: 1, flow: 0, wiggle: 0 });
-      keys.push({ t: start, x, y, height: 0.25, flow: 0.35, wiggle: 0 });
+      keys.push({ t: start - 0.3, x, y, height: 1, flow: 0, wiggle: 0 });
+      keys.push({ t: start, x, y, height: 0.22, flow: 0.45, wiggle: 0 });
     } else {
-      keys.push({ t: start + (end - start) * s, x, y, height: 0.25, flow: 0.35, wiggle: 0, pace: 'even' });
+      keys.push({ t: start + (end - start) * s, x, y, height: 0.22, flow: 0.45, wiggle: 0, pace: 'even' });
     }
   }
   // The head: a small disc at the top of the neck, then a short pull through it, the beak its point.
   const backX = HEAD.x - (HEAD.beakX - HEAD.x) * 0.75;
   const backY = HEAD.y - (HEAD.beakY - HEAD.y) * 0.75;
   keys.push(
-    { t: end + 0.4, x: HEAD.x, y: HEAD.y, height: 0.05, flow: 0.5, wiggle: 0 },
-    { t: end + 1.4, x: HEAD.x, y: HEAD.y, height: 0.05, flow: 0.5, wiggle: 0 },
-    { t: end + 2.2, x: backX, y: backY, height: 1, flow: 0, wiggle: 0 },
-    { t: end + 2.5, x: backX, y: backY, height: 0.55, flow: 0.2, wiggle: 0 },
-    { t: end + 3.5, x: HEAD.beakX, y: HEAD.beakY, height: 0.55, flow: 0.2, wiggle: 0 },
-    { t: end + 3.9, x: HEAD.beakX, y: HEAD.beakY, height: 1, flow: 0, wiggle: 0 },
+    { t: end + 0.4, x: HEAD.x, y: HEAD.y, height: 0.05, flow: 0.6, wiggle: 0 },
+    { t: end + 1.6, x: HEAD.x, y: HEAD.y, height: 0.05, flow: 0.6, wiggle: 0 },
+    { t: end + 2, x: backX, y: backY, height: 1, flow: 0, wiggle: 0 },
+    { t: end + 2.3, x: backX, y: backY, height: 0.55, flow: 0.2, wiggle: 0 },
+    { t: end + 3.3, x: HEAD.beakX, y: HEAD.beakY, height: 0.55, flow: 0.2, wiggle: 0 },
+    { t: end + 3.7, x: HEAD.beakX, y: HEAD.beakY, height: 1, flow: 0, wiggle: 0 },
     { t: 25, x: HEAD.beakX, y: HEAD.beakY, height: 1, flow: 0, wiggle: 0 },
   );
   return keys;
 }
 
-/** The swan: a rosetta's wing off to the right, a neck drawn up out of its body as an S, and a small heart for the head. */
+/** The swan: a rosetta's wing off to the right, pulled through toward its body, a neck drawn up out of the body as an S, and a small heart for the head. */
 const SWAN: Choreography = {
   id: 'swan',
   name: 'Swan',

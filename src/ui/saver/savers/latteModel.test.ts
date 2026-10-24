@@ -184,6 +184,31 @@ describe('the surface', () => {
       expect(leaves, `x ${x}`).toBeGreaterThanOrEqual(6);
     }
   });
+
+  it('pours a swan: a wing of leaves to the right, a thin neck to the left of it, a head at the top', () => {
+    const surface = pourWhole(CHOREOGRAPHIES.swan, 1);
+    const runs = (y: number, fromX: number, toX: number) => {
+      let count = 0;
+      let cells = 0;
+      let was = false;
+      for (let x = fromX; x < toX; x += 2 / GRID) {
+        const white = foamAt(surface, x, y) >= 0.5;
+        if (white && !was) count += 1;
+        if (white) cells += 1;
+        was = white;
+      }
+      return { count, cells };
+    };
+    // The wing: leaf after leaf across it.
+    expect(runs(0.1, 0, 0.6).count).toBeGreaterThanOrEqual(4);
+    // The neck: one thin line, crema either side.
+    const neck = runs(0, -0.45, -0.08);
+    expect(neck.count).toBe(1);
+    expect(neck.cells).toBeLessThanOrEqual(6);
+    // The head, up on the left, and nothing above the wing on the right.
+    expect(foamAt(surface, -0.35, -0.45)).toBeGreaterThan(0.5);
+    expect(foamAt(surface, 0.5, -0.5)).toBeLessThan(0.5);
+  });
 });
 
 describe('createLatteModel', () => {
