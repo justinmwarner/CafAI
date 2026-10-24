@@ -1,16 +1,18 @@
 /**
- * The bounce of the Bouncing Portafilter (D227) as pure code: where the
- * badge is, how it turns at the walls, which roast it wears, the corners it
- * has found and the beans a corner throws. The drawing (portafilter.ts) only
- * paints what is here; every random number comes from the seed and every
+ * The bounce of the Bouncing Portafilter (D227, D255, D256) as pure
+ * code: where the logo is, how it turns at the walls, which roast it wears
+ * and how far its colour has crossed to it, the corners it has found and the
+ * beans and the ring of light a corner throws. The drawing (portafilter.ts)
+ * only paints what is here; every random number comes from the seed and every
  * change from step(), so the same seed and steps give the same picture.
  *
- * The badge drifts at 70 px a second on each axis, as the DVD logo does. Each
- * wall it meets moves its colour one roast along; a corner, both walls in the
- * one step, throws a dozen beans out of it and is counted ("Corner 2"). A real
- * corner is rare (about one in half an hour), so the badge is set down on a
- * path that finds its first one within the first minute or two, and goes on
- * bouncing as it would after that.
+ * The logo (the badge) drifts at 70 px a second on each axis, as the DVD logo
+ * does. Each wall it meets moves its colour one roast along, crossing over in
+ * 300 ms; a corner, both walls in the one step, throws a dozen beans and a
+ * ring of light out of it and is counted ("Corner 2"). A real corner is rare
+ * (about one in half an hour), so the logo is set down on a path that finds
+ * its first one within the first minute or two, and goes on bouncing as it
+ * would after that.
  */
 import { between, createRandom, wholeBetween, type Random } from '../random.ts';
 import { nextRoast, ROASTS } from './roasts.ts';
@@ -19,8 +21,19 @@ import { nextRoast, ROASTS } from './roasts.ts';
 export const BADGE_SPEED = 70;
 /** About a fifth of the screen wide. */
 export const BADGE_WIDTH_SHARE = 0.2;
-/** Its height over its width: the lettering over a 4:1 oval. */
-export const BADGE_ASPECT = 0.56;
+/** Its height over its width: the portafilter over the lettering over a 4:1 oval (portafilterLogo.ts). */
+export const BADGE_ASPECT = 0.88;
+/** A wall's change of roast crosses over this long. */
+export const ROAST_FADE_MS = 300;
+/** A corner's ring of light spreads out of it and fades over this long. */
+export const RING_MS = 900;
+/**
+ * A screen smaller than this either way, px, is no screen to bounce on (a
+ * canvas not laid out yet, or a screenshot that shrinks the page to 1x1 for a
+ * moment): the logo keeps its place, its path and its planned first corner
+ * for when the size comes back (D257).
+ */
+export const MIN_SCREEN = 16;
 /** "Corner 2" shows this long by the badge. */
 export const CORNER_LABEL_MS = 3000;
 /** The label fades over its last part. */
@@ -68,14 +81,26 @@ export interface PortafilterModel {
   h: number;
   vx: number;
   vy: number;
-  /** An index into ROASTS: the colour it wears. */
+  /** An index into ROASTS: the colour it wears, or is crossing to. */
   roast: number;
+  /**
+   * The colour shown, as a place along the roasts counted on and on (roast r
+   * is r, r + 7, ...): crossing from `toneFrom` to `toneTo` over ROAST_FADE_MS
+   * of `toneAge` (shownTone). A wall that comes mid-crossing starts the next
+   * from where it had got to.
+   */
+  toneFrom: number;
+  toneTo: number;
+  toneAge: number;
   /** Walls met since it came up. */
   walls: number;
   /** Corners found since it came up. */
   corners: number;
   /** Ms since the last corner; Infinity before the first. */
   cornerAge: number;
+  /** The screen's corner the last one was found in, px: where its ring of light spreads from. */
+  cornerX: number;
+  cornerY: number;
   /** The beans of the last corner, while they last. */
   burst: BurstBean[];
   /** When the first corner is due, as planned when the badge was set down; null once a resize spoils the plan, or with a start of its own. */
@@ -88,6 +113,27 @@ export interface PortafilterModel {
 /** How opaque a burst bean is: 1 at the burst, 0 when it is over. */
 export function burstAlpha(ageMs: number): number {
   return Math.min(1, Math.max(0, 1 - ageMs / BURST_MS));
+}
+
+/** The colour shown, as a place along the roasts counted on and on: eased from `toneFrom` to `toneTo`. */
+export function shownTone(model: Pick<PortafilterModel, 'toneFrom' | 'toneTo' | 'toneAge'>): number {
+  const t = Math.min(1, Math.max(0, model.toneAge / ROAST_FADE_MS));
+  const eased = t * t * (3 - 2 * t);
+  return model.toneFrom + (model.toneTo - model.toneFrom) * eased;
+}
+
+/** A place along the roasts as the two roasts it lies between and how far it is from the first to the second. */
+export function roastBetween(tone: number): { from: number; to: number; mix: number } {
+  const whole = Math.floor(tone + 1e-9);
+  const from = ((whole % ROASTS.length) + ROASTS.length) % ROASTS.length;
+  return { from, to: nextRoast(from), mix: Math.max(0, tone - whole) };
+}
+
+/** A corner's ring of light `ageMs` after it: how far it has spread (0 to 1 of its reach) and how bright it is (0 to 1). */
+export function ringAt(ageMs: number): { spread: number; alpha: number } {
+  if (!(ageMs >= 0) || ageMs >= RING_MS) return { spread: 0, alpha: 0 };
+  const t = ageMs / RING_MS;
+  return { spread: 1 - (1 - t) * (1 - t), alpha: Math.min(1, t * 10) * (1 - t) * (1 - t) };
 }
 
 /** How opaque "Corner N" is, `cornerAgeMs` after the corner: 0 once it has shown for 3 s. */
@@ -157,13 +203,19 @@ export function createPortafilterModel(seed: number, start?: PortafilterStart): 
     vx: BADGE_SPEED,
     vy: BADGE_SPEED,
     roast: 0,
+    toneFrom: 0,
+    toneTo: 0,
+    toneAge: ROAST_FADE_MS,
     walls: 0,
     corners: 0,
     cornerAge: Infinity,
+    cornerX: 0,
+    cornerY: 0,
     burst: [],
     firstCornerMs: null,
 
     resize(width, height) {
+      if (width < MIN_SCREEN || height < MIN_SCREEN) return;
       model.width = width;
       model.height = height;
       model.w = badgeWidth(width);
@@ -189,6 +241,7 @@ export function createPortafilterModel(seed: number, start?: PortafilterStart): 
       const ms = Math.max(0, dtMs);
       const seconds = ms / 1000;
       model.cornerAge += ms;
+      model.toneAge += ms;
       stepBurst(seconds, ms);
       if (!placed) return;
       const moveX = bounce(model.x, model.vx, seconds, rangeX);
@@ -201,10 +254,16 @@ export function createPortafilterModel(seed: number, start?: PortafilterStart): 
       if (hits === 0) return;
       model.walls += hits;
       for (let i = 0; i < hits; i += 1) model.roast = nextRoast(model.roast);
+      // The colour crosses on from wherever it had got to.
+      model.toneFrom = shownTone(model);
+      model.toneTo += hits;
+      model.toneAge = 0;
       if (moveX.hits > 0 && moveY.hits > 0) {
         model.corners += 1;
         model.cornerAge = 0;
-        throwBeans(moveX.velocity > 0 ? 0 : model.width, moveY.velocity > 0 ? 0 : model.height);
+        model.cornerX = moveX.velocity > 0 ? 0 : model.width;
+        model.cornerY = moveY.velocity > 0 ? 0 : model.height;
+        throwBeans(model.cornerX, model.cornerY);
       }
     },
   };
@@ -218,8 +277,11 @@ export function createPortafilterModel(seed: number, start?: PortafilterStart): 
       model.vx = start.vx;
       model.vy = start.vy;
       model.roast = start.roast;
-      return;
     }
+    model.toneFrom = model.roast;
+    model.toneTo = model.roast;
+    model.toneAge = ROAST_FADE_MS;
+    if (start) return;
     const cornerAtRight = random() < 0.5;
     const cornerAtBottom = random() < 0.5;
     // The first corner's time is drawn again until the badge starts well clear of the walls

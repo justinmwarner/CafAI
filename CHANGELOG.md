@@ -17,6 +17,28 @@ workflow checks against it. Settings > About shows the version you run.
   with the coach back on the Anthropic API key, the copy is deleted. Any
   device on your network can read Decaid's store, as the switch says.
 
+### Screensavers
+
+- **Nicer screensavers.** Each is drawn lit now, not flat. The Bouncing
+  Portafilter is a portafilter logo glowing in its roast, crossing to the
+  next at each wall. Beanfield's beans are lit roasted beans rolling out of
+  a roaster's warm glow, the yellow no longer lemony. Rising Steam is a
+  porcelain cup of coffee with its steam lit from behind. Lava Latte is a
+  glass of coffee lit from below like a lava lamp. Nightstand shows the
+  date and fades to its new place each minute.
+- **Brew Rain is coffee now.** Water falls from a group head's shower
+  screen as coffee's own symbols and words, turning from water to amber on
+  the way down, into a cup of crema that ripples where it lands. No
+  Japanese characters any more, so no font is needed for them.
+- **Espresso Pipes**, after the 3D Pipes: copper, brass and chrome pipes
+  grow under a studio's light, with a pressure gauge, a valve wheel or an
+  espresso cup now and then. It needs WebGL; where the device cannot start
+  it, Settings greys it out.
+- **Latte Art**: the cup from above, and an unseen pitcher pouring a heart,
+  a tulip, a rosetta and a swan in turn.
+- A screensaver that cannot run on a device gives way to Nightstand, as
+  before, and now says so in Decaid's log.
+
 ## 0.1.3 (2026-10-23)
 
 ### Usage sharing

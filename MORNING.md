@@ -1,6 +1,75 @@
 # Good morning: CafAI after your answers (2026-10-04)
 
-**Newest (2026-10-23, evening):** where the coach runs survives a Decaid
+**Newest (2026-10-24):** the screensavers' second round (D249-D273, branch
+`feat/screensavers-2`, merged into `main`): all eight now, each drawn lit
+rather than flat, and Brew Rain made of coffee.
+
+- **Why.** Having tried the six, you asked to finish the two planned, for
+  nicer visuals ("I do like a lot of them, but just want to make them
+  nicer"), and said Brew Rain "is just matrix, nothing coffee related".
+- **How.** Five builders worked side by side, each in a worktree of its own,
+  shooting its screensaver and changing it until it looked right; the
+  design's section 7 has each as it is now.
+- **Lit, not flat (D249).** The one place in CafAI where light and glow are
+  drawn: gradients for volume, sheen on metal, glass, glaze and oily beans,
+  made for the screen dimmed to 30; a fixed cup or glass drifts a few
+  pixels a minute.
+- **The six, nicer.** The Bouncing Portafilter is a portafilter drawn as a
+  logo over CafAI and the ESPRESSO oval, glowing in its roast and crossing
+  to the next in 300 ms at each wall; a corner throws a ring of light and
+  lit beans. Beanfield's beans are lit roasted beans (a domed back, the
+  centre cut on the flat side, an oily glint on the dark roasts) rolling
+  out of a roaster's warm glow; the roasts are a roaster's stages now, the
+  yellow straw, not lemon. Rising Steam is a porcelain cup of coffee
+  rendered as a still life, its steam lit from behind. Lava Latte is a
+  thick glass of coffee lit from below like a lava lamp, the cream shaded
+  round. Nightstand has the date above the time, its lines under
+  hairlines, a faint warm glow, and fades to its new place each minute.
+- **Brew Rain, coffee now (D252-D257).** Water falls from a group head's
+  shower screen as coffee's own symbols (beans, drops, cups, cherries,
+  leaves, steam, hearts) and words, pale water at the top turning crema
+  gold and amber, into a cup of crema that ripples where each drop lands
+  and fills over the half hour. No katakana, so QUESTIONS 33 is moot.
+- **Espresso Pipes, new (D261-D263).** Copper, brass, chrome and anodised
+  pipes grow through a grid under a studio's light, now and then a
+  pressure gauge at 9 bar, a valve wheel or an espresso cup on its saucer.
+  WebGL1 written by hand; greyed out where a device cannot start it.
+- **Latte Art, new (D270-D273).** A lit cup from above, and an unseen
+  pitcher pouring a heart, a tulip, a rosetta and a swan in turn on a
+  surface its pour moves; each named under the saucer and admired 12 s.
+  All four passed the screenshots and come round (D250); D228's gate is
+  your look on the iPad, and a pour you dislike comes out in one line.
+- **Found on the way (D251).** Brew Rain threw at some sizes and Nightstand
+  silently took its place: a page shrunk to 1x1 and back (Puppeteer's
+  screenshot does that) restarted it on a one-pixel cup. Fixed, and a
+  screensaver that gives way now says so: `data-fallback` on the overlay,
+  a line in Decaid's WebView log, and an e2e test that starts each one at
+  each tablet size.
+- **Review.** One reviewer on three engines (Chromium 91, today's Chromium,
+  WebKit), up to 24 sizes from 1x1 to 2732x2048, resizes mid-run and 30
+  minutes of frames: no throws. It found Brew Rain's still costing up to
+  4 s a minute under reduced motion (now about 0.1 s once, then a copy),
+  two stills that never drifted, burst beans whose light turned with them,
+  Espresso Pipes keeping its WebGL context until garbage collection, and a
+  test that tested nothing: all fixed. Left as it is: Rising Steam and Lava
+  Latte render their cup and glass pixel by pixel as they start, about half
+  a second here, perhaps 1 to 3 s on a weak tablet (QUESTIONS 37).
+- **Numbers.** D249-D273 follow Settings regrouped's D232-D248, which that
+  session's branch has reserved, so `main` shows a gap until it merges.
+- **Checks.** On the final code: typecheck, lint, 5165 unit tests, the
+  build and the release zip, the screensaver e2e (each of the seven canvas
+  ones at each tablet size among them), and Chromium 91 for all eight,
+  held, running and as their stills. The whole of Playwright's 587 tests
+  (8 skipped by design) ran just before Brew Rain's last fixes: chat-first's
+  80 ms Stop check failed twice on the busy PC and passed alone.
+- **Calls to check.** QUESTIONS 36-39: Latte Art's pours on the iPad,
+  Espresso Pipes and Beanfield on a weak tablet, the small calls on the
+  looks, and Nightstand's date in the tablet's language. The hardware test
+  plan's section 20, step 8, goes through each one dimmed.
+- **Cost.** About 6M tokens: five builders, one reviewer and two rounds of
+  fixes.
+
+**Before that (2026-10-23, evening):** where the coach runs survives a Decaid
 update (D229-D231, branch `fix/coach-source-in-decaid`, merged into `main`).
 
 - **Why.** You said the latest update cleared your coach settings. The

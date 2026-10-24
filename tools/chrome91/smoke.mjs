@@ -81,7 +81,9 @@ try {
   /* ignore */
 }
 const shot = path.join(outDir, `${name}.png`);
-await page.screenshot({ path: shot });
+// At the viewport's size, as the page is: puppeteer 9's default first shrinks the page to its
+// content (1x1 when a fixed overlay holds everything, as a screensaver does), resizing what is tested.
+await page.screenshot({ path: shot, captureBeyondViewport: false });
 await browser.close();
 server.close();
 

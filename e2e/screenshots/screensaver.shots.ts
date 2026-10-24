@@ -25,10 +25,13 @@ const NOW = new Date('2026-10-22T21:30:00Z');
 const FRAMES: ReadonlyArray<{ id: string; at: number }> = [
   { id: 'nightstand', at: 0 },
   { id: 'portafilter', at: 3000 },
+  // 8 s in: a held frame draws every frame before it, which Playwright's software WebGL pays for one frame at a time.
+  { id: 'pipes', at: 8000 },
   { id: 'beanfield', at: 6000 },
   { id: 'steam', at: 12_000 },
   { id: 'lava', at: 20_000 },
   { id: 'rain', at: 8000 },
+  { id: 'latte', at: 30_000 },
 ];
 
 test.use({ viewport: { width: 962, height: 602 }, deviceScaleFactor: 1.33 });
@@ -66,8 +69,11 @@ for (const { id, at } of FRAMES) {
     await page.clock.install({ time: NOW });
     // The demo: a bag on the machine and its last shot, for Nightstand's lines and Brew Rain's numbers.
     await page.goto(`./?demo=1&mockSpeed=25&saverPreview=${id}&saverAt=${at}#/`);
-    await expect(page.getByTestId(TID.saverReady)).toBeAttached({ timeout: 30_000 });
+    // A minute: Espresso Pipes held at 8 s takes 11 to 13 s in Playwright's software WebGL.
+    await expect(page.getByTestId(TID.saverReady)).toBeAttached({ timeout: 60_000 });
     await expect(page.getByTestId(TID.saver)).toHaveAttribute('data-saver', id);
+    // Not Nightstand standing in for one that threw.
+    await expect(page.getByTestId(TID.saver)).not.toHaveAttribute('data-fallback', '1');
     await snap(page, id);
     expect(problems).toEqual([]);
   });

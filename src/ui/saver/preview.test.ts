@@ -55,7 +55,7 @@ describe('previewFromUrl (mock builds)', () => {
 
   it('opens nothing without a screensaver this build knows', () => {
     expect(previewFromUrl('')).toBeNull();
-    expect(previewFromUrl('?saverPreview=pipes&saverAt=10')).toBeNull();
+    expect(previewFromUrl('?saverPreview=etching&saverAt=10')).toBeNull();
     expect(previewFromUrl('?saverAt=10')).toBeNull();
   });
 });

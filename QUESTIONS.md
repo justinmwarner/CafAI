@@ -8,10 +8,11 @@ Decaid alignment of 2026-10-09, 14-16 out of Claude on your computer of
 2026-10-11, 17 out of your list of 2026-10-11, 18-21 out of the gap review's
 four items of 2026-10-15, 22-23 out of the simulator pre-run of 2026-10-16,
 24-27 out of fun facts of 2026-10-16, 28-29 out of the drink scenes of
-2026-10-22, 30-33 out of the screensavers of 2026-10-22 and 35 out of where
-the coach runs after a Decaid update of 2026-10-23 (each ranked the same
-way, in its own section); the questions you answered are in "Answered" at
-the end.
+2026-10-22, 30-32 out of the screensavers of 2026-10-22, 35 out of where
+the coach runs after a Decaid update of 2026-10-23 and 36-39 out of the
+screensavers' second round of 2026-10-24 (each ranked the same way, in its
+own section); the questions you answered, and 33, which round 2 made moot,
+are in "Answered" at the end.
 
 ## Your next step: usage analytics (2026-10-22)
 
@@ -330,11 +331,6 @@ the end.
     one stays your favourite, or a quieter default suits more people,
     Nightstand could be the default instead; a choice made in Settings is
     kept either way.
-33. **Do Brew Rain's katakana show on the tablet (D227)?** The rain's
-    glyphs (コーヒー, エスプレッソ) come from the device's own fonts, which
-    Android has; a tablet without a Japanese font would show empty boxes.
-    If it does, the rain falls in digits and Latin letters instead, or
-    carries a small font of its own.
 
 ## From where the coach runs after a Decaid update (2026-10-23)
 
@@ -353,6 +349,41 @@ the end.
     it on; making that one on by default too is your call as well. The real
     fix is Decaid's: `docs/upstream/decaid-skin-origin-ios.md` is a draft
     issue for Decent (D231), to open if you want it.
+
+## From the screensavers, round 2 (2026-10-24)
+
+36. **Do Latte Art's four pours look right on the tablet (D228,
+    D250, D271)?** The heart, the tulip, the rosetta and the swan
+    were tuned from screenshots on a computer, and all four come round.
+    D228 leaves the last word to you, the heart and the tulip first. A pour
+    that does not look right comes out in one line (`IN_ROTATION` in
+    `src/ui/saver/savers/latteModel.ts`); if the heart and the tulip fail,
+    Latte Art does not ship. Section 20 of docs/HARDWARE_TEST_PLAN.md, step
+    8, watches a whole round.
+37. **Are Espresso Pipes and Beanfield smooth on a Decent tablet (D261,
+    D264)?** Both are fine on a computer and the iPad is fast, but a
+    Decent tablet's GPU and memory are small. Espresso Pipes holds about
+    255,000 triangles at its fullest (60% of the grid, about 40 s in) and
+    fills and starts again about 35 times in a half hour, lively like the
+    classic. Beanfield keeps up to 22 MB of lit bean sprites and does its
+    heaviest work in its first seconds. Rising Steam and Lava Latte render
+    their cup and glass pixel by pixel as they start (about 0.5 to 0.7 s in
+    the smoke test's Chromium 91 on this PC at 1280x800, so perhaps 1 to 3 s
+    on a weak tablet), showing only the page until then. If one stutters or
+    starts too slowly, the cheap fixes: Pipes fades at a lower fill or grows
+    slower; Beanfield's size caps come down; Rising Steam and Lava Latte
+    keep their render across showings.
+38. **The new looks, dimmed: anything to change?** Small calls made without
+    you, each one line to change: the portafilter logo at a fifth of the
+    screen's width; Brew Rain's density, its words (the classics, not your
+    own drinks) and its cup that fills over the half hour; Lava Latte's
+    band of foam at the top (it may read as a lid); Rising Steam's saucer,
+    the second-brightest thing on screen; the pipes' anodised one a neutral
+    gunmetal, and espresso cups that do not steam.
+39. **Nightstand's date in the tablet's language (D260)?** It follows
+    the device's language, as clocks do ("Saturday, October 24"), while the
+    rest of CafAI is English; a German tablet would show "Samstag, 24.
+    Oktober". Always English is one line.
 
 ## Answered
 
@@ -490,3 +521,11 @@ the end.
    the 88 °C target in every frame and the profile id can, which is what the
    machine check looks at (docs/HARDWARE_TEST_PLAN.md section 6).
    Commits: 0f1f041, 725940b.
+
+10. **Do Brew Rain's katakana show on the tablet (D227)?** The rain's
+    glyphs (コーヒー, エスプレッソ) came from the device's own fonts.
+
+    Moot since round 2 (2026-10-24, D252): the owner found Brew Rain
+    "just matrix, nothing coffee related", so it falls as coffee's own
+    symbols, drawn as paths, and Latin letters in Figtree; no font of the
+    device's is needed.

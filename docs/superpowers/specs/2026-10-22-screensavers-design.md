@@ -8,6 +8,15 @@ screensavers, then a check-in with the owner (results and token spend)
 before Espresso Pipes and Latte Art. Decisions D223-D228,
 numbered at the merge.
 
+Round 2 (2026-10-24): having tried the six, the owner asked for the planned
+two, for nicer visuals ("I do like a lot of them, but just want to make them
+nicer") and for a Brew Rain that says coffee ("Brew Rain is just matrix,
+nothing coffee related"). Every screensaver is now lit, not flat (D249),
+Brew Rain is water brewing from a shower screen into a cup, and Espresso
+Pipes and Latte Art are built, Latte Art's four pours at once (D250).
+Sections 5 to 8 describe them as they are now; the decisions are
+D249-D273 in DECISIONS.md.
+
 ## 1. The ask
 
 From the owner: "I want to add screensavers. I'd like to play off of the
@@ -83,8 +92,8 @@ temperature unit is (no Save):
 
 - **Screensaver**, a switch: on by default.
 - **Which**, one choice: "A different one each day" (the default), then
-  Nightstand, Bouncing Portafilter, Beanfield, Rising Steam, Lava Latte and
-  Brew Rain (Espresso Pipes and Latte Art when they are built).
+  Nightstand, Bouncing Portafilter, Espresso Pipes, Beanfield, Rising Steam,
+  Lava Latte, Brew Rain and Latte Art.
 - **Preview**: shows the chosen one now, full screen (for "A different one
   each day", today's). A tap closes it; it never wakes the machine.
 - A line under the choice: "Shows once the machine has been asleep and the
@@ -112,8 +121,17 @@ settings to Decaid's backup and the export.
   tint (`paletteFor({mode: 'dark', tint}, false)`), whatever their light or
   dark mode: a dim, dark screen is the point. The colours that carry meaning
   elsewhere (pressure green, flow blue) may be used as colours here.
+- **Lit, not flat** (D249, round 2): the light that draws a thing is
+  allowed here, and only here: soft gradients for volume, a key light and a
+  rim light, the sheen of metal, glass, glaze and oily beans, a soft glow
+  where there is a light. Drawn for a screen dimmed to 30: the subject and
+  any words at least 3:1 on the page, carried by midtones and lights, never
+  by near-black detail. A fixed object (a cup, a glass) drifts a few pixels
+  a minute, against burn-in.
 - **Drawn in code**: no images, no fonts beyond Figtree and the device's own,
   no libraries. D10's one bundle stays small, and nothing is clip art.
+  Canvas 2D, except Espresso Pipes, which draws with WebGL1 written by hand
+  (D262).
 - **Frames**: the host's loop (`runSaver`): at most 30 a second, a step by
   the time since the last frame (at most a tenth of a second), then a draw;
   paused while the page is hidden. A canvas backing scale of the device's
@@ -130,7 +148,9 @@ settings to Decaid's backup and the export.
   mascots or novelty fonts; and its motion is the one exception to "short,
   150 to 250 ms, never bouncy".
 - **Falls back**: a screensaver that cannot get its context, or throws, is
-  replaced by Nightstand for the rest of that showing.
+  replaced by Nightstand for the rest of that showing. Since round 2 it also
+  says so (D251): the overlay carries `data-fallback="1"`, and one line
+  goes to the console, Decaid's WebView log on a tablet.
 
 ## 7. The screensavers (D227)
 
@@ -141,28 +161,26 @@ scale)`, `still()` and `dispose()`, or null when the canvas cannot give it its
 context. `env` holds the palette, the seed and a few numbers from the last
 shot. The registry (`src/ui/saver/registry.ts`) lists them in Settings' order.
 Every one keeps to Chromium 91's canvas (no `roundRect`,
-`createConicGradient`, `reset` or `letterSpacing`) and aims at under 4 ms a
+`createConicGradient`, `reset` or `letterSpacing`) and to WebKit's (no
+`ctx.filter`, which Safari ignores before 18), and aims at under 4 ms a
 frame on a desktop at 962×602 (the tablet is several times slower).
 
-### The first step
+The first step (2026-10-22) drew six flat; round 2 (2026-10-24) lit them,
+drew Brew Rain again as coffee and added Espresso Pipes and Latte Art. As they
+are now, in Settings' order:
 
 | Screensaver | After | What it draws |
 |---|---|---|
-| **Nightstand** | A bedside clock | Text, drawn by React, not a canvas: the time, large (24-hour, as CafAI writes times); under it, when they are known, the next wake time from Decaid's wake times ("Wakes at 06:00"), the bag on the machine, and the last shot in one line as CafAI writes one elsewhere. The time in ink, the rest in muted ink. The block jumps to a new place each minute (seeded), well inside the edges, so nothing stays lit in one spot. |
-| **Bouncing Portafilter** | The DVD logo | A badge: "CafAI" in Figtree, extra bold and italic, over a flat oval (about 4:1) with ESPRESSO in it in the page's colour: the DVD logo's layout, never its mark. About a fifth of the screen wide, it drifts at 70 px/s on both axes and bounces off the edges. Each wall it hits moves its colour one roast along: green, yellow, cinnamon, city, full city, Vienna, French, then green again, each light enough to read on the dark page (3:1 at least). A corner (both walls in the same frame) bursts a dozen small beans out of the corner, fading over 1.2 s, and "Corner 2" (the corners since it came up) shows small by the badge for 3 s. Still: the badge at a seeded place. |
-| **Beanfield** | Starfield | About 180 beans in a deep box coming toward you, each from far to past you in about 8 s, then far away again at a new place. A bean is an oval (about 1.45:1) with a darker S-shaped crease along it, turning slowly and tumbling (one axis squeezed by the cosine of its own phase, so it flips). Seven roast colours from green to dark, each with a lighter rim so the dark ones show; far beans fade in from the page. Drawn from pre-drawn sprites. Still: the frame at 6 s. |
-| **Rising Steam** | Flurry, Mystify | A cup's outline at the bottom centre (bowl, handle, the line of a saucer) in muted ink, about 180 px wide at 962. Steam rises from its rim: a few hundred particles going up at about 35 px/s, swirled by a curl-noise field that drifts slowly with time, each living 6 to 10 s and fading in and out, drawn as short strokes in ink at low alpha onto a canvas that fades a little toward the page each frame, so the wisps leave trails. No additive glow. Named so it is not taken for the Steam drink. Still: the frame at 12 s. |
-| **Lava Latte** | The lava lamp | A tall glass from the side, a little tapered, about 70% of the screen's height, its outline in muted ink. Inside, coffee (a vertical gradient from a deep brown at the bottom to a lighter one at the top, both clear of the page) and seven to nine blobs of cream (off-white): warmed at the bottom they rise, cooled at the top they sink, wobbling sideways, merging and splitting, at about 15 px/s. Metaballs on a coarse grid (about 4 px a cell) with a soft edge, scaled up smoothly and clipped to the glass. Still: the frame at 20 s. |
-| **Brew Rain** | The Matrix's falling code | Columns about 20 px apart; glyphs of 16 to 18 px; each column's head falls at 6 to 14 rows a second. The classic trail: each frame darkens the canvas a little toward the page and draws only the heads. The glyphs are the katakana of コーヒー, エスプレッソ, ラテ and カフェ, and digits; the head near-white, the trail in the pressure green. Every few seconds one column spells a word top to bottom instead (エスプレッソ, コーヒー, ラテ, カフェ) or one of the last shot's numbers. The katakana come from the device's own font (Android has one). Still: the frame at 8 s. |
+| **Nightstand** | A bedside clock | Text, drawn by React, not a canvas (D260): the time large and light (24-hour, weight 300, tabular) over a very faint warm glow, the day small above it as the device writes one ("Friday 24 October", "Friday, October 24"). Under it, each under a hairline and each only when known: the next wake time from Decaid's wake times ("Wakes at 06:00"), the bag on the machine, and the last shot in one line as CafAI writes one elsewhere. The time in ink, the rest in muted ink. Each minute the block fades out (700 ms) and in (1.1 s) at a new seeded place, well inside the edges, so nothing stays lit in one spot; under reduced motion it jumps. |
+| **Bouncing Portafilter** | The DVD logo | A logo (D255, D256): a portafilter from the side drawn as a logo mark (the group ring and its two lugs, the basket, a double spout with a drop under each nozzle, the handle and its collar) over "CafAI" in Figtree, extra bold and italic, over a flat 4:1 oval with ESPRESSO cut out in the page's colour: the DVD logo's layout, never its mark. A fifth of the screen wide, 0.88 as high; it drifts at 70 px/s on both axes and bounces off the edges. All in the roast's colour, each part lit softly from above, with a soft glow of its colour on the page. Each wall moves its colour one roast along, green to French and round again, crossing over in 300 ms, each at least 3:1 on the page. A corner (both walls in the same frame) sends a ring of warm light out of the screen's corner (gone in 0.9 s), bursts a dozen shaded beans out in front of the logo that grow a little and fade over 1.2 s, and shows "Corner 2" (the corners since it came up) small by the logo for 3 s. Still: the logo at a seeded place. |
+| **Espresso Pipes** | 3D Pipes | WebGL1, written by hand, no library and no extension needed (D261-D263). Polished copper, brass, chrome and dark anodised pipes grow through a 20×12×12 grid seen from a fixed camera a little above its middle, three to five at once, a cell every 80 to 120 ms, drawn out smoothly, with ball joints (1.45 times the pipe) at the turns; a pipe boxed in stops and another starts. About one turn in thirty is a coffee fitting: a pressure gauge (0 to 16 bar, its needle near 9) or a valve wheel facing the camera, or an espresso cup on its saucer where both pipes run level. The metals reflect a studio built in the shader (a warm key softbox, a cool fill, strips overhead and behind, a dark floor), with Fresnel; fog sinks the far pipes into the page colour. At 60% full or after 4 minutes it fades over 2.5 s and grows a new layout. Still: a layout grown to 42%, built once. |
+| **Beanfield** | Starfield | About 180 roasted beans in a deep box coming toward you out of a soft warm glow in the middle (the roaster's drum light), each from far to past you in about 8 s (D264-D266). Each bean is a lit solid, an oval 1.38:1 with a domed back and the centre cut down its flat side (a dark fold, its far slope lit): a warm key light from the upper left, a warm back light along its lower right edge, an oily glint broken by grain on the dark roasts. Each rolls slowly about its long axis, its angle on the screen kept but for a small wobble, so the light never moves on it. Seven stages: green coffee's grey-green, straw, cinnamon, city, full city, Vienna, French. Far beans hazy, near ones crisp, the fastest streaking a little. Drawn from sprites lit pixel by pixel (24 roll frames, 4 light angles, 4 sizes), made when first wanted and kept. Still: the frame at 6 s. |
+| **Rising Steam** | Flurry, Mystify | A lit still life (D258, D259): a porcelain cup of coffee on its saucer at the bottom centre, about 175 px across the rim at 962, seen from 17.5° above, rendered once per size, per pixel: a warm white glaze with soft shading and a bright lip, a strip light's highlight, the inner wall in shade, dark coffee with a crema ring and a paler swirl, and the shadow on an unseen table. A warm key light behind and above it has its glow behind the steam. Steam leaves the coffee: a few hundred particles at about 35 px/s on a curl-noise flow, each living 6 to 10 s, laying fine filaments that fade in about a second and feeding a broad faint body that rises, spreads and fades over 2.4 s, both brighter where they cross the glow and fading with height; the cup's near side is laid over the steam. The whole scene drifts up to 6 px across and 3.5 px up and down over minutes. Named so it is not taken for the Steam drink. Still: the frame at 12 s, moved to the drift's next place each minute. |
+| **Lava Latte** | The lava lamp | A tall tapered glass, about 70% of the screen's height, with thickness (D267-D269): outer and inner edges, a faint tint, a heavy foot, a rim seen from slightly above, soft vertical streaks. Coffee under a thin layer of milk foam, and seven to nine blobs of cream that rise warm, sink cool and merge, at about 15 px/s: metaballs on a 4 px grid, shaded three times as fine from the field's slope. A warm light under the glass, as a lava lamp's bulb, glows through the foot, turns the coffee gold and amber deepening to espresso, lights the cream from below, and spills onto the page as a halo, a pool and a reflection where the glass stands. The glass drifts a few pixels a minute. Still: the frame at 20 s. |
+| **Brew Rain** | The Matrix's falling code | Water falling from a group head's shower screen into a cup, brewing on its way (D252-D254). Along the top, brushed steel with staggered rows of holes. Near columns (glyphs of 18 to 20 px) fall under the front row of holes, 32 px apart, at 5 to 11 rows of 24 px a second; far columns between them, smaller (12 to 13 px), slower, sparser and fainter. The classic trail. The glyphs are coffee's, drawn as paths: a bean, a drop, a cup, cherries, a leaf, steam, a latte-art heart (five near heads in six, every far one); the rest are the Latin letters and figures of coffee's words, in Figtree. A head goes from pale water at the top to crema gold and amber by the cup, glowing softly; its trail sinks through amber and espresso brown into the page. Every 3 to 6 s a near column spells a word (ESPRESSO, CREMA, RISTRETTO, ...), a brew number (9 BAR, 93°, 1:2) or one of the last shot's numbers, each letter lit 1.6 s, then fading. At the bottom the cup: crema over coffee on a slow wave, where each head drops in with rings and droplets; it fills from 12% to 18% of the height over 30 minutes. No katakana, so no font of the device's is needed. Still: the first moment from 8 s on when a word has just been spelled (14 s at the latest). |
+| **Latte Art** | (its own) | The cup from straight above on its saucer, 83% of the screen's height, in a pool of light from the upper left (D270-D273): a warm white glaze, the lip glinting, the inner wall in shade, the saucer falling off into shade toward its rim. An unseen pitcher pours a heart, a tulip, a rosetta and a swan in turn on a field of foam its pour moves, about 25 s each, then 12 s to admire it under its name (Figtree, ink-muted) and 3 s for the cup to clear to fresh crema (section 8). The crema swirled and tiger-striped, darker at the wall; the foam ivory, warmer at its edge, a thin brown line where it meets the crema; the stream shows only where it lands, a dot and two faint rings. It drifts up to 12 by 8 px over a quarter of an hour. Still: the finished heart. |
 
-### Later steps
-
-| Screensaver | After | What it draws |
-|---|---|---|
-| **Espresso Pipes** | 3D Pipes | WebGL1, written by hand (no library). Copper, brass and chrome pipes grow through a 3D grid from a fixed camera; ball joints at the turns; about one joint in thirty is a coffee fitting instead (a pressure gauge, a valve wheel, a small cup); at 60% full or after 4 minutes it fades and starts again. Its still: one grown frame. |
-| **Latte Art** | (its own) | See D228. |
-
-## 8. Latte Art (D228, a later step)
+## 8. Latte Art (D228, built in round 2)
 
 The cup seen from above (its rim, a saucer, the handle). An unseen pitcher
 pours, in turn, a heart, a tulip, a rosetta and a swan: about 25 s a pour, 12
@@ -182,7 +200,21 @@ next.
 - **The gate**: the heart and the tulip first, tuned from screenshots, then
   judged by the owner on the tablet; the rosetta and the swan only after. A
   pour that does not look right is left out; if the heart and the tulip do
-  not pass, Latte Art does not ship.
+  not pass, Latte Art does not ship. Round 2 built all four at once
+  (D250), each tuned from screenshots; the owner's look on the tablet is
+  the gate that stays.
+- **As built** (2026-10-24, D270-D273): the model as planned,
+  the foam on 192×192 and the crema's tone on 96×96, carried with
+  MacCormack's correction at a fixed 15 steps a second inside `step(dt)`.
+  Two things joined the timelines: the stream leans (it pushes more ahead
+  than behind, without which the tulip's discs grew backward over each other
+  and the rosetta came out a filled egg) and has a heading (so the swan's
+  wing is pushed sideways); a low stream drags the surface a tenth as much
+  as a lifted one. The foam is moved only around where it is, and the
+  canvases are coloured only when the surface changes, never while a pour is
+  admired: about 2 ms a frame at the busiest on a desktop. All four passed
+  the screenshots and come round (`IN_ROTATION` in `latteModel.ts` takes one
+  out in a line).
 
 ## 9. The parts
 
@@ -218,15 +250,19 @@ next.
   `PUT /machine/state/idle` and puts the brightness back and the wake lock
   away; the 30 minutes turn it black and let the lock go; awake, or on a
   phone, it never shows; turned off, it never shows; reduced motion shows the
-  still; Preview shows and closes without a wake.
+  still; Preview shows and closes without a wake. Since round 2, each canvas
+  screensaver starts, held at 3 s and running, at each tablet size without
+  giving way to Nightstand (D251).
 - **Screenshots**: Settings > Screensaver, and one frame of each screensaver
-  at 962×602 at a fixed seed and moment.
+  at 962×602 at a fixed seed and moment, none of them Nightstand standing in.
 - **Chromium 91**: each screensaver runs a few seconds in the smoke test's
-  Chromium 91 without an error.
+  Chromium 91, held, running and as its still, without an error and without
+  giving way to Nightstand.
 - **The tablet** (docs/HARDWARE_TEST_PLAN.md): each one's frame rate, the dim
   and the hold, the 30 minutes, a tap waking the machine, the page shown
-  again after the screen was off, a reload while dimmed, and whether the
-  katakana show.
+  again after the screen was off, a reload while dimmed; since round 2, how
+  each new look reads dimmed, and Espresso Pipes' and Beanfield's start and
+  frame rate on a weak tablet.
 
 ## 11. The steps
 
@@ -241,3 +277,10 @@ next.
    `main`, and the check-in.
 4. Later, as the owner says then: Espresso Pipes; Latte Art's heart and
    tulip, the owner's look, then its rosetta and swan.
+5. **Round 2** (2026-10-24, after the owner tried the six): five builders
+   side by side, each in a worktree of its own, judging its work from
+   screenshots: Brew Rain and the Bouncing Portafilter; Rising Steam and
+   Nightstand; Beanfield and Lava Latte; Espresso Pipes; Latte Art's four
+   pours. Then one review, the checks (`npm run verify`, the Chromium 91
+   smoke, a sweep of every screensaver over ten screen sizes), into `main`,
+   and the owner's look on the iPad.
