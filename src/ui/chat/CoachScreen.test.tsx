@@ -115,7 +115,7 @@ describe('CoachScreen', () => {
         'The key stays on this device unless you choose in Settings to keep a copy in Decaid. You pay Anthropic directly for what the coach uses.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open Settings' })).toHaveAttribute('href', '#/settings');
+    expect(screen.getByRole('link', { name: 'Open Settings' })).toHaveAttribute('href', '#/settings/coach');
     expect(screen.queryByTestId(TID.chat)).toBeNull();
     expect(screen.queryByTestId(TID.newBag)).toBeNull();
     // CafAI is an everyday skin before the coach can start: the machine stays on screen.
@@ -129,7 +129,7 @@ describe('CoachScreen', () => {
     expect(screen.getByText(again)).toBeInTheDocument();
     expect(screen.queryByText(/storage was cleared|key again/)).toBeNull();
     expect(screen.getByText('Add your Anthropic API key to start coaching')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open Settings' })).toHaveAttribute('href', '#/settings');
+    expect(screen.getByRole('link', { name: 'Open Settings' })).toHaveAttribute('href', '#/settings/coach');
     cleanup();
 
     renderCoach({ ...coachStateFor('diff'), hasApiKey: false });

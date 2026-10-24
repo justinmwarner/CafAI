@@ -32,7 +32,7 @@ export interface CareScreenProps {
   routine: RoutineId;
   /** A segment chosen: the app replaces the address, so Back leaves Care. */
   onRoutine(routine: RoutineId): void;
-  /** The back arrow: to Settings. */
+  /** The back arrow: to Settings > Machine, the group the guide belongs to (D233). */
   onBack(): void;
 }
 

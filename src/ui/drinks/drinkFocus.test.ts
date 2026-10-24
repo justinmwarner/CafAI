@@ -9,6 +9,13 @@ describe('drinkStarted', () => {
     });
   });
 
+  it('remembers the Settings group it took over, so Go back returns to that group (D233)', () => {
+    const step = drinkStarted(NO_ORIGIN, { kind: 'hotWater', typing: false, shown: { name: 'settings', group: 'drinks' } });
+    expect(step.go).toEqual({ name: 'drink', drink: 'hotWater' });
+    expect(goBackRoute(step.state)).toEqual({ name: 'settings', group: 'drinks' });
+    expect(goBackLabel(goBackRoute(step.state))).toBe('Go back to Settings');
+  });
+
   it("stays while the barista follows Decent's video on Care (D156)", () => {
     const origin = { origin: { name: 'coach' as const } };
     expect(drinkStarted(origin, { kind: 'flush', typing: false, held: true, shown: { name: 'care', routine: 'daily' } })).toEqual({

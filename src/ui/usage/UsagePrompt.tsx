@@ -22,14 +22,14 @@ export const PRIVACY_URL = 'https://github.com/justinmwarner/CafAI#privacy';
 
 const CARD = {
   title: 'Help improve CafAI?',
-  body: 'Share how you use CafAI with its developer through Microsoft Clarity: the screens you open, where you tap and scroll, and steps such as a shot read or a change confirmed. All text is hidden: never your words, your coffee or your key. Settings > About turns it off.',
+  body: 'Share how you use CafAI with its developer through Microsoft Clarity: the screens you open, where you tap and scroll, and steps such as a shot read or a change confirmed. All text is hidden: never your words, your coffee or your key. Settings > Data and privacy turns it off.',
   yes: 'Yes, share',
   no: 'No thanks',
 };
 
 const NOTICE = {
   title: null,
-  body: 'CafAI shares how you use it with its developer through Microsoft Clarity: screens, taps and steps such as a shot read, with all text hidden. Settings > About turns it off.',
+  body: 'CafAI shares how you use it with its developer through Microsoft Clarity: screens, taps and steps such as a shot read, with all text hidden. Settings > Data and privacy turns it off.',
   yes: 'OK',
   no: 'Turn off',
 };

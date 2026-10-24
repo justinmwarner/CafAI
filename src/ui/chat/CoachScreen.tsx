@@ -294,7 +294,8 @@ function NewBagCta({ hasBags, disabled }: { hasBags: boolean; disabled: boolean 
   );
 }
 
-export function CoachScreen({ settingsHref = '#/settings' }: CoachScreenProps) {
+// Settings > Coach, where the key, and the bridge's address and code, are (D233).
+export function CoachScreen({ settingsHref = '#/settings/coach' }: CoachScreenProps) {
   const { coach, telemetry } = useServices();
   const ready = useCoach((s) => s.ready);
   const hasApiKey = useCoach((s) => s.hasApiKey);
