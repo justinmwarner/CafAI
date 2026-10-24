@@ -70,11 +70,14 @@ All JSON payloads are compact `JSON.stringify` output.
    `doseG` is Decaid's dose (`context.targetDoseWeight`) when CafAI coaches
    from it (12-25 g, D57), else null (none set, or outside that range).
    `<grinder>` =
-   `{"name":string|null,"setting":string|null,"settingType":"numeric"|"preset"|null,"step":number|null,"values":string[]|null,"linked":boolean}`:
-   `name` and `setting` as last saved in Settings; `settingType`, `step` (a
+   `{"name":string|null,"setting":string|null,"finer":"lower"|"higher","settingType":"numeric"|"preset"|null,"step":number|null,"values":string[]|null,"linked":boolean}`:
+   `name` and `setting` as last saved in Settings; `finer`, always sent, is
+   which way is finer on that grinder (D241): "higher" when the barista set
+   Settings > Grinder > Finer is to Higher numbers for it, linked or typed,
+   else "lower", CafAI's assumption (D62); `settingType`, `step` (a
    numeric dial's `settingSmallStep`) and `values` (a preset grinder's
-   `settingValues`, finest first) describe the grinder linked from Decaid's
-   grinder library (D62). They are null when no grinder is linked or Decaid
+   `settingValues`, finest first whichever way its numbers run) describe the
+   grinder linked from Decaid's grinder library (D62). They are null when no grinder is linked or Decaid
    has no data for it (`step` is always null on a preset grinder, `values`
    on a numeric one). `linked` is true when Settings links a grinder from
    Decaid's library, also when Decaid no longer lists it or has no step data
