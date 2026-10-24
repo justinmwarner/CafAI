@@ -353,15 +353,15 @@ are in "Answered" at the end.
 ## From the screensavers, round 2 (2026-10-24)
 
 36. **Do Latte Art's four pours look right on the tablet (D228,
-    D-SAVE-2, D-LATTE-2)?** The heart, the tulip, the rosetta and the swan
+    D250, D271)?** The heart, the tulip, the rosetta and the swan
     were tuned from screenshots on a computer, and all four come round.
     D228 leaves the last word to you, the heart and the tulip first. A pour
     that does not look right comes out in one line (`IN_ROTATION` in
     `src/ui/saver/savers/latteModel.ts`); if the heart and the tulip fail,
     Latte Art does not ship. Section 20 of docs/HARDWARE_TEST_PLAN.md, step
     8, watches a whole round.
-37. **Are Espresso Pipes and Beanfield smooth on a Decent tablet (D-PIPES-1,
-    D-BEAN-1)?** Both are fine on a computer and the iPad is fast, but a
+37. **Are Espresso Pipes and Beanfield smooth on a Decent tablet (D261,
+    D264)?** Both are fine on a computer and the iPad is fast, but a
     Decent tablet's GPU and memory are small. Espresso Pipes holds about
     255,000 triangles at its fullest (60% of the grid, about 40 s in) and
     fills and starts again about 35 times in a half hour, lively like the
@@ -380,7 +380,7 @@ are in "Answered" at the end.
     band of foam at the top (it may read as a lid); Rising Steam's saucer,
     the second-brightest thing on screen; the pipes' anodised one a neutral
     gunmetal, and espresso cups that do not steam.
-39. **Nightstand's date in the tablet's language (D-STEAM-3)?** It follows
+39. **Nightstand's date in the tablet's language (D260)?** It follows
     the device's language, as clocks do ("Saturday, October 24"), while the
     rest of CafAI is English; a German tablet would show "Samstag, 24.
     Oktober". Always English is one line.
@@ -525,7 +525,7 @@ are in "Answered" at the end.
 10. **Do Brew Rain's katakana show on the tablet (D227)?** The rain's
     glyphs (コーヒー, エスプレッソ) came from the device's own fonts.
 
-    Moot since round 2 (2026-10-24, D-RAIN-1): the owner found Brew Rain
+    Moot since round 2 (2026-10-24, D252): the owner found Brew Rain
     "just matrix, nothing coffee related", so it falls as coffee's own
     symbols, drawn as paths, and Latin letters in Figtree; no font of the
     device's is needed.

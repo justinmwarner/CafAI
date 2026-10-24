@@ -1,15 +1,15 @@
 /**
- * Espresso Pipes, after Windows' 3D Pipes (D-PIPES-1): copper, brass,
+ * Espresso Pipes, after Windows' 3D Pipes (D261): copper, brass,
  * chrome and dark anodised pipes growing through a grid seen from a fixed
  * camera, ball joints at the turns, and now and then a coffee fitting: a
  * pressure gauge reading 9 bar, a valve wheel, a small espresso cup. WebGL1,
- * written by hand (D-PIPES-2): no library and no extension needed.
+ * written by hand (D262): no library and no extension needed.
  *
  * The growth is pipesModel.ts and the shapes pipesMesh.ts; this file builds
  * the finished parts into buffers as they come (appended, never rebuilt; in
  * chunks of under 65,536 vertices where 32-bit indices are not to be had),
  * draws each growing run and each joint still growing in with a matrix of its
- * own, and lights it all (D-PIPES-3): a made-up studio for the metals to
+ * own, and lights it all (D263): a made-up studio for the metals to
  * reflect (a warm key softbox in front on the left with a strip beside it, a
  * cool fill on the right, a strip overhead, a low one behind for the rims,
  * warm grey walls and a dark floor) with Blinn-Phong highlights from the same
@@ -449,7 +449,7 @@ export const pipes: CanvasSaver = {
     const found = webgl(canvas);
     if (!found) return null;
     const gl: WebGLRenderingContext = found;
-    /** Lets the context itself go at once, not at garbage collection: each showing makes one, and a page may hold only so many (D-PIPES-2). */
+    /** Lets the context itself go at once, not at garbage collection: each showing makes one, and a page may hold only so many (D262). */
     const loseContext = () => gl.getExtension('WEBGL_lose_context')?.loseContext();
     // Built first: should it fail, there is nothing else to let go of but the context.
     let program: WebGLProgram;

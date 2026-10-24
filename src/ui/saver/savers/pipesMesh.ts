@@ -1,5 +1,5 @@
 /**
- * Espresso Pipes' shapes (D-PIPES-2) as pure code: the pieces a pipe is
+ * Espresso Pipes' shapes (D262) as pure code: the pieces a pipe is
  * built of, in cell units (a cell is 1 across), and the buffers they are
  * built into as the pipes grow. No WebGL here, so it can be tested in Node;
  * pipes.ts uploads what this builds and draws it.

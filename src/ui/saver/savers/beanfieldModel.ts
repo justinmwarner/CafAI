@@ -1,5 +1,5 @@
 /**
- * Beanfield's beans (D227, D-BEAN-1) as pure code: about 180 of them in a
+ * Beanfield's beans (D227, D264) as pure code: about 180 of them in a
  * deep box coming toward the viewer, each from far away to past the viewer in
  * about 8 s and then, far away again, at a new place. The drawing
  * (beanfield.ts) paints what is here; every random number comes from the seed
@@ -12,7 +12,7 @@
  * past the viewer (see CENTRE_CLEAR), and counts as in the box until then.
  * Each rolls about its long axis, so it shows its flat side, its edge and its
  * round back in turn, its long axis keeping its angle on the screen but for a
- * small wobble: so the key light stays where it is on every bean (D-BEAN-1).
+ * small wobble: so the key light stays where it is on every bean (D264).
  */
 import { between, createRandom, wholeBetween, type Random } from '../random.ts';
 import { ROASTS } from './roasts.ts';
@@ -38,7 +38,7 @@ export const FAR_LENGTH_SHARE = 0.02;
 /** The far part of the box in which beans come out of the page, so none is seen to appear: a share of its depth. */
 const FADE_IN_SHARE = 0.12;
 /**
- * The haze (D-BEAN-2): a bean far away shows only this much of itself over
+ * The haze (D265): a bean far away shows only this much of itself over
  * the page, more as it comes, and all of itself from CLEAR_Z on, so the far
  * ones are dim and near the page's colour and the near ones crisp and full.
  */

@@ -1,5 +1,5 @@
 /**
- * The model behind Lava Latte (D227, D-BEAN-4 to D-BEAN-6), pure: no
+ * The model behind Lava Latte (D227, D267-D269), pure: no
  * canvas, no clock. Seven to nine blobs of cream drift in a glass of coffee as
  * they do in a lava lamp: warmed at the bottom each rises, cooled at the top
  * each sinks, wobbling sideways as it goes, at about 15 px/s. The blobs are
@@ -237,7 +237,7 @@ export function createLavaModel(seed: number): LavaModel {
  * The field's slope at each cell of its grid, written into `outX` and `outY`
  * (field a cell, x to the right and y down the grid, so up the glass is -y):
  * central differences, one-sided at the grid's edges. Taken as a normal, it
- * gives the cream its volume (D-BEAN-5): where the field falls away, the
+ * gives the cream its volume (D268): where the field falls away, the
  * cream's surface turns away from the viewer.
  */
 export function fieldSlope(field: Float32Array, outX: Float32Array, outY: Float32Array): void {
@@ -255,7 +255,7 @@ export function fieldSlope(field: Float32Array, outX: Float32Array, outY: Float3
 }
 
 /**
- * The light from below (D-BEAN-5): the bulb under the glass, as a lava lamp's,
+ * The light from below (D268): the bulb under the glass, as a lava lamp's,
  * shines up through its foot into the coffee, which takes it in as it rises.
  * How much of it reaches a height up the glass: all of it on the coffee's
  * floor, a third of it BULB_FALL higher, and so on.
@@ -267,7 +267,7 @@ export function bulbLight(y: number): number {
 }
 
 /**
- * The glass's drift (D-BEAN-6), in design units: a slow figure about its
+ * The glass's drift (D269), in design units: a slow figure about its
  * place, so nothing bright stays on one spot of the screen for long. Its
  * fastest is a few pixels a minute.
  */

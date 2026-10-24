@@ -1,5 +1,5 @@
 /**
- * The bounce of the Bouncing Portafilter (D227, D-RAIN-4, D-RAIN-5) as pure
+ * The bounce of the Bouncing Portafilter (D227, D255, D256) as pure
  * code: where the logo is, how it turns at the walls, which roast it wears
  * and how far its colour has crossed to it, the corners it has found and the
  * beans and the ring of light a corner throws. The drawing (portafilter.ts)
@@ -31,7 +31,7 @@ export const RING_MS = 900;
  * A screen smaller than this either way, px, is no screen to bounce on (a
  * canvas not laid out yet, or a screenshot that shrinks the page to 1x1 for a
  * moment): the logo keeps its place, its path and its planned first corner
- * for when the size comes back (D-RAIN-6).
+ * for when the size comes back (D257).
  */
 export const MIN_SCREEN = 16;
 /** "Corner 2" shows this long by the badge. */

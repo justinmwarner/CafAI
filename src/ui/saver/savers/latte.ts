@@ -1,5 +1,5 @@
 /**
- * Latte Art (D228, D-LATTE-1 to D-LATTE-4): a cup from straight above, on
+ * Latte Art (D228, D270-D273): a cup from straight above, on
  * its saucer, lit from the upper left, and an unseen pitcher pouring a heart,
  * a tulip, a rosetta and a swan in turn, each admired for a while before the
  * cup clears for the next. The pour and the surface are latteModel.ts; this
@@ -33,7 +33,7 @@ const STILL_HZ = 5;
 const LIGHT_X = -0.6;
 const LIGHT_Y = -0.8;
 
-/** The drift (D-LATTE-3): how far the picture wanders (design px) and how slowly (seconds a sway). */
+/** The drift (D272): how far the picture wanders (design px) and how slowly (seconds a sway). */
 const DRIFT_X = 12;
 const DRIFT_Y = 8;
 const DRIFT_X_S = 900;
@@ -772,7 +772,7 @@ export const latte: CanvasSaver = {
       }
     };
 
-    /** The drift's time of the still: a minute further along each time reduced motion paints it again (D-LATTE-3, D-SAVE-1). */
+    /** The drift's time of the still: a minute further along each time reduced motion paints it again (D272, D249). */
     let stillTime = 0;
     const paintStill = () => {
       finished ??= pourWhole(CHOREOGRAPHIES[STILL_POUR], env.seed, STILL_HZ);

@@ -1,5 +1,5 @@
 /**
- * Brew Rain's coffee glyphs (D-RAIN-1), drawn as vector paths rather than
+ * Brew Rain's coffee glyphs (D252), drawn as vector paths rather than
  * taken from a font: a bean with its crease, a drop, a small cup on its
  * saucer, coffee cherries on their stem, a leaf, wisps of steam and a
  * latte-art heart.

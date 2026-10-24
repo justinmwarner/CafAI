@@ -1,6 +1,6 @@
 /**
- * Bouncing Portafilter, after the DVD logo's bounce (D227, D-RAIN-4,
- * D-RAIN-5): a logo, a portafilter from the side over "CafAI" over a flat
+ * Bouncing Portafilter, after the DVD logo's bounce (D227, D255,
+ * D256): a logo, a portafilter from the side over "CafAI" over a flat
  * oval with ESPRESSO cut out of it (portafilterLogo.ts), drifts about and
  * bounces off the edges, lit softly from above and glowing a little on the
  * page in its own colour. Each wall it meets turns it one roast along, green
@@ -297,7 +297,7 @@ export const portafilter: CanvasSaver = {
         // The sprites are drawn at the backing scale: a new one draws them again (a new width does, in draw).
         if (nextScale !== scale) layout = null;
         scale = nextScale;
-        // A size too small to bounce on changes nothing in the model (MIN_SCREEN, D-RAIN-6), and is not drawn on; back
+        // A size too small to bounce on changes nothing in the model (MIN_SCREEN, D257), and is not drawn on; back
         // at a size, the logo goes on where it was, painted again at once, as resizing the canvas cleared it.
         model.resize(width, height);
         draw();

@@ -711,7 +711,7 @@ laptop on the same network for steps 4 and 5. Put any setting back after.
    card's line "Weekly clean due: … shots since …", and a tap opens Weekly
    on that step.
 
-## 20. Screensavers (D223-D228, D-SAVE-1 to D-SAVE-3)
+## 20. Screensavers (D223-D228, D249-D251)
 
 Once Decaid says the DE1 is asleep and nobody has touched the tablet for a
 minute, a screensaver covers CafAI; it dims the screen to 30 and holds it on
@@ -758,7 +758,7 @@ rate and how each one looks dimmed. Allow about an hour, most of it waiting. For
    Expected: CafAI starts again at the brightness from before the dim (it
    puts the dim back at start), and a minute later the screensaver is up
    again, dimmed.
-8. **The looks, dimmed** (round 2, D-SAVE-1). Let each come up dimmed
+8. **The looks, dimmed** (round 2, D249). Let each come up dimmed
    (or Preview each with the brightness turned down to about a third) and
    look from a step back. Expected, and record what is not so:
    - **Bouncing Portafilter**: the portafilter logo glowing in its roast,

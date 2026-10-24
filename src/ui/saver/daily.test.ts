@@ -65,7 +65,7 @@ describe('what a device can run', () => {
     expect(canRun({ context: 'webgl' }, true)).toBe(true);
     expect(canRun({ context: '2d' }, false)).toBe(true);
     expect(canRun({ context: 'text' }, false)).toBe(true);
-    // Espresso Pipes needs it (D-PIPES-2): without WebGL it alone is left out.
+    // Espresso Pipes needs it (D262): without WebGL it alone is left out.
     expect(anyNeedsWebgl()).toBe(true);
     expect(runnableSavers(false)).toEqual(ALL.filter((id) => id !== 'pipes'));
     expect(runnableSavers(true)).toEqual(ALL);

@@ -1,6 +1,6 @@
 /**
  * Rising Steam, after Flurry and Mystify (D227), redrawn as a lit still
- * life (D-STEAM-1, D-STEAM-2): a porcelain cup of coffee on its saucer at the
+ * life (D258, D259): a porcelain cup of coffee on its saucer at the
  * bottom of the screen, a warm light behind it and above, and steam rising
  * from the coffee in slow curls, bright where it crosses the light and faint
  * away from it. The cup, the saucer and the shadow they throw are rendered

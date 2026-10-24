@@ -1,5 +1,5 @@
 /**
- * One roasted coffee bean, lit (D227, D-BEAN-1). A bean is a small solid:
+ * One roasted coffee bean, lit (D227, D264). A bean is a small solid:
  * an oval about 1.4 times as long as it is wide, a flat side with the centre
  * cut running down it (a fold, so a dark core between two lips), and a domed
  * back with no cut. It is lit as a still life is: a warm key light from the

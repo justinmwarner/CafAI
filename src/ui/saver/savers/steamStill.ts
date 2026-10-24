@@ -1,5 +1,5 @@
 /**
- * Rising Steam's still life (D-STEAM-1), pure: a porcelain cup of coffee on
+ * Rising Steam's still life (D258), pure: a porcelain cup of coffee on
  * its saucer, on a table never seen but for the shadow on it, lit by a warm
  * key light behind the cup and above it (the light the steam glows in) and a
  * soft fill from the front. It is rendered once, per pixel, at the screen's
@@ -102,7 +102,7 @@ function normalize(v: Vec): Vec {
 const VIEW: Vec = [0, SIN, COS];
 
 /**
- * The lights (D-STEAM-1). The key: warm, behind the cup, a little above it and
+ * The lights (D258). The key: warm, behind the cup, a little above it and
  * to the left, near enough that its angle changes across the cup: it lights
  * the steam from behind, rims the cup and lies low across the saucer. The
  * fill: a soft, cooler light from in front and to the right. The strip: a tall

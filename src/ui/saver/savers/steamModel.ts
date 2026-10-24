@@ -1,5 +1,5 @@
 /**
- * The model behind Rising Steam (D227, D-STEAM-2), pure: no canvas, no clock.
+ * The model behind Rising Steam (D227, D259), pure: no canvas, no clock.
  * A few hundred particles leave the coffee's surface, rise at about 35 px/s on
  * a curl-noise flow that drifts slowly with time, live 6 to 10 s and fade in
  * and out. The steam they make is two layers. The filaments: each step lays a
@@ -24,7 +24,7 @@ import { between, createRandom, type Random } from '../random.ts';
 import { createNoise, curl, type Noise3 } from './noise.ts';
 
 /**
- * How the scene is seen (D-STEAM-1): from a little above, so a circle lying
+ * How the scene is seen (D258): from a little above, so a circle lying
  * flat shows VIEW_SIN of its width as its height. The eye looks down about
  * 17.5 degrees.
  */
@@ -100,7 +100,7 @@ const THIN_FROM = 290;
 const THIN_TO = 430;
 
 /**
- * The key light (D-STEAM-2): a warm light behind the cup and above it, out
+ * The key light (D259): a warm light behind the cup and above it, out
  * of the picture, whose glow sits behind the steam. Where the steam crosses
  * it the steam is lit from behind and shows bright; away from it, it shows
  * faint. Its middle and its reach, in the units above.
@@ -109,7 +109,7 @@ export const GLOW_X = -34;
 export const GLOW_Y = 205;
 export const GLOW_REACH = 150;
 
-/** The whole scene drifts this far each way at most (units), over minutes, so nothing bright stays in one place (D-STEAM-1). */
+/** The whole scene drifts this far each way at most (units), over minutes, so nothing bright stays in one place (D258). */
 export const DRIFT_X = 6;
 export const DRIFT_Y = 3.5;
 /** The drift's two periods (seconds): coprime-ish, so its path takes hours to repeat. */

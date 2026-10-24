@@ -1,5 +1,5 @@
 /**
- * Beanfield, after Windows' Starfield (D227, D-BEAN-1, D-BEAN-2): about 180
+ * Beanfield, after Windows' Starfield (D227, D264, D265): about 180
  * roasted coffee beans coming toward you through a deep box out of the warm
  * glow of a roaster's drum light, small, dim and hazy far away, crisp and
  * full as they pass, each rolling slowly about its long axis so it shows its
@@ -66,7 +66,7 @@ const BIG_SPRITES_A_FRAME = 2;
 const BIG_RAYS_A_FRAME = 1;
 
 /**
- * The drum light behind the field (D-BEAN-2): a warm glow deep in the middle,
+ * The drum light behind the field (D265): a warm glow deep in the middle,
  * as much of it as this over the page at its heart, fading out over this
  * share of the screen's longer side, and breathing slowly.
  */

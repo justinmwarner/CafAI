@@ -1,5 +1,5 @@
 /**
- * Brew Rain (D-RAIN-1 to D-RAIN-3, D-RAIN-6): after The Matrix's falling
+ * Brew Rain (D252-D254, D257): after The Matrix's falling
  * code, water falls from a group head's shower screen and brews on its way
  * down into the cup. Along the top, the underside of the dispersion screen:
  * brushed steel with rows of small holes, a column under each hole of the
@@ -337,7 +337,7 @@ export const rain: CanvasSaver = {
       g.setTransform(scale, 0, 0, scale, 0, 0);
       const top = cupAbove - WAVE_REACH;
       // The crema thins on a short screen, so its layers always fit in the sprite; the depth is still kept within
-      // the gradient, as addColorStop throws outside 0 to 1 (D-SAVE-3, D-RAIN-6).
+      // the gradient, as addColorStop throws outside 0 to 1 (D251, D257).
       const crema = Math.min(CREMA_DEPTH, found.height * CREMA_SHARE);
       const depth = (y: number) => Math.min(1, Math.max(0, (y - top) / (tall - top)));
       const body = g.createLinearGradient(0, top, 0, tall);
@@ -872,7 +872,7 @@ export const rain: CanvasSaver = {
         // A new size resets the canvas's context, and with it the font it held.
         mainFont = '';
         // Too small to draw on (a canvas not laid out yet, or a screenshot's passing resize to 1x1): the scene
-        // waits as it is for a size it can fall on (D-RAIN-6).
+        // waits as it is for a size it can fall on (D257).
         if (width < MIN_WIDTH || height < MIN_HEIGHT) return;
         // Back at the size it was built for: the rain goes on as it was, painted again at once, as resizing
         // the canvas cleared it.
@@ -891,7 +891,7 @@ export const rain: CanvasSaver = {
           ctx.globalCompositeOperation = 'source-over';
           return;
         }
-        // The rain falls to the still's moment (D-RAIN-3) and is painted there, once for this size.
+        // The rain falls to the still's moment (D254) and is painted there, once for this size.
         start();
         playTo(isStillMoment);
         const kept = stillPicture ?? doc.createElement('canvas');

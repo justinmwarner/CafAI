@@ -148,7 +148,7 @@ test('under reduced motion a canvas screensaver shows its still', async ({ page 
 const CANVAS_IDS = ['portafilter', 'pipes', 'beanfield', 'steam', 'lava', 'rain', 'latte'] as const;
 
 // At each tablet project's size: a throw that only some sizes meet (a gradient stop past 1 on a
-// 1280x800 screen, once) shows Nightstand in its place, which only data-fallback tells apart (D-SAVE-3).
+// 1280x800 screen, once) shows Nightstand in its place, which only data-fallback tells apart (D251).
 for (const id of CANVAS_IDS) {
   test(`${id} starts at this size, held and running, and never gives way to Nightstand`, async ({ page }) => {
     const problems: string[] = [];

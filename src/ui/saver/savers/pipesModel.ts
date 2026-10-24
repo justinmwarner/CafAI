@@ -1,5 +1,5 @@
 /**
- * Espresso Pipes' growth (D-PIPES-1) as pure code, after Windows' 3D Pipes:
+ * Espresso Pipes' growth (D261) as pure code, after Windows' 3D Pipes:
  * three to five pipes grow a cell at a time through a grid of cells, each
  * at its own pace of a segment every 80 to 120 ms, going straight on and now
  * and then turning at a joint. A pipe boxed in by the walls and the other

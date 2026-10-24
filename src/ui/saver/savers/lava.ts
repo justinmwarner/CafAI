@@ -1,5 +1,5 @@
 /**
- * Lava Latte, after the lava lamp (D227, D-BEAN-4 to D-BEAN-6): a tall glass
+ * Lava Latte, after the lava lamp (D227, D267-D269): a tall glass
  * of coffee seen from the side, lit from below as a lava lamp is by its bulb,
  * with blobs of cream rising and sinking in it, merging and splitting. The
  * motion and the field are lavaModel.ts; this file lights them.
@@ -696,7 +696,7 @@ export const lava: CanvasSaver = {
         const fresh = createLavaModel(env.seed);
         advanceLava(fresh, STILL_MS);
         // Painted again each minute under reduced motion: a minute further along the drift each time,
-        // so the glass never stands in one place all night there either (D-BEAN-6, D-SAVE-1).
+        // so the glass never stands in one place all night there either (D269, D249).
         paint(fresh, fresh.time + 60 * stills);
         stills += 1;
       },

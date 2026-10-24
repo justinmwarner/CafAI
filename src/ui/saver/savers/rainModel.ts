@@ -1,5 +1,5 @@
 /**
- * Brew Rain's model (D-RAIN-1 to D-RAIN-3) as pure code: water falls from
+ * Brew Rain's model (D252-D254) as pure code: water falls from
  * the holes of a group head's shower screen, in columns, and brews on its way
  * down into the cup below. A head falls down each column, a new glyph in each
  * cell it enters (a coffee symbol, or a letter or figure of coffee's words and
@@ -106,7 +106,7 @@ export const MAX_DROPLETS = 120;
 export const LETTER_HOLD_MS = 1600;
 export const LETTER_FADE_MS = 1400;
 
-/** The still (D-RAIN-3): from 8 s on, the first moment a word has just been spelled in full, every letter lit; 14 s at the latest. */
+/** The still (D254): from 8 s on, the first moment a word has just been spelled in full, every letter lit; 14 s at the latest. */
 export const STILL_FROM_MS = 8000;
 export const STILL_LATEST_MS = 14_000;
 /** "Just": its last letter came at least this long ago, ms, its head a row or two on (and its first within LETTER_HOLD_MS). */
@@ -295,7 +295,7 @@ export function letterAlpha(age: number): number {
   return t >= 1 ? 0 : (1 - t) * (1 - t);
 }
 
-/** True when this is the still's moment (D-RAIN-3): a word just spelled in full, from 8 s on; or 14 s. */
+/** True when this is the still's moment (D254): a word just spelled in full, from 8 s on; or 14 s. */
 export function isStillMoment(model: Pick<RainModel, 'time' | 'lastWord'>): boolean {
   if (model.time >= STILL_LATEST_MS) return true;
   const word = model.lastWord;

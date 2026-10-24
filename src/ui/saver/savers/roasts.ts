@@ -2,7 +2,7 @@
  * The seven roasts of a coffee bean, green to French, and their colours: the
  * Bouncing Portafilter's badge steps along them (one roast a wall), and the
  * beans of Beanfield and of the portafilter's corner burst are drawn in them
- * (D227, D-BEAN-3). The colours are a roaster's stages, not a paint box:
+ * (D227, D266). The colours are a roaster's stages, not a paint box:
  * green coffee's pale grey-green, the straw of the yellowing (never lemon),
  * then cinnamon, city, full city, Vienna and French, each a darker, redder
  * brown, the last two oily. Fixed whatever the tint, as a roast is a roast,

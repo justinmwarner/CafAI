@@ -7,7 +7,7 @@
  * picture differs a little too.
  *
  * What a device can run: every screensaver but one that needs WebGL where
- * WebGL cannot start (Espresso Pipes, D-PIPES-2).
+ * WebGL cannot start (Espresso Pipes, D262).
  */
 import { createRandom } from './random.ts';
 import { isSaverId, SAVERS, type SaverChoice } from './registry.ts';

@@ -1,5 +1,5 @@
 /**
- * Latte Art's pours (D228, D-LATTE-1): each a timeline of the unseen
+ * Latte Art's pours (D228, D270): each a timeline of the unseen
  * pitcher, key by key, for latteModel.ts to pour from. A key says where the
  * stream lands, how high the pitcher is, how much milk comes and how wide it
  * wiggles; between two keys the pitcher eases from one to the next, or keeps

@@ -1,5 +1,5 @@
 /**
- * Nightstand (D227, D-STEAM-3), after a bedside clock, and the screensaver
+ * Nightstand (D227, D260), after a bedside clock, and the screensaver
  * every other one falls back to: text drawn by React, not a canvas. The time,
  * large and light, 24-hour as CafAI writes times, over a very faint warm glow;
  * the date small above it, in the device's own words; under a hairline, when
@@ -30,7 +30,7 @@ import { createRandom } from './random.ts';
 /** The share of the screen kept clear on every side. */
 const EDGE = 0.1;
 
-/** At each new minute the block fades out where it was, then in at its new place (D-STEAM-3). */
+/** At each new minute the block fades out where it was, then in at its new place (D260). */
 export const FADE_OUT_MS = 700;
 export const FADE_IN_MS = 1100;
 

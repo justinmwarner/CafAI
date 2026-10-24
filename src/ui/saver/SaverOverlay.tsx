@@ -282,7 +282,7 @@ export function SaverOverlay({ preview = saverPreview, saverFor = canvasSaver }:
 
   const fail = useCallback(
     (error?: unknown) => {
-      // Said once in the console (Decaid's WebView log on a tablet), so a screensaver that gives way on a device can be found (D-SAVE-3).
+      // Said once in the console (Decaid's WebView log on a tablet), so a screensaver that gives way on a device can be found (D251).
       console.warn(`CafAI: a screensaver stopped (${error instanceof Error ? error.message : String(error)}); Nightstand shows instead.`);
       setFailedFor(current);
     },

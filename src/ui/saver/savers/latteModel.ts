@@ -1,5 +1,5 @@
 /**
- * The model behind Latte Art (D228, D-LATTE-1), pure: no canvas, no clock.
+ * The model behind Latte Art (D228, D270), pure: no canvas, no clock.
  * The cup's surface is two fields on grids: the foam (0 is crema, 1 the white
  * of the milk) and the crema's tone (its tiger-striped marbling, 0 its
  * lightest, 1 its darkest streaks). An unseen pitcher pours, from a timeline
@@ -50,7 +50,7 @@ const FIELD_DT = 1 / FIELD_HZ;
 export const ADMIRE_S = 12;
 export const CLEAR_S = 3;
 
-/** The pours that come round, in turn (D-LATTE-2). */
+/** The pours that come round, in turn (D271). */
 export const IN_ROTATION: readonly PourId[] = ['heart', 'tulip', 'rosetta', 'swan'];
 
 /** The model moves on by this many milliseconds in one step at most, whatever it is asked. */

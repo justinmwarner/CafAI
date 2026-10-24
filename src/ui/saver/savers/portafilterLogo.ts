@@ -1,5 +1,5 @@
 /**
- * The Bouncing Portafilter's logo (D-RAIN-4): a portafilter from the side,
+ * The Bouncing Portafilter's logo (D255): a portafilter from the side,
  * drawn in code as a logo mark (its handle, the group ring with its two lugs,
  * the basket and the double spout), over "CafAI" in Figtree, extra bold and
  * italic, over a flat oval with ESPRESSO cut out of it: the DVD logo's layout,
