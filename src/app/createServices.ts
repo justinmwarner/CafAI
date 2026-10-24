@@ -129,6 +129,7 @@ export async function createServices(win: Window): Promise<AppServices> {
   // a database of its own) and copied month by month to Decaid's store, so the totals and the budget add every
   // device and an iPad's Decaid update gets the month back. Read from Decaid at start, and when Decaid is back.
   const spend = await openSpendService({ kv: decaid.kv, deviceStorage, models: KNOWN_MODELS });
+  void spend.refresh();
 
   const coach = createCoachEngine({
     // Its "is a key stored" means "has what the selected source needs".
@@ -160,7 +161,6 @@ export async function createServices(win: Window): Promise<AppServices> {
 
   telemetry.start();
   await coach.start();
-  void spend.refresh();
 
   // Which coach this device runs, for Clarity's filters (D213): none until the chosen source has its key or code.
   let sourceKind = (await coachSource?.get().catch(() => null))?.kind ?? 'anthropic';

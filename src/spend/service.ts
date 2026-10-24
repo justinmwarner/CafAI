@@ -104,10 +104,12 @@ export function createSpendService(options: SpendServiceOptions): CreatedSpendSe
         const key = recordKey(delta);
         records.set(key, addRecords(records.get(key), delta));
         // Kept on the device behind the count: another page's counts of the same key come back with it.
-        store.add(delta).then(
-          (stored) => void take([stored]),
-          () => undefined,
-        );
+        Promise.resolve()
+          .then(() => store.add(delta))
+          .then(
+            (stored) => void take([stored]),
+            () => undefined,
+          );
         sync?.changed(delta.day.slice(0, 7));
         changed();
       } catch {
