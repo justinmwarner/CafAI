@@ -6,6 +6,17 @@ workflow checks against it. Settings > About shows the version you run.
 
 ## Unreleased
 
+### The coach
+
+- **Where the coach runs survives a Decaid update.** On an iPad, each
+  update of Decaid gives CafAI a fresh browser storage; your bags and
+  settings came back from Decaid's backup, but Claude on my computer, with
+  CafAI Bridge's address and code, was gone. CafAI now keeps a copy of them
+  in Decaid and puts them back by itself. **Settings > Where the coach runs
+  > Keep the address and code in Decaid** is on by default; turned off, or
+  with the coach back on the Anthropic API key, the copy is deleted. Any
+  device on your network can read Decaid's store, as the switch says.
+
 ## 0.1.3 (2026-10-23)
 
 ### Usage sharing

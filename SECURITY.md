@@ -62,6 +62,14 @@ is the first).
   Decaid's store has no sign-in: any device on your network can read it, and
   Decaid's backups include it. Turning the switch off, or **Forget key**,
   deletes the copy. Leave it off on a network you do not trust.
+- **Keep the address and code in Decaid** (Settings > Where the coach runs,
+  on by default) keeps a copy of CafAI Bridge's address and pairing code in
+  Decaid's key-value store, in a namespace of its own
+  (`cafai-coach-source`), while the coach runs on your computer, so a Decaid
+  update does not lose them. Any device on your network can read it, and
+  Decaid's backups include it. Turning the switch off, or choosing the
+  Anthropic API key, deletes the copy; `npm run bridge -- code --new` makes
+  the old code useless.
 
 **Your data in Decaid**
 
@@ -75,10 +83,11 @@ is the first).
 - It listens on your network over plain HTTP. Every route except `/health`
   needs the bridge's 8-character pairing code; five wrong codes from one
   address in ten minutes lock that address out for a minute, doubling up to
-  fifteen. The code is kept on the device like the API key (never in Decaid
-  or an export), never in Settings > Log (redacted like the key, also when
-  the bridge echoes it back as ABCD-EFGH) and never written to the bridge's
-  log.
+  fifteen. The code is kept on the device and, unless you turn it off, in
+  its own namespace in Decaid's store (above); never in an export, never in
+  Settings > Log (redacted like the key, also when the bridge echoes it back
+  as ABCD-EFGH, and so is any call to its copy in Decaid) and never written
+  to the bridge's log.
 - Its MCP endpoint answers only `127.0.0.1`, and it can be stopped over HTTP
   only from its own computer.
 - It never reads, stores or forwards your Claude credentials (it asks Claude

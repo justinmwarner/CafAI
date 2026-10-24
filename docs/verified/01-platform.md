@@ -99,7 +99,7 @@ All JSON bodies limited to 64 KiB (`smallRequestBodyBytes`, `decaid/lib/src/serv
   - Remove + reinstall with the same `id`: same path; no code deletes port assignments (only `SERVE:456` adds) → same origin; Decaid never deletes WebView storage (no `WebStorageManager`/`deleteAllData` in `lib/`).
   - Changing the manifest `id` → new dir → new port → old storage orphaned.
   - Port bind failure → temporary origin for that run.
-  - Inference (not in sources): a changed absolute app-data path (e.g. iOS container path after an app update, desktop data-dir move per `decaid/doc/AI_STORAGE_NOTES.md:23-33`) changes the identity → new origin.
+  - A changed absolute app-data path changes the identity → new origin. SEEN on an iPad (2026-10-23, Decaid 0.9.0 from the App Store): the update moved the data container from `.../Application/E1952A25-...` to `.../Application/D5CA0338-...`, and CafAI went from `localhost:26493` to `localhost:27749` (Decaid's log; D231, `docs/upstream/decaid-skin-origin-ios.md`). So on iOS every Decaid update hides every skin's storage. Inference (not in sources): a desktop data-dir move per `decaid/doc/AI_STORAGE_NOTES.md:23-33` does the same.
   - Decaid calls `InAppWebViewController.clearAllCache()` on every SkinView init except Windows (`VIEW:237-244`); what that clears is defined by flutter_inappwebview 6.2.0-beta.3 (not in sources).
 
 ## 3. Heartbeat / user presence
@@ -324,7 +324,7 @@ All JSON bodies limited to 64 KiB (`smallRequestBodyBytes`, `decaid/lib/src/serv
 ## 16. Open questions (ranked by cost of a wrong guess)
 
 1. **Actual WebView engine floor on shipping tablets.** Sources prove pre-Chromium-92 engines exist but give no floor (RESEARCH's "Chromium 91" comes from decaid#901, outside these repos). Wrong guess = blank screen on old tablets. Verify on a real Teclast via `navigator.userAgentData`/feature probes.
-2. **Storage survival across iOS app updates / data-dir moves.** Port identity is the absolute skin path; if the container path changes, the origin changes. Wrong guess = silent loss of local history and the stored API key. Mitigate with the KV mirror and an easy key re-entry flow.
+2. **Storage survival across iOS app updates / data-dir moves.** Port identity is the absolute skin path; if the container path changes, the origin changes. Wrong guess = silent loss of local history and the stored API key. Mitigate with the KV mirror and an easy key re-entry flow. Settled on 2026-10-23: an iPad's Decaid update did move it (D231); CafAI keeps what must survive in Decaid's store (the mirror, the key's optional copy, where the coach runs: D229).
 3. **`env(safe-area-inset-*)` values in the embedded WebView** on iPad and Android with `immersiveSticky` + `viewport-fit=cover`. Wrong guess = controls under the home indicator or cutout.
 4. **`<input type="file">` (gallery / camera capture) in the embedded WebView** (flutter_inappwebview chooser; iOS has a camera usage string, Android has no CAMERA permission). Wrong guess = bag-photo feature dead on device.
 5. **CORS on uncaught server exceptions.** KV POST with non-JSON throws outside any catch; whether that 500 carries CORS headers is not settled (likely surfaces as `Failed to fetch`). Affects error reporting only.

@@ -48,7 +48,9 @@ quit.
    address and the code.
 
 In CafAI, open **Settings > Where the coach runs**, choose **Claude on my
-computer**, and enter the address and the code. Save, then Test.
+computer**, and enter the address and the code. Save, then Test. CafAI
+keeps a copy of both in Decaid, so a Decaid update does not lose them;
+**Keep the address and code in Decaid**, under them, turns that off.
 
 To change your answers later: `npm run bridge -- setup`.
 
@@ -269,7 +271,9 @@ Claude Code runs in.
   Settings > Coach > Fun facts includes a web search; its searches stay
   inside Claude Code. Nothing is added to Claude Code's session history.
 - The pairing code keeps other devices on your network out. A device that
-  sends five wrong codes is locked out for a while.
+  sends five wrong codes is locked out for a while. CafAI keeps a copy of
+  the code in Decaid unless you turn that off, and any device on your
+  network can read Decaid's store: `code --new` makes a copied code useless.
 - The log holds times, message counts, durations, model names and the
   bridge's own events (the address of a device that sent a wrong code,
   Claude Code's version and error output), never what you or the coach

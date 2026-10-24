@@ -8,9 +8,10 @@ Decaid alignment of 2026-10-09, 14-16 out of Claude on your computer of
 2026-10-11, 17 out of your list of 2026-10-11, 18-21 out of the gap review's
 four items of 2026-10-15, 22-23 out of the simulator pre-run of 2026-10-16,
 24-27 out of fun facts of 2026-10-16, 28-29 out of the drink scenes of
-2026-10-22 and 30-33 out of the screensavers of 2026-10-22 (each ranked the
-same way, in its own section); the questions you answered are in "Answered"
-at the end.
+2026-10-22, 30-33 out of the screensavers of 2026-10-22 and 35 out of where
+the coach runs after a Decaid update of 2026-10-23 (each ranked the same
+way, in its own section); the questions you answered are in "Answered" at
+the end.
 
 ## Your next step: usage analytics (2026-10-22)
 
@@ -334,6 +335,24 @@ at the end.
     Android has; a tablet without a Japanese font would show empty boxes.
     If it does, the rain falls in digits and Latin letters instead, or
     carries a small font of its own.
+
+## From where the coach runs after a Decaid update (2026-10-23)
+
+35. **Keep the bridge's code in Decaid by default (D230)?** CafAI now
+    copies where the coach runs (Claude on my computer, the address and the
+    code) to Decaid's store, so an iPad's Decaid update no longer clears it
+    (D229). The cost: any device on your network can read Decaid's store,
+    and with the code it could use your plan through the bridge while the
+    bridge runs. That costs the plan's limits, not money, and
+    `npm run bridge -- code --new` ends it. The copy is on unless turned off
+    (Settings > Where the coach runs > Keep the address and code in Decaid).
+    Off until chosen, like the API key's copy, is one word in two places
+    (`?? true` in `src/app/createServices.ts` and `CoachSourceSection.tsx`).
+    The API key's copy stays off by default (D99), so on an iPad someone on
+    an API key pastes it again after every Decaid update unless they turn
+    it on; making that one on by default too is your call as well. The real
+    fix is Decaid's: `docs/upstream/decaid-skin-origin-ios.md` is a draft
+    issue for Decent (D231), to open if you want it.
 
 ## Answered
 

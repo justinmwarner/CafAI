@@ -359,6 +359,9 @@ machine by itself.
   **Find** and **Test**). The fields follow the choice: the API key's
   section shows only with Anthropic, the bridge's address and code only
   with the computer; whatever you saved for the other one stays saved.
+  **Keep the address and code in Decaid** (on by default) copies them to
+  Decaid, so a Decaid update does not lose them (see Privacy for what it
+  means).
 - **Settings > Anthropic API key** (with Anthropic chosen): the key, and
   **Keep my API key in Decaid** (off by default; see Privacy for what it
   means). A key pasted into the chat or another field is taken out, with a
@@ -502,7 +505,8 @@ works too) and Node 18 or newer.
    example `192.168.1.20` and `K7QM-2XWD`.
 2. In CafAI, **Settings > Where the coach runs > Claude on my computer**:
    type the address (`127.0.0.1` when Decaid runs on that same computer) and
-   the code, **Save**, then **Test**.
+   the code, **Save**, then **Test**. CafAI keeps a copy of both in Decaid,
+   so after a Decaid update they come back by themselves.
 3. `npm run bridge -- setup` changes the answers later; `status` says
    whether it runs and when it starts next; `doctor` checks Claude Code, its
    sign-in and a real turn.
@@ -586,7 +590,9 @@ troubleshooting.
 - With an API key, calls go straight from the tablet to `api.anthropic.com`.
 - With Claude on my computer, calls go from the tablet to CafAI Bridge on
   your computer, over your network in plain HTTP with the pairing code
-  (kept on the device like the API key, never in Decaid or an export), and
+  (kept on the device and, unless you turn **Keep the address and code in
+  Decaid** off, in its own namespace in Decaid's store, which any device on
+  your network can read; never in an export), and
   from there to Anthropic through your own Claude Code. The bridge keeps
   nothing you or the coach said: its log has times, message counts,
   durations, model names and its own events (the address of a device that
@@ -640,7 +646,7 @@ troubleshooting.
   gone when the page reloads. It holds what you and the coach wrote, so
   share it only with someone you trust. It never holds the API key or the
   pairing code (only that an `x-api-key` header went), the key's copy in
-  Decaid, or a bag photo (only its size).
+  Decaid, the copy of where the coach runs, or a bag photo (only its size).
 
 [SECURITY.md](SECURITY.md) says how to report a security problem privately.
 
