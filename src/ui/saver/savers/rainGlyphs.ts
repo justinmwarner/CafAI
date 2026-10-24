@@ -1,7 +1,8 @@
 /**
  * Brew Rain's coffee glyphs (D-RAIN-1), drawn as vector paths rather than
  * taken from a font: a bean with its crease, a drop, a small cup on its
- * saucer, a coffee cherry, a leaf, a wisp of steam and a latte-art heart.
+ * saucer, coffee cherries on their stem, a leaf, wisps of steam and a
+ * latte-art heart.
  * Each lives in a unit box centred on the origin (y down), so a glyph of 19
  * px is its path scaled by 19. Built once, as Path2D, which Chromium 91 and
  * WebKit both have; plain moves, lines, curves and ellipses, nothing newer.

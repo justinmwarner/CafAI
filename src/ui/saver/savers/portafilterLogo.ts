@@ -14,9 +14,9 @@ export const FAMILY = '"Figtree", system-ui, sans-serif';
 export const TITLE = 'CafAI';
 export const CAPTION = 'ESPRESSO';
 
-/** The logo's parts, top to bottom, in shares of its width. */
-export const MARK_HEIGHT = 0.3;
+/** The logo's parts, top to bottom, in shares of its width: the mark (its height over its width), the gap under it, the oval. */
 const MARK_WIDTH = 0.86;
+const MARK_ASPECT = 0.35;
 const MARK_GAP = 0.045;
 const OVAL_HEIGHT = 0.25;
 
@@ -50,7 +50,7 @@ export function layoutLogo(ctx: CanvasRenderingContext2D, width: number): LogoLa
   ctx.font = `italic 800 ${probe}px ${FAMILY}`;
   const probeBox = ctx.measureText(TITLE);
   const probeInk = probeBox.actualBoundingBoxLeft + probeBox.actualBoundingBoxRight;
-  const room = ovalY - width * (MARK_HEIGHT + MARK_GAP) - width * 0.035;
+  const room = ovalY - width * (MARK_WIDTH * MARK_ASPECT + MARK_GAP) - width * 0.035;
   let titleSize = probeInk > 0 ? (probe * width * 0.97) / probeInk : width * 0.38;
   const probeTall = probeBox.actualBoundingBoxAscent + probeBox.actualBoundingBoxDescent;
   if (probeTall > 0) titleSize = Math.min(titleSize, (probe * room) / probeTall);
@@ -176,9 +176,6 @@ function markPath(w: number): Path2D {
   return path;
 }
 
-/** The mark's height over its width. */
-const MARK_ASPECT = 0.35;
-
 function mix(from: string, to: string, t: number): string {
   const [r, g, b] = oklabToRgb(mixOklab(hexToOklab(from), hexToOklab(to), t));
   return `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
@@ -201,16 +198,12 @@ function satin(ctx: CanvasRenderingContext2D, colour: string, top: number, botto
 export function paintLogo(ctx: CanvasRenderingContext2D, layout: LogoLayout, colour: string, page: string, flat = false): void {
   const width = layout.forWidth;
   const markWidth = width * MARK_WIDTH;
-  const markLeft = (width - markWidth) / 2;
-  const markTop = 0;
-  const markBottom = markTop + markWidth * MARK_ASPECT;
 
   ctx.save();
-  ctx.translate(markLeft, markTop);
+  ctx.translate((width - markWidth) / 2, 0);
   ctx.fillStyle = flat ? colour : satin(ctx, colour, 0, markWidth * MARK_ASPECT);
   ctx.fill(markPath(markWidth));
   ctx.restore();
-  void markBottom;
 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';

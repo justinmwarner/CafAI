@@ -21,7 +21,7 @@ import { ROASTS } from './roasts.ts';
 const GLOW_REACH = 0.2;
 /** How strongly the glow shows. */
 const GLOW_ALPHA = 0.68;
-/** A burst's beans are drawn up to this long, px at most: they grow a little as they come out at you. */
+/** A burst's beans grow to this many times their length over the burst, as they come out at you. */
 const BEAN_GROWTH = 1.3;
 /** The ring of light spreads this far, as a share of the screen's shorter side. */
 const RING_REACH = 0.55;
