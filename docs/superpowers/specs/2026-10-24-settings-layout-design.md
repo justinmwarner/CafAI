@@ -283,8 +283,9 @@ from 80 %, error at 100 %), and the switch "Pause the coach at the budget".
   or cleared, the switch is turned off, or a month begins, and then sends
   the reply that waited, as a reply waiting for a key is sent once one is
   saved.
-- A request already running finishes; the budget is checked before each
-  reply and before each further request of a tool loop.
+- The budget is checked before each reply. A reply already started
+  finishes, its tool loop included (at most six requests), so a month can
+  pass the budget by one reply's worth.
 
 ## 8. The gaps (D241-D248)
 
