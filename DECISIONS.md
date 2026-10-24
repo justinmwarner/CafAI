@@ -4375,8 +4375,10 @@ that needs WebGL (D227).
   context.", so the host shows Nightstand for the rest of that showing;
   nothing is restored. `dispose()` deletes every buffer, the texture and
   the program; a shader that will not compile throws from `create()`
-  having deleted what it made, for the same fallback. The shaders keep to
-  GLSL ES 1.00's character set, comments included. Settings greys it out
+  having deleted what it made, for the same fallback. The still, which the
+  host paints again each minute under reduced motion, is grown and built
+  once. The shaders keep to GLSL ES 1.00's character set, comments
+  included. Settings greys it out
   where WebGL cannot start, and the day's pick passes it by (D225);
   `src/ui/saver/daily.ts` now answers no at once where the page has no
   `WebGLRenderingContext` at all (jsdom in the tests), without making a
