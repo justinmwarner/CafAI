@@ -2,6 +2,7 @@
 import '../chat/testing/setup.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { act, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { DisplayPrefsSaved } from '../../app/displayPrefs.ts';
 import { withTds } from '../../coach/extraction.ts';
 import type { IterationRecord } from '../../storage/types.ts';
@@ -70,5 +71,17 @@ describe('HistoryScreen on the 12-hour clock (D245)', () => {
     });
     expect(row()).toHaveTextContent(`${formatDateTime(shot.createdAt, '24h')} · 27.8 s`);
     expect(row().textContent).toMatch(/^\d{1,2} \w{3} \d{4}, \d\d:\d\d · /);
+  });
+});
+
+describe('HistoryScreen import and the display choices (D245, D246)', () => {
+  it('reads the clock and the TDS switch again after an import, which may bring them to a device that never chose', async () => {
+    const services = renderHistory(null, {});
+    vi.spyOn(services.storage.porter, 'importAll').mockResolvedValue({ imported: 1, care: 0 });
+    const reload = vi.spyOn(services.displayPrefs, 'reload');
+    await screen.findByTestId(TID.historyBag(KIAMBU.id));
+    await userEvent.upload(screen.getByTestId(TID.importData), new File(['{}'], 'x.json', { type: 'application/json' }));
+    expect(await screen.findByText('Imported 1 record.')).toBeInTheDocument();
+    expect(reload).toHaveBeenCalled();
   });
 });

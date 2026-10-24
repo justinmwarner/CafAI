@@ -359,7 +359,7 @@ function BagDetail({ data, onBack }: { data: BagHistory; onBack(): void }) {
 type ListData = { bags: Bag[]; shotCounts: Map<string, number> };
 
 export function HistoryScreen({ bagId, onSelectBag = hashNavigate }: HistoryScreenProps) {
-  const { storage, coach, appearance, temperatureUnit, drinkScreens, care } = useServices();
+  const { storage, coach, appearance, temperatureUnit, drinkScreens, displayPrefs, care } = useServices();
   const [coachBags, coachVersions, coachPhase, coachBusy] = useCoachCommits();
   const [reloads, setReloads] = useState(0);
   const [list, setList] = useState<ListData | null>(null);
@@ -443,6 +443,8 @@ export function HistoryScreen({ bagId, onSelectBag = hashNavigate }: HistoryScre
         temperatureUnit.reload().catch(() => undefined);
         // And the drinks' screens, on a device that never chose them (D222).
         drinkScreens?.reload().catch(() => undefined);
+        // And the clock and the TDS cell's switch, on a device that never chose them (D245, D246).
+        displayPrefs?.reload().catch(() => undefined);
         // And machine care's last times (D189).
         care?.reload().catch(() => undefined);
       } catch (error) {
@@ -451,7 +453,7 @@ export function HistoryScreen({ bagId, onSelectBag = hashNavigate }: HistoryScre
         setWorking(null);
       }
     },
-    [storage, coach, appearance, temperatureUnit, drinkScreens, care],
+    [storage, coach, appearance, temperatureUnit, drinkScreens, displayPrefs, care],
   );
 
   const current = bagId === null ? list : detail?.id === bagId ? detail : null;
