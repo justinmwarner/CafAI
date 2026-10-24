@@ -1534,7 +1534,7 @@ describe('coach engine', () => {
       .find((b) => b.type === 'text' && b.text.startsWith('[event:shot_completed]'));
     const payload = JSON.parse((shotEvent as { text: string }).text.split('\n')[1]!);
     // Typed in Settings, not linked to Decaid's grinder library: no steps to tell.
-    expect(payload.grinder).toEqual({ name: 'Niche Zero', setting: '13', settingType: null, step: null, values: null, linked: false });
+    expect(payload.grinder).toEqual({ name: 'Niche Zero', setting: '13', finer: 'lower', settingType: null, step: null, values: null, linked: false });
   });
 
   it('keeps the bag on screen while a shot is pulled', async () => {
@@ -3269,7 +3269,7 @@ describe('coach engine', () => {
         tips: [],
       });
 
-    const nicheOn = (setting: string) => ({ name: 'Niche Zero', setting, settingType: 'numeric', step: 0.5, values: null, linked: true });
+    const nicheOn = (setting: string) => ({ name: 'Niche Zero', setting, finer: 'lower', settingType: 'numeric', step: 0.5, values: null, linked: true });
 
     it("reads the linked grinder at start and tells the coach its dial at intake and with every shot", async () => {
       await startLinked('g-niche', NICHE, '15');
@@ -3368,6 +3368,7 @@ describe('coach engine', () => {
       expect(intakeGrinder()).toEqual({
         name: 'Baratza Encore ESP',
         setting: '5',
+        finer: 'lower',
         settingType: 'preset',
         step: null,
         values: ENCORE.values,
@@ -3391,7 +3392,7 @@ describe('coach engine', () => {
       await saveInSettings('g-encore', ENCORE, '5');
       expect(engine.getState().error).toBeNull();
       await throughShot();
-      expect(intakeGrinder()).toEqual({ name: 'Baratza Encore ESP', setting: '5', settingType: null, step: null, values: null, linked: true });
+      expect(intakeGrinder()).toEqual({ name: 'Baratza Encore ESP', setting: '5', finer: 'lower', settingType: null, step: null, values: null, linked: true });
 
       await engine.refresh();
       await grinderSettled();
@@ -3401,6 +3402,7 @@ describe('coach engine', () => {
       expect(shotEvents()[1]!.grinder).toEqual({
         name: 'Baratza Encore ESP',
         setting: '5',
+        finer: 'lower',
         settingType: 'preset',
         step: null,
         values: ENCORE.values,
@@ -3421,7 +3423,7 @@ describe('coach engine', () => {
       expect(callsOf('getGrinder').at(-1)!.args).toEqual(['g-gone']);
       await throughTemplateCards();
       // Still linked, so the coach gives directions only.
-      expect(intakeGrinder()).toEqual({ name: 'Old grinder', setting: '7', settingType: null, step: null, values: null, linked: true });
+      expect(intakeGrinder()).toEqual({ name: 'Old grinder', setting: '7', finer: 'lower', settingType: null, step: null, values: null, linked: true });
     });
 
     it('reads nothing when no grinder is linked, and forgets the steps when it is unlinked', async () => {
@@ -3431,7 +3433,7 @@ describe('coach engine', () => {
       expect(callsOf('getGrinder')).toHaveLength(1);
       expect(callsOf('updateWorkflow').at(-1)!.args[0]).toEqual({ context: { grinderId: null, grinderModel: 'Niche Zero', grinderSetting: '15', grinderBurrs: null } });
       await throughShot();
-      expect(intakeGrinder()).toEqual({ name: 'Niche Zero', setting: '15', settingType: null, step: null, values: null, linked: false });
+      expect(intakeGrinder()).toEqual({ name: 'Niche Zero', setting: '15', finer: 'lower', settingType: null, step: null, values: null, linked: false });
 
       // Without Decaid's steps a relative move stays as the coach gave it.
       scripts.push(() => [grindMove({ direction: 'finer', amount: 1, setting: null })]);
@@ -3481,7 +3483,7 @@ describe('coach engine', () => {
       expect(callsOf('getGrinder').length).toBeGreaterThan(1);
       // The shot event already says so: still linked, no steps.
       expect(shotEvents().map((e) => e.grinder)).toEqual([
-        { name: 'Niche Zero', setting: '15', settingType: null, step: null, values: null, linked: true },
+        { name: 'Niche Zero', setting: '15', finer: 'lower', settingType: null, step: null, values: null, linked: true },
       ]);
 
       scripts.push(() => [grindMove({ direction: 'finer', amount: 1, setting: null })]);
@@ -3562,7 +3564,7 @@ describe('coach engine', () => {
       expect(parsed(lastUserTurn(requests)[0])).toEqual({
         added: true,
         alreadyInDecaid: false,
-        grinder: { name: 'Mazzer Philos', setting: '12', settingType: 'numeric', step: 0.5, values: null, linked: true },
+        grinder: { name: 'Mazzer Philos', setting: '12', finer: 'lower', settingType: 'numeric', step: 0.5, values: null, linked: true },
       });
       expect(engine.getState()).toMatchObject({ busy: false, phase: 'awaiting_shot' });
     });

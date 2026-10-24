@@ -132,6 +132,7 @@ describe('buildSystemPrompt: content', () => {
       '"step"',
       '"values"',
       '"linked"',
+      '"finer"',
       '"onMachine"',
       '"loadError"',
       '"bag"',
@@ -206,7 +207,7 @@ describe('buildSystemPrompt: content', () => {
 
   it("gives the grinder object with its dial from Decaid's grinder library, at intake and with every shot (D62)", () => {
     const grinder =
-      '"grinder":{"name":string|null,"setting":string|null,"settingType":"numeric"|"preset"|null,"step":number|null,"values":string[]|null,"linked":boolean}';
+      '"grinder":{"name":string|null,"setting":string|null,"finer":"lower"|"higher","settingType":"numeric"|"preset"|null,"step":number|null,"values":string[]|null,"linked":boolean}';
     const loop = prompt.slice(prompt.indexOf('# The loop'), prompt.indexOf('# Template catalog'));
     const intake = loop.split('\n').find((line) => line.startsWith('1. Intake.'))!;
     const shot = loop.split('\n').find((line) => line.startsWith('3. Shot completed.'))!;
@@ -219,8 +220,17 @@ describe('buildSystemPrompt: content', () => {
     expect(manual).toMatch(/When step or values is known, move in those steps and give the new setting/);
     expect(manual).toContain('from "15" with step 0.5, one step finer is "14.5"');
     expect(manual).toMatch(/CafAI works the setting out from the steps, or checks yours against Decaid's grinder library/);
-    expect(manual).toMatch(/lower numbers are finer/);
-    expect(manual).toMatch(/finest first/);
+    expect(manual).toMatch(/"values" a preset grinder's settings, finest first whichever way its numbers go/);
+  });
+
+  it('tells the coach to read "finer", the barista\'s answer for their grinder, linked or not, never assuming lower is finer (D241)', () => {
+    const manual = prompt.slice(prompt.indexOf('# Manual variables'), prompt.indexOf('# Reading a shot'));
+    expect(manual).toContain('The grinder\'s "finer" is which way its numbers go finer, as the barista set it in Settings');
+    expect(manual).toContain('"lower" (lower numbers are finer, as on most grinders) or "higher" (higher numbers are finer on this one)');
+    expect(manual).toMatch(/linked or not.*outranks what you know of that grinder's usual dial: read the setting that way and give a new setting that way/);
+    expect(manual).toContain('one step finer is "14.5", or "15.5" where "finer" is "higher"');
+    expect(manual).toContain('the way "finer" says');
+    expect(prompt).not.toMatch(/assuming lower numbers are finer/);
   });
 
   it('asks for directions only for a linked grinder Decaid has no steps for, as Settings tells the user (D62)', () => {
