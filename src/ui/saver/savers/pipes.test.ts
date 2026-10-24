@@ -15,6 +15,7 @@ function fakeWebgl(options: { wideIndices?: boolean; compiles?: boolean } = {}) 
   const deleted = new Set<object>();
   const draws: { count: number; type: unknown }[] = [];
   const indexUploads: unknown[] = [];
+  const sources: string[] = [];
   let lost = false;
   let boundIndexTarget = false;
   const make = (kind: string) => {
@@ -35,6 +36,7 @@ function fakeWebgl(options: { wideIndices?: boolean; compiles?: boolean } = {}) 
     deleteTexture: (object: object) => deleted.add(object),
     deleteProgram: (object: object) => deleted.add(object),
     deleteShader: (object: object) => deleted.add(object),
+    shaderSource: (_shader: object, source: string) => sources.push(source),
     getShaderParameter: () => options.compiles !== false,
     getShaderInfoLog: () => 'ERROR: 0:1: oops',
     getProgramParameter: () => true,
@@ -61,6 +63,7 @@ function fakeWebgl(options: { wideIndices?: boolean; compiles?: boolean } = {}) 
     deleted,
     draws,
     indexUploads,
+    sources,
     lose() {
       lost = true;
     },
@@ -92,6 +95,16 @@ describe('Espresso Pipes', () => {
   it('needs WebGL: none on the canvas, no screensaver (the host shows Nightstand)', () => {
     expect(pipes.context).toBe('webgl');
     expect(pipes.create(fakeCanvas(null), env)).toBeNull();
+  });
+
+  it('writes its shaders in GLSL ES 1.00 alone: its own characters, comments included, and no extension', () => {
+    const { sources } = start();
+    expect(sources).toHaveLength(2);
+    for (const source of sources) {
+      // The language's character set (section 3.1): no quotes, apostrophes, backticks or backslashes, even in a comment.
+      expect(source.match(/[^A-Za-z0-9_ \t\n.+\-/*%<>[\](){}^|&~=!:;,?#]/g) ?? []).toEqual([]);
+      expect(source).not.toMatch(/#extension|#version/);
+    }
   });
 
   it('draws the finished parts a chunk at a time, and each growing run and joint on its own', () => {

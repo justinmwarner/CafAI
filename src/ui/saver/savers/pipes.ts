@@ -9,10 +9,12 @@
  * the finished parts into buffers as they come (appended, never rebuilt; in
  * chunks of under 65,536 vertices where 32-bit indices are not to be had),
  * draws each growing run and each joint still growing in with a matrix of its
- * own, and lights it all: a made-up studio for the metals to reflect (a warm
- * key light high on the left, a cool fill on the right, a light strip behind,
- * a dark floor) with Blinn-Phong highlights from the same lights, and fog
- * toward the page's colour, so the far pipes sink into the dark.
+ * own, and lights it all (D-PIPES-3): a made-up studio for the metals to
+ * reflect (a warm key softbox in front on the left with a strip beside it, a
+ * cool fill on the right, a strip overhead, a low one behind for the rims,
+ * warm grey walls and a dark floor) with Blinn-Phong highlights from the same
+ * lights, and fog toward the page's colour, so the far pipes sink into the
+ * dark.
  *
  * Should the context be lost, the next step or draw throws and the host shows
  * Nightstand instead, as for any screensaver that throws.
@@ -89,7 +91,6 @@ uniform float uFade;
 uniform vec3 uFog;
 uniform vec3 uKey;
 uniform vec3 uFill;
-uniform vec3 uRim;
 uniform sampler2D uDial;
 varying vec3 vWorld;
 varying vec3 vNormal;
@@ -102,46 +103,63 @@ const vec3 FILL_COLOR = vec3(0.6, 0.73, 1.0);
 const vec3 TOP_COLOR = vec3(1.0, 0.96, 0.9);
 const vec3 RIM_COLOR = vec3(0.95, 0.93, 0.9);
 
+// Where the lights standing round the pipes are, across the floor (x, z): the key in front on the
+// left, a strip beside it, the fill on the right, a dim one behind the camera, the rim light behind the pipes.
+// (No apostrophes or quotes in these comments: they are outside the character set of GLSL ES.)
+const vec2 KEY_MIDDLE = vec2(-0.877, 0.479);
+const vec2 STRIP_MIDDLE = vec2(-0.531, 0.847);
+const vec2 FILL_MIDDLE = vec2(0.877, 0.479);
+const vec2 FRONT_MIDDLE = vec2(0.0, 1.0);
+const vec2 RIM_MIDDLE = vec2(0.0, -1.0);
+
 // 1 between lo and hi, 0 outside, with soft edges.
 float within(float x, float lo, float hi, float soft) {
   return smoothstep(lo - soft, lo + soft, x) * (1.0 - smoothstep(hi - soft, hi + soft, x));
 }
 
+// How much of a light standing round the pipes a heading sees: all of it within
+// the sine inner of the middle of the light, none past outer or behind it.
+float facing(vec2 heading, vec2 middle, float inner, float outer) {
+  float off = dot(heading, middle) > 0.0 ? abs(heading.x * middle.y - heading.y * middle.x) : 1.0;
+  return 1.0 - smoothstep(inner, outer, off);
+}
+
 // The studio the metals reflect, by direction: warm grey walls lighter toward
 // the horizon, a dark floor, a darker ceiling; a tall warm softbox standing
-// in front on the left, a cool one on the right, a strip overhead and a low
-// one behind the pipes for their rims.
+// in front on the left with a narrow strip beside it, a cool one on the
+// right, a dim light behind the camera, a strip overhead, and a low one
+// behind the pipes for their rims. The gaps between them are what make a
+// polished pipe read round.
 vec3 studio(vec3 r) {
   float e = r.y;
-  // 0 toward the camera, negative to the left, plus or minus pi behind the pipes.
-  float a = atan(r.x, r.z);
-  // The horizon sits a little below level, softly: seen from a little above, a pipe's front reflects the walls, its underside the floor.
+  vec2 heading = r.xz * inversesqrt(max(dot(r.xz, r.xz), 1e-6));
+  // The horizon sits a little below level, softly: seen from a little above, the front of a pipe reflects the walls, its underside the floor.
   float h = e + 0.24;
   vec3 wall = mix(vec3(0.22, 0.205, 0.18), vec3(0.09, 0.088, 0.095), smoothstep(0.0, 1.0, h));
   vec3 ground = mix(vec3(0.06, 0.05, 0.044), vec3(0.008, 0.007, 0.006), smoothstep(0.0, 0.3, -h));
   vec3 c = mix(ground, wall, smoothstep(-0.06, 0.06, h));
-  c += KEY_COLOR * 2.8 * within(a, -1.32, -0.82, 0.06) * within(e, -0.5, 0.85, 0.08);
-  c += KEY_COLOR * 1.3 * within(a, -0.62, -0.5, 0.04) * within(e, -0.45, 0.8, 0.08);
-  c += FILL_COLOR * 1.1 * within(a, 0.78, 1.36, 0.07) * within(e, -0.4, 0.6, 0.08);
+  c += KEY_COLOR * 2.8 * facing(heading, KEY_MIDDLE, 0.19, 0.305) * within(e, -0.5, 0.85, 0.08);
+  c += KEY_COLOR * 1.3 * facing(heading, STRIP_MIDDLE, 0.02, 0.1) * within(e, -0.45, 0.8, 0.08);
+  c += FILL_COLOR * 1.1 * facing(heading, FILL_MIDDLE, 0.218, 0.352) * within(e, -0.4, 0.6, 0.08);
   c += TOP_COLOR * 1.4 * smoothstep(0.74, 0.84, e) * (1.0 - smoothstep(0.3, 0.38, abs(r.z)));
-  c += KEY_COLOR * 0.35 * within(a, -0.3, 0.3, 0.15) * within(e, -0.3, 0.22, 0.1);
-  c += RIM_COLOR * 1.4 * smoothstep(2.45, 2.58, abs(a)) * within(e, -0.12, 0.38, 0.06);
+  c += KEY_COLOR * 0.35 * facing(heading, FRONT_MIDDLE, 0.149, 0.435) * within(e, -0.3, 0.22, 0.1);
+  c += RIM_COLOR * 1.4 * facing(heading, RIM_MIDDLE, 0.531, 0.637) * within(e, -0.12, 0.38, 0.06);
   return c;
 }
 
 void main() {
   vec3 n = normalize(vNormal);
   vec3 toEye = uCamera - vWorld;
-  float distance = length(toEye);
-  vec3 v = toEye / distance;
+  float fromEye = length(toEye);
+  vec3 v = toEye / fromEye;
   float ndv = clamp(dot(n, v), 0.0, 1.0);
   vec3 r = reflect(-v, n);
   vec3 env = studio(r);
   float shininess = vSurface.y;
+  // Highlights from the key and the fill; the rim light shows in the studio alone.
   float highKey = pow(max(dot(n, normalize(uKey + v)), 0.0), shininess);
   float highFill = pow(max(dot(n, normalize(uFill + v)), 0.0), shininess);
-  float highRim = pow(max(dot(n, normalize(uRim + v)), 0.0), shininess);
-  vec3 highlight = KEY_COLOR * highKey * 1.8 + FILL_COLOR * highFill * 0.7 + RIM_COLOR * highRim * 0.9;
+  vec3 highlight = KEY_COLOR * highKey * 1.8 + FILL_COLOR * highFill * 0.7;
   float fresnel = pow(1.0 - ndv, 5.0);
 
   vec3 base = vBase;
@@ -162,7 +180,7 @@ void main() {
 
   color = vec3(1.0) - exp(-color * 1.35);
   color = pow(color, vec3(1.0 / 2.2));
-  color = mix(color, uPage, smoothstep(uFog.x, uFog.y, distance) * uFog.z);
+  color = mix(color, uPage, smoothstep(uFog.x, uFog.y, fromEye) * uFog.z);
   color = mix(color, uPage, uFade);
   gl_FragColor = vec4(color, 1.0);
 }
@@ -202,10 +220,9 @@ const METAL_MATERIAL: Record<Metal, number> = {
   anodised: MATERIAL.anodised,
 };
 
-/** The lights' hot spots, toward them: the key in front on the left and up, the fill on the right, the rim behind and low; the studio's softboxes are round them. */
+/** The highlights' lights, toward them: the key in front on the left and up, the fill on the right; the studio's softboxes are round them. */
 const KEY_DIR = unit([-0.74, 0.36, 0.58]);
 const FILL_DIR = unit([0.86, 0.15, 0.49]);
-const RIM_DIR = unit([0.1, 0.18, -0.98]);
 
 /** The camera: in front of the grid's middle and a little above, looking a little down. */
 const EYE: Vec3 = [0, 3.4, 19];
@@ -259,7 +276,7 @@ function multiply(a: Float32Array, b: Float32Array): Float32Array {
   return out;
 }
 
-/** The gauge's face, drawn once: 0 to 16 bar, the espresso band in the pressure green, the needle near 9. */
+/** The gauge's face, drawn once (and again when Figtree is in): 0 to 16 bar, the espresso band of 8 to 10 in the pressure green, red from 13, the needle near 9, a glint on its glass. */
 export function paintDial(dial: HTMLCanvasElement): void {
   const ctx = dial.getContext('2d');
   if (!ctx) return;
@@ -463,7 +480,6 @@ export const pipes: CanvasSaver = {
     gl.uniform4fv(where('uSurface'), new Float32Array(SURFACES.flatMap((surface) => [surface.metal, surface.shininess, surface.reflect, surface.kind])));
     gl.uniform3fv(where('uKey'), new Float32Array(KEY_DIR));
     gl.uniform3fv(where('uFill'), new Float32Array(FILL_DIR));
-    gl.uniform3fv(where('uRim'), new Float32Array(RIM_DIR));
     gl.uniform3fv(uniforms.camera, new Float32Array(EYE));
     gl.uniform3fv(uniforms.page, new Float32Array(page));
     gl.uniform1i(uniforms.dial, 0);
@@ -544,9 +560,14 @@ export const pipes: CanvasSaver = {
       const from = joint.start ? 0 : (PIPE_RADIUS / BALL_RADIUS) * 1.04;
       const ball = placeAt(at, from + (1 - from) * jointGrowth(age));
       if (joint.fitting === 'ball') return { ball, fitting: null };
+      // A fitting grows out of its ball: a cup standing up, its handle to the side the model says; a dial or a wheel facing its way, upright.
       const grown = jointGrowth(age, FITTING_GROW_MS);
-      const handle = STEPS[joint.handle]!;
-      return { ball, fitting: placeAt(at, grown, joint.fitting === 'cup' ? [handle[0], handle[1], handle[2]] : [1, 0, 0]) };
+      if (joint.fitting === 'cup') {
+        const handle = STEPS[joint.handle]!;
+        return { ball, fitting: placeAt(at, grown, [handle[0], handle[1], handle[2]]) };
+      }
+      const facing = STEPS[joint.facing]!;
+      return { ball, fitting: placeAlong([facing[0], facing[1], facing[2]], at, grown, grown) };
     };
 
     const fittingMesh = (joint: JointPart): Mesh | null =>
