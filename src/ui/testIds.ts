@@ -242,6 +242,8 @@ export const TID = {
   computerTest: 'computer-test',
   computerFind: 'computer-find',
   computerStatus: 'computer-status',
+  /** Its switch: keep the address and code in Decaid too (D229). */
+  sourceInDecaid: 'source-in-decaid',
 
   // Settings > Log and the log view (D139); Share, Email and Copy carry the same ids in both
   logSection: 'log-section',

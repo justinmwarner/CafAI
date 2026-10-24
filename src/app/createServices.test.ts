@@ -2,6 +2,8 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFakeWebSocket, type FakeWebSocketFactory } from '../api/testing/fakeWebSocket.ts';
+import { openCoachSourceStore, type CoachSource } from '../storage/coachSource.ts';
+import { COACH_SOURCE_KEY, COACH_SOURCE_NAMESPACE } from '../storage/coachSourceBackup.ts';
 import { buildMirrorEntries } from '../storage/mirror.ts';
 import { KEY_NAME, KEY_NAMESPACE } from '../storage/keyBackup.ts';
 import { API_KEY, MODEL, makeBag, makeCareRecord, makeConversation, makeSettings, makeVersion } from '../storage/testing/fixtures.ts';
@@ -12,7 +14,8 @@ const json = (value: unknown, status = 200) => new Response(JSON.stringify(value
 
 /**
  * Decaid over fetch, as far as start-up needs it: the key-value store (the
- * backup in `cafai`, the key's copy in `cafai-key`), empty lists for plugins
+ * backup in `cafai`, the key's copy in `cafai-key`, where the coach runs in
+ * `cafai-coach-source`), empty lists for plugins
  * and devices, and "Route not found" for the rest. While `down`, nothing answers.
  */
 function fakeDecaid() {
@@ -60,8 +63,13 @@ function fakeDecaid() {
     keepKey(key: string) {
       space(KEY_NAMESPACE).set(KEY_NAME, key);
     },
+    keepSource(source: CoachSource) {
+      space(COACH_SOURCE_NAMESPACE).set(COACH_SOURCE_KEY, source);
+    },
   };
 }
+
+const COMPUTER: CoachSource = { kind: 'computer', address: '192.168.1.20:8877', code: 'ABCDEFGH' };
 
 describe('createServices: bags and the key back from Decaid (D99, D100)', () => {
   let decaid: ReturnType<typeof fakeDecaid>;
@@ -211,5 +219,82 @@ describe('createServices: bags and the key back from Decaid (D99, D100)', () => 
     sockets.latest('/ws/v1/devices').open();
     await vi.waitFor(() => expect(keyCopy()).toBe(second));
     expect(await services.storage.secrets.getApiKey()).toBe(second);
+  });
+});
+
+describe('createServices: where the coach runs back from Decaid (D229)', () => {
+  let decaid: ReturnType<typeof fakeDecaid>;
+  let services: AppServices | null = null;
+
+  beforeEach(() => {
+    vi.stubGlobal('indexedDB', new IDBFactory());
+    decaid = fakeDecaid();
+    vi.stubGlobal('fetch', decaid.fetch);
+    vi.stubGlobal('WebSocket', createFakeWebSocket().WebSocketImpl);
+  });
+
+  afterEach(() => {
+    services?.dispose();
+    (services?.storage as IdbStorage | undefined)?.close();
+    services?.coachSource?.close();
+    services = null;
+    vi.unstubAllGlobals();
+  });
+
+  const sourceCopy = () => decaid.state.store.get(COACH_SOURCE_NAMESPACE)?.get(COACH_SOURCE_KEY);
+
+  async function restart(): Promise<AppServices> {
+    services?.dispose();
+    (services?.storage as IdbStorage | undefined)?.close();
+    services?.coachSource?.close();
+    services = await createServices(window);
+    return services;
+  }
+
+  it('brings it back at start on a device with nothing saved, so the coach runs on the computer without asking', async () => {
+    decaid.backUp();
+    decaid.keepSource(COMPUTER);
+    const started = await restart();
+    expect(await started.coachSource!.get()).toEqual(COMPUTER);
+    expect(started.coach.getState()).toMatchObject({ hasApiKey: true, restoredFromBackup: true });
+  });
+
+  it('brings it back once Decaid answers, and the coach then has the code', async () => {
+    decaid.keepSource(COMPUTER);
+    decaid.state.down = true;
+    const started = await restart();
+    expect(started.coach.getState().hasApiKey).toBe(false);
+    decaid.state.down = false;
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.waitFor(() => expect(services!.coach.getState().hasApiKey).toBe(true));
+    expect(await started.coachSource!.get()).toEqual(COMPUTER);
+  });
+
+  it('copies a source saved before there was a copy at the next start, and every source saved from then on', async () => {
+    const before = await openCoachSourceStore();
+    await before.set(COMPUTER);
+    before.close();
+    const started = await restart();
+    await vi.waitFor(() => expect(sourceCopy()).toEqual(COMPUTER));
+    const moved = { ...COMPUTER, address: '192.168.1.30:8877' };
+    expect(await started.coachSourceBackup!.save(moved)).toBe(true);
+    expect(sourceCopy()).toEqual(moved);
+  });
+
+  it('sends a copy Decaid did not take once it may be back, without a restart', async () => {
+    const started = await restart();
+    decaid.state.down = true;
+    expect(await started.coachSourceBackup!.save(COMPUTER)).toBe(false);
+    decaid.state.down = false;
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.waitFor(() => expect(sourceCopy()).toEqual(COMPUTER));
+  });
+
+  it('copies nothing once the choice is off', async () => {
+    const started = await restart();
+    await started.storage.settings.update({ keepCoachSourceInDecaid: false });
+    expect(await started.coachSourceBackup!.save(COMPUTER)).toBe(true);
+    await restart();
+    expect(sourceCopy()).toBeUndefined();
   });
 });

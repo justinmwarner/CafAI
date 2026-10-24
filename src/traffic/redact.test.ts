@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   decodedSize,
   holdsSecret,
+  coachSourceStoreBody,
+  COACH_SOURCE_COPY_MARKER,
+  isCoachSourceStoreCall,
   isKeyStoreCall,
   isSecretHeader,
   KEY_COPY_MARKER,
@@ -146,5 +149,24 @@ describe('isKeyStoreCall', () => {
     expect(isKeyStoreCall('GET /api/v1/store/cafai-key')).toBe(true);
     expect(isKeyStoreCall('POST /api/v1/store/cafai/settings')).toBe(false);
     expect(isKeyStoreCall('GET /api/v1/store/cafai-keyring/x')).toBe(false);
+  });
+});
+
+describe('the copy of where the coach runs (D229)', () => {
+  it('keeps no body of it but one with no room for a code', () => {
+    const copy = JSON.stringify({ kind: 'computer', address: '192.168.1.20:8877', code: 'QRST2345' });
+    expect(coachSourceStoreBody(copy)).toBe(COACH_SOURCE_COPY_MARKER);
+    expect(coachSourceStoreBody('"QRST2345"')).toBe(COACH_SOURCE_COPY_MARKER);
+    for (const empty of ['null', '{}', '[]', '""', '', ' null\n']) expect(coachSourceStoreBody(empty)).toBe(empty);
+  });
+
+  it("knows its namespace in Decaid's store, and nothing else", () => {
+    expect(isCoachSourceStoreCall('POST /api/v1/store/cafai-coach-source/current')).toBe(true);
+    expect(isCoachSourceStoreCall('GET /api/v1/store/cafai-coach-source/current')).toBe(true);
+    expect(isCoachSourceStoreCall('DELETE /api/v1/store/cafai-coach-source/current')).toBe(true);
+    expect(isCoachSourceStoreCall('GET /api/v1/store/cafai-coach-source?full=1')).toBe(true);
+    expect(isCoachSourceStoreCall('GET /api/v1/store/cafai-coach-source')).toBe(true);
+    expect(isCoachSourceStoreCall('POST /api/v1/store/cafai/settings')).toBe(false);
+    expect(isCoachSourceStoreCall('GET /api/v1/store/cafai-coach-sources/x')).toBe(false);
   });
 });

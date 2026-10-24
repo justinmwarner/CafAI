@@ -14,6 +14,7 @@ import type { ShotSummary } from '../coach/types.ts';
 import type { BagPhoto } from '../llm/extractBag.ts';
 import type { ModelInfo } from '../llm/types.ts';
 import type { CoachSourceStore } from '../storage/coachSource.ts';
+import type { CoachSourceBackup } from '../storage/coachSourceBackup.ts';
 import type { Bag, ProfileVersion, Storage } from '../storage/types.ts';
 import type { UsageService } from '../usage/service.ts';
 import type { AppearanceStore } from './appearance.ts';
@@ -59,6 +60,13 @@ export interface Services {
    * Settings then offers only the API key.
    */
   coachSource?: CoachSourceStore;
+  /**
+   * Its copy in Decaid (D229, src/storage/coachSourceBackup.ts): Settings
+   * saves the source through it, so the copy follows, and its switch turns
+   * the copy on and off. Present whenever coachSource is, outside fakes and
+   * previews; without it Settings saves on this device only.
+   */
+  coachSourceBackup?: CoachSourceBackup;
   /**
    * Machine care's steps, their counts and marks (D183-D190,
    * src/app/care/careService.ts). Optional: fakes and previews leave it out,

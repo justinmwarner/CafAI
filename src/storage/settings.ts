@@ -209,6 +209,8 @@ export function normalizeSettings(raw: unknown, defaultModel: string): Settings 
   if (isRecord(raw['drinkScreens'])) settings.drinkScreens = normalizeDrinkScreens(raw['drinkScreens']);
   // The screensaver (D225), as care: the block once someone changed it here, the default's values included.
   if (isRecord(raw['screensaver'])) settings.screensaver = normalizeScreensaver(raw['screensaver']);
+  // Where the coach runs, kept in Decaid too (D229), as the key's copy: only a choice someone made, read as on without one.
+  if (typeof raw['keepCoachSourceInDecaid'] === 'boolean') settings.keepCoachSourceInDecaid = raw['keepCoachSourceInDecaid'];
   return settings;
 }
 
@@ -225,6 +227,7 @@ const FIELDS: ReadonlyArray<keyof Settings> = [
   'funFacts',
   'drinkScreens',
   'screensaver',
+  'keepCoachSourceInDecaid',
 ];
 
 /** `undefined` means "not part of this edit", never "clear it"; clearing takes an explicit null. */
@@ -270,9 +273,9 @@ function isBlank(value: string | null | undefined): boolean {
  * The key's copy in Decaid (D99) is the user's choice wherever this device
  * holds one, off as much as on; only a device that never chose takes it.
  * The temperature unit (D172), machine care's answers (D187), the source of
- * fun facts (D198), the drinks' screens (D222) and the screensaver
- * (D225) follow the same rule, the care, drink screens and screensaver
- * blocks whole.
+ * fun facts (D198), the drinks' screens (D222), the screensaver (D225) and
+ * the choice to keep where the coach runs in Decaid (D229) follow the same
+ * rule, the care, drink screens and screensaver blocks whole.
  */
 export function fillBlankSettings(local: Settings, incoming: Settings, defaultModel: string): Settings {
   const pick = (mine: string | null, theirs: string | null) => (isBlank(mine) && !isBlank(theirs) ? theirs : mine);
@@ -307,5 +310,8 @@ export function fillBlankSettings(local: Settings, incoming: Settings, defaultMo
   // The screensaver (D225), as care: a choice made here wins whole, turned off as much as on.
   const saver = local.screensaver ?? incoming.screensaver;
   if (saver !== undefined) merged.screensaver = saver;
+  // Where the coach runs, kept in Decaid (D229), as the key's copy: a choice made here wins, off as much as on.
+  const keepSource = local.keepCoachSourceInDecaid ?? incoming.keepCoachSourceInDecaid;
+  if (keepSource !== undefined) merged.keepCoachSourceInDecaid = keepSource;
   return merged;
 }

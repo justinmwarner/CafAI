@@ -3,14 +3,17 @@
  * Claude on the user's own Mac or PC through CafAI Bridge, which answers with
  * their Claude plan through Claude Code
  * (docs/superpowers/specs/2026-10-11-local-claude-design.md). The choice, the
- * bridge's address and its pairing code stay on this device
- * (src/storage/coachSource.ts); a change reaches the coach at once. The code
- * lets anyone on the network use the plan, so it is hidden like the API key
- * until shown. Test asks the bridge how it is and for one short real reply on
- * the coach's model; Find looks for a bridge on this same computer (Decaid on
- * a Mac or PC). Shown only when the services carry the store.
+ * bridge's address and its pairing code are saved on this device
+ * (src/storage/coachSource.ts) and, unless its switch here is off, copied in
+ * Decaid, so a Decaid update does not lose them (D229); a change reaches the
+ * coach at once, and a source the copy brings back while this screen is open
+ * shows at once. The code lets anyone on the network use the plan, so it is
+ * hidden like the API key until shown. Test asks the bridge how it is and for
+ * one short real reply on the coach's model; Find looks for a bridge on this
+ * same computer (Decaid on a Mac or PC). Shown only when the services carry
+ * the store.
  */
-import { useEffect, useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -19,6 +22,7 @@ import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
 import Radio from '@mui/material/Radio';
 import RadioGroup from '@mui/material/RadioGroup';
+import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -33,6 +37,8 @@ import {
   type CoachSourceKind,
   type CoachSourceStore,
 } from '../../storage/coachSource.ts';
+import type { CoachSourceBackup } from '../../storage/coachSourceBackup.ts';
+import { StorageError } from '../../storage/errors.ts';
 import { SECRET_FIELD } from '../../usage/mask.ts';
 import { TID } from '../testIds.ts';
 import { Section } from './Section.tsx';
@@ -43,11 +49,25 @@ declare module '@mui/material/Radio' {
     'data-testid'?: string;
   }
 }
+declare module '@mui/material/Switch' {
+  interface SwitchInputSlotPropsOverrides {
+    'data-testid'?: string;
+  }
+}
 
 /** The bridge caps its test reply at 60 s: wait a little longer for its answer. */
 const TEST_TIMEOUT_MS = 75_000;
 const START_BRIDGE = "On that computer, run npm run bridge in CafAI's folder (see bridge/README.md).";
 const SAVE_TO_USE = 'Tap Save to use it.';
+/** Saved while the copy in Decaid is on, but Decaid did not take it: src/storage/coachSourceBackup.ts sends it when Decaid is back. */
+const SAVED_COPY_LATER = "Saved on this device. Decaid can't be reached right now, so CafAI will copy it there as soon as it can.";
+/** The computer chosen, its copy not taken yet. */
+const COPY_LATER = "Decaid can't be reached right now, so CafAI will copy the address and code there as soon as it can.";
+/** Anthropic chosen, the copy not deleted yet: the code stays in Decaid until then. */
+const COPY_OFF_LATER = "Decaid can't be reached right now, so CafAI will delete its copy of the address and code there as soon as it can.";
+/** Why the copy in Decaid is worth having, and what it costs, as the API key's switch says it (D99, D229). */
+const SOURCE_IN_DECAID_SENTENCE =
+  "So you do not have to type them again after a Decaid update. Any device on your network can read Decaid's store, and Decaid's backups include it.";
 
 type Line = { tone: 'success' | 'info' | 'warning' | 'error'; text: string };
 type Busy = 'choose' | 'save' | 'test' | 'find';
@@ -92,7 +112,77 @@ async function savedModel(settings: { get(): Promise<{ model: string }> }): Prom
   }
 }
 
-function CoachSourceForm({ store }: { store: CoachSourceStore }) {
+/**
+ * The switch for the copy in Decaid (D229): on unless turned off on this
+ * device, so Settings.keepCoachSourceInDecaid reads as on while unset (as
+ * the copy does: createServices.ts), and off when the settings cannot be
+ * read, when nothing is copied either. The copy keeps the choice itself, in
+ * the same turn as the copy or the delete. Like the API key's switch (D99), a
+ * toggle that cannot reach Decaid goes back and says why, so the switch
+ * never claims a copy that is not there, or one gone that is not; one this
+ * device could not keep says so in the device's own words.
+ */
+function SourceInDecaidSwitch({ backup }: { backup: CoachSourceBackup }) {
+  const { storage } = useServices();
+  const [keep, setKeep] = useState<boolean | 'loading'>('loading');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    storage.settings.get().then(
+      (settings) => {
+        if (live) setKeep(settings.keepCoachSourceInDecaid ?? true);
+      },
+      () => {
+        if (live) setKeep(false);
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [storage]);
+
+  const toggle = async (checked: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await backup.setOn(checked);
+      setKeep(checked);
+    } catch (caught) {
+      setError(caught instanceof StorageError ? caught.message : `Could not reach Decaid: ${errorText(caught)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Box>
+      <FormControlLabel
+        control={
+          <Switch
+            checked={keep === true}
+            disabled={keep === 'loading' || busy}
+            onChange={(event) => void toggle(event.target.checked)}
+            slotProps={{ input: { 'data-testid': TID.sourceInDecaid } }}
+          />
+        }
+        label="Keep the address and code in Decaid"
+        sx={{ minHeight: 48, mr: 0 }}
+      />
+      <Typography variant="body2" sx={mutedSx}>
+        {SOURCE_IN_DECAID_SENTENCE}
+      </Typography>
+      {error ? (
+        <Typography variant="body2" sx={{ color: 'error.main' }}>
+          {error}
+        </Typography>
+      ) : null}
+    </Box>
+  );
+}
+
+function CoachSourceForm({ store, backup }: { store: CoachSourceStore; backup: CoachSourceBackup | undefined }) {
   const { coach, storage, usage } = useServices();
   const [saved, setSaved] = useState<CoachSource | null>(null);
   const [address, setAddress] = useState('');
@@ -105,11 +195,35 @@ function CoachSourceForm({ store }: { store: CoachSourceStore }) {
   const [message, setMessage] = useState<Line | null>(null);
   const [status, setStatus] = useState<Line | null>(null);
 
+  // Every source saved from now on, by this form or not: its copy in Decaid brought back once Decaid
+  // answered (D229), say. The choice shows it, and so do the fields while they still show what was
+  // saved (or nothing yet); fields being edited stay as typed. A save, which shows what it saved
+  // itself, counts too, so the first read never puts back what was there before it.
+  const changes = useRef(0);
+  const latest = useRef({ saved, address, code });
+  useLayoutEffect(() => {
+    latest.current = { saved, address, code };
+  });
+  useEffect(
+    () =>
+      store.subscribe((source) => {
+        changes.current += 1;
+        const now = latest.current;
+        setSaved(source);
+        if (now.saved === null || (now.address === now.saved.address && now.code === shownCode(now.saved.code))) {
+          setAddress(source.address);
+          setCode(shownCode(source.code));
+        }
+      }),
+    [store],
+  );
+
   useEffect(() => {
     let live = true;
+    const ticket = changes.current;
     store.get().then(
       (source) => {
-        if (!live) return;
+        if (!live || changes.current !== ticket) return;
         setSaved(source);
         setAddress(source.address);
         setCode(shownCode(source.code));
@@ -122,6 +236,14 @@ function CoachSourceForm({ store }: { store: CoachSourceStore }) {
       live = false;
     };
   }, [store]);
+
+  /** Save on this device, and in Decaid while the copy is on. False when Decaid did not take the copy: it goes later. */
+  const saveSource = (next: CoachSource): Promise<boolean> => (backup ? backup.save(next) : store.set(next).then(() => true));
+  /** The choice alone, on what is saved when the save runs: an address and a code just brought back stay. */
+  const saveKind = (kind: CoachSourceKind): Promise<boolean> =>
+    backup
+      ? backup.update((current) => ({ ...current, kind }))
+      : store.get().then((current) => store.set({ ...current, kind })).then(() => true);
 
   /**
    * The engine reads readiness again, and sends a reply that waited for the
@@ -144,15 +266,14 @@ function CoachSourceForm({ store }: { store: CoachSourceStore }) {
   const choose = async (kind: CoachSourceKind) => {
     if (!saved || busy || kind === saved.kind) return;
     const before = saved;
-    // The address and the code stay, whichever is chosen.
-    const next = { ...saved, kind };
-    // The choice shows at once, and goes back if it could not be saved.
-    setSaved(next);
+    // The choice shows at once, and goes back if it could not be saved; the address and the code stay,
+    // whichever is chosen, and the store tells the form what it saved (above).
+    setSaved({ ...saved, kind });
     setBusy('choose');
     setMessage(null);
     setStatus(null);
     try {
-      await store.set(next);
+      if (!(await saveKind(kind))) setMessage({ tone: 'info', text: kind === 'computer' ? COPY_LATER : COPY_OFF_LATER });
       refreshCoach();
     } catch (error) {
       setSaved(before);
@@ -172,12 +293,12 @@ function CoachSourceForm({ store }: { store: CoachSourceStore }) {
     setStatus(null);
     try {
       const next: CoachSource = { kind: 'computer', address: fields.where.display, code: fields.pairing.code };
-      await store.set(next);
+      const copied = await saveSource(next);
       setSaved(next);
       // The fields show what was saved, not what was typed.
       setAddress(next.address);
       setCode(fields.pairing.display);
-      setMessage({ tone: 'success', text: 'Saved on this device.' });
+      setMessage({ tone: 'success', text: copied ? 'Saved on this device.' : SAVED_COPY_LATER });
       refreshCoach();
       usage?.track('coach_setup');
     } catch (error) {
@@ -346,6 +467,7 @@ function CoachSourceForm({ store }: { store: CoachSourceStore }) {
               {status.text}
             </Alert>
           ) : null}
+          {backup ? <SourceInDecaidSwitch backup={backup} /> : null}
         </Box>
       ) : null}
       {message ? (
@@ -358,7 +480,7 @@ function CoachSourceForm({ store }: { store: CoachSourceStore }) {
 }
 
 export function CoachSourceSection() {
-  const { coachSource } = useServices();
+  const { coachSource, coachSourceBackup } = useServices();
   // Without the store (fakes, previews) there is nothing to choose: the coach runs on Anthropic.
-  return coachSource ? <CoachSourceForm store={coachSource} /> : null;
+  return coachSource ? <CoachSourceForm store={coachSource} backup={coachSourceBackup} /> : null;
 }

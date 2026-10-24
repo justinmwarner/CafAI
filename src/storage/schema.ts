@@ -139,6 +139,8 @@ export const SettingsSchema = z.object({
   drinkScreens: exact<DrinkScreensSettings>(z.unknown()).optional(),
   /** The screensaver (D225); absent from exports made before it. Re-validated by normalizeScreensaver, as care is. */
   screensaver: exact<ScreensaverSetting>(z.unknown()).optional(),
+  /** Where the coach runs, kept in Decaid too (D229); absent from exports made before it, and read as on (settings.ts). */
+  keepCoachSourceInDecaid: z.boolean().optional(),
 });
 
 export const BagSchema = z.object({

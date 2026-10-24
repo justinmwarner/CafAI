@@ -247,7 +247,10 @@ accept that code. Check the code it shows on your computer.".
   `computer`. For `computer`: the address (`192.168.1.20` or
   `192.168.1.20:8877`; `http://` and port 8877 are added) and the pairing code.
   Kept on this device in its own IndexedDB database `cafai-coach-source`:
-  never mirrored to Decaid, never exported, like the API key.
+  never mirrored to Decaid, never exported, like the API key. (Since
+  2026-10-23 a copy goes to a namespace of its own in Decaid's store, on by
+  default, because an iPad's Decaid update empties the skin's storage:
+  D229-D231.)
 - **Provider**: the Anthropic provider with `baseUrl` = the address, the code
   as its key, and its own wording (below). The engine's "has a key" check
   means "has what the selected source needs".

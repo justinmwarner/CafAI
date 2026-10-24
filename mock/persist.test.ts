@@ -113,6 +113,15 @@ describe('snapshotStore + restoreStore', () => {
     expect(fresh.kvGet('cafai-key', 'anthropic')).toBe('sk-ant-mock');
   });
 
+  it('restores where the coach runs, copied in Decaid (D229)', () => {
+    const state = usedStore();
+    const source = { kind: 'computer', address: '127.0.0.1:8877', code: 'ABCDEFGH' };
+    state.kvSet('cafai-coach-source', 'current', JSON.stringify(source));
+    const fresh = createMockDecaid();
+    restoreStore(fresh, roundTrip(snapshotStore(state)));
+    expect(fresh.kvGet('cafai-coach-source', 'current')).toEqual(source);
+  });
+
   it('keeps data time moving forward across the reload', () => {
     const state = usedStore();
     const snapshot = snapshotStore(state);
@@ -121,12 +130,12 @@ describe('snapshotStore + restoreStore', () => {
     expect(fresh.clock.now()).toBeGreaterThanOrEqual(snapshot.clockMs);
   });
 
-  it('saves only cafai and cafai-key, and the profiles CafAI created, never the request log', () => {
+  it('saves only cafai, cafai-key and cafai-coach-source, and the profiles CafAI created, never the request log', () => {
     const state = usedStore();
     state.kvSet('dye2.reaplugin', 'beans', JSON.stringify([{ name: 'not ours' }]));
     state.logRequest({ method: 'POST', path: '/api/v1/store/cafai/bags', query: '', body: [] });
     const snapshot = snapshotStore(state);
-    expect(Object.keys(snapshot.kv)).toEqual(['cafai', 'cafai-key']);
+    expect(Object.keys(snapshot.kv)).toEqual(['cafai', 'cafai-key', 'cafai-coach-source']);
     expect(snapshot.profiles.length).toBeGreaterThan(0);
     expect(snapshot.profiles.every((record) => !record.isDefault)).toBe(true);
     expect(JSON.stringify(snapshot)).not.toContain('"requests"');

@@ -1,6 +1,53 @@
 # Good morning: CafAI after your answers (2026-10-04)
 
-**Newest (2026-10-23):** usage sharing with Microsoft Clarity (D210-D216,
+**Newest (2026-10-23, evening):** where the coach runs survives a Decaid
+update (D229-D231, branch `fix/coach-source-in-decaid`, merged into `main`).
+
+- **Why.** You said the latest update cleared your coach settings. The
+  iPad's own logs, read from this PC, say it was Decaid's App Store update
+  to 0.9.0, not CafAI 0.1.3. iOS gave the app's data folder a new name, and
+  Decaid picks each skin's port from that folder's full path, so CafAI moved
+  from `localhost:26493` to `localhost:27749`: a new origin, with empty
+  browser storage. The mirror brought your bags and settings back, but where
+  the coach runs lived only on the device. Decaid's own update check
+  installed 0.1.3 34 s later.
+- **The fix.** CafAI keeps a copy of the choice, the address and the code
+  in a namespace of its own in Decaid's store, `cafai-coach-source`, while
+  the coach runs on your computer. A device with nothing saved puts them
+  back by itself: at start, or as soon as Decaid answers.
+- **The switch.** **Settings > Where the coach runs > Keep the address and
+  code in Decaid** is on by default (D230). It says what it costs: any device
+  on your network can read Decaid's store. Off, or back on the API key,
+  deletes the copy.
+- **On your iPad.** The copy starts with the next release, 0.1.4. Its
+  first start copies what you typed in tonight. Until then, another Decaid
+  update would clear it again.
+- **The real fix is Decaid's.** `docs/upstream/decaid-skin-origin-ios.md`
+  is a draft issue for Decent: derive the port from the path inside the app's
+  folder, and keep the old ports. Opening it is your call.
+- **The bridge.** It had been running for 12 days from the old worktree's
+  code, which has no web search for fun facts. It now runs from
+  `E:\source\cafai` and keeps running until stopped. The 05:00 task still
+  starts the worktree's copy, but only when none runs.
+- **Clarity.** The iPad's WebView log says "Data from this session is not
+  being collected by Microsoft Clarity because the provided project id is
+  not a Clarity Web project". Check the project's type in Clarity
+  (QUESTIONS 34): it may have been made as a mobile app's.
+- **Review.** One reviewer found three defects and five smaller ones, all
+  fixed with tests. The worst: choosing Claude on my computer before Decaid
+  answered, as on a new origin when Decaid is late after an update, saved a
+  blank source. That blocked the restore and later wrote blanks over the
+  copy in Decaid. A late restore could also read the switch before Decaid's
+  backup brought back "off", and copy the code anyway.
+- **Checks.** On the final code these pass: typecheck, lint, 5048 unit
+  tests, the build and the release zip. Playwright passed all 558 tests (8
+  skipped by design). Chromium 91 starts the app and opens Settings with no
+  error. The new end-to-end test empties CafAI's browser storage as the
+  iPad's update did, reloads and finds the coach on the computer. Then it
+  turns the copy off and finds it gone.
+- **Call to check.** QUESTIONS 35: the copy on by default.
+
+**Before that (2026-10-23):** usage sharing with Microsoft Clarity (D210-D216,
 branch `feat/usage-analytics`, merged into `main`).
 
 - **Why.** You asked how to see how many people use CafAI and the coach,

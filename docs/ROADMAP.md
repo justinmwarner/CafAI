@@ -137,7 +137,9 @@ a Windows PC, and CafAI's Settings chooses where the coach runs. It runs
 the `claude` command itself rather than the Agent SDK: Claude Code's legal
 page sends products built on the SDK to API keys, while signing in to the
 unmodified Claude Code with one's own plan is ordinary use; and the command
-needs nothing installed beside Claude Code (D130). Left:
+needs nothing installed beside Claude Code (D130). Since 2026-10-23 the
+address and the code are copied in Decaid, so a Decaid update keeps them
+(D229). Left:
 
 - **Re-find a computer whose address changed**, the way Crema sweeps the
   saved address's /24 (`crema/web/src/advice/discover.ts`). Today Settings
@@ -145,8 +147,6 @@ needs nothing installed beside Claude Code (D130). Left:
 - **One file to download** for people who install CafAI from a release zip
   rather than the repository (the bridge is plain Node modules today), and
   perhaps a packaged app with a tray icon instead of a console.
-- **The address in Decaid's backup**, so a reinstalled skin keeps it (the
-  code would stay on the device, like the API key).
 - **Installing the systemd units on Linux by itself** (setup prints the
   service and timer today; the bridge itself runs there), and waking a Mac
   for the schedule without the printed `sudo pmset` line.

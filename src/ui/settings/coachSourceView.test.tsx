@@ -52,7 +52,7 @@ describe('the coach without what its source needs', () => {
     renderWithServices(<CoachScreen />, servicesWith({ ...COMPUTER, code: '' }, { hasApiKey: false }));
     expect(await screen.findByRole('heading', { name: 'Add the code CafAI Bridge shows on your computer to start coaching' })).toBeInTheDocument();
     expect(
-      screen.getByText('The coach runs on your computer with your Claude plan, so it needs no API key. The code stays on this device.'),
+      screen.getByText('The coach runs on your computer with your Claude plan, so it needs no API key. The code is kept on this device, and in Decaid unless you turn that off in Settings.'),
     ).toBeInTheDocument();
     expect(screen.queryByText(/You pay Anthropic directly/)).not.toBeInTheDocument();
   });

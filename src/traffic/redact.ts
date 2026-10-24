@@ -16,11 +16,14 @@
  *     body, a URL, a status, a header;
  *   - the body of any call to the key's own namespace in Decaid's store
  *     (D99), whatever the key looks like (one with no room for a key stays:
- *     Decaid's null says it has no copy);
+ *     Decaid's null says it has no copy), and to the namespace of where the
+ *     coach runs (D229), whose copy holds CafAI Bridge's code before CafAI
+ *     has used it;
  *   - image data (the bag photo) and other long base64 runs, kept as their
  *     size: "[image, 412 KB]".
  */
 import { hideSecret } from '../llm/errors.ts';
+import { COACH_SOURCE_NAMESPACE } from '../storage/coachSourceBackup.ts';
 import { KEY_NAMESPACE } from '../storage/keyBackup.ts';
 import { containsKeyLike, redactKeyLike } from '../storage/redact.ts';
 
@@ -28,6 +31,8 @@ import { containsKeyLike, redactKeyLike } from '../storage/redact.ts';
 export const KEY_MARKER = '[key redacted]';
 /** What stands for any body of a call to the key's copy in Decaid (D99). */
 export const KEY_COPY_MARKER = "[not kept: the API key's copy in Decaid]";
+/** What stands for any body of a call to where the coach runs, copied in Decaid (D229). */
+export const COACH_SOURCE_COPY_MARKER = "[not kept: where the coach runs, copied in Decaid]";
 
 /**
  * Header names whose values are secrets, by a whole part of the name:
@@ -45,6 +50,8 @@ const MIN_SECRET_CHARS = 8;
 
 /** The key's copy in Decaid's store (src/storage/keyBackup.ts): its body is the key, so it is never kept. */
 const KEY_STORE_PATH = new RegExp(`/api/v1/store/${KEY_NAMESPACE}(?:[/?]|$|\\s)`);
+/** Where the coach runs, copied in Decaid's store (src/storage/coachSourceBackup.ts): its body holds the code. */
+const COACH_SOURCE_STORE_PATH = new RegExp(`/api/v1/store/${COACH_SOURCE_NAMESPACE}(?:[/?]|$|\\s)`);
 
 /** A JSON string that is nothing but base64, at least this long: image data, a signature, an opaque blob. */
 const BASE64_STRING = /"([A-Za-z0-9+/]{1000,}={0,2})"/g;
@@ -147,4 +154,14 @@ const KEYLESS_BODIES: ReadonlySet<string> = new Set(['', 'null', '{}', '[]', '""
 /** A body of a call to the key's copy in Decaid as the log keeps it: the marker, unless it cannot hold a key. */
 export function keyStoreBody(body: string): string {
   return KEYLESS_BODIES.has(body.trim()) ? body : KEY_COPY_MARKER;
+}
+
+/** Whether a call ("POST /api/v1/store/cafai-coach-source/current") is to where the coach runs, copied in Decaid. */
+export function isCoachSourceStoreCall(what: string): boolean {
+  return COACH_SOURCE_STORE_PATH.test(what);
+}
+
+/** A body of a call to that copy as the log keeps it: the marker, unless it cannot hold a code. */
+export function coachSourceStoreBody(body: string): string {
+  return KEYLESS_BODIES.has(body.trim()) ? body : COACH_SOURCE_COPY_MARKER;
 }

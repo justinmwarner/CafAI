@@ -765,6 +765,29 @@ rate and the fonts. Allow about an hour, most of it waiting. For steps 2 to
    the screen then goes off by Android's own timeout, as before CafAI had
    screensavers.
 
+## 21. Where the coach runs, across a Decaid update (D229-D231)
+
+On an iPad each update of Decaid moves the app's data folder, so CafAI comes
+up on a new origin with empty browser storage (D231). CafAI keeps where the
+coach runs in Decaid's store and puts it back. Do this at the next Decaid
+update, on whichever device runs CafAI with Claude on my computer; it costs
+nothing until then.
+
+1. **Before.** Settings > Where the coach runs shows Claude on my
+   computer, the address and the code, and **Keep the address and code in
+   Decaid** on. From the computer:
+   `curl http://<tablet>:8080/api/v1/store/cafai-coach-source/current`.
+   Expected: the choice, the address and the code. Note CafAI's port:
+   the last `Page started loading: http://localhost:<port>/` in
+   `curl "http://<tablet>:8080/api/v1/logs?kb=256"`.
+2. **The update.** Update Decaid (the App Store or Google Play), open it and
+   CafAI. Expected: the coach answers through the bridge without asking for
+   a key or a code; Settings shows the address and the code. Record the port
+   now (as in step 1): a new one means the update moved CafAI to a new
+   origin, which this step was for.
+3. **Off.** Turn **Keep the address and code in Decaid** off. Expected:
+   the curl in step 1 answers `null`. Turn it on again: the copy is back.
+
 ## Results
 
 | Section | Step | Expected | Observed | Pass? |
@@ -860,6 +883,9 @@ rate and the fonts. Allow about an hour, most of it waiting. For steps 2 to
 | 20 | 7 | After 11 minutes off: CafAI starts at the old brightness; the screensaver back a minute later | | |
 | 20 | 8 | Brew Rain's katakana show, not boxes | | |
 | 20 | 9 | DE1 switched off: the screensaver goes, the brightness back | | |
+| 21 | 1 | The copy in Decaid holds the choice, the address and the code; CafAI's port | | |
+| 21 | 2 | After a Decaid update: the coach on the computer, nothing asked; the port before and after | | |
+| 21 | 3 | Off: the copy gone; on: back | | |
 
 Send back this table, the saved shot and profile JSON files, the `[CafAI]`
 lines from `/api/v1/webview/logs`, the output of `npm run test:decaid`, and,
