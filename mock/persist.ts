@@ -6,8 +6,9 @@
  *
  * With it, the mock keeps what a real Decaid keeps on disk: the `cafai`
  * key-value namespace (CafAI's backup), the `cafai-key` one (D99's
- * optional copy of the API key) and the `cafai-coach-source` one (D229's
- * copy of where the coach runs), the shot records, the steam records
+ * optional copy of the API key), the `cafai-coach-source` one (D229's
+ * copy of where the coach runs) and the `cafai-spend` one (D238's
+ * coach's usage, month by month), the shot records, the steam records
  * (without their measurements, which nothing reads; D191), the workflow
  * (profile and context), the profiles CafAI created, and the bean library (D4/D10):
  * the two seeded beans and batches, and any CafAI added. Live state starts
@@ -56,10 +57,10 @@ export const MOCK_PERSIST_PARAM = 'mockPersist';
 export const MOCK_STORE_PREFIX = 'cafai-mock:';
 export const MOCK_STORE_KEY = `${MOCK_STORE_PREFIX}store`;
 /**
- * CafAI's backup namespace (D16), its optional copy of the API key (D99, D10) and its copy of where the coach
- * runs (D229); nothing else in the key-value store is CafAI's to keep.
+ * CafAI's backup namespace (D16), its optional copy of the API key (D99, D10), its copy of where the coach
+ * runs (D229) and the coach's usage month by month (D238); nothing else in the key-value store is CafAI's to keep.
  */
-export const PERSISTED_KV_NAMESPACES: readonly string[] = ['cafai', 'cafai-key', 'cafai-coach-source'];
+export const PERSISTED_KV_NAMESPACES: readonly string[] = ['cafai', 'cafai-key', 'cafai-coach-source', 'cafai-spend'];
 /** UTF-16 code units a saved snapshot may take: well under Chromium's ~5.2 million per origin. */
 export const MAX_SNAPSHOT_CHARS = 4 * 1024 * 1024;
 
