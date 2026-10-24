@@ -63,7 +63,7 @@ describe('the coach without what its source needs', () => {
   });
 
   it("words the engine's no-key banner for the bridge on the computer, and leaves other errors alone", async () => {
-    const engineSaid = 'Add your Anthropic API key in Settings to start coaching.';
+    const engineSaid = 'Add your Anthropic API key in Settings > Coach to start coaching.';
     const services = servicesWith({ ...COMPUTER, code: '' }, { hasApiKey: false });
     services.coach.setState({ error: engineSaid });
     renderWithServices(<CoachScreen />, services);

@@ -1,6 +1,6 @@
 /**
- * The stepper of Settings > Steam, hot water and flush and a drink's set of
- * them (D124), shared with each drink's view (D147). How they read and write
+ * The stepper of Settings > Drinks and a drink's set of
+ * them (D124, D235), shared with each drink's view (D147). How they read and write
  * is useDrinkPresets.ts; the ranges and steps are drinkSettings.ts.
  *
  * A stepper is one outlined field: Less, the value with its unit, More. The
@@ -56,7 +56,7 @@ export interface Drink {
   fields: readonly DrinkFieldSpec[];
 }
 
-/** The drinks in the order of Settings' title (Steam, hot water and flush), each with the machine row's own icon (MachineRow.tsx). */
+/** The drinks in the order of Settings > Drinks' cards (Steam, Hot water, Flush), each with the machine row's own icon (MachineRow.tsx). */
 export function drinksFor(model: string | null): readonly Drink[] {
   return [
     { key: 'steamSettings', name: 'Steam', icon: <AirRounded fontSize="small" />, fields: steamFields(model) },

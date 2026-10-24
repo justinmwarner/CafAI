@@ -48,7 +48,7 @@ function useSourceView(): SourceView | null {
 
 /** What the engine says when no key is there (src/app/engine/engine.ts runModel), worded for an API key. */
 const ENGINE_NEEDS_KEY = 'Add your Anthropic API key';
-export const BRIDGE_NEEDS_CODE = 'Add the code CafAI Bridge shows on your computer in Settings to start coaching.';
+export const BRIDGE_NEEDS_CODE = 'Add the code CafAI Bridge shows on your computer in Settings > Coach to start coaching.';
 
 /**
  * The coach's error as the banner shows it: while the coach runs on the

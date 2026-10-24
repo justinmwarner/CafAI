@@ -2,7 +2,7 @@
  * The drinks' screens (D217, D221, D222) as live state, as the
  * temperature unit is (temperatureUnit.ts): each drink's scene and whether
  * its view goes back by itself, read by the drink's view and changed in
- * Settings > Drink screens, a change showing at once and saved with the
+ * Settings > Drinks (each drink's On screen, D235), a change showing at once and saved with the
  * other settings, so it is mirrored to Decaid and exported like them.
  *
  * The scene stays the id that was chosen, or null for none: which ids a

@@ -72,10 +72,10 @@ describe('describeManualChange (Crema leadChange, one variable)', () => {
 
   it('turns manual changes into instructions for the hands', () => {
     expect(describeManualSteps(grind('finer', 1, null))).toEqual([
-      "Turn the grinder 1 step finer before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings.",
+      "Turn the grinder 1 step finer before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings > Grinder.",
     ]);
     expect(describeManualSteps(grind('coarser', null, null))).toEqual([
-      "Turn the grinder a little coarser before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings.",
+      "Turn the grinder a little coarser before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings > Grinder.",
     ]);
     expect(describeManualSteps(grind('coarser', 2, '16'))).toEqual([
       "Set the grinder to 16 (2 steps coarser) before the next shot. That is the coach's estimate: CafAI doesn't know your grinder's step size, so note where the dial really lands in Settings.",
@@ -108,7 +108,7 @@ describe("grind text with Decaid's grinder library (D62)", () => {
 
   it("names Decaid's step when CafAI could not work out the new setting", () => {
     expect(describeManualSteps(grind('finer', 1, null), { grinder: niche })).toEqual([
-      'Turn the grinder 1 step finer before the next shot (Decaid lists 0.5 steps for your Niche Zero), then note the new setting in Settings.',
+      'Turn the grinder 1 step finer before the next shot (Decaid lists 0.5 steps for your Niche Zero), then note the new setting in Settings > Grinder.',
     ]);
   });
 
@@ -121,7 +121,7 @@ describe("grind text with Decaid's grinder library (D62)", () => {
       'Set the grinder to 13 (1 step finer) before the next shot.',
     ]);
     expect(describeManualSteps(grind('finer', 2, null), { grinder: { ...niche, smallStep: null } })).toEqual([
-      "Turn the grinder 2 steps finer before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings.",
+      "Turn the grinder 2 steps finer before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings > Grinder.",
     ]);
   });
 
@@ -144,7 +144,7 @@ describe("grind text with Decaid's grinder library (D62)", () => {
       'Set the grinder to 16 before the next shot (Decaid lists 0.5 steps for your Niche Zero).',
     ]);
     expect(describeManualSteps(grind('coarser', 1, null), { grinder: { ...ditting, finerIsHigher: true } })).toEqual([
-      'Turn the grinder 1 step coarser before the next shot (Decaid lists 3 settings for your Ditting 807), then note the new setting in Settings.',
+      'Turn the grinder 1 step coarser before the next shot (Decaid lists 3 settings for your Ditting 807), then note the new setting in Settings > Grinder.',
     ]);
   });
 });

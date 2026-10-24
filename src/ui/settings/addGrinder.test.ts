@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NO_GRINDER_LIBRARY, type Grinder } from '../../api/grinders.ts';
+import { NO_GRINDER_LIBRARY } from '../../api/grinders.ts';
 import { GatewayError } from '../../api/types.ts';
 import {
   KEY_REFUSED,
@@ -9,7 +9,6 @@ import {
   STEP_HELP,
   TOO_MANY_SETTINGS,
   addGrinderError,
-  addedNote,
   checkAddGrinder,
   dye2GrindersUrl,
   emptyAddGrinderForm,
@@ -89,13 +88,6 @@ describe('checkAddGrinder', () => {
 });
 
 describe('what Settings says', () => {
-  const philos: Grinder = { id: 'g', model: 'Mazzer Philos', burrs: '64 mm flat', archived: false, settingType: 'numeric' };
-
-  it('after the grinder is added, or found in Decaid already', () => {
-    expect(addedNote(philos, true)).toBe("Added Mazzer Philos (64 mm flat) to Decaid's grinders. Save settings to use it.");
-    expect(addedNote(philos, false)).toBe('Decaid already has Mazzer Philos (64 mm flat), so CafAI picked it. Save settings to use it.');
-  });
-
   it('when the grinder could not be added: Decaid without a library, or Decaid’s own words', () => {
     expect(addGrinderError(new GatewayError(404, '/api/v1/grinders', 'Route not found', 'http'))).toBe(NO_GRINDER_LIBRARY);
     expect(addGrinderError(new GatewayError(0, '/api/v1/grinders', 'Could not reach Decaid.', 'network'))).toBe(

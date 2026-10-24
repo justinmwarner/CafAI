@@ -3495,7 +3495,7 @@ describe('coach engine', () => {
       const card = allParts().find((p) => p.kind === 'diff');
       expect(card).toMatchObject({
         lines: ['Grind 1 step finer (now 15)'],
-        manualSteps: ["Turn the grinder 1 step finer before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings."],
+        manualSteps: ["Turn the grinder 1 step finer before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings > Grinder."],
       });
       expect(JSON.stringify(card)).not.toContain('Decaid lists');
     });
@@ -5307,7 +5307,7 @@ describe('coach engine', () => {
       await engine.newBag();
       await engine.readBagPhoto(PHOTO);
       expect(reader.asked).toEqual([]);
-      expect(notices().map((p) => p.text)).toContain('Add your API key in Settings first.');
+      expect(notices().map((p) => p.text)).toContain('Add your API key in Settings > Coach first.');
       expect(beanCard()!.choice).toBeNull();
       expect(confirmCard()).toBeUndefined();
     });

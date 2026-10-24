@@ -433,7 +433,7 @@ const ALREADY_IN_BEANS = "Already in Decaid's beans.";
 const BAGS_ARE_BACK = "Your bags are back from Decaid's backup.";
 /** The bean card lists at most this many batches (6.1). */
 const MAX_BEAN_OPTIONS = 8;
-const NEEDS_KEY = 'Add your API key in Settings first.';
+const NEEDS_KEY = 'Add your API key in Settings > Coach first.';
 const READING_BAG = 'Reading the bag…';
 const NO_PHOTO_READER = 'CafAI cannot read photos here. Describe the bag in the chat.';
 const DYE2_UNREACHABLE = "Decaid can't be reached right now, so DYE2's setups could not be read.";
@@ -2005,7 +2005,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (!s) return;
     if (!(await storage.secrets.getApiKey())) {
       state = { ...state, hasApiKey: false };
-      setError('Add your Anthropic API key in Settings to start coaching.', runModel);
+      setError('Add your Anthropic API key in Settings > Coach to start coaching.', runModel);
       emit();
       return;
     }
@@ -3386,7 +3386,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     const trimmed = redactKeyLike(typed, '[API key removed]');
     addMessage('user', [{ kind: 'text', text: trimmed }]);
     if (trimmed !== typed) {
-      addMessage('system', [noticePart('info', 'That looked like an API key, so CafAI took it out. Keys go in Settings.')]);
+      addMessage('system', [noticePart('info', 'That looked like an API key, so CafAI took it out. Keys go in Settings > Coach.')]);
     }
     emit();
     // Typed while the taste question is open, it is the taste; typed under

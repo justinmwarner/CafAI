@@ -4,8 +4,8 @@
  * GET /api/v1/workflow, written one field at a time with
  * PUT /api/v1/workflow, never while the machine runs or no machine is
  * connected (D114: the machine is using them then; Decaid refuses them
- * without a DE1, as it puts them on the machine at once). Settings > Steam,
- * hot water and flush and each drink's view use it. A write carries only
+ * without a DE1, as it puts them on the machine at once). Settings > Drinks
+ * and each drink's view use it. A write carries only
  * the field that changed, never the profile.
  *
  * A blur, a stepper tap or an arrow key only ever writes a value the user
