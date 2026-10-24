@@ -44,7 +44,7 @@ import type {
   Settings,
   Storage,
 } from '../../storage/types.ts';
-import { DEFAULT_CARE } from '../../storage/settings.ts';
+import { DEFAULT_BUDGET, DEFAULT_CARE } from '../../storage/settings.ts';
 
 export interface Call {
   method: string;
@@ -371,9 +371,10 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
     },
     settings: {
       get: async () => settings,
-      // As the real one, the care block field by field (D187), and each drink's screen too (D222).
-      update: async ({ care: carePatch, drinkScreens: screensPatch, ...patch }) => {
+      // As the real one, the care and budget blocks field by field (D187, D240), and each drink's screen too (D222).
+      update: async ({ care: carePatch, drinkScreens: screensPatch, coachBudget: budgetPatch, ...patch }) => {
         const careEdits = Object.entries(carePatch ?? {}).filter(([, value]) => value !== undefined);
+        const budgetEdits = Object.entries(budgetPatch ?? {}).filter(([, value]) => value !== undefined);
         const screens = { ...settings.drinkScreens };
         for (const [kind, edit] of Object.entries(screensPatch ?? {}) as [keyof typeof screens, Record<string, unknown> | undefined][]) {
           const edits = Object.entries(edit ?? {}).filter(([, value]) => value !== undefined);
@@ -383,6 +384,7 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
           ...settings,
           ...patch,
           ...(carePatch ? { care: { ...(settings.care ?? DEFAULT_CARE), ...Object.fromEntries(careEdits) } } : {}),
+          ...(budgetPatch ? { coachBudget: { ...(settings.coachBudget ?? DEFAULT_BUDGET), ...Object.fromEntries(budgetEdits) } } : {}),
           ...(screensPatch ? { drinkScreens: screens } : {}),
         };
         return settings;

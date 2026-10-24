@@ -7,16 +7,26 @@ import { createRepositories } from './repositories.ts';
 import {
   applySettingsPatch,
   DEFAULT_APPEARANCE,
+  DEFAULT_BUDGET,
   DEFAULT_CARE,
+  DEFAULT_CLOCK,
+  DEFAULT_COACH_EFFORT,
   DEFAULT_SCREENSAVER,
   defaultSettings,
   fillBlankSettings,
+  finerIsHigher,
+  grinderDirectionKey,
   normalizeAppearance,
   normalizeCareSettings,
+  normalizeCoachBudget,
   normalizeDrinkScreens,
+  normalizeGrinderFinerHigher,
   normalizeScreensaver,
   normalizeSettings,
+  SAVER_DIM_TO,
+  SAVER_START_AFTER_MINUTES,
   sameAppearance,
+  withGrinderDirection,
 } from './settings.ts';
 import type { CafaiExport, Settings } from './types.ts';
 import { API_KEY, MODEL, makeSettings, uniqueDbName } from './testing/fixtures.ts';
@@ -856,5 +866,155 @@ describe('the choice to keep where the coach runs in Decaid (D229)', () => {
     const data = Object.fromEntries([...entries].map(([key, text]) => [key, JSON.parse(text)]));
     const restored = exportFromMirror(data, { appVersion: '1.2.3', defaultModel: MODEL, now: () => new Date(0) });
     expect(restored?.settings.keepCoachSourceInDecaid).toBe(false);
+  });
+});
+
+describe('the settings of Settings regrouped (D240, D241, D243, D245, D246, D247)', () => {
+  function setup() {
+    const handle = createDbHandle((onLost) => openCafaiDb(uniqueDbName(), onLost));
+    const db = () => handle.get();
+    const repos = createRepositories({ db, onWrite: () => undefined, defaultModel: MODEL });
+    const porter = createDataPorter({
+      db,
+      careDb: careDbOfItsOwn(),
+      secrets: { getApiKey: async () => null },
+      mirror: { schedulePush: () => undefined },
+      appVersion: '1.2.3',
+      defaultModel: MODEL,
+      now: () => new Date('2026-10-24T21:00:00.000Z'),
+    });
+    return { repos, porter };
+  }
+  const exportWith = (settings: Settings): CafaiExport => ({
+    format: 'cafai-export',
+    schemaVersion: 1,
+    exportedAt: '2026-10-24T20:00:00.000Z',
+    appVersion: '1.2.3',
+    settings,
+    bags: [],
+    versions: [],
+    iterations: [],
+    conversations: [],
+  });
+  const FIELDS = ['coachEffort', 'coachBudget', 'grinderFinerHigher', 'clock', 'showTds'] as const;
+  const chosen = (): Partial<Settings> => ({
+    coachEffort: 'high',
+    coachBudget: { monthlyUsd: 5, pauseAtBudget: true },
+    grinderFinerHigher: ['id:grinder-1', 'name:niche zero'],
+    clock: '12h',
+    showTds: false,
+  });
+
+  it('are absent until someone chooses on this device', () => {
+    const settings = normalizeSettings(makeSettings(), MODEL);
+    for (const field of FIELDS) {
+      expect(defaultSettings(MODEL), field).not.toHaveProperty(field);
+      expect(settings, field).not.toHaveProperty(field);
+    }
+    expect(DEFAULT_COACH_EFFORT).toBe('medium');
+    expect(DEFAULT_CLOCK).toBe('24h');
+    expect(DEFAULT_BUDGET).toEqual({ monthlyUsd: null, pauseAtBudget: false });
+  });
+
+  it('keep every valid choice', () => {
+    expect(normalizeSettings({ ...makeSettings(), ...chosen() }, MODEL)).toMatchObject(chosen());
+  });
+
+  it('read leniently: a value this build does not know reads as none chosen', () => {
+    const settings = normalizeSettings({ ...makeSettings(), coachEffort: 'max', clock: '13h', showTds: 'no' }, MODEL);
+    expect(settings).not.toHaveProperty('coachEffort');
+    expect(settings).not.toHaveProperty('clock');
+    expect(settings).not.toHaveProperty('showTds');
+  });
+
+  it('keep a budget in whole dollars from 1 to 1,000, or none, and the pause off unless it says on', () => {
+    expect(normalizeCoachBudget({ monthlyUsd: 4.6, pauseAtBudget: true })).toEqual({ monthlyUsd: 5, pauseAtBudget: true });
+    expect(normalizeCoachBudget({ monthlyUsd: 0 })).toEqual({ monthlyUsd: 1, pauseAtBudget: false });
+    expect(normalizeCoachBudget({ monthlyUsd: 5000, pauseAtBudget: 'yes' })).toEqual({ monthlyUsd: 1000, pauseAtBudget: false });
+    expect(normalizeCoachBudget({ monthlyUsd: null, pauseAtBudget: true })).toEqual({ monthlyUsd: null, pauseAtBudget: true });
+    expect(normalizeCoachBudget({ monthlyUsd: Number.NaN })).toEqual(DEFAULT_BUDGET);
+    expect(normalizeCoachBudget('5')).toEqual(DEFAULT_BUDGET);
+  });
+
+  it('change the budget field by field: setting the dollars never turns the pause off', () => {
+    const paused = applySettingsPatch(makeSettings(), { coachBudget: { pauseAtBudget: true } }, MODEL);
+    expect(paused.coachBudget).toEqual({ monthlyUsd: null, pauseAtBudget: true });
+    const set = applySettingsPatch(paused, { coachBudget: { monthlyUsd: 8 } }, MODEL);
+    expect(set.coachBudget).toEqual({ monthlyUsd: 8, pauseAtBudget: true });
+    expect(applySettingsPatch(set, { coachBudget: { monthlyUsd: null } }, MODEL).coachBudget).toEqual({ monthlyUsd: null, pauseAtBudget: true });
+    expect(applySettingsPatch(set, { activeBagId: 'bag_1' }, MODEL).coachBudget).toEqual(set.coachBudget);
+  });
+
+  it("keep the grinders' directions as a clean list: each key once, nothing key-shaped, an emptied list a choice too", () => {
+    expect(normalizeGrinderFinerHigher(['id:a', 'id:a', '', 7, 'x'.repeat(81), `name:${PASTED_KEY}`, 'name:ek43'])).toEqual(['id:a', 'name:ek43']);
+    expect(normalizeGrinderFinerHigher(Array.from({ length: 60 }, (_, i) => `id:g${i}`))).toHaveLength(50);
+    expect(normalizeGrinderFinerHigher('id:a')).toEqual([]);
+    expect(normalizeSettings({ ...makeSettings(), grinderFinerHigher: [] }, MODEL).grinderFinerHigher).toEqual([]);
+  });
+
+  it("name a grinder's direction by Decaid's id while linked, else by the typed name, and read it back", () => {
+    expect(grinderDirectionKey({ grinderId: 'g-9', grinderName: 'Niche Zero' })).toBe('id:g-9');
+    expect(grinderDirectionKey({ grinderId: null, grinderName: '  Niche   Zero ' })).toBe('name:niche zero');
+    expect(grinderDirectionKey({ grinderId: '  ', grinderName: '' })).toBeNull();
+    const linked = { grinderId: 'g-9', grinderName: 'Niche Zero', grinderFinerHigher: ['id:g-9'] };
+    expect(finerIsHigher(linked)).toBe(true);
+    expect(finerIsHigher({ ...linked, grinderId: 'g-10' })).toBe(false);
+    expect(finerIsHigher({ grinderId: null, grinderName: 'Niche Zero' })).toBe(false);
+    expect(withGrinderDirection(['id:a'], 'id:b', true)).toEqual(['id:a', 'id:b']);
+    expect(withGrinderDirection(['id:a', 'id:b'], 'id:b', true)).toEqual(['id:a', 'id:b']);
+    expect(withGrinderDirection(['id:a', 'id:b'], 'id:a', false)).toEqual(['id:b']);
+    expect(withGrinderDirection(undefined, 'id:a', false)).toEqual([]);
+  });
+
+  it("keep the screensaver's wait and brightness only at a value on offer (D247)", () => {
+    expect(normalizeScreensaver({ on: true, pick: 'daily', startAfterMinutes: 5, dimTo: 20 })).toEqual({
+      on: true,
+      pick: 'daily',
+      startAfterMinutes: 5,
+      dimTo: 20,
+    });
+    expect(normalizeScreensaver({ on: true, pick: 'daily', startAfterMinutes: 3, dimTo: 25 })).toEqual(DEFAULT_SCREENSAVER);
+    expect(normalizeScreensaver({ on: false, pick: 'nightstand', startAfterMinutes: 15, dimTo: 70 })).toEqual({
+      on: false,
+      pick: 'nightstand',
+      startAfterMinutes: 15,
+    });
+    expect(SAVER_START_AFTER_MINUTES).toEqual([1, 2, 5, 10, 15]);
+    expect(SAVER_DIM_TO).toEqual({ min: 10, max: 60, step: 10 });
+  });
+
+  it('merge as the unit: a choice made here wins whole; a device that never chose takes the incoming one', () => {
+    expect(fillBlankSettings(makeSettings(), makeSettings(chosen()), MODEL)).toMatchObject(chosen());
+    const mine: Partial<Settings> = {
+      coachEffort: 'low',
+      coachBudget: { monthlyUsd: null, pauseAtBudget: false },
+      grinderFinerHigher: [],
+      clock: '24h',
+      showTds: true,
+    };
+    expect(fillBlankSettings(makeSettings(mine), makeSettings(chosen()), MODEL)).toMatchObject(mine);
+    const none = fillBlankSettings(makeSettings(), makeSettings(), MODEL);
+    for (const field of FIELDS) expect(none, field).not.toHaveProperty(field);
+  });
+
+  it('are stored, exported and imported with the other settings', async () => {
+    const { repos, porter } = setup();
+    await repos.settings.update(chosen());
+    expect(await repos.settings.get()).toMatchObject(chosen());
+    const exported = await porter.exportAll();
+    expect(exported.settings).toMatchObject(chosen());
+    for (const mode of ['replace', 'merge'] as const) {
+      const other = setup();
+      await other.porter.importAll(exportWith(exported.settings), mode);
+      expect(await other.repos.settings.get(), mode).toMatchObject(chosen());
+    }
+  });
+
+  it('survive the Decaid mirror round trip, so a new origin gets them back', () => {
+    const settings = makeSettings(chosen());
+    const { entries } = buildMirrorEntries({ settings, bags: [], versions: [], iterations: [], conversations: [] }, null, MODEL);
+    const data = Object.fromEntries([...entries].map(([key, text]) => [key, JSON.parse(text)]));
+    const restored = exportFromMirror(data, { appVersion: '1.2.3', defaultModel: MODEL, now: () => new Date(0) });
+    expect(restored?.settings).toMatchObject(chosen());
   });
 });
