@@ -4164,32 +4164,32 @@ glow (D226's one place for play allows them) rather than flat outlines.
 - **D-RAIN-1. Brew Rain is water brewing on its way from the shower screen
   into the cup.** Along the top, the underside of a group head's shower
   screen: a band of brushed steel with five staggered rows of holes, each
-  row further back smaller. A near column falls under each hole of the
-  front row, 32 px apart, and a far one under each hole of the next,
-  between them: smaller (12 to 13 px against 18 to 20), slower, sparser,
-  fainter and all symbols, for depth. The glyphs are coffee's, drawn as
-  paths (`rainGlyphs.ts`): a bean with its crease, a drop, a cup on its
-  saucer, cherries, a leaf, steam and a latte-art heart, five heads in
-  six near; the rest are the Latin letters and figures of the words and
-  numbers, in Figtree. A head is pale water near the top, crema gold
-  further down and amber by the cup, with a soft glow; its trail sinks from
-  gold and amber through espresso brown into the page. At the bottom, the
-  cup: crema over coffee, mottled, its surface lit and moving in two slow
-  waves, lit warm under the heads and drops coming down to it; a head that
-  reaches it lets a drop go, which lands with two rings spreading on the
-  crema and a few droplets thrown up. The cup fills while
-  it shows, from 12 % of the screen's height to 18 % over 30 minutes, at
-  most 2 px a minute, then back as slowly. The trail is a canvas of its
-  own, a pixel to a CSS pixel, copied (not blended) each frame onto the
-  screensaver's canvas, whose CSS background is the page; the heads, the
-  words, the cup and the screen are drawn over it at full scale from
-  sprites made once a size: 1.6 ms a frame on the build PC, against 2.3 ms
-  with a trail at full scale. Why: the owner found the first one "just
-  matrix, nothing coffee related". The falling code stays in its columns,
-  bright heads and fading trails; everything else says coffee at a glance.
-  Paths, not a font, end the wait on the device's Japanese font
-  (QUESTIONS 33). The rising cup keeps a bright band from sitting in one
-  place for the 30 minutes.
+  row further back smaller. A near column falls under each hole of the front
+  row, 32 px apart, and a far one under each hole of the next, between them:
+  smaller (12 to 13 px against 18 to 20), slower, sparser, fainter and all
+  symbols, for depth. The glyphs are coffee's, drawn as paths
+  (`rainGlyphs.ts`): a bean with its crease, a drop, a cup on its saucer,
+  cherries, a leaf, steam and a latte-art heart, five heads in six near; the
+  rest are the Latin letters and figures of the words and numbers, in
+  Figtree. A head is pale water near the top, crema gold further down and
+  amber by the cup, with a soft glow; its trail sinks from gold and amber
+  through espresso brown into the page. At the bottom, the cup: crema over
+  coffee, mottled, its surface lit and moving in two slow waves, lit warm
+  under the heads and drops coming down to it; a head that reaches it lets a
+  drop go, which lands with two rings spreading on the crema and a few
+  droplets thrown up. The cup fills while it shows, from 12 % of the
+  screen's height to 18 % over 30 minutes, at most 2 px a minute, then back
+  as slowly. The trail is a canvas of its own, a pixel to a CSS pixel, faded
+  every other frame by both frames' worth and copied (not blended) each
+  frame onto the screensaver's canvas, whose CSS background is the page; the
+  heads, the words, the cup and the screen are drawn over it at full scale
+  from sprites made once a size: about 1.2 ms a frame on the build PC
+  (Beanfield's 0.5), against 2.3 ms for a trail at full scale faded every
+  frame. Why: the owner found the first one "just matrix, nothing coffee
+  related". The falling code stays in its columns, bright heads and fading
+  trails; everything else says coffee at a glance. Paths, not a font, end
+  the wait on the device's Japanese font (QUESTIONS 33). The rising cup
+  keeps a bright band from sitting in one place for the 30 minutes.
 - **D-RAIN-2. A spelled word stays lit, then fades on its own.** Every 3 to
   6 s a near column spells, top to bottom, a coffee word in Latin capitals
   (ESPRESSO, CREMA, RISTRETTO, LUNGO, DOPPIO, BLOOM, CORTADO, MACCHIATO) six

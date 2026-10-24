@@ -51,6 +51,8 @@ const FAMILY = '"Figtree", system-ui, sans-serif';
 /** How much more transparent the trail's paint gets each frame, at 30 frames a second. */
 const FADE_PER_FRAME = 0.044;
 const FRAME_MS = 1000 / 30;
+/** The trail fades every other frame, by both frames' worth: half the work, and no eye sees a fade 15 times a second. */
+const FADE_EVERY_MS = 2 * FRAME_MS - 1;
 /** The still's trails have faded within the last few seconds before it, so only those are painted. */
 const STILL_PAINTED_MS = 2500;
 /** The colours down the screen come in this many steps, each with its glow drawn once. */
@@ -191,7 +193,7 @@ export const rain: CanvasSaver = {
     let trailScale = 1;
     /** The first frame after a size change starts from nothing painted, rather than fading what was. */
     let blank = true;
-    /** Time stepped since the last frame: the fade goes by it, so a slow frame fades as much as the time it covers. */
+    /** Time stepped since the trail last faded: the fade goes by it, so a slow frame fades as much as the time it covers. */
     let pendingMs = 0;
     let painted: (Painted | null)[] = [];
     /** Each layer's floor when the trail was last cleared below it. */
@@ -479,8 +481,10 @@ export const rain: CanvasSaver = {
       trailCtx.setTransform(1, 0, 0, 1, 0, 0);
       if (blank) {
         trailCtx.clearRect(0, 0, trail.width, trail.height);
-      } else {
+        pendingMs = 0;
+      } else if (pendingMs >= FADE_EVERY_MS) {
         const fade = 1 - Math.pow(1 - FADE_PER_FRAME, pendingMs / FRAME_MS);
+        pendingMs = 0;
         if (fade > 0.0005) {
           trailCtx.globalCompositeOperation = 'destination-out';
           trailCtx.globalAlpha = fade;
@@ -717,7 +721,6 @@ export const rain: CanvasSaver = {
       if (!model || !layout || width <= 0 || height <= 0 || steps.length === 0) return;
       drawTrail(model);
       blank = false;
-      pendingMs = 0;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       // A copy, not a blend, of only the rows the trail can be in: the fastest way to put it down, and it
       // clears the rest of last frame with it (the screen and the cup are drawn again over it).
