@@ -4263,7 +4263,7 @@ Nightstand, both still drawn in code and made for a screen dimmed to 30.
   shadow thrown forward on it and the contact under the saucer show it. The
   cup is 1.12 times round 1's (about 175 px across its rim at 962), the
   saucer's near edge 94 % down the screen. The render takes about 120 ms on
-  this PC in Chromium, cold, and 0.8 s with the CPU throttled sixfold (a
+  this PC in Chromium, cold, and 0.7 s with the CPU throttled sixfold (a
   stand-in for a slow tablet), once per start or resize; each frame then
   only places images (under 1 ms a frame, step and draw). The cup's near
   side is a second image laid over the steam, so steam low in the cup stays
@@ -4272,13 +4272,13 @@ Nightstand, both still drawn in code and made for a screen dimmed to 30.
   moved in whole device pixels so the render stays crisp; under reduced
   motion the still, painted again each minute, takes the drift's place a
   minute on each time (a jump of a pixel or so, not motion). Why: round 1's
-  outline read as a placeholder; a still
-  life lit from behind is how steam is seen at all, so the one light shows
-  the steam and models the cup; per pixel because porcelain's soft shading,
-  its rim and its glaze's highlight are what make a cup look real, and
-  gradients alone look drawn; once per size because it is far too slow for
-  a frame; and the drift because the white cup is the brightest thing on
-  the screen for half an hour.
+  outline read as a placeholder; a still life lit from behind is how steam
+  is seen at all, so the one light shows the steam and models the cup; per
+  pixel because porcelain's soft shading, its rim and its glaze's
+  highlight are what make a cup look real, and gradients alone look drawn;
+  once per size because it is far too slow for a frame; and the drift
+  because the white cup is the brightest thing on the screen for half an
+  hour.
 - **D-STEAM-2. The steam is backlit and has a body: a broad faint haze
   round finer filaments, bright where it crosses the light.** It leaves the
   coffee's surface (each particle is born on the coffee showing inside the
