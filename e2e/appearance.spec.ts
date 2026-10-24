@@ -3,19 +3,19 @@ import { TID } from '../src/ui/testIds.ts';
 import { goTo, isPhone, openApp } from './helpers.ts';
 
 /**
- * Settings > Appearance (D80, D82), in every layout: a mode and a tint
- * recolour the whole app at once, every screen, and stay after a reload
+ * Settings > Display > Appearance (D80, D82), in every layout: a mode and a
+ * tint recolour the whole app at once, every screen, and stay after a reload
  * (CafAI's own storage keeps the setting; nothing here needs the mock
  * Decaid's store). The custom hue slider works from the keyboard too.
  */
 
-/** Settings, the way each layout gets there: its own address on a tablet, the Settings tab on a phone. */
+/** Settings > Display, the way each layout gets there: its own address on a tablet, the Settings tab and Display's row on a phone. */
 async function openSettings(page: Page): Promise<void> {
   if (isPhone(page)) {
     await openApp(page);
-    await goTo(page, 'settings');
+    await goTo(page, 'settings', 'display');
   } else {
-    await openApp(page, '#/settings');
+    await openApp(page, '#/settings/display');
   }
   await expect(page.getByRole('region', { name: 'Appearance' })).toBeVisible();
 }
@@ -64,7 +64,7 @@ test('Light and Matcha recolour every screen at once, and stay after a reload', 
   await page.reload();
   await expect(page.getByTestId(TID.appReady)).toBeVisible();
   await expect.poll(() => background(page), { message: 'the look after a reload' }).toBe(lightMatcha);
-  await goTo(page, 'settings');
+  await goTo(page, 'settings', 'display');
   await expect(page.getByTestId(TID.appearanceMode('light'))).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByTestId(TID.tintSwatch('matcha'))).toHaveAttribute('aria-checked', 'true');
   expect(await background(page)).toBe(lightMatcha);
@@ -86,7 +86,7 @@ test('the custom hue slider, moved with the keyboard, checks Custom and is kept'
   await expect(custom).toHaveAttribute('aria-checked', 'true');
   await expect(page.getByTestId(TID.tintSwatch('crema'))).toHaveAttribute('aria-checked', 'false');
 
-  // The reload opens Settings again: the address keeps the route.
+  // The reload opens Settings > Display again: the address keeps the route.
   await page.reload();
   await expect(page.getByTestId(TID.appReady)).toBeVisible();
   await expect(custom).toHaveAttribute('aria-checked', 'true');

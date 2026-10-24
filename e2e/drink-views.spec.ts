@@ -61,7 +61,7 @@ test('Steam from the row takes the screen, Stop in its place; its settings wait 
 });
 
 test('hot water started on the machine takes the screen from Settings, counts its water, and Go back returns there', async ({ page }) => {
-  await openApp(page, '#/settings');
+  await openApp(page, '#/settings/drinks');
   await startOnMachine(page, 'hotWater');
   await expect(view(page)).toHaveAttribute('data-drink', 'hotWater');
   await expect(view(page).getByTestId(TID.drinkPhase)).toContainText('Done');
@@ -70,6 +70,7 @@ test('hot water started on the machine takes the screen from Settings, counts it
   expect(water).toBeLessThanOrEqual(55);
   await expect(view(page).getByTestId(TID.drinkDialOf)).toHaveText(/^in \d+\.\d s$/);
   await view(page).getByRole('button', { name: 'Go back to Settings' }).click();
+  await expect(page).toHaveURL(/#\/settings\/drinks$/);
   await expect(page.getByTestId(TID.drinkSettings)).toBeVisible();
 });
 
@@ -85,11 +86,11 @@ test('a flush counts its time toward the flush time and holds the result', async
 });
 
 test('no switch while the barista types', async ({ page }) => {
-  await openApp(page, '#/settings');
+  await openApp(page, '#/settings/coach');
   await page.getByTestId(TID.apiKeyInput).click();
   await startOnMachine(page, 'flush');
   await machineIdle(page);
-  expect(hash(page)).toBe('#/settings');
+  expect(hash(page)).toBe('#/settings/coach');
   await expect(view(page)).toHaveCount(0);
 });
 

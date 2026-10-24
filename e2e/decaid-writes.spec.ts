@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import type { ShotRecord } from '../src/api/types.ts';
 import type { CafaiMockWindow } from '../mock/browser.ts';
 import { TID } from '../src/ui/testIds.ts';
-import { fillField, openApp, pullShot, saveApiKey, sendChat } from './helpers.ts';
+import { fillField, openApp, openSettingsGroup, pullShot, saveApiKey, sendChat } from './helpers.ts';
 
 /**
  * CafAI's writes to Decaid: the taste answer and the verdict on the shot land
@@ -101,10 +101,11 @@ test('compares the next shot with the one before it, and its score moves from th
 test('sends a grind setting Decaid could not take once Decaid is back', async ({ page }) => {
   await openApp(page);
   await saveApiKey(page);
-  // A plain number, so the scripted coach names the new setting (ENGINE_PROTOCOL rule 2).
+  // A plain number, so the scripted coach names the new setting (ENGINE_PROTOCOL rule 2); typed, it saves on Enter (D234).
+  await openSettingsGroup(page, 'grinder');
   await fillField(page, TID.grinderSetting, '14');
-  await page.getByTestId(TID.settingsSave).click();
-  await expect(page.getByText('Settings saved.')).toBeVisible();
+  await page.getByTestId(TID.grinderSetting).press('Enter');
+  await expect(page.getByTestId(TID.settingsSaved('grinder'))).toHaveText('Saved.');
   await pullFirstShot(page);
 
   // A taste the scripted coach does not recognise: it proposes one step finer, to 13.

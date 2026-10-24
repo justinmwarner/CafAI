@@ -9,9 +9,11 @@ import {
   machineRow,
   openApp,
   openAppWithSwitches,
+  openSettingsGroup,
   pullShot,
   saveApiKey,
   sendChat,
+  settingsGroup,
   settledMirror,
   statsCard,
 } from './helpers.ts';
@@ -22,9 +24,10 @@ import {
  * CafAI never changes it by itself (5.1, D98); the API key's copy in Decaid
  * is the barista's choice (5.6, D99); the rating scale is asked, not assumed
  * (5.14, D101); About says which Decaid runs and what it sent that CafAI
- * did not expect (4.6, D96); and a Decaid that goes away is said to be out
- * of reach, with the commands that need it held until it is back (D206,
- * D207). Each is checked against what the mock Decaid received and holds.
+ * did not expect (4.6, D96), and Data and privacy when CafAI last backed up
+ * to it; and a Decaid that goes away is said to be out of reach, with the
+ * commands that need it held until it is back (D206, D207). Each is checked
+ * against what the mock Decaid received and holds.
  */
 
 /** The mock answers GET /api/v1/info as a 0.8.6 field build. */
@@ -85,7 +88,7 @@ test('gateway mode Full gets an alert, and Let Decaid stop shots hands stopping 
 });
 
 test('Keep my API key in Decaid copies the key to its own namespace while on, and deletes it when off', async ({ page }) => {
-  await openApp(page, '#/settings');
+  await openApp(page, '#/settings/coach');
   const keep = page.getByTestId(TID.keyInDecaid);
   // Nothing to keep before a key is saved.
   await expect(keep).toBeDisabled();
@@ -151,8 +154,8 @@ test('a Decaid on the 0-100 rating scale gets ten times the running score, after
   expect(probes.map((request) => request.body)).toEqual([{ annotations: { enjoyment: 11 } }]);
 });
 
-test('About names the Decaid that runs and the one CafAI was verified with, and when CafAI last backed up to it', async ({ page }) => {
-  await openApp(page, '#/settings');
+test('About names the Decaid that runs and the one CafAI was verified with, and Data and privacy when CafAI last backed up to it', async ({ page }) => {
+  await openApp(page, '#/settings/about');
   const about = page.getByTestId(TID.aboutDecaid);
   await expect(page.getByText(/^CafAI \d+\.\d+\.\d+/)).toBeVisible();
   // The mock's 0.8.6 is older than the Decaid CafAI was verified with, and About says so.
@@ -162,13 +165,14 @@ test('About names the Decaid that runs and the one CafAI was verified with, and 
   await expect(about.getByTestId(TID.driftReport)).toHaveCount(0);
   await expect(about.getByTestId(TID.copyDriftReport)).toHaveCount(0);
 
-  // A saved setting goes to the backup in Decaid's store, and About says when the next time it opens.
-  await page.getByTestId(TID.settingsSave).click();
-  await expect(page.getByText('Settings saved.')).toBeVisible();
+  // A setting saved as it is picked (D234) goes to the backup in Decaid's store, and Data and privacy says when the next time it opens.
+  await openSettingsGroup(page, 'coach');
+  await page.getByTestId(TID.modelSelect).selectOption('claude-fable-5-1');
+  await expect(page.getByTestId(TID.settingsSaved('model'))).toHaveText('Saved.');
   await settledMirror(page, '"meta"');
   await goTo(page, 'coach');
-  await goTo(page, 'settings');
-  await expect(about.getByTestId(TID.backupHealth)).toHaveText('Backed up to Decaid 0 min ago');
+  await goTo(page, 'settings', 'data');
+  await expect(settingsGroup(page, 'data').getByTestId(TID.backupHealth)).toHaveText('Backed up to Decaid 0 min ago');
 });
 
 test('a reading Decaid renamed is a dash on the stats card and an entry in About, with a report to copy', async ({ page, context }) => {
@@ -183,7 +187,7 @@ test('a reading Decaid renamed is a dash on the stats card and an entry in About
   await expect(group).toContainText('—');
   await expect(group).not.toContainText(/\d+\.\d\s*°C/);
 
-  await goTo(page, 'settings');
+  await goTo(page, 'settings', 'about');
   const about = page.getByTestId(TID.aboutDecaid);
   const entries = about.getByTestId(TID.driftReport).getByRole('listitem');
   await expect(entries.filter({ hasText: 'ws/v1/machine/snapshot: groupTemperature: missing' })).toHaveCount(1);

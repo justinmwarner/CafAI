@@ -4,11 +4,11 @@ import { TID } from '../src/ui/testIds.ts';
 import { isPhone, machineRow, openApp, recordRequests, type SeenRequest } from './helpers.ts';
 
 /**
- * Settings > Machine care and its cleaning guide (D152-D156), on the tablets
- * and the phones. Nothing here reaches Google: YouTube's hosts, its images'
- * and Google's answer with a stub page, and every request for a host other
- * than this machine is counted, so a thumbnail or a preload slipping in
- * before a tap fails the checks.
+ * Settings > Machine > Machine care and its cleaning guide (D152-D156), on
+ * the tablets and the phones. Nothing here reaches Google: YouTube's hosts,
+ * its images' and Google's answer with a stub page, and every request for a
+ * host other than this machine is counted, so a thumbnail or a preload
+ * slipping in before a tap fails the checks.
  */
 const STUB = '<!doctype html><title>stub player</title><p>stub</p>';
 const GOOGLE = /^https:\/\/([a-z0-9-]+\.)*(youtube|youtube-nocookie|ytimg|googlevideo|ggpht|google|gstatic|doubleclick)\.com\//;
@@ -41,10 +41,10 @@ function activity(page: Page): Promise<string | null> {
   return page.evaluate(() => (window as CafaiMockWindow).__CAFAI_MOCK__?.player.activity ?? null);
 }
 
-test('Settings > Machine care opens the guide on Daily, under Settings, and nothing leaves the machine', async ({ page }) => {
+test('Settings > Machine > Machine care opens the guide on Daily, under Settings, and nothing leaves the machine', async ({ page }) => {
   await stubGoogle(page);
   const seen = recordRequests(page);
-  await openApp(page, '#/settings');
+  await openApp(page, '#/settings/machine');
   const open = page.getByTestId(TID.careOpen);
   await open.scrollIntoViewIfNeeded();
   await open.click();
@@ -72,7 +72,7 @@ test('the routines switch in place, the address follows, and a reload keeps it',
 });
 
 test('Back from the guide leaves it, whichever routines were looked at', async ({ page }) => {
-  await openApp(page, '#/settings');
+  await openApp(page, '#/settings/machine');
   const open = page.getByTestId(TID.careOpen);
   await open.scrollIntoViewIfNeeded();
   await open.click();
@@ -82,7 +82,7 @@ test('Back from the guide leaves it, whichever routines were looked at', async (
   await page.getByTestId(TID.careSegment('monthly')).click();
   await expect(page).toHaveURL(/#\/care\/monthly$/);
   await page.goBack();
-  await expect(page).toHaveURL(/#\/settings$/);
+  await expect(page).toHaveURL(/#\/settings\/machine$/);
 });
 
 test('a moment plays the video in place at its time, and only YouTube is asked', async ({ page }) => {
@@ -175,9 +175,9 @@ test('inside Decaid on Windows the moments are links to YouTube, and nothing is 
   expect(leaving(seen)).toEqual([]);
 });
 
-test('the back arrow returns to Settings', async ({ page }) => {
+test('the back arrow returns to Settings > Machine', async ({ page }) => {
   await openApp(page, '#/care/weekly');
   await page.getByTestId(TID.careBack).click();
-  await expect(page).toHaveURL(/#\/settings$/);
+  await expect(page).toHaveURL(/#\/settings\/machine$/);
   await expect(page.getByTestId(TID.careSection)).toBeAttached();
 });

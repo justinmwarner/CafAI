@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import type { CafaiMockWindow } from '../mock/browser.ts';
 import { MOCK_GRINDER_IDS } from '../mock/decaid/grinders.ts';
 import { TID } from '../src/ui/testIds.ts';
-import { fillField, openApp, pullShot, saveApiKey, sendChat } from './helpers.ts';
+import { fillField, openApp, openSettingsGroup, pullShot, saveApiKey, sendChat } from './helpers.ts';
 
 /**
  * A grind move on the grinder linked from Decaid's grinder library (D62).
@@ -10,7 +10,8 @@ import { fillField, openApp, pullShot, saveApiKey, sendChat } from './helpers.ts
  * scripted coach's "one step finer" from 15 is 14.5 (ENGINE_PROTOCOL,
  * scripted rule 2). CafAI checks it on the grinder's grid, says where the
  * step came from, and on Confirm saves the setting and writes it to Decaid's
- * workflow context with the grinder's id.
+ * workflow context with the grinder's id. Settings > Grinder saves as it
+ * changes (D234): the pick at once, the typed setting on Enter.
  */
 const NICHE_LABEL = 'Niche Zero (63 mm conical)';
 
@@ -30,13 +31,14 @@ test("a grind move uses the linked grinder's steps and reaches Settings and Deca
   await openApp(page);
   await saveApiKey(page);
 
-  // Settings: link the Niche Zero from Decaid's library; its dial is on 15.
+  // Settings > Grinder: link the Niche Zero from Decaid's library; its dial is on 15.
+  await openSettingsGroup(page, 'grinder');
   const picker = page.getByLabel('Grinder from Decaid');
   await expect(picker).toBeEnabled();
   await picker.selectOption({ label: NICHE_LABEL });
   await fillField(page, TID.grinderSetting, '15');
-  await page.getByTestId(TID.settingsSave).click();
-  await expect(page.getByText('Settings saved.')).toBeVisible();
+  await page.getByTestId(TID.grinderSetting).press('Enter');
+  await expect(page.getByTestId(TID.settingsSaved('grinder'))).toHaveText('Saved.');
   await expect
     .poll(() => workflowGrinder(page))
     .toEqual({ grinderId: MOCK_GRINDER_IDS.nicheZero, grinderModel: 'Niche Zero', grinderSetting: '15' });
@@ -66,7 +68,7 @@ test("a grind move uses the linked grinder's steps and reaches Settings and Deca
     .poll(() => workflowGrinder(page))
     .toEqual({ grinderId: MOCK_GRINDER_IDS.nicheZero, grinderModel: 'Niche Zero', grinderSetting: '14.5' });
 
-  // Settings shows the new setting too.
-  await page.getByTestId(TID.navSettings).click();
+  // Settings > Grinder shows the new setting too.
+  await openSettingsGroup(page, 'grinder');
   await expect(page.getByTestId(TID.grinderSetting)).toHaveValue('14.5');
 });

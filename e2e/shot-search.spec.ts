@@ -184,7 +184,7 @@ test('Espresso then Stop at once is no shot: no card, no taste question, and the
 
 test('a cleaning profile run is no shot: no search, no warning, no banner, no card', async ({ page }) => {
   await loadFirstVersion(page);
-  // The weekly clean (Settings > Machine care): Decent's Forward Flush x5, loaded and run in streamline, behind
+  // The weekly clean (Settings > Machine > Machine care): Decent's Forward Flush x5, loaded and run in streamline, behind
   // CafAI's back. Decaid gives the run a shot id and keeps no record of it, and so does the mock (D191).
   await page.evaluate(() => {
     const state = (window as CafaiMockWindow).__CAFAI_MOCK__!.state;

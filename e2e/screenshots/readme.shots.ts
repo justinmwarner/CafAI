@@ -107,7 +107,7 @@ test('history: every version of the bag with its shots', async ({ page }) => {
 test('settings: a look of your own, Light in Matcha', async ({ page }) => {
   test.skip(isPhone(page), 'The README shows Settings on the tablet only.');
   await openDemo(page);
-  await goTo(page, 'settings');
+  await goTo(page, 'settings', 'display');
   await expect(page.getByRole('region', { name: 'Appearance' })).toBeVisible();
   await page.getByTestId(TID.appearanceMode('light')).click();
   await page.getByTestId(TID.tintSwatch('matcha')).click();
@@ -118,7 +118,8 @@ test('settings: a look of your own, Light in Matcha', async ({ page }) => {
 test('care: the cleaning guide, Weekly', async ({ page }) => {
   test.skip(isPhone(page), 'The README shows the cleaning guide on the tablet only.');
   await openDemo(page);
-  await goTo(page, 'settings');
+  // Settings > Machine > Machine care's Cleaning guide.
+  await goTo(page, 'settings', 'machine');
   const open = page.getByTestId(TID.careOpen);
   await open.scrollIntoViewIfNeeded();
   await open.click();
@@ -136,7 +137,8 @@ test('sleep and wake: the wake times on a phone', async ({ page }) => {
     state.addWakeSchedule({ time: '06:30', daysOfWeek: [1, 2, 3, 4, 5], enabled: true, keepAwakeFor: 60 });
     state.addWakeSchedule({ time: '08:00', daysOfWeek: [6, 7], enabled: true, keepAwakeFor: 120 });
   });
-  await goTo(page, 'settings');
+  // Settings > Machine, a page of its own on the phone.
+  await goTo(page, 'settings', 'machine');
   const section = page.getByTestId(TID.sleepWake);
   await section.scrollIntoViewIfNeeded();
   await expect(section.getByTestId(TID.nextWake)).toHaveText(/^Next wake: /);

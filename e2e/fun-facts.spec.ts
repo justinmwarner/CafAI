@@ -79,15 +79,14 @@ test('a kept recipe pulled again the same way gets a fun fact before the taste q
   expect(await inOrder(fact, page.getByTestId(TID.optionChip(BALANCED)).nth(1)), 'before its taste question').toBe(true);
   await keepRecipe(page, 2);
 
-  // Settings > Coach > Fun facts: Off, saved with the rest of the section.
-  await goTo(page, 'settings');
+  // Settings > Coach > Fun facts: Off, saved as it is picked (D234).
+  await goTo(page, 'settings', 'coach');
   const source = page.getByTestId(TID.funFacts);
   await expect(source).toHaveValue('coach');
   expect((await source.boundingBox())?.height ?? 0, 'the native select is a full touch target').toBeGreaterThanOrEqual(47.5);
   await source.selectOption('off');
   await expect(page.getByText('No fun facts.')).toBeVisible();
-  await page.getByTestId(TID.settingsSave).click();
-  await expect(page.getByText('Settings saved.')).toBeVisible();
+  await expect(page.getByTestId(TID.settingsSaved('model'))).toHaveText('Saved.');
 
   // The third shot runs like the second on the same kept recipe: no fact now, and the one told is still there.
   await goTo(page, 'coach');

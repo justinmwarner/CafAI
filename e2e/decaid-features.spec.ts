@@ -8,8 +8,8 @@ import { decaidRequests, openApp, pullShot, statsCard } from './helpers.ts';
  * Decaid's features in CafAI (spec section 6), in every layout: Connect for
  * a machine and a scale that dropped off (6.2, D111), the minutes until a
  * waking machine is ready (6.3, D112), Next step during a shot (6.7, D113),
- * and Settings' steam, hot water and flush (6.6, D114). Each is checked
- * against what the mock Decaid received and holds.
+ * and steam, hot water and flush in Settings > Drinks (6.6, D114). Each is
+ * checked against what the mock Decaid received and holds.
  *
  * mockSpeed 2 runs time-to-ready's countdown after a wake (about 32
  * mock-seconds) in about 16 s; mockSpeed 0.5 plays the scripted shot at half
@@ -126,7 +126,7 @@ test('Next step moves the shot on to its next step, at once and once per tap', a
 });
 
 test("a steam change in Settings reaches Decaid's workflow alone, held to what the DE1 can take", async ({ page }) => {
-  await openApp(page, '#/settings');
+  await openApp(page, '#/settings/drinks');
   const drinks = page.getByTestId(TID.drinkSettings);
   // Each setting's value is a spin button named for its drink (D124).
   const steamTime = drinks.getByRole('spinbutton', { name: 'Steam time' });

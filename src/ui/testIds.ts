@@ -119,7 +119,7 @@ export const TID = {
   appearanceMode: (mode: string) => `appearance-mode-${mode}`,
   tintSwatch: (id: string) => `tint-${id}`,
   tintHue: 'tint-hue',
-  /** Settings > Appearance > Temperatures (D172): 'celsius' or 'fahrenheit'. */
+  /** Settings > Display > Units > Temperatures (D172): 'celsius' or 'fahrenheit'. */
   temperatureUnit: (unit: string) => `temperature-unit-${unit}`,
   apiKeyInput: 'api-key-input',
   apiKeySave: 'api-key-save',
@@ -130,7 +130,6 @@ export const TID = {
   funFacts: 'fun-facts',
   grinderName: 'grinder-name',
   grinderSetting: 'grinder-setting',
-  settingsSave: 'settings-save',
   // Add a grinder to Decaid's library (D125), and DYE2's page to edit them
   addGrinder: 'add-grinder',
   addGrinderModel: 'add-grinder-model',
@@ -175,12 +174,12 @@ export const TID = {
   // Going back by itself (D221): Stay, and the seconds left on Go back
   drinkStay: 'drink-stay',
   drinkGoBackSeconds: 'drink-go-back-seconds',
-  // Settings > Drink screens (D222): each drink's scene and its going back by itself
+  // Settings > Drinks, each drink's On screen (D222, D235): its scene and its going back by itself; drinkSettings is the group, drinkScreens its three cards
   drinkScreens: 'drink-screens',
   drinkScene: (kind: string) => `drink-scene-${slug(kind)}`,
   drinkGoBackSwitch: (kind: string) => `drink-go-back-switch-${slug(kind)}`,
   drinkScreensError: 'drink-screens-error',
-  // Settings > Sleep and wake: Decaid's idle sleep and its wake times (D157-D160)
+  // Settings > Machine > Sleep and wake: Decaid's idle sleep and its wake times (D157-D160)
   sleepWake: 'sleep-wake',
   sleepWhenIdle: 'sleep-when-idle',
   nextWake: 'next-wake',
@@ -195,7 +194,7 @@ export const TID = {
   wakeDialogKeepAwake: 'wake-dialog-keep-awake',
   wakeDialogSave: 'wake-dialog-save',
   wakeDialogDelete: 'wake-dialog-delete',
-  // Settings > Screensaver, and the screensaver over the shell (D223-D227)
+  // Settings > Display > Screensaver, and the screensaver over the shell (D223-D227)
   saverSection: 'saver-section',
   saverOn: 'saver-on',
   saverPick: 'saver-pick',
@@ -209,7 +208,7 @@ export const TID = {
   saverCanvas: 'saver-canvas',
   nightstand: 'nightstand',
   nightstandTime: 'nightstand-time',
-  // Settings > Machine care and its cleaning guide (D152-D155)
+  // Settings > Machine > Machine care and its cleaning guide (D152-D155)
   careSection: 'care-section',
   careOpen: 'care-open',
   careScreen: 'care-screen',
@@ -230,7 +229,7 @@ export const TID = {
   careStepLine: (id: string) => `care-step-line-${slug(id)}`,
   careMarkDone: (id: string) => `care-mark-done-${slug(id)}`,
   careUndo: (id: string) => `care-undo-${slug(id)}`,
-  /** The descale's and the intake filter's link to Settings > Machine care. */
+  /** The descale's and the intake filter's link to Settings > Machine > Machine care. */
   careSetIn: (id: string) => `care-set-in-${slug(id)}`,
   careWater: 'care-water',
   careFilter: 'care-filter',
@@ -253,7 +252,7 @@ export const TID = {
   /** Its switch: keep the address and code in Decaid too (D229). */
   sourceInDecaid: 'source-in-decaid',
 
-  // Settings > Log and the log view (D139); Share, Email and Copy carry the same ids in both
+  // Settings > Data and privacy > Log and the log view (D139); Share, Email and Copy carry the same ids in both
   logSection: 'log-section',
   logSummary: 'log-summary',
   logOpen: 'log-open',
@@ -272,7 +271,7 @@ export const TID = {
   logShowAll: 'log-show-all',
   logMore: 'log-more',
 
-  // Usage sharing (D212): the card or the notice at the foot of the chat, and Settings > About's switch
+  // Usage sharing (D212): the card or the notice at the foot of the chat, and Settings > Data and privacy's switch
   usagePrompt: 'usage-prompt',
   usageYes: 'usage-yes',
   usageNo: 'usage-no',

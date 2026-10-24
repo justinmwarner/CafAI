@@ -3,12 +3,13 @@ import { TID } from '../src/ui/testIds.ts';
 import { goTo, openApp, saveApiKey, sendChat } from './helpers.ts';
 
 /**
- * Settings > Log (D139), end to end against the mock Decaid and the scripted
- * coach, which answer through the same code as the real ones: the log holds
- * Decaid's REST calls, its WebSocket frames and the coach's turns, opens an
- * entry to its raw body, never holds the key (saved, sent to the coach in
- * its header, and copied into Decaid's store), and goes out by Email's
- * mailto: link and by Share (stubbed: Chromium has no share sheet here).
+ * Settings > Data and privacy > Log (D139), end to end against the mock
+ * Decaid and the scripted coach, which answer through the same code as the
+ * real ones: the log holds Decaid's REST calls, its WebSocket frames and the
+ * coach's turns, opens an entry to its raw body, never holds the key (saved,
+ * sent to the coach in its header, and copied into Decaid's store), and goes
+ * out by Email's mailto: link and by Share (stubbed: Chromium has no share
+ * sheet here).
  */
 
 /** A made-up key, built at run time. */
@@ -89,8 +90,8 @@ test('Settings > Log holds what went to Decaid and the coach, without the key, a
   await sendChat(page, 'Kiambu AA, light roast, washed');
   await expect(page.locator('[data-testid^="template-card-"]').first()).toBeVisible();
 
-  // Settings > Log: the summary, and Email's link.
-  await goTo(page, 'settings');
+  // Settings > Data and privacy > Log: the summary, and Email's link.
+  await goTo(page, 'settings', 'data');
   const section = page.getByTestId(TID.logSection);
   await section.scrollIntoViewIfNeeded();
   await expect(section.getByTestId(TID.logSummary)).toHaveText(/^\d+ entries since \d\d:\d\d, [\d.]+ (B|KB|MB)$/);
@@ -169,7 +170,7 @@ test('Settings > Log holds what went to Decaid and the coach, without the key, a
   }
   expect(file.text).not.toContain(KEY);
 
-  // Copy puts the same on the clipboard, and says so; Close goes back to Settings.
+  // Copy puts the same on the clipboard, and says so; Close goes back to Data and privacy.
   await view.getByTestId(TID.logCopy).click();
   await expect(view.getByTestId(TID.logSaid)).toHaveText('Copied the whole log.');
   const copied = await page.evaluate(() => navigator.clipboard.readText());
@@ -182,7 +183,7 @@ test('Settings > Log holds what went to Decaid and the coach, without the key, a
 });
 
 test('Pause holds the view still while the log keeps recording', async ({ page }) => {
-  await openApp(page, '#/settings');
+  await openApp(page, '#/settings/data');
   await page.getByTestId(TID.logOpen).click();
   const view = page.getByTestId(TID.logView);
   await view.getByTestId(TID.logFilter('frames')).click();
@@ -207,7 +208,7 @@ test('Copy works where the page has no clipboard API (plain http on the network)
   });
   const clipboard = () => page.evaluate(() => (window as unknown as { __clipboard: Clipboard }).__clipboard.readText());
   const stale = () => page.evaluate(() => (window as unknown as { __clipboard: Clipboard }).__clipboard.writeText('stale'));
-  await openApp(page, '#/settings');
+  await openApp(page, '#/settings/data');
   const section = page.getByTestId(TID.logSection);
   await section.scrollIntoViewIfNeeded();
   await stale();
