@@ -3508,6 +3508,63 @@ describe('coach engine', () => {
       await throughTemplateCards();
       expect(intakeGrinder()).toMatchObject({ step: 1 });
     });
+
+    describe('which way is finer (D241)', () => {
+      it('tells the coach a linked grinder goes finer at higher numbers, and works a move out that way', async () => {
+        await storage.settings.update({ grinderFinerHigher: ['id:g-niche'] });
+        await startLinked('g-niche', NICHE, '15');
+        await throughShot();
+        expect(intakeGrinder()).toEqual({ ...nicheOn('15'), finer: 'higher' });
+        expect(shotEvents().map((e) => e.grinder)).toEqual([{ ...nicheOn('15'), finer: 'higher' }]);
+
+        scripts.push(() => [grindMove({ direction: 'finer', amount: 1, setting: null })]);
+        await engine.answerOptions('t-ask', [OTHER_OPTION], 'Muddy');
+        expect(lastProposalContext?.grinder).toEqual({ ...NICHE, finerIsHigher: true });
+        expect(allParts().find((p) => p.kind === 'diff')).toMatchObject({
+          lines: ['Grind 1 step finer: 15 -> 15.5'],
+          manualSteps: ['Set the grinder to 15.5 before the next shot (Decaid lists 0.5 steps for your Niche Zero).'],
+        });
+        scripts.push(() => [text('Make that change, then pull another shot.')]);
+        await engine.confirmChange('t-grind');
+        expect((await storage.settings.get()).grinderSetting).toBe('15.5');
+      });
+
+      it("reads a linked preset grinder's list from its finest end, for the coach and the move", async () => {
+        await storage.settings.update({ grinderFinerHigher: ['id:g-encore'] });
+        await startLinked('g-encore', ENCORE, '5');
+        await throughShot();
+        expect(intakeGrinder()).toMatchObject({ finer: 'higher', values: ['12', '11', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1'] });
+        scripts.push(() => [grindMove({ direction: 'finer', amount: 1, setting: null })]);
+        await engine.answerOptions('t-ask', [OTHER_OPTION], 'Muddy');
+        expect(allParts().find((p) => p.kind === 'diff')).toMatchObject({ lines: ['Grind 1 step finer: 5 -> 6'] });
+      });
+
+      it('tells the coach for a typed grinder too, by its name', async () => {
+        await storage.settings.update({ grinderName: 'Niche  Zero', grinderSetting: '15', grinderFinerHigher: ['name:niche zero'] });
+        await engine.refresh();
+        await throughShot();
+        expect(intakeGrinder()).toEqual({ name: 'Niche  Zero', setting: '15', finer: 'higher', settingType: null, step: null, values: null, linked: false });
+        // Another grinder's answer is not this one's.
+        await storage.settings.update({ grinderName: 'DF64' });
+        await engine.refresh();
+        await pullAnother('shot-2');
+        expect(shotEvents().at(-1)!.grinder).toMatchObject({ name: 'DF64', finer: 'lower' });
+      });
+
+      it('takes an answer changed in Settings at the next refresh, with nothing written to Decaid', async () => {
+        await startLinked('g-niche', NICHE, '15');
+        await throughShot();
+        expect(intakeGrinder()).toMatchObject({ finer: 'lower' });
+        const writes = callsOf('updateWorkflow').length;
+        await storage.settings.update({ grinderFinerHigher: ['id:g-niche'] });
+        await engine.refresh();
+        await grinderSettled();
+        // Which way is finer is CafAI's, not the workflow's: Decaid has no field for it.
+        expect(callsOf('updateWorkflow')).toHaveLength(writes);
+        await pullAnother('shot-2');
+        expect(shotEvents().at(-1)!.grinder).toEqual({ ...nicheOn('15'), finer: 'higher' });
+      });
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -3645,6 +3702,25 @@ describe('coach engine', () => {
         context: { grinderId: 'g-added-1', grinderModel: 'Comandante C40', grinderSetting: null, grinderBurrs: null },
       });
       expect(parsed(lastUserTurn(requests)[0])).toMatchObject({ added: true, grinder: { name: 'Comandante C40', setting: null } });
+    });
+
+    it('keeps which way is finer, said for the typed grinder, once Add links it, and the coach hears it (D241)', async () => {
+      await storage.settings.update({ grinderFinerHigher: ['name:mazzer philos'] });
+      await throughOffer();
+      scripts.push(() => [text('Added. Pull a shot.')]);
+      await engine.addGrinder('t-grinder');
+      // Kept under its name too, so typing it again finds the answer.
+      expect((await storage.settings.get()).grinderFinerHigher).toEqual(['name:mazzer philos', 'id:g-added-1']);
+      expect(parsed(lastUserTurn(requests)[0])).toMatchObject({ added: true, grinder: { name: 'Mazzer Philos', finer: 'higher', linked: true } });
+    });
+
+    it("never gives a typed grinder's answer to another grinder Add links", async () => {
+      await storage.settings.update({ grinderFinerHigher: ['name:mazzer philos'] });
+      await throughOffer({ model: 'Comandante C40', burrs: null, settingType: null, smallStep: null });
+      scripts.push(() => [text('Added.')]);
+      await engine.addGrinder('t-grinder');
+      expect((await storage.settings.get()).grinderFinerHigher).toEqual(['name:mazzer philos']);
+      expect(parsed(lastUserTurn(requests)[0])).toMatchObject({ grinder: { name: 'Comandante C40', finer: 'lower' } });
     });
 
     describe('offered beside another card (it comes alone)', () => {

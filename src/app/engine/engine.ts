@@ -107,6 +107,7 @@ import {
 } from '../../api/types.ts';
 import { isShotRunning as shotInProgress } from '../../api/workflow.ts';
 import { redactKeyLike } from '../../storage/redact.ts';
+import { finerIsHigher, grinderDirectionKey, withGrinderDirection } from '../../storage/settings.ts';
 import type { GrinderInfo, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
 import type { BagPhoto, ExtractedBag } from '../../llm/extractBag.ts';
 import type { ContentBlock, Effort, LlmMessage, PendingUiCall, RunnerTool, RunResult, ToolResultBlock, ToolValidation } from '../../llm/types.ts';
@@ -953,15 +954,21 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     );
   }
 
-  /** The linked grinder's dial, when Decaid's library described it; never another grinder's. */
+  /**
+   * The linked grinder's dial, when Decaid's library described it; never
+   * another grinder's. Which way is finer is the barista's, from the
+   * settings (D241): Decaid's library never says.
+   */
   function grinderInfo(): GrinderInfo | null {
     const id = settings.grinderId ?? null;
-    return id !== null && linkedGrinder?.id === id ? linkedGrinder.info : null;
+    const info = id !== null && linkedGrinder?.id === id ? linkedGrinder.info : null;
+    return info && finerIsHigher(settings) ? { ...info, finerIsHigher: true } : info;
   }
 
-  /** The grinder as the model hears it: as last saved, with its dial when Decaid knows it. */
+  /** The grinder as the model hears it: as last saved, which way is finer (D241, typed grinders too), with its dial when Decaid knows it. */
   function grinderForModel() {
-    return grinderPayload(settings.grinderName, settings.grinderSetting, grinderInfo(), (settings.grinderId ?? null) !== null);
+    const linked = (settings.grinderId ?? null) !== null;
+    return grinderPayload(settings.grinderName, settings.grinderSetting, grinderInfo(), linked, finerIsHigher(settings));
   }
 
   // -------------------------------------------------------------------------
@@ -3079,7 +3086,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
    * into Decaid's grinder library, or the one Decaid already has is taken
    * (never a second entry), and it is linked as Settings links one: its id,
    * its model as the name, the dial's setting kept only when it was this
-   * grinder's (another grinder's number means nothing here). The next shots carry it
+   * grinder's (another grinder's number means nothing here), and so is
+   * which way is finer when the barista said it for this grinder by name
+   * (D241). The next shots carry it
    * in Decaid's workflow (D54), and the coach hears its dial. A failure says
    * why on the card, which stays open to tap again; the coach waits.
    */
@@ -3116,10 +3125,14 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     const previousId = settings.grinderId ?? null;
     const previousName = settings.grinderName?.trim().toLowerCase() || null;
     const sameGrinder = previousId !== null ? previousId === linked.id : previousName === null || previousName === model.toLowerCase();
+    // Higher numbers finer, said for the typed grinder by its name, stays with it once linked by id (D241): nobody sees Finer is from here.
+    const linkedKey = grinderDirectionKey({ grinderId: linked.id, grinderName: model });
+    const keepFinerHigher = sameGrinder && previousId === null && linkedKey !== null && finerIsHigher(settings);
     settings = await storage.settings.update({
       grinderId: linked.id,
       grinderName: model || null,
       ...(sameGrinder ? {} : { grinderSetting: null }),
+      ...(keepFinerHigher ? { grinderFinerHigher: withGrinderDirection(settings.grinderFinerHigher, linkedKey, true) } : {}),
     });
     // Its dial as Decaid just answered it; a read still on its way is older.
     grinderReads += 1;
