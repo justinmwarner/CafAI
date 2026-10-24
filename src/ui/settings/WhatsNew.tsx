@@ -14,7 +14,7 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import Typography from '@mui/material/Typography';
-import NewReleasesRoundedIcon from '@mui/icons-material/NewReleasesRounded';
+import ArticleRoundedIcon from '@mui/icons-material/ArticleRounded';
 import { useServices } from '../../app/services.tsx';
 import { formatDate } from '../chat/format.ts';
 import { whatsNew, type NotesBlock, type Span } from './whatsNew.ts';
@@ -86,7 +86,8 @@ export function WhatsNew() {
     <>
       <Button
         variant="tonal"
-        startIcon={<NewReleasesRoundedIcon />}
+        // Release notes to read: a page, not Material's "new releases" seal, whose "!" reads as a warning in About.
+        startIcon={<ArticleRoundedIcon />}
         data-testid={WHATS_NEW_TID.whatsNew}
         onClick={() => setOpen(true)}
         sx={{ minHeight: 48 }}
