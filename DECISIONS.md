@@ -4206,3 +4206,30 @@ glow (D226's one place for play allows them) rather than flat outlines.
   Why: the still stands for the screensaver, and a word with the rain says
   it best; the moment is the seed's, so each day's still is the same each
   minute.
+- **D-RAIN-4. The Bouncing Portafilter's badge is a logo with a portafilter
+  in it.** Drawn in code (`portafilterLogo.ts`): a portafilter from the
+  side, as a logo mark, its group ring with two lugs, the basket, a double
+  spout with a drop under each nozzle and the handle out to the right with
+  its collar; under it "CafAI" in Figtree, extra bold and italic, as wide as
+  the logo; under that the flat 4:1 oval with ESPRESSO cut out of it in the
+  page's colour. 0.88 as high as it is wide, a fifth of the screen wide,
+  still drifting at 70 px a second and bouncing as D227 has it. All of it
+  in the roast's colour, each part lit from above (a satin gradient from a
+  lighter tint to the colour itself, never darker, so the 3:1 holds). Why:
+  the owner liked it but wanted it nicer, and its name promised a
+  portafilter the badge never showed; the DVD logo's layout stays (the
+  word over the oval), never its mark.
+- **D-RAIN-5. Its colour crosses over, it glows, and a corner throws light
+  as well as beans.** A wall's change of roast crosses over in 300 ms,
+  eased; one that comes mid-crossing goes on from where the colour had got
+  to, and a corner's two roasts cross by way of the one between. A soft
+  glow of its colour lies on the page around the logo: its shape blurred,
+  drawn once for each roast at each size. A corner sends a ring of warm
+  light out of the screen's corner, spreading over a little more than half
+  the screen's shorter side and gone in 0.9 s, with a flash where it
+  starts; its dozen beans are shaded sprites (`beanShape.ts`), flying out in
+  front of the logo, growing a little as they come at you, solid for half
+  their 1.2 s and then fading. Under 0.1 ms a frame on the build PC. Why: a
+  colour that switches at once flickers; the glow and the light give the
+  logo and its corner the "premium product's ambient screen" the owner's
+  ask was after, for next to nothing a frame.

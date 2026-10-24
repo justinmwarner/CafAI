@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRandom } from '../random.ts';
 import {
+  BADGE_ASPECT,
   BADGE_SPEED,
   badgeWidth,
   BURST_BEANS,
@@ -12,6 +13,11 @@ import {
   FIRST_CORNER_MS,
   type PortafilterModel,
   type PortafilterStart,
+  RING_MS,
+  ringAt,
+  ROAST_FADE_MS,
+  roastBetween,
+  shownTone,
 } from './portafilterModel.ts';
 import { ROASTS } from './roasts.ts';
 
@@ -35,11 +41,12 @@ function snapshot(made: PortafilterModel) {
 }
 
 describe('the badge', () => {
-  it('is about a fifth of the screen wide, and never more than half of it', () => {
+  it('is about a fifth of the screen wide, a portafilter over the lettering over the oval, and never more than half of it', () => {
     const made = model();
     expect(made.w).toBeCloseTo(962 * 0.2, 5);
-    expect(made.h / made.w).toBeGreaterThan(0.45);
-    expect(made.h / made.w).toBeLessThan(0.65);
+    expect(made.h / made.w).toBeCloseTo(BADGE_ASPECT, 9);
+    expect(BADGE_ASPECT).toBeGreaterThan(0.75);
+    expect(BADGE_ASPECT).toBeLessThan(1);
     expect(badgeWidth(100)).toBe(50);
     expect(badgeWidth(300)).toBe(120);
     expect(badgeWidth(2000)).toBe(400);
@@ -169,7 +176,7 @@ describe('the walls and the roasts', () => {
     expect(right.vx).toBe(-70);
     expect(right.x + right.w).toBeLessThan(962);
     expect(right.roast).toBe(1);
-    const bottom = model(1, { x: 100, y: 602 - 0.56 * 192.4 - 1, vx: 70, vy: 70, roast: 0 });
+    const bottom = model(1, { x: 100, y: 602 - BADGE_ASPECT * 192.4 - 1, vx: 70, vy: 70, roast: 0 });
     bottom.step(100);
     expect(bottom.vy).toBe(-70);
     expect(bottom.roast).toBe(1);
@@ -202,6 +209,80 @@ describe('the walls and the roasts', () => {
   });
 });
 
+describe('the colour crossing over', () => {
+  it('starts settled on the roast it was set down in', () => {
+    for (const seed of [1, 2, 3]) {
+      const made = model(seed);
+      expect(shownTone(made)).toBe(made.roast);
+      expect(roastBetween(shownTone(made))).toEqual({ from: made.roast, to: (made.roast + 1) % ROASTS.length, mix: 0 });
+    }
+  });
+
+  it('crosses to the next roast over 300 ms at a wall, easing in and out, never past it', () => {
+    const made = model(1, { x: 5, y: 300, vx: -70, vy: 70, roast: 2 });
+    made.step(100);
+    expect(made.roast).toBe(3);
+    expect(ROAST_FADE_MS).toBe(300);
+    const seen: number[] = [shownTone(made)];
+    for (let ms = 0; ms < 400; ms += 10) {
+      made.step(10);
+      seen.push(shownTone(made));
+    }
+    expect(seen[0]).toBeCloseTo(2, 9);
+    for (let i = 1; i < seen.length; i += 1) expect(seen[i]!).toBeGreaterThanOrEqual(seen[i - 1]!);
+    expect(seen[15]!).toBeCloseTo(2.5, 1);
+    expect(seen[30]).toBe(3);
+    expect(seen.at(-1)).toBe(3);
+    expect(roastBetween(seen[15]!).from).toBe(2);
+    expect(roastBetween(seen[15]!).to).toBe(3);
+  });
+
+  it('crosses two roasts at a corner, and from French on round to green', () => {
+    const corner = model(1, { x: 3, y: 3, vx: -70, vy: -70, roast: 5 });
+    corner.step(100);
+    expect(corner.roast).toBe(0);
+    stepFor(corner, ROAST_FADE_MS);
+    expect(roastBetween(shownTone(corner))).toEqual({ from: 0, to: 1, mix: 0 });
+    // Halfway across, it shows the roast it passes on the way (Vienna to green by way of French).
+    const halfway = model(1, { x: 3, y: 3, vx: -70, vy: -70, roast: 5 });
+    halfway.step(100);
+    halfway.step(ROAST_FADE_MS / 2 + 10);
+    expect(roastBetween(shownTone(halfway)).from).toBe(6);
+  });
+
+  it('goes on from where it had got to when a wall comes mid-crossing: no jump', () => {
+    const made = model(1, { x: 5, y: 300, vx: -70, vy: 70, roast: 1 });
+    made.step(100);
+    made.step(100);
+    const before = shownTone(made);
+    expect(before).toBeGreaterThan(1);
+    expect(before).toBeLessThan(2);
+    // Where the crossing would be 10 ms on, had nothing happened.
+    const goingOn = shownTone({ toneFrom: made.toneFrom, toneTo: made.toneTo, toneAge: made.toneAge + 10 });
+    // The next wall at once: the bottom.
+    made.y = 602 - made.h - 0.5;
+    made.step(10);
+    expect(made.roast).toBe(3);
+    expect(shownTone(made)).toBeCloseTo(goingOn, 9);
+    expect(made.toneTo).toBe(3);
+    stepFor(made, ROAST_FADE_MS);
+    expect(shownTone(made)).toBe(3);
+  });
+
+  it('walks every roast in its order along a long run, the colour shown never jumping', () => {
+    const made = model(4);
+    let last = shownTone(made);
+    for (let i = 0; i < 5 * 30 * 60; i += 1) {
+      made.step(FRAME_MS);
+      const tone = shownTone(made);
+      expect(tone - last).toBeGreaterThanOrEqual(0);
+      expect(tone - last).toBeLessThan(0.6);
+      last = tone;
+    }
+    expect(roastBetween(made.toneTo).from).toBe(made.roast);
+  });
+});
+
 describe('the corners', () => {
   it('counts a corner when both walls are met in the one step, moving the colour two roasts', () => {
     const made = model(1, { x: 3, y: 3, vx: -70, vy: -70, roast: 1 });
@@ -224,7 +305,7 @@ describe('the corners', () => {
       expect(bean.length).toBeGreaterThan(12);
       expect(bean.length).toBeLessThan(32);
     }
-    const bottomRight = model(1, { x: 962 * 0.8 - 1, y: 602 - 0.56 * 192.4 - 1, vx: 70, vy: 70, roast: 0 });
+    const bottomRight = model(1, { x: 962 * 0.8 - 1, y: 602 - BADGE_ASPECT * 192.4 - 1, vx: 70, vy: 70, roast: 0 });
     bottomRight.step(100);
     expect(bottomRight.corners).toBe(1);
     for (const bean of bottomRight.burst) {
@@ -238,6 +319,29 @@ describe('the corners', () => {
     expect(burstAlpha(topLeft.burst[0]!.age)).toBeCloseTo(0.5, 1);
     stepFor(topLeft, 700);
     expect(topLeft.burst).toEqual([]);
+  });
+
+  it('sends a ring of light out of the corner it found, spreading and gone within 0.9 s', () => {
+    const topLeft = model(1, { x: 3, y: 3, vx: -70, vy: -70, roast: 0 });
+    expect(ringAt(topLeft.cornerAge)).toEqual({ spread: 0, alpha: 0 });
+    topLeft.step(100);
+    expect([topLeft.cornerX, topLeft.cornerY]).toEqual([0, 0]);
+    const bottomRight = model(1, { x: 962 * 0.8 - 1, y: 602 - BADGE_ASPECT * 192.4 - 1, vx: 70, vy: 70, roast: 0 });
+    bottomRight.step(100);
+    expect([bottomRight.cornerX, bottomRight.cornerY]).toEqual([962, 602]);
+    expect(RING_MS).toBe(900);
+    let last = -1;
+    for (let age = 0; age < RING_MS; age += 30) {
+      const { spread, alpha } = ringAt(age);
+      expect(spread).toBeGreaterThanOrEqual(last);
+      expect(alpha).toBeGreaterThanOrEqual(0);
+      expect(alpha).toBeLessThanOrEqual(1);
+      last = spread;
+    }
+    expect(ringAt(120).alpha).toBeGreaterThan(0.6);
+    expect(ringAt(RING_MS - 10).alpha).toBeLessThan(0.01);
+    expect(ringAt(RING_MS)).toEqual({ spread: 0, alpha: 0 });
+    expect(ringAt(Infinity)).toEqual({ spread: 0, alpha: 0 });
   });
 
   it('fades a bean from 1 to 0 over 1.2 s', () => {
