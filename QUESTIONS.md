@@ -23,11 +23,12 @@ are in "Answered" at the end.
     user agent as a person is unknown. Releases carry no Clarity project
     until the repository variable `CLARITY_PROJECT_ID` is set, so until then
     none shares anything. What it needs, in order: a Clarity project of your
-    own (clarity.microsoft.com, a Microsoft account; any site URL will do)
-    with Strict masking set in its settings; a local build with its ID,
-    `VITE_CLARITY_PROJECT_ID=<id> npm run release:zip`; that zip in the
-    Decaid simulator on Windows and in Chrome on `localhost`, checking the
-    items of section 10 of
+    own (clarity.microsoft.com, a Microsoft account; any site URL will do),
+    made as a Website project (Clarity's web tag collects nothing for a
+    Mobile app one), with Strict masking set in its settings; a local build
+    with its ID, `VITE_CLARITY_PROJECT_ID=<id> npm run release:zip`; that
+    zip in the Decaid simulator on Windows and in Chrome on `localhost`,
+    checking the items of section 10 of
     `docs/superpowers/specs/2026-10-22-usage-analytics-design.md` (sessions
     and coach events in Clarity's live view, a replay that looks like CafAI,
     one heatmap per `?screen=`, a shot's CPU and upload with Clarity and
@@ -46,6 +47,13 @@ are in "Answered" at the end.
     dropped and sending moves to PostHog or a small counter of CafAI's own,
     in a new decision; if a shot costs too much, Clarity stops while a shot
     runs.
+    *So far (2026-10-24):* 0.1.3 carried Clarity, but Clarity collected
+    nothing from it. Its project had been made as a Mobile app one, and the
+    iPad's WebView log said "Data from this session is not being collected
+    by Microsoft Clarity because the provided project id is not a Clarity
+    Web project". `CLARITY_PROJECT_ID` now names a Website project, so 0.1.4
+    is the first release that can report, and the checks above are still
+    to do, on it.
 
 ## From the morning session (2026-10-04)
 

@@ -3787,7 +3787,9 @@ uses the coach.
 - **D216. A test run on the simulator and the owner's tablet comes
   before the first release that carries the ID.** It needs the owner's
   Clarity project (clarity.microsoft.com, a Microsoft account; any site URL
-  will do) with Strict masking set, and its ID in a local release build:
+  will do), made as a Website project, since Clarity's web tag collects
+  nothing for a Mobile app one (0.1.3's was one, found 2026-10-24), with
+  Strict masking set, and its ID in a local release build:
   `VITE_CLARITY_PROJECT_ID=<id> npm run release:zip`. In the Decaid
   simulator on Windows and in Chrome on `localhost`: sessions and the coach
   events reach Clarity's live view, with the "Decent" user agent not dropped

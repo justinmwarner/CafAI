@@ -6,6 +6,14 @@ workflow checks against it. Settings > About shows the version you run.
 
 ## Unreleased
 
+### Usage sharing
+
+- **Usage sharing reaches Clarity.** Clarity collected nothing from
+  0.1.3: CafAI is a web page, but 0.1.3's Clarity project had been made
+  for a mobile app, and Clarity's web code collects nothing for one.
+  Releases now name a website project. What is shared, and how to turn it
+  off, are unchanged.
+
 ### The coach
 
 - **Where the coach runs survives a Decaid update.** On an iPad, each
