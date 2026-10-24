@@ -4168,6 +4168,73 @@ with a switch to pause the coach, the Claude plan's use on the computer, and
 ten of eleven gaps (all but "reset a group"). The design is
 `docs/superpowers/specs/2026-10-24-settings-layout-design.md`.
 
+- **D232. Settings is two panes on a tablet, a list then a page on a
+  phone.** On a tablet (layout.ts: 800 px wide and 500 tall, or more) Settings'
+  own list of seven groups (280 px, 300 from a 1200 px window) sits beside the
+  chosen group's pane, each scrolling itself; a bare `#/settings` is replaced
+  by the group opened last in this page's life, else Coach (`replaceRoute`,
+  so Back is no trap). On a phone `#/settings` is the list and
+  `#/settings/<group>` the group's page, under a 57 px header with an
+  icon-only back arrow named "Back to Settings", as Care's. A row is a 64 px
+  link: an icon tile, the group's name and its status line, a dot when the
+  line says something needs the barista, the chosen one accent on
+  accent-wash; one tab stop, moved by the arrow keys, Home and End, wrapping
+  at the ends; a chevron on the phone. Settings follows the shell's held
+  layout (`useScreenMode()`), not the window, so a keyboard opening never
+  turns the panes into pages mid-typing. A pane has the group's name as an
+  h2 and a line under it, its cards' titles h3; a phone's page has the name
+  as its h1 and the cards' titles h2. Cards sit in two columns from 840 px of
+  the pane's own width (`useOwnLayout`: Chromium 91 has no container
+  queries), else one column of at most 760 px: Coach's source and key beside
+  the model and usage, Machine's sleep beside care, Display's appearance
+  beside the rest, Data's backup beside the log; Grinder and About keep one.
+  Why: every setting one tap from the list, the list saying how each group
+  stands, the tablet's right half used. It is Settings' own first column, not
+  the app-wide sidebar PRODUCT.md rules out, and it opens a group as History
+  opens a bag.
+- **D233. Seven groups, each at its own address.** `#/settings/coach`,
+  `/grinder`, `/drinks`, `/machine`, `/display`, `/data`, `/about`; a group
+  this build does not know is the list. Coach: Where the coach runs, the
+  Anthropic API key while it runs there (D140), Model and replies, Usage and
+  cost. Grinder: Your grinder. Drinks: Steam, Hot water, Flush. Machine:
+  Sleep and wake, Machine care. Display: Appearance, Units (the temperatures,
+  out of Appearance, and the clock), Shot cards, Screensaver. Data and
+  privacy: Backup in Decaid (the backup line, out of About, and what the copy
+  holds), Your data, Share usage (out of About), Log (from the end of the old
+  page). About: CafAI and Decaid. Links land on their group: the coach
+  screen's Open Settings on Coach, Care's back arrow and "Set it in Settings"
+  on Machine (the care fields brought into view, as before), a drink's Go
+  back on the group it left, the pause card on Coach. Words follow:
+  "Settings > Data and privacy" for usage sharing and the log, "Settings >
+  Coach" in the coach's error lines, and a pasted key's note ends "Keys go in
+  Settings > Coach.". Usage sharing names the screens `settings` and
+  `settings-<group>`. Settings asks Decaid's version as it opens, whichever
+  group shows, since the log's header reads it. Why: an address per group is
+  what lets every link, a reload and a drink's Go back land where they mean.
+- **D234. Everything applies as it changes; Save is gone.** The model and fun
+  facts save on change (fun facts only once chosen here, D198); a grinder
+  picked from Decaid's list and a preset grinder's setting save at once; the
+  typed name and setting save when their field is left and on Enter, and an
+  unchanged value saves nothing. Each save sends the whole card, so a later
+  change carries an earlier one that failed; only the newest says anything,
+  and a save already on its way is not sent twice; what is typed while a save
+  is out stays typed. The line under the card says "Saved." for 3 s, or
+  "Could not save the grinder: <why>. Try again.", and keeps its height. A
+  pick still brings the setting into view in the group's own scroll; a key
+  pasted into a field is still taken out and said (D37). Add a grinder then
+  says "Added X to Decaid's grinders, and picked it." or "Decaid already has
+  X, so CafAI picked it.", and the pick saves. Why: one way of saving for the
+  whole screen; the Coach card alone had a Save button.
+- **D235. Each drink in one card.** Steam, Hot water and Flush each hold
+  their machine settings (Decaid's, held while the machine runs or is not
+  connected) and then "On screen": the animation, Go back by itself and After
+  (CafAI's, never held). One line over the three says "Changes go to Decaid
+  at once. On screen is kept on this device.", or why the machine's fields
+  are held, at its height. Three across from 840 px of the pane's width,
+  stacked rows under it; a screen setting that failed to save says so in its
+  drink's card; every test id stays. Why: a barista finds a drink in one
+  place; the line and the "On screen" heading keep D222's difference (Decaid's
+  or CafAI's) in view.
 - **D237. The coach's tokens and cost are counted from what each reply
   already carries.** Every response streams its `usage` (input, output,
   cache reads and writes, web searches), which CafAI assembled and dropped.
@@ -4230,6 +4297,37 @@ ten of eleven gaps (all but "reset a group"). The design is
   (`cafai`): its copy is one device's snapshot, the last writer's, which
   would drop another device's spend. Token counts and dollars only, never
   text: nothing in it is a secret (D16 is about keys).
+- **D239. Usage and cost, in Settings > Coach.** On the API key the card
+  shows the month's estimated cost large, "estimated this month · 412 k
+  tokens · 63 replies", a slot for every day of the month with the days so far
+  as bars (today in ink, the rest in the accent, the tallest the scale, any
+  spend at least 2 px, scaled by tokens when no model of the month has a
+  price; each bar named with its day and cost), Today, Last month and All
+  time, What it went on (Replies to you, Replies after shots, Bag photos, Web
+  searches, each a cost and a meter of the month's share), the budget (D240)
+  and "Counted on every device that uses this Decaid, at Anthropic's prices
+  of 24 Oct 2026. Your bill is in Anthropic's Console." A cost under a cent
+  reads "< $0.01", so a light month never reads as free; tokens read "412 k",
+  "1.2 M". An empty month keeps the tiles and the budget and says "Nothing
+  yet this month."; a month spent only on the computer says "Nothing on your
+  API key yet this month."; a month that also used the computer adds "Also
+  230 k tokens on your computer (≈ $0.80 on the API)"; a model typed by hand
+  adds "Price not known for X, so its cost is left out.". While the coach
+  runs on the computer the card is "Usage": the plan pays, the plan's use
+  this 5 hours and this week as meters with when each resets (in the chosen
+  clock), the month's and today's tokens, and "≈ $1.84 on the API". The
+  plan's use comes from the bridge's `/v1/status` without a probe, read when
+  the card shows, every 60 s while the page is in view, and when the address
+  or code is saved; the status carries no time, so the card says "As Claude
+  Code reported them with the coach's last reply.", a window whose reset has
+  passed shows "—" until the next reply, a reached limit says so, and a
+  failure hides the block. The card reads Decaid's copy when it opens (D238),
+  keeps its view while a change of place is read, and is brought into view
+  by the pause card's Open Settings. Numbers keep their places (tabular
+  figures; no-break spaces keep a number and its unit together). Without a
+  spend service (a preview) it draws nothing. Why: the owner's ask, as they
+  chose it in the form; the accent on the bars and meters is the one place
+  the accent marks a measure rather than an action, the owner's choice.
 - **D240. A monthly budget warns, and can pause the coach.**
   `Settings.coachBudget` (`{ monthlyUsd, pauseAtBudget }`, whole dollars 1
   to 1,000, absent until set, patched field by field) counts only what costs
@@ -4255,6 +4353,21 @@ ten of eleven gaps (all but "reset a group"). The design is
   - The check runs before each reply; a reply already started finishes its
     tool loop (at most six requests), so a month can pass the budget by one
     reply's worth.
+  - **The controls**, in the usage card: Monthly budget, a stepper of whole
+    dollars whose empty field (placeholder "None") and a No budget button
+    mean none; from none, the raise starts at $1; a typed "0" is $1, "$12"
+    and "1,000" are read, other text puts the budget back. A meter of the
+    month's spend against it (success, warning from 80 %, error at 100 %),
+    its percent rounded down so the words never cross a step before the
+    colour does, or with no budget "No budget. Set one to be told in the
+    chat at 80 % and 100 % of it.". The switch "Pause the coach at the
+    budget" is held while there is no budget, keeping its value, and says
+    what it does, or while paused "Paused now: the coach starts again on 1
+    November, or as soon as you raise the budget or turn this off.". Each
+    change saves at once and refreshes the coach, which sends a reply that
+    waited; a failed save goes back to what is saved and says "Could not save
+    the budget: ..."; nothing claims there is no budget until the settings
+    are read.
 
   Why: the owner chose "warns as you near it, with a switch to also pause";
   a hard stop by surprise would cost a dial-in mid-bag, so pausing is the
@@ -4306,8 +4419,14 @@ ten of eleven gaps (all but "reset a group"). The design is
   D30) is the effort of each reply; the bag photo stays low. The bridge
   passes it to Claude Code (`--effort`, which 2.1.309 takes), so it applies
   on the computer too. A changed effort costs one fuller request: the prompt
-  cache, or on the bridge a new Claude Code session, starts again. Why: the
-  owner chose to offer it; effort is the cost lever within one model.
+  cache, or on the bridge a new Claude Code session, starts again. The row,
+  between the model and fun facts, is a three-way control in the Mode
+  control's style with a line on what the choice trades ("uses less of your
+  plan" on the computer, with "Claude Code on your computer follows it
+  too."); it is held, saying why, on a model that takes no effort (Haiku 4.5)
+  and on an id typed by hand, which the request builder sends no effort
+  either. Why: the owner chose to offer it; effort is the cost lever within
+  one model.
 - **D244. Export is in Data and privacy too.** History's export (the file,
   and the "Your CafAI data" dialog that offers the text to copy where a
   download does not work, inside Decaid) is one hook, `useExportData`, so
