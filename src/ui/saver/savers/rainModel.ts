@@ -47,7 +47,7 @@ export interface RainLayer {
   splash: number;
 }
 
-export const NEAR: RainLayer = { offset: 0.5, row: 24, sizes: [18, 19, 20], speed: [5, 11], gap: [10, 52], cell: 20, symbols: 0.75, words: true, splash: 1 };
+export const NEAR: RainLayer = { offset: 0.5, row: 24, sizes: [18, 19, 20], speed: [5, 11], gap: [14, 60], cell: 20, symbols: 0.85, words: true, splash: 1 };
 export const FAR: RainLayer = { offset: 0, row: 16, sizes: [12, 13], speed: [3.5, 7], gap: [34, 120], cell: 12, symbols: 1, words: false, splash: 0.55 };
 
 /** How long a trail lasts: its length in rows is the speed times this. */

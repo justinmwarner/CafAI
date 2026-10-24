@@ -215,7 +215,7 @@ describe('the columns', () => {
     });
   });
 
-  it('put a glyph from the set in each cell above the coffee, nothing below: near a symbol three times in four, far always', () => {
+  it('put a glyph from the set in each cell above the coffee, nothing below: near a symbol five times in six, far always', () => {
     const model = createRainModel(1, SCREEN);
     const events = run(model, 30_000);
     expect(events.length).toBeGreaterThan(1500);
@@ -228,8 +228,8 @@ describe('the columns', () => {
     for (const event of near) expect(GLYPHS).toContain(event.glyph);
     expect(new Set(near.map((event) => event.glyph)).size).toBe(GLYPHS.length);
     const symbols = near.filter((event) => isSymbol(event.glyph)).length / near.length;
-    expect(symbols).toBeGreaterThan(0.68);
-    expect(symbols).toBeLessThan(0.82);
+    expect(symbols).toBeGreaterThan(0.79);
+    expect(symbols).toBeLessThan(0.91);
     const far = random(FAR);
     expect(far.length).toBeGreaterThan(100);
     for (const event of far) expect(isSymbol(event.glyph)).toBe(true);

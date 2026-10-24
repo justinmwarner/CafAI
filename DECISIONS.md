@@ -4169,14 +4169,15 @@ glow (D226's one place for play allows them) rather than flat outlines.
   between them: smaller (12 to 13 px against 18 to 20), slower, sparser,
   fainter and all symbols, for depth. The glyphs are coffee's, drawn as
   paths (`rainGlyphs.ts`): a bean with its crease, a drop, a cup on its
-  saucer, cherries, a leaf, steam and a latte-art heart, three heads in
-  four near; the rest are the Latin letters and figures of the words and
+  saucer, cherries, a leaf, steam and a latte-art heart, five heads in
+  six near; the rest are the Latin letters and figures of the words and
   numbers, in Figtree. A head is pale water near the top, crema gold
   further down and amber by the cup, with a soft glow; its trail sinks from
   gold and amber through espresso brown into the page. At the bottom, the
   cup: crema over coffee, mottled, its surface lit and moving in two slow
-  waves; a head that reaches it lets a drop go, which lands with two rings
-  spreading on the crema and a few droplets thrown up. The cup fills while
+  waves, lit warm under the heads and drops coming down to it; a head that
+  reaches it lets a drop go, which lands with two rings spreading on the
+  crema and a few droplets thrown up. The cup fills while
   it shows, from 12 % of the screen's height to 18 % over 30 minutes, at
   most 2 px a minute, then back as slowly. The trail is a canvas of its
   own, a pixel to a CSS pixel, copied (not blended) each frame onto the
@@ -4201,8 +4202,9 @@ glow (D226's one place for play allows them) rather than flat outlines.
   it faded with its trail among random katakana.
 - **D-RAIN-3. Brew Rain's still is the moment a word has just been spelled,
   from 8 s on.** The first moment from 8 s on when a word's last letter
-  came 0.3 to 0.9 s before, so every letter is lit; 14 s at the latest. The
-  last 3 s before it are drawn frame by frame, so the trails are there.
+  came 0.3 to 0.9 s before, so every letter is lit; 14 s at the latest,
+  found first on a model of its own. The last 2.5 s before it are drawn
+  frame by frame, so the trails are there.
   Why: the still stands for the screensaver, and a word with the rain says
   it best; the moment is the seed's, so each day's still is the same each
   minute.

@@ -39,7 +39,6 @@ import {
   PITCH,
   rippleAt,
   rowY,
-  STILL_FROM_MS,
   surfaceAt,
   WAVE_REACH,
   type RainColumn,
@@ -53,7 +52,7 @@ const FAMILY = '"Figtree", system-ui, sans-serif';
 const FADE_PER_FRAME = 0.044;
 const FRAME_MS = 1000 / 30;
 /** The still's trails have faded within the last few seconds before it, so only those are painted. */
-const STILL_PAINTED_MS = 3000;
+const STILL_PAINTED_MS = 2500;
 /** The colours down the screen come in this many steps, each with its glow drawn once. */
 const STEPS = 16;
 /** A near head's glow reaches this far from its middle, px; a far one's is scaled to its size. */
@@ -65,6 +64,9 @@ const FAR_GLOW = 0.45;
 const CREMA_DEPTH = 20;
 /** The surface's line is drawn through a point every this many px. */
 const WAVE_STEP = 8;
+/** A head lights the crema under it from this many rows above it; the light lies in a patch this wide and tall, px. */
+const REFLECTION_ROWS = 5;
+const REFLECTION: readonly [number, number] = [76, 14];
 /** The holes' rows on the screen's underside, up from its front edge, px: the front row over the near columns, the next over the far ones. */
 const HOLE_ROWS = [
   { up: 10, size: 1, offset: NEAR.offset },
@@ -298,6 +300,14 @@ export const rain: CanvasSaver = {
       g.fillRect(0, found.band - 2.8, width, 0.8);
       g.fillStyle = css(STEEL_EDGE);
       g.fillRect(0, found.band - 2, width, 2);
+      // The light falls off toward its ends, as across a round screen.
+      const ends = g.createLinearGradient(0, 0, width, 0);
+      ends.addColorStop(0, 'rgba(0, 0, 0, 0.4)');
+      ends.addColorStop(0.28, 'rgba(0, 0, 0, 0)');
+      ends.addColorStop(0.72, 'rgba(0, 0, 0, 0)');
+      ends.addColorStop(1, 'rgba(0, 0, 0, 0.4)');
+      g.fillStyle = ends;
+      g.fillRect(0, 0, width, found.band);
       return band;
     };
 
@@ -551,6 +561,31 @@ export const rain: CanvasSaver = {
       ctx.stroke();
     };
 
+    /** The heads and drops close above the cup light the crema under them: a soft warm patch, brighter as they near it. */
+    const drawReflections = (found: RainModel) => {
+      const glow = steps[STEPS - 1]?.glow;
+      if (!glow) return;
+      const at = found.layout;
+      const light = (x: number, closeness: number, size: number) => {
+        if (closeness <= 0) return;
+        const w = REFLECTION[0] * size * scale;
+        const h = REFLECTION[1] * size * scale;
+        const y = (surfaceAt(at, x, found.time) + 2.5 * size) * scale;
+        ctx.globalAlpha = Math.min(1, closeness) * Math.min(1, closeness) * (size < 1 ? FAR_GLOW : 0.85);
+        ctx.drawImage(glow, x * scale - w / 2, y - h / 2, w, h);
+      };
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalCompositeOperation = 'lighter';
+      for (const column of found.columns) {
+        if (column.row < 0 || column.glyph === '') continue;
+        const above = found.floorOf(column.layer) - column.y;
+        if (above < REFLECTION_ROWS) light(column.x, 1 - above / REFLECTION_ROWS, column.layer === NEAR ? 1 : FAR.row / NEAR.row);
+      }
+      for (const drop of found.drops) light(drop.x, 1 - (surfaceAt(at, drop.x, found.time) - drop.y) / (REFLECTION_ROWS * NEAR.row), drop.size);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+    };
+
     /** The rings on the crema, the droplets of the splashes, and the drops on their way in. */
     const drawSplashes = (found: RainModel) => {
       ctx.setTransform(scale, 0, 0, scale, 0, 0);
@@ -697,6 +732,7 @@ export const rain: CanvasSaver = {
       drawLetters(model);
       drawHeads(model);
       drawCup(model);
+      drawReflections(model);
       drawSplashes(model);
       if (screen) {
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -740,19 +776,22 @@ export const rain: CanvasSaver = {
         if (layout) makeSprites(layout);
       },
       still() {
-        if (width <= 0 || height <= 0 || !model) return;
+        if (width <= 0 || height <= 0 || !layout) return;
+        // The still's moment, found on a model of its own (stepping one costs next to nothing).
+        const probe = createRainModel(env.seed, layout, env.numbers);
+        while (!isStillMoment(probe)) probe.step(FRAME_MS);
         start();
-        const found = model;
-        // The rain has fallen a while, its trails built up frame by frame: the first seconds only move
-        // the heads on (their trails would be gone), the last ones are painted, up to the still's moment.
-        while (found.time < STILL_FROM_MS - STILL_PAINTED_MS) {
+        const found = model!;
+        // The rain falls to it with its trails built up frame by frame: up to its last few seconds the
+        // heads only move on (their trails would be gone), and those are painted.
+        while (found.time < probe.time - STILL_PAINTED_MS - 1e-6) {
           found.step(FRAME_MS);
           found.takeEvents();
         }
-        do {
+        while (found.time < probe.time - 1e-6) {
           instance.step(FRAME_MS);
           draw();
-        } while (!isStillMoment(found));
+        }
       },
       dispose() {
         canvas.style.backgroundColor = hostBackground;
