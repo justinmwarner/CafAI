@@ -80,8 +80,8 @@ describe('extractBag (6.8)', () => {
     expect(bag).toMatchObject({ name: 'Kiambu AA', roastLevel: 'light', roastDate: '2026-09-30' });
     expect(requests).toHaveLength(1);
     const [request] = requests;
-    // Nothing to cache: the photo is sent once.
-    expect(request).toMatchObject({ model: 'claude-opus-5-5', system: '', tools: [], effort: 'low', cache: false });
+    // Nothing to cache: the photo is sent once. Counted as a bag photo, a reply of one call (D237).
+    expect(request).toMatchObject({ model: 'claude-opus-5-5', system: '', tools: [], effort: 'low', cache: false, purpose: 'photo', call: 0 });
     expect(request!.messages).toEqual([
       {
         role: 'user',

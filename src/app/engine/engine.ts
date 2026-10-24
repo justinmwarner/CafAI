@@ -123,6 +123,8 @@ import type {
   Storage,
 } from '../../storage/types.ts';
 import { NO_USAGE, type UsageTracker } from '../../usage/types.ts';
+import type { SpendKind } from '../../spend/types.ts';
+import { DEFAULT_COACH_EFFORT } from '../../storage/settings.ts';
 import type {
   BeanChoice,
   BeanPickerOption,
@@ -220,7 +222,6 @@ export interface EngineDeps {
   llm: LlmPort;
   clock: Clock;
   newId(prefix: string): string;
-  effort?: Effort;
   maxTokens?: number;
   /** How long to keep asking Decaid for a just-finished shot record. */
   shotFetch?: { attempts: number; delayMs: number };
@@ -589,7 +590,6 @@ function describe(error: unknown): string {
 
 export function createCoachEngine(deps: EngineDeps): CoachEngine {
   const { storage, telemetry, api, coach, llm, clock } = deps;
-  const effort: Effort = deps.effort ?? 'medium';
   const shotFetch = deps.shotFetch ?? { attempts: 6, delayMs: 500 };
   const checkTimers = deps.checkTimers ?? browserTimers;
   const visibility = deps.visibility ?? ALWAYS_VISIBLE;
@@ -1885,7 +1885,12 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     );
   }
 
-  async function runModel(): Promise<void> {
+  /**
+   * `purpose`: what the coach's usage counts the reply as (D237): the reply
+   * after a credited shot, or a reply to the barista, as a Retry and a reply
+   * sent once a key is saved always are.
+   */
+  async function runModel(purpose: SpendKind = 'reply'): Promise<void> {
     const s = session;
     if (!s) return;
     if (!(await storage.secrets.getApiKey())) {
@@ -1899,6 +1904,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     emit();
     let streamingId: string | null = null;
     factShown = false;
+    // How hard the coach thinks, as Settings has it now (D243): medium until chosen (D30). A model without effort is sent none.
+    const effort: Effort = settings.coachEffort ?? DEFAULT_COACH_EFFORT;
     // The prompt, the tools and the web search follow the fun facts mode of the moment (D198, D203).
     const run = (source: FunFactsSource) =>
       llm.run({
@@ -1906,6 +1913,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         model: settings.model,
         system: coach.systemPrompt(source),
         effort,
+        purpose,
         ...(deps.maxTokens ? { maxTokens: deps.maxTokens } : {}),
         messages: s.conversation.apiMessages,
         tools: toolsFor(source),
@@ -2012,7 +2020,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     // What the barista typed may ask for a fun fact; a tap or a shot does not (D201).
     s.typedTurn = setAsideFor === 'typed';
     await persistConversation(s);
-    await runModel();
+    // A credited shot's turn is the reply after a shot in the coach's usage (D237).
+    await runModel(setAsideFor === 'shot' ? 'shot' : 'reply');
   }
 
   // -------------------------------------------------------------------------

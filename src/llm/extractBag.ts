@@ -102,6 +102,9 @@ export async function extractBag(options: ExtractBagOptions): Promise<ExtractedB
     effort: 'low',
     // Sent once: caching it would only bill a cache write.
     cache: false,
+    // The coach's usage counts it as a bag photo (D237).
+    purpose: 'photo',
+    call: 0,
   };
   if (options.signal) request.signal = options.signal;
   let answer: string | null = null;

@@ -183,6 +183,14 @@ describe('buildRunArgs', () => {
     expect(plain).not.toContain('--allowedTools');
   });
 
+  it("passes how hard the coach thinks to Claude Code, which takes CafAI's low, medium and high as they come (D243)", () => {
+    for (const effort of ['low', 'medium', 'high']) {
+      const args = buildRunArgs({ model: 'claude-sonnet-5-5', effort, systemPromptFile: 's' });
+      expect(args.slice(args.indexOf('--effort'), args.indexOf('--effort') + 2)).toEqual(['--effort', effort]);
+    }
+    expect(buildRunArgs({ model: 'claude-haiku-5-5', systemPromptFile: 's' })).not.toContain('--effort');
+  });
+
   it("turns on and allows Claude Code's own WebSearch, and nothing else, for a request that may search (D203)", () => {
     const args = buildRunArgs({ model: 'claude-opus-5-5', systemPromptFile: '/w/s.txt', mcpConfigFile: '/w/m.json', webSearch: true });
     expect(args.slice(args.indexOf('--tools'), args.indexOf('--tools') + 2)).toEqual(['--tools', 'WebSearch']);

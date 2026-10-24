@@ -6011,3 +6011,105 @@ describe('coach engine', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// D237, D240, D243: what each reply is for, how hard the coach thinks, and the budget
+// ---------------------------------------------------------------------------
+
+describe("the coach's spend in the engine (D237, D240, D243)", () => {
+  let storage: FakeStorage;
+  let telemetry: FakeTelemetry;
+  let runs: RunRequest[];
+  let scripts: Script[];
+  let engine: CoachEngine;
+  let nowMs: number;
+
+  function build(extra: Partial<EngineDeps> = {}): CoachEngine {
+    let counter = 0;
+    return createCoachEngine({
+      storage,
+      telemetry,
+      api: makeApi([]),
+      coach,
+      llm: makeLlm(scripts, [], runs),
+      clock: { now: () => new Date(nowMs), sleep: async () => {} },
+      newId: (prefix) => `${prefix}-${++counter}`,
+      timers: manualTimers().timers,
+      checkTimers: manualTimers().timers,
+      ...extra,
+    });
+  }
+
+  beforeEach(async () => {
+    storage = createFakeStorage();
+    storage.apiKey = 'sk-ant-test';
+    telemetry = createFakeTelemetry();
+    runs = [];
+    scripts = [];
+    nowMs = Date.parse('2026-10-03T08:00:00Z');
+    reader.asked = [];
+    reader.answer = null;
+    engine = build();
+    await engine.start();
+  });
+
+  afterEach(() => {
+    engine.dispose();
+  });
+
+  /** Intake, a template, then a credited shot whose reply asks how it tasted. */
+  async function throughShot(): Promise<void> {
+    await engine.newBag();
+    scripts.push(() => [text('Lovely. Here is where I would start.'), saveBag, proposeTemplates]);
+    await engine.sendText('Kiambu AA, light, washed');
+    scripts.push(() => [text('Loaded. Pull a shot.')]);
+    await engine.pickTemplate('t-tpl', 'd-flow');
+    scripts.push(() => [text('Got it.'), askTaste]);
+    telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' });
+    await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+  }
+
+  describe('what each reply is for (D237)', () => {
+    it("asks the coach's reply after a credited shot as a shot's, and every other as a reply", async () => {
+      await throughShot();
+      expect(runs.map((run) => run.purpose)).toEqual(['reply', 'reply', 'shot']);
+      scripts.push(() => [text('Sour, then. Grind finer.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      expect(runs.at(-1)!.purpose).toBe('reply');
+    });
+
+    it("asks a Retry as a reply, even of a shot's", async () => {
+      await throughShot();
+      scripts.push(() => {
+        throw new LlmError('overloaded', 'Anthropic is overloaded right now.');
+      });
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: 'targetWeight' });
+      await vi.waitFor(() => expect(engine.getState().error).toBe('Anthropic is overloaded right now.'));
+      expect(runs.at(-1)!.purpose).toBe('shot');
+      scripts.push(() => [text('There it is.')]);
+      await engine.retry();
+      expect(runs.at(-1)!.purpose).toBe('reply');
+    });
+  });
+
+  describe('how hard the coach thinks (D243)', () => {
+    it('thinks at medium, as it always has (D30), until someone chooses', async () => {
+      await throughShot();
+      expect(runs.map((run) => run.effort)).toEqual(['medium', 'medium', 'medium']);
+    });
+
+    it('thinks as chosen in Settings from the next reply on, once Settings has the coach read its settings again', async () => {
+      await storage.settings.update({ coachEffort: 'high' });
+      await engine.refresh();
+      await engine.newBag();
+      scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);
+      await engine.sendText('Kiambu AA, light, washed');
+      expect(runs.at(-1)!.effort).toBe('high');
+      await storage.settings.update({ coachEffort: 'low' });
+      await engine.refresh();
+      scripts.push(() => [text('Loaded. Pull a shot.')]);
+      await engine.pickTemplate('t-tpl', 'd-flow');
+      expect(runs.at(-1)!.effort).toBe('low');
+    });
+  });
+});
