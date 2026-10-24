@@ -178,9 +178,9 @@ are now, in Settings' order:
 | **Rising Steam** | Flurry, Mystify | A lit still life (D-STEAM-1, D-STEAM-2): a porcelain cup of coffee on its saucer at the bottom centre, about 175 px across the rim at 962, seen from 17.5° above, rendered once per size, per pixel: a warm white glaze with soft shading and a bright lip, a strip light's highlight, the inner wall in shade, dark coffee with a crema ring and a paler swirl, and the shadow on an unseen table. A warm key light behind and above it has its glow behind the steam. Steam leaves the coffee: a few hundred particles at about 35 px/s on a curl-noise flow, each living 6 to 10 s, laying fine filaments that fade in about a second and feeding a broad faint body that rises, spreads and fades over 2.4 s, both brighter where they cross the glow and fading with height; the cup's near side is laid over the steam. The whole scene drifts up to 6 px across and 3.5 px up and down over minutes. Named so it is not taken for the Steam drink. Still: the frame at 12 s, moved to the drift's next place each minute. |
 | **Lava Latte** | The lava lamp | A tall tapered glass, about 70% of the screen's height, with thickness (D-BEAN-4 to D-BEAN-6): outer and inner edges, a faint tint, a heavy foot, a rim seen from slightly above, soft vertical streaks. Coffee under a thin layer of milk foam, and seven to nine blobs of cream that rise warm, sink cool and merge, at about 15 px/s: metaballs on a 4 px grid, shaded three times as fine from the field's slope. A warm light under the glass, as a lava lamp's bulb, glows through the foot, turns the coffee gold and amber deepening to espresso, lights the cream from below, and spills onto the page as a halo, a pool and a reflection where the glass stands. The glass drifts a few pixels a minute. Still: the frame at 20 s. |
 | **Brew Rain** | The Matrix's falling code | Water falling from a group head's shower screen into a cup, brewing on its way (D-RAIN-1 to D-RAIN-3). Along the top, brushed steel with staggered rows of holes. Near columns (glyphs of 18 to 20 px) fall under the front row of holes, 32 px apart, at 5 to 11 rows of 24 px a second; far columns between them, smaller (12 to 13 px), slower, sparser and fainter. The classic trail. The glyphs are coffee's, drawn as paths: a bean, a drop, a cup, cherries, a leaf, steam, a latte-art heart (five near heads in six, every far one); the rest are the Latin letters and figures of coffee's words, in Figtree. A head goes from pale water at the top to crema gold and amber by the cup, glowing softly; its trail sinks through amber and espresso brown into the page. Every 3 to 6 s a near column spells a word (ESPRESSO, CREMA, RISTRETTO, ...), a brew number (9 BAR, 93°, 1:2) or one of the last shot's numbers, each letter lit 1.6 s, then fading. At the bottom the cup: crema over coffee on a slow wave, where each head drops in with rings and droplets; it fills from 12% to 18% of the height over 30 minutes. No katakana, so no font of the device's is needed. Still: the first moment from 8 s on when a word has just been spelled (14 s at the latest). |
-| **Latte Art** | (its own) | See section 8. |
+| **Latte Art** | (its own) | The cup from straight above on its saucer, 83% of the screen's height, in a pool of light from the upper left (D-LATTE-1 to D-LATTE-4): a warm white glaze, the lip glinting, the inner wall in shade, the saucer falling off into shade toward its rim. An unseen pitcher pours a heart, a tulip, a rosetta and a swan in turn on a field of foam its pour moves, about 25 s each, then 12 s to admire it under its name (Figtree, ink-muted) and 3 s for the cup to clear to fresh crema (section 8). The crema swirled and tiger-striped, darker at the wall; the foam ivory, warmer at its edge, a thin brown line where it meets the crema; the stream shows only where it lands, a dot and two faint rings. It drifts up to 12 by 8 px over a quarter of an hour. Still: the finished heart. |
 
-## 8. Latte Art (D228, a later step)
+## 8. Latte Art (D228, built in round 2)
 
 The cup seen from above (its rim, a saucer, the handle). An unseen pitcher
 pours, in turn, a heart, a tulip, a rosetta and a swan: about 25 s a pour, 12
@@ -200,7 +200,21 @@ next.
 - **The gate**: the heart and the tulip first, tuned from screenshots, then
   judged by the owner on the tablet; the rosetta and the swan only after. A
   pour that does not look right is left out; if the heart and the tulip do
-  not pass, Latte Art does not ship.
+  not pass, Latte Art does not ship. Round 2 built all four at once
+  (D-SAVE-2), each tuned from screenshots; the owner's look on the tablet is
+  the gate that stays.
+- **As built** (2026-10-24, D-LATTE-1 to D-LATTE-4): the model as planned,
+  the foam on 192×192 and the crema's tone on 96×96, carried with
+  MacCormack's correction at a fixed 15 steps a second inside `step(dt)`.
+  Two things joined the timelines: the stream leans (it pushes more ahead
+  than behind, without which the tulip's discs grew backward over each other
+  and the rosetta came out a filled egg) and has a heading (so the swan's
+  wing is pushed sideways); a low stream drags the surface a tenth as much
+  as a lifted one. The foam is moved only around where it is, and the
+  canvases are coloured only when the surface changes, never while a pour is
+  admired: about 2 ms a frame at the busiest on a desktop. All four passed
+  the screenshots and come round (`IN_ROTATION` in `latteModel.ts` takes one
+  out in a line).
 
 ## 9. The parts
 

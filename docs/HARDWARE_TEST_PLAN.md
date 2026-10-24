@@ -776,7 +776,10 @@ rate and how each one looks dimmed. Allow about an hour, most of it waiting. For
    - **Brew Rain**: the steel screen along the top, coffee symbols falling
      in two layers, a lit word every few seconds, splashes and rings on the
      crema, no empty boxes.
-   - **Latte Art**: each pour reads as what its name says, under the cup.
+   - **Latte Art**: watch a whole round, about 2 min 40 s: each pour reads
+     at a glance as its name under the cup says, edges crisp, no stutter at
+     the rosetta's wiggle and pull-through (about 90 and 99 s in; record the
+     frames a second there). Name any pour that looks wrong (QUESTIONS 36).
    - **Nightstand**: the date in the tablet's language; the minute's fade
      smooth.
 9. **Machine off.** With the screensaver up, switch the DE1 off. Expected:

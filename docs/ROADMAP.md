@@ -160,10 +160,11 @@ address and the code are copied in Decaid, so a Decaid update keeps them
 
 - Teaching mode, personas, cross-user learning, voice. (Bag photos came
   with the Decaid alignment, 2026-10-10: D120.)
-- Two more screensavers: Espresso Pipes, after Windows' 3D Pipes, in
-  WebGL; and Latte Art, poured by a simulation, behind a gate of its own
-  (docs/superpowers/specs/2026-10-22-screensavers-design.md, D228).
-  (The screensaver came on 2026-10-22 with six to choose from:
-  D223-D227. Steam, hot water and flush settings, Connect for a dropped
+- Latte Art's pours judged on the tablet by the owner, D228's gate: a pour
+  that does not look right comes out of the rotation in one line
+  (QUESTIONS 36). (The screensaver came on 2026-10-22 with six to choose
+  from, D223-D227; round 2, 2026-10-24, lit them all, drew Brew Rain again
+  as coffee and added Espresso Pipes and Latte Art: D-SAVE-1 to D-SAVE-3.
+  Steam, hot water and flush settings, Connect for a dropped
   machine or scale, and the link to Decaid's bean and batch entities came
   with the Decaid alignment: D114, D111, D102.)
