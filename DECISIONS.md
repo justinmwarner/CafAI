@@ -4152,6 +4152,211 @@ database (D135), so it was gone.
   the mirror (D16), the key's optional copy (D99) and now where the coach
   runs.
 
+### Settings regrouped, and the coach's cost (2026-10-24)
+
+The owner's ask of 2026-10-24: "Can we work to clean up and make the
+settings page more managable, organized, easy to view, etc. Right now it's
+just a list of all the options the user can do, it's annoying to use. Can
+we clean it up and fill in any gaps we can see (IE: It could be useful to
+give a token count + est. cost for the coach)." Settings was eleven cards
+in one column, about five and a half screens on the tablet. Offered four
+layouts (`docs/superpowers/specs/2026-10-24-settings-layout.mockup.html`)
+and every other choice in one form, the owner chose: two panes, the seven
+groups in this order, each drink in one card, everything applying at once,
+the coach's totals, a bar a day and what it went on, a budget that warns
+with a switch to pause the coach, the Claude plan's use on the computer, and
+ten of eleven gaps (all but "reset a group"). The design is
+`docs/superpowers/specs/2026-10-24-settings-layout-design.md`.
+
+- **D237. The coach's tokens and cost are counted from what each reply
+  already carries.** Every response streams its `usage` (input, output,
+  cache reads and writes, web searches), which CafAI assembled and dropped.
+  `createCoachProvider` now counts each request at its `message_done`,
+  before the turn is passed on, with what it was for: a reply to the
+  barista (typed text, taps, intake, confirm or decline, undo, Retry, the
+  replies sent once a key or a restore arrives), the automatic reply after a
+  credited shot, or a bag photo. The runner marks each request's purpose and
+  its place in the run (`call`, 0 for a reply's first), so a reply of six
+  requests is one reply and six requests. A retry that got through counts
+  once; a stream that fails counts nothing (its tokens are unknown), so the
+  card says "estimated".
+  - **Prices** sit in the catalog (`src/llm/models.ts`), taken from
+    Anthropic's pricing page on 2026-10-24 (`PRICES_AS_OF`), per million
+    tokens, input / output / 5-minute cache write / cache read: Opus 5.5
+    4 / 20 / 5 / 0.20; Opus 5 5 / 25 / 6.25 / 0.50; Sonnet 5.5 2 / 10 /
+    2.50 / 0.10 (the page's 0.05x, not the 0.1x the design assumed); Haiku
+    5.5 0.10 / 0.50 / 0.125 / 0.01, and 0.50 / 2.50 / 0.625 / 0.05 for a
+    request whose prompt (input and cache tokens) passes 100,000; Fable 5.1
+    10 / 50 / 12.50 / 0.25. Web search is $10 per 1,000, whatever the model.
+  - A request's cost is worked out when it is counted (`requestCost`,
+    `src/spend/pricing.ts`), each kind of token at its own rate, rounded
+    once, and kept in millionths of a dollar, so a later price never
+    rewrites a past month. A model typed by hand is counted in tokens with
+    no price ("Price not known for <id>"); its web searches are still
+    priced.
+  - **Through the bridge** the tokens come back too (`pickUsage`). The
+    bridge now also forwards the web search count, counting each of Claude
+    Code's own WebSearch calls as one unless it says more (its stream never
+    reports them), and adds the usage of the turns around such a search,
+    which it dropped. What those replies "would cost on the API" is priced
+    at the 5-minute cache write, though Claude Code writes a 1-hour cache:
+    it estimates CafAI's own API path, not Claude Code's. The owner's
+    running bridge picks this up when restarted.
+
+  Why: the owner asked for a token count and an estimated cost, and the
+  numbers were already in every reply; Anthropic's Console has the bill,
+  the card an estimate it says is one.
+- **D238. The count is kept per day and shared through Decaid; the totals
+  add every device's.** On the device: IndexedDB `cafai-spend` (version 1,
+  store `days`; the `cafai` database is pinned at version 1, as D189 found),
+  one record per local day, device, source, model and kind, holding the
+  requests, the replies, each kind of token, the web searches and the cost.
+  The device is a random id in localStorage (`cafai.spend.device`). In
+  Decaid: KV namespace `cafai-spend`, one key per month (`2026-10`),
+  `{ v: 1, records }` with every device's records. A device writes its own
+  2 s after a count, merged with what is there (per record the larger count
+  of requests wins: a device's counts only grow), and reads the whole
+  namespace at start, whenever Decaid comes back and when the Coach group
+  opens, writing back what Decaid lacks of its own. Decaid out of reach:
+  tried again at the next count or refresh, at most once a minute. A month
+  a newer CafAI wrote (another `v`) is left alone; anything unreadable is
+  written over. The mock keeps the namespace across reloads
+  (`?mockPersist=1`). Why: the bill is the key's, whichever device spent it,
+  so the budget must mean what the bill means; and an iPad's Decaid update
+  moves CafAI's origin and empties its storage (D231), which would start the
+  month again at zero. The owner left "every device added together"
+  unticked as an extra view; it is how the count works, for those two
+  reasons, and with one device it is the same number. Not in the mirror
+  (`cafai`): its copy is one device's snapshot, the last writer's, which
+  would drop another device's spend. Token counts and dollars only, never
+  text: nothing in it is a secret (D16 is about keys).
+- **D240. A monthly budget warns, and can pause the coach.**
+  `Settings.coachBudget` (`{ monthlyUsd, pauseAtBudget }`, whole dollars 1
+  to 1,000, absent until set, patched field by field) counts only what costs
+  money: replies on the API key. Replies through the bridge never count,
+  pause or warn.
+  - **Warning.** After each reply or photo on the key, a quiet notice once a
+    month at each step, noted on the device (`cafai.spend.noticed`): "The
+    coach has used $4.02 of your $5 budget this month." at 80 %, in the info
+    tone, and "This month's coach spend reached your $5 budget." at 100 %,
+    in the warning tone. A reply that jumps from under 80 % past 100 % says
+    only the second; a changed budget earns its notices again.
+  - **Pause.** With the switch on and the month's spend at or over the
+    budget, the coach sends nothing: before each reply, its card stands in
+    ("The coach is paused: this month's spend reached your $5.00 budget.
+    Raise it in Settings, or it starts again on 1 November.", Open Settings
+    to Coach, the usage card brought into view), said once until something
+    else is said, and kept with the chat. Shots still save and show. No bag
+    photo is read meanwhile; it is never kept, so nothing waits. The reply
+    that waited goes once a refresh (a saved budget, the switch off) finds
+    the coach no longer paused, or a new month begins (checked at the
+    month's turn and at least hourly). After a reload while paused it shows
+    as a reply that did not finish, with Retry.
+  - The check runs before each reply; a reply already started finishes its
+    tool loop (at most six requests), so a month can pass the budget by one
+    reply's worth.
+
+  Why: the owner chose "warns as you near it, with a switch to also pause";
+  a hard stop by surprise would cost a dial-in mid-bag, so pausing is the
+  barista's own choice.
+- **D241. Which way is finer is the barista's answer, per grinder.**
+  Decaid's grinder library has no direction, so D62 assumed lower numbers
+  finer and a preset list finest first; QUESTIONS 2 asked about grinders
+  that run the other way. Settings > Grinder > **Finer is**, Lower numbers
+  (the default) or Higher numbers, is kept per grinder in
+  `Settings.grinderFinerHigher`, by Decaid's grinder id while linked, else
+  by the typed name ("id:<id>", "name:niche zero").
+  - **The coach's arithmetic** follows it: on a higher-is-finer numbered
+    dial a finer move goes up a step and a coarser one down, the floor of 0
+    is the coarser end's, and a setting named on the wrong side is refused
+    with "(higher numbers are finer)". A preset list is read finest first
+    (`finestFirst`): Decaid's order backwards on such a grinder, except a
+    list of plain numbers that already runs from its highest, as Add a
+    grinder and the coach's grinder offer ask lists to be typed (finest
+    first), which reversing would turn the wrong way. The change card's
+    words follow ("Grind 2 steps finer: 15 -> 16.0").
+  - **The coach hears it**: the grinder in every context, shot event and
+    grinder offer carries `"finer": "lower" | "higher"`, its values finest
+    first. The prompt says "lower" is CafAI's assumption until the barista
+    says otherwise, and asks a barista who says their grinder goes the other
+    way to set it in Settings > Grinder > Finer is.
+  - **Linking keeps it**: Add on the coach's grinder card, linking the same
+    grinder the barista had typed, keeps its answer under the new id too;
+    another grinder starts at lower. A change reaches the coach at the next
+    refresh and writes nothing to Decaid, whose workflow has no field for it.
+  - **The row**: a failed save says "Could not save which way is finer: ..."
+    and the control goes back to the answer the coach still uses; unreadable
+    settings hold it and say so. The scripted coach turns the dial the same
+    way.
+
+  Why: a grinder numbered the other way got every move backwards, and only
+  the barista knows their dial. Answers QUESTIONS 2.
+- **D242. Sonnet 5.5 and Haiku 5.5 replace Sonnet 5 and Haiku 4.5 in the
+  list.** The model list is Opus 5.5 (the default, D24), Opus 5, Sonnet 5.5,
+  Haiku 5.5 and Fable 5.1. Sonnet 5 and Haiku 4.5 stay known as
+  `FORMER_MODELS`: a device that kept one still sends the right effort
+  (Haiku 4.5 takes none) and is priced right, listed as no longer offered.
+  Prices print with their cents (`priceText`: "$0.10", not "$0.1"). The
+  requests needed no change: CafAI sends no `thinking` setting (Sonnet 5.5
+  refuses a disabled one), and both new models take effort. Why: the card
+  makes the model's price visible, and Haiku 5.5 coaches at a fortieth of
+  Opus 5.5's price; the owner chose to offer them.
+- **D243. How the coach replies: Quicker, Balanced or Thorough.**
+  `Settings.coachEffort` ('low', 'medium', 'high'; absent reads as medium,
+  D30) is the effort of each reply; the bag photo stays low. The bridge
+  passes it to Claude Code (`--effort`, which 2.1.309 takes), so it applies
+  on the computer too. A changed effort costs one fuller request: the prompt
+  cache, or on the bridge a new Claude Code session, starts again. Why: the
+  owner chose to offer it; effort is the cost lever within one model.
+- **D244. Export is in Data and privacy too.** History's export (the file,
+  and the "Your CafAI data" dialog that offers the text to copy where a
+  download does not work, inside Decaid) is one hook, `useExportData`, so
+  History and Settings > Data and privacy > Your data share it, each saying
+  a failure in its own place. History keeps its button. An e2e spec now
+  exercises the export (none did): a dated file matching the dialog, no
+  trace of a saved API key, and the copy path inside Decaid.
+- **D245. A 12-hour clock.** `Settings.clock` ('24h', the default as every
+  time read so far, or '12h') is kept in the display prefs store
+  (`src/app/displayPrefs.ts`, `useClockFormat()`), and every clock time a
+  screen shows follows it: wake rows, the next wake and the keep-awake line,
+  the wake time dialog (an hour select, the minutes and an am/pm control on
+  the 12-hour clock; Decaid still gets "HH:MM"), Nightstand (its am or pm
+  smaller after the figures), the log's summary and rows, History's and the
+  coach screen's dates. The log's shared text (Share, Copy, Email, its title
+  and file name) stays 24-hour, to the millisecond, with its UTC offset, so
+  it reads the same from any device. Each formatter takes the clock as a
+  parameter; no state hides in a module. Why: the owner chose it; CafAI
+  speaks °F to American baristas and should tell their time too.
+- **D246. A switch for the TDS cell.** `Settings.showTds` (absent reads as
+  on): off, shot cards drop the TDS cell, its reading, the EY and the note
+  under them, and History's shot line ends at the peak pressure. A TDS
+  already given stays stored, and in Decaid, and the coach still reads it.
+  Why: QUESTIONS 21: a barista with no refractometer saw "TDS · Add" on
+  every card.
+- **D247. The screensaver's wait and brightness are choices.** Settings >
+  Display > Screensaver gains Starts after (1, 2, 5, 10 or 15 minutes; the
+  default the minute of D223) and Dims the screen to (10 to 60 % in tens;
+  the default the 30 of D224), applying at once, the line under them saying
+  the minutes chosen. The store takes a partial change and saves the whole
+  block; the overlay re-times when the wait changes (a wait chosen while it
+  waits counts from the same last touch), and the brightness is read as
+  each showing begins. Why: QUESTIONS 30 and 31 asked the owner for two
+  numbers that suit a kitchen better as the barista's own.
+- **D248. About tells what's new and takes a report.** **What's new in
+  0.1.3** opens the running version's CHANGELOG section, taken in at build
+  time (`?raw`) and drawn without a markdown library, matched on the
+  heading's first word (so "Unreleased" never matches); without a section
+  it does not show, and a unit test fails a version bump that has no
+  section. **Report a problem** opens GitHub's new issue page with CafAI's
+  and Decaid's versions, where it runs and the browser filled in, and a
+  reminder to attach the log (Share where the device can, else Copy, with
+  "It holds your chat with the coach, so take out anything you would rather
+  not post."); the line under it says it needs a GitHub account and the
+  issue is public. Inside Decaid it stays a link, which Decaid's navigation
+  guard opens in the system browser (D121, D154), with the address and Copy
+  under it in case it does not. Why: the owner chose both; About had only
+  versions.
+
 ### Screensavers, round 2 (2026-10-24)
 
 The owner's word of 2026-10-23, after trying the first six: "I'd like to
