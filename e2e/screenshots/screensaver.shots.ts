@@ -25,6 +25,8 @@ const NOW = new Date('2026-10-22T21:30:00Z');
 const FRAMES: ReadonlyArray<{ id: string; at: number }> = [
   { id: 'nightstand', at: 0 },
   { id: 'portafilter', at: 3000 },
+  // 8 s in: a held frame draws every frame before it, which Playwright's software WebGL pays for one frame at a time.
+  { id: 'pipes', at: 8000 },
   { id: 'beanfield', at: 6000 },
   { id: 'steam', at: 12_000 },
   { id: 'lava', at: 20_000 },

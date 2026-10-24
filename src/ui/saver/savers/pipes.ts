@@ -117,13 +117,14 @@ vec3 studio(vec3 r) {
   float a = atan(r.x, r.z);
   // The horizon sits a little below level, softly: seen from a little above, a pipe's front reflects the walls, its underside the floor.
   float h = e + 0.24;
-  vec3 wall = mix(vec3(0.27, 0.25, 0.22), vec3(0.09, 0.088, 0.095), smoothstep(0.0, 1.0, h));
+  vec3 wall = mix(vec3(0.22, 0.205, 0.18), vec3(0.09, 0.088, 0.095), smoothstep(0.0, 1.0, h));
   vec3 ground = mix(vec3(0.06, 0.05, 0.044), vec3(0.008, 0.007, 0.006), smoothstep(0.0, 0.3, -h));
   vec3 c = mix(ground, wall, smoothstep(-0.06, 0.06, h));
-  c += KEY_COLOR * 2.6 * within(a, -1.38, -0.5, 0.08) * within(e, -0.5, 0.85, 0.08);
+  c += KEY_COLOR * 2.8 * within(a, -1.32, -0.82, 0.06) * within(e, -0.5, 0.85, 0.08);
+  c += KEY_COLOR * 1.3 * within(a, -0.62, -0.5, 0.04) * within(e, -0.45, 0.8, 0.08);
   c += FILL_COLOR * 1.1 * within(a, 0.78, 1.36, 0.07) * within(e, -0.4, 0.6, 0.08);
   c += TOP_COLOR * 1.4 * smoothstep(0.74, 0.84, e) * (1.0 - smoothstep(0.3, 0.38, abs(r.z)));
-  c += KEY_COLOR * 0.55 * within(a, -0.5, 0.5, 0.18) * within(e, -0.3, 0.22, 0.1);
+  c += KEY_COLOR * 0.35 * within(a, -0.3, 0.3, 0.15) * within(e, -0.3, 0.22, 0.1);
   c += RIM_COLOR * 1.4 * smoothstep(2.45, 2.58, abs(a)) * within(e, -0.12, 0.38, 0.06);
   return c;
 }
@@ -710,7 +711,8 @@ export const pipes: CanvasSaver = {
         // The grid's middle plane covers the screen: as much of it as the screen's shape allows.
         const halfHeight = Math.min(model.grid.y / 2, model.grid.x / 2 / aspect) * COVER;
         const fovY = 2 * Math.atan(halfHeight / eyeDistance);
-        viewProjection = multiply(perspective(fovY, aspect, 0.5, eyeDistance + model.grid.z * 2), lookAt(EYE, TARGET));
+        // Near and far well clear of the grid (nothing comes nearer than its front), for the depth's precision where it has only 16 bits.
+        viewProjection = multiply(perspective(fovY, aspect, Math.max(1, eyeDistance - model.grid.z), eyeDistance + model.grid.z * 2), lookAt(EYE, TARGET));
       },
       still() {
         check();
