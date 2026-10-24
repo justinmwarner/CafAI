@@ -772,10 +772,12 @@ export const latte: CanvasSaver = {
       }
     };
 
+    /** The drift's time of the still: a minute further along each time reduced motion paints it again (D-LATTE-3, D-SAVE-1). */
+    let stillTime = 0;
     const paintStill = () => {
       finished ??= pourWhole(CHOREOGRAPHIES[STILL_POUR], env.seed, STILL_HZ);
       paintedX = Number.NaN;
-      paint({ surface: finished, version: -1, time: 0, phase: 'admire', phaseTime: 0, pour: STILL_POUR, foamShown: 1, stream: null });
+      paint({ surface: finished, version: -1, time: stillTime, phase: 'admire', phaseTime: 0, pour: STILL_POUR, foamShown: 1, stream: null });
     };
     // What was painted last, the still or a frame: the still is painted again when Figtree arrives.
     let showingStill = false;
@@ -827,6 +829,7 @@ export const latte: CanvasSaver = {
       still() {
         showingStill = true;
         paintStill();
+        stillTime += 60;
       },
       dispose() {
         disposed = true;

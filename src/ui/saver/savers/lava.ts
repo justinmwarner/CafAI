@@ -541,6 +541,8 @@ export const lava: CanvasSaver = {
     /** How far past the screen's edges the halo reaches, CSS px: as far as the glass drifts. */
     let haloRoom = 0;
     const offset = { x: 0, y: 0 };
+    /** The stills painted so far: each is a minute further along the drift. */
+    let stills = 0;
     /** The layers' size, design units round the glass's origin: x ±BOX_HALF, y from BOX_LOW to BOX_HIGH. */
     const BOX_HALF = GLASS.topHalf + MARGIN;
     const BOX_LOW = -MARGIN;
@@ -612,10 +614,10 @@ export const lava: CanvasSaver = {
       layerContext.putImageData(image, 0, 0);
     };
 
-    const paint = (shown: LavaModel) => {
+    const paint = (shown: LavaModel, driftSeconds = shown.time) => {
       if (!layer || !coffee || !front || width <= 0 || height <= 0) return;
       // Where the glass has drifted to, to the whole device pixel, so its fine edges stay sharp.
-      drift(shown.time, offset);
+      drift(driftSeconds, offset);
       const originX = Math.round((width / 2 + offset.x * unit) * scale) / scale;
       const originY = Math.round((height / 2 + (GLASS.height * unit) / 2 - offset.y * unit) * scale) / scale;
       const at = place(originX, originY, unit);
@@ -693,7 +695,10 @@ export const lava: CanvasSaver = {
       still() {
         const fresh = createLavaModel(env.seed);
         advanceLava(fresh, STILL_MS);
-        paint(fresh);
+        // Painted again each minute under reduced motion: a minute further along the drift each time,
+        // so the glass never stands in one place all night there either (D-BEAN-6, D-SAVE-1).
+        paint(fresh, fresh.time + 60 * stills);
+        stills += 1;
       },
       dispose() {
         release(layer);

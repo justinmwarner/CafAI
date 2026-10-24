@@ -4418,8 +4418,11 @@ that needs WebGL (D227).
   the next step, draw or still throw "Espresso Pipes lost its WebGL
   context.", so the host shows Nightstand for the rest of that showing;
   nothing is restored. `dispose()` deletes every buffer, the texture and
-  the program; a shader that will not compile throws from `create()`
-  having deleted what it made, for the same fallback. The still, which the
+  the program, then lets the context itself go (`WEBGL_lose_context`), and
+  a shader that will not compile throws from `create()` having deleted what
+  it made and let the context go, for the same fallback: the review found a
+  page warning "Too many active WebGL contexts" after 48 starts, each
+  showing's context kept until garbage collection. The still, which the
   host paints again each minute under reduced motion, is grown and built
   once. The shaders keep to GLSL ES 1.00's character set, comments
   included. Settings greys it out

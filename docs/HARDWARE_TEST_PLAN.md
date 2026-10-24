@@ -762,6 +762,7 @@ rate and how each one looks dimmed. Allow about an hour, most of it waiting. For
    (or Preview each with the brightness turned down to about a third) and
    look from a step back. Expected, and record what is not so:
    - **Bouncing Portafilter**: the portafilter logo glowing in its roast,
+     "CafAI" heavy (extra bold, as in Settings' own bold text, not light),
      the colour crossing over at each wall; at a corner, a ring of light and
      a burst of beans.
    - **Espresso Pipes**: offered (not greyed out); gauges and espresso cups

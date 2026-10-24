@@ -366,10 +366,13 @@ are in "Answered" at the end.
     255,000 triangles at its fullest (60% of the grid, about 40 s in) and
     fills and starts again about 35 times in a half hour, lively like the
     classic. Beanfield keeps up to 22 MB of lit bean sprites and does its
-    heaviest work in its first seconds; Rising Steam renders its cup for
-    about a second before its first picture there. If one stutters, the
-    cheap fixes: Pipes fades at a lower fill or grows slower; Beanfield's
-    size caps come down; Rising Steam keeps its render across showings.
+    heaviest work in its first seconds. Rising Steam and Lava Latte render
+    their cup and glass pixel by pixel as they start (about 0.5 to 0.7 s in
+    the smoke test's Chromium 91 on this PC at 1280x800, so perhaps 1 to 3 s
+    on a weak tablet), showing only the page until then. If one stutters or
+    starts too slowly, the cheap fixes: Pipes fades at a lower fill or grows
+    slower; Beanfield's size caps come down; Rising Steam and Lava Latte
+    keep their render across showings.
 38. **The new looks, dimmed: anything to change?** Small calls made without
     you, each one line to change: the portafilter logo at a fifth of the
     screen's width; Brew Rain's density, its words (the classics, not your

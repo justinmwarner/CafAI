@@ -449,8 +449,16 @@ export const pipes: CanvasSaver = {
     const found = webgl(canvas);
     if (!found) return null;
     const gl: WebGLRenderingContext = found;
-    // Built first: should it fail, there is nothing else to let go of.
-    const program = buildProgram(gl);
+    /** Lets the context itself go at once, not at garbage collection: each showing makes one, and a page may hold only so many (D-PIPES-2). */
+    const loseContext = () => gl.getExtension('WEBGL_lose_context')?.loseContext();
+    // Built first: should it fail, there is nothing else to let go of but the context.
+    let program: WebGLProgram;
+    try {
+      program = buildProgram(gl);
+    } catch (error) {
+      loseContext();
+      throw error;
+    }
     let lost = false;
     let disposed = false;
     const onLost = () => {
@@ -762,6 +770,8 @@ export const pipes: CanvasSaver = {
         growingJoints = [];
         dialCanvas.width = 0;
         dialCanvas.height = 0;
+        // The canvas is never drawn on again (the host makes a fresh one for each start).
+        loseContext();
       },
     };
     return instance;

@@ -69,7 +69,8 @@ for (const { id, at } of FRAMES) {
     await page.clock.install({ time: NOW });
     // The demo: a bag on the machine and its last shot, for Nightstand's lines and Brew Rain's numbers.
     await page.goto(`./?demo=1&mockSpeed=25&saverPreview=${id}&saverAt=${at}#/`);
-    await expect(page.getByTestId(TID.saverReady)).toBeAttached({ timeout: 30_000 });
+    // A minute: Espresso Pipes held at 8 s takes 11 to 13 s in Playwright's software WebGL.
+    await expect(page.getByTestId(TID.saverReady)).toBeAttached({ timeout: 60_000 });
     await expect(page.getByTestId(TID.saver)).toHaveAttribute('data-saver', id);
     // Not Nightstand standing in for one that threw.
     await expect(page.getByTestId(TID.saver)).not.toHaveAttribute('data-fallback', '1');
