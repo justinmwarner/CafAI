@@ -64,9 +64,9 @@ From the built-in demo (`npm run demo`, no machine needed);
 | The big shot graph, from a shot's card | History: every version, its change and its shots |
 |---|---|
 | ![The shot view on a tablet: pressure, flow, weight and weight flow over a 60 s Blooming Espresso shot, the previous shot faint under it and named over the plot](docs/images/tablet-shot.png) | ![History on a tablet: Kiambu AA's versions v4 (active), v3 (undone) and v2, each with its change and shots, the last with its TDS and EY](docs/images/tablet-history.png) |
-| **Settings > Appearance: Light, in Matcha** | **On a phone: the coach and the shot** |
-| ![Settings on a tablet in the Light mode with the Matcha tint: the mode, seven tints, a custom hue and the temperatures in °C or °F](docs/images/tablet-settings.png) | <img src="docs/images/phone-coach.png" width="49%" alt="The coach on a phone, proposing one change"> <img src="docs/images/phone-shot.png" width="49%" alt="The shot graph on a phone, the previous shot faint under it"> |
-| **Settings > Machine care: Decent's cleaning routine, by how often** | **Settings > Sleep and wake: warm at 06:30 on weekdays** |
+| **Settings > Display: Light, in Matcha** | **On a phone: the coach and the shot** |
+| ![Settings on a tablet in the Light mode with the Matcha tint: the list of seven groups beside Display, with its mode, seven tints, custom hue, units and screensaver](docs/images/tablet-settings.png) | <img src="docs/images/phone-coach.png" width="49%" alt="The coach on a phone, proposing one change"> <img src="docs/images/phone-shot.png" width="49%" alt="The shot graph on a phone, the previous shot faint under it"> |
+| **Settings > Machine > Machine care: Decent's cleaning routine, by how often** | **Settings > Machine > Sleep and wake: warm at 06:30 on weekdays** |
 | ![Machine care on a tablet: the Weekly routine's steps, each with its time in Decent's video, the detergent clean due with 6 shots since it was last done and Mark done, beside the video's card](docs/images/tablet-care.png) | <img src="docs/images/phone-sleep-wake.png" width="49%" alt="Sleep and wake on a phone: Sleep when idle after 30 minutes, held off until 10:00 by a wake time, and two wake times, weekdays at 06:30 for an hour and weekends at 08:00 for two, with the next wake over them"> |
 
 ## What you need
@@ -84,7 +84,7 @@ From the built-in demo (`npm run demo`, no machine needed);
 - **For the coach, one of:**
   - an **Anthropic API key**, from Anthropic's Console. You pay Anthropic
     directly for what the coach uses; **Settings > Coach** shows each
-    model's price.
+    model's price, and what the coach has cost so far.
   - **Claude on your computer**: Claude Code signed in with a Claude Pro or
     Max plan on a Mac or Windows PC (Linux works too), Node 18 or newer, and
     this repository on that computer. See
@@ -127,8 +127,8 @@ settings page.
 ## First run
 
 1. **The coach's key.** The chat opens on "Add your Anthropic API key to
-   start coaching". Open **Settings** and paste the key under **Anthropic
-   API key**, or choose **Claude on my computer** under **Where the coach
+   start coaching". Open **Settings > Coach** and paste the key under
+   **Anthropic API key**, or choose **Claude on my computer** under **Where the coach
    runs** ([below](#claude-on-your-computer-no-api-key)). The machine row,
    the stats card and the shot graph work without a key.
 2. **The machine and the scale.** Decaid connects them, as for any skin. The
@@ -139,7 +139,7 @@ settings page.
 3. **Gateway mode.** When Decaid is set to leave stopping shots to the skin
    (gateway mode Full), the alert says so, and **Let Decaid stop shots** sets
    it to Tracking. CafAI never changes Decaid's settings without that tap.
-4. **Your grinder** (optional): link it in **Settings > Coach**, from
+4. **Your grinder** (optional): link it in **Settings > Grinder**, from
    Decaid's grinder library, or add it there with **Add a grinder** when
    the library does not have it.
 5. **A bag.** On the coach, "Which coffee is it?" lists the coffees in
@@ -152,8 +152,8 @@ settings page.
    Elsewhere a notice in its place says CafAI shares how it is used, with
    all text hidden: **OK** or **Turn off**. It sits under the screen's first
    card until there is a chat, then at the chat's foot, above the composer;
-   it stays until you answer and holds nothing up. **Settings > About**
-   changes the answer later ([Privacy](#privacy)).
+   it stays until you answer and holds nothing up. **Settings > Data and
+   privacy** changes the answer later ([Privacy](#privacy)).
 
 To see it first without a machine, run `npm run demo` on a computer: CafAI
 with a dial-in already under way, on the built-in mocks, with no Decaid and
@@ -223,11 +223,11 @@ no API key ([docs/DEMO.md](docs/DEMO.md)).
 6. **One change.** The coach proposes the next version or a manual step such
    as grind, changing one variable at a time, and explains it by what it
    does at the machine, with your own words as the reason. With °F chosen
-   in Settings > Appearance it speaks °F (1 °C hotter is 1.8 °F hotter),
+   in Settings > Display > Units it speaks °F (1 °C hotter is 1.8 °F hotter),
    while the change itself goes to the machine in °C. You see a
    plain-language diff and confirm it before anything is uploaded. Undo
    returns to the previous version. Link your grinder from Decaid's grinder
-   library in **Settings > Coach** (add it there if the library lacks it,
+   library in **Settings > Grinder** (add it there if the library lacks it,
    or tap **Add to Decaid** on the coach's card when you name it in the
    chat) and grind moves come with the new setting worked out on its own
    steps.
@@ -279,7 +279,7 @@ machine by itself.
   the shot the card asks about); the top bar and Stop never move. Steam, hot
   water and flush take the screen the same way while they run, whoever
   started them (unless you are typing, or following Decent's cleaning video
-  in Settings > Machine care): a dial fills toward the time or volume set
+  in Settings > Machine > Machine care): a dial fills toward the time or volume set
   around the scene you pick for the drink (steam's wand spraying into the
   milk, a whirlpool from above or a rosetta pouring; hot water pouring or
   seen from above; the shower screen from the side or from below; or each
@@ -292,7 +292,7 @@ machine by itself.
   own settings, held while it runs and yours to change the moment it stops.
   Once the drink is done, **Go back** counts down and returns to where you
   were by itself after 10 s; **Stay**, or a tap on the view, keeps it with
-  its result (Settings > Drink screens turns this off, or sets the time,
+  its result (Settings > Drinks turns this off, or sets the time,
   for each drink). Problems
   (not connected, Decaid out of reach, water to refill, an error the machine
   or a device reports, a failed command, Decaid set to leave stopping shots
@@ -343,46 +343,61 @@ machine by itself.
 - **History**: every bag, its versions with the change that made each, and
   their shots; **Export** writes it all as JSON and **Import** merges a file
   back.
-- **Settings > Appearance**: Dark, Light or Auto (follows the device), and a
-  tint named for coffee: Crema, Matcha, Cold Brew, Blueberry, Plum, Cherry,
-  Tamper, or any hue from the slider. Every colour comes from the tint (in
-  OKLCH, written out as plain hex for Chromium 91) and every pair of
-  palette colours the screens use is tested for WCAG AA contrast at every
-  hue; the shot graph keeps Decent's colours (pressure green, flow blue).
-  The look is saved with the other settings. Last, **Temperatures**: °C (the
-  default) or °F. In °F every temperature CafAI shows or takes is in °F (the
-  stats card, the drinks' views and settings, the change card and History,
-  the cleaning guide), and the coach speaks °F; Decaid and your profiles
-  keep °C. [DESIGN.md](DESIGN.md) describes the visual system.
-- **Settings > Where the coach runs**: **Anthropic API key** (the default)
-  or **Claude on my computer** (CafAI Bridge's address and code, with
-  **Find** and **Test**). The fields follow the choice: the API key's
-  section shows only with Anthropic, the bridge's address and code only
-  with the computer; whatever you saved for the other one stays saved.
-  **Keep the address and code in Decaid** (on by default) copies them to
-  Decaid, so a Decaid update does not lose them (see Privacy for what it
-  means).
-- **Settings > Anthropic API key** (with Anthropic chosen): the key, and
-  **Keep my API key in Decaid** (off by default; see Privacy for what it
-  means). A key pasted into the chat or another field is taken out, with a
-  note.
-- **Settings > Coach**: the model (Opus 5.5 by default, Opus 5, Sonnet 5,
-  Haiku 4.5 or Fable 5.1, each with its price per million tokens), **Fun
-  facts** (Off; CafAI's facts, from its own checked list, free; CafAI's and
-  the coach's, the default, where the coach adds facts about the bag it is
-  sure of; or CafAI's, the coach's and a web search, where the coach may
-  look the roaster, farm or producer up on the web, once per fact, at about
-  one US cent a search plus the pages it reads, or on your Claude plan
-  through CafAI Bridge) and your grinder, from Decaid's grinder library. **Add a grinder** adds one the
+- **Settings**: on a tablet, Settings' own list of seven groups (Coach,
+  Grinder, Drinks, Machine, Display, Data and privacy, About) beside the
+  chosen group; on a phone, the list, then a group's page with a back arrow.
+  Each group says in the list how it stands ("Niche Zero · 14", "Backed up
+  5 min ago"), with a dot when something needs you (no API key, a backup
+  paused, a care step due), and a search over the list finds any setting by
+  its words ("tint", "budget", "wake") and opens it. Each group has its own
+  address (`#/settings/coach` and so on), so links, a reload and a drink's
+  Go back land on it. Everything applies as you change it; no Save button.
+- **Settings > Coach**:
+  - **Where the coach runs**: **Anthropic API key** (the default) or
+    **Claude on my computer** (CafAI Bridge's address and code, with **Find**
+    and **Test**). The fields follow the choice: the API key's card shows
+    only with Anthropic, the bridge's address and code only with the
+    computer; whatever you saved for the other one stays saved. **Keep the
+    address and code in Decaid** (on by default) copies them to Decaid, so a
+    Decaid update does not lose them (see Privacy for what it means).
+  - **Anthropic API key** (with Anthropic chosen): the key, and **Keep my API
+    key in Decaid** (off by default; see Privacy for what it means). A key
+    pasted into the chat or another field is taken out, with a note.
+  - **Model and replies**: the model (Opus 5.5 by default, Opus 5, Sonnet
+    5.5, Haiku 5.5 or Fable 5.1, each with its price per million tokens);
+    **How the coach replies**: Quicker, Balanced (the default) or Thorough,
+    how hard it thinks, which Claude Code on your computer follows too; and
+    **Fun facts** (Off; CafAI's facts, from its own checked list, free;
+    CafAI's and the coach's, the default, where the coach adds facts about
+    the bag it is sure of; or CafAI's, the coach's and a web search, where
+    the coach may look the roaster, farm or producer up on the web, once per
+    fact, at about one US cent a search plus the pages it reads, or on your
+    Claude plan through CafAI Bridge).
+  - **Usage and cost**: what the coach has used, counted from what Anthropic
+    reports with each reply and priced at Anthropic's prices: this month's
+    estimated cost and tokens, a bar for each day, today, last month and all
+    time, and what it went on (replies to you, replies after shots, bag
+    photos, web searches). Every device that uses your Decaid adds to the
+    same count, through Decaid's store, so a Decaid update does not reset
+    it; your bill is in Anthropic's Console. **Monthly budget** warns in the
+    chat at 80 % and 100 % of it, and **Pause the coach at the budget** stops
+    it sending anything until you raise the budget or a month begins (shots
+    still save). On your computer the card shows your Claude plan's use this
+    5 hours and this week, the tokens, and what the same replies would cost
+    on the API; the plan's replies never count toward the budget.
+- **Settings > Grinder**: your grinder, from Decaid's grinder library (or
+  named by hand), and its setting; **Finer is**: Lower numbers (the default)
+  or Higher numbers, for a grinder whose dial runs the other way, which the
+  coach's moves and the change card follow; **Add a grinder** adds one the
   library lacks (its burrs and its dial: a numbered dial with its steps, or
   a list of settings, finest first) and picks it; **Edit grinders in
   DYE2**, while Decaid runs its DYE2 plugin, opens DYE2's Grinders page,
   where grinders are edited and deleted (Decaid's own app has no such
   screen).
-- **Settings > Steam, hot water and flush**: the presets Decaid keeps for
-  the machine row's Steam, Hot water and Flush, grouped by drink (steam
-  temperature, time and flow; hot water temperature, volume, time and flow;
-  flush temperature, time and flow): side by side on a tablet, one row per
+- **Settings > Drinks**: one card each for Steam, Hot water and Flush. First
+  the presets Decaid keeps for the machine row's buttons (steam temperature,
+  time and flow; hot water temperature, volume, time and flow; flush
+  temperature, time and flow): side by side on a tablet, one row per
   setting on a phone. Each has a stepper (Up and Down on a keyboard too),
   within what the DE1 can hold (hot water at most 255 ml; steam 135-160 °C,
   165 on a Bengle). In °F a temperature shows in whole degrees and a tap
@@ -392,50 +407,38 @@ machine by itself.
   while the machine runs, and never without a DE1 connected; until Decaid
   answers, the fields show a dash, and a write that fails says why under
   its setting. Steam that is off in Decaid (below 135 °C) reads "Off in
-  Decaid"; turning it on or off stays in Decaid.
-- **Settings > Drink screens**: for each drink, its **Animation** (steam:
-  Wand and spray, Whirlpool, Rosetta or Simple; hot water: Pour, From above
-  or Simple; flush: Shower, Screen or Simple) and **Go back by itself**,
-  with **After** its seconds (5 to 60; on, after 10 s, until you change
-  it). Kept on this device, mirrored and exported with the other settings,
-  and changeable while the machine runs.
-- **Settings > Sleep and wake**: what Decaid does with the machine when
-  nobody is using it. **Sleep when idle**, with the minutes it waits (1 to
-  240), and the **wake times**: each a time, its days (every day, weekdays,
-  or any you pick) and how long the machine stays on after, even with
-  nobody there (an hour for a new one, so a machine woken at 06:30 is not
-  asleep again by the time you come down), with the next wake over the
-  list. Decaid keeps them and acts on them while it runs, CafAI open or
-  not, and only while the machine is connected; its own Sleep & Wake page
-  shows the same. Changes go to Decaid at once.
-- **Settings > Screensaver**: on the Decent tablet, once Decaid says the
-  machine is asleep and nobody has touched the screen for a minute, a
-  screensaver covers CafAI: **Nightstand** (a bedside clock with the next
-  wake time, the bag and the last shot), **Bouncing Portafilter**,
-  **Espresso Pipes** (where the device can run WebGL), **Beanfield**,
-  **Rising Steam**, **Lava Latte**, **Brew Rain** or **Latte Art**, or **A
-  different one each day** (the default). The screen stays on, dimmed, for
-  30 minutes, then goes dark as Android's timeout has it. A tap clears it
-  and wakes the machine, as Wake does; the tap never reaches what is under
-  it. **Preview** shows one now, anywhere, and a tap closes it without waking
-  anything. Turn it off with the switch; under reduced motion each shows a
-  still picture.
-- **Settings > Machine care**: **Cleaning guide** opens Decent's routine for
-  the DE1, one at a time: **Daily** (purge the wand, flush the group head,
-  wipe the shower screen, rinse the wand), **Weekly** (detergent, Rinza, the
-  tank and drip tray, the intake filter), **Monthly** (the group head's
-  parts, the gasket) and **As needed** (descaling for your water, a clogged
-  steam tip, emptying the machine to move it). Each step says what to do and
-  when, with its moment in Decent's video "How often/to clean DE1"; where
-  the 2022 video and Decent's current pages differ, the step follows the
-  pages and says so. The video plays in place in a browser and on Decent's
-  tablets; inside Decaid on Windows, a Mac or an iPad, each moment opens
-  YouTube at that time instead (Decaid would not let it play in place).
-  While the video is open, a drink you start (the flush a step asks for,
-  say) leaves the guide on screen rather than taking it over. The steps are
-  CafAI's own words and work offline. CafAI does not start the DE1's
-  Clean, Descale or Transport; the steps that need them say to use
-  streamline, the skin Decaid comes with.
+  Decaid"; turning it on or off stays in Decaid. Then **On screen**: the
+  drink's **Animation** (steam: Wand and spray, Whirlpool, Rosetta or
+  Simple; hot water: Pour, From above or Simple; flush: Shower, Screen or
+  Simple) and **Go back by itself**, with **After** its seconds (5 to 60;
+  on, after 10 s, until you change it), kept on this device, mirrored and
+  exported with the other settings, and changeable while the machine runs.
+- **Settings > Machine**:
+  - **Sleep and wake**: what Decaid does with the machine when nobody is
+    using it. **Sleep when idle**, with the minutes it waits (1 to 240), and
+    the **wake times**: each a time, its days (every day, weekdays, or any
+    you pick) and how long the machine stays on after, even with nobody
+    there (an hour for a new one, so a machine woken at 06:30 is not asleep
+    again by the time you come down), with the next wake over the list.
+    Decaid keeps them and acts on them while it runs, CafAI open or not, and
+    only while the machine is connected; its own Sleep & Wake page shows the
+    same. Changes go to Decaid at once.
+  - **Machine care**: **Cleaning guide** opens Decent's routine for the
+    DE1, one at a time: **Daily** (purge the wand, flush the group head,
+    wipe the shower screen, rinse the wand), **Weekly** (detergent, Rinza,
+    the tank and drip tray, the intake filter), **Monthly** (the group
+    head's parts, the gasket) and **As needed** (descaling for your water, a
+    clogged steam tip, emptying the machine to move it). Each step says what
+    to do and when, with its moment in Decent's video "How often/to clean
+    DE1"; where the 2022 video and Decent's current pages differ, the step
+    follows the pages and says so. The video plays in place in a browser and
+    on Decent's tablets; inside Decaid on Windows, a Mac or an iPad, each
+    moment opens YouTube at that time instead (Decaid would not let it play
+    in place). While the video is open, a drink you start (the flush a step
+    asks for, say) leaves the guide on screen rather than taking it over.
+    The steps are CafAI's own words and work offline. CafAI does not start
+    the DE1's Clean, Descale or Transport; the steps that need them say to
+    use streamline, the skin Decaid comes with.
 - **Machine care's reminders**: every step beyond Daily says when it was
   last done ("Last done 9 days ago · 41 shots since"), with **Mark done**
   (and **Undo** until the page reloads). Five come due by themselves and
@@ -451,31 +454,72 @@ machine by itself.
   elsewhere while CafAI is open, marks its step done too; Decent's Forward
   Flush x5 does not, as it is the daily water flush's profile as well. Each
   device keeps its own last times, as it keeps its own bags: a step marked
-  done on a phone is not marked on the tablet. In Settings > Machine care:
-  **Your water**, in Decent's bands (under 30 ppm never descale; up to 120
-  ppm once a year or 1,500 shots; over 120 ppm every six months or 800
-  shots; Not sure is reminded as up to 120), **Intake filter** (V1, V2 or
-  Not sure, reminded as V1) and **Remind me on the stats card**.
+  done on a phone is not marked on the tablet. In Settings > Machine >
+  Machine care: **Your water**, in Decent's bands (under 30 ppm never
+  descale; up to 120 ppm once a year or 1,500 shots; over 120 ppm every six
+  months or 800 shots; Not sure is reminded as up to 120), **Intake filter**
+  (V1, V2 or Not sure, reminded as V1) and **Remind me on the stats card**.
+- **Settings > Display**:
+  - **Appearance**: Dark, Light or Auto (follows the device), and a tint
+    named for coffee: Crema, Matcha, Cold Brew, Blueberry, Plum, Cherry,
+    Tamper, or any hue from the slider. Every colour comes from the tint (in
+    OKLCH, written out as plain hex for Chromium 91) and every pair of
+    palette colours the screens use is tested for WCAG AA contrast at every
+    hue; the shot graph keeps Decent's colours (pressure green, flow blue).
+    The look is saved with the other settings. [DESIGN.md](DESIGN.md)
+    describes the visual system.
+  - **Units**: **Temperatures**, °C (the default) or °F. In °F every
+    temperature CafAI shows or takes is in °F (the stats card, the drinks'
+    views and settings, the change card and History, the cleaning guide),
+    and the coach speaks °F; Decaid and your profiles keep °C. **Clock**,
+    24-hour (the default) or 12-hour: every time CafAI shows (wake times,
+    the log, History, Nightstand) and the wake time dialog follow it;
+    Decaid keeps its 24-hour times.
+  - **Shot cards**: **Show TDS and extraction** (on by default): off, shot
+    cards and History leave out the TDS cell and the extraction, for a
+    barista without a refractometer; a TDS already given is kept, and the
+    coach still reads it.
+  - **Screensaver**: on the Decent tablet, once Decaid says the machine is
+    asleep and nobody has touched the screen for a while, a screensaver
+    covers CafAI: **Nightstand** (a bedside clock with the next wake time,
+    the bag and the last shot), **Bouncing Portafilter**, **Espresso Pipes**
+    (where the device can run WebGL), **Beanfield**, **Rising Steam**,
+    **Lava Latte**, **Brew Rain** or **Latte Art**, or **A different one each
+    day** (the default). **Starts after** sets the while (1, 2, 5, 10 or 15
+    minutes; a minute by default) and **Dims the screen to** its brightness
+    (10 to 60 %; 30 by default). The screen stays on, dimmed, for 30
+    minutes, then goes dark as Android's timeout has it. A tap clears it and
+    wakes the machine, as Wake does; the tap never reaches what is under it.
+    **Preview** shows one now, anywhere, and a tap closes it without waking
+    anything. Turn it off with the switch; under reduced motion each shows a
+    still picture.
+- **Settings > Data and privacy**:
+  - **Backup in Decaid**: when CafAI last backed up to Decaid, and what the
+    copy holds (your bags, versions, shots and settings, never the API key).
+  - **Your data**: **Export** writes your bags, versions and shots as JSON,
+    as History's Export does (a file to keep or move to another device).
+  - **Share usage with CafAI's developer** (in CafAI's releases): "Screens,
+    taps and coach steps go to Microsoft Clarity, with all text hidden."; on
+    while this device shares; off stops it at once and on starts it again,
+    and each device keeps its own answer ([Privacy](#privacy)).
+  - **Log**: what CafAI sends to and gets from Decaid (its REST calls and
+    WebSocket frames) and the coach, as it went ("214 entries since 21:04,
+    1.2 MB"). **Open log** shows it full screen, newest first, one line per
+    entry, with filters (All, Decaid, Live frames, Coach), **Pause**, and the
+    raw headers and body of an entry you tap. **Share** (where the browser
+    has a share sheet), **Email** and **Copy** send the whole log with
+    CafAI's and Decaid's versions and your device; **Clear** empties it. The
+    machine's and the scale's frames are kept once a second ("frame +4"
+    counts the rest). The API key and the bridge's pairing code are never in
+    it.
 - **Settings > About**: CafAI's version, and the Decaid you run next to the
   one CafAI was checked against ("Decaid 0.9.0 (CafAI was verified with
-  0.8.8)", with a note when yours is older); anything Decaid sent that
-  CafAI did not expect, with **Copy report** (Decaid's routes and field
-  names, with counts and both versions, never your notes or the key); and
-  when CafAI last backed up to Decaid. In CafAI's releases, last, **Share
-  usage with CafAI's developer** ("Screens, taps and coach steps go to
-  Microsoft Clarity, with all text hidden."): on while this device shares;
-  off stops it at once and on starts it again, and each device keeps its own
-  answer ([Privacy](#privacy)).
-- **Settings > Log**: what CafAI sends to and gets from Decaid (its REST
-  calls and WebSocket frames) and the coach, as it went ("214 entries
-  since 21:04, 1.2 MB"). **Open log** shows it full screen, newest first,
-  one line per entry, with filters (All, Decaid, Live frames, Coach),
-  **Pause**, and the raw headers and body of an entry you tap. **Share**
-  (where the browser has a share sheet), **Email** and **Copy** send the
-  whole log with CafAI's and Decaid's versions and your device; **Clear**
-  empties it. The machine's and the scale's frames are kept once a second
-  ("frame +4" counts the rest). The API key and the bridge's pairing code
-  are never in it.
+  0.8.8)", with a note when yours is older); anything Decaid sent that CafAI
+  did not expect, with **Copy report** (Decaid's routes and field names,
+  with counts and both versions, never your notes or the key); **What's new
+  in 0.1.3**, this version's notes from the changelog; and **Report a
+  problem**, which opens GitHub's new issue page with CafAI's and Decaid's
+  versions filled in (it needs a GitHub account, and the issue is public).
 
 ## On a phone
 
@@ -504,7 +548,7 @@ works too) and Node 18 or newer.
    only when you start it), and, on Windows, may the firewall let the
    tablet in. Then it prints the address to use and a pairing code, for
    example `192.168.1.20` and `K7QM-2XWD`.
-2. In CafAI, **Settings > Where the coach runs > Claude on my computer**:
+2. In CafAI, **Settings > Coach > Where the coach runs > Claude on my computer**:
    type the address (`127.0.0.1` when Decaid runs on that same computer) and
    the code, **Save**, then **Test**. CafAI keeps a copy of both in Decaid,
    so after a Decaid update they come back by themselves.
@@ -531,7 +575,7 @@ troubleshooting.
 - Your Anthropic API key is stored in this skin's local browser storage on
   the device you enter it on. It is never included in exports or in CafAI's
   backup in Decaid (namespace `cafai`), and never logged.
-- **Keep my API key in Decaid** (Settings, under the key; off by default)
+- **Keep my API key in Decaid** (Settings > Coach, under the key; off by default)
   also keeps a copy in Decaid's key-value store, in a namespace of its own
   (`cafai-key`), so the key survives a Decaid update or a cleared browser.
   What that means: any device on your network can read Decaid's store,
@@ -547,7 +591,14 @@ troubleshooting.
   is stored in the skin's IndexedDB and copied to Decaid's key-value store
   (namespace `cafai`) so it survives a browser-storage reset. Like the key's
   copy, any device on your network can read it there. Export it any time as
-  JSON from History.
+  JSON from History or Settings > Data and privacy.
+- The coach's usage (Settings > Coach > Usage and cost) is counted per day
+  from what Anthropic, or Claude Code, reports with each reply: tokens,
+  requests, web searches and the estimated cost, by model and by what it was
+  for, never any text. It is kept in IndexedDB (`cafai-spend`) and copied
+  to Decaid's key-value store (namespace `cafai-spend`), where every device
+  that uses your Decaid adds its own and any device on your network can read
+  it.
 - To count the shots and steams since a step of machine care, CafAI asks
   Decaid which shot and steam are its newest and when they began, and how
   many it holds; it keeps those, never the shots themselves.
@@ -567,7 +618,7 @@ troubleshooting.
   shot's record,
   which is what Visualizer gets if you upload there. v1 and every version
   you confirm are also added to Decaid's profile library.
-- A grinder you add in Settings (**Add a grinder**), or on the coach's card
+- A grinder you add in Settings > Grinder (**Add a grinder**), or on the coach's card
   after you name it in the chat, goes into Decaid's grinder library, where
   Decaid and your other skins list it. Nothing is added without your tap;
   CafAI takes a grinder already there with the same model rather than add
@@ -582,7 +633,7 @@ troubleshooting.
   Decaid (notes, a running score as enjoyment, `drinkTds` and `drinkEy`, and
   CafAI's own extras), which Decaid may upload to Visualizer if you set that
   up. Notes you wrote yourself are never overwritten.
-- Settings > Machine care loads nothing from YouTube until you tap play or
+- Settings > Machine > Machine care loads nothing from YouTube until you tap play or
   one of the video's moments. Then YouTube's player comes from
   `youtube-nocookie.com` (YouTube's privacy-enhanced mode), and YouTube,
   that is Google, sees your device's address and that the video played.
@@ -616,7 +667,7 @@ troubleshooting.
   shown, a coach error) and five tags (CafAI's version, where the coach
   runs, Decaid's platform or a browser, the tablet or phone layout, and
   whether the device was asked first). All text is hidden: every word is
-  replaced before it leaves the device, the chat and Settings > Log are
+  replaced before it leaves the device, the chat and Settings > Data and privacy > Log are
   masked as well, and no field you type in reaches Clarity at all, not even
   as a hash: the API key, the pairing code, what you write to the coach, a
   bag's details, a TDS, a grind setting. A shot's link to Visualizer is
@@ -634,14 +685,14 @@ troubleshooting.
   there, so Clarity's own check of where the upload comes from keeps its
   cookies off. Microsoft may use the data, including for advertising: see
   [Microsoft's privacy statement](https://www.microsoft.com/privacy/privacystatement).
-  **Share usage with CafAI's developer** in Settings > About turns it off on
+  **Share usage with CafAI's developer** in Settings > Data and privacy turns it off on
   that device (Clarity's cookies are erased and nothing more is sent) or on
   again; the answer stays on the device, never in Decaid's backup or an
   export. Development builds, the tests, a fork's build, the demo and mock
   mode never load Clarity: only CafAI's releases carry its project.
 - The report in Settings > About names Decaid's routes and fields and what
   was wrong with them, never your notes, your coffee or the key.
-- Settings > Log keeps the last 1000 entries (requests, replies, frames)
+- Settings > Data and privacy > Log keeps the last 1000 entries (requests, replies, frames)
   of CafAI's traffic with Decaid and the coach in the page's memory only:
   never stored, never sent anywhere until you tap Share, Email or Copy,
   gone when the page reloads. It holds what you and the coach wrote, so
@@ -680,7 +731,7 @@ troubleshooting.
   themselves, and the key does too if **Keep my API key in Decaid** is on;
   otherwise paste it again.
 - **The coach does not answer.** The banner says why, with **Retry**:
-  - "Anthropic did not accept your API key. Check it in Settings."
+  - "Anthropic did not accept your API key. Check it in Settings > Coach."
   - "Anthropic is overloaded right now. Try again in a minute." or
     "Anthropic is rate limiting. Wait a moment and try again.": wait, then
     Retry.
@@ -707,7 +758,7 @@ troubleshooting.
 - **Import failed** in History: "That file is not a CafAI export (it is not
   JSON).", "This is not a CafAI export file.", or "This file comes from a
   newer version of CafAI. Update CafAI, then import it again." A backup to
-  Decaid that keeps failing shows as "Backup paused: …" in Settings > About.
+  Decaid that keeps failing shows as "Backup paused: …" in Settings > Data and privacy.
 - **Claude on my computer.** **Test** says what is wrong in one line:
   - "Could not reach CafAI Bridge at … Check it is running on your computer
     and that this device is on the same network.": start the bridge
@@ -725,9 +776,9 @@ troubleshooting.
   turn, the port, the network, the firewall and the schedule, and says what
   to do about each; [bridge/README.md](bridge/README.md#troubleshooting) has
   the rest.
-- **To show someone what went wrong, share the log.** Settings > Log has
+- **To show someone what went wrong, share the log.** Settings > Data and privacy > Log has
   every exchange with Decaid and the coach. Do what went wrong once more,
-  then in Settings > Log (or in **Open log**):
+  then in Settings > Data and privacy > Log (or in **Open log**):
   - **Share** (a phone or a computer with a share sheet, on a secure page)
     attaches the whole log as a `.txt` file to an email or a message.
   - **Email** opens your email app with the newest entries (a link can
@@ -744,7 +795,7 @@ troubleshooting.
 
 Still stuck? [Open an issue](https://github.com/justinmwarner/CafAI/issues/new/choose)
 with the CafAI and Decaid versions from Settings > About, the tablet or
-phone you use, and the log from Settings > Log.
+phone you use, and the log from Settings > Data and privacy > Log (Settings > About > **Report a problem** starts such an issue with the versions filled in).
 
 ## Develop
 
@@ -893,7 +944,7 @@ the demo at a fixed time, time zone and locale on a 1280x800 tablet and a
 390x844 phone, and writes the README's pictures to `docs/images/` (each
 under 300 KB). `SCREENSHOTS_PORT` moves its server from port 4176. Run it
 after a change to the screens, and commit the pictures. Its screensaver
-scene (`e2e/screenshots/screensaver.shots.ts`) writes Settings > Screensaver
+scene (`e2e/screenshots/screensaver.shots.ts`) writes Settings > Display > Screensaver
 and one frame of each screensaver at 962x602 to the git-ignored
 `test-results-screenshots/screensavers/`, for looking at, not for the README.
 
@@ -977,7 +1028,7 @@ General, "Read repository contents and packages permissions") can stay.
 | `src/coach` | Pure logic: templates and levers, bounded validator, profile hashing, shot summarizer and query tools, roast age, prompt |
 | `src/llm` | `LlmProvider` interface, streaming Anthropic client (fetch + SSE), tool-loop runner, the one request that reads a bag photo, the CafAI Bridge client |
 | `src/storage` | IndexedDB repositories, the key store (and the key's optional copy in Decaid), where the coach runs, export/import, mirror to Decaid's KV store |
-| `src/traffic` | The traffic log behind Settings > Log: the recorder, what it never keeps (the key, the pairing code, image data), and the text Share, Email and Copy send |
+| `src/traffic` | The traffic log behind Settings > Data and privacy > Log: the recorder, what it never keeps (the key, the pairing code, image data), and the text Share, Email and Copy send |
 | `src/usage` | Usage sharing with Microsoft Clarity: the region rule, the device's answer, CafAI's own loader, the screen in the address, and the attributes that keep words and fields out of Clarity |
 | `src/app` | The coach engine, services, app composition |
 | `src/ui` | Shell, machine row, stats card and alert, live graph, chat surface, history, settings, the cleaning guide and the screensavers (`src/ui/saver`) |
@@ -1056,8 +1107,8 @@ from it: code, a running conversation, or lessons.
 - **[DYE2](https://github.com/decentespresso/dye2)** ("Describe Your
   Espresso"), a plugin for Decaid published by Decent Espresso: beans, roast
   batches, grinders and equipment, a shot dashboard, auto-favourites and
-  recipes. The coach reads the setups DYE2 recorded (D119), and Settings
-  opens DYE2's Grinders page (D125); CafAI never writes DYE2's data.
+  recipes. The coach reads the setups DYE2 recorded (D119), and Settings >
+  Grinder opens DYE2's Grinders page (D125); CafAI never writes DYE2's data.
 - **[Visualizer](https://visualizer.coffee)** by Miha Rekar: a shot
   Decaid's Visualizer plugin uploaded gets an **On Visualizer** link, and
   CafAI's taste notes and ratings travel there with the shot.
