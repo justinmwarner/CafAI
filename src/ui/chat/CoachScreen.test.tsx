@@ -5,9 +5,11 @@ import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { CoachState, CoachUiMessage } from '../../app/types.ts';
 import type { LiveSample, ShotStateEvent } from '../../api/types.ts';
+import { createFakeServicesShowing } from '../testing/displayServices.ts';
 import { createFakeServices, createFakeUsage, IDLE_TELEMETRY, type FakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
-import { CoachScreen } from './CoachScreen.tsx';
+import { bagLabels, CoachScreen } from './CoachScreen.tsx';
+import { formatDateTime } from './format.ts';
 import { BAG_FROM_PHOTO, BEAN_OPTIONS, KIAMBU, SANTOS, coachStateFor } from './testing/fixtures.ts';
 import { renderWithServices } from './testing/render.tsx';
 
@@ -216,6 +218,18 @@ describe('CoachScreen', () => {
     expect(labels).toHaveLength(2);
     expect(labels.every((label) => label.startsWith('Kiambu AA · '))).toBe(true);
     expect(new Set(labels).size).toBe(2);
+  });
+
+  it('says when they were started in the clock chosen (D245)', () => {
+    const twin = { ...SANTOS, id: 'bag-twin', name: 'Kiambu AA', createdAt: '2026-09-20T07:00:00.000Z' };
+    const services = createFakeServicesShowing({ clock: '12h' }, { coach: { ...coachStateFor('options'), bags: [KIAMBU, twin] } });
+    renderWithServices(<CoachScreen />, services);
+    const labels = within(screen.getByTestId(TID.bagPicker))
+      .getAllByRole('option')
+      .map((o) => o.textContent ?? '');
+    expect(labels).toEqual([`Kiambu AA · ${formatDateTime(KIAMBU.createdAt, '12h')}`, `Kiambu AA · ${formatDateTime(twin.createdAt, '12h')}`]);
+    expect(labels.every((label) => / [ap]m$/.test(label))).toBe(true);
+    expect(bagLabels([KIAMBU, twin], '24h').get(KIAMBU.id)).toBe(`Kiambu AA · ${formatDateTime(KIAMBU.createdAt, '24h')}`);
   });
 
   it('says when no profile is loaded yet', () => {

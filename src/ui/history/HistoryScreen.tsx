@@ -24,7 +24,7 @@ import type { Bag, IterationRecord, ProfileVersion } from '../../storage/types.t
 import { OTHER_OPTION } from '../../coach/contract.ts';
 import { formatEy, formatTds, readingOf } from '../../coach/extraction.ts';
 import { inTemperatureUnit } from '../../coach/temperature.ts';
-import { useCoach, useServices, useWordsTemperatureUnit } from '../../app/services.tsx';
+import { useClockFormat, useCoach, useServices, useWordsTemperatureUnit } from '../../app/services.tsx';
 import { TID } from '../testIds.ts';
 import {
   describeChannelingFlag,
@@ -75,6 +75,7 @@ function bagDetails(bag: Bag): string {
 }
 
 function BagList({ bags, shotCounts, onSelect }: { bags: Bag[]; shotCounts: Map<string, number>; onSelect(id: string): void }) {
+  const clock = useClockFormat();
   if (bags.length === 0) {
     return (
       <Typography sx={{ color: 'text.secondary', p: 2 }}>
@@ -106,7 +107,7 @@ function BagList({ bags, shotCounts, onSelect }: { bags: Bag[]; shotCounts: Map<
               <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
                 <Typography variant="body2">{shots === 1 ? '1 shot' : `${shots} shots`}</Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                  {formatDateTime(bag.updatedAt)}
+                  {formatDateTime(bag.updatedAt, clock)}
                 </Typography>
               </Box>
               <ChevronRightIcon sx={{ color: 'text.secondary' }} />
@@ -187,6 +188,7 @@ function feedbackText(record: IterationRecord): string | null {
 
 function IterationRow({ record }: { record: IterationRecord }) {
   const words = useWords();
+  const clock = useClockFormat();
   const feedback = feedbackText(record);
   const flags = record.summary?.channelingFlags ?? [];
   return (
@@ -196,7 +198,7 @@ function IterationRow({ record }: { record: IterationRecord }) {
     >
       <Typography variant="body2">
         <Box component="span" sx={{ color: 'text.secondary' }}>
-          {formatDateTime(record.createdAt)} ·{' '}
+          {formatDateTime(record.createdAt, clock)} ·{' '}
         </Box>
         {shotLine(record)}
       </Typography>
@@ -232,6 +234,7 @@ function IterationRow({ record }: { record: IterationRecord }) {
 
 function VersionCard({ version, iterations }: { version: ProfileVersion; iterations: IterationRecord[] }) {
   const words = useWords();
+  const clock = useClockFormat();
   return (
     <Paper
       variant="outlined"
@@ -259,7 +262,7 @@ function VersionCard({ version, iterations }: { version: ProfileVersion; iterati
         />
         <Box sx={{ flex: 1 }} />
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          {formatDateTime(version.createdAt)}
+          {formatDateTime(version.createdAt, clock)}
         </Typography>
       </Stack>
       <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>

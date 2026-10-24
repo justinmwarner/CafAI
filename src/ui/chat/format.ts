@@ -6,6 +6,7 @@
 import type { SetAsideReason } from '../../app/types.ts';
 import type { Confidence } from '../../coach/contract.ts';
 import type { ShotSummary } from '../../coach/types.ts';
+import { formatTime, type ClockFormat } from '../clock.ts';
 
 const DASH = '–';
 
@@ -85,15 +86,14 @@ export function setAsideNote(reason: SetAsideReason | undefined, typed: string):
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /**
- * "3 Oct 2026, 08:05" in local time. Built by hand rather than with
- * toLocaleString so it reads the same on every tablet locale.
+ * "3 Oct 2026, 08:05" in local time, or "3 Oct 2026, 8:05 am" on the
+ * 12-hour clock (D245). Built by hand rather than with toLocaleString so it
+ * reads the same on every tablet locale.
  */
-export function formatDateTime(iso: string): string {
+export function formatDateTime(iso: string, clock: ClockFormat): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  const hh = String(date.getHours()).padStart(2, '0');
-  const mm = String(date.getMinutes()).padStart(2, '0');
-  return `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}, ${hh}:${mm}`;
+  return `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}, ${formatTime(date, clock)}`;
 }
 
 /**

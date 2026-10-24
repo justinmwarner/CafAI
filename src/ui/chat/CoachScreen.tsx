@@ -20,7 +20,7 @@ import LocalCafeIcon from '@mui/icons-material/LocalCafe';
 import UndoIcon from '@mui/icons-material/Undo';
 import type { Bag, ProfileVersion } from '../../storage/types.ts';
 import type { CoachPhase, CoachUiMessage } from '../../app/types.ts';
-import { useCoach, useServices, useTelemetry } from '../../app/services.tsx';
+import { useClockFormat, useCoach, useServices, useTelemetry } from '../../app/services.tsx';
 import { isShotRunning } from '../../api/workflow.ts';
 import { shotTraceFor } from '../machine/shotTrace.ts';
 import { StatsCard } from '../machine/StatsCard.tsx';
@@ -30,6 +30,7 @@ import { useLayout } from '../shell/layout.ts';
 import { TID } from '../testIds.ts';
 import { templateName } from '../history/historyModel.ts';
 import { ChatSurface } from './ChatSurface.tsx';
+import type { ClockFormat } from '../clock.ts';
 import { formatDateTime } from './format.ts';
 import type { OptionsPart } from './parts/types.ts';
 import { statsCardFor, statsCardShown } from './statsCard.ts';
@@ -88,18 +89,18 @@ function pickerBags(bags: readonly Bag[], activeBag: Bag | null): Bag[] {
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-/** The picker label: the bag's name, plus when it was started if another bag has the same name. */
-export function bagLabels(bags: readonly Bag[]): Map<string, string> {
+/** The picker label: the bag's name, plus when it was started (in the clock chosen, D245) if another bag has the same name. */
+export function bagLabels(bags: readonly Bag[], clock: ClockFormat): Map<string, string> {
   const counts = new Map<string, number>();
   for (const bag of bags) counts.set(bag.name, (counts.get(bag.name) ?? 0) + 1);
   return new Map(
-    bags.map((bag) => [bag.id, (counts.get(bag.name) ?? 0) > 1 ? `${bag.name} · ${formatDateTime(bag.createdAt)}` : bag.name]),
+    bags.map((bag) => [bag.id, (counts.get(bag.name) ?? 0) > 1 ? `${bag.name} · ${formatDateTime(bag.createdAt, clock)}` : bag.name]),
   );
 }
 
 function BagPicker({ bags, activeBag, disabled }: { bags: Bag[]; activeBag: Bag | null; disabled: boolean }) {
   const { coach } = useServices();
-  const labels = bagLabels(bags);
+  const labels = bagLabels(bags, useClockFormat());
   return (
     <TextField
       select
