@@ -5,14 +5,15 @@
  * cup clears for the next. The pour and the surface are latteModel.ts; this
  * file draws them.
  *
- * The porcelain (the saucer and its shadow, the handle, the cup's lip and
- * inner wall, the rim's shadow on the coffee, the sheen) is drawn once a
- * size into two layers, one under the coffee and one over its edge, and the
- * names under the cup once each. A frame lays the crema (its tone through a
- * smooth ramp, darker at the wall) and the foam (ivory, a thin brown line
- * where it meets the crema) on two small canvases, scaled up smoothly to the
- * cup, and the stream's small disturbance where it lands. The whole picture
- * drifts a few pixels a minute, so nothing bright sits still for long.
+ * The porcelain, in a pool of light on the cup (the saucer and its shadow,
+ * the handle, the cup's lip and inner wall, the rim's shadow on the coffee,
+ * the sheen), is drawn once a size into two layers, one under the coffee and
+ * one over its edge, and the pours' names, under the saucer, once each. A
+ * frame lays the crema (its tone through a smooth ramp, darker at the wall)
+ * and the foam (ivory, a thin brown line where it meets the crema) on two
+ * small canvases, scaled up smoothly to the cup, and the stream's small
+ * disturbance where it lands. The whole picture drifts a few pixels a
+ * minute, so nothing bright sits still for long.
  */
 import { hexToOklab, mixOklab, oklabToRgb, oklch, type Oklab } from '../../color.ts';
 import type { Palette } from '../../palette.ts';
@@ -453,6 +454,10 @@ function paintOver(doc: Document, at: Layout, scale: number): HTMLCanvasElement 
   return canvas;
 }
 
+/** The names' font: Figtree, a little heavier than the body's. */
+const NAME_WEIGHT = 500;
+const NAME_FAMILY = 'Figtree, system-ui, sans-serif';
+
 /** A pour's name, small, in Figtree, in the page's muted ink. */
 function paintName(doc: Document, text: string, palette: Palette, at: Layout, scale: number): HTMLCanvasElement | null {
   const width = 240 * at.unit;
@@ -460,7 +465,7 @@ function paintName(doc: Document, text: string, palette: Palette, at: Layout, sc
   const made = layer(doc, width, height, scale);
   if (!made) return null;
   const [canvas, context] = made;
-  context.font = `500 ${at.nameSize}px Figtree, system-ui, sans-serif`;
+  context.font = `${NAME_WEIGHT} ${at.nameSize}px ${NAME_FAMILY}`;
   context.textAlign = 'center';
   context.textBaseline = 'alphabetic';
   context.fillStyle = palette.inkMuted;
@@ -757,12 +762,44 @@ export const latte: CanvasSaver = {
       }
     };
 
+    const paintNames = () => {
+      for (const made of names.values()) release(made);
+      names.clear();
+      if (!at) return;
+      for (const choreo of Object.values(CHOREOGRAPHIES)) {
+        const name = paintName(doc, choreo.name, env.palette, at, scale);
+        if (name) names.set(choreo.id, name);
+      }
+    };
+
+    const paintStill = () => {
+      finished ??= pourWhole(CHOREOGRAPHIES[STILL_POUR], env.seed, STILL_HZ);
+      paintedX = Number.NaN;
+      paint({ surface: finished, version: -1, time: 0, phase: 'admire', phaseTime: 0, pour: STILL_POUR, foamShown: 1, stream: null });
+    };
+    // What was painted last, the still or a frame: the still is painted again when Figtree arrives.
+    let showingStill = false;
+    let disposed = false;
+
+    // Figtree loads when first asked for, and the names are drawn once a size: draw them again once it is here.
+    if (doc.fonts) {
+      void doc.fonts
+        .load(`${NAME_WEIGHT} 17px ${NAME_FAMILY}`, Object.values(CHOREOGRAPHIES).map((choreo) => choreo.name).join(' '))
+        .then(() => {
+          if (disposed) return;
+          paintNames();
+          if (showingStill) paintStill();
+        })
+        .catch(() => undefined);
+    }
+
     return {
       step(dtMs) {
         model?.step(dtMs);
       },
       draw() {
         if (!model) return;
+        showingStill = false;
         paint({
           surface: model.surface,
           version: model.version,
@@ -780,24 +817,19 @@ export const latte: CanvasSaver = {
         scale = nextScale;
         paintedX = Number.NaN;
         paintedY = Number.NaN;
-        for (const made of [under, over, ...names.values()]) release(made);
+        release(under);
+        release(over);
         at = width > 0 && height > 0 ? layoutFor(width, height) : null;
         under = at ? paintUnder(doc, at, scale) : null;
         over = at ? paintOver(doc, at, scale) : null;
-        names.clear();
-        if (at) {
-          for (const choreo of Object.values(CHOREOGRAPHIES)) {
-            const name = paintName(doc, choreo.name, env.palette, at, scale);
-            if (name) names.set(choreo.id, name);
-          }
-        }
+        paintNames();
       },
       still() {
-        finished ??= pourWhole(CHOREOGRAPHIES[STILL_POUR], env.seed, STILL_HZ);
-        paintedX = Number.NaN;
-        paint({ surface: finished, version: -1, time: 0, phase: 'admire', phaseTime: 0, pour: STILL_POUR, foamShown: 1, stream: null });
+        showingStill = true;
+        paintStill();
       },
       dispose() {
+        disposed = true;
         for (const made of [cremaCanvas, foamCanvas, under, over, ...names.values()]) release(made);
         names.clear();
         cremaCanvas = null;
