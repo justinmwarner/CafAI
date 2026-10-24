@@ -4410,3 +4410,68 @@ that needs WebGL (D227).
   upright reflecting the floor, so the softboxes stand from below the
   horizon to high up; a brighter, broader one washed the pipes flat, so the
   gaps between the lights are what make a pipe read round.
+
+### Beanfield and Lava Latte: round 2 (2026-10-24)
+
+The owner's words after trying the six on the tablet (2026-10-23): "for the
+others, can we get better visuals? I do like a lot of them, but just want to
+make them nicer", and earlier, that Beanfield's yellow roast read lemony.
+Round 1 drew both flat, outlined; round 2 lights them as a still life is lit
+(the shared brief: light and material, depth, calm, unmistakably coffee,
+still dark and dimmed, Chromium 91's canvas, under 4 ms a frame on a
+desktop).
+
+- **D-BEAN-1. Beanfield's beans are lit solids, drawn from sprites lit
+  pixel by pixel.** A bean is a small solid (`src/ui/saver/savers/beanShape.ts`):
+  an oval 1.38 times as long as wide, a domed back, a slightly swelled flat
+  side with the centre cut down it as a fold (a dark core between two
+  slopes), a grain fixed to the skin, and oil lying in patches, more on the
+  back than the flat side. A ray from each pixel finds it, rolled about its
+  long axis, once per roll frame (24 a turn; the second half of the roll is
+  the first turned half round, as the bean, its cut and its grain look the
+  same turned half round) and per size (4, the biggest 168 device px); each
+  sprite is then lit for a roast and for the side the key light will come
+  from once it is turned to its place: a warm key from the upper left, a dim
+  fill, a back light from the lower right (the bean's own colour on a side
+  turned to it, a warm glint on the edge it grazes), and a glint, strong on
+  the oily dark roasts. Each bean keeps its angle on the screen as it comes,
+  but for a 7° wobble, and rolls about its long axis, so it shows its flat
+  side, its edge and its back in turn while the light keeps its side; between
+  two frames its sprite is stretched to the roll's own silhouette. Sprites
+  are made the first time they are wanted and kept: the two small sizes all
+  of them, the two big ones their most recently used, about 1.3 million
+  pixels each (some 16 MB in all); a frame makes at most two big ones, and a
+  bean past that is drawn from a frame of its roll one or two away; a still
+  makes all it needs. About 2 ms a frame on the desktop once running, 1 ms of
+  it the drawing. Why: the owner asked for nicer, and a gradient on an oval
+  only ever looks like a lozenge; per-pixel light is what makes a small solid
+  read as lit, and Chromium 91's 2D canvas can only have it made once in
+  script and kept. A bean that turned on the screen would cross from one
+  light's sprite to the next and its glint would jump, so beans keep their
+  angle and roll instead, which is how a thrown bean spins anyway.
+- **D-BEAN-2. Beanfield's depth: a haze, the drum light and streaks.** A
+  far bean comes out of the page quickly but only to 30% of itself, rising
+  through the haze to all of itself from a third of the way in, so the far
+  ones are dim and near the page's colour and the near ones crisp and full. A
+  warm glow lies deep in the middle, as if the roaster's drum light were
+  behind the beans: about 16% of a warm amber over the page at its heart,
+  gone by 55% of the screen's longer side, dithered so it shows no rings, and
+  breathing 12% over 14 s. A near bean faster than 160 px a second leaves a
+  streak, five fading copies of itself over its last 60 ms, all of it from
+  420 px a second. Why: haze, scale and the light behind give the field its
+  depth; the glow is dim and soft, never a bright area held in one place; the
+  copies say speed for what a few draws cost, where a blur would cost a
+  filter Chromium 91's canvas lacks.
+- **D-BEAN-3. The roasts are a roaster's stages.** Green coffee is a pale
+  grey-green, the yellowing straw (never lemon), then cinnamon, city, full
+  city, Vienna and French, each browner and redder as it darkens
+  (`src/ui/saver/savers/roasts.ts`). Their oil (`Roast.gloss`, new) grows
+  from 0.04 to 0.8, showing from full city on. Every rim light is at least
+  3:1 on the dark page of every tint, as before, and the badge colours
+  Bouncing Portafilter steps through follow the same stages, still 3:1. The
+  burst's beans (`drawBean`) are lit the same way with paths, the key kept on
+  the screen's upper left whatever the context's turn where the browser can
+  say it (`getTransform`). Why: the owner found the yellow lemony, and a
+  roast stage is a colour coffee people know; the dark roasts' bodies are as
+  dark as they are, and their rim light and their oil's glint show them on
+  the page.

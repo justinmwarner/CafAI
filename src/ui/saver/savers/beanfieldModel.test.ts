@@ -4,13 +4,16 @@ import {
   BEAN_COUNT,
   BOX,
   CENTRE_CLEAR,
+  CLEAR_Z,
   CROSSING_MS,
   createBeanfieldModel,
   depthAlpha,
   FAR_LENGTH_SHARE,
-  MIN_SQUEEZE,
+  HAZE_FAR,
   projectBean,
-  squeezeOf,
+  screenVelocity,
+  turnOf,
+  WOBBLE,
   type BeanfieldModel,
   type FieldBean,
   type Projection,
@@ -26,7 +29,7 @@ function stepFor(model: BeanfieldModel, ms: number, frameMs = FRAME_MS): void {
 }
 
 function bean(patch: Partial<FieldBean> = {}): FieldBean {
-  return { x: 0, y: 0, z: 0.5, spin: 0, spinRate: 0, tumble: 0, tumbleRate: 0, squeezesLength: false, roast: 0, size: 1, ...patch };
+  return { x: 0, y: 0, z: 0.5, spin: 0, wobble: 0, wobbleRate: 0, roll: 0, rollRate: 0, roast: 0, size: 1, ...patch };
 }
 
 function insideTheBox(model: BeanfieldModel): void {
@@ -171,53 +174,96 @@ describe('the beans', () => {
     for (const count of counts) expect(count).toBeGreaterThan(8);
   });
 
-  it('turn slowly and tumble, a flip now and then', () => {
+  it('roll about their long axes, each its own way, showing their flat sides and their backs in turn', () => {
     const model = createBeanfieldModel(2);
     for (const b of model.beans) {
-      expect(Math.abs(b.spinRate)).toBeLessThanOrEqual(0.55);
-      expect(Math.abs(b.tumbleRate)).toBeGreaterThanOrEqual(0.7);
+      expect(Math.abs(b.rollRate)).toBeGreaterThanOrEqual(0.5);
+      expect(Math.abs(b.rollRate)).toBeLessThanOrEqual(1.3);
     }
-    const first = model.beans.map((b) => ({ spin: b.spin, tumble: b.tumble, z: b.z }));
+    expect(model.beans.some((b) => b.rollRate > 0)).toBe(true);
+    expect(model.beans.some((b) => b.rollRate < 0)).toBe(true);
+    const first = model.beans.map((b) => ({ roll: b.roll, z: b.z }));
     model.step(500);
     model.beans.forEach((b, i) => {
-      if (b.z < first[i]!.z) {
-        expect(b.spin).not.toBe(first[i]!.spin);
-        expect(b.tumble).not.toBe(first[i]!.tumble);
-      }
+      if (b.z < first[i]!.z) expect(b.roll).not.toBe(first[i]!.roll);
     });
-    // Over a few seconds some bean is on its face and some on its back.
+    // At any moment some bean shows its flat side and some its back.
     stepFor(model, 3000);
-    expect(model.beans.some((b) => squeezeOf(b.tumble) > 0)).toBe(true);
-    expect(model.beans.some((b) => squeezeOf(b.tumble) < 0)).toBe(true);
-    expect(model.beans.some((b) => b.squeezesLength)).toBe(true);
-    expect(model.beans.some((b) => !b.squeezesLength)).toBe(true);
+    expect(model.beans.filter((b) => Math.cos(b.roll) > 0.7).length).toBeGreaterThan(20);
+    expect(model.beans.filter((b) => Math.cos(b.roll) < -0.7).length).toBeGreaterThan(20);
   });
-});
 
-describe('squeezeOf', () => {
-  it('is the cosine of the phase, and never quite zero', () => {
-    expect(squeezeOf(0)).toBe(1);
-    expect(squeezeOf(Math.PI)).toBe(-1);
-    expect(squeezeOf(Math.PI / 3)).toBeCloseTo(0.5, 9);
-    expect(squeezeOf(Math.PI / 2)).toBe(MIN_SQUEEZE);
-    expect(squeezeOf(-Math.PI / 2 + 0.01)).toBe(MIN_SQUEEZE);
-    expect(squeezeOf((3 * Math.PI) / 2 + 0.001)).toBe(MIN_SQUEEZE);
-    expect(squeezeOf(Math.PI / 2 + 0.01)).toBe(-MIN_SQUEEZE);
+  it('keep their angle on the screen as they come, but for a small wobble, so the light keeps its side on them', () => {
+    const model = createBeanfieldModel(3);
+    const spins = model.beans.map((b) => b.spin);
+    const turns = model.beans.map((b) => [turnOf(b)]);
+    for (let i = 0; i < 60; i += 1) {
+      model.step(FRAME_MS);
+      model.beans.forEach((b, index) => turns[index]!.push(turnOf(b)));
+    }
+    let kept = 0;
+    model.beans.forEach((b, index) => {
+      // A bean not recycled meanwhile (a recycled one has a new angle) kept its angle.
+      if (b.spin !== spins[index]) return;
+      kept += 1;
+      for (const turn of turns[index]!) expect(Math.abs(turn - b.spin)).toBeLessThanOrEqual(WOBBLE + 1e-12);
+    });
+    expect(kept).toBeGreaterThan(BEAN_COUNT * 0.6);
+    // It does wobble.
+    const swing = turns.map((list) => Math.max(...list) - Math.min(...list));
+    expect(swing.filter((s) => s > 0.05).length).toBeGreaterThan(BEAN_COUNT / 2);
   });
 });
 
 describe('depthAlpha', () => {
-  it('fades the far beans in from the page', () => {
+  it('fades the far beans in from the page, then through the haze to all of them near', () => {
     expect(depthAlpha(Z_FAR)).toBe(0);
     expect(depthAlpha(Z_NEAR)).toBe(1);
-    expect(depthAlpha(0.5)).toBe(1);
+    expect(depthAlpha(CLEAR_Z)).toBe(1);
     let last = 0;
     for (let z = Z_FAR; z >= Z_NEAR; z -= 0.01) {
       const alpha = depthAlpha(z);
       expect(alpha).toBeGreaterThanOrEqual(last - 1e-12);
       last = alpha;
     }
+    // They come out of the page quickly, so none is seen to appear, but only as far as the haze lets them.
     expect(depthAlpha(Z_FAR - 0.05)).toBeLessThan(0.2);
+    expect(depthAlpha(Z_FAR - 0.12)).toBeGreaterThan(HAZE_FAR * 0.9);
+    expect(depthAlpha(Z_FAR - 0.12)).toBeLessThan(0.5);
+    // Halfway through the haze, half way to clear.
+    const middle = depthAlpha((CLEAR_Z + Z_FAR) / 2);
+    expect(middle).toBeGreaterThan(0.55);
+    expect(middle).toBeLessThan(0.75);
+  });
+});
+
+describe('screenVelocity', () => {
+  const out = { x: 0, y: 0 };
+
+  it('is still in the middle line, and straight out from it elsewhere, faster the nearer', () => {
+    screenVelocity(bean({ x: 0, y: 0, z: 0.5 }), 962, 602, out);
+    expect(out.x).toBe(0);
+    expect(out.y).toBe(0);
+    screenVelocity(bean({ x: 0.3, y: -0.2, z: 0.5 }), 962, 602, out);
+    expect(out.x).toBeGreaterThan(0);
+    expect(out.y).toBeLessThan(0);
+    const far = Math.hypot(out.x, out.y);
+    screenVelocity(bean({ x: 0.3, y: -0.2, z: 0.25 }), 962, 602, out);
+    expect(Math.hypot(out.x, out.y)).toBeCloseTo(4 * far, 9);
+  });
+
+  it('is how far the bean really moves on the screen in a step', () => {
+    const model = createBeanfieldModel(4, 1);
+    const only = model.beans[0]!;
+    only.x = 0.3;
+    only.y = 0.25;
+    only.z = 0.6;
+    const before = { ...projectBean(only, 962, 602, { x: 0, y: 0, length: 0 }) };
+    screenVelocity(only, 962, 602, out);
+    model.step(10);
+    const after = projectBean(only, 962, 602, { x: 0, y: 0, length: 0 });
+    expect((after.x - before.x) / 0.01).toBeCloseTo(out.x, 0);
+    expect((after.y - before.y) / 0.01).toBeCloseTo(out.y, 0);
   });
 });
 
