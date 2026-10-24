@@ -1,32 +1,159 @@
 /**
- * Brew Rain, after The Matrix's falling code (D227): columns of katakana
- * (the letters of コーヒー, エスプレッソ, ラテ and カフェ) and digits fall down the
- * dark screen, a near-white head ahead of a trail in the shot graph's pressure
- * green, and every few seconds one column spells a coffee word, or one of the
- * last shot's numbers, instead. The classic trail: each frame fades what is
- * painted a little and paints only the heads, and the cell a head has just
- * left, turned to the trail's colour. Where the heads are is rainModel.ts. The
- * katakana come from the device's own font.
+ * Brew Rain (D-RAIN-1 to D-RAIN-3): after The Matrix's falling code, water
+ * falls from a group head's shower screen and brews on its way down into the
+ * cup. Along the top, the underside of the dispersion screen: brushed steel
+ * with rows of small holes, a column under each hole of the front two rows.
+ * Down each column a head falls, a coffee glyph (a bean, a drop, a cup,
+ * cherries, a leaf, steam, a latte-art heart: rainGlyphs.ts) or a letter of
+ * coffee's words and numbers in Figtree; pale water near the top, crema gold
+ * further down, amber near the cup, each glowing softly; its trail sinks
+ * through amber and espresso brown into the page. The far columns, between
+ * the near ones, are smaller, slower and fainter. Every few seconds a column
+ * spells a word (ESPRESSO, 9 BAR, the last shot's 36.4), lit a moment. At the
+ * bottom, the cup: coffee under its crema, a slow wave on the surface, and
+ * each head that reaches it drops in with a splash and rings spreading on the
+ * crema. Where everything is is rainModel.ts.
  *
- * The canvas is left transparent where nothing is painted, over the page's
- * colour as its own CSS background, and the fade is of the paint's opacity.
- * Fading the picture toward the page's colour instead would never arrive at
- * it: 8-bit colour rounds a very dark page's blue away a little each frame, so
- * the whole canvas drifts to another shade and every wiped cell shows as a box.
+ * The trail is the classic one: a canvas of its own, faded a little each
+ * frame, where only the cells the heads leave are painted (the fade is of the
+ * paint's opacity: fading toward the page's colour would never arrive at it,
+ * 8-bit colour rounding a dark page's blue away a little each frame). Each
+ * frame copies it onto the screensaver's canvas, whose own background is the
+ * page, and draws over it, crisp: the words, the heads with their glow, the
+ * cup and the shower screen, from sprites drawn once a size.
  */
+import { hexToOklab, mixOklab, oklabToRgb, oklch, parseHex } from '../../color.ts';
+import { createRandom } from '../random.ts';
 import type { CanvasSaver, SaverInstance } from '../types.ts';
-import { columnsFor, COLUMN_PITCH, createRainModel, ROW_HEIGHT, rowsFor, type RainModel } from './rainModel.ts';
+import { paintGlyph } from './rainGlyphs.ts';
+import {
+  createRainModel,
+  FAR,
+  isStillMoment,
+  isSymbol,
+  layoutFor,
+  letterAlpha,
+  LEVEL_FULL,
+  levelY,
+  NEAR,
+  PITCH,
+  rippleAt,
+  rowY,
+  STILL_FROM_MS,
+  surfaceAt,
+  WAVE_REACH,
+  type RainColumn,
+  type RainLayer,
+  type RainLayout,
+  type RainModel,
+} from './rainModel.ts';
 
-/** Figtree has no katakana: the device's own Japanese font (a few common names, Android's first), and sans-serif to end on. */
-const FONT_STACK = '"Noto Sans CJK JP", "Noto Sans JP", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif';
-/** How much more transparent the paint gets each frame, at 30 frames a second. */
-const FADE_PER_FRAME = 0.04;
+const FAMILY = '"Figtree", system-ui, sans-serif';
+/** How much more transparent the trail's paint gets each frame, at 30 frames a second. */
+const FADE_PER_FRAME = 0.044;
 const FRAME_MS = 1000 / 30;
-/** The still is the frame at 8 s; the trails have faded within the last few of them, so only those are painted. */
-const STILL_MS = 8000;
+/** The still's trails have faded within the last few seconds before it, so only those are painted. */
 const STILL_PAINTED_MS = 3000;
+/** The colours down the screen come in this many steps, each with its glow drawn once. */
+const STEPS = 16;
+/** A near head's glow reaches this far from its middle, px; a far one's is scaled to its size. */
+const GLOW_RADIUS = 30;
+/** A far column, against a near one: its colours this far toward the page, its glow this bright. */
+const FAR_FADE = 0.42;
+const FAR_GLOW = 0.45;
+/** How deep the crema is under the surface, px, before the coffee. */
+const CREMA_DEPTH = 20;
+/** The surface's line is drawn through a point every this many px. */
+const WAVE_STEP = 8;
+/** The holes' rows on the screen's underside, up from its front edge, px: the front row over the near columns, the next over the far ones. */
+const HOLE_ROWS = [
+  { up: 10, size: 1, offset: NEAR.offset },
+  { up: 17, size: 0.8, offset: FAR.offset },
+  { up: 22.5, size: 0.65, offset: NEAR.offset },
+  { up: 27, size: 0.53, offset: FAR.offset },
+  { up: 30.5, size: 0.43, offset: NEAR.offset },
+] as const;
 
-/** What a column's head was last painted as: its cell, and whether it is a letter of a word. */
+type Lch = readonly [lightness: number, chroma: number, hue: number];
+
+/** A colour ramp in OKLCH, sampled at a share 0 (the top) to 1 (the cup). */
+type Ramp = readonly (readonly [at: number, colour: Lch])[];
+
+/** The heads: pale water at the top, crema gold, then amber by the cup. */
+const HEAD_RAMP: Ramp = [
+  [0, [0.95, 0.03, 225]],
+  [0.3, [0.92, 0.07, 95]],
+  [0.6, [0.86, 0.12, 80]],
+  [1, [0.79, 0.14, 64]],
+];
+/** The trails: what the water has brewed, gold near the top to amber and a reddish brown below. */
+const TRAIL_RAMP: Ramp = [
+  [0, [0.82, 0.08, 90]],
+  [0.45, [0.75, 0.125, 72]],
+  [1, [0.66, 0.13, 55]],
+];
+
+/** The shower screen's steel, from the back of its underside to the front, and its holes and lip. */
+const STEEL_BACK: Lch = [0.3, 0.006, 250];
+const STEEL_FRONT: Lch = [0.5, 0.008, 250];
+const STEEL_LIGHT: Lch = [0.86, 0.006, 250];
+const STEEL_EDGE: Lch = [0.36, 0.008, 250];
+const HOLE: Lch = [0.12, 0.004, 250];
+
+/** The cup: the crema at its surface and deeper, the coffee under it. */
+const CREMA_TOP: Lch = [0.86, 0.06, 82];
+const CREMA_LIGHT: Lch = [0.76, 0.09, 72];
+const CREMA_MID: Lch = [0.64, 0.105, 60];
+const CREMA_LOW: Lch = [0.46, 0.085, 50];
+const COFFEE_TOP: Lch = [0.3, 0.055, 45];
+const COFFEE_LOW: Lch = [0.22, 0.035, 42];
+const SURFACE_LINE: Lch = [0.94, 0.04, 88];
+const RIPPLE: Lch = [0.95, 0.035, 88];
+const RIPPLE_TROUGH: Lch = [0.5, 0.08, 55];
+const DROPLET: Lch = [0.9, 0.08, 82];
+
+const css = ([l, c, h]: Lch) => oklch(l, c, h);
+
+function rgba(hex: string, alpha: number): string {
+  const [r, g, b] = parseHex(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/** Two colours mixed in OKLab, as hex. */
+function mix(from: string, to: string, t: number): string {
+  const [r, g, b] = oklabToRgb(mixOklab(hexToOklab(from), hexToOklab(to), t));
+  return `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** A ramp's colour at `share` (0 to 1). */
+function sample(ramp: Ramp, share: number): string {
+  const t = Math.min(1, Math.max(0, share));
+  for (let i = 1; i < ramp.length; i += 1) {
+    const [at, colour] = ramp[i]!;
+    if (t <= at) {
+      const [lastAt, last] = ramp[i - 1]!;
+      return mix(css(last), css(colour), (t - lastAt) / (at - lastAt));
+    }
+  }
+  return css(ramp[ramp.length - 1]![1]);
+}
+
+/** A layer's colours at one step down the screen: its heads' and its trail's, each with the darker shade of their fine lines. */
+interface Shades {
+  head: string;
+  headDetail: string;
+  trail: string;
+  trailDetail: string;
+}
+
+/** One step down the screen: each layer's shades, and the near heads' glow. */
+interface Step {
+  near: Shades;
+  far: Shades;
+  glow: HTMLCanvasElement;
+}
+
+/** What a column's head was last painted as: its cell, its glyph, and whether it is a letter of a word. */
 interface Painted {
   row: number;
   glyph: string;
@@ -40,95 +167,556 @@ export const rain: CanvasSaver = {
   create(canvas, env) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
-    const { palette } = env;
-    const headColour = palette.ink;
-    const trailColour = palette.graph.pressure;
+    const doc = canvas.ownerDocument;
+    const trail = doc.createElement('canvas');
+    const trailCtx = trail.getContext('2d');
+    if (!trailCtx) return null;
+    const page = env.palette.background;
+    // The page is the canvas's own background: each frame copies the trail over it as it is, clear where it is clear.
     const hostBackground = canvas.style.backgroundColor;
-    canvas.style.backgroundColor = palette.background;
+    canvas.style.backgroundColor = page;
+
+    let layout: RainLayout | null = null;
     let model: RainModel | null = null;
     let width = 0;
     let height = 0;
     let scale = 1;
-    /** Where the first column starts: the columns are centred on the screen. */
-    let left = 0;
+    /**
+     * The trail's own scale: a CSS pixel to a pixel, below the canvas's on a finer screen. Its fade is
+     * most of what a frame costs where a canvas is drawn without the GPU, and a fading trail shows no
+     * difference; the heads, the words, the screen and the cup are drawn at the canvas's scale.
+     */
+    let trailScale = 1;
     /** The first frame after a size change starts from nothing painted, rather than fading what was. */
     let blank = true;
     /** Time stepped since the last frame: the fade goes by it, so a slow frame fades as much as the time it covers. */
     let pendingMs = 0;
     let painted: (Painted | null)[] = [];
-    const fonts = new Map<number, string>();
-    /** The font the context holds: set only when it changes, and forgotten when the canvas is resized (that resets the context). */
-    let currentFont = '';
+    /** Each layer's floor when the trail was last cleared below it. */
+    const clearedFloors = new Map<RainLayer, number>();
+    let steps: Step[] = [];
+    let screen: HTMLCanvasElement | null = null;
+    let cup: HTMLCanvasElement | null = null;
+    let cupPattern: CanvasPattern | null = null;
+    /** Where the cup's sprite starts above the level, px. */
+    let cupAbove = 0;
+    let glowAbove: HTMLCanvasElement | null = null;
+    let dropSprite: HTMLCanvasElement | null = null;
+    /** The fonts each context holds: set only when they change, and forgotten when a canvas is resized (that resets its context). */
+    let mainFont = '';
+    let trailFont = '';
 
-    const clearCell = (col: number, row: number) => {
-      // A pixel wider each side than the column's pitch: the glyphs leave that much room.
-      ctx.clearRect(left + col * COLUMN_PITCH - 1, row * ROW_HEIGHT, COLUMN_PITCH + 2, ROW_HEIGHT);
+    const sprite = (w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] | null => {
+      const made = doc.createElement('canvas');
+      made.width = Math.max(1, Math.ceil(w));
+      made.height = Math.max(1, Math.ceil(h));
+      const made2d = made.getContext('2d');
+      return made2d ? [made, made2d] : null;
     };
 
-    const paintGlyph = (glyph: string, col: number, row: number, colour: string, size: number) => {
-      let font = fonts.get(size);
-      if (!font) {
-        font = `${size}px ${FONT_STACK}`;
-        fonts.set(size, font);
+    const release = (sprites: (HTMLCanvasElement | null)[]) => {
+      for (const one of sprites) {
+        if (one) {
+          one.width = 0;
+          one.height = 0;
+        }
       }
-      if (currentFont !== font) {
-        ctx.font = font;
-        currentFont = font;
-      }
-      ctx.fillStyle = colour;
-      ctx.fillText(glyph, left + col * COLUMN_PITCH + COLUMN_PITCH / 2, row * ROW_HEIGHT + ROW_HEIGHT / 2);
     };
 
-    const draw = () => {
-      if (!model || width <= 0 || height <= 0) return;
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    /** A soft round glow of `colour`, brightest in the middle: drawn added to what is under it. */
+    const makeGlow = (colour: string, radius: number, strength: number): HTMLCanvasElement | null => {
+      const size = Math.ceil(radius * 2 * scale);
+      const made = sprite(size, size);
+      if (!made) return null;
+      const [glow, g] = made;
+      const middle = size / 2;
+      const gradient = g.createRadialGradient(middle, middle, 0, middle, middle, middle);
+      // About a Gaussian: soft all the way out, nothing at the edge.
+      for (const [at, share] of [
+        [0, 1],
+        [0.15, 0.82],
+        [0.3, 0.52],
+        [0.5, 0.22],
+        [0.7, 0.07],
+        [1, 0],
+      ] as const) {
+        gradient.addColorStop(at, rgba(colour, strength * share));
+      }
+      g.fillStyle = gradient;
+      g.fillRect(0, 0, size, size);
+      return glow;
+    };
+
+    /** The underside of the shower screen along the top: brushed steel, rows of holes, a lit lip. */
+    const makeScreen = (found: RainLayout): HTMLCanvasElement | null => {
+      const made = sprite(width * scale, found.band * scale);
+      if (!made) return null;
+      const [band, g] = made;
+      g.setTransform(scale, 0, 0, scale, 0, 0);
+      const steel = g.createLinearGradient(0, 0, 0, found.band);
+      steel.addColorStop(0, css(STEEL_BACK));
+      steel.addColorStop(0.75, css(STEEL_FRONT));
+      steel.addColorStop(1, mix(css(STEEL_FRONT), css(STEEL_LIGHT), 0.2));
+      g.fillStyle = steel;
+      g.fillRect(0, 0, width, found.band);
+      // Brushed: fine streaks along it, a little lighter or darker, seeded so each size draws the same.
+      const next = createRandom(0x5c4ee7);
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      const streaks = Math.round(found.band * scale * 7);
+      for (let i = 0; i < streaks; i += 1) {
+        const y = Math.floor(next() * found.band * scale);
+        const x = next() * width * scale;
+        const length = (0.08 + next() * 0.5) * width * scale;
+        g.fillStyle = next() < 0.5 ? `rgba(255, 255, 255, ${0.025 + next() * 0.05})` : `rgba(0, 0, 0, ${0.04 + next() * 0.07})`;
+        g.fillRect(x - length / 2, y, length, 1);
+      }
+      g.setTransform(scale, 0, 0, scale, 0, 0);
+      // The holes, each row further back smaller and closer to the last, staggered by half a pitch.
+      for (const row of HOLE_ROWS) {
+        const y = found.band - row.up;
+        const rx = 2.6 * row.size;
+        const ry = 1.5 * row.size;
+        if (y - 2 * ry < 1) continue;
+        let x = found.left + row.offset * PITCH;
+        while (x - PITCH > -rx) x -= PITCH;
+        for (; x < width + rx; x += PITCH) {
+          // The hole's rim, lit along its near edge, then the hole.
+          g.fillStyle = rgba(css(STEEL_LIGHT), 0.6 * row.size);
+          g.beginPath();
+          g.ellipse(x, y + ry * 0.5, rx * 1.12, ry * 1.12, 0, 0, Math.PI * 2);
+          g.fill();
+          g.fillStyle = css(HOLE);
+          g.beginPath();
+          g.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
+      // The lip along the front: a lit edge, then its darker face.
+      g.fillStyle = css(STEEL_LIGHT);
+      g.fillRect(0, found.band - 4, width, 1.2);
+      g.fillStyle = mix(css(STEEL_FRONT), css(STEEL_EDGE), 0.5);
+      g.fillRect(0, found.band - 2.8, width, 0.8);
+      g.fillStyle = css(STEEL_EDGE);
+      g.fillRect(0, found.band - 2, width, 2);
+      return band;
+    };
+
+    /** The cup's coffee from just above the level to the screen's bottom when it is fullest: crema over coffee, mottled. */
+    const makeCup = (found: RainLayout): HTMLCanvasElement | null => {
+      cupAbove = WAVE_REACH + 3;
+      const tall = found.height * LEVEL_FULL + cupAbove + 2;
+      const made = sprite(width * scale, tall * scale);
+      if (!made) return null;
+      const [made2, g] = made;
+      g.setTransform(scale, 0, 0, scale, 0, 0);
+      const top = cupAbove - WAVE_REACH;
+      const depth = (y: number) => (y - top) / (tall - top);
+      const body = g.createLinearGradient(0, top, 0, tall);
+      body.addColorStop(0, css(CREMA_TOP));
+      body.addColorStop(depth(top + 2.5), css(CREMA_LIGHT));
+      body.addColorStop(depth(top + CREMA_DEPTH * 0.45), css(CREMA_MID));
+      body.addColorStop(depth(top + CREMA_DEPTH), css(CREMA_LOW));
+      body.addColorStop(depth(top + CREMA_DEPTH * 1.5), css(COFFEE_TOP));
+      body.addColorStop(1, css(COFFEE_LOW));
+      g.fillStyle = css(CREMA_TOP);
+      g.fillRect(0, 0, width, top);
+      g.fillStyle = body;
+      g.fillRect(0, top, width, tall - top);
+      // The crema's mottle, seeded so each size draws the same: soft lighter and darker clouds,
+      // the tiger's darker flecks low in it, and fine bubbles near its top.
+      const next = createRandom(0xc4e3a);
+      const cloud = (x: number, y: number, rx: number, ry: number, colour: string, alpha: number) => {
+        g.save();
+        g.translate(x, y);
+        g.scale(rx, ry);
+        const soft = g.createRadialGradient(0, 0, 0, 0, 0, 1);
+        soft.addColorStop(0, rgba(colour, alpha));
+        soft.addColorStop(1, rgba(colour, 0));
+        g.fillStyle = soft;
+        g.fillRect(-1, -1, 2, 2);
+        g.restore();
+      };
+      const clouds = Math.round(width / 26);
+      for (let i = 0; i < clouds; i += 1) {
+        const lighter = next() < 0.5;
+        cloud(next() * width, top + 2 + next() * CREMA_DEPTH * 0.8, 20 + next() * 50, 3 + next() * 4, css(lighter ? CREMA_TOP : CREMA_LOW), 0.16 + next() * 0.16);
+      }
+      const flecks = Math.round(width / 9);
+      for (let i = 0; i < flecks; i += 1) {
+        cloud(next() * width, top + CREMA_DEPTH * (0.4 + next() * 0.55), 1.5 + next() * 2.5, 3 + next() * 4, css(CREMA_LOW), 0.22 + next() * 0.25);
+      }
+      const bubbles = Math.round(width / 6);
+      for (let i = 0; i < bubbles; i += 1) {
+        g.fillStyle = rgba(css(SURFACE_LINE), 0.2 + next() * 0.3);
+        g.beginPath();
+        g.arc(next() * width, top + 1 + next() * 6, 0.35 + next() * 0.75, 0, Math.PI * 2);
+        g.fill();
+      }
+      return made2;
+    };
+
+    /** Warm light off the crema, rising a little way into the air above it. */
+    const makeGlowAbove = (): HTMLCanvasElement | null => {
+      const tall = 46;
+      const made = sprite(1, tall * scale);
+      if (!made) return null;
+      const [made2, g] = made;
+      const gradient = g.createLinearGradient(0, 0, 0, tall * scale);
+      gradient.addColorStop(0, rgba(css(CREMA_MID), 0));
+      gradient.addColorStop(0.6, rgba(css(CREMA_MID), 0.05));
+      gradient.addColorStop(1, rgba(css(CREMA_TOP), 0.14));
+      g.fillStyle = gradient;
+      g.fillRect(0, 0, 1, tall * scale);
+      return made2;
+    };
+
+    /** The drop a head lets go into the cup: amber, lit from the top left. */
+    const makeDrop = (): HTMLCanvasElement | null => {
+      const w = 9;
+      const h = 13;
+      const made = sprite(w * scale, h * scale);
+      if (!made) return null;
+      const [made2, g] = made;
+      g.setTransform(scale, 0, 0, scale, 0, 0);
+      g.translate(w / 2, h / 2);
+      const amber = sample(HEAD_RAMP, 1);
+      const shade = g.createRadialGradient(-1.3, 1, 0.5, 0, 1.5, 5);
+      shade.addColorStop(0, mix(amber, '#ffffff', 0.45));
+      shade.addColorStop(0.6, amber);
+      shade.addColorStop(1, mix(amber, page, 0.35));
+      g.fillStyle = shade;
+      g.beginPath();
+      g.moveTo(0, -6);
+      g.bezierCurveTo(1, -4, 3.8, -1.2, 3.8, 1.8);
+      g.arc(0, 1.8, 3.8, 0, Math.PI);
+      g.bezierCurveTo(-3.8, -1.2, -1, -4, 0, -6);
+      g.fill();
+      g.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      g.beginPath();
+      g.ellipse(-1.3, 1.2, 0.8, 1.3, 0.4, 0, Math.PI * 2);
+      g.fill();
+      return made2;
+    };
+
+    const releaseSprites = () => {
+      release([screen, cup, glowAbove, dropSprite, ...steps.map((one) => one.glow)]);
+      screen = null;
+      cup = null;
+      cupPattern = null;
+      glowAbove = null;
+      dropSprite = null;
+      steps = [];
+    };
+
+    const makeSprites = (found: RainLayout) => {
+      releaseSprites();
+      const shades = (head: string, trailColour: string): Shades => ({
+        head,
+        headDetail: mix(head, page, 0.62),
+        trail: trailColour,
+        trailDetail: mix(trailColour, page, 0.6),
+      });
+      for (let i = 0; i < STEPS; i += 1) {
+        const share = i / (STEPS - 1);
+        const head = sample(HEAD_RAMP, share);
+        const trailColour = sample(TRAIL_RAMP, share);
+        const glow = makeGlow(head, GLOW_RADIUS, 0.32);
+        if (!glow) return;
+        steps.push({ near: shades(head, trailColour), far: shades(mix(head, page, FAR_FADE), mix(trailColour, page, FAR_FADE)), glow });
+      }
+      screen = makeScreen(found);
+      cup = makeCup(found);
+      cupPattern = cup ? ctx.createPattern(cup, 'repeat-x') : null;
+      glowAbove = makeGlowAbove();
+      dropSprite = makeDrop();
+    };
+
+    /** The colour step for a column's row: how far down it is, from the top to its layer's floor. */
+    const stepFor = (found: RainModel, layer: RainLayer, row: number): Step => {
+      const floor = found.floorOf(layer);
+      const share = floor > 1 ? row / (floor - 1) : 0;
+      return steps[Math.min(STEPS - 1, Math.max(0, Math.round(share * (STEPS - 1))))]!;
+    };
+
+    const shadesOf = (step: Step, layer: RainLayer): Shades => (layer === NEAR ? step.near : step.far);
+
+    /** The middle of a column's cell, px. */
+    const cellY = (found: RainModel, column: RainColumn, row: number) => rowY(found.layout, row, column.layer) + column.layer.row / 2;
+
+    /** A glyph in its cell, centred; `on` is the context, `font` the font it holds now (returned, maybe changed). */
+    const glyphAt = (on: CanvasRenderingContext2D, font: string, glyph: string, x: number, y: number, size: number, colour: string, detail: string, at = scale): string => {
+      if (glyph === '' || glyph === ' ') return font;
+      if (isSymbol(glyph)) {
+        const unit = size * 0.92 * at;
+        on.setTransform(unit, 0, 0, unit, x * at, y * at);
+        paintGlyph(on, glyph, colour, detail);
+        return font;
+      }
+      on.setTransform(at, 0, 0, at, 0, 0);
+      const wanted = `700 ${size}px ${FAMILY}`;
+      if (font !== wanted) on.font = wanted;
+      on.fillStyle = colour;
+      on.fillText(glyph, x, y + size * 0.36);
+      return wanted;
+    };
+
+    /** The lowest edge, px, the trail can reach: the deepest of the layers' floors. */
+    const trailBottom = (found: RainModel) => Math.max(rowY(found.layout, found.floorOf(NEAR), NEAR), rowY(found.layout, found.floorOf(FAR), FAR));
+
+    /** The trail: fade it, paint the cells the heads have left, wipe the ends. */
+    const drawTrail = (found: RainModel) => {
+      const at = found.layout;
+      trailCtx.setTransform(1, 0, 0, 1, 0, 0);
       if (blank) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        blank = false;
+        trailCtx.clearRect(0, 0, trail.width, trail.height);
       } else {
         const fade = 1 - Math.pow(1 - FADE_PER_FRAME, pendingMs / FRAME_MS);
         if (fade > 0.0005) {
-          ctx.globalCompositeOperation = 'destination-out';
-          ctx.globalAlpha = fade;
-          ctx.fillStyle = '#000000';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.globalCompositeOperation = 'source-over';
-          ctx.globalAlpha = 1;
+          trailCtx.globalCompositeOperation = 'destination-out';
+          trailCtx.globalAlpha = fade;
+          trailCtx.fillStyle = '#000000';
+          // Only the rows between the screen and the cup ever hold any.
+          const from = Math.floor(at.band * trailScale);
+          trailCtx.fillRect(0, from, trail.width, Math.ceil(trailBottom(found) * trailScale) - from + 1);
+          trailCtx.globalCompositeOperation = 'source-over';
+          trailCtx.globalAlpha = 1;
         }
       }
-      pendingMs = 0;
-      ctx.setTransform(scale, 0, 0, scale, 0, 0);
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-
-      for (const event of model.takeEvents()) {
+      trailCtx.setTransform(trailScale, 0, 0, trailScale, 0, 0);
+      // The cup has risen over a layer's row: what was painted in it is under the coffee now, and goes.
+      for (const layer of [NEAR, FAR]) {
+        const floor = found.floorOf(layer);
+        if (floor < (clearedFloors.get(layer) ?? floor)) {
+          for (const column of found.columns) {
+            if (column.layer === layer) trailCtx.clearRect(column.x - layer.cell / 2, rowY(at, floor, layer), layer.cell, height);
+          }
+        }
+        clearedFloors.set(layer, floor);
+      }
+      trailCtx.textAlign = 'center';
+      trailCtx.textBaseline = 'alphabetic';
+      for (const event of found.takeEvents()) {
         const before = painted[event.col];
+        const column = found.columns[event.col]!;
         if (before && !before.bright) {
-          // The head moves on: its cell turns to the trail.
-          clearCell(event.col, before.row);
-          paintGlyph(before.glyph, event.col, before.row, trailColour, model.columns[event.col]!.size);
+          // The head moves on: its cell turns to the trail. A word's letter stays lit instead (drawLetters).
+          const shades = shadesOf(stepFor(found, column.layer, before.row), column.layer);
+          trailFont = glyphAt(trailCtx, trailFont, before.glyph, column.x, cellY(found, column, before.row), column.size, shades.trail, shades.trailDetail, trailScale);
         }
         painted[event.col] = event.glyph ? { row: event.row, glyph: event.glyph, bright: event.bright } : null;
-        if (event.erase >= 0) clearCell(event.col, event.erase);
+        if (event.erase >= 0) {
+          trailCtx.setTransform(trailScale, 0, 0, trailScale, 0, 0);
+          trailCtx.clearRect(column.x - column.layer.cell / 2, rowY(at, event.erase, column.layer), column.layer.cell, column.layer.row);
+        }
       }
-      // The heads, every frame, so they stay as bright as they began.
-      const rows = model.rows;
-      model.columns.forEach((column, col) => {
-        if (column.glyph === '' || column.row < 0 || column.row >= rows) return;
-        clearCell(col, column.row);
-        paintGlyph(column.glyph, col, column.row, headColour, column.size);
+    };
+
+    /** The cup: the crema's moving surface over the coffee, its lit line, and the light off it. */
+    const drawCup = (found: RainModel) => {
+      const at = found.layout;
+      const time = found.time;
+      const level = levelY(at, time);
+      if (glowAbove) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(glowAbove, 0, 0, 1, glowAbove.height, 0, Math.round((level - 46) * scale), canvas.width, glowAbove.height);
+      }
+      const top = Math.round((level - cupAbove) * scale);
+      ctx.setTransform(1, 0, 0, 1, 0, top);
+      ctx.beginPath();
+      const surface: number[] = [];
+      for (let x = 0; x <= width + WAVE_STEP; x += WAVE_STEP) surface.push(surfaceAt(at, x, time));
+      surface.forEach((y, i) => {
+        const px = i * WAVE_STEP * scale;
+        const py = y * scale - top;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
       });
+      const bottom = canvas.height - top + 1;
+      ctx.lineTo((surface.length - 1) * WAVE_STEP * scale, bottom);
+      ctx.lineTo(0, bottom);
+      ctx.closePath();
+      if (cupPattern) {
+        ctx.fillStyle = cupPattern;
+        ctx.fill();
+      }
+      // The surface's lit line.
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      ctx.beginPath();
+      surface.forEach((y, i) => {
+        if (i === 0) ctx.moveTo(0, y);
+        else ctx.lineTo(i * WAVE_STEP, y);
+      });
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = rgba(css(SURFACE_LINE), 0.85);
+      ctx.stroke();
+    };
+
+    /** The rings on the crema, the droplets of the splashes, and the drops on their way in. */
+    const drawSplashes = (found: RainModel) => {
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      ctx.lineWidth = 1.1;
+      // Each ring a trough in shadow and its crest lit just above it: one shows on the crema, the other on the page.
+      const trough = css(RIPPLE_TROUGH);
+      const crest = css(RIPPLE);
+      for (const ripple of found.ripples) {
+        const { spread, alpha } = rippleAt(ripple.age);
+        if (alpha <= 0.01) continue;
+        const rx = 1.5 + ripple.reach * spread;
+        const ry = 0.8 + rx * 0.2;
+        ctx.globalAlpha = alpha * 0.7;
+        ctx.strokeStyle = trough;
+        ctx.beginPath();
+        ctx.ellipse(ripple.x, ripple.y + 2.2, rx, ry, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = alpha * 0.9;
+        ctx.strokeStyle = crest;
+        ctx.beginPath();
+        ctx.ellipse(ripple.x, ripple.y + 1.1, rx, ry, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = css(DROPLET);
+      for (const droplet of found.droplets) {
+        ctx.beginPath();
+        ctx.arc(droplet.x, droplet.y, droplet.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      const last = steps[STEPS - 1];
+      if (dropSprite && last) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        for (const drop of found.drops) {
+          const x = drop.x * scale;
+          const y = drop.y * scale;
+          const glowSize = last.glow.width * drop.size;
+          ctx.globalAlpha = drop.size < 1 ? FAR_GLOW + 0.15 : 1;
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.drawImage(last.glow, Math.round(x - glowSize / 2), Math.round(y - glowSize / 2), glowSize, glowSize);
+          ctx.globalCompositeOperation = 'source-over';
+          const w = dropSprite.width * drop.size;
+          const h = dropSprite.height * drop.size;
+          ctx.drawImage(dropSprite, Math.round(x - w / 2), Math.round(y - h / 2), w, h);
+        }
+        ctx.globalAlpha = 1;
+      }
+    };
+
+    /** The heads, each with its glow: the far ones first, smaller and fainter. */
+    const drawHeads = (found: RainModel) => {
+      const showing = (column: RainColumn) => column.row >= 0 && column.row < found.floorOf(column.layer);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalCompositeOperation = 'lighter';
+      for (const layer of [FAR, NEAR]) {
+        const size = layer === NEAR ? 1 : FAR.row / NEAR.row;
+        ctx.globalAlpha = layer === NEAR ? 1 : FAR_GLOW;
+        for (const column of found.columns) {
+          if (column.layer !== layer || !showing(column) || column.glyph === '') continue;
+          const glow = stepFor(found, layer, column.row).glow;
+          const glowSize = glow.width * size;
+          ctx.drawImage(glow, Math.round(column.x * scale - glowSize / 2), Math.round(cellY(found, column, column.row) * scale - glowSize / 2), glowSize, glowSize);
+        }
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      for (const layer of [FAR, NEAR]) {
+        for (const column of found.columns) {
+          if (column.layer !== layer || !showing(column)) continue;
+          const shades = shadesOf(stepFor(found, layer, column.row), layer);
+          mainFont = glyphAt(ctx, mainFont, column.glyph, column.x, cellY(found, column, column.row), column.size, shades.head, shades.headDetail);
+        }
+      }
+    };
+
+    /** The letters of words, lit a while where their heads spelled them, glowing a little. */
+    const drawLetters = (found: RainModel) => {
+      const lit = found.letters.filter((letter) => {
+        const column = found.columns[letter.col]!;
+        // Its head is still on it, and draws it.
+        return !(column.row === letter.row && column.bright);
+      });
+      if (lit.length === 0) return;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalCompositeOperation = 'lighter';
+      for (const letter of lit) {
+        const column = found.columns[letter.col]!;
+        const glow = stepFor(found, column.layer, letter.row).glow;
+        ctx.globalAlpha = letterAlpha(letter.age) * 0.6;
+        ctx.drawImage(glow, Math.round(column.x * scale - glow.width / 2), Math.round(cellY(found, column, letter.row) * scale - glow.height / 2));
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      for (const letter of lit) {
+        const column = found.columns[letter.col]!;
+        const shades = shadesOf(stepFor(found, column.layer, letter.row), column.layer);
+        ctx.globalAlpha = letterAlpha(letter.age);
+        mainFont = glyphAt(ctx, mainFont, letter.glyph, column.x, cellY(found, column, letter.row), letter.size, shades.head, shades.headDetail);
+      }
+      ctx.globalAlpha = 1;
+    };
+
+    /** A bead of water swelling at its hole as a column is about to fall, and glinting there while its head leaves. */
+    const drawBeads = (found: RainModel) => {
+      const first = steps[0];
+      if (!first) return;
+      const at = found.layout;
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      for (const column of found.columns) {
+        const near = column.layer === NEAR;
+        // Swelling over the last two rows of its wait, then going with the head over its first two.
+        const swell = column.y < 0 ? 1 + column.y / 2 : 1 - column.y / 2;
+        if (swell <= 0 || column.y < -2 || column.y > 2) continue;
+        const size = near ? 1 : 0.7;
+        const y = at.band - (near ? HOLE_ROWS[0].up : HOLE_ROWS[1].up) + 1.2 * size;
+        ctx.globalAlpha = (near ? 0.9 : 0.55) * swell;
+        ctx.fillStyle = near ? first.near.head : first.far.head;
+        ctx.beginPath();
+        ctx.ellipse(column.x, y + 1.2 * swell * size, (1.3 + 1.2 * swell) * size, (1.1 + 1.9 * swell) * size, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    };
+
+    const draw = () => {
+      if (!model || !layout || width <= 0 || height <= 0 || steps.length === 0) return;
+      drawTrail(model);
+      blank = false;
+      pendingMs = 0;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      // A copy, not a blend, of only the rows the trail can be in: the fastest way to put it down, and it
+      // clears the rest of last frame with it (the screen and the cup are drawn again over it).
+      const from = Math.floor(layout.band * trailScale);
+      const to = Math.min(trail.height, Math.ceil(trailBottom(model) * trailScale) + 1);
+      const below = Math.floor((to * scale) / trailScale);
+      ctx.globalCompositeOperation = 'copy';
+      ctx.drawImage(trail, 0, from, trail.width, to - from, 0, (from * scale) / trailScale, canvas.width, below - (from * scale) / trailScale);
+      ctx.globalCompositeOperation = 'source-over';
+      // WebKit's copy leaves what is outside the image: clear under it, down to the cup (the screen covers above).
+      ctx.clearRect(0, below, canvas.width, canvas.height - below);
+      drawLetters(model);
+      drawHeads(model);
+      drawCup(model);
+      drawSplashes(model);
+      if (screen) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(screen, 0, 0);
+      }
+      drawBeads(model);
     };
 
     /** A new model for this size: the same seed gives the same rain at the same size. */
     const start = () => {
-      model = createRainModel(env.seed, columnsFor(width), rowsFor(height), env.numbers);
-      left = (width - model.columns.length * COLUMN_PITCH) / 2;
+      layout = layoutFor(width, height);
+      model = createRainModel(env.seed, layout, env.numbers);
       painted = model.columns.map(() => null);
+      clearedFloors.clear();
       blank = true;
       pendingMs = 0;
-      currentFont = '';
     };
+
+    // Figtree is most likely here already (CafAI sets everything in it); if not, ask for the weight the letters use.
+    if (doc.fonts) void doc.fonts.load(`700 20px ${FAMILY}`, 'ESPRESSO 0123456789').catch(() => undefined);
 
     const instance: SaverInstance = {
       step(dtMs) {
@@ -138,32 +726,41 @@ export const rain: CanvasSaver = {
       },
       draw,
       resize(nextWidth, nextHeight, nextScale) {
-        // The same size again: the canvas keeps what is painted on it, so the rain goes on.
+        // The same size again: the trail keeps what is painted on it, so the rain goes on.
         if (model && nextWidth === width && nextHeight === height && nextScale === scale) return;
         width = nextWidth;
         height = nextHeight;
         scale = nextScale;
+        trailScale = Math.min(1, scale);
+        trail.width = Math.max(1, Math.round(width * trailScale));
+        trail.height = Math.max(1, Math.round(height * trailScale));
+        mainFont = '';
+        trailFont = '';
         start();
+        if (layout) makeSprites(layout);
       },
       still() {
-        if (width <= 0 || height <= 0) return;
+        if (width <= 0 || height <= 0 || !model) return;
         start();
-        // The rain has fallen for 8 s with its trails built up frame by frame: the first five seconds only
-        // move the heads on (their trails would be gone), the last three are painted.
-        for (let rest = STILL_MS - STILL_PAINTED_MS; rest > 0; rest -= FRAME_MS) {
-          model!.step(Math.min(FRAME_MS, rest));
-          model!.takeEvents();
+        const found = model;
+        // The rain has fallen a while, its trails built up frame by frame: the first seconds only move
+        // the heads on (their trails would be gone), the last ones are painted, up to the still's moment.
+        while (found.time < STILL_FROM_MS - STILL_PAINTED_MS) {
+          found.step(FRAME_MS);
+          found.takeEvents();
         }
-        for (let rest = STILL_PAINTED_MS; rest > 0; rest -= FRAME_MS) {
-          instance.step(Math.min(FRAME_MS, rest));
+        do {
+          instance.step(FRAME_MS);
           draw();
-        }
+        } while (!isStillMoment(found));
       },
       dispose() {
         canvas.style.backgroundColor = hostBackground;
+        releaseSprites();
+        release([trail]);
         model = null;
+        layout = null;
         painted = [];
-        fonts.clear();
       },
     };
     return instance;

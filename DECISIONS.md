@@ -4151,3 +4151,58 @@ database (D135), so it was gone.
   ships, CafAI keeps in Decaid's store whatever must survive the move:
   the mirror (D16), the key's optional copy (D99) and now where the coach
   runs.
+
+### Brew Rain and the Bouncing Portafilter: round 2 (2026-10-24)
+
+The owner's words after trying the first six screensavers (2026-10-23):
+"Brew Rain is just matrix, nothing coffee related", and of the others, "can
+we get better visuals? I do like a lot of them, but just want to make them
+nicer." Brew Rain is drawn again as coffee, and the Bouncing Portafilter's
+badge becomes a logo with a portafilter in it, both with light, depth and
+glow (D226's one place for play allows them) rather than flat outlines.
+
+- **D-RAIN-1. Brew Rain is water brewing on its way from the shower screen
+  into the cup.** Along the top, the underside of a group head's shower
+  screen: a band of brushed steel with five staggered rows of holes, each
+  row further back smaller. A near column falls under each hole of the
+  front row, 32 px apart, and a far one under each hole of the next,
+  between them: smaller (12 to 13 px against 18 to 20), slower, sparser,
+  fainter and all symbols, for depth. The glyphs are coffee's, drawn as
+  paths (`rainGlyphs.ts`): a bean with its crease, a drop, a cup on its
+  saucer, cherries, a leaf, steam and a latte-art heart, three heads in
+  four near; the rest are the Latin letters and figures of the words and
+  numbers, in Figtree. A head is pale water near the top, crema gold
+  further down and amber by the cup, with a soft glow; its trail sinks from
+  gold and amber through espresso brown into the page. At the bottom, the
+  cup: crema over coffee, mottled, its surface lit and moving in two slow
+  waves; a head that reaches it lets a drop go, which lands with two rings
+  spreading on the crema and a few droplets thrown up. The cup fills while
+  it shows, from 12 % of the screen's height to 18 % over 30 minutes, at
+  most 2 px a minute, then back as slowly. The trail is a canvas of its
+  own, a pixel to a CSS pixel, copied (not blended) each frame onto the
+  screensaver's canvas, whose CSS background is the page; the heads, the
+  words, the cup and the screen are drawn over it at full scale from
+  sprites made once a size: 1.6 ms a frame on the build PC, against 2.3 ms
+  with a trail at full scale. Why: the owner found the first one "just
+  matrix, nothing coffee related". The falling code stays in its columns,
+  bright heads and fading trails; everything else says coffee at a glance.
+  Paths, not a font, end the wait on the device's Japanese font
+  (QUESTIONS 33). The rising cup keeps a bright band from sitting in one
+  place for the 30 minutes.
+- **D-RAIN-2. A spelled word stays lit, then fades on its own.** Every 3 to
+  6 s a near column spells, top to bottom, a coffee word in Latin capitals
+  (ESPRESSO, CREMA, RISTRETTO, LUNGO, DOPPIO, BLOOM, CORTADO, MACCHIATO) six
+  times in ten, otherwise a brew number (9 BAR, 93°, 1:2, 18 g, 36 g, 28 s)
+  or one of the last shot's numbers; a space is a cell left empty. Each
+  letter stays lit where it was spelled for 1.6 s, glowing a little, then
+  fades over 1.4 s, apart from the trail's fade. A word keeps a row clear
+  above the coffee, so a cup rising meanwhile never cuts it short. Why: a
+  word is what says coffee from across the kitchen, and in the first round
+  it faded with its trail among random katakana.
+- **D-RAIN-3. Brew Rain's still is the moment a word has just been spelled,
+  from 8 s on.** The first moment from 8 s on when a word's last letter
+  came 0.3 to 0.9 s before, so every letter is lit; 14 s at the latest. The
+  last 3 s before it are drawn frame by frame, so the trails are there.
+  Why: the still stands for the screensaver, and a word with the rain says
+  it best; the moment is the seed's, so each day's still is the same each
+  minute.
