@@ -9,7 +9,7 @@ import { localDayNumber } from '../saver/random.ts';
 import { SAVERS } from '../saver/registry.ts';
 import { TID } from '../testIds.ts';
 import { createFakeServices, type FakeServices } from '../testing/fakeServices.ts';
-import { SAVER_HELP, SAVER_HERE_ONLY, ScreensaverSection, type ScreensaverSectionProps } from './ScreensaverSection.tsx';
+import { SAVER_HELP, SAVER_HERE_ONLY, SAVER_TIMING_TID, saverHelp, ScreensaverSection, type ScreensaverSectionProps } from './ScreensaverSection.tsx';
 
 const ALL = SAVERS.map((saver) => saver.id);
 
@@ -117,5 +117,62 @@ describe('ScreensaverSection', () => {
     setup({ savers, webgl: true });
     expect([...pick().options].find((option) => option.value === 'lava')!.disabled).toBe(false);
     expect(screen.queryByText(/needs WebGL/)).toBeNull();
+  });
+});
+
+describe('ScreensaverSection: Starts after and Dims the screen to (D247)', () => {
+  const startsAfter = () => screen.getByTestId(SAVER_TIMING_TID.startAfter) as HTMLSelectElement;
+  const dimsTo = () => screen.getByTestId(SAVER_TIMING_TID.dimTo) as HTMLSelectElement;
+
+  it('offers 1, 2, 5, 10 or 15 minutes and 10 % to 60 %, a minute and 30 % until someone chooses', () => {
+    setup();
+    expect(screen.getByRole('combobox', { name: 'Starts after' })).toBe(startsAfter());
+    expect(screen.getByRole('combobox', { name: 'Dims the screen to' })).toBe(dimsTo());
+    expect([...startsAfter().options].map((option) => option.textContent)).toEqual(['1 minute', '2 minutes', '5 minutes', '10 minutes', '15 minutes']);
+    expect([...dimsTo().options].map((option) => option.textContent)).toEqual(['10 %', '20 %', '30 %', '40 %', '50 %', '60 %']);
+    expect(startsAfter().value).toBe('1');
+    expect(dimsTo().value).toBe('30');
+  });
+
+  it('shows the saved choices, and the help line says the minutes chosen', async () => {
+    const services = createFakeServices({ insideDecaid: true });
+    await services.screensaver.set({ startAfterMinutes: 5, dimTo: 20 });
+    setup({ services });
+    expect(startsAfter().value).toBe('5');
+    expect(dimsTo().value).toBe('20');
+    expect(screen.getByText(saverHelp(5))).toBeInTheDocument();
+    expect(saverHelp(5)).toBe(
+      'Shows once the machine has been asleep and the screen untouched for 5 minutes. A tap wakes the machine. The screen stays on, dimmed, for 30 minutes.',
+    );
+    expect(saverHelp(1)).toBe(SAVER_HELP);
+  });
+
+  it('each applies at once and is saved, the rest of the setting kept', async () => {
+    const { services } = setup();
+    fireEvent.change(startsAfter(), { target: { value: '10' } });
+    expect(startsAfter().value).toBe('10');
+    expect(screen.getByText(saverHelp(10))).toBeInTheDocument();
+    fireEvent.change(dimsTo(), { target: { value: '50' } });
+    expect(dimsTo().value).toBe('50');
+    expect(services.screensaver.get()).toEqual({ on: true, pick: 'daily', startAfterMinutes: 10, dimTo: 50 });
+    await settle();
+    expect((await services.storage.settings.get()).screensaver).toEqual({ on: true, pick: 'daily', startAfterMinutes: 10, dimTo: 50 });
+    // The switch and the pick keep the wait and the brightness.
+    fireEvent.click(screen.getByTestId(TID.saverOn));
+    fireEvent.change(pick(), { target: { value: 'rain' } });
+    await settle();
+    expect((await services.storage.settings.get()).screensaver).toEqual({ on: false, pick: 'rain', startAfterMinutes: 10, dimTo: 50 });
+  });
+
+  it('a failed save says so, and the choice stays on screen for now', async () => {
+    const services = createFakeServices({ insideDecaid: true });
+    services.storage.settings.update = async () => {
+      throw new Error('The disk is full.');
+    };
+    setup({ services });
+    fireEvent.change(dimsTo(), { target: { value: '10' } });
+    await settle();
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not save the screensaver: The disk is full.');
+    expect(dimsTo().value).toBe('10');
   });
 });

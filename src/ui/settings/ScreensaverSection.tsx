@@ -10,6 +10,11 @@
  * the day's pick passes it by. Preview shows the chosen one now, full screen,
  * today's for "A different one each day"; a tap closes it, and it never
  * wakes the machine (preview.ts, SaverOverlay.tsx).
+ *
+ * Then how long it waits and how far it dims (D247): Starts after (1, 2, 5,
+ * 10 or 15 minutes; a minute until chosen, D223) and Dims the screen to (10
+ * to 60 %; 30 until chosen, D224), both kept in the screensaver setting; the
+ * line under them says the minutes chosen.
  */
 import { useId, useRef, useState } from 'react';
 import Alert from '@mui/material/Alert';
@@ -22,17 +27,32 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import { useScreensaverSetting, useServices } from '../../app/services.tsx';
+import { SAVER_DIM_TO, SAVER_START_AFTER_MINUTES } from '../../storage/settings.ts';
+import type { ScreensaverSetting } from '../../storage/types.ts';
 import { canRun, DAILY, resolvePick, webglStarts } from '../saver/daily.ts';
+import { saverBrightness, saverIdleMs } from '../saver/policy.ts';
 import { saverPreview, type SaverPreviewStore } from '../saver/preview.ts';
 import { localDayNumber } from '../saver/random.ts';
 import { SAVERS, type SaverChoice } from '../saver/registry.ts';
 import { TID } from '../testIds.ts';
 import { Section } from './Section.tsx';
 
-export const SAVER_HELP =
-  'Shows once the machine has been asleep and the screen untouched for a minute. A tap wakes the machine. The screen stays on, dimmed, for 30 minutes.';
+/** The line under the choices, saying the wait chosen: "…untouched for a minute." or "…for 5 minutes." */
+export function saverHelp(minutes: number): string {
+  const wait = minutes === 1 ? 'a minute' : `${minutes} minutes`;
+  return `Shows once the machine has been asleep and the screen untouched for ${wait}. A tap wakes the machine. The screen stays on, dimmed, for 30 minutes.`;
+}
+
+/** The line while nothing was chosen: a minute (D223). */
+export const SAVER_HELP = saverHelp(1);
 export const SAVER_HERE_ONLY = 'Only on the Decent tablet: here, Preview shows it.';
 const DAILY_LABEL = 'A different one each day';
+
+/** The wait's and the brightness's test ids (D247); the coordinator moves them into testIds.ts. */
+export const SAVER_TIMING_TID = { startAfter: 'saver-start-after', dimTo: 'saver-dim-to' } as const;
+
+/** Every brightness on offer: 10 % to 60 % in tens (SAVER_DIM_TO). */
+const DIM_LEVELS = Array.from({ length: (SAVER_DIM_TO.max - SAVER_DIM_TO.min) / SAVER_DIM_TO.step + 1 }, (_, index) => SAVER_DIM_TO.min + index * SAVER_DIM_TO.step);
 
 const mutedSx = { color: 'text.secondary' } as const;
 /** MUI's switch is 38 px tall: the label around it, which toggles it too, is the 48 px touch target. */
@@ -75,11 +95,15 @@ export function ScreensaverSection({ savers = SAVERS, webgl, preview = saverPrev
   const today = localDayNumber(new Date());
   const todays = resolvePick(DAILY, runnable, today);
   const todaysLabel = savers.find((saver) => saver.id === todays)?.label ?? '';
+  // The wait and the brightness as the policy acts on them: a minute and 30 until chosen.
+  const minutes = saverIdleMs(setting) / 60_000;
+  const help = saverHelp(minutes);
 
-  const save = (next: { on: boolean; pick: string }) => {
+  /** A change names only what it changes; the store keeps the rest. */
+  const save = (change: Partial<ScreensaverSetting>) => {
     const ticket = ++latestSave.current;
     setError(null);
-    store.set(next).catch((reason: unknown) => {
+    store.set(change).catch((reason: unknown) => {
       // Only the newest change speaks: one made after this that saved carried this one with it.
       if (ticket === latestSave.current) setError(`Could not save the screensaver: ${errorText(reason)}`);
     });
@@ -95,7 +119,7 @@ export function ScreensaverSection({ savers = SAVERS, webgl, preview = saverPrev
             control={
               <Switch
                 checked={setting.on}
-                onChange={(event) => save({ on: event.target.checked, pick: setting.pick })}
+                onChange={(event) => save({ on: event.target.checked })}
                 slotProps={{ input: { 'data-testid': TID.saverOn } }}
               />
             }
@@ -110,7 +134,7 @@ export function ScreensaverSection({ savers = SAVERS, webgl, preview = saverPrev
           value={shown}
           onChange={(event) => {
             const next = event.target.value;
-            if (next !== shown) save({ on: setting.on, pick: next });
+            if (next !== shown) save({ pick: next });
           }}
           helperText={shown === DAILY && todaysLabel ? `Today: ${todaysLabel}` : ' '}
           sx={selectSx}
@@ -127,8 +151,46 @@ export function ScreensaverSection({ savers = SAVERS, webgl, preview = saverPrev
             </option>
           ))}
         </TextField>
+        <TextField
+          select
+          size="small"
+          label="Starts after"
+          value={String(minutes)}
+          onChange={(event) => save({ startAfterMinutes: Number(event.target.value) })}
+          sx={selectSx}
+          slotProps={{
+            select: { native: true },
+            htmlInput: { 'data-testid': SAVER_TIMING_TID.startAfter, 'aria-describedby': helpId },
+            inputLabel: { shrink: true },
+          }}
+        >
+          {SAVER_START_AFTER_MINUTES.map((value) => (
+            <option key={value} value={String(value)}>
+              {value === 1 ? '1 minute' : `${value} minutes`}
+            </option>
+          ))}
+        </TextField>
+        <TextField
+          select
+          size="small"
+          label="Dims the screen to"
+          value={String(saverBrightness(setting))}
+          onChange={(event) => save({ dimTo: Number(event.target.value) })}
+          sx={selectSx}
+          slotProps={{
+            select: { native: true },
+            htmlInput: { 'data-testid': SAVER_TIMING_TID.dimTo },
+            inputLabel: { shrink: true },
+          }}
+        >
+          {DIM_LEVELS.map((value) => (
+            <option key={value} value={String(value)}>
+              {`${value} %`}
+            </option>
+          ))}
+        </TextField>
         <Typography id={helpId} variant="body2" sx={mutedSx}>
-          {host.insideDecaid ? SAVER_HELP : `${SAVER_HELP} ${SAVER_HERE_ONLY}`}
+          {host.insideDecaid ? help : `${help} ${SAVER_HERE_ONLY}`}
         </Typography>
         {cannot.length > 0 ? (
           <Typography variant="body2" sx={mutedSx}>

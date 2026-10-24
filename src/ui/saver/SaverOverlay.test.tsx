@@ -21,11 +21,17 @@ function machineIn(state: string): Partial<TelemetryState> {
 
 const ASLEEP = machineIn('sleeping');
 
-function fakeScreen(): SaverScreen & { calls: string[] } {
+/** `held`: the brightness each hold() was given. */
+function fakeScreen(): SaverScreen & { calls: string[]; held: Array<number | undefined> } {
   const calls: string[] = [];
+  const held: Array<number | undefined> = [];
   return {
     calls,
-    hold: () => void calls.push('hold'),
+    held,
+    hold: (brightness) => {
+      calls.push('hold');
+      held.push(brightness);
+    },
     release: () => void calls.push('release'),
     restore: () => void calls.push('restore'),
     dispose: () => void calls.push('dispose'),
@@ -40,14 +46,17 @@ interface Setup {
   telemetry?: Partial<TelemetryState>;
   pick?: string;
   on?: boolean;
+  /** Settings > Screensaver's Starts after and Dims the screen to (D247); none chosen unless given. */
+  startAfterMinutes?: number;
+  dimTo?: number;
   saverFor?: (id: string) => CanvasSaver | undefined;
 }
 
-function setup({ insideDecaid = true, telemetry = ASLEEP, pick = 'nightstand', on = true, saverFor }: Setup = {}) {
+function setup({ insideDecaid = true, telemetry = ASLEEP, pick = 'nightstand', on = true, startAfterMinutes, dimTo, saverFor }: Setup = {}) {
   const services: FakeServices = createFakeServices({ insideDecaid, telemetry });
   const saverScreen = fakeScreen();
   services.saverScreen = saverScreen;
-  void services.screensaver.set({ on, pick });
+  void services.screensaver.set({ on, pick, startAfterMinutes, dimTo });
   const preview: SaverPreviewStore = createSaverPreview();
   const view = render(
     <ServicesProvider services={services}>
@@ -174,6 +183,40 @@ describe('SaverOverlay: when it shows (spec 3)', () => {
     act(() => void services.screensaver.set({ on: false, pick: 'nightstand' }));
     expect(screen.queryByTestId(TID.saver)).toBeNull();
     expect(saverScreen.calls).toEqual(['hold', 'restore']);
+  });
+});
+
+describe('SaverOverlay: the wait and the brightness chosen (D247)', () => {
+  it('dims to 30 while nothing was chosen', () => {
+    const { saverScreen } = setup();
+    advance(SAVER_IDLE_MS);
+    expect(saverScreen.held).toEqual([30]);
+  });
+
+  it('waits the minutes chosen in Settings, counted from the page load or the last touch', () => {
+    setup({ startAfterMinutes: 5 });
+    advance(5 * 60_000 - 1);
+    expect(screen.queryByTestId(TID.saver)).toBeNull();
+    advance(1);
+    expect(screen.getByTestId(TID.saver)).toHaveAttribute('data-phase', 'showing');
+  });
+
+  it('dims to the brightness chosen in Settings', () => {
+    const { saverScreen } = setup({ dimTo: 50 });
+    advance(SAVER_IDLE_MS);
+    expect(saverScreen.held).toEqual([50]);
+  });
+
+  it('a wait chosen while it waits counts from the same last touch', () => {
+    const { services } = setup();
+    advance(30_000);
+    act(() => void services.screensaver.set({ startAfterMinutes: 2 }));
+    advance(SAVER_IDLE_MS);
+    expect(screen.queryByTestId(TID.saver)).toBeNull();
+    advance(30_000 - 1);
+    expect(screen.queryByTestId(TID.saver)).toBeNull();
+    advance(1);
+    expect(screen.getByTestId(TID.saver)).toBeInTheDocument();
   });
 });
 

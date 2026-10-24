@@ -4,12 +4,13 @@
  * top bar and any dialog left open included.
  *
  * Up: on in Settings, inside Decaid, the machine confirmed asleep and the
- * screen untouched for a minute (policy.ts), the minute counted from the
- * page's load at first and from every pointerdown or keydown on the window
- * since (the events the heartbeat counts). It dims the tablet and holds it
- * on (services.saverScreen); 30 minutes on it turns black and lets the
- * screen go, and if the page shows again (the screen was turned back on)
- * with the machine still asleep it starts over.
+ * screen untouched for a minute, or the minutes Settings chose (policy.ts,
+ * D247), counted from the page's load at first and from every pointerdown or
+ * keydown on the window since (the events the heartbeat counts). It dims the
+ * tablet to 30, or the brightness Settings chose, and holds it on
+ * (services.saverScreen); 30 minutes on it turns black and lets the screen
+ * go, and if the page shows again (the screen was turned back on) with the
+ * machine still asleep it starts over.
  *
  * Down: a tap, swallowed as TapGuard swallows one (native listeners, capture,
  * non-passive), so it never lands on what is underneath: the clear sheet
@@ -35,7 +36,7 @@ import { usePrefersReducedMotion } from '../platform/usePrefersReducedMotion.ts'
 import { TID } from '../testIds.ts';
 import { resolvePick, runnableHere } from './daily.ts';
 import { lastShotSummary, Nightstand, shotNumbers } from './Nightstand.tsx';
-import { confirmedAsleep, msUntilWanted, SAVER_SHOW_MS } from './policy.ts';
+import { confirmedAsleep, msUntilWanted, SAVER_SHOW_MS, saverBrightness, saverIdleMs } from './policy.ts';
 import { previewFromUrl, saverPreview, usePreviewedSaver, type SaverPreviewStore } from './preview.ts';
 import { localDayNumber } from './random.ts';
 import { canvasSaver } from './registry.ts';
@@ -113,6 +114,12 @@ export function SaverOverlay({ preview = saverPreview, saverFor = canvasSaver }:
   const previewed = usePreviewedSaver(preview);
   const appearance = useAppearance();
   const eligible = setting.on && host.insideDecaid && asleep;
+  // Settings' wait and brightness (D247): the wait is read whenever it changes; the brightness as each showing begins.
+  const idleMs = saverIdleMs(setting);
+  const brightness = useRef(saverBrightness(setting));
+  useLayoutEffect(() => {
+    brightness.current = saverBrightness(setting);
+  });
 
   const lastTouch = useRef(Date.now());
   const [shown, setShown] = useState<Showing | null>(null);
@@ -156,7 +163,7 @@ export function SaverOverlay({ preview = saverPreview, saverFor = canvasSaver }:
     if (asleep) asleepSince.current = Date.now();
   }, [asleep]);
 
-  // Up: checked again when the minute untouched (or the few seconds asleep) would be over, for as long as the machine stays asleep.
+  // Up: checked again when the wait untouched (or the few seconds asleep) would be over, for as long as the machine stays asleep.
   useEffect(() => {
     if (shown !== null) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -168,6 +175,7 @@ export function SaverOverlay({ preview = saverPreview, saverFor = canvasSaver }:
         asleep,
         untouchedMs: now - lastTouch.current,
         asleepMs: now - asleepSince.current,
+        idleMs,
       });
       if (wait === null) return;
       if (wait > 0) {
@@ -180,7 +188,7 @@ export function SaverOverlay({ preview = saverPreview, saverFor = canvasSaver }:
     };
     check();
     return () => clearTimeout(timer);
-  }, [setting.on, host.insideDecaid, asleep, shown, preview]);
+  }, [setting.on, host.insideDecaid, asleep, shown, preview, idleMs]);
 
   // Down by itself: the machine woke (or the link went), or the screensaver was turned off.
   useEffect(() => {
@@ -196,7 +204,7 @@ export function SaverOverlay({ preview = saverPreview, saverFor = canvasSaver }:
   // It comes up, or starts over: dimmed and held on, then after 30 minutes black, and the screen let go.
   useEffect(() => {
     if (!showing || shown === null) return;
-    saverScreen?.hold();
+    saverScreen?.hold(brightness.current);
     const timer = setTimeout(() => {
       setBlackFor(shown);
       saverScreen?.release();
