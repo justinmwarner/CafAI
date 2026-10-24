@@ -91,6 +91,10 @@ const trackSx: SxProps<Theme> = (theme) => ({
       color: 'text.primary',
       boxShadow: `0 1px 2px rgba(0, 0, 0, ${theme.palette.mode === 'dark' ? 0.35 : 0.14})`,
     },
+    // Held: still the Mode control's track, without the outline MUI gives a disabled toggle; the
+    // choice kept for another model stays on its pill, its label muted with the rest.
+    '&.Mui-disabled': { border: 0, color: theme.palette.action.disabled },
+    '&.Mui-selected.Mui-disabled': { color: theme.palette.text.secondary },
   },
 });
 

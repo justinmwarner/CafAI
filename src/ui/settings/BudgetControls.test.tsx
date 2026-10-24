@@ -243,7 +243,8 @@ describe('Settings > Coach > Usage and cost > Monthly budget (D240)', () => {
     expect(update).toHaveBeenLastCalledWith({ coachBudget: { pauseAtBudget: true } });
     await waitFor(() => expect(refreshes(services)).toBe(1));
     expect(pause()).toHaveAccessibleDescription(
-      'Paused now: the coach starts again on 1 November, or as soon as you raise the budget or turn this off.',
+      // The date kept on one line.
+      'Paused now: the coach starts again on 1\xa0November, or as soon as you raise the budget or turn this off.',
     );
 
     // Raised past the spend: the coach is back, and the refresh sends the reply that waited.

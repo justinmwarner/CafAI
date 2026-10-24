@@ -183,10 +183,10 @@ describe('Settings > Coach > Usage and cost, on the API key (D239)', () => {
     const usage = await screen.findByRole('region', { name: 'Usage and cost' });
     expect(within(usage).getByRole('spinbutton', { name: 'Monthly budget' })).toBe(screen.getByTestId(BUDGET_TID.amount));
     expect(within(usage).getByRole('switch', { name: 'Pause the coach at the budget' })).toBeInTheDocument();
-    expect(sayDate(PRICES_AS_OF)).toMatch(/^\d{1,2} [A-Z][a-z]+ \d{4}$/);
+    expect(sayDate(PRICES_AS_OF)).toMatch(/^\d{1,2}\xa0[A-Z][a-z]+\xa0\d{4}$/);
     expect(
       within(usage).getByText(
-        `Counted on every device that uses this Decaid, at Anthropic's prices of ${sayDate(PRICES_AS_OF)}. Your bill is in Anthropic's Console.`,
+        plain(`Counted on every device that uses this Decaid, at Anthropic's prices of ${sayDate(PRICES_AS_OF)}. Your bill is in Anthropic's Console.`),
       ),
     ).toBeInTheDocument();
   });
@@ -324,7 +324,7 @@ describe('Settings > Coach > Usage, while the coach runs on the computer (D239)'
     expect(within(usage).queryByRole('spinbutton', { name: 'Monthly budget' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Usage and cost' })).toBeNull();
     expect(within(usage).queryByTestId(USAGE_CARD_TID.also)).toBeNull();
-    expect(within(usage).getByText(`Counted on every device that uses this Decaid, at Anthropic's prices of ${sayDate(PRICES_AS_OF)}.`)).toBeInTheDocument();
+    expect(within(usage).getByText(plain(`Counted on every device that uses this Decaid, at Anthropic's prices of ${sayDate(PRICES_AS_OF)}.`))).toBeInTheDocument();
   });
 
   it("shows the plan's use this 5 hours and this week, read from the bridge without a test reply", async () => {

@@ -32,13 +32,13 @@ import type { SxProps, Theme } from '@mui/material/styles';
 import AddRounded from '@mui/icons-material/AddRounded';
 import RemoveRounded from '@mui/icons-material/RemoveRounded';
 import { useServices } from '../../app/services.tsx';
-import { formatUsd, resumeDay } from '../../spend/budget.ts';
+import { formatUsd } from '../../spend/budget.ts';
 import type { BudgetState } from '../../spend/types.ts';
 import { useSpendSummary } from '../../spend/useSpend.ts';
 import { BUDGET_USD, DEFAULT_BUDGET } from '../../storage/settings.ts';
 import type { CoachBudget } from '../../storage/types.ts';
 import { DASH } from '../machine/format.ts';
-import { budgetPercent } from './usageFormat.ts';
+import { budgetPercent, sayDay } from './usageFormat.ts';
 import { UsageMeter } from './UsageMeter.tsx';
 
 // The test ids go on the inputs themselves, the elements a test (or a keyboard) can focus: the
@@ -75,7 +75,7 @@ export const NO_BUDGET_LINE = `No budget. Set one to be told in the chat at 80${
 export const PAUSE_LINE = 'At the budget the coach sends nothing more until you raise it or a new month begins. Shots still save.';
 const PAUSE_NEEDS_BUDGET = 'Set a budget to use this.';
 const pausedLine = (resumesOn: string) =>
-  `Paused now: the coach starts again on ${resumeDay(resumesOn)}, or as soon as you raise the budget or turn this off.`;
+  `Paused now: the coach starts again on ${sayDay(resumesOn)}, or as soon as you raise the budget or turn this off.`;
 
 const STEP_COLOUR: Readonly<Record<BudgetState['step'], string>> = {
   none: 'primary.main',
@@ -108,9 +108,9 @@ const spokenBudget = (usd: number) => `${usd} ${usd === 1 ? 'dollar' : 'dollars'
 /**
  * As the drinks' stepper (DrinkFields.tsx): Less and More fill 30% of the
  * outline at its ends (at least 48 px), the value between them in 17 px at
- * 600 in tabular figures, the dollar sign before it as a unit is shown
- * (smaller, muted), centred together. No budget is the empty field, its
- * placeholder "None" in ink-muted at full opacity, as every placeholder.
+ * 600 in tabular figures, the dollar sign before it in ink-muted, centred
+ * together. No budget is the empty field, its placeholder "None" in
+ * ink-muted at full opacity, as every placeholder.
  */
 const stepperSx: SxProps<Theme> = (theme) => ({
   width: '100%',
@@ -127,12 +127,12 @@ const stepperSx: SxProps<Theme> = (theme) => ({
     '&::placeholder': { color: theme.palette.text.secondary, opacity: 1 },
   },
   '& .MuiOutlinedInput-input.Mui-disabled': { WebkitTextFillColor: theme.palette.text.secondary },
+  // The value's own size, muted: money reads "$5", the number in ink; a tap on it reaches the field.
   '& .stepper-unit': {
-    ...theme.typography.label,
+    fontSize: '1.0625rem',
+    fontWeight: 600,
     color: theme.palette.text.secondary,
-    mr: '2px',
-    position: 'relative',
-    top: '1px',
+    mr: '1px',
     whiteSpace: 'nowrap',
     pointerEvents: 'none',
   },

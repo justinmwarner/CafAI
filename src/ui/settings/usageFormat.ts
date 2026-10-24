@@ -2,8 +2,9 @@
  * How Settings > Coach > Usage and cost writes its numbers (D239): tokens in
  * k and M, dollars to the cent (and a cost under a cent as under one, so a
  * month of a few Haiku replies never reads as free), shares in whole percent,
- * and days as the barista says them. A number and its unit are joined by a
- * no-break space, so a narrow card never parts them at a line's end.
+ * and days as the barista says them. A number and its unit, and a date's
+ * parts, are joined by no-break spaces, so a narrow card never parts them at
+ * a line's end.
  */
 import { formatUsd, resumeDay } from '../../spend/budget.ts';
 import type { BudgetState } from '../../spend/types.ts';
@@ -49,12 +50,12 @@ export function budgetPercent(state: BudgetState): number | null {
   return Math.max(percent, 100);
 }
 
-/** 'YYYY-MM-DD' as "4 October". */
+/** 'YYYY-MM-DD' as "4 October", kept on one line. */
 export function sayDay(day: string): string {
-  return resumeDay(day);
+  return resumeDay(day).replace(' ', NBSP);
 }
 
-/** 'YYYY-MM-DD' as "24 October 2026". */
+/** 'YYYY-MM-DD' as "24 October 2026", kept on one line. */
 export function sayDate(day: string): string {
-  return `${resumeDay(day)} ${day.slice(0, 4)}`;
+  return `${sayDay(day)}${NBSP}${day.slice(0, 4)}`;
 }

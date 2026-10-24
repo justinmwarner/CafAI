@@ -50,8 +50,8 @@ describe("the usage card's numbers (D239)", () => {
     expect(budgetPercent(budgetState(undefined, 1_000_000, NOW))).toBeNull();
   });
 
-  it('says a day as the barista does, and a date with its year', () => {
-    expect(sayDay('2026-10-04')).toBe('4 October');
-    expect(sayDate('2026-10-24')).toBe('24 October 2026');
+  it('says a day as the barista does, and a date with its year, each kept on one line', () => {
+    expect(sayDay('2026-10-04')).toBe(`4${NBSP}October`);
+    expect(sayDate('2026-10-24')).toBe(`24${NBSP}October${NBSP}2026`);
   });
 });
