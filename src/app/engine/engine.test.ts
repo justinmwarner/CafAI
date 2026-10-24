@@ -41,6 +41,9 @@ import type { FunFact, FunFactsSource } from '../../coach/facts/types.ts';
 import type { Bag } from '../../storage/types.ts';
 import type { CoachUiPart, ShotVerdict } from '../types.ts';
 import { createFakeStorage, createFakeTelemetry, SAMPLE_WORKFLOW, type FakeStorage, type FakeTelemetry } from '../../ui/testing/fakeServices.ts';
+import { budgetState, createBudgetNotes } from '../../spend/budget.ts';
+import type { CoachSource } from '../../storage/coachSource.ts';
+import type { CoachBudget } from '../../storage/types.ts';
 
 // ---------------------------------------------------------------------------
 // Fixtures and fakes
@@ -6111,5 +6114,180 @@ describe("the coach's spend in the engine (D237, D240, D243)", () => {
       await engine.pickTemplate('t-tpl', 'd-flow');
       expect(runs.at(-1)!.effort).toBe('low');
     });
+  });
+
+  describe('the budget (D240)', () => {
+    /** This month's spend on the API key, in millionths of a dollar, as the spend service would say. */
+    let spent: number;
+    let source: CoachSource;
+    let budgetTimers: ReturnType<typeof manualTimers>;
+    const dollars = (usd: number) => Math.round(usd * 1_000_000);
+
+    beforeEach(async () => {
+      spent = 0;
+      source = { kind: 'anthropic', address: '', code: '' };
+      budgetTimers = manualTimers();
+      engine.dispose();
+      engine = build({
+        spend: { budget: (budget, now) => budgetState(budget, spent, now ?? new Date(nowMs)) },
+        coachSource: { get: async () => source },
+        budgetNotes: createBudgetNotes(null),
+        budgetTimers: budgetTimers.timers,
+      });
+      await engine.start();
+    });
+
+    async function setBudget(budget: CoachBudget): Promise<void> {
+      await storage.settings.update({ coachBudget: budget });
+      await engine.refresh();
+    }
+
+    const parts = () => engine.getState().messages.flatMap((m) => m.parts);
+    const pauseCards = () => parts().filter((part) => part.kind === 'budgetPaused');
+    const budgetNotices = () => parts().flatMap((part) => (part.kind === 'notice' && part.text.includes('budget') ? [part.text] : []));
+    const said = () => parts().flatMap((part) => (part.kind === 'text' ? [part.text] : []));
+    const newest = () => engine.getState().messages.at(-1)!.parts;
+
+    it('sends nothing while the month reached the budget with the pause on: the pause card stands in for the reply, and the shot still shows', async () => {
+      await throughShot();
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(5);
+      const asked = runs.length;
+      await engine.sendText('How was that one?');
+      expect(runs).toHaveLength(asked);
+      expect(newest()).toEqual([{ kind: 'budgetPaused', budgetUsd: 5, resumesOn: '2026-11-01' }]);
+      expect(engine.getState()).toMatchObject({ busy: false, error: null });
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: 'targetWeight' });
+      await vi.waitFor(() => expect(parts().some((part) => part.kind === 'shot' && part.shotId === 'shot-2')).toBe(true));
+      await vi.waitFor(() => expect(newest()).toEqual([{ kind: 'budgetPaused', budgetUsd: 5, resumesOn: '2026-11-01' }]));
+      expect(runs).toHaveLength(asked);
+      // Kept with the chat, as any card is.
+      const stored = await storage.conversations.get(engine.getState().activeBag!.conversationId);
+      expect(stored!.uiMessages.at(-1)!.parts).toEqual([{ kind: 'budgetPaused', budgetUsd: 5, resumesOn: '2026-11-01' }]);
+    });
+
+    it('says the pause once however often the coach is asked again before anything else is said', async () => {
+      await throughShot();
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(6);
+      await engine.sendText('Hello?');
+      await engine.refresh();
+      expect(pauseCards()).toHaveLength(1);
+    });
+
+    it('sends the reply that waited once the budget is raised, as a reply', async () => {
+      await throughShot();
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(5);
+      await engine.sendText('How was that one?');
+      const asked = runs.length;
+      scripts.push(() => [text('Grind a step finer.')]);
+      await setBudget({ monthlyUsd: 10, pauseAtBudget: true });
+      expect(runs).toHaveLength(asked + 1);
+      expect(runs.at(-1)!.purpose).toBe('reply');
+      expect(engine.getState().messages.at(-1)!.parts).toEqual([{ kind: 'text', text: 'Grind a step finer.' }]);
+    });
+
+    it('sends it once the pause is turned off, or the budget cleared', async () => {
+      await throughShot();
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(5);
+      await engine.sendText('One');
+      scripts.push(() => [text('Off.')]);
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: false });
+      expect(said()).toContain('Off.');
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      await engine.sendText('Two');
+      scripts.push(() => [text('Cleared.')]);
+      await setBudget({ monthlyUsd: null, pauseAtBudget: true });
+      expect(newest()).toEqual([{ kind: 'text', text: 'Cleared.' }]);
+    });
+
+    it('leaves a paused coach paused when its settings are read again unchanged', async () => {
+      await throughShot();
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(5);
+      await engine.sendText('How was that one?');
+      const asked = runs.length;
+      await engine.refresh();
+      expect(runs).toHaveLength(asked);
+    });
+
+    it('looks again as the month turns, at least hourly, and sends the reply that waited when a new month begins', async () => {
+      await throughShot();
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(5);
+      await engine.sendText('How was that one?');
+      const asked = runs.length;
+      expect(budgetTimers.delays()).toEqual([60 * 60 * 1000]);
+      budgetTimers.fire();
+      await drainEngine();
+      expect(runs).toHaveLength(asked);
+      expect(budgetTimers.delays()).toEqual([60 * 60 * 1000]);
+      // 1 November: a new month, nothing spent in it yet.
+      nowMs = new Date(2026, 10, 1, 0, 0, 5).getTime();
+      spent = 0;
+      scripts.push(() => [text('Back again.')]);
+      budgetTimers.fire();
+      await vi.waitFor(() => expect(runs).toHaveLength(asked + 1));
+      expect(budgetTimers.delays()).toEqual([]);
+    });
+
+    it('warns once a month at 80 % and once at 100 %, after the reply that got there, and keeps coaching without the pause', async () => {
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: false });
+      await throughShot();
+      expect(budgetNotices()).toEqual([]);
+      spent = dollars(4.02);
+      scripts.push(() => [text('Sour. Grind finer.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      expect(newest()).toEqual([{ kind: 'notice', tone: 'info', text: 'The coach has used $4.02 of your $5 budget this month.' }]);
+      scripts.push(() => [text('Noted.')]);
+      await engine.sendText('Thanks');
+      spent = dollars(5.2);
+      scripts.push(() => [text('Noted again.')]);
+      await engine.sendText('And now?');
+      expect(newest()).toEqual([{ kind: 'notice', tone: 'warning', text: "This month's coach spend reached your $5 budget." }]);
+      scripts.push(() => [text('Still here.')]);
+      await engine.sendText('Still there?');
+      expect(newest()).toEqual([{ kind: 'text', text: 'Still here.' }]);
+      expect(budgetNotices()).toEqual(['The coach has used $4.02 of your $5 budget this month.', "This month's coach spend reached your $5 budget."]);
+      expect(pauseCards()).toEqual([]);
+    });
+
+    it('never pauses or warns while the coach runs on the computer, whose plan pays', async () => {
+      source = { kind: 'computer', address: '192.168.1.20:8877', code: 'ABCDEFGH' };
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(9);
+      await throughShot();
+      expect(pauseCards()).toEqual([]);
+      expect(budgetNotices()).toEqual([]);
+      expect(runs).toHaveLength(3);
+    });
+
+    it('reads no bag photo while paused: the bean card stays open beside the pause card', async () => {
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(5);
+      reader.answer = { name: 'Kiambu AA', roaster: null, origin: null, process: null, roastLevel: null, roastDate: null, notes: null };
+      await engine.newBag();
+      await engine.readBagPhoto({ mediaType: 'image/jpeg', data: 'UEhPVE8=' });
+      expect(reader.asked).toEqual([]);
+      expect(newest()).toEqual([{ kind: 'budgetPaused', budgetUsd: 5, resumesOn: '2026-11-01' }]);
+      expect(parts().find((part) => part.kind === 'beanPicker')).toMatchObject({ choice: null });
+    });
+
+    it('warns after a bag photo that got there too', async () => {
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: false });
+      spent = dollars(4.5);
+      reader.answer = { name: 'Kiambu AA', roaster: null, origin: null, process: null, roastLevel: null, roastDate: null, notes: null };
+      await engine.newBag();
+      await engine.readBagPhoto({ mediaType: 'image/jpeg', data: 'UEhPVE8=' });
+      expect(reader.asked).toHaveLength(1);
+      expect(budgetNotices()).toEqual(['The coach has used $4.50 of your $5 budget this month.']);
+    });
+
+    /** Let what the engine queued run to its end. */
+    async function drainEngine(): Promise<void> {
+      await engine.declineChange('no-such-card');
+    }
   });
 });

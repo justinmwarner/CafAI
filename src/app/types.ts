@@ -334,6 +334,19 @@ export type CoachUiPart =
       sites: string[];
     }
   | {
+      /**
+       * The coach paused by the month's budget (D240), in place of its reply:
+       * the budget reached, when the coach starts again by itself, and Open
+       * Settings. The reply waits, and goes once the budget is raised or
+       * cleared, the pause is turned off, or a month begins.
+       */
+      kind: 'budgetPaused';
+      /** The budget it reached, whole dollars. */
+      budgetUsd: number;
+      /** 'YYYY-MM-DD': the first of next month, when the pause lifts by itself. */
+      resumesOn: string;
+    }
+  | {
       kind: 'notice';
       tone: 'info' | 'success' | 'warning' | 'error';
       text: string;

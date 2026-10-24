@@ -123,7 +123,10 @@ import type {
   Storage,
 } from '../../storage/types.ts';
 import { NO_USAGE, type UsageTracker } from '../../usage/types.ts';
-import type { SpendKind } from '../../spend/types.ts';
+import type { BudgetState, SpendKind, SpendService } from '../../spend/types.ts';
+import { createBudgetNotes, type BudgetNotes } from '../../spend/budget.ts';
+import { monthOf } from '../../spend/records.ts';
+import type { CoachSourceStore } from '../../storage/coachSource.ts';
 import { DEFAULT_COACH_EFFORT } from '../../storage/settings.ts';
 import type {
   BeanChoice,
@@ -241,6 +244,14 @@ export interface EngineDeps {
   facts?: () => Promise<readonly FunFact[]>;
   /** Usage sharing's counts (D213); nothing by default. */
   usage?: UsageTracker;
+  /** The coach's spend (D240): the month's budget, which can pause the coach and warns as it nears; none by default. */
+  spend?: Pick<SpendService, 'budget'>;
+  /** The budget's notices given this month on this device (D240); kept in memory by default. */
+  budgetNotes?: BudgetNotes;
+  /** Where the coach runs, read before each reply: replies on the computer never count toward the budget (D240). Anthropic by default. */
+  coachSource?: Pick<CoachSourceStore, 'get'>;
+  /** Timers for the look at the budget as the month turns while a reply waits on it (the browser's by default). */
+  budgetTimers?: OutboxTimers;
 }
 
 /** The page's visibility: the WebView runs on with the page hidden behind another app or a dark screen. */
@@ -432,6 +443,8 @@ const NO_WEB_SEARCH = 'Web search is not available for your Anthropic account, s
 /** How often, and for how long, CafAI looks for a shot's Visualizer upload: every 3 s for 30 s (streamline's rule, 6.4). */
 const VISUALIZER_LOOK_MS = 3_000;
 const VISUALIZER_WATCH_MS = 30_000;
+/** While a reply waits on the month's budget, it is looked at again at least this often, so a new month is not missed (D240). */
+const BUDGET_LOOK_MAX_MS = 60 * 60 * 1000;
 
 /** Text from Decaid or a photo that travels on to the coach and Decaid: never a key (D37). */
 function withoutKey(text: string | null): string | null {
@@ -597,6 +610,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   const told = deps.told ?? createToldList(null);
   const facts = deps.facts ?? loadFacts;
   const usage = deps.usage ?? NO_USAGE;
+  const spend = deps.spend ?? null;
+  const budgetNotes = deps.budgetNotes ?? createBudgetNotes(null);
+  const budgetTimers = deps.budgetTimers ?? browserTimers;
 
   let state: CoachState = {
     ready: false,
@@ -701,6 +717,14 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   /** Bags whose bean card is reading Decaid's batches now, so a second open reads them once. */
   const filling = new Set<string>();
   let chain: Promise<void> = Promise.resolve();
+  /**
+   * A reply the month's budget stopped (D240): sent once a refresh (the
+   * budget raised or cleared, the pause turned off) or a new month finds the
+   * coach no longer paused, as a reply waiting for a key is once one is saved.
+   */
+  let budgetWait = false;
+  /** The look at the budget as the month turns, while a reply waits on it. */
+  let budgetTimer: unknown = null;
 
   const nowIso = () => clock.now().toISOString();
 
@@ -1441,6 +1465,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     };
     if (!llm.readBag) return warn(NO_PHOTO_READER);
     if (!(await storage.secrets.getApiKey())) return warn(NEEDS_KEY);
+    // Paused by the month's budget, the photo is not sent either (D240): it is never kept, so nothing waits.
+    const paused = await budgetPause();
+    if (paused) return waitOnBudget(s, paused, false);
     state = { ...state, busy: true };
     const progressId = showProgress(null, READING_BAG, { value: null, label: null });
     emit();
@@ -1466,10 +1493,13 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
           roastDate: read.roastDate,
         }),
       ]);
+      // A photo read on the key costs as a reply does (D240).
+      await noticeBudget();
       await persistConversation(s);
       emit();
       return;
     }
+    await noticeBudget();
     await warn(failure);
   }
 
@@ -1885,6 +1915,87 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     );
   }
 
+  // -------------------------------------------------------------------------
+  // The month's budget (D240)
+  // -------------------------------------------------------------------------
+
+  /** Whether a reply costs money now: the coach runs on Anthropic with the API key, not on the computer's Claude plan. */
+  async function paysPerReply(): Promise<boolean> {
+    if (!spend) return false;
+    try {
+      return (await deps.coachSource?.get())?.kind !== 'computer';
+    } catch {
+      return true;
+    }
+  }
+
+  /** The budget while it pauses the coach: the month's spend on the key reached it with the pause on. Null otherwise. */
+  async function budgetPause(): Promise<BudgetState | null> {
+    if (!spend || !(await paysPerReply())) return null;
+    try {
+      const budget = spend.budget(settings.coachBudget, clock.now());
+      return budget.paused ? budget : null;
+    } catch {
+      // A spend that cannot be told pauses nothing.
+      return null;
+    }
+  }
+
+  /**
+   * The coach sends nothing: the pause card stands in for its reply, said
+   * once until something else is said, and the reply waits for the coach to
+   * be back. Shots still save and show; the coach reads them when it is back.
+   */
+  async function waitOnBudget(s: Session, budget: BudgetState, reply: boolean): Promise<void> {
+    const part: CoachUiPart = { kind: 'budgetPaused', budgetUsd: (budget.budgetMicros ?? 0) / 1_000_000, resumesOn: budget.resumesOn };
+    const newest = state.messages[state.messages.length - 1];
+    if (!newest?.parts.some((shown) => JSON.stringify(shown) === JSON.stringify(part))) addMessage('system', [part]);
+    if (reply) {
+      budgetWait = true;
+      lookAtBudgetLater(budget);
+    }
+    await persistConversation(s);
+    emit();
+  }
+
+  /** Look at the budget again as the month turns, at least hourly, while a reply waits on it: a new month lifts the pause. */
+  function lookAtBudgetLater(budget: BudgetState): void {
+    stopBudgetLook();
+    if (disposed) return;
+    const [year, month, day] = budget.resumesOn.split('-').map(Number);
+    const untilThen = new Date(year ?? 0, (month ?? 1) - 1, day ?? 1).getTime() - clock.now().getTime();
+    budgetTimer = budgetTimers.setTimeout(
+      () => {
+        budgetTimer = null;
+        void enqueue(async () => {
+          if (!budgetWait || disposed) return;
+          const still = await budgetPause();
+          if (still) return lookAtBudgetLater(still);
+          budgetWait = false;
+          if (session && awaitingModel(session.conversation.apiMessages)) await runModel();
+        });
+      },
+      Math.min(Math.max(untilThen, 0) + 1000, BUDGET_LOOK_MAX_MS),
+    );
+  }
+
+  function stopBudgetLook(): void {
+    if (budgetTimer !== null) budgetTimers.clearTimeout(budgetTimer);
+    budgetTimer = null;
+  }
+
+  /** After what cost money on the key: a quiet notice at 80 % of the budget and at 100 %, once a month at each step. Never throws. */
+  async function noticeBudget(): Promise<void> {
+    try {
+      if (!spend || !(await paysPerReply())) return;
+      const now = clock.now();
+      const notice = budgetNotes.take(spend.budget(settings.coachBudget, now), monthOf(now));
+      if (notice) addMessage('system', [noticePart(notice.tone, notice.text)]);
+    } catch {
+      // A notice missed: the usage card still shows where the month stands.
+    }
+  }
+
   /**
    * `purpose`: what the coach's usage counts the reply as (D237): the reply
    * after a credited shot, or a reply to the barista, as a Retry and a reply
@@ -1899,6 +2010,11 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       emit();
       return;
     }
+    // The budget is checked before each reply (D240); one already started finishes, its tool loop included.
+    const paused = await budgetPause();
+    if (paused) return waitOnBudget(s, paused, true);
+    budgetWait = false;
+    stopBudgetLook();
     state = { ...state, busy: true, error: null };
     lastFailed = null;
     emit();
@@ -1966,6 +2082,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       usage.track('coach_error');
     } finally {
       state = { ...state, busy: false };
+      // What the reply cost may have brought the month near its budget, or to it (D240).
+      await noticeBudget();
       await persistConversation(s);
       emit();
     }
@@ -3333,7 +3451,13 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (grinderChanged) await sendGrinder();
     const waitedForKey = state.hasApiKey && Boolean(state.error?.startsWith('Add your Anthropic API key'));
     if (waitedForKey) setError(null);
-    return waitedForKey && session !== null && awaitingModel(session.conversation.apiMessages);
+    // A reply the budget stopped goes once the coach is no longer paused: the budget raised or cleared, or the pause off (D240).
+    const waitedForBudget = budgetWait && !(await budgetPause());
+    if (waitedForBudget) {
+      budgetWait = false;
+      stopBudgetLook();
+    }
+    return (waitedForKey || waitedForBudget) && session !== null && awaitingModel(session.conversation.apiMessages);
   }
 
   return {
@@ -3405,6 +3529,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       unsubscribeVisibility?.();
       if (checkTimer !== null) checkTimers.clearTimeout(checkTimer);
       checkTimer = null;
+      stopBudgetLook();
       outbox.dispose();
       if (emitTimer) clearTimeout(emitTimer);
       listeners.clear();

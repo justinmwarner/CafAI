@@ -13,6 +13,7 @@ import { createPluginDirectory, watchPlugins } from '../api/plugins.ts';
 import { createToldList } from '../coach/facts/told.ts';
 import { DEFAULT_MODEL, MODELS } from '../llm/index.ts';
 import { KNOWN_MODELS } from '../llm/models.ts';
+import { createBudgetNotes } from '../spend/budget.ts';
 import { openSpendService } from '../spend/service.ts';
 import { createIdbStorage, restoreFromMirrorIfEmpty, startLateRestore } from '../storage/index.ts';
 import { openCoachSourceStore } from '../storage/coachSource.ts';
@@ -151,6 +152,10 @@ export async function createServices(win: Window): Promise<AppServices> {
     // The fun facts told, in the device's own storage beside the care counts' cache: never mirrored or exported (D200).
     told: createToldList(deviceStorage),
     usage,
+    // The month's budget (D240): checked before each reply on the API key, its notices noted on the device.
+    spend,
+    budgetNotes: createBudgetNotes(deviceStorage),
+    coachSource,
   });
 
   telemetry.start();
