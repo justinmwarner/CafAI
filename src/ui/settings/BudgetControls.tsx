@@ -343,7 +343,7 @@ export function BudgetControls() {
           </Button>
         </Box>
       </Box>
-      {state.budgetMicros !== null && percent !== null ? (
+      {budget === null ? null : state.budgetMicros !== null && percent !== null ? (
         <Box data-testid={BUDGET_TID.meter} sx={{ display: 'grid', gap: 0.75 }}>
           <UsageMeter share={percent / 100} color={STEP_COLOUR[state.step]} />
           <Typography variant="body2" sx={{ fontVariantNumeric: 'tabular-nums' }}>

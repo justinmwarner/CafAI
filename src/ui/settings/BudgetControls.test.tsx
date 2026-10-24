@@ -286,8 +286,12 @@ describe('Settings > Coach > Usage and cost > Monthly budget (D240)', () => {
     renderWithServices(<BudgetControls />, services);
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not read the budget: IndexedDB is closed.');
     expect(amount()).toBeDisabled();
+    expect(amount()).toHaveAttribute('aria-valuetext', 'Unknown');
     expect(pause()).toBeDisabled();
     expect(noBudget()).toBeDisabled();
+    // Nothing claims there is no budget, or measures against one: neither is known.
+    expect(screen.queryByText(plain(NO_BUDGET_LINE))).toBeNull();
+    expect(screen.queryByTestId(BUDGET_TID.meter)).toBeNull();
   });
 
   it('draws nothing without a spend service', () => {

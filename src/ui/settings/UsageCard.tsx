@@ -86,6 +86,7 @@ const NO_PLAN_USE_YET = "Your plan's use shows here after the coach's next reply
 const PLAN_LIMIT = "The plan's limit is reached for now. The coach answers again once it resets.";
 /** The bridge's status says what Claude Code reported with the last run, not when: that run was the coach's last reply. */
 const PLAN_REPORTED = "As Claude Code reported them with the coach's last reply.";
+const PLAN_REPORTED_ONE = "As Claude Code reported it with the coach's last reply.";
 
 const COUNTED = `Counted on every device that uses this Decaid, at Anthropic's prices of ${sayDate(PRICES_AS_OF)}.`;
 const BILL = "Your bill is in Anthropic's Console.";
@@ -112,14 +113,14 @@ const visuallyHidden = {
   whiteSpace: 'nowrap',
 } as const;
 
+type Place = 'anthropic' | 'computer';
+
 /**
  * Where the coach runs, once known: null until it has been read, so neither
  * card flashes up first. While it is read again after a change, each of the
  * two answers comes in its own time; the card keeps the one it showed until
  * the new place is known, rather than vanish for a moment.
  */
-type Place = 'anthropic' | 'computer';
-
 function useUsageSource(): Place | null {
   const onComputer = useCoachRunsOnComputer();
   const showsKey = useShowsApiKey();
@@ -386,12 +387,12 @@ function ApiUsage({ summary, today }: { summary: SpendSummary; today: Date }) {
  * again. A window whose reset has passed since Claude Code reported it has
  * started again, its old share no longer true: it says so, and shows none.
  */
-function PlanWindow({ id, label, window, clock }: { id: PlanWindowId; label: string; window: BridgeUsageWindow; clock: ClockFormat }) {
+function PlanWindow({ id, label, use, clock }: { id: PlanWindowId; label: string; use: BridgeUsageWindow; clock: ClockFormat }) {
   const now = new Date();
-  const reset = window.resetsAt === null ? null : new Date(window.resetsAt);
+  const reset = use.resetsAt === null ? null : new Date(use.resetsAt);
   const resets = reset !== null && Number.isFinite(reset.getTime()) ? reset : null;
   const started = resets !== null && resets.getTime() <= now.getTime();
-  const percent = Math.min(100, Math.max(0, Math.round(window.utilization * 100)));
+  const percent = Math.min(100, Math.max(0, Math.round(use.utilization * 100)));
   return (
     <Box
       data-testid={USAGE_CARD_TID.planWindow(id)}
@@ -430,15 +431,15 @@ function PlanUse() {
         </Typography>
       ) : (
         <>
-          {usage.fiveHour ? <PlanWindow id="five-hour" label="Plan, this 5 hours" window={usage.fiveHour} clock={clock} /> : null}
-          {usage.sevenDay ? <PlanWindow id="seven-day" label="Plan, this week" window={usage.sevenDay} clock={clock} /> : null}
+          {usage.fiveHour ? <PlanWindow id="five-hour" label="Plan, this 5 hours" use={usage.fiveHour} clock={clock} /> : null}
+          {usage.sevenDay ? <PlanWindow id="seven-day" label="Plan, this week" use={usage.sevenDay} clock={clock} /> : null}
           {usage.status === 'rejected' ? (
             <Typography variant="body2" sx={{ color: 'warning.main' }}>
               {PLAN_LIMIT}
             </Typography>
           ) : null}
           <Typography variant="caption" component="p" sx={mutedSx}>
-            {PLAN_REPORTED}
+            {usage.fiveHour && usage.sevenDay ? PLAN_REPORTED : PLAN_REPORTED_ONE}
           </Typography>
         </>
       )}

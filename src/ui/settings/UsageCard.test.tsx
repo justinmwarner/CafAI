@@ -430,6 +430,8 @@ describe('Settings > Coach > Usage, while the coach runs on the computer (D239)'
     expect(plan).toHaveTextContent("The plan's limit is reached for now. The coach answers again once it resets.");
     expect(within(plan).getByTestId(USAGE_CARD_TID.planWindow('five-hour'))).toHaveTextContent('100 %');
     expect(within(plan).queryByTestId(USAGE_CARD_TID.planWindow('seven-day'))).toBeNull();
+    // One window reported: it, not them.
+    expect(within(plan).getByText("As Claude Code reported it with the coach's last reply.")).toBeInTheDocument();
   });
 
   it('adds what the API key spent this month too', async () => {
