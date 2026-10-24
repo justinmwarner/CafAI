@@ -19,6 +19,7 @@ import { useEffect, useLayoutEffect } from 'react';
 import Box from '@mui/material/Box';
 import { replaceRoute } from '../router.ts';
 import { useScreenMode } from '../shell/screenMode.ts';
+import { useDecaidVersion } from './decaidVersion.ts';
 import type { SettingsGroupId } from './groupIds.ts';
 import { GroupPage } from './GroupPage.tsx';
 import { SettingsList } from './SettingsList.tsx';
@@ -41,6 +42,9 @@ export interface SettingsScreenProps {
 
 export function SettingsScreen({ group = null }: SettingsScreenProps) {
   const tablet = useScreenMode() === 'tablet';
+  // Decaid's version, asked each time Settings opens, whichever group shows: the log's Share, Email
+  // and Copy (Data and privacy) put it in their header, and build it in the tap (decaidVersion.ts).
+  useDecaidVersion();
   // A tablet always shows a group beside the list; a phone shows the list until a group is opened.
   const shown = group ?? (tablet ? (opened ?? FIRST_GROUP) : null);
 

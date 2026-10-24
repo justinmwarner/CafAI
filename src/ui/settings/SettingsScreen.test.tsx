@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import '../chat/testing/setup.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, screen, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { createFakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
 import { renderWithServices } from '../chat/testing/render.tsx';
 import { ScreenModeContext } from '../shell/screenMode.ts';
+import { knownDecaidVersion } from './decaidVersion.ts';
 import { SETTINGS_GROUP_IDS } from './groupIds.ts';
 import { forgetOpenedGroup, SettingsScreen } from './SettingsScreen.tsx';
 
@@ -153,6 +154,23 @@ describe('Settings across the line', () => {
     act(() => setViewport(962, 602));
     expect(pane('coach')).toBeInTheDocument();
     expect(window.location.hash).toBe('#/settings/coach');
+  });
+});
+
+describe("Settings and Decaid's version", () => {
+  it("asks Decaid's version as it opens, whichever group shows, so the log's header carries it (D139)", async () => {
+    setViewport(1280, 800);
+    const services = createFakeServices();
+    renderWithServices(<SettingsScreen group="data" />, services);
+    await waitFor(() => expect(knownDecaidVersion(services.decaid)).toBe('0.9.0+1'));
+    expect(services.decaid.calls.filter((call) => call.method === 'getInfo')).toHaveLength(1);
+  });
+
+  it("asks again on the phone's list", async () => {
+    setViewport(390, 844);
+    const services = createFakeServices();
+    renderWithServices(<SettingsScreen group={null} />, services);
+    await waitFor(() => expect(knownDecaidVersion(services.decaid)).toBe('0.9.0+1'));
   });
 });
 
