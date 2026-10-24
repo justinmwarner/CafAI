@@ -8,6 +8,7 @@ import { toToolDefinition } from '../llm/schema.ts';
 import { LlmError, type LlmMessage, type LlmRequest, type LlmStreamEvent } from '../llm/types.ts';
 import { createMemoryCoachSourceStore, type CoachSource } from '../storage/coachSource.ts';
 import type { SecretStore, Storage } from '../storage/types.ts';
+import type { SpendCount } from '../spend/types.ts';
 import { activeCredential, createCoachProvider, retryOnComputer, withCoachCredential } from './coachAccess.ts';
 
 const KEY = 'sk-ant-test-key-0123456789';
@@ -224,6 +225,94 @@ describe('createCoachProvider', () => {
     expect(seen).toHaveLength(1);
   });
 });
+
+describe("counting what the coach used (D237)", () => {
+  const AT = new Date('2026-10-24T09:30:00');
+  /** A reply whose usage says exactly what it used: message_start's, then message_delta's. */
+  const billed = () =>
+    sse(
+      {
+        type: 'message_start',
+        message: { id: 'msg_1', type: 'message', role: 'assistant', model: 'claude-opus-5-5', content: [], usage: { input_tokens: 900, cache_read_input_tokens: 4000, cache_creation_input_tokens: 300, output_tokens: 1 } },
+      },
+      { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+      { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Grind finer.' } },
+      { type: 'content_block_stop', index: 0 },
+      { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 40, server_tool_use: { web_search_requests: 1 } } },
+      { type: 'message_stop' },
+    );
+  const USAGE = { inputTokens: 900, outputTokens: 40, cacheReadInputTokens: 4000, cacheCreationInputTokens: 300, webSearchRequests: 1 };
+
+  function metered(source: Partial<CoachSource>, count?: (entry: SpendCount) => void) {
+    const counts: SpendCount[] = [];
+    const coach = createCoachProvider({
+      secrets: secrets(),
+      coachSource: createMemoryCoachSourceStore(source),
+      retryBaseMs: 1,
+      spend: { count: count ?? ((entry) => counts.push(entry)) },
+      now: () => AT,
+    });
+    return { counts, coach };
+  }
+
+  it('counts each finished request once, with its model, what it was for, its call and the usage Anthropic reported', async () => {
+    watch(ANTHROPIC_MESSAGES, billed);
+    const { counts, coach } = metered({});
+    await collect(coach.stream({ ...REQUEST, purpose: 'shot', call: 2 }));
+    expect(counts).toEqual([{ at: AT, source: 'anthropic', model: 'claude-opus-5-5', kind: 'shot', call: 2, usage: USAGE }]);
+  });
+
+  it("counts a request that says nothing of itself as a reply's first call", async () => {
+    watch(ANTHROPIC_MESSAGES, billed);
+    const { counts, coach } = metered({});
+    await collect(coach.stream(REQUEST));
+    expect(counts).toMatchObject([{ kind: 'reply', call: 0 }]);
+  });
+
+  it('counts what CafAI Bridge reported as the computer\'s, whose plan pays for it', async () => {
+    watch(BRIDGE_MESSAGES, billed);
+    const { counts, coach } = metered(COMPUTER);
+    await collect(coach.stream({ ...REQUEST, purpose: 'photo' }));
+    expect(counts).toEqual([{ at: AT, source: 'computer', model: 'claude-opus-5-5', kind: 'photo', call: 0, usage: USAGE }]);
+  });
+
+  it('counts a request tried again once it got through, once', async () => {
+    const seen = watch(ANTHROPIC_MESSAGES, () => (seen.length === 1 ? HttpResponse.json(errorBody('overloaded_error', 'Overloaded'), { status: 529 }) : billed()));
+    const { counts, coach } = metered({});
+    await collect(coach.stream(REQUEST));
+    expect(seen).toHaveLength(2);
+    expect(counts).toHaveLength(1);
+  });
+
+  it('counts nothing for a stream that fails before its end: what it used is not known', async () => {
+    const cases: Array<[string, () => Response]> = [
+      ['error event', () => sse({ ...MESSAGE_START_EVENT }, { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } })],
+      ['dropped', () => sse({ ...MESSAGE_START_EVENT }, { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } })],
+      ['refused', () => HttpResponse.json(errorBody('invalid_request_error', 'Bad request'), { status: 400 })],
+    ];
+    for (const [name, respond] of cases) {
+      server.resetHandlers();
+      watch(ANTHROPIC_MESSAGES, respond);
+      const { counts, coach } = metered({});
+      await failure(collect(coach.stream(REQUEST)));
+      expect(counts, name).toEqual([]);
+    }
+  });
+
+  it('never lets the count stand in the way of the reply', async () => {
+    watch(ANTHROPIC_MESSAGES, billed);
+    const { coach } = metered({}, () => {
+      throw new Error('the counter broke');
+    });
+    const events = await collect(coach.stream(REQUEST));
+    expect(events.at(-1)?.type).toBe('message_done');
+  });
+});
+
+const MESSAGE_START_EVENT = {
+  type: 'message_start',
+  message: { id: 'msg_x', type: 'message', role: 'assistant', model: 'claude-opus-5-5', content: [], usage: { input_tokens: 9, output_tokens: 1 } },
+};
 
 describe('activeCredential', () => {
   it('is the API key while the coach runs on Anthropic', async () => {
