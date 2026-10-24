@@ -126,7 +126,8 @@ interface Layout {
 }
 
 function layoutFor(width: number, height: number): Layout {
-  const unit = Math.max(0.1, Math.min(width / 962, height / 602));
+  // On the tablet the height sets the size; on a narrow screen (a phone's Preview) the saucer takes most of the width.
+  const unit = Math.max(0.1, Math.min(width / 580, height / 602));
   const coffee = 148 * unit;
   const lipIn = coffee * 1.06;
   const lipOut = lipIn + 16 * unit;
@@ -296,10 +297,19 @@ function paintUnder(doc: Document, at: Layout, scale: number): HTMLCanvasElement
   ring(saucer, saucer * 0.88);
   context.fillStyle = roll;
   context.fill();
-  glint(context, x, y, saucer * 0.93, toLight, 0.85, 4.5 * unit, '#ffffff', 0.95, 5 * unit * scale);
-  glint(context, x, y, saucer * 0.9, toLight + Math.PI, 0.6, 3 * unit, '#fffaf2', 0.4, 4 * unit * scale);
+  // The light is a pool on the cup: the saucer falls off into shade toward its rim, so the coffee
+  // is the subject and the porcelain round it stays modest on a dim screen.
+  const falloff = context.createRadialGradient(x + LIGHT_X * at.lipOut * 0.25, y + LIGHT_Y * at.lipOut * 0.25, at.lipOut, x, y, saucer);
+  falloff.addColorStop(0, 'rgba(18, 11, 6, 0)');
+  falloff.addColorStop(0.55, 'rgba(18, 11, 6, 0.18)');
+  falloff.addColorStop(1, 'rgba(18, 11, 6, 0.42)');
+  disc(saucer);
+  context.fillStyle = falloff;
+  context.fill();
+  glint(context, x, y, saucer * 0.93, toLight, 0.85, 4.5 * unit, '#ffffff', 0.85, 5 * unit * scale);
+  glint(context, x, y, saucer * 0.9, toLight + Math.PI, 0.6, 3 * unit, '#fffaf2', 0.3, 4 * unit * scale);
   // A cool rim light on the far edge.
-  glint(context, x, y, saucer * 0.988, toLight + Math.PI, 0.55, 2 * unit, '#dfe8f2', 0.35, 3 * unit * scale);
+  glint(context, x, y, saucer * 0.988, toLight + Math.PI, 0.55, 2 * unit, '#dfe8f2', 0.4, 3 * unit * scale);
 
   // The cup's shadow and the handle's, soft, to the lower right; and the dark where the cup meets the saucer.
   context.save();
@@ -662,19 +672,22 @@ export const latte: CanvasSaver = {
         shownVersion = shown.version;
       }
 
-      // The drift, in whole device pixels.
-      const driftX = Math.round(DRIFT_X * at.unit * Math.sin((2 * Math.PI * time) / DRIFT_X_S + env.seed) * scale) / scale;
-      const driftY = Math.round(DRIFT_Y * at.unit * Math.sin((2 * Math.PI * time) / DRIFT_Y_S + env.seed * 1.7) * scale) / scale;
-      const cx = at.cx + driftX;
-      const cy = at.cy + driftY;
+      // The drift; the cup's centre and every layer's corner on whole device pixels, so a patch
+      // painted again lines up with what is under it exactly.
+      const snap = (value: number) => Math.round(value * scale) / scale;
+      const driftY = DRIFT_Y * at.unit * Math.sin((2 * Math.PI * time) / DRIFT_Y_S + env.seed * 1.7);
+      const cx = snap(at.cx + DRIFT_X * at.unit * Math.sin((2 * Math.PI * time) / DRIFT_X_S + env.seed));
+      const cy = snap(at.cy + driftY);
+      const underSize = under.width / scale;
+      const underX = snap(cx - underSize / 2);
+      const underY = snap(cy - underSize / 2);
 
       context.setTransform(scale, 0, 0, scale, 0, 0);
       context.globalAlpha = 1;
       if (cx !== paintedX || cy !== paintedY) {
         context.fillStyle = env.palette.background;
         context.fillRect(0, 0, width, height);
-        const underSize = under.width / scale;
-        context.drawImage(under, cx - underSize / 2, cy - underSize / 2, underSize, underSize);
+        context.drawImage(under, underX, underY, underSize, underSize);
         paintedX = cx;
         paintedY = cy;
       }
@@ -717,15 +730,15 @@ export const latte: CanvasSaver = {
       }
 
       const overSize = over.width / scale;
-      context.drawImage(over, cx - overSize / 2, cy - overSize / 2, overSize, overSize);
+      context.drawImage(over, snap(cx - overSize / 2), snap(cy - overSize / 2), overSize, overSize);
 
       // The pour's name under the cup, coming in as it starts and going as the cup clears.
       const name = names.get(pour);
       if (name) {
         const nameWidth = name.width / scale;
         const nameHeight = name.height / scale;
-        const nameX = cx - nameWidth / 2;
-        const nameY = at.nameY + driftY - nameHeight * 0.68;
+        const nameX = snap(cx - nameWidth / 2);
+        const nameY = snap(at.nameY + driftY - nameHeight * 0.68);
         // What is under the name (the table, the edge of the saucer's shadow), painted again under it.
         context.save();
         context.beginPath();
@@ -733,8 +746,7 @@ export const latte: CanvasSaver = {
         context.clip();
         context.fillStyle = env.palette.background;
         context.fillRect(nameX, nameY, nameWidth, nameHeight);
-        const underSize = under.width / scale;
-        context.drawImage(under, cx - underSize / 2, cy - underSize / 2, underSize, underSize);
+        context.drawImage(under, underX, underY, underSize, underSize);
         context.restore();
         const shown = phase === 'pour' ? smooth(0, NAME_IN_S, phaseTime) : phase === 'clear' ? 1 - smooth(0, 1.2, phaseTime) : 1;
         if (shown > 0) {
