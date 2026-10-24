@@ -144,8 +144,9 @@ export interface Template {
 /**
  * A grinder from Decaid's grinder library (GET /api/v1/grinders), reduced to
  * what the coach needs to size a grind move (D62). Decaid lists no range and
- * no "which way is finer": CafAI assumes lower numbers are finer and that a
- * preset list runs finest first.
+ * no "which way is finer": the barista says that in Settings (D241,
+ * `finerIsHigher`); until they do, CafAI assumes lower numbers are finer and
+ * that a preset list runs finest first.
  */
 export interface GrinderInfo {
   /** Decaid's `model`, e.g. "Niche Zero". */
@@ -156,8 +157,16 @@ export interface GrinderInfo {
   smallStep: number | null;
   /** Decaid's `settingBigStep`; null when Decaid has none. */
   bigStep: number | null;
-  /** Decaid's `settingValues` for a preset grinder; null when Decaid has none. */
+  /** Decaid's `settingValues` for a preset grinder, in Decaid's order (grinderSettings reads them finest first); null when Decaid has none. */
   values: readonly string[] | null;
+  /**
+   * The barista said higher numbers are finer on this grinder (D241,
+   * Settings > Grinder > Finer is): a finer move goes up the dial, and a
+   * preset list is read the other way round (finestFirst in grinder.ts).
+   * Absent or false: lower numbers are finer (D62). Never Decaid's: the
+   * engine adds it from the settings.
+   */
+  finerIsHigher?: boolean;
 }
 
 /** Current value of each lever of a profile built from a template. */

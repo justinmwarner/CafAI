@@ -135,6 +135,18 @@ describe("grind text with Decaid's grinder library (D62)", () => {
     // Worked out on Decaid's steps: no caveat.
     expect(describeManualSteps(grind('finer', 1, '14.5'), { grinder: niche, fromDecaid: true })[0]).not.toContain('estimate');
   });
+
+  it('names the move the way the grinder goes finer: finer to the higher number where higher numbers are finer (D241)', () => {
+    const upward: GrinderInfo = { ...niche, finerIsHigher: true };
+    expect(describeManualChange(grind('finer', 2, '16'), { doseG: 18, grinderSetting: '15' })).toBe('Grind 2 steps finer: 15 -> 16');
+    expect(describeManualChange(grind('finer', 2, '16'), { doseG: 18, grinderSetting: null })).toBe('Grind 2 steps finer, to 16');
+    expect(describeManualSteps(grind('finer', 2, '16'), { grinder: upward, fromDecaid: true })).toEqual([
+      'Set the grinder to 16 before the next shot (Decaid lists 0.5 steps for your Niche Zero).',
+    ]);
+    expect(describeManualSteps(grind('coarser', 1, null), { grinder: { ...ditting, finerIsHigher: true } })).toEqual([
+      'Turn the grinder 1 step coarser before the next shot (Decaid lists 3 settings for your Ditting 807), then note the new setting in Settings.',
+    ]);
+  });
 });
 
 describe('diffProfiles', () => {

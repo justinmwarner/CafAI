@@ -485,6 +485,40 @@ describe("validateProposal: grind with Decaid's grinder library (D62)", () => {
     // Same as before: a "new" setting equal to the one on the dial is refused.
     expect(errorsOf(validateProposal(grind('finer', 1, 'two turns'), on(NICHE, 'two turns')))).toMatch(/is the setting the grinder is on now/);
   });
+
+  describe('on a grinder whose higher numbers are finer (D241)', () => {
+    const UPWARD: GrinderInfo = { ...NICHE, finerIsHigher: true };
+    const STEPPED: GrinderInfo = {
+      model: 'Baratza Encore ESP',
+      settingType: 'preset',
+      smallStep: null,
+      bigStep: null,
+      values: ['1', '2', '3', '4', '5', '6'],
+      finerIsHigher: true,
+    };
+
+    it('the change card says finer with the higher number, worked out on the dial', () => {
+      expect(okPlan(validateProposal(grind('finer', 2, null), on(UPWARD, '15')))).toMatchObject({
+        contextPatch: { grinderSetting: '16.0' },
+        diffLines: ['Grind 2 steps finer: 15 -> 16.0'],
+        manualSteps: ['Set the grinder to 16.0 before the next shot (Decaid lists 0.5 steps for your Niche Zero).'],
+        grindSettingFrom: 'decaid',
+      });
+      expect(okPlan(validateProposal(grind('finer', null, '16'), on(UPWARD, null))).diffLines).toEqual(['Grind finer, to 16']);
+      expect(okPlan(validateProposal(grind('coarser', 1, null), on(UPWARD, '15'))).diffLines).toEqual(['Grind 1 step coarser: 15 -> 14.5']);
+      expect(okPlan(validateProposal(grind('finer', 1, null), on(STEPPED, '4')))).toMatchObject({
+        diffLines: ['Grind 1 step finer: 4 -> 5'],
+        manualSteps: ['Set the grinder to 5 before the next shot (Decaid lists 6 settings for your Baratza Encore ESP).'],
+      });
+    });
+
+    it('sends a setting on the wrong side back to the model, saying which way is finer', () => {
+      expect(errorsOf(validateProposal(grind('finer', null, '14'), on(UPWARD, '15')))).toMatch(
+        /^grind\.setting "14" is coarser than 15 \(higher numbers are finer\), but grind\.direction is "finer"\. Your grinder moves in steps of 0\.5 \(Decaid's grinder library\): 1 step finer from 15 is 15\.5\./,
+      );
+      expect(errorsOf(validateProposal(grind('finer', 1, '3'), on(STEPPED, '4')))).toMatch(/^grind\.setting "3" is coarser than "4" in the list/);
+    });
+  });
 });
 
 describe('validateProposal: dose', () => {
