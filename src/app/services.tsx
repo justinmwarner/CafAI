@@ -2,7 +2,8 @@ import { createContext, useCallback, useContext, useSyncExternalStore, type Reac
 import type { CoachState, Services } from './types.ts';
 import type { TelemetryState } from '../api/types.ts';
 import { DEFAULT_TEMPERATURE_UNIT, type TemperatureUnit } from '../coach/temperature.ts';
-import type { Appearance, ScreensaverSetting } from '../storage/types.ts';
+import { DEFAULT_CLOCK } from '../storage/settings.ts';
+import type { Appearance, ClockFormat, ScreensaverSetting } from '../storage/types.ts';
 
 const ServicesContext = createContext<Services | null>(null);
 
@@ -59,6 +60,25 @@ const inCelsius = () => DEFAULT_TEMPERATURE_UNIT;
 export function useTemperatureUnit(): TemperatureUnit {
   const store = useContext(ServicesContext)?.temperatureUnit;
   return useSyncExternalStore(store?.subscribe ?? unchanging, store?.get ?? inCelsius);
+}
+
+const inTwentyFourHours = () => DEFAULT_CLOCK;
+const tdsShown = () => true;
+
+/**
+ * The clock times are shown and typed in (D245). 24-hour outside a
+ * ServicesProvider or without the store (a card's own test, a preview), as
+ * every time read before the choice came.
+ */
+export function useClockFormat(): ClockFormat {
+  const store = useContext(ServicesContext)?.displayPrefs;
+  return useSyncExternalStore(store?.subscribe ?? unchanging, store?.clock ?? inTwentyFourHours);
+}
+
+/** Whether shot cards and History show the TDS cell and the extraction (D246): on, as before, outside a ServicesProvider or without the store. */
+export function useShowTds(): boolean {
+  const store = useContext(ServicesContext)?.displayPrefs;
+  return useSyncExternalStore(store?.subscribe ?? unchanging, store?.showTds ?? tdsShown);
 }
 
 const noneChosen = () => null;

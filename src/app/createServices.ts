@@ -24,6 +24,7 @@ import { createAppearanceStore } from './appearance.ts';
 import { createCareService, localTotalsCache } from './care/careService.ts';
 import { withCoachCredential } from './coachAccess.ts';
 import { createCoachEngine, type CoachEngine } from './engine/engine.ts';
+import { createDisplayPrefsStore } from './displayPrefs.ts';
 import { createDrinkScreensStore } from './drinkScreens.ts';
 import { createSaverScreen } from './saverScreen.ts';
 import { createScreensaverSettingStore } from './screensaverSetting.ts';
@@ -86,6 +87,8 @@ export async function createServices(win: Window): Promise<AppServices> {
   const drinkScreens = createDrinkScreensStore(storage.settings, (await storage.settings.get()).drinkScreens);
   // Settings > Screensaver (D225): the overlay over the shell acts on it at once.
   const screensaver = createScreensaverSettingStore(storage.settings, (await storage.settings.get()).screensaver);
+  // The clock and the TDS cell's switch (D245, D246): every screen that shows a time or a shot reads them.
+  const displayPrefs = createDisplayPrefsStore(storage.settings, await storage.settings.get());
 
   // Machine care's steps (D183-D190): read now, counted from Decaid's totals behind the start.
   const visibility = {
@@ -165,6 +168,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     if (records) void coach.restored();
     void appearance.reload();
     void temperatureUnit.reload();
+    void displayPrefs.reload();
     void drinkScreens.reload();
     void screensaver.reload();
     void care.reload();
@@ -236,6 +240,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     appVersion: APP_VERSION,
     appearance,
     temperatureUnit,
+    displayPrefs,
     drinkScreens,
     screensaver,
     saverScreen,

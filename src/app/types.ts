@@ -18,6 +18,7 @@ import type { CoachSourceBackup } from '../storage/coachSourceBackup.ts';
 import type { Bag, ProfileVersion, Storage } from '../storage/types.ts';
 import type { UsageService } from '../usage/service.ts';
 import type { AppearanceStore } from './appearance.ts';
+import type { DisplayPrefsStore } from './displayPrefs.ts';
 import type { DrinkScreensStore } from './drinkScreens.ts';
 import type { SaverScreen } from './saverScreen.ts';
 import type { ScreensaverSettingStore } from './screensaverSetting.ts';
@@ -42,6 +43,12 @@ export interface Services {
   temperatureUnit: TemperatureUnitStore;
   /** Settings > Screensaver (D225), as live state. */
   screensaver: ScreensaverSettingStore;
+  /**
+   * The clock and the TDS cell's switch (D245, D246), as live state.
+   * Optional: fakes and previews leave it out, and then times read 24-hour
+   * and shot cards show the TDS cell, as before either was a choice.
+   */
+  displayPrefs?: DisplayPrefsStore;
   /**
    * The tablet's screen while a screensaver shows (D224): dimmed and
    * held on through Decaid's display socket. Only inside Decaid, whose
