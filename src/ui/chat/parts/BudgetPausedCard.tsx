@@ -8,7 +8,7 @@ import { requestUsageReveal } from '../../../spend/reveal.ts';
 import { routeHref } from '../../router.ts';
 import { TID } from '../../testIds.ts';
 
-/** The card's test ids, here until they join src/ui/testIds.ts (the layout's file). */
+/** The card's test ids, as kept with the rest in TID (src/ui/testIds.ts). */
 export const BUDGET_PAUSED_TID = { card: TID.budgetPaused, openSettings: TID.budgetPausedOpenSettings } as const;
 
 /** Settings > Coach, where the usage card holds the budget (D233). */
