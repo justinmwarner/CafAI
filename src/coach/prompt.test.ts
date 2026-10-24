@@ -223,11 +223,13 @@ describe('buildSystemPrompt: content', () => {
     expect(manual).toMatch(/"values" a preset grinder's settings, finest first whichever way its numbers go/);
   });
 
-  it('tells the coach to read "finer", the barista\'s answer for their grinder, linked or not, never assuming lower is finer (D241)', () => {
+  it('tells the coach to read "finer" for every grinder, and where the user sets it, never assuming lower is finer (D241)', () => {
     const manual = prompt.slice(prompt.indexOf('# Manual variables'), prompt.indexOf('# Reading a shot'));
-    expect(manual).toContain('The grinder\'s "finer" is which way its numbers go finer, as the barista set it in Settings');
-    expect(manual).toContain('"lower" (lower numbers are finer, as on most grinders) or "higher" (higher numbers are finer on this one)');
-    expect(manual).toMatch(/linked or not.*outranks what you know of that grinder's usual dial: read the setting that way and give a new setting that way/);
+    expect(manual).toContain('The grinder\'s "finer" is which way its numbers go finer, linked or not');
+    expect(manual).toContain('"lower" (lower numbers are finer, as on most grinders, and what CafAI assumes until the user says otherwise)');
+    expect(manual).toContain('"higher" (the user set higher numbers as finer on this grinder in Settings)');
+    expect(manual).toContain("Read the setting that way and give a new setting that way, whatever you know of that grinder's usual dial.");
+    expect(manual).toContain('If the user says their grinder goes finer the other way, ask them to set it in Settings > Grinder > Finer is');
     expect(manual).toContain('one step finer is "14.5", or "15.5" where "finer" is "higher"');
     expect(manual).toContain('the way "finer" says');
     expect(prompt).not.toMatch(/assuming lower numbers are finer/);
