@@ -4475,3 +4475,37 @@ desktop).
   roast stage is a colour coffee people know; the dark roasts' bodies are as
   dark as they are, and their rim light and their oil's glint show them on
   the page.
+- **D-BEAN-4. Lava Latte's glass is a lit object.** Walls 7 design units
+  thick, an outer and an inner edge with the glass faintly tinted between
+  them, the outside's edge catching light; a heavy foot of solid glass (30);
+  the rim a ring seen from a little above, its far side faint through the
+  glass; vertical streaks of the room's light down it, a broad soft one and a
+  fine one on the left, a faint one on the right, fading toward their ends;
+  and a thin layer of milk foam on the coffee, its top a flat ellipse: a
+  latte (`src/ui/saver/savers/lava.ts`). All of it is made once at a resize.
+  Why: the owner asked for nicer, and an outline round a flat fill read as a
+  diagram of a glass, not a glass.
+- **D-BEAN-5. A warm light from below, as a lava lamp's bulb.** The bulb
+  under the glass glows through its foot and turns the bottom of the coffee
+  gold and amber, deepening to espresso up the glass as the coffee takes it
+  in (a third of it left 150 design units up, `bulbLight`), darker toward
+  the walls where there is less coffee to light: lit pixel by pixel at a
+  resize, dithered, so its long fall shows no rings. The cream takes the
+  light from below: brighter undersides, a glow through it and at its thin
+  edges, warmer the lower it is, and a faint room light from the upper left
+  so a high blob keeps its shape; it is shaded from the field's slope taken
+  as a normal (`fieldSlope`), the slope flattened deep in the cream so blobs
+  that merge are one body, on a grid three times as fine as the field's,
+  which stays the coarse one. Round the glass the light spills onto the page
+  as a soft halo, pools on what it stands on, and the foot and the coffee's
+  bottom are mirrored there, faint and fading. About 1.5 ms a frame on the
+  desktop. Why: the brief's lava lamp lit as a lamp is, its light making the
+  coffee translucent and the cream round; and a soft glow and a reflection
+  say where the glass stands.
+- **D-BEAN-6. The glass drifts.** It moves slowly about its place, 16
+  design units either way across and 6 up and down, over 14 and 10 minutes
+  (`drift`, from the model's own time), at most about 8 pixels a minute, to
+  the whole device pixel so its fine edges stay sharp; the halo and the
+  reflection go with it. Why: the brief's burn-in rule: the foot's glow and
+  the foam are the brightest things on the screen, and a showing lasts half
+  an hour.

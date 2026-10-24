@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   advanceLava,
+  BULB_FALL,
+  bulbLight,
   CELL,
   createLavaModel,
+  drift,
+  DRIFT,
+  fieldSlope,
   FLOOR,
+  GLASS,
   GRID_COLS,
   GRID_LEFT,
   GRID_ROWS,
@@ -279,5 +285,116 @@ describe('the field', () => {
       expect(valueAt(field, x, FLOOR + 6)).toBeGreaterThan(ISO);
       expect(valueAt(field, x, FLOOR + 60)).toBeLessThan(ISO);
     }
+  });
+});
+
+describe('the glass', () => {
+  it('has thick walls and a heavy foot, and still holds a tall glass of coffee', () => {
+    expect(GLASS.wall).toBeGreaterThanOrEqual(6);
+    expect(GLASS.base).toBeGreaterThan(3 * GLASS.wall);
+    expect(FLOOR).toBe(GLASS.base);
+    expect((SURFACE - FLOOR) / GLASS.height).toBeGreaterThan(0.8);
+    // The field's grid covers the coffee, wall to wall and floor to surface.
+    expect(GRID_LEFT).toBeLessThanOrEqual(-innerHalfWidth(SURFACE));
+    expect(GRID_LEFT + GRID_COLS * CELL).toBeGreaterThanOrEqual(innerHalfWidth(SURFACE));
+    expect(GRID_TOP).toBeGreaterThanOrEqual(SURFACE);
+    expect(GRID_TOP - GRID_ROWS * CELL).toBeLessThanOrEqual(FLOOR);
+  });
+});
+
+describe('fieldSlope', () => {
+  it('points up the field: toward a lone blob from all round it, and flat at its middle', () => {
+    const model = createLavaModel(7);
+    model.blobs.forEach((blob, index) => {
+      blob.x = (index % 2 === 0 ? -1 : 1) * 40;
+      blob.y = SURFACE - 30 - Math.floor(index / 2) * 5;
+      blob.r = 4;
+    });
+    const blob = model.blobs[0]!;
+    blob.x = 2;
+    blob.y = 202;
+    blob.r = 24;
+    blob.stretch = 1;
+    const field = fieldOf(model);
+    const slopeX = new Float32Array(field.length);
+    const slopeY = new Float32Array(field.length);
+    fieldSlope(field, slopeX, slopeY);
+    const cell = (x: number, y: number) => Math.floor((GRID_TOP - y) / CELL) * GRID_COLS + Math.floor((x - GRID_LEFT) / CELL);
+    // Left of it the field rises to the right; right of it, to the left; below it, up the glass (up the grid is -y); above it, down.
+    expect(slopeX[cell(blob.x - 16, blob.y)]!).toBeGreaterThan(0.05);
+    expect(slopeX[cell(blob.x + 16, blob.y)]!).toBeLessThan(-0.05);
+    expect(slopeY[cell(blob.x, blob.y - 16)]!).toBeLessThan(-0.05);
+    expect(slopeY[cell(blob.x, blob.y + 16)]!).toBeGreaterThan(0.05);
+    expect(Math.abs(slopeX[cell(blob.x, blob.y)]!)).toBeLessThan(0.05);
+    expect(Math.abs(slopeY[cell(blob.x, blob.y)]!)).toBeLessThan(0.05);
+  });
+
+  it("is the difference between a cell's neighbours, one-sided at the grid's edges", () => {
+    const field = new Float32Array(GRID_COLS * GRID_ROWS);
+    for (let row = 0; row < GRID_ROWS; row += 1) for (let col = 0; col < GRID_COLS; col += 1) field[row * GRID_COLS + col] = 0.3 * col - 0.2 * row;
+    const slopeX = new Float32Array(field.length);
+    const slopeY = new Float32Array(field.length);
+    fieldSlope(field, slopeX, slopeY);
+    for (const at of [0, 5, GRID_COLS - 1, GRID_COLS * 7 + 3, field.length - 1]) {
+      expect(slopeX[at]!).toBeCloseTo(0.3, 5);
+      expect(slopeY[at]!).toBeCloseTo(-0.2, 5);
+    }
+  });
+});
+
+describe('the light from below', () => {
+  it("is all there on the coffee's floor and fades up the glass, a third of it BULB_FALL higher", () => {
+    expect(bulbLight(FLOOR)).toBe(1);
+    expect(bulbLight(FLOOR - 10)).toBe(1);
+    expect(bulbLight(FLOOR + BULB_FALL)).toBeCloseTo(Math.exp(-1), 9);
+    let last = 1;
+    for (let y = FLOOR; y <= SURFACE; y += 5) {
+      const light = bulbLight(y);
+      expect(light).toBeLessThanOrEqual(last);
+      expect(light).toBeGreaterThan(0);
+      last = light;
+    }
+    // At the top a little is left: the high blobs are lit mostly by the room.
+    expect(bulbLight(SURFACE)).toBeLessThan(0.15);
+    expect(bulbLight(SURFACE)).toBeGreaterThan(0.05);
+  });
+});
+
+describe('the drift', () => {
+  it("stays within its bounds, about the glass's place", () => {
+    let leftmost = 0;
+    let rightmost = 0;
+    for (let seconds = 0; seconds < 3 * 3600; seconds += 7) {
+      const at = drift(seconds);
+      expect(Math.abs(at.x)).toBeLessThanOrEqual(DRIFT.x);
+      expect(Math.abs(at.y)).toBeLessThanOrEqual(DRIFT.y);
+      leftmost = Math.min(leftmost, at.x);
+      rightmost = Math.max(rightmost, at.x);
+    }
+    expect(rightmost - leftmost).toBeGreaterThan(1.9 * DRIFT.x);
+  });
+
+  it('is slow, a few pixels a minute, and moves the glass well over the half hour a showing lasts', () => {
+    let fastest = 0;
+    const out = { x: 0, y: 0 };
+    let last = { ...drift(0, out) };
+    for (let seconds = 1; seconds < 1800; seconds += 1) {
+      drift(seconds, out);
+      fastest = Math.max(fastest, Math.hypot(out.x - last.x, out.y - last.y));
+      last = { ...out };
+    }
+    // Design units a second, times sixty: a minute.
+    expect(fastest * 60).toBeLessThan(9);
+    expect(fastest * 60).toBeGreaterThan(3);
+    const start = drift(0);
+    const halfway = drift(900);
+    expect(Math.hypot(halfway.x - start.x, halfway.y - start.y)).toBeGreaterThan(10);
+  });
+
+  it("follows the model's own time, so the same steps put the glass in the same place", () => {
+    const model = createLavaModel(3);
+    advanceLava(model, 90_000);
+    expect(drift(model.time).x).toBeCloseTo(drift(90).x, 6);
+    expect(drift(model.time).y).toBeCloseTo(drift(90).y, 6);
   });
 });
