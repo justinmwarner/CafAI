@@ -92,7 +92,7 @@ interface ContentProps {
   palette: Palette;
   fallback: boolean;
   saverFor: (id: string) => CanvasSaver | undefined;
-  onFail(): void;
+  onFail(error?: unknown): void;
   onPainted(): void;
 }
 
@@ -280,7 +280,14 @@ export function SaverOverlay({ preview = saverPreview, saverFor = canvasSaver }:
     };
   }, [guarding]);
 
-  const fail = useCallback(() => setFailedFor(current), [current]);
+  const fail = useCallback(
+    (error?: unknown) => {
+      // Said once in the console (Decaid's WebView log on a tablet), so a screensaver that gives way on a device can be found (D-SAVE-3).
+      console.warn(`CafAI: a screensaver stopped (${error instanceof Error ? error.message : String(error)}); Nightstand shows instead.`);
+      setFailedFor(current);
+    },
+    [current],
+  );
   const painted = useCallback(() => setPaintedFor(current), [current]);
 
   if (!active && !guarding) return null;
@@ -298,6 +305,7 @@ export function SaverOverlay({ preview = saverPreview, saverFor = canvasSaver }:
         aria-hidden={active ? undefined : true}
         data-testid={active ? TID.saver : TID.saverGuard}
         data-saver={active ? (id ?? undefined) : undefined}
+        data-fallback={active && current !== null && failedFor === current ? '1' : undefined}
         data-phase={phase}
         sx={(theme) => ({
           position: 'fixed',

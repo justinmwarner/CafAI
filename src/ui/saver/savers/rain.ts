@@ -322,7 +322,8 @@ export const rain: CanvasSaver = {
       const [made2, g] = made;
       g.setTransform(scale, 0, 0, scale, 0, 0);
       const top = cupAbove - WAVE_REACH;
-      const depth = (y: number) => (y - top) / (tall - top);
+      // Kept within the gradient (addColorStop throws outside 0 to 1): on a short sprite the crema's depth can outrun it (D-SAVE-3).
+      const depth = (y: number) => Math.min(1, Math.max(0, (y - top) / (tall - top)));
       const body = g.createLinearGradient(0, top, 0, tall);
       body.addColorStop(0, css(CREMA_TOP));
       body.addColorStop(depth(top + 2.5), css(CREMA_LIGHT));

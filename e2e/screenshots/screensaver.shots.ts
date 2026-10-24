@@ -70,6 +70,8 @@ for (const { id, at } of FRAMES) {
     await page.goto(`./?demo=1&mockSpeed=25&saverPreview=${id}&saverAt=${at}#/`);
     await expect(page.getByTestId(TID.saverReady)).toBeAttached({ timeout: 30_000 });
     await expect(page.getByTestId(TID.saver)).toHaveAttribute('data-saver', id);
+    // Not Nightstand standing in for one that threw.
+    await expect(page.getByTestId(TID.saver)).not.toHaveAttribute('data-fallback', '1');
     await snap(page, id);
     expect(problems).toEqual([]);
   });

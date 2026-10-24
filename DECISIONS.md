@@ -4152,6 +4152,50 @@ database (D135), so it was gone.
   the mirror (D16), the key's optional copy (D99) and now where the coach
   runs.
 
+### Screensavers, round 2 (2026-10-24)
+
+The owner's word of 2026-10-23, after trying the first six: "I'd like to
+continue the screensavers and finish writing up the others we planned to do.
+Also Brew Rain is just matrix, nothing coffee related. And then for the
+others, can we get better visuals? I do like a lot of them, but just want to
+make them nicer." Five builders worked side by side, each from screenshots
+of its own: Brew Rain and the Bouncing Portafilter, Rising Steam and
+Nightstand, Espresso Pipes, Beanfield and Lava Latte, and Latte Art. This
+section holds what they share; each builder's decisions follow in a section
+of its own.
+
+- **D-SAVE-1. A screensaver is lit, not flat.** Inside a screensaver, the
+  light that draws a thing is allowed: soft gradients for volume, a key
+  light and a rim light, the sheen of metal, glass, glaze and oily beans,
+  and a soft glow where there is a light (a lamp under a glass, a head of
+  water, a window behind the steam). DESIGN.md's "no glassy gradients,
+  glassmorphism or glow" keeps everywhere else. Each is drawn for a screen
+  dimmed to 30: the subject and any words at least 3:1 on the page, the
+  look carried by its midtones and lights, never by near-black detail. A
+  scene with a fixed object drifts it a few pixels a minute (the cup, the
+  glass), against burn-in. Why: the owner asked for nicer visuals, the flat
+  outlines of the first round read as placeholders, and the screensaver is
+  already the one place for play (D226).
+- **D-SAVE-2. Espresso Pipes and Latte Art are built now, Latte Art's four
+  pours at once.** D228 had the owner judge the heart and the tulip before
+  the rosetta and the swan were built. The owner's go-ahead of 2026-10-23
+  ("finish writing up the others we planned to do", "we can do as far as we
+  can before needing questions answered") lifts that wait: the builder tuned
+  each pour from screenshots and left out any that did not look right, and
+  the owner judges them all at once on the iPad. D228's last rule stands: if
+  the heart and the tulip do not pass, Latte Art does not ship. Why: one
+  session instead of two, and the owner's eye still decides.
+- **D-SAVE-3. A screensaver that gives way says so.** When one cannot start
+  or throws, Nightstand still shows in its place (D226); now the overlay
+  also carries `data-fallback="1"` and writes one line to the console
+  ("CafAI: a screensaver stopped (...); Nightstand shows instead."), which
+  Decaid's WebView log keeps on a tablet. The screenshot scene, the
+  Chromium 91 smoke and a new e2e test (each canvas screensaver, held at
+  3 s and running, at each tablet size) fail on it. Why: Brew Rain threw
+  on a 1280x800 screen (a gradient stop past 1, from the crema's depth on a
+  short sprite) while the smoke passed, Nightstand drawn in its place and
+  nothing saying so.
+
 ### Brew Rain and the Bouncing Portafilter: round 2 (2026-10-24)
 
 The owner's words after trying the first six screensavers (2026-10-23):
