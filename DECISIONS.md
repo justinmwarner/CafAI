@@ -4607,13 +4607,13 @@ section 8).
   body, with a neck drawn up out of the body as an S and a small heart for a
   head. The swan's first wing, not pulled through, came out as thick stacked
   strokes, and was kept out of the rotation until the pull along it thinned
-  its leaves into feathers. A pour still left out goes from `IN_ROTATION`
-  (`latteModel.ts`) and nothing else changes. The still is the finished
-  heart, poured at 5 steps a second (the same heart for a third of the work,
-  done in one go before the still paints). Why: D228's gate; latte-art clip
-  art is what PRODUCT.md rules out, so a pour that only half reads would be
-  worse than one fewer. The owner's eye on the tablet is still the test
-  (QUESTIONS).
+  its leaves into feathers. A pour the owner finds wrong comes out of
+  `IN_ROTATION` (`latteModel.ts`), and nothing else changes. The still is
+  the finished heart, poured at 5 steps a second (the same heart for a third
+  of the work, done in one go before the still paints). Why: D228's gate;
+  latte-art clip art is what PRODUCT.md rules out, so a pour that only half
+  reads would be worse than one fewer. The owner's eye on the tablet is
+  still the test (QUESTIONS).
 - **D-LATTE-3. The cup from straight above, on its saucer, lit from the
   upper left.** A white glaze (warm, its light falling off from the upper
   left to the lower right), in a pool of light on the cup that leaves the
@@ -4650,8 +4650,9 @@ section 8).
   are drawn once a size; the table and the saucer are painted again only when
   the drift moves a whole device pixel, each frame redrawing the coffee, the
   lip over its edge, the stream and the name's patch. Measured on this PC at
-  962 by 602 and a backing scale of 1.33: about 2.1 to 2.3 ms a frame at the
-  busiest moments of a pour (the disc growing, the pull-through, the
-  rosetta's wiggle), under 1 ms in the base pour, 0.13 ms while a pour is
-  admired. Why: the brief's 4 ms, with a tablet several times slower; a
-  first, plain version cost about 9 ms a field step and 6.6 ms a colouring.
+  962 by 602 and a backing scale of 1.33 (the dev preview's average over a
+  second): 1.8 to 2.7 ms a frame while the foam pours (2.7 ms at the
+  rosetta's pull-through, the busiest), 0.6 ms in the base pour, 0.95 ms as
+  the cup clears, 0.14 ms while a pour is admired. Why: the brief's 4 ms,
+  with a tablet several times slower; a first, plain version cost about 9 ms
+  a field step and 6.6 ms a colouring.
