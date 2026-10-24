@@ -27,7 +27,7 @@ import type { SecretStore, Storage } from '../storage/types.ts';
 type SourceReader = Pick<CoachSourceStore, 'get'>;
 type KeyReader = Pick<SecretStore, 'getApiKey'>;
 
-const NO_ADDRESS = 'Add the address CafAI Bridge shows on your computer in Settings.';
+const NO_ADDRESS = 'Add the address CafAI Bridge shows on your computer in Settings > Coach.';
 /** CafAI Bridge sends its first byte (a ping) as soon as a run takes the request; Anthropic's 60 s is for the internet. */
 const BRIDGE_FIRST_BYTE_MS = 30_000;
 

@@ -115,7 +115,7 @@ describe('createCoachProvider', () => {
     const seen = watch(BRIDGE_MESSAGES);
     for (const code of ['', 'ABC']) {
       const error = await failure(collect(provider({ ...COMPUTER, code }).provider.stream(REQUEST)));
-      expect(error).toMatchObject({ kind: 'no_api_key', message: 'Add the code CafAI Bridge shows on your computer in Settings.' });
+      expect(error).toMatchObject({ kind: 'no_api_key', message: 'Add the code CafAI Bridge shows on your computer in Settings > Coach.' });
     }
     expect(seen).toHaveLength(0);
   });
@@ -123,7 +123,7 @@ describe('createCoachProvider', () => {
   it('asks for the address when there is none to send to', async () => {
     for (const address of ['', 'http://192.168.1.20/v1']) {
       const error = await failure(collect(provider({ ...COMPUTER, address }).provider.stream(REQUEST)));
-      expect(error).toMatchObject({ kind: 'no_api_key', message: 'Add the address CafAI Bridge shows on your computer in Settings.' });
+      expect(error).toMatchObject({ kind: 'no_api_key', message: 'Add the address CafAI Bridge shows on your computer in Settings > Coach.' });
     }
   });
 
@@ -162,7 +162,7 @@ describe('createCoachProvider', () => {
   it('falls back to its own words when the bridge sent none', async () => {
     watch(BRIDGE_MESSAGES, () => new HttpResponse('Unauthorized', { status: 401 }));
     const error = await failure(collect(provider(COMPUTER).provider.stream(REQUEST)));
-    expect(error).toMatchObject({ kind: 'auth', message: 'CafAI Bridge did not accept the code. Check it in Settings.' });
+    expect(error).toMatchObject({ kind: 'auth', message: 'CafAI Bridge did not accept the code. Check it in Settings > Coach.' });
   });
 
   it('never shows the code, even when a server puts it in an error, with or without its dash', async () => {

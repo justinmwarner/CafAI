@@ -378,7 +378,7 @@ describe('createAnthropicProvider: errors', () => {
     for (const key of [null, '', '   ']) {
       const error = await failure(collect(provider({ getApiKey: () => Promise.resolve(key) }).stream(request())));
       expect(error.kind).toBe('no_api_key');
-      expect(error.message).toBe('Add your Anthropic API key in Settings.');
+      expect(error.message).toBe('Add your Anthropic API key in Settings > Coach.');
     }
     expect(counter.calls).toBe(0);
   });
@@ -576,7 +576,7 @@ describe('createAnthropicProvider: CafAI Bridge wording', () => {
 
   it('asks for the code, not a key', async () => {
     const error = await failure(collect(bridge({ getApiKey: () => Promise.resolve(null) }).stream(request())));
-    expect(error).toMatchObject({ kind: 'no_api_key', message: 'Add the code CafAI Bridge shows on your computer in Settings.' });
+    expect(error).toMatchObject({ kind: 'no_api_key', message: 'Add the code CafAI Bridge shows on your computer in Settings > Coach.' });
   });
 
   it('names the address when the bridge cannot be reached', async () => {

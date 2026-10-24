@@ -109,7 +109,7 @@ describe('fixed sentences', () => {
   it('asks for a key when there is none', () => {
     const error = noApiKeyError();
     expect(error.kind).toBe('no_api_key');
-    expect(error.message).toBe('Add your Anthropic API key in Settings.');
+    expect(error.message).toBe('Add your Anthropic API key in Settings > Coach.');
     expect(error.retryable).toBe(false);
   });
 
@@ -132,7 +132,7 @@ describe('wording per provider', () => {
     expect(streamDroppedError().message).toBe('The connection to Anthropic dropped before the reply finished. Try again.');
     expect(unreadableReplyError().message).toBe('Anthropic sent a reply CafAI could not read. Try again.');
     expect(describeHttpError(401, body('authentication_error', 'invalid x-api-key'), ANTHROPIC_WORDING)).toBe(
-      'Anthropic did not accept your API key. Check it in Settings.',
+      'Anthropic did not accept your API key. Check it in Settings > Coach.',
     );
     // Anthropic's own sentences are for developers: only a bad request's reason is repeated, after ours.
     expect(describeHttpError(429, body('rate_limit_error', 'Number of request tokens has exceeded your per-minute rate limit'))).toBe(
@@ -141,7 +141,7 @@ describe('wording per provider', () => {
   });
 
   it('names CafAI Bridge, its address and your computer, for the coach on the computer', () => {
-    expect(noApiKeyError(computer)).toMatchObject({ kind: 'no_api_key', message: 'Add the code CafAI Bridge shows on your computer in Settings.' });
+    expect(noApiKeyError(computer)).toMatchObject({ kind: 'no_api_key', message: 'Add the code CafAI Bridge shows on your computer in Settings > Coach.' });
     expect(networkError(computer)).toMatchObject({
       kind: 'network',
       retryable: true,
@@ -180,13 +180,13 @@ describe('wording per provider', () => {
   });
 
   it('falls back to its own words when the bridge sent no sentence', () => {
-    expect(describeHttpError(401, '', computer)).toBe('CafAI Bridge did not accept the code. Check it in Settings.');
-    expect(describeHttpError(403, '<html>Forbidden</html>', computer)).toBe('CafAI Bridge did not accept the code. Check it in Settings.');
+    expect(describeHttpError(401, '', computer)).toBe('CafAI Bridge did not accept the code. Check it in Settings > Coach.');
+    expect(describeHttpError(403, '<html>Forbidden</html>', computer)).toBe('CafAI Bridge did not accept the code. Check it in Settings > Coach.');
     expect(describeHttpError(429, '', computer)).toBe('CafAI Bridge is rate limiting. Wait a moment and try again.');
     expect(describeHttpError(529, '', computer)).toBe('Claude is overloaded right now. Try again in a minute.');
     expect(describeHttpError(502, '<html>bad gateway</html>', computer)).toBe('CafAI Bridge ran into trouble on your computer. Try again shortly.');
     expect(describeHttpError(400, '', computer)).toBe('CafAI Bridge rejected the request. Update CafAI Bridge and try again.');
-    expect(describeHttpError(404, 'Not Found', computer)).toBe('Could not find CafAI Bridge at 192.168.1.20:8877. Check the address in Settings.');
+    expect(describeHttpError(404, 'Not Found', computer)).toBe('Could not find CafAI Bridge at 192.168.1.20:8877. Check the address in Settings > Coach.');
     expect(describeHttpError(400, '{"detail":"no such route"}', computer)).toBe('CafAI Bridge rejected the request: no such route');
     expect(describeHttpError(500, body('api_error', '   '), computer)).toBe('CafAI Bridge ran into trouble on your computer. Try again shortly.');
     expect(errorFromStreamError({ nonsense: true }, computer)).toMatchObject({
