@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
 import '../testing/setup.ts';
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ShotRecord } from '../../../api/types.ts';
 import shot01 from '../../../coach/__fixtures__/decaid-mcp/shot-01.json';
+import { withTds } from '../../../coach/extraction.ts';
 import { summarizeShot } from '../../../coach/summary/summarize.ts';
 import { TID } from '../../testIds.ts';
+import { createFakeServicesShowing } from '../../testing/displayServices.ts';
 import { createFakeUsage } from '../../testing/fakeServices.ts';
 import { UsageContextForTests } from '../../usage/useUsage.ts';
-import { renderThemed } from '../testing/render.tsx';
+import { renderThemed, renderWithServices } from '../testing/render.tsx';
 import { sampleSummary } from '../testing/fixtures.ts';
 import { ShotCard } from './ShotCard.tsx';
 import { Notice } from './Notice.tsx';
@@ -273,6 +275,40 @@ describe('ShotCard Visualizer link (6.4)', () => {
     expect(screen.queryByTestId(TID.visualizerLink)).toBeNull();
     renderThemed(<ShotCard summary={sampleSummary()} visualizerUrl="javascript:alert(1)" />);
     expect(screen.queryByTestId(TID.visualizerLink)).toBeNull();
+  });
+});
+
+describe('ShotCard and the TDS switch (D246)', () => {
+  it('shows the TDS cell, and a reading with its EY, while the switch is on, as it always did', () => {
+    renderWithServices(<ShotCard summary={sampleSummary()} onSaveTds={vi.fn()} />, createFakeServicesShowing());
+    expect(screen.getByTestId(TID.tdsCell)).toHaveAccessibleName('Add TDS');
+    cleanup();
+    renderWithServices(<ShotCard summary={withTds(sampleSummary(), 9.25)} />, createFakeServicesShowing({ showTds: true }));
+    expect(screen.getByTestId(TID.tdsCell)).toHaveTextContent('9.25 %');
+    expect(screen.getByTestId(TID.tdsEy)).toBeInTheDocument();
+  });
+
+  it('hides the TDS cell, the reading and its EY while it is off; the rest of the card stays', () => {
+    renderWithServices(<ShotCard summary={withTds(sampleSummary(), 9.25)} onSaveTds={vi.fn()} />, createFakeServicesShowing({ showTds: false }));
+    expect(screen.queryByTestId(TID.tdsCell)).toBeNull();
+    expect(screen.queryByTestId(TID.tdsEy)).toBeNull();
+    expect(screen.queryByTestId(TID.tdsNote)).toBeNull();
+    expect(screen.getByText('Dose → yield')).toBeInTheDocument();
+    expect(screen.getByText('First drop')).toBeInTheDocument();
+  });
+
+  it('follows the switch at once', async () => {
+    const services = createFakeServicesShowing();
+    renderWithServices(<ShotCard summary={sampleSummary()} onSaveTds={vi.fn()} />, services);
+    expect(screen.getByTestId(TID.tdsCell)).toBeInTheDocument();
+    await act(async () => {
+      await services.displayPrefs.setShowTds(false);
+    });
+    expect(screen.queryByTestId(TID.tdsCell)).toBeNull();
+    await act(async () => {
+      await services.displayPrefs.setShowTds(true);
+    });
+    expect(screen.getByTestId(TID.tdsCell)).toBeInTheDocument();
   });
 });
 

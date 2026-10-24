@@ -3,6 +3,8 @@ import '../chat/testing/setup.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { act, screen, within } from '@testing-library/react';
 import type { DisplayPrefsSaved } from '../../app/displayPrefs.ts';
+import { withTds } from '../../coach/extraction.ts';
+import type { IterationRecord } from '../../storage/types.ts';
 import { formatDateTime } from '../chat/format.ts';
 import { KIAMBU, KIAMBU_ITERATIONS, KIAMBU_VERSIONS, SANTOS } from '../chat/testing/fixtures.ts';
 import { renderWithServices } from '../chat/testing/render.tsx';
@@ -12,13 +14,39 @@ import { HistoryScreen } from './HistoryScreen.tsx';
 
 /**
  * History as the barista chose to read it: the clock its times are in
- * (D245). HistoryScreen.test.tsx has the rest.
+ * (D245) and whether a shot's line carries the TDS and the EY (D246).
+ * HistoryScreen.test.tsx has the rest.
  */
-function renderHistory(bagId: string | null, prefs: DisplayPrefsSaved) {
-  const services = createFakeServicesShowing(prefs, { storage: { bags: [SANTOS, KIAMBU], versions: KIAMBU_VERSIONS, iterations: KIAMBU_ITERATIONS } });
+function renderHistory(bagId: string | null, prefs: DisplayPrefsSaved, iterations: IterationRecord[] = KIAMBU_ITERATIONS) {
+  const services = createFakeServicesShowing(prefs, { storage: { bags: [SANTOS, KIAMBU], versions: KIAMBU_VERSIONS, iterations } });
   renderWithServices(<HistoryScreen bagId={bagId} onSelectBag={vi.fn()} />, services);
   return services;
 }
+
+/** The first shot with a refractometer's 9.25 %, so its line ends with the TDS and the EY while they show. */
+const WITH_TDS = KIAMBU_ITERATIONS.map((record) => (record.id === 'it-1' ? { ...record, summary: withTds(record.summary!, 9.25) } : record));
+
+describe('HistoryScreen and the TDS switch (D246)', () => {
+  it("ends a shot's line with its TDS and EY while the switch is on", async () => {
+    renderHistory(KIAMBU.id, { showTds: true }, WITH_TDS);
+    const first = within(await screen.findByTestId(TID.historyVersion(1))).getByTestId(TID.historyIteration('it-1'));
+    expect(first).toHaveTextContent('peak 8.9 bar · TDS 9.25 % · EY 18.7 %');
+  });
+
+  it('leaves them out while it is off, the reading kept in storage, and puts them back when it is on again', async () => {
+    const services = renderHistory(KIAMBU.id, { showTds: false }, WITH_TDS);
+    const row = () => within(screen.getByTestId(TID.historyVersion(1))).getByTestId(TID.historyIteration('it-1'));
+    await screen.findByTestId(TID.historyVersion(1));
+    expect(row()).toHaveTextContent('27.8 s · 18.0 g → 36.4 g · 1:2.0 · peak 8.9 bar');
+    expect(row()).not.toHaveTextContent('TDS');
+    expect(row()).not.toHaveTextContent('EY');
+    expect((await services.storage.iterations.listByBag(KIAMBU.id)).find((record) => record.id === 'it-1')?.summary?.tdsPct).toBe(9.25);
+    await act(async () => {
+      await services.displayPrefs.setShowTds(true);
+    });
+    expect(row()).toHaveTextContent('TDS 9.25 % · EY 18.7 %');
+  });
+});
 
 describe('HistoryScreen on the 12-hour clock (D245)', () => {
   it('dates the bags in the list that way', async () => {

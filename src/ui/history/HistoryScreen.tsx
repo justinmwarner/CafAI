@@ -24,7 +24,7 @@ import type { Bag, IterationRecord, ProfileVersion } from '../../storage/types.t
 import { OTHER_OPTION } from '../../coach/contract.ts';
 import { formatEy, formatTds, readingOf } from '../../coach/extraction.ts';
 import { inTemperatureUnit } from '../../coach/temperature.ts';
-import { useClockFormat, useCoach, useServices, useWordsTemperatureUnit } from '../../app/services.tsx';
+import { useClockFormat, useCoach, useServices, useShowTds, useWordsTemperatureUnit } from '../../app/services.tsx';
 import { TID } from '../testIds.ts';
 import {
   describeChannelingFlag,
@@ -163,11 +163,11 @@ function ChangeLines({ lines }: { lines: string[] }) {
   );
 }
 
-function shotLine(record: IterationRecord): string {
+function shotLine(record: IterationRecord, showTds: boolean): string {
   const s = record.summary;
   if (!s) return 'No shot data';
-  // The barista's refractometer reading, and its EY when there is one (D166).
-  const reading = readingOf(s);
+  // The barista's refractometer reading, and its EY when there is one (D166), while Settings shows them (D246).
+  const reading = showTds ? readingOf(s) : null;
   const measured = reading ? [`TDS ${formatTds(reading.tdsPct)}`, ...(reading.eyPct === null ? [] : [`EY ${formatEy(reading.eyPct)}`])] : [];
   return [
     formatSeconds(s.durationS),
@@ -189,6 +189,7 @@ function feedbackText(record: IterationRecord): string | null {
 function IterationRow({ record }: { record: IterationRecord }) {
   const words = useWords();
   const clock = useClockFormat();
+  const showTds = useShowTds();
   const feedback = feedbackText(record);
   const flags = record.summary?.channelingFlags ?? [];
   return (
@@ -200,7 +201,7 @@ function IterationRow({ record }: { record: IterationRecord }) {
         <Box component="span" sx={{ color: 'text.secondary' }}>
           {formatDateTime(record.createdAt, clock)} ·{' '}
         </Box>
-        {shotLine(record)}
+        {shotLine(record, showTds)}
       </Typography>
       {flags.length > 0 ? (
         <Typography variant="body2" sx={{ color: 'warning.main' }}>
