@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canRun, DAILY, dailyOrder, dailyPick, resolvePick, runnableSavers } from './daily.ts';
+import { anyNeedsWebgl, canRun, DAILY, dailyOrder, dailyPick, resolvePick, runnableSavers } from './daily.ts';
 import { localDayNumber } from './random.ts';
 import { SAVERS } from './registry.ts';
 import type { SaverId } from './types.ts';
@@ -52,7 +52,7 @@ describe('resolvePick', () => {
   });
 
   it("reads one this build does not know, or this device cannot run, as the day's pick", () => {
-    expect(resolvePick('pipes', ALL, DAY)).toBe(dailyPick(ALL, DAY));
+    expect(resolvePick('etching', ALL, DAY)).toBe(dailyPick(ALL, DAY));
     expect(resolvePick('', ALL, DAY)).toBe(dailyPick(ALL, DAY));
     const without = ALL.filter((id) => id !== 'lava');
     expect(resolvePick('lava', without, DAY)).toBe(dailyPick(without, DAY));
@@ -65,8 +65,9 @@ describe('what a device can run', () => {
     expect(canRun({ context: 'webgl' }, true)).toBe(true);
     expect(canRun({ context: '2d' }, false)).toBe(true);
     expect(canRun({ context: 'text' }, false)).toBe(true);
-    // None needs it yet: every one runs either way.
-    expect(runnableSavers(false)).toEqual(ALL);
+    // Espresso Pipes needs it (D-PIPES-2): without WebGL it alone is left out.
+    expect(anyNeedsWebgl()).toBe(true);
+    expect(runnableSavers(false)).toEqual(ALL.filter((id) => id !== 'pipes'));
     expect(runnableSavers(true)).toEqual(ALL);
   });
 });

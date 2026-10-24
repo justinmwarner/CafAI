@@ -7,7 +7,7 @@
  * picture differs a little too.
  *
  * What a device can run: every screensaver but one that needs WebGL where
- * WebGL cannot start (none yet: Espresso Pipes will be the first).
+ * WebGL cannot start (Espresso Pipes, D-PIPES-2).
  */
 import { createRandom } from './random.ts';
 import { isSaverId, SAVERS, type SaverChoice } from './registry.ts';
@@ -82,6 +82,11 @@ let webglAnswer: boolean | null = null;
 export function webglStarts(doc: Document | null = typeof document === 'undefined' ? null : document): boolean {
   if (webglAnswer !== null) return webglAnswer;
   if (!doc) return false;
+  // A page with no WebGL at all (jsdom in the tests, among others) need not make a canvas to be told so.
+  if (typeof (doc.defaultView as (Window & { WebGLRenderingContext?: unknown }) | null)?.WebGLRenderingContext === 'undefined') {
+    webglAnswer = false;
+    return webglAnswer;
+  }
   try {
     const canvas = doc.createElement('canvas');
     const gl = canvas.getContext('webgl') ?? canvas.getContext('experimental-webgl');

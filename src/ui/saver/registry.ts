@@ -4,12 +4,13 @@
  */
 import { beanfield } from './savers/beanfield.ts';
 import { lava } from './savers/lava.ts';
+import { pipes } from './savers/pipes.ts';
 import { portafilter } from './savers/portafilter.ts';
 import { rain } from './savers/rain.ts';
 import { steam } from './savers/steam.ts';
 import type { CanvasSaver, SaverId } from './types.ts';
 
-export const CANVAS_SAVERS: readonly CanvasSaver[] = [portafilter, beanfield, steam, lava, rain];
+export const CANVAS_SAVERS: readonly CanvasSaver[] = [portafilter, pipes, beanfield, steam, lava, rain];
 
 export interface SaverChoice {
   id: SaverId;
