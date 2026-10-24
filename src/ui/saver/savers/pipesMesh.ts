@@ -270,27 +270,24 @@ export function ballMesh(): Mesh {
   return b.build();
 }
 
-/** The gauge's sizes, local z toward its face: on a stem out of the ball, a short drum with a dial face and a bright bezel. */
-export const GAUGE = { stemRadius: 0.075, back: 0.2, front: 0.34, radius: 0.42, bezel: 0.042 } as const;
+/** The gauge's sizes, local z toward its face: a short drum, wider than the ball it is set into, its dial face in front of the ball under a bright bezel. */
+export const GAUGE = { back: 0.2, front: 0.34, radius: 0.42, bezel: 0.042 } as const;
 
-/** A pressure gauge, without its ball: local z is the way its dial faces. */
+/** A pressure gauge, without its ball: local z is the way its dial faces (its back, inside the ball or turned from the camera, is never seen). */
 export function gaugeMesh(): Mesh {
   const b = new Builder();
-  tube(b, IDENTITY, GAUGE.stemRadius, 0, GAUGE.back + 0.02, 12, MATERIAL.pipe);
   tube(b, IDENTITY, GAUGE.radius, GAUGE.back, GAUGE.front, 32, MATERIAL.chrome);
-  disc(b, IDENTITY, GAUGE.radius, GAUGE.back, 32, MATERIAL.chrome, true);
   torus(b, IDENTITY, GAUGE.radius - GAUGE.bezel * 0.4, GAUGE.bezel, GAUGE.front, 36, 8, MATERIAL.chrome);
   disc(b, IDENTITY, GAUGE.radius - GAUGE.bezel * 0.9, GAUGE.front - 0.006, 40, MATERIAL.dial);
   return b.build();
 }
 
-/** The valve wheel's sizes, local z the way its stem points. */
-export const WHEEL = { stemRadius: 0.06, at: 0.37, radius: 0.31, rim: 0.04, spokes: 5, spokeRadius: 0.027, hubRadius: 0.09 } as const;
+/** The valve wheel's sizes, local z the way it faces: its hub on the front of the ball. */
+export const WHEEL = { at: 0.37, radius: 0.31, rim: 0.04, spokes: 5, spokeRadius: 0.027, hubRadius: 0.09 } as const;
 
-/** A valve wheel on its stem, without its ball: a ring with spokes round a hub. */
+/** A valve wheel, without its ball: a ring with spokes round a hub. */
 export function wheelMesh(): Mesh {
   const b = new Builder();
-  tube(b, IDENTITY, WHEEL.stemRadius, 0, WHEEL.at, 12, MATERIAL.pipe);
   tube(b, IDENTITY, WHEEL.hubRadius, WHEEL.at - 0.05, WHEEL.at + 0.05, 16, MATERIAL.chrome);
   disc(b, IDENTITY, WHEEL.hubRadius, WHEEL.at + 0.05, 16, MATERIAL.chrome);
   torus(b, IDENTITY, WHEEL.radius, WHEEL.rim, WHEEL.at, 36, 8, MATERIAL.chrome);

@@ -277,7 +277,7 @@ function multiply(a: Float32Array, b: Float32Array): Float32Array {
 }
 
 /** The gauge's face, drawn once (and again when Figtree is in): 0 to 16 bar, the espresso band of 8 to 10 in the pressure green, red from 13, the needle near 9, a glint on its glass. */
-export function paintDial(dial: HTMLCanvasElement): void {
+function paintDial(dial: HTMLCanvasElement): void {
   const ctx = dial.getContext('2d');
   if (!ctx) return;
   const size = dial.width;

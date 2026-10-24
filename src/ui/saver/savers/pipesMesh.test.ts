@@ -103,6 +103,8 @@ describe('the meshes', () => {
 
   it('put the pipe’s own metal where a mesh says so, and keep the others', () => {
     const geometry = createChunkedGeometry(true);
+    // A gauge's joint: its ball in the pipe's metal, the gauge itself chrome round its dial.
+    geometry.add(meshes.ball, placeAt([0, 0, 0]), MATERIAL.brass);
     geometry.add(meshes.gauge, placeAt([0, 0, 0]), MATERIAL.brass);
     const materials = new Set<number>();
     const chunk = geometry.chunks[0]!;

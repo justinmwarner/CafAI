@@ -70,7 +70,6 @@ export const STILL_FILL = 0.42;
  * never two pipes running.
  */
 export type Metal = 'copper' | 'brass' | 'chrome' | 'anodised';
-export const METALS: readonly Metal[] = ['copper', 'brass', 'chrome', 'anodised'];
 const BRIGHT_METALS: readonly Metal[] = ['copper', 'brass', 'chrome'];
 export const ANODISED_CHANCE = 0.12;
 
