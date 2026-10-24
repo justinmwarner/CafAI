@@ -4057,44 +4057,73 @@ and settings back. Where the coach runs lived only in the device's own
 database (D135), so it was gone.
 
 - **D229. Where the coach runs is copied in Decaid, so a Decaid update does
-  not lose it.** Every save of the source in Settings goes through
+  not lose it.** Every change of the source in Settings goes through
   `src/storage/coachSourceBackup.ts`, one at a time.
   - **What is copied.** The choice, the address and the code, while the
-    coach runs on the computer. They go to a namespace of their own,
-    `cafai-coach-source` (key `current`), never `cafai`, so the mirror,
-    the export and the import never carry the code. With the coach back on
-    Anthropic the copy is deleted: nothing is left worth keeping, and the
-    code leaves Decaid's store once it is not used. The device keeps the
-    address and code for the way back, as before.
-  - **Restoring.** A device with nothing saved takes the copy. That is a new
-    origin, a first visit or a phone, as a device with no API key takes the
-    key's (D99). It happens at start-up, at each try of D100's late
-    restore, when Decaid's sockets open, when the machine connects and when
-    the page comes back into view. The coach then reads it again. A
-    device with a source of its own never takes the copy, and another
-    device's copy is left alone.
+    coach runs on the computer with an address and a code. They go to a
+    namespace of their own, `cafai-coach-source` (key `current`), never
+    `cafai`, so the mirror, the export and the import never carry the code.
+    With the coach back on Anthropic the copy is deleted: nothing is left
+    worth keeping, and the code leaves Decaid's store once it is not used.
+    The device keeps the address and code for the way back, as before. The
+    computer chosen with no address or code yet is nothing to copy, and
+    changes no copy. Decaid holds one copy, the newest change's from any
+    device.
+  - **Restoring.** A device with nothing saved that the coach can use takes
+    the copy: nothing at all (a new origin, a first visit, a phone), or the
+    computer chosen with no address or code yet, as on a new origin before
+    the copy came back. A device with no API key takes the key's the same
+    way (D99). It happens at start-up, at each try of D100's late restore,
+    when Decaid's sockets open, when the machine connects and when the page
+    comes back into view. The coach then reads it again. A source saved
+    here otherwise, Anthropic included, never gives way to the copy.
+    Choosing between Anthropic and the computer changes only the choice on
+    what is saved when the change runs, so it keeps an address and a code
+    that came back meanwhile.
   - **Copies owed.** One Decaid did not take is noted beside the source,
     in the same database (`copy`, never mirrored), and goes out at the same
-    moments. A device with a source of its own, the choice on and no copy in
-    Decaid copies its source then, so a source saved before 0.1.4 gets one
-    at the first start of the new build.
+    moments. Then a device with a source of its own, the choice on and no
+    copy in Decaid copies its source, so a source saved before 0.1.4 gets
+    one at the first start of the new build. Another device's copy stays;
+    only a change made here replaces it.
+  - **The choice waits for the backup.** Whatever reads the choice (what is
+    owed, a first copy) runs only once Decaid's backup has come back,
+    which may bring back a choice turned off before a move. That means
+    after the start-up restore, or after the late restore's try that
+    found the backup; until then only the restore runs, which reads no
+    choice. With the choice off, a sync also takes a copy of this device's
+    code off Decaid, whatever left it there. With the choice unreadable,
+    nothing is copied and nothing owed is dropped.
   - **Settings.** **Keep the address and code in Decaid** sits under the
     address and code, with "So you do not have to type them again after a
     Decaid update. Any device on your network can read Decaid's store, and
-    Decaid's backups include it." Off deletes the copy. A switch that cannot
-    reach Decaid goes back and says "Could not reach Decaid: ...". A save
-    Decaid did not take says "Saved on this device. Decaid can't be reached
-    right now, so CafAI will copy it there as soon as it can." A source the
-    copy brings back while Settings is open shows at once; fields being
-    edited stay as typed.
+    Decaid's backups include it." Off deletes the copy. The choice is kept
+    in the same turn as the copy or the delete; if this device cannot keep
+    it, Decaid is put back and the device's own sentence shows. A switch
+    that cannot reach Decaid goes back and says "Could not reach Decaid:
+    ...". A save Decaid did not take says "Saved on this device. Decaid
+    can't be reached right now, so CafAI will copy it there as soon as it
+    can.", and a choice of the computer or of Anthropic says the same of its
+    copy or its delete. A source the copy brings back while Settings is open
+    shows at once, even while the screen is still reading; fields being
+    edited stay as typed. The coach screen's card says "The code is kept on
+    this device, and in Decaid unless you turn that off in Settings."
   - **Kept out.** Settings > Log keeps no body of a call to that namespace,
     only "[not kept: where the coach runs, copied in Decaid]", as for the
     key's copy (the code is not known to the recorder until it has come
     back). The mock keeps the namespace across reloads (`?mockPersist=1`).
+  - **Two devices on one bridge.** The choice is each device's (mirrored
+    to a device that never chose): turned off on one, the other still
+    copies its own, so turn it off on each. A replace import, which no
+    screen offers, takes the file's settings whole, so a file without the
+    choice reads as on.
 
   Why: D135 kept the code only on the device, but on an iPad that means
   only until the next Decaid update (D231). The mirror is the one store
-  that outlives the origin, and the only one any skin can write to.
+  that outlives the origin, and the only one any skin can write to. The
+  review found that a computer chosen before the copy came back blocked the
+  restore and wrote blanks over the copy, and that a late restore read the
+  choice before the backup brought it back. Both are fixed, with tests.
 - **D230. The copy is on by default; the API key's stays off.**
   `Settings.keepCoachSourceInDecaid` is absent until someone chooses on the
   device and reads as on. It is mirrored and merged like the key's choice:

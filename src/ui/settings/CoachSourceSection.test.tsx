@@ -4,8 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
-import { createMemoryCoachSourceStore, type CoachSource } from '../../storage/coachSource.ts';
+import { createMemoryCoachSourceStore, type CoachSource, type CoachSourceStore } from '../../storage/coachSource.ts';
 import { COACH_SOURCE_KEY, COACH_SOURCE_NAMESPACE, createCoachSourceBackup } from '../../storage/coachSourceBackup.ts';
+import { StorageError } from '../../storage/errors.ts';
 import { createMemoryKv, type MemoryKv } from '../../storage/testing/memoryKv.ts';
 import { renderWithServices } from '../chat/testing/render.tsx';
 import { createFakeServices, createFakeUsage, type FakeServices } from '../testing/fakeServices.ts';
@@ -298,9 +299,8 @@ describe('SettingsScreen with the coach on the computer', () => {
 describe('the copy in Decaid (D229)', () => {
   const NOTE = "So you do not have to type them again after a Decaid update. Any device on your network can read Decaid's store, and Decaid's backups include it.";
 
-  function renderWithCopy(source: Partial<CoachSource> = SAVED) {
+  function renderWithCopy(source: Partial<CoachSource> = SAVED, store: CoachSourceStore = createMemoryCoachSourceStore(source)) {
     const services: FakeServices = createFakeServices();
-    const store = createMemoryCoachSourceStore(source);
     const kv = createMemoryKv();
     let owed = false;
     services.coachSource = store;
@@ -313,7 +313,13 @@ describe('the copy in Decaid (D229)', () => {
           owed = state.owed;
         },
       },
-      async () => (await services.storage.settings.get()).keepCoachSourceInDecaid ?? true,
+      // As createServices.ts reads and keeps the choice.
+      {
+        read: async () => (await services.storage.settings.get()).keepCoachSourceInDecaid ?? true,
+        write: async (on) => {
+          await services.storage.settings.update({ keepCoachSourceInDecaid: on });
+        },
+      },
     );
     renderWithServices(<CoachSourceSection />, services);
     return { services, store, kv };
@@ -381,6 +387,56 @@ describe('the copy in Decaid (D229)', () => {
     expect(await screen.findByText('Could not reach Decaid: Decaid is not answering.')).toBeInTheDocument();
     expect(toggle).toBeChecked();
     expect((await services.storage.settings.get()).keepCoachSourceInDecaid).toBeUndefined();
+  });
+
+  it("a switch whose choice this device cannot keep puts Decaid back, and says so in the device's words", async () => {
+    const { services, kv } = renderWithCopy();
+    await services.coachSourceBackup!.setOn(true);
+    const toggle = await screen.findByTestId(TID.sourceInDecaid);
+    await waitFor(() => expect(toggle).toBeChecked());
+    services.storage.settings.update = () => Promise.reject(new StorageError('write', 'Could not save to this device. Try again.'));
+    await userEvent.click(toggle);
+    expect(await screen.findByText('Could not save to this device. Try again.')).toBeInTheDocument();
+    expect(toggle).toBeChecked();
+    expect(copy(kv)).toEqual(SAVED);
+  });
+
+  it('choosing Anthropic while Decaid is away says its copy of the code goes later', async () => {
+    const { services, kv } = renderWithCopy();
+    await services.coachSourceBackup!.setOn(true);
+    await waitFor(() => expect(screen.getByTestId(TID.coachSourceComputer)).toBeChecked());
+    kv.failNext('delete');
+    await userEvent.click(screen.getByTestId(TID.coachSourceAnthropic));
+    expect(
+      await screen.findByText("Decaid can't be reached right now, so CafAI will delete its copy of the address and code there as soon as it can."),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId(TID.coachSourceAnthropic)).toBeChecked();
+    expect(copy(kv)).toEqual(SAVED);
+  });
+
+  it('shows a source brought back while the screen still reads, and the first read never puts the old one back', async () => {
+    const inner = createMemoryCoachSourceStore();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // The first read sees the store as it was, and answers only after the copy has landed.
+    const store: CoachSourceStore = {
+      ...inner,
+      get: async () => {
+        const before = await inner.get();
+        await held;
+        return before;
+      },
+    };
+    renderWithCopy({}, store);
+    await inner.set(SAVED);
+    await waitFor(() => expect(screen.getByTestId(TID.coachSourceComputer)).toBeChecked());
+    release();
+    await held;
+    await waitFor(() => expect(screen.getByTestId(TID.computerAddress)).toHaveValue('192.168.1.20:8877'));
+    expect(screen.getByTestId(TID.coachSourceComputer)).toBeChecked();
+    expect(screen.getByTestId(TID.computerCode)).toHaveValue('ABCD-EFGH');
   });
 
   it('shows a source its copy brought back while Settings is open, unless the fields were being edited', async () => {

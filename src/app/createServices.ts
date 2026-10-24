@@ -50,11 +50,15 @@ export async function createServices(win: Window): Promise<AppServices> {
   // Where the coach runs: Anthropic, or CafAI Bridge on the user's computer. This device's, like the key.
   // Storage that refuses it leaves the coach on Anthropic rather than stopping CafAI.
   const coachSource = await openCoachSourceStore().catch(() => undefined);
-  // Its copy in Decaid, unless the user turned that off (D229): a Decaid update that moves CafAI to a new
-  // origin leaves this device's storage behind, and the copy brings where the coach runs back.
-  const keepSourceInDecaid = async () => (await storage.settings.get()).keepCoachSourceInDecaid ?? true;
+  // Its copy in Decaid, unless the user turned that off (D229, D230: on while unset): a Decaid update that
+  // moves CafAI to a new origin leaves this device's storage behind, and the copy brings where the coach runs back.
   const coachSourceBackup = coachSource
-    ? createCoachSourceBackup(decaid.kv, coachSource, coachSource.copyState, keepSourceInDecaid)
+    ? createCoachSourceBackup(decaid.kv, coachSource, coachSource.copyState, {
+        read: async () => (await storage.settings.get()).keepCoachSourceInDecaid ?? true,
+        write: async (on) => {
+          await storage.settings.update({ keepCoachSourceInDecaid: on });
+        },
+      })
     : undefined;
   // Settings > Log looks for the key and the bridge's code wherever they show, a chat
   // in a backup read back included, from before the restore on (D139).
@@ -67,11 +71,12 @@ export async function createServices(win: Window): Promise<AppServices> {
   // update): bring the non-secret records back from Decaid's key-value backup
   // before anything reads them, and the API key from its copy in Decaid when
   // the user keeps one there and did not forget it here, once what that copy
-  // is owed has gone out (D99); where the coach runs likewise (D229).
+  // is owed has gone out (D99); and where the coach runs from its own copy (D229), which reads no
+  // choice: the settings that hold it may be the ones coming back (D230).
   const [restore] = await Promise.all([
     restoreFromMirrorIfEmpty(storage),
     storage.keyBackup.restoreIfMissing(),
-    coachSourceBackup?.sync(),
+    coachSourceBackup?.restoreIfMissing(),
   ]);
 
   const appearance = createAppearanceStore(storage.settings, (await storage.settings.get()).appearance);
@@ -179,14 +184,21 @@ export async function createServices(win: Window): Promise<AppServices> {
       : null;
   // The key's copy in Decaid (D99) and where the coach runs (D229): what Decaid did not take goes out when
   // it may be back, before anything is restored from it, and a key or a source it brings back reaches the coach.
-  const syncCopies = () => {
-    void storage.keyBackup.restoreIfMissing().then((restored) => {
-      if (restored) void coach.refresh();
-    });
+  // While Decaid's backup is still to come back, the late restore's tries sync the source after it (D230).
+  const syncSource = () => {
+    if (late?.pending()) return;
     void coachSourceBackup?.sync().then((restored) => {
       if (restored) void coach.refresh();
     });
   };
+  const syncCopies = () => {
+    void storage.keyBackup.restoreIfMissing().then((restored) => {
+      if (restored) void coach.refresh();
+    });
+    syncSource();
+  };
+  // The settings are back, or were never lost: what the source's copy is owed, a first copy (D229).
+  syncSource();
   let machineConnected = telemetry.getState().machineConnected;
   let decaidOpen = telemetry.getState().sockets.devices === 'open';
   const stopTelemetryWatch = telemetry.subscribe(() => {

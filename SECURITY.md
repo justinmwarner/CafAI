@@ -69,7 +69,11 @@ is the first).
   update does not lose them. Any device on your network can read it, and
   Decaid's backups include it. Turning the switch off, or choosing the
   Anthropic API key, deletes the copy; `npm run bridge -- code --new` makes
-  the old code useless.
+  the old code useless. The switch is each device's: with two devices on one
+  bridge, turn it off on both. A device with nothing saved takes the copy it
+  finds there, so a device on your network could leave an address of its own
+  for it, as it could leave records in CafAI's backup; with Decaid's API
+  open to the network that adds little, but run CafAI on a network you trust.
 
 **Your data in Decaid**
 

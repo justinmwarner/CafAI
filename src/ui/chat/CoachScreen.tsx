@@ -256,7 +256,7 @@ function ApiKeyCard({ settingsHref, restored }: { settingsHref: string; restored
       ) : null}
       <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
         {onComputer
-          ? 'The coach runs on your computer with your Claude plan, so it needs no API key. The code stays on this device.'
+          ? 'The coach runs on your computer with your Claude plan, so it needs no API key. The code is kept on this device, and in Decaid unless you turn that off in Settings.'
           : 'The key stays on this device unless you choose in Settings to keep a copy in Decaid. You pay Anthropic directly for what the coach uses.'}
       </Typography>
       <Button variant="contained" href={settingsHref} sx={{ mt: 2.5, minHeight: 48, px: 3 }}>

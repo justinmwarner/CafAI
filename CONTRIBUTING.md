@@ -68,9 +68,10 @@ Optional, when your change touches them:
   reader in `src/api/readers.ts` or `src/api/frames.ts`; anything unexpected
   falls back safely and lands in the drift log (Settings > About).
 - **Nobody else's data.** CafAI writes Decaid's key-value store only in its
-  own namespaces (`cafai`, and `cafai-key` when the user chooses), never a
-  plugin's keys (DYE2, Visualizer), and never the API key, prompts or tokens
-  to the console or Decaid's store.
+  own namespaces (`cafai`; `cafai-key` when the user chooses; and
+  `cafai-coach-source`, where the coach runs, unless the user turns it off),
+  never a plugin's keys (DYE2, Visualizer), and never the API key (but in
+  its chosen copy), prompts or tokens to the console or Decaid's store.
 - **The skin id is `cafai`, forever** (`skin.config.json`): it keys the
   skin's saved data in Decaid.
 - **Test ids** live in `src/ui/testIds.ts`, shared by the UI and the

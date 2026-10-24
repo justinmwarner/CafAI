@@ -38,6 +38,7 @@ import {
   type CoachSourceStore,
 } from '../../storage/coachSource.ts';
 import type { CoachSourceBackup } from '../../storage/coachSourceBackup.ts';
+import { StorageError } from '../../storage/errors.ts';
 import { SECRET_FIELD } from '../../usage/mask.ts';
 import { TID } from '../testIds.ts';
 import { Section } from './Section.tsx';
@@ -60,6 +61,10 @@ const START_BRIDGE = "On that computer, run npm run bridge in CafAI's folder (se
 const SAVE_TO_USE = 'Tap Save to use it.';
 /** Saved while the copy in Decaid is on, but Decaid did not take it: src/storage/coachSourceBackup.ts sends it when Decaid is back. */
 const SAVED_COPY_LATER = "Saved on this device. Decaid can't be reached right now, so CafAI will copy it there as soon as it can.";
+/** The computer chosen, its copy not taken yet. */
+const COPY_LATER = "Decaid can't be reached right now, so CafAI will copy the address and code there as soon as it can.";
+/** Anthropic chosen, the copy not deleted yet: the code stays in Decaid until then. */
+const COPY_OFF_LATER = "Decaid can't be reached right now, so CafAI will delete its copy of the address and code there as soon as it can.";
 /** Why the copy in Decaid is worth having, and what it costs, as the API key's switch says it (D99, D229). */
 const SOURCE_IN_DECAID_SENTENCE =
   "So you do not have to type them again after a Decaid update. Any device on your network can read Decaid's store, and Decaid's backups include it.";
@@ -111,9 +116,11 @@ async function savedModel(settings: { get(): Promise<{ model: string }> }): Prom
  * The switch for the copy in Decaid (D229): on unless turned off on this
  * device, so Settings.keepCoachSourceInDecaid reads as on while unset (as
  * the copy does: createServices.ts), and off when the settings cannot be
- * read, when nothing is copied either. Like the API key's switch (D99), a
+ * read, when nothing is copied either. The copy keeps the choice itself, in
+ * the same turn as the copy or the delete. Like the API key's switch (D99), a
  * toggle that cannot reach Decaid goes back and says why, so the switch
- * never claims a copy that is not there, or one gone that is not.
+ * never claims a copy that is not there, or one gone that is not; one this
+ * device could not keep says so in the device's own words.
  */
 function SourceInDecaidSwitch({ backup }: { backup: CoachSourceBackup }) {
   const { storage } = useServices();
@@ -141,10 +148,9 @@ function SourceInDecaidSwitch({ backup }: { backup: CoachSourceBackup }) {
     setError(null);
     try {
       await backup.setOn(checked);
-      await storage.settings.update({ keepCoachSourceInDecaid: checked });
       setKeep(checked);
     } catch (caught) {
-      setError(`Could not reach Decaid: ${errorText(caught)}`);
+      setError(caught instanceof StorageError ? caught.message : `Could not reach Decaid: ${errorText(caught)}`);
     } finally {
       setBusy(false);
     }
@@ -189,11 +195,35 @@ function CoachSourceForm({ store, backup }: { store: CoachSourceStore; backup: C
   const [message, setMessage] = useState<Line | null>(null);
   const [status, setStatus] = useState<Line | null>(null);
 
+  // Every source saved from now on, by this form or not: its copy in Decaid brought back once Decaid
+  // answered (D229), say. The choice shows it, and so do the fields while they still show what was
+  // saved (or nothing yet); fields being edited stay as typed. A save, which shows what it saved
+  // itself, counts too, so the first read never puts back what was there before it.
+  const changes = useRef(0);
+  const latest = useRef({ saved, address, code });
+  useLayoutEffect(() => {
+    latest.current = { saved, address, code };
+  });
+  useEffect(
+    () =>
+      store.subscribe((source) => {
+        changes.current += 1;
+        const now = latest.current;
+        setSaved(source);
+        if (now.saved === null || (now.address === now.saved.address && now.code === shownCode(now.saved.code))) {
+          setAddress(source.address);
+          setCode(shownCode(source.code));
+        }
+      }),
+    [store],
+  );
+
   useEffect(() => {
     let live = true;
+    const ticket = changes.current;
     store.get().then(
       (source) => {
-        if (!live) return;
+        if (!live || changes.current !== ticket) return;
         setSaved(source);
         setAddress(source.address);
         setCode(shownCode(source.code));
@@ -207,29 +237,13 @@ function CoachSourceForm({ store, backup }: { store: CoachSourceStore; backup: C
     };
   }, [store]);
 
-  // A source saved by anything but this form: its copy in Decaid brought back once Decaid answered (D229).
-  // The choice follows it, and so do the fields while they still show what was saved; this form's own
-  // saves come while it is busy, and set what they show themselves.
-  const latest = useRef({ saved, address, code, busy });
-  useLayoutEffect(() => {
-    latest.current = { saved, address, code, busy };
-  });
-  useEffect(
-    () =>
-      store.subscribe((source) => {
-        const now = latest.current;
-        if (now.busy !== null || now.saved === null) return;
-        setSaved(source);
-        if (now.address === now.saved.address && now.code === shownCode(now.saved.code)) {
-          setAddress(source.address);
-          setCode(shownCode(source.code));
-        }
-      }),
-    [store],
-  );
-
   /** Save on this device, and in Decaid while the copy is on. False when Decaid did not take the copy: it goes later. */
   const saveSource = (next: CoachSource): Promise<boolean> => (backup ? backup.save(next) : store.set(next).then(() => true));
+  /** The choice alone, on what is saved when the save runs: an address and a code just brought back stay. */
+  const saveKind = (kind: CoachSourceKind): Promise<boolean> =>
+    backup
+      ? backup.update((current) => ({ ...current, kind }))
+      : store.get().then((current) => store.set({ ...current, kind })).then(() => true);
 
   /**
    * The engine reads readiness again, and sends a reply that waited for the
@@ -252,15 +266,14 @@ function CoachSourceForm({ store, backup }: { store: CoachSourceStore; backup: C
   const choose = async (kind: CoachSourceKind) => {
     if (!saved || busy || kind === saved.kind) return;
     const before = saved;
-    // The address and the code stay, whichever is chosen.
-    const next = { ...saved, kind };
-    // The choice shows at once, and goes back if it could not be saved.
-    setSaved(next);
+    // The choice shows at once, and goes back if it could not be saved; the address and the code stay,
+    // whichever is chosen, and the store tells the form what it saved (above).
+    setSaved({ ...saved, kind });
     setBusy('choose');
     setMessage(null);
     setStatus(null);
     try {
-      await saveSource(next);
+      if (!(await saveKind(kind))) setMessage({ tone: 'info', text: kind === 'computer' ? COPY_LATER : COPY_OFF_LATER });
       refreshCoach();
     } catch (error) {
       setSaved(before);

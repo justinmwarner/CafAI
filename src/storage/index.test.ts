@@ -478,23 +478,36 @@ describe('startLateRestore (5.4)', () => {
     expect(kv.writes()).toEqual([]);
   });
 
-  it('brings where the coach runs back from its copy in Decaid in the same tries (D229)', async () => {
-    const computer: CoachSource = { kind: 'computer', address: '192.168.1.20:8877', code: 'ABCDEFGH' };
-    const kv = createMemoryKv({ [COACH_SOURCE_NAMESPACE]: { [COACH_SOURCE_KEY]: computer } });
-    const fresh = await open(kv);
-    const coachSource = createMemoryCoachSourceStore();
-    let owed = false;
+  /** Where the coach runs and its copy in Decaid, the choice read from `storage`'s settings as createServices reads it. */
+  function coachSourceOn(kv: MemoryKv, storage: IdbStorage, saved?: CoachSource) {
+    const coachSource = createMemoryCoachSourceStore(saved);
+    const state = { owed: false };
     const backup = createCoachSourceBackup(
       kv,
       coachSource,
       {
-        get: async () => ({ owed }),
-        set: async (state) => {
-          owed = state.owed;
+        get: async () => ({ ...state }),
+        set: async (next) => {
+          state.owed = next.owed;
         },
       },
-      async () => true,
+      {
+        read: async () => (await storage.settings.get()).keepCoachSourceInDecaid ?? true,
+        write: async (on) => {
+          await storage.settings.update({ keepCoachSourceInDecaid: on });
+        },
+      },
     );
+    return { coachSource, state, backup };
+  }
+
+  const COMPUTER_SOURCE: CoachSource = { kind: 'computer', address: '192.168.1.20:8877', code: 'ABCDEFGH' };
+
+  it('brings where the coach runs back from its copy in Decaid in the same tries (D229)', async () => {
+    const computer = COMPUTER_SOURCE;
+    const kv = createMemoryKv({ [COACH_SOURCE_NAMESPACE]: { [COACH_SOURCE_KEY]: computer } });
+    const fresh = await open(kv);
+    const { coachSource, backup } = coachSourceOn(kv, fresh);
     const clock = manualTimers();
     kv.failNext('getAll', 1, away());
     // The key's copy and the source's: neither answers in the first try.
@@ -512,6 +525,37 @@ describe('startLateRestore (5.4)', () => {
     expect(onRestored).toHaveBeenCalledWith({ records: false, care: false, key: false, coachSource: true });
     expect(await coachSource.get()).toEqual(computer);
     expect(kv.writes()).toEqual([]);
+  });
+
+  it('copies where the coach runs only once the backup is back, so a copy turned off before an update stays off (D230)', async () => {
+    const kv = createMemoryKv();
+    // Before the update: the copy turned off, and backed up with the rest.
+    const before = await open(kv);
+    await seed(before);
+    await before.settings.update({ keepCoachSourceInDecaid: false });
+    await before.mirror.pushNow();
+    before.close();
+    // After it, on a new origin: Decaid answers late, and the bridge is typed in again meanwhile.
+    const fresh = await open(kv);
+    const { backup, state } = coachSourceOn(kv, fresh);
+    kv.failNext('set');
+    expect(await backup.save(COMPUTER_SOURCE)).toBe(false);
+    expect(state.owed).toBe(true);
+    const clock = manualTimers();
+    kv.failNext('getAll', 1, away());
+    const late = startLateRestore(fresh, { onRestored: vi.fn(), timers: clock.timers, now: clock.now, coachSource: backup });
+    restores.push(late);
+    clock.fire();
+    await late.settled();
+    expect(late.pending()).toBe(true);
+    expect(kv.values(COACH_SOURCE_NAMESPACE)).toEqual({});
+
+    clock.fire();
+    await late.settled();
+    expect(late.pending()).toBe(false);
+    expect((await fresh.settings.get()).keepCoachSourceInDecaid).toBe(false);
+    expect(kv.values(COACH_SOURCE_NAMESPACE)).toEqual({});
+    expect(state.owed).toBe(false);
   });
 
   it("reports machine care's last times alone as care, not records, and stops (D189)", async () => {
