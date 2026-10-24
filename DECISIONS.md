@@ -4235,3 +4235,32 @@ glow (D226's one place for play allows them) rather than flat outlines.
   colour that switches at once flickers; the glow and the light give the
   logo and its corner the "premium product's ambient screen" the owner's
   ask was after, for next to nothing a frame.
+
+### Rising Steam and Nightstand: round 2 (2026-10-24)
+
+The owner, after trying the six on the iPad (2026-10-23): "for the others,
+can we get better visuals? I do like a lot of them, but just want to make
+them nicer." Round 1 was flat and drawn in outline; round 2 aims at a lit
+still life for Rising Steam and a calmer, more finished bedside clock for
+Nightstand, both still drawn in code and made for a screen dimmed to 30.
+
+- **D-STEAM-3. Nightstand: the date over a large, light time, the lines
+  under hairlines, and a fade at each minute's move.** The time 23 % of the
+  screen's shorter side (72 to 216 px), weight 300 (Figtree's lightest),
+  tabular, tracked in by 2 % and pulled back by its first figure's side
+  bearing, so the digits line up with the words above and below them; behind
+  it a very faint warm glow, the scene palette's warm end at 9 % in the
+  middle of a radial gradient and nothing at its edge. Above it, small, at
+  500 in muted ink, the day as the device writes one
+  (`toLocaleDateString` with the weekday, the day and the month: "Friday
+  23 October" in British English, "Friday, October 23" in American). Under
+  it, when they are known, the next wake, the bag and the last shot, each a
+  small line in muted ink under a 1 px hairline in the line colour. Each
+  minute the block fades out where it was (700 ms, ease-in) and in at its
+  new place (1.1 s, ease-out), the old time on it until it has gone; under
+  reduced motion it jumps at once, as before. Why: the owner asked for the
+  screensavers to be nicer; a bedside clock is read from across a room, so
+  the time stays the one big thing, and light figures that large stay
+  legible while they look calm; the date is the one more thing a glance at
+  a clock wants; a fade is calmer than a jump at night; and only the device
+  knows how its barista writes a date.
