@@ -2,7 +2,13 @@
  * The traffic log as text (D139): one line per entry for the list, and the
  * whole log under a header for Share and Copy; Email gets the newest entries
  * that fit in a mailto: link. Pure: the UI passes the clock and the device.
+ *
+ * What the log view and Settings' summary show follows the clock the barista
+ * chose (D245, src/ui/clock.ts); the shared text stays 24-hour, to the
+ * millisecond, with its UTC offset: a record for whoever reads it, the same
+ * from every device.
  */
+import { formatTime, type ClockFormat } from '../ui/clock.ts';
 import { safeSlice, type TrafficChannel, type TrafficDirection, type TrafficEntry } from './recorder.ts';
 import { KEY_MARKER } from './redact.ts';
 
@@ -24,22 +30,21 @@ export interface LogContext {
 
 /** A mailto: link longer than this may not open everywhere; Email cuts the log to fit (see emailBody). */
 export const MAILTO_MAX_CHARS = 8000;
+/** Where Share and Copy are, as Settings' groups name it (D233). */
+const LOG_PLACE = 'Settings > Data and privacy > Log';
 /** A body in an email keeps at most this much. */
 const EMAIL_BODY_CHARS = 600;
 
-const pad = (value: number, length = 2) => String(value).padStart(length, '0');
+const pad = (value: number) => String(value).padStart(2, '0');
 
-/** "21:04:05", or with milliseconds "21:04:05.123", in local time. */
-export function formatClock(at: number, withMs = false): string {
-  const date = new Date(at);
-  const clock = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-  return withMs ? `${clock}.${pad(date.getMilliseconds(), 3)}` : clock;
+/** "21:04:05", or with milliseconds "21:04:05.123", in local time; "9:04:05 pm" on the 12-hour clock. */
+export function formatClock(at: number, withMs = false, clock: ClockFormat = '24h'): string {
+  return formatTime(new Date(at), clock, withMs ? 'millisecond' : 'second');
 }
 
-/** "21:04", local. */
-export function formatHourMinute(at: number): string {
-  const date = new Date(at);
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+/** "21:04" or "9:04 pm", local: since when Settings' summary counts. */
+export function formatHourMinute(at: number, clock: ClockFormat): string {
+  return formatTime(new Date(at), clock);
 }
 
 /** "2026-10-11 21:04", local. */
@@ -72,9 +77,9 @@ export function entryFacts(entry: TrafficEntry): string[] {
   return facts;
 }
 
-/** "21:04:05.123 ↓ REST GET /api/v1/workflow · 200 · 57 ms · 3.2 KB". */
-export function entryLine(entry: TrafficEntry): string {
-  const head = `${formatClock(entry.at, true)} ${DIRECTION_ARROW[entry.direction]} ${CHANNEL_LABEL[entry.channel]} ${entry.what}`;
+/** "21:04:05.123 ↓ REST GET /api/v1/workflow · 200 · 57 ms · 3.2 KB"; the time 12-hour in the log view when chosen. */
+export function entryLine(entry: TrafficEntry, clock: ClockFormat = '24h'): string {
+  const head = `${formatClock(entry.at, true, clock)} ${DIRECTION_ARROW[entry.direction]} ${CHANNEL_LABEL[entry.channel]} ${entry.what}`;
   return [head, ...entryFacts(entry)].join(' · ');
 }
 
@@ -172,10 +177,10 @@ export function emailBody(entries: readonly TrafficEntry[], context: LogContext,
   const parts = [header];
   if (left > 0) {
     parts.push(
-      `Cut to fit an email: the oldest ${left} of ${entries.length} entries are left out${shortened ? ' and long bodies are shortened' : ''}. Share or Copy in CafAI's Settings > Log has all of it.`,
+      `Cut to fit an email: the oldest ${left} of ${entries.length} entries are left out${shortened ? ' and long bodies are shortened' : ''}. Share or Copy in CafAI's ${LOG_PLACE} has all of it.`,
     );
   } else if (shortened) {
-    parts.push("Long bodies are shortened to fit an email. Share or Copy in CafAI's Settings > Log has all of it.");
+    parts.push(`Long bodies are shortened to fit an email. Share or Copy in CafAI's ${LOG_PLACE} has all of it.`);
   }
   return [...parts, ...kept.reverse()].join('\n\n') + '\n';
 }

@@ -1,8 +1,9 @@
 /**
  * The log view (D139): the traffic log, newest first, full screen over
- * whatever is under it. Opened from Settings > Log, it is the app's (see
- * App.tsx), so a shot that takes the screen under it to the Shot view leaves
- * it open. One line per entry: the time, ↑ sent or ↓ received, the channel,
+ * whatever is under it. Opened from Settings > Data and privacy > Log, it is
+ * the app's (see App.tsx), so a shot that takes the screen under it to the
+ * Shot view leaves it open. One line per entry: the time (in the clock the
+ * barista chose, D245), ↑ sent or ↓ received, the channel,
  * what, the status and the size; a tap opens the raw headers and body in
  * monospace, JSON pretty-printed, a huge body cut at 4,000 characters until
  * Show all (Share and Copy always have all of it). Filters (All, Decaid,
@@ -25,9 +26,11 @@ import Typography from '@mui/material/Typography';
 import CloseIcon from '@mui/icons-material/Close';
 import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import { useClockFormat } from '../../app/services.tsx';
 import { CHANNEL_LABEL, DIRECTION_ARROW, entryLine, formatBytes, formatClock, prettyBody } from '../../traffic/format.ts';
 import { safeSlice, trafficLog, type TrafficEntry } from '../../traffic/recorder.ts';
 import { MASK } from '../../usage/mask.ts';
+import type { ClockFormat } from '../clock.ts';
 import { TID } from '../testIds.ts';
 import { LogActions } from './LogActions.tsx';
 import { closeLogView, useLogViewOpen } from './logShare.ts';
@@ -63,7 +66,7 @@ function newerThan(live: readonly TrafficEntry[], held: readonly TrafficEntry[])
   return count;
 }
 
-function LogDetail({ entry }: { entry: TrafficEntry }) {
+function LogDetail({ entry, clock }: { entry: TrafficEntry; clock: ClockFormat }) {
   const [whole, setWhole] = useState(false);
   const shown = useRef<HTMLPreElement>(null);
   const body = useMemo(() => prettyBody(entry.body), [entry.body]);
@@ -77,7 +80,7 @@ function LogDetail({ entry }: { entry: TrafficEntry }) {
   return (
     <div className="detail" data-testid={TID.logDetail}>
       <div className="facts">
-        {entryLine(entry)}
+        {entryLine(entry, clock)}
         {entry.more > 0 ? ` (${moreNote(entry.more)})` : ''}
       </div>
       {entry.headers ? <pre className="headers">{entry.headers}</pre> : null}
@@ -108,7 +111,14 @@ function LogDetail({ entry }: { entry: TrafficEntry }) {
   );
 }
 
-const LogRow = memo(function LogRow({ entry, open, onToggle }: { entry: TrafficEntry; open: boolean; onToggle: (id: number) => void }) {
+interface LogRowProps {
+  entry: TrafficEntry;
+  open: boolean;
+  clock: ClockFormat;
+  onToggle: (id: number) => void;
+}
+
+const LogRow = memo(function LogRow({ entry, open, clock, onToggle }: LogRowProps) {
   const status = entry.more > 0 ? `${entry.status} +${entry.more}` : entry.status;
   return (
     <li>
@@ -120,7 +130,7 @@ const LogRow = memo(function LogRow({ entry, open, onToggle }: { entry: TrafficE
         data-id={entry.id}
         data-testid={TID.logEntry(entry.id)}
       >
-        <span className="time">{formatClock(entry.at)}</span>
+        <span className="time">{formatClock(entry.at, false, clock)}</span>
         <span className="dir">
           <span aria-hidden="true">{DIRECTION_ARROW[entry.direction]}</span>
           <span className="sr">{DIRECTION_WORD[entry.direction]}</span>
@@ -130,7 +140,7 @@ const LogRow = memo(function LogRow({ entry, open, onToggle }: { entry: TrafficE
         <span className={entry.failed ? 'status failed' : 'status'}>{status}</span>
         <span className="size">{entry.size !== null ? formatBytes(entry.size) : ''}</span>
       </button>
-      {open ? <LogDetail entry={entry} /> : null}
+      {open ? <LogDetail entry={entry} clock={clock} /> : null}
     </li>
   );
 });
@@ -190,6 +200,7 @@ const listSx = {
 
 function LogViewContent() {
   const live = useSyncExternalStore(trafficLog.subscribe, trafficLog.list);
+  const clock = useClockFormat();
   // Paused: the log as it stood, while recording goes on.
   const [held, setHeld] = useState<readonly TrafficEntry[] | null>(null);
   const shown = held ?? live;
@@ -324,7 +335,7 @@ function LogViewContent() {
         ) : (
           <Box component="ul" data-testid={TID.logEntries} aria-labelledby={TITLE_ID} sx={listSx}>
             {rows.slice(0, limit).map((entry) => (
-              <LogRow key={entry.id} entry={entry} open={expanded.has(entry.id)} onToggle={toggle} />
+              <LogRow key={entry.id} entry={entry} open={expanded.has(entry.id)} clock={clock} onToggle={toggle} />
             ))}
           </Box>
         )}

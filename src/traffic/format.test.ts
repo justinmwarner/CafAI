@@ -3,7 +3,9 @@ import {
   emailBody,
   entryLine,
   formatBytes,
+  formatClock,
   formatEntry,
+  formatHourMinute,
   formatTrafficLog,
   logFileName,
   logTitle,
@@ -55,6 +57,11 @@ describe('entryLine', () => {
       entryLine(entry({ channel: 'socket', what: 'ws/v1/machine/snapshot', status: 'frame', durationMs: null, size: 412, more: 4, frame: true })),
     ).toBe('21:04:05.123 ↓ WS ws/v1/machine/snapshot · frame · 412 B · +4 more');
     expect(entryLine(entry({ channel: 'coach', what: 'POST api.anthropic.com/v1/messages', status: '200 end_turn' }))).toContain('↓ Coach POST');
+  });
+
+  it('says when in the clock the log view shows (D245); 24-hour unless told', () => {
+    expect(entryLine(entry(), '12h')).toBe('9:04:05.123 pm ↓ REST GET /api/v1/workflow · 200 · 57 ms · 3.2 KB');
+    expect(entryLine(entry(), '24h')).toBe(entryLine(entry()));
   });
 
   it('writes sizes in B, KB and MB', () => {
@@ -121,7 +128,9 @@ describe('emailBody', () => {
     const body = emailBody(many, CONTEXT);
     const href = mailtoHref(logTitle(CONTEXT.now), body);
     expect(href.length).toBeLessThanOrEqual(MAILTO_MAX_CHARS);
-    expect(body).toMatch(/Cut to fit an email: the oldest \d+ of 200 entries are left out\. Share or Copy in CafAI's Settings > Log has all of it\./);
+    expect(body).toMatch(
+      /Cut to fit an email: the oldest \d+ of 200 entries are left out\. Share or Copy in CafAI's Settings > Data and privacy > Log has all of it\./,
+    );
     expect(body).toContain('GET /api/v1/shots/200');
     expect(body).not.toContain('GET /api/v1/shots/1 ');
     expect(body.indexOf('/shots/199')).toBeLessThan(body.indexOf('/shots/200'));
@@ -131,7 +140,7 @@ describe('emailBody', () => {
   it('keeps everything when it fits, shortening long bodies and saying so', () => {
     expect(emailBody(many.slice(0, 3), CONTEXT)).not.toContain('Cut to fit');
     const long = emailBody([entry({ body: 'y'.repeat(5000) })], CONTEXT);
-    expect(long).toContain('Long bodies are shortened to fit an email.');
+    expect(long).toContain("Long bodies are shortened to fit an email. Share or Copy in CafAI's Settings > Data and privacy > Log has all of it.");
     expect(long).toContain('[… shortened]');
   });
 
@@ -168,5 +177,21 @@ describe('names', () => {
   it("dates the shared file and the email's subject", () => {
     expect(logTitle(CONTEXT.now)).toBe('CafAI log, 2026-10-11 21:15');
     expect(logFileName(CONTEXT.now)).toBe('cafai-log-2026-10-11-2115.txt');
+  });
+});
+
+describe('the clock (D245)', () => {
+  it('writes the log view’s times and its summary’s in the clock chosen, the seconds kept', () => {
+    expect(formatClock(AT)).toBe('21:04:05');
+    expect(formatClock(AT, false, '12h')).toBe('9:04:05 pm');
+    expect(formatClock(AT, true, '12h')).toBe('9:04:05.123 pm');
+    expect(formatHourMinute(AT, '24h')).toBe('21:04');
+    expect(formatHourMinute(AT, '12h')).toBe('9:04 pm');
+  });
+
+  it('keeps the shared text 24-hour, with its UTC offset: a record for whoever reads it, the same from every device', () => {
+    const text = formatTrafficLog([entry()], CONTEXT);
+    expect(text).toContain('21:04:05.123 ↓ REST GET /api/v1/workflow');
+    expect(text).not.toMatch(/ [ap]m\b/);
   });
 });

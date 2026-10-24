@@ -5,6 +5,7 @@ import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { recordExchange, trafficLog } from '../../traffic/recorder.ts';
 import { renderWithServices } from '../chat/testing/render.tsx';
+import { createFakeServicesShowing } from '../testing/displayServices.ts';
 import { createFakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
 import { knownDecaidVersion, useDecaidVersion } from './decaidVersion.ts';
@@ -52,9 +53,15 @@ afterEach(() => {
 describe('summaryText', () => {
   it('counts the entries since the oldest, with their size, or says there are none', () => {
     const at = new Date(2026, 9, 11, 21, 4).getTime();
-    expect(summaryText({ count: 0, oldestAt: null, chars: 0, since: at })).toBe('Nothing recorded since 21:04.');
-    expect(summaryText({ count: 1, oldestAt: at, chars: 500, since: at })).toBe('1 entry since 21:04, 500 B');
-    expect(summaryText({ count: 214, oldestAt: at, chars: 1_258_291, since: at })).toBe('214 entries since 21:04, 1.2 MB');
+    expect(summaryText({ count: 0, oldestAt: null, chars: 0, since: at }, '24h')).toBe('Nothing recorded since 21:04.');
+    expect(summaryText({ count: 1, oldestAt: at, chars: 500, since: at }, '24h')).toBe('1 entry since 21:04, 500 B');
+    expect(summaryText({ count: 214, oldestAt: at, chars: 1_258_291, since: at }, '24h')).toBe('214 entries since 21:04, 1.2 MB');
+  });
+
+  it('says since when in the clock chosen (D245)', () => {
+    const at = new Date(2026, 9, 11, 21, 4).getTime();
+    expect(summaryText({ count: 0, oldestAt: null, chars: 0, since: at }, '12h')).toBe('Nothing recorded since 9:04 pm.');
+    expect(summaryText({ count: 214, oldestAt: at, chars: 1_258_291, since: at }, '12h')).toBe('214 entries since 9:04 pm, 1.2 MB');
   });
 });
 
@@ -74,6 +81,17 @@ describe('LogSection', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('says since when in the clock chosen, and follows a change of it at once (D245)', async () => {
+    stubNavigator();
+    const services = createFakeServicesShowing({ clock: '12h' });
+    renderWithServices(<LogSection />, services);
+    expect(screen.getByTestId(TID.logSummary)).toHaveTextContent(/^Nothing recorded since \d{1,2}:\d\d [ap]m\.$/);
+    await act(async () => {
+      await services.displayPrefs.setClock('24h');
+    });
+    expect(screen.getByTestId(TID.logSummary)).toHaveTextContent(/^Nothing recorded since \d\d:\d\d\.$/);
   });
 
   it('never listens to the log itself', () => {
