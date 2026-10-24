@@ -535,6 +535,8 @@ export const pipes: CanvasSaver = {
     }
 
     let model: PipesModel = createPipesModel(env.seed);
+    /** The still's layout, once grown: the host asks for the still again each minute, and it is the same picture. */
+    let still: PipesModel | null = null;
     let width = 0;
     let height = 0;
     let viewProjection: Float32Array = new Float32Array(16);
@@ -722,6 +724,7 @@ export const pipes: CanvasSaver = {
       step(dtMs) {
         check();
         model.step(dtMs);
+        still = null;
       },
       draw,
       resize(nextWidth, nextHeight) {
@@ -737,7 +740,10 @@ export const pipes: CanvasSaver = {
       },
       still() {
         check();
-        model = growForStill(env.seed);
+        if (still === null || model !== still) {
+          still = growForStill(env.seed);
+          model = still;
+        }
         draw();
       },
       dispose() {

@@ -15,6 +15,7 @@ function fakeWebgl(options: { wideIndices?: boolean; compiles?: boolean } = {}) 
   const deleted = new Set<object>();
   const draws: { count: number; type: unknown }[] = [];
   const indexUploads: unknown[] = [];
+  const uploads = { count: 0 };
   const sources: string[] = [];
   let lost = false;
   let boundIndexTarget = false;
@@ -45,7 +46,11 @@ function fakeWebgl(options: { wideIndices?: boolean; compiles?: boolean } = {}) 
       boundIndexTarget = target === 'ELEMENT_ARRAY_BUFFER';
     },
     bufferData: (_target: string, data: unknown) => {
+      uploads.count += 1;
       if (boundIndexTarget) indexUploads.push(data);
+    },
+    bufferSubData: () => {
+      uploads.count += 1;
     },
     drawElements: (_mode: unknown, count: number, type: unknown) => draws.push({ count, type }),
   };
@@ -63,6 +68,7 @@ function fakeWebgl(options: { wideIndices?: boolean; compiles?: boolean } = {}) 
     deleted,
     draws,
     indexUploads,
+    uploads,
     sources,
     lose() {
       lost = true;
@@ -130,6 +136,17 @@ describe('Espresso Pipes', () => {
     wide.instance.still();
     expect(wide.draws.filter((draw) => draw.count > 10_000)).toHaveLength(1);
     expect(wide.indexUploads.some((data) => data instanceof Uint32Array)).toBe(true);
+  });
+
+  it('paints its still again, each minute under reduced motion, without growing or building it again', () => {
+    const { instance, draws, uploads } = start();
+    instance.still();
+    const first = draws.map((draw) => draw.count);
+    const sent = uploads.count;
+    draws.length = 0;
+    instance.still();
+    expect(draws.map((draw) => draw.count)).toEqual(first);
+    expect(uploads.count).toBe(sent);
   });
 
   it('starts its buffers over with each new layout, and draws only the page while faded out', () => {
