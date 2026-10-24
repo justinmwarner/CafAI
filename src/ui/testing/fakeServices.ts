@@ -538,6 +538,8 @@ export const FAKE_MODELS: readonly ModelInfo[] = [
     note: 'Sharpest advice.',
     inputPerMTok: 4,
     outputPerMTok: 20,
+    cacheWritePerMTok: 5,
+    cacheReadPerMTok: 0.2,
     supportsEffort: true,
   },
   {
@@ -546,6 +548,8 @@ export const FAKE_MODELS: readonly ModelInfo[] = [
     note: 'Cheapest and quickest.',
     inputPerMTok: 1,
     outputPerMTok: 5,
+    cacheWritePerMTok: 1.25,
+    cacheReadPerMTok: 0.1,
     supportsEffort: false,
   },
 ];

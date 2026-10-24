@@ -17,6 +17,7 @@ import {
   type AnthropicProviderOptions,
 } from './anthropic.ts';
 import { computerWording } from './errors.ts';
+import { MODELS } from './models.ts';
 import { toToolDefinition } from './schema.ts';
 import { WEB_SEARCH_TOOL } from './webSearch.ts';
 import {
@@ -147,6 +148,26 @@ describe('buildAnthropicRequest', () => {
     expect(effortOf('claude-fable-5-1')).toEqual({ effort: 'high' });
     expect(effortOf('claude-haiku-4-5')).toBeUndefined();
     expect(effortOf('claude-unknown-1')).toBeUndefined();
+  });
+
+  it('builds each offered model a request it takes: effort on all, never a thinking setting (Sonnet 5.5 refuses thinking disabled), no fallbacks on the new ones (D242)', () => {
+    for (const { id } of MODELS) {
+      const body = JSON.parse(buildAnthropicRequest(request({ model: id, effort: 'low' }), KEY).body);
+      expect(body.model, id).toBe(id);
+      expect(body.output_config, id).toEqual({ effort: 'low' });
+      for (const key of ['thinking', 'temperature', 'top_p', 'top_k']) expect(body, `${id} ${key}`).not.toHaveProperty(key);
+    }
+    for (const model of ['claude-sonnet-5-5', 'claude-haiku-5-5']) {
+      const http = buildAnthropicRequest(request({ model }), KEY);
+      expect(JSON.parse(http.body), model).not.toHaveProperty('fallbacks');
+      expect(http.headers['anthropic-beta'], model).toBeUndefined();
+    }
+  });
+
+  it("never sends what a request is for, or which call of its reply it is: CafAI's own counting (D237)", () => {
+    const body = JSON.parse(buildAnthropicRequest(request({ purpose: 'shot', call: 2 }), KEY).body);
+    expect(body).not.toHaveProperty('purpose');
+    expect(body).not.toHaveProperty('call');
   });
 
   it('asks for refusal fallbacks only for Opus 5 and Fable 5.1', () => {
