@@ -303,7 +303,7 @@ export function wheelMesh(): Mesh {
 }
 
 /** The cup's sizes, local y up, its handle toward local x: a saucer resting on the ball, the cup standing in it. */
-export const CUP = { saucerBottom: BALL_RADIUS - 0.015, size: 1.32 } as const;
+export const CUP = { saucerBottom: BALL_RADIUS - 0.015, size: 1.45 } as const;
 
 /** A small espresso cup on its saucer, without its ball: porcelain, the crema showing at the top. */
 export function cupMesh(): Mesh {

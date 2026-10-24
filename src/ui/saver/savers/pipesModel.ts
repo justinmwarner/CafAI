@@ -457,7 +457,9 @@ export function createPipesModel(seed: number, grid: Grid = GRID): PipesModel {
     model.time = time;
     model.layoutTime = time - layoutStart;
     model.fill = takenCount / total;
-    model.fade = fadeStart === null ? 0 : Math.min(1, (time - fadeStart) / FADE_MS);
+    // The fade eases in and out of the page.
+    const faded = fadeStart === null ? 0 : Math.min(1, (time - fadeStart) / FADE_MS);
+    model.fade = faded * faded * (3 - 2 * faded);
     const until = fadeStart ?? time;
     model.growing = pipes.map((pipe) => {
       const progress = Math.min(1, Math.max(0, (until - pipe.segmentStart) / pipe.segmentMs));
