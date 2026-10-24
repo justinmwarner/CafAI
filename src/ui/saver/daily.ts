@@ -83,7 +83,8 @@ export function webglStarts(doc: Document | null = typeof document === 'undefine
   if (webglAnswer !== null) return webglAnswer;
   if (!doc) return false;
   // A page with no WebGL at all (jsdom in the tests, among others) need not make a canvas to be told so.
-  if (typeof (doc.defaultView as (Window & { WebGLRenderingContext?: unknown }) | null)?.WebGLRenderingContext === 'undefined') {
+  const view: { WebGLRenderingContext?: unknown } | null = doc.defaultView;
+  if (typeof view?.WebGLRenderingContext === 'undefined') {
     webglAnswer = false;
     return webglAnswer;
   }
