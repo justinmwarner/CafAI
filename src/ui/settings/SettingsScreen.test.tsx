@@ -1,844 +1,168 @@
 // @vitest-environment jsdom
 import '../chat/testing/setup.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import type { CoachState } from '../../app/types.ts';
-import { applySettingsPatch, DEFAULT_APPEARANCE, normalizeSettings } from '../../storage/settings.ts';
-import type { Settings } from '../../storage/types.ts';
-import { createFakeServices, createFakeUsage, type FakeServices } from '../testing/fakeServices.ts';
+import { act, screen, within } from '@testing-library/react';
+import { createFakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
 import { renderWithServices } from '../chat/testing/render.tsx';
-import { LIBRARY_HINT, MISSING_LINE, UNREACHABLE_LINE } from './grinderPicker.ts';
-import { KEY_TAKEN_OUT, SettingsScreen } from './SettingsScreen.tsx';
+import { ScreenModeContext } from '../shell/screenMode.ts';
+import { SETTINGS_GROUP_IDS } from './groupIds.ts';
+import { forgetOpenedGroup, SettingsScreen } from './SettingsScreen.tsx';
 
-const SECRET = 'sk-ant-api03-very-secret-value';
-/** A made-up key, built at run time so no key-shaped literal sits in the source. */
-const PASTED_KEY = ['sk', 'ant', 'api03', 'sEtTiNgSuItEsT0123456789', 'AbCdEfGhIjKlMnOpQrStUvWxYz_0123456789AA'].join('-');
-const DEFAULT_MODEL = 'claude-opus-5-5';
+const JSDOM_VIEWPORT = { width: window.innerWidth, height: window.innerHeight };
 
-/** Decaid's grinder library as GET /api/v1/grinders sends it (null fields left out). */
-const GRINDERS = [
-  {
-    id: 'g-niche',
-    model: 'Niche Zero',
-    burrs: '63 mm conical',
-    archived: false,
-    settingType: 'numeric',
-    settingSmallStep: 0.5,
-    settingBigStep: 2.0,
-    createdAt: '2026-09-28T07:30:05.114862',
-    updatedAt: '2026-09-28T07:30:05.114862',
-  },
-  { id: 'g-c40', model: 'Comandante C40 MK4', archived: false, settingType: 'numeric', settingSmallStep: 1.0 },
-  {
-    id: 'g-encore',
-    model: 'Baratza Encore ESP',
-    archived: false,
-    settingType: 'preset',
-    settingValues: Array.from({ length: 40 }, (_, i) => String(i + 1)),
-  },
-  { id: 'g-lagom', model: 'Lagom P64', archived: false, settingType: 'numeric', extras: { dye2: true } },
-  { id: 'g-old', model: 'Old Mazzer', archived: true, settingType: 'numeric', settingSmallStep: 1.0 },
-];
-
-// The screen reads Decaid's grinders with the global fetch; no test may reach a real network.
-let grinderReply: () => Response | Promise<Response>;
-const fetched: string[] = [];
+function setViewport(width: number, height: number) {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: height });
+  window.dispatchEvent(new Event('resize'));
+}
 
 beforeEach(() => {
-  grinderReply = () => new Response(JSON.stringify(GRINDERS), { status: 200, headers: { 'Content-Type': 'application/json' } });
-  fetched.length = 0;
+  forgetOpenedGroup();
+  window.location.hash = '#/settings';
+  // The groups read Decaid's grinders and more with the global fetch; no test may reach a real network.
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      fetched.push(url);
-      if (url.endsWith('/api/v1/grinders')) return grinderReply();
-      return new Response('Route not found', { status: 404 });
-    }),
+    vi.fn(async () => new Response('Route not found', { status: 404 })),
   );
 });
 
 afterEach(() => {
+  setViewport(JSDOM_VIEWPORT.width, JSDOM_VIEWPORT.height);
   vi.unstubAllGlobals();
+  window.location.hash = '';
 });
 
-function renderSettings(options: { coach?: Partial<CoachState>; settings?: Settings; insideDecaid?: boolean; key?: string } = {}) {
-  const services: FakeServices = createFakeServices({
-    coach: options.coach,
-    insideDecaid: options.insideDecaid,
-    storage: options.settings ? { settings: options.settings } : {},
-  });
-  // The fake stores a patch as given; CafAI's storage reads and writes every
-  // record through the settings rules (src/storage/repositories.ts), and the
-  // screen must show what those rules really saved.
-  let stored = normalizeSettings(options.settings, DEFAULT_MODEL);
-  services.storage.settings = {
-    get: async () => stored,
-    update: async (patch) => (stored = applySettingsPatch(stored, patch, DEFAULT_MODEL)),
-  };
-  if (options.key) services.storage.apiKey = options.key;
-  renderWithServices(<SettingsScreen />, services);
-  return services;
-}
+const list = () => screen.queryByTestId(TID.settingsList);
+const pane = (id: string) => screen.queryByTestId(TID.settingsPane(id));
+const anyPane = () => SETTINGS_GROUP_IDS.map((id) => pane(id)).filter((element) => element !== null);
 
-/** A reply the test sends when it chooses, to see the screen while Decaid's list is on its way. */
-function laterReply() {
-  let send: (response: Response) => void = () => undefined;
-  const reply = new Promise<Response>((resolve) => {
-    send = resolve;
-  });
-  return { reply: () => reply, send: () => send(new Response(JSON.stringify(GRINDERS), { status: 200 })) };
-}
+describe('Settings on a tablet (D232)', () => {
+  beforeEach(() => setViewport(1280, 800));
 
-const methods = (services: FakeServices) => services.coach.calls.map((c) => c.method);
-
-describe('SettingsScreen API key', () => {
-  it('saves the key, refreshes the coach, and never shows the key again', async () => {
-    const log = vi.spyOn(console, 'log');
-    const error = vi.spyOn(console, 'error');
-    const services = renderSettings({ coach: { hasApiKey: false } });
-    expect(screen.getByText('No key saved yet. The coach needs one to work.')).toBeInTheDocument();
-    // A phone keeps its own key too: the copy says "this device", never "this tablet".
-    expect(screen.getByText('The key stays on this device unless you keep a copy in Decaid (below). It is never included in exports.')).toBeInTheDocument();
-    const input = screen.getByTestId(TID.apiKeyInput);
-    expect(input).toHaveAttribute('type', 'password');
-    expect(screen.getByTestId(TID.apiKeySave)).toBeDisabled();
-
-    await userEvent.type(input, `  ${SECRET}  `);
-    await userEvent.click(screen.getByTestId(TID.apiKeySave));
-
-    await waitFor(() => expect(services.storage.apiKey).toBe(SECRET));
-    expect(await screen.findByText('A key is saved on this device.')).toBeInTheDocument();
-    expect(screen.getByText('Key saved on this device.')).toBeInTheDocument();
-    expect(methods(services)).toContain('refresh');
-    expect(screen.getByTestId(TID.apiKeyInput)).toHaveValue('');
-    expect(document.body.innerHTML).not.toContain(SECRET);
-    for (const field of document.querySelectorAll('input')) expect(field.value).not.toContain(SECRET);
-    for (const call of [...log.mock.calls, ...error.mock.calls]) expect(JSON.stringify(call)).not.toContain(SECRET);
+  it('shows its list beside the group chosen, the group marked current there', () => {
+    renderWithServices(<SettingsScreen group="display" />);
+    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
+    expect(screen.getByTestId(TID.settingsGroupRow('display'))).toHaveAttribute('aria-current', 'page');
+    const display = pane('display')!;
+    expect(within(display).getByRole('heading', { level: 2, name: 'Display' })).toBeInTheDocument();
+    expect(within(display).getByText('How CafAI looks, the units it shows, and the screensaver.')).toBeInTheDocument();
+    // A card's title sits under the group's h2.
+    expect(within(display).getByRole('heading', { level: 3, name: 'Appearance' })).toBeInTheDocument();
+    expect(within(display).getByRole('region', { name: 'Appearance' })).toBeInTheDocument();
+    expect(anyPane()).toEqual([display]);
+    // Rows open their group's page; beside the pane they end in no chevron.
+    expect(screen.getByTestId(TID.settingsGroupRow('coach')).querySelector('[data-testid="ChevronRightRoundedIcon"]')).toBeNull();
   });
 
-  it('keeps the key field out of Clarity, shown or hidden, and counts a saved key (D213, D214)', async () => {
-    const services = renderSettings({ coach: { hasApiKey: false } });
-    const { usage, tracked } = createFakeUsage();
-    // The screen reads the services again at every render: the next keystroke sees it.
-    services.usage = usage;
-    expect(screen.getByTestId(TID.apiKeyInput)).toHaveAttribute('data-private', 'secret');
-    await userEvent.click(screen.getByRole('button', { name: 'Show key' }));
-    expect(screen.getByTestId(TID.apiKeyInput)).toHaveAttribute('type', 'text');
-    expect(screen.getByTestId(TID.apiKeyInput)).toHaveAttribute('data-private', 'secret');
-    await userEvent.type(screen.getByTestId(TID.apiKeyInput), SECRET);
-    await userEvent.click(screen.getByTestId(TID.apiKeySave));
-    await waitFor(() => expect(tracked).toEqual(['coach_setup']));
+  it('opens Coach on a bare #/settings and puts it in the address, replacing it so Back is no trap', () => {
+    const entries = window.history.length;
+    renderWithServices(<SettingsScreen group={null} />);
+    expect(pane('coach')).toBeInTheDocument();
+    expect(screen.getByTestId(TID.settingsGroupRow('coach'))).toHaveAttribute('aria-current', 'page');
+    expect(window.location.hash).toBe('#/settings/coach');
+    expect(window.history.length).toBe(entries);
   });
 
-  it('shows and hides what is being typed', async () => {
-    renderSettings({ coach: { hasApiKey: false } });
-    const input = screen.getByTestId(TID.apiKeyInput);
-    await userEvent.click(screen.getByRole('button', { name: 'Show key' }));
-    expect(input).toHaveAttribute('type', 'text');
-    await userEvent.click(screen.getByRole('button', { name: 'Hide key' }));
-    expect(input).toHaveAttribute('type', 'password');
-    expect(input).toHaveAttribute('autocomplete', 'off');
+  it('opens the group opened last in this page’s life on a bare #/settings', () => {
+    window.location.hash = '#/settings/data';
+    const { unmount } = renderWithServices(<SettingsScreen group="data" />);
+    unmount();
+    window.location.hash = '#/settings';
+    renderWithServices(<SettingsScreen group={null} />);
+    expect(pane('data')).toBeInTheDocument();
+    expect(window.location.hash).toBe('#/settings/data');
   });
 
-  it('forgets the key only after a confirmation', async () => {
-    const services = renderSettings({ coach: { hasApiKey: true }, key: SECRET });
-    expect(screen.getByText('A key is saved on this device.')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByTestId(TID.forgetKey));
-    const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByText('The coach stops working on this device until you add a key again.')).toBeInTheDocument();
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Keep it' }));
-    expect(services.storage.apiKey).toBe(SECRET);
-
-    await userEvent.click(screen.getByTestId(TID.forgetKey));
-    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Forget key' }));
-    await waitFor(() => expect(services.storage.apiKey).toBeNull());
-    expect(await screen.findByText('No key saved yet. The coach needs one to work.')).toBeInTheDocument();
-    expect(screen.getByText('The key is gone from this device.')).toBeInTheDocument();
-    expect(methods(services)).toEqual(['refresh']);
-    expect(screen.queryByTestId(TID.forgetKey)).toBeNull();
-  });
-});
-
-describe('SettingsScreen coach settings', () => {
-  const settings: Settings = { model: 'claude-opus-5-5', grinderName: 'Niche Zero', grinderSetting: '14', activeBagId: 'bag-1' };
-
-  it('loads the stored model and grinder', async () => {
-    renderSettings({ settings });
-    await waitFor(() => expect(screen.getByTestId(TID.grinderName)).toHaveValue('Niche Zero'));
-    expect(screen.getByTestId(TID.grinderSetting)).toHaveValue('14');
-    const select = screen.getByTestId(TID.modelSelect);
-    expect(select).toHaveValue('claude-opus-5-5');
-    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([
-      'Opus 5.5 · $4 / $20 per MTok',
-      'Haiku 4.5 · $1 / $5 per MTok',
-    ]);
-    expect(screen.getByText('Sharpest advice. $4 in / $20 out per million tokens.')).toBeInTheDocument();
+  it('scrolls the list and the group each inside itself, never the page', () => {
+    renderWithServices(<SettingsScreen group="machine" />);
+    expect(getComputedStyle(list()!).overflowY).toBe('auto');
+    expect(getComputedStyle(pane('machine')!).overflowY).toBe('auto');
   });
 
-  it('persists model and grinder, then refreshes the coach', async () => {
-    const services = renderSettings({ settings });
-    await waitFor(() => expect(screen.getByTestId(TID.grinderName)).toHaveValue('Niche Zero'));
-    await userEvent.selectOptions(screen.getByTestId(TID.modelSelect), 'claude-haiku-4-5');
-    await userEvent.clear(screen.getByTestId(TID.grinderName));
-    await userEvent.type(screen.getByTestId(TID.grinderName), 'DF64');
-    await userEvent.clear(screen.getByTestId(TID.grinderSetting));
-    await userEvent.type(screen.getByTestId(TID.grinderSetting), ' 2.5 ');
-    await userEvent.click(screen.getByTestId(TID.settingsSave));
-
-    expect(await screen.findByText('Settings saved.')).toBeInTheDocument();
-    expect(await services.storage.settings.get()).toEqual({
-      model: 'claude-haiku-4-5',
-      grinderName: 'DF64',
-      grinderSetting: '2.5',
-      grinderId: null,
-      activeBagId: 'bag-1',
-      appearance: DEFAULT_APPEARANCE,
-    });
-    expect(methods(services)).toEqual(['refresh']);
-    // The fields show what was saved; nothing was taken out, so nothing more is said.
-    expect(screen.getByTestId(TID.grinderSetting)).toHaveValue('2.5');
-    expect(screen.queryByText(KEY_TAKEN_OUT)).toBeNull();
-  });
-
-  it('stores blank grinder fields as null', async () => {
-    const services = renderSettings({ settings });
-    await waitFor(() => expect(screen.getByTestId(TID.grinderName)).toHaveValue('Niche Zero'));
-    await userEvent.clear(screen.getByTestId(TID.grinderName));
-    await userEvent.clear(screen.getByTestId(TID.grinderSetting));
-    await userEvent.click(screen.getByTestId(TID.settingsSave));
-    await screen.findByText('Settings saved.');
-    expect(await services.storage.settings.get()).toMatchObject({ grinderName: null, grinderSetting: null });
-  });
-});
-
-describe('SettingsScreen keeps a pasted API key out of the settings (D37)', () => {
-  const typed: Settings = { model: DEFAULT_MODEL, grinderName: 'Niche Zero', grinderSetting: '14', activeBagId: 'bag-1' };
-  const noKeyInAnyField = () => {
-    for (const field of document.querySelectorAll('input, select')) expect((field as HTMLInputElement).value).not.toContain('sk-ant-');
-  };
-
-  it('takes a key pasted into the grinder fields out, says so, and shows what was saved', async () => {
-    const log = vi.spyOn(console, 'log');
-    const error = vi.spyOn(console, 'error');
-    const services = renderSettings({ settings: typed });
-    await waitFor(() => expect(screen.getByTestId(TID.grinderName)).toHaveValue('Niche Zero'));
-    // Pasted after the name, and over the setting (which keeps 20 characters).
-    await userEvent.click(screen.getByTestId(TID.grinderName));
-    await userEvent.paste(` ${PASTED_KEY}`);
-    await userEvent.clear(screen.getByTestId(TID.grinderSetting));
-    await userEvent.paste(PASTED_KEY);
-    expect(screen.getByTestId(TID.grinderSetting)).toHaveValue(PASTED_KEY.slice(0, 20));
-    await userEvent.click(screen.getByTestId(TID.settingsSave));
-
-    expect(await screen.findByText(KEY_TAKEN_OUT)).toBeInTheDocument();
-    expect(KEY_TAKEN_OUT).toBe('That looked like an API key, so CafAI took it out. Keys go in the API key field above.');
-    expect(screen.getByText('Settings saved.')).toBeInTheDocument();
-    expect(screen.getByTestId(TID.grinderName)).toHaveValue('Niche Zero');
-    expect(screen.getByTestId(TID.grinderSetting)).toHaveValue('');
-    expect(await services.storage.settings.get()).toEqual({
-      ...typed,
-      grinderSetting: null,
-      grinderId: null,
-      appearance: DEFAULT_APPEARANCE,
-    });
-    expect(methods(services)).toEqual(['refresh']);
-    noKeyInAnyField();
-    expect(document.body.innerHTML).not.toContain(PASTED_KEY.slice(0, 20));
-    for (const call of [...log.mock.calls, ...error.mock.calls]) expect(JSON.stringify(call)).not.toContain('sk-ant-api03');
-  });
-
-  it('never saves a key as the model: the default model is used, and the screen says why', async () => {
-    const services = renderSettings({ settings: { ...typed, model: 'claude-haiku-4-5' } });
-    const model = screen.getByTestId(TID.modelSelect);
-    await waitFor(() => expect(model).toHaveValue('claude-haiku-4-5'));
-    // The model is a list, so only a crafted value can carry a key: plant one.
-    const planted = document.createElement('option');
-    planted.value = PASTED_KEY;
-    planted.textContent = 'Planted';
-    model.appendChild(planted);
-    await userEvent.selectOptions(model, PASTED_KEY);
-    planted.remove();
-    await userEvent.click(screen.getByTestId(TID.settingsSave));
-
-    expect(await screen.findByText(KEY_TAKEN_OUT)).toBeInTheDocument();
-    expect(model).toHaveValue(DEFAULT_MODEL);
-    expect(await services.storage.settings.get()).toMatchObject({ model: DEFAULT_MODEL, grinderName: 'Niche Zero', grinderSetting: '14' });
-    noKeyInAnyField();
-    expect(document.body.innerHTML).not.toContain(PASTED_KEY);
-  });
-
-  it('a later save without a key clears the notice', async () => {
-    renderSettings({ settings: typed });
-    await waitFor(() => expect(screen.getByTestId(TID.grinderName)).toHaveValue('Niche Zero'));
-    await userEvent.clear(screen.getByTestId(TID.grinderSetting));
-    await userEvent.paste(PASTED_KEY);
-    await userEvent.click(screen.getByTestId(TID.settingsSave));
-    await screen.findByText(KEY_TAKEN_OUT);
-    await userEvent.type(screen.getByTestId(TID.grinderSetting), '15');
-    await userEvent.click(screen.getByTestId(TID.settingsSave));
-    await waitFor(() => expect(screen.queryByText(KEY_TAKEN_OUT)).toBeNull());
-    expect(screen.getByText('Settings saved.')).toBeInTheDocument();
-    expect(screen.getByTestId(TID.grinderSetting)).toHaveValue('15');
-  });
-});
-
-describe('SettingsScreen grinder from Decaid', () => {
-  const typed: Settings = { model: 'claude-opus-5-5', grinderName: 'Niche Zero', grinderSetting: '14', activeBagId: 'bag-1' };
-  const picker = () => screen.getByLabelText('Grinder from Decaid');
-  const libraryReady = () => waitFor(() => expect(picker()).toBeEnabled());
-  const options = (select: HTMLElement) => within(select).getAllByRole('option').map((option) => option.textContent);
-
-  it("lists Decaid's grinders with their burrs, archived ones left out, plus \"Not in Decaid's list\"", async () => {
-    renderSettings({ settings: typed });
-    await libraryReady();
-    expect(fetched).toContain('http://localhost:8080/api/v1/grinders');
-    expect(options(picker())).toEqual(['Niche Zero (63 mm conical)', 'Comandante C40 MK4', 'Baratza Encore ESP', 'Lagom P64', "Not in Decaid's list"]);
-    // Typed before grinders could be linked: still free text, with the hint on how to link it.
-    expect(picker()).toHaveValue('');
-    expect(screen.getByTestId(TID.grinderName)).toHaveValue('Niche Zero');
-    expect(screen.getByTestId(TID.grinderSetting)).toHaveValue('14');
-    expect(screen.getByText(LIBRARY_HINT)).toBeInTheDocument();
-  });
-
-  it('says plainly what CafAI will use for the grinder picked', async () => {
-    renderSettings({ settings: typed });
-    await libraryReady();
-    await userEvent.selectOptions(picker(), 'g-niche');
-    expect(screen.getByText('Decaid lists steps of 0.5 for this grinder (big steps 2).')).toBeInTheDocument();
-    expect(screen.queryByTestId(TID.grinderName), 'a picked grinder is named by its model').toBeNull();
-    expect(screen.getByTestId(TID.grinderSetting)).toHaveValue('14');
-    await userEvent.selectOptions(picker(), 'g-c40');
-    expect(screen.getByText('Decaid lists steps of 1 for this grinder.')).toBeInTheDocument();
-    await userEvent.selectOptions(picker(), 'g-encore');
-    expect(screen.getByText('Decaid lists 40 settings for this grinder.')).toBeInTheDocument();
-    await userEvent.selectOptions(picker(), 'g-lagom');
-    expect(screen.getByText('Decaid has no step size for this grinder, so the coach gives directions only.')).toBeInTheDocument();
-    await userEvent.selectOptions(picker(), "Not in Decaid's list");
-    expect(screen.getByText(LIBRARY_HINT)).toBeInTheDocument();
-    expect(screen.getByTestId(TID.grinderName)).toHaveValue('Niche Zero');
-  });
-
-  it('saves the link, the model as the name and the setting, refreshes the coach, and leaves the workflow alone', async () => {
-    const services = renderSettings({ settings: typed });
-    await libraryReady();
-    await userEvent.selectOptions(picker(), 'g-niche');
-    await userEvent.clear(screen.getByTestId(TID.grinderSetting));
-    await userEvent.type(screen.getByTestId(TID.grinderSetting), '13.5');
-    await userEvent.click(screen.getByTestId(TID.settingsSave));
-    expect(await screen.findByText('Settings saved.')).toBeInTheDocument();
-    expect(await services.storage.settings.get()).toEqual({
-      model: 'claude-opus-5-5',
-      grinderName: 'Niche Zero',
-      grinderSetting: '13.5',
-      grinderId: 'g-niche',
-      activeBagId: 'bag-1',
-      appearance: DEFAULT_APPEARANCE,
-    });
-    expect(methods(services)).toEqual(['refresh']);
-    expect(services.decaid.calls.map((call) => call.method)).not.toContain('updateWorkflow');
-  });
-
-  it('a preset grinder picks its setting from its list, keeping a value Decaid does not list', async () => {
-    const services = renderSettings({ settings: { ...typed, grinderId: 'g-encore', grinderName: 'Baratza Encore ESP', grinderSetting: '14.5' } });
-    await libraryReady();
-    expect(picker()).toHaveValue('g-encore');
-    const setting = screen.getByLabelText('Current grinder setting');
-    expect(setting.tagName).toBe('SELECT');
-    expect(screen.queryByTestId(TID.grinderSetting)).toBeNull();
-    expect(setting).toHaveValue('14.5');
-    expect(options(setting)[0]).toBe("14.5 (not in Decaid's list)");
-    expect(options(setting)).toHaveLength(41);
-    await userEvent.selectOptions(setting, '12');
-    await userEvent.click(screen.getByTestId(TID.settingsSave));
-    await screen.findByText('Settings saved.');
-    expect(await services.storage.settings.get()).toMatchObject({ grinderId: 'g-encore', grinderName: 'Baratza Encore ESP', grinderSetting: '12' });
-  });
-
-  it('"Not in Decaid\'s list" keeps the free-text name and saves it unlinked', async () => {
-    const services = renderSettings({ settings: { ...typed, grinderId: 'g-niche' } });
-    await libraryReady();
-    expect(picker()).toHaveValue('g-niche');
-    expect(screen.queryByTestId(TID.grinderName)).toBeNull();
-    await userEvent.selectOptions(picker(), "Not in Decaid's list");
-    await userEvent.clear(screen.getByTestId(TID.grinderName));
-    await userEvent.type(screen.getByTestId(TID.grinderName), 'DF64');
-    await userEvent.click(screen.getByTestId(TID.settingsSave));
-    await screen.findByText('Settings saved.');
-    expect(await services.storage.settings.get()).toMatchObject({ grinderId: null, grinderName: 'DF64', grinderSetting: '14' });
-  });
-
-  it('keeps the link to a grinder Decaid no longer lists until another is picked', async () => {
-    const services = renderSettings({ settings: { ...typed, grinderId: 'g-gone', grinderName: 'Old grinder' } });
-    await libraryReady();
-    expect(picker()).toHaveValue('g-gone');
-    expect(options(picker())[0]).toBe("Old grinder (no longer in Decaid's list)");
-    expect(screen.getByText(MISSING_LINE)).toBeInTheDocument();
-    await userEvent.click(screen.getByTestId(TID.settingsSave));
-    await screen.findByText('Settings saved.');
-    expect(await services.storage.settings.get()).toMatchObject({ grinderId: 'g-gone', grinderName: 'Old grinder' });
-  });
-
-  const unreachable = () => {
-    throw new TypeError('Failed to fetch');
-  };
-  const noGrinders = () => new Response('[]', { status: 200 });
-  const noLibrary = () => new Response('Route not found', { status: 404 });
-  for (const [why, reply] of [
-    ['Decaid cannot be reached', unreachable],
-    ['Decaid has no grinders', noGrinders],
-    ['Decaid is too old to have a grinder library', noLibrary],
-  ] as const) {
-    it(`keeps the two text fields of a typed grinder and adds the library hint when ${why}`, async () => {
-      grinderReply = reply;
-      const services = renderSettings({ settings: typed });
-      expect(await screen.findByText(LIBRARY_HINT)).toBeInTheDocument();
-      expect(screen.queryByLabelText('Grinder from Decaid')).toBeNull();
-      expect(screen.getByTestId(TID.grinderName)).toHaveValue('Niche Zero');
-      expect(screen.getByTestId(TID.grinderSetting)).toHaveValue('14');
-      await userEvent.click(screen.getByTestId(TID.settingsSave));
-      await screen.findByText('Settings saved.');
-      expect(await services.storage.settings.get()).toMatchObject({ grinderId: null, grinderName: 'Niche Zero', grinderSetting: '14' });
-      expect(methods(services)).toEqual(['refresh']);
-    });
-  }
-
-  for (const [why, reply] of [
-    ['Decaid lists no grinders', noGrinders],
-    ['Decaid has no grinder library', noLibrary],
-  ] as const) {
-    it(`a link to a grinder Decaid no longer lists is kept and says so when ${why}`, async () => {
-      grinderReply = reply;
-      const services = renderSettings({ settings: { ...typed, grinderId: 'g-niche' } });
-      expect(await screen.findByText(MISSING_LINE)).toBeInTheDocument();
-      expect(picker()).toHaveValue('g-niche');
-      expect(options(picker())).toEqual(["Niche Zero (no longer in Decaid's list)", "Not in Decaid's list"]);
-      expect(screen.queryByText(LIBRARY_HINT)).toBeNull();
-      expect(screen.queryByTestId(TID.grinderName), 'a linked grinder is named by its link').toBeNull();
-      expect(screen.getByTestId(TID.grinderSetting)).toHaveValue('14');
-      await userEvent.click(screen.getByTestId(TID.settingsSave));
-      await screen.findByText('Settings saved.');
-      expect(await services.storage.settings.get()).toMatchObject({ grinderId: 'g-niche', grinderName: 'Niche Zero', grinderSetting: '14' });
-      expect(methods(services)).toEqual(['refresh']);
-    });
-  }
-
-  it('with Decaid listing no grinders, "Not in Decaid\'s list" unlinks the grinder and names it by hand', async () => {
-    grinderReply = noGrinders;
-    const services = renderSettings({ settings: { ...typed, grinderId: 'g-niche' } });
-    await screen.findByText(MISSING_LINE);
-    await userEvent.selectOptions(picker(), "Not in Decaid's list");
-    expect(screen.getByText(LIBRARY_HINT)).toBeInTheDocument();
-    expect(screen.getByTestId(TID.grinderName)).toHaveValue('Niche Zero');
-    await userEvent.clear(screen.getByTestId(TID.grinderName));
-    await userEvent.type(screen.getByTestId(TID.grinderName), 'DF64');
-    await userEvent.click(screen.getByTestId(TID.settingsSave));
-    await screen.findByText('Settings saved.');
-    expect(await services.storage.settings.get()).toMatchObject({ grinderId: null, grinderName: 'DF64', grinderSetting: '14' });
-  });
-
-  it("says Decaid can't be reached for a linked grinder, and keeps the link while the name is unchanged", async () => {
-    grinderReply = unreachable;
-    const services = renderSettings({ settings: { ...typed, grinderId: 'g-niche' } });
-    expect(await screen.findByText(UNREACHABLE_LINE)).toBeInTheDocument();
-    expect(screen.queryByText(LIBRARY_HINT)).toBeNull();
-    expect(screen.queryByLabelText('Grinder from Decaid')).toBeNull();
-    expect(screen.getByTestId(TID.grinderName)).toHaveValue('Niche Zero');
-    expect(screen.getByTestId(TID.grinderSetting)).toHaveValue('14');
-    await userEvent.click(screen.getByTestId(TID.settingsSave));
-    await screen.findByText('Settings saved.');
-    expect(await services.storage.settings.get()).toMatchObject({ grinderId: 'g-niche', grinderName: 'Niche Zero' });
-    expect(methods(services)).toEqual(['refresh']);
-  });
-
-  it("drops the link when the grinder is renamed while Decaid's list is out of reach", async () => {
-    grinderReply = unreachable;
-    const services = renderSettings({ settings: { ...typed, grinderId: 'g-niche' } });
-    await screen.findByText(UNREACHABLE_LINE);
-    await userEvent.clear(screen.getByTestId(TID.grinderName));
-    await userEvent.type(screen.getByTestId(TID.grinderName), 'DF64');
-    await userEvent.click(screen.getByTestId(TID.settingsSave));
-    await screen.findByText('Settings saved.');
-    expect(await services.storage.settings.get()).toMatchObject({ grinderId: null, grinderName: 'DF64' });
-    // Saved unlinked, so the screen speaks of a typed grinder now.
-    expect(screen.getByText(LIBRARY_HINT)).toBeInTheDocument();
-    expect(screen.queryByText(UNREACHABLE_LINE)).toBeNull();
-  });
-
-  it("shows a preset grinder's setting only as its list: a disabled placeholder until Decaid's list arrives", async () => {
-    const later = laterReply();
-    grinderReply = later.reply;
-    renderSettings({ settings: { ...typed, grinderId: 'g-encore', grinderName: 'Baratza Encore ESP', grinderSetting: '12' } });
-    await waitFor(() => expect(picker()).toHaveValue('g-encore'));
-    const placeholder = screen.getByLabelText('Current grinder setting');
-    expect(placeholder).toBeDisabled();
-    expect(placeholder.tagName).toBe('INPUT');
-    expect(placeholder).toHaveValue('');
-    expect(placeholder).toHaveAttribute('placeholder', 'Loading…');
-    expect(screen.queryByTestId(TID.grinderSetting), 'never the free-text field, not even for a moment').toBeNull();
-
-    later.send();
-    await libraryReady();
-    const setting = screen.getByLabelText('Current grinder setting');
-    expect(setting.tagName).toBe('SELECT');
-    expect(setting).toBeEnabled();
-    expect(setting).toHaveValue('12');
-  });
-
-  it("shows a typed grinder's setting at once, while Decaid's list is still on its way", async () => {
-    const later = laterReply();
-    grinderReply = later.reply;
-    renderSettings({ settings: typed });
-    await waitFor(() => expect(screen.getByTestId(TID.grinderSetting)).toHaveValue('14'));
-    expect(screen.getByTestId(TID.grinderSetting)).toBeEnabled();
-    expect(picker()).toBeDisabled();
-    later.send();
-    await libraryReady();
-    expect(screen.getByTestId(TID.grinderSetting)).toHaveValue('14');
-  });
-
-  it('a pick brings the setting and Save into view, scrolling only the Settings column', async () => {
-    renderSettings({ settings: typed });
-    await libraryReady();
-    const column = screen.getByRole('heading', { level: 1, name: 'Settings' }).parentElement?.parentElement;
-    if (!column) throw new Error('No Settings column');
-    // jsdom has no layout. At 962x602 the column runs from the 64 px top bar
-    // to the bottom of the window, and the setting and Save sit about 700 px
-    // down its content: below the fold.
-    const box = (top: number, height: number) => ({ top, bottom: top + height, left: 0, right: 600, width: 600, height, x: 0, y: top }) as DOMRect;
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      return this === column ? box(64, 538) : box(64 + 700 - column.scrollTop, 48);
-    });
-    const page = { top: document.documentElement.scrollTop, body: document.body.scrollTop };
-
-    await userEvent.selectOptions(picker(), 'g-encore');
-    expect(screen.getByLabelText('Current grinder setting').tagName).toBe('SELECT');
-    expect(column.scrollTop).toBe(700 + 48 + 16 - 538);
-    expect({ top: document.documentElement.scrollTop, body: document.body.scrollTop }).toEqual(page);
-  });
-
-  it('Save brings what it says into view, the key notice included', async () => {
-    renderSettings({ settings: typed });
-    await waitFor(() => expect(screen.getByTestId(TID.grinderName)).toHaveValue('Niche Zero'));
-    const column = screen.getByRole('heading', { level: 1, name: 'Settings' }).parentElement?.parentElement;
-    if (!column) throw new Error('No Settings column');
-    // Save sits at the bottom of the view; the messages under it, below the fold.
-    const box = (top: number, height: number) => ({ top, bottom: top + height, left: 0, right: 600, width: 600, height, x: 0, y: top }) as DOMRect;
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      if (this === column) return box(64, 538);
-      if (this.textContent?.includes('Settings saved.')) return box(64 + 560 - column.scrollTop, 120);
-      return box(64 + 470 - column.scrollTop, 48);
-    });
-    await userEvent.clear(screen.getByTestId(TID.grinderSetting));
-    await userEvent.paste(PASTED_KEY);
-    await userEvent.click(screen.getByTestId(TID.settingsSave));
-    await screen.findByText(KEY_TAKEN_OUT);
-    expect(column.scrollTop).toBe(560 + 120 + 16 - 538);
-  });
-});
-
-describe('SettingsScreen Add a grinder (D125)', () => {
-  const typed: Settings = { model: 'claude-opus-5-5', grinderName: 'DF64', grinderSetting: '14', activeBagId: 'bag-1' };
-  const ADDED = {
-    id: 'g-new',
-    model: 'DF64',
-    burrs: 'SSP MP',
-    archived: false,
-    settingType: 'numeric',
-    settingSmallStep: 0.5,
-    createdAt: '2026-10-11T09:00:00.000000',
-    updatedAt: '2026-10-11T09:00:00.000000',
-  };
-  const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-  /** Decaid's library as the reads find it, and the bodies posted to it. */
-  let library: unknown[] = [];
-  let postReply: () => Response = () => json(ADDED, 201);
-  const posted: unknown[] = [];
-
-  beforeEach(() => {
-    library = [];
-    postReply = () => json(ADDED, 201);
-    posted.length = 0;
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = String(input);
-        fetched.push(url);
-        if (!url.endsWith('/api/v1/grinders')) return new Response('Route not found', { status: 404 });
-        if (init?.method === 'POST') {
-          posted.push(JSON.parse(String(init.body)));
-          return postReply();
-        }
-        return grinderReply();
-      }),
+  it('lays itself out as the shell does, not the window: a keyboard shortening a tablet keeps its panes', () => {
+    setViewport(1280, 380);
+    renderWithServices(
+      <ScreenModeContext.Provider value="tablet">
+        <SettingsScreen group="grinder" />
+      </ScreenModeContext.Provider>,
     );
-    grinderReply = () => json(library);
-  });
-
-  const addButton = () => screen.findByTestId(TID.addGrinder);
-
-  it("adds the grinder to Decaid's library, picks it and says so; Save links it", async () => {
-    const services = renderSettings({ settings: typed });
-    expect(await screen.findByText(LIBRARY_HINT)).toBeInTheDocument();
-    await userEvent.click(await addButton());
-    const dialog = await screen.findByRole('dialog', { name: 'Add a grinder to Decaid' });
-    // It starts from the name typed in Settings.
-    expect(within(dialog).getByTestId(TID.addGrinderModel)).toHaveValue('DF64');
-    await userEvent.type(within(dialog).getByTestId(TID.addGrinderBurrs), 'SSP MP');
-    await userEvent.type(within(dialog).getByTestId(TID.addGrinderSmallStep), '0,5');
-    await userEvent.click(within(dialog).getByTestId(TID.addGrinderSubmit));
-
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(posted).toEqual([{ model: 'DF64', burrs: 'SSP MP', settingType: 'numeric', settingSmallStep: 0.5 }]);
-    expect(screen.getByLabelText('Grinder from Decaid')).toHaveValue('g-new');
-    expect(screen.getByText('Decaid lists steps of 0.5 for this grinder.')).toBeInTheDocument();
-    expect(screen.getByTestId(TID.addGrinderNote)).toHaveTextContent("Added DF64 (SSP MP) to Decaid's grinders. Save settings to use it.");
-    expect(methods(services), 'nothing is saved before Save').toEqual([]);
-
-    await userEvent.click(screen.getByTestId(TID.settingsSave));
-    await screen.findByText('Settings saved.');
-    expect(await services.storage.settings.get()).toMatchObject({ grinderId: 'g-new', grinderName: 'DF64', grinderSetting: '14' });
-    expect(screen.queryByTestId(TID.addGrinderNote)).toBeNull();
-  });
-
-  it('picks the grinder Decaid already has, read afresh, instead of adding it twice', async () => {
-    renderSettings({ settings: typed });
-    await userEvent.click(await addButton());
-    // Another skin added it while Settings was open.
-    library = GRINDERS;
-    const dialog = await screen.findByRole('dialog');
-    await userEvent.clear(within(dialog).getByTestId(TID.addGrinderModel));
-    await userEvent.type(within(dialog).getByTestId(TID.addGrinderModel), 'niche zero');
-    await userEvent.click(within(dialog).getByTestId(TID.addGrinderSubmit));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(posted).toEqual([]);
-    expect(screen.getByLabelText('Grinder from Decaid')).toHaveValue('g-niche');
-    expect(screen.getByTestId(TID.addGrinderNote)).toHaveTextContent('Decaid already has Niche Zero (63 mm conical), so CafAI picked it.');
-  });
-
-  it("says what to fix and Decaid's refusal in the dialog, and Cancel changes nothing", async () => {
-    const services = renderSettings({ settings: { ...typed, grinderName: null } });
-    await userEvent.click(await addButton());
-    const dialog = await screen.findByRole('dialog');
-    await userEvent.click(within(dialog).getByTestId(TID.addGrinderSubmit));
-    expect(within(dialog).getByText('Name the grinder, like Niche Zero.')).toBeInTheDocument();
-    await userEvent.type(within(dialog).getByTestId(TID.addGrinderModel), 'Kinu M47');
-    await userEvent.selectOptions(within(dialog).getByTestId(TID.addGrinderDial), 'preset');
-    await userEvent.click(within(dialog).getByTestId(TID.addGrinderSubmit));
-    expect(within(dialog).getByText("List the grinder's settings, finest first, with commas between them.")).toBeInTheDocument();
-    await userEvent.type(within(dialog).getByTestId(TID.addGrinderSettings), '1, 2, 3');
-    postReply = () => json({ error: 'Exception: database is locked' }, 400);
-    await userEvent.click(within(dialog).getByTestId(TID.addGrinderSubmit));
-    expect(await within(dialog).findByText("Couldn't add the grinder: database is locked")).toBeInTheDocument();
-    expect(posted).toEqual([{ model: 'Kinu M47', settingType: 'preset', settingValues: ['1', '2', '3'] }]);
-
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(screen.queryByLabelText('Grinder from Decaid')).toBeNull();
-    expect(screen.queryByTestId(TID.addGrinderNote)).toBeNull();
-    expect(methods(services)).toEqual([]);
-  });
-
-  for (const [why, reply] of [
-    ['Decaid cannot be reached', () => Promise.reject(new TypeError('Failed to fetch'))],
-    ['Decaid sent a list CafAI cannot read', () => Promise.resolve(json(null))],
-    ['Decaid is too old to have a grinder library', () => Promise.resolve(new Response('Route not found', { status: 404 }))],
-  ] as const) {
-    it(`offers no Add when ${why}`, async () => {
-      grinderReply = reply;
-      renderSettings({ settings: typed });
-      expect(await screen.findByText(LIBRARY_HINT)).toBeInTheDocument();
-      expect(screen.queryByTestId(TID.addGrinder)).toBeNull();
-    });
-  }
-
-  it("links to DYE2's Grinders page only while Decaid runs DYE2", async () => {
-    const services = renderSettings({ settings: typed });
-    await addButton();
-    expect(screen.queryByTestId(TID.editGrindersInDye2)).toBeNull();
-    act(() => services.plugins.setLoaded(['dye2.reaplugin']));
-    expect(screen.getByTestId(TID.editGrindersInDye2)).toHaveAttribute('href', 'http://localhost:8080/api/v1/plugins/dye2.reaplugin/grinders');
-    act(() => services.plugins.setLoaded([]));
-    expect(screen.queryByTestId(TID.editGrindersInDye2)).toBeNull();
+    expect(list()).toBeInTheDocument();
+    expect(pane('grinder')).toBeInTheDocument();
+    expect(screen.queryByTestId(TID.settingsBack)).toBeNull();
   });
 });
 
-describe('SettingsScreen about', () => {
-  it('shows the app version and the Decaid version from the API, against the one CafAI was verified with', async () => {
-    renderSettings();
-    expect(screen.getByText('CafAI 0.1.0-test')).toBeInTheDocument();
-    expect(await screen.findByText('Decaid 0.9.0+1 (CafAI was verified with 0.8.8)')).toBeInTheDocument();
+describe('Settings on a phone (D232)', () => {
+  beforeEach(() => setViewport(390, 844));
+
+  it('is its list alone on #/settings, each row ending in a chevron, and puts nothing in the address', () => {
+    renderWithServices(<SettingsScreen group={null} />);
+    expect(list()).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
+    expect(anyPane()).toEqual([]);
+    for (const id of SETTINGS_GROUP_IDS) {
+      const row = screen.getByTestId(TID.settingsGroupRow(id));
+      expect(row).not.toHaveAttribute('aria-current');
+      expect(row.querySelector('[data-testid="ChevronRightRoundedIcon"]')).not.toBeNull();
+    }
+    expect(window.location.hash).toBe('#/settings');
   });
 
-  it('prefers the version Decaid reports to the skin', () => {
-    const services = renderSettings({ insideDecaid: true });
-    expect(screen.getByText('Decaid 0.9.0 (CafAI was verified with 0.8.8)')).toBeInTheDocument();
-    expect(services.decaid.calls.map((c) => c.method)).not.toContain('getInfo');
+  it("opens a group as a page of its own: a back arrow to the list, the group's name as the h1, its cards under it", () => {
+    renderWithServices(<SettingsScreen group="grinder" />);
+    expect(list()).toBeNull();
+    const page = pane('grinder')!;
+    expect(within(page).getByRole('heading', { level: 1, name: 'Grinder' })).toBeInTheDocument();
+    const back = screen.getByTestId(TID.settingsBack);
+    expect(back).toHaveAccessibleName('Back to Settings');
+    expect(back).toHaveAttribute('href', '#/settings');
+    expect(within(page).getByText('Your grinder and its setting, so the coach can say how far to turn it.')).toBeInTheDocument();
+    expect(within(page).getByRole('heading', { level: 2, name: 'Your grinder' })).toBeInTheDocument();
   });
 
-  it('wires in the Decaid-about block and the drink settings section', async () => {
-    renderSettings();
-    expect(await screen.findByTestId(TID.aboutDecaid)).toBeInTheDocument();
-    expect(screen.getByTestId(TID.backupHealth)).toBeInTheDocument();
-    expect(screen.getByTestId(TID.drinkSettings)).toBeInTheDocument();
+  it('scrolls the page under its header, never the page itself', () => {
+    renderWithServices(<SettingsScreen group="about" />);
+    const header = screen.getByRole('heading', { level: 1, name: 'About' });
+    const scroller = within(pane('about')!).getByRole('region', { name: 'CafAI and Decaid' }).closest<HTMLElement>('[class*="MuiBox-root"]')!;
+    expect(header).toBeInTheDocument();
+    let element: HTMLElement | null = scroller;
+    while (element && getComputedStyle(element).overflowY !== 'auto') element = element.parentElement;
+    expect(element).not.toBeNull();
+    expect(element).not.toContainElement(header);
   });
 });
 
-describe('SettingsScreen key in Decaid (5.6, D99)', () => {
-  const sentence =
-    "So you do not have to paste it again after a Decaid update. Any device on your network can read Decaid's store, and Decaid's backups include it.";
-  const withChoice = (keepKeyInDecaid: boolean) => ({
-    model: DEFAULT_MODEL,
-    grinderName: null,
-    grinderSetting: null,
-    activeBagId: null,
-    keepKeyInDecaid,
+describe('Settings across the line', () => {
+  it("keeps its route: a tablet's pane becomes a phone's page, and back", () => {
+    setViewport(1280, 800);
+    renderWithServices(<SettingsScreen group="machine" />);
+    expect(list()).toBeInTheDocument();
+    act(() => setViewport(390, 844));
+    expect(list()).toBeNull();
+    expect(screen.getByRole('heading', { level: 1, name: 'Machine' })).toBeInTheDocument();
+    act(() => setViewport(1280, 800));
+    expect(list()).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Machine' })).toBeInTheDocument();
   });
 
-  it('is off by default, with the reason underneath, once a key exists', async () => {
-    renderSettings();
-    const toggle = await screen.findByTestId(TID.keyInDecaid);
-    expect(toggle).not.toBeChecked();
-    expect(toggle).toBeEnabled();
-    expect(screen.getByText(sentence)).toBeInTheDocument();
+  it("a phone's list, made a tablet, shows the group opened last beside it", () => {
+    setViewport(390, 844);
+    renderWithServices(<SettingsScreen group={null} />, createFakeServices());
+    expect(anyPane()).toEqual([]);
+    act(() => setViewport(962, 602));
+    expect(pane('coach')).toBeInTheDocument();
+    expect(window.location.hash).toBe('#/settings/coach');
   });
+});
 
-  it('disables the switch, with a short reason, when there is no key yet', async () => {
-    renderSettings({ coach: { hasApiKey: false } });
-    const toggle = await screen.findByTestId(TID.keyInDecaid);
-    expect(toggle).toBeDisabled();
-    expect(screen.getByText('Add a key above before turning this on.')).toBeInTheDocument();
-    expect(screen.queryByText(sentence)).toBeNull();
-  });
-
-  it('on copies the key to Decaid and stores the choice', async () => {
-    const services = renderSettings();
-    const setOn = vi.spyOn(services.storage.keyBackup, 'setOn');
-    const toggle = await screen.findByTestId(TID.keyInDecaid);
-    await userEvent.click(toggle);
-    await waitFor(() => expect(toggle).toBeChecked());
-    expect(setOn).toHaveBeenCalledWith(true);
-    expect((await services.storage.settings.get()).keepKeyInDecaid).toBe(true);
-  });
-
-  it('off deletes the copy in Decaid and stores the choice', async () => {
-    const services = renderSettings({ settings: withChoice(true) });
-    const setOn = vi.spyOn(services.storage.keyBackup, 'setOn');
-    const toggle = await screen.findByTestId(TID.keyInDecaid);
-    await waitFor(() => expect(toggle).toBeChecked());
-
-    await userEvent.click(toggle);
-    await waitFor(() => expect(toggle).not.toBeChecked());
-    expect(setOn).toHaveBeenCalledWith(false);
-    expect((await services.storage.settings.get()).keepKeyInDecaid).toBe(false);
-  });
-
-  it('a toggle that cannot reach Decaid reverts and says so', async () => {
-    const services = renderSettings();
-    vi.spyOn(services.storage.keyBackup, 'setOn').mockRejectedValue(new Error('Decaid is not answering.'));
-    const toggle = await screen.findByTestId(TID.keyInDecaid);
-    await userEvent.click(toggle);
-    expect(await screen.findByText('Could not reach Decaid: Decaid is not answering.')).toBeInTheDocument();
-    expect(toggle).not.toBeChecked();
-    // Nothing went through, so nothing was chosen: still unset, which reads as off.
-    expect((await services.storage.settings.get()).keepKeyInDecaid).toBeUndefined();
-  });
-
-  it('saving a new key copies it to Decaid while the choice is on', async () => {
-    const services = renderSettings({ coach: { hasApiKey: false }, settings: withChoice(true) });
-    const saveKey = vi.spyOn(services.storage.keyBackup, 'saveKey');
-    await screen.findByTestId(TID.keyInDecaid);
-
-    await userEvent.type(screen.getByTestId(TID.apiKeyInput), SECRET);
-    await userEvent.click(screen.getByTestId(TID.apiKeySave));
-    await waitFor(() => expect(services.storage.apiKey).toBe(SECRET));
-    expect(saveKey).toHaveBeenCalledWith(SECRET, true);
-    expect(screen.getByText('Key saved on this device.')).toBeInTheDocument();
-  });
-
-  it('saving a key while the choice is off keeps it on this device only', async () => {
-    const services = renderSettings({ coach: { hasApiKey: false }, settings: withChoice(false) });
-    const saveKey = vi.spyOn(services.storage.keyBackup, 'saveKey');
-    await screen.findByTestId(TID.keyInDecaid);
-
-    await userEvent.type(screen.getByTestId(TID.apiKeyInput), SECRET);
-    await userEvent.click(screen.getByTestId(TID.apiKeySave));
-    await waitFor(() => expect(services.storage.apiKey).toBe(SECRET));
-    expect(saveKey).toHaveBeenCalledWith(SECRET, false);
-  });
-
-  it('a save that cannot reach Decaid still keeps the key here, and says the copy follows when Decaid is back', async () => {
-    const services = renderSettings({ coach: { hasApiKey: false }, settings: withChoice(true) });
-    vi.spyOn(services.storage.keyBackup, 'saveKey').mockImplementation(async (key) => {
-      services.storage.apiKey = key;
-      return false;
-    });
-    await screen.findByTestId(TID.keyInDecaid);
-
-    await userEvent.type(screen.getByTestId(TID.apiKeyInput), SECRET);
-    await userEvent.click(screen.getByTestId(TID.apiKeySave));
-    await waitFor(() => expect(services.storage.apiKey).toBe(SECRET));
-    expect(
-      await screen.findByText("Key saved on this device. Decaid can't be reached right now, so CafAI will copy it there as soon as it can."),
-    ).toBeInTheDocument();
-    expect(document.body.innerHTML).not.toContain(SECRET);
-  });
-
-  it('forgetting the key while the choice is on deletes the copy, and leaves the choice on for the next key', async () => {
-    const services = renderSettings({ settings: withChoice(true), key: SECRET });
-    const forgetKey = vi.spyOn(services.storage.keyBackup, 'forgetKey');
-    const toggle = await screen.findByTestId(TID.keyInDecaid);
-    await waitFor(() => expect(toggle).toBeChecked());
-
-    await userEvent.click(screen.getByTestId(TID.forgetKey));
-    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Forget key' }));
-    await waitFor(() => expect(services.storage.apiKey).toBeNull());
-    expect(forgetKey).toHaveBeenCalledWith(true);
-    expect(screen.getByText('The key is gone from this device.')).toBeInTheDocument();
-    // Still on, so the next key saved here is copied again; and it can still be turned off.
-    expect(screen.getByTestId(TID.keyInDecaid)).toBeChecked();
-    expect(screen.getByTestId(TID.keyInDecaid)).toBeEnabled();
-    expect(screen.getByText(sentence)).toBeInTheDocument();
-  });
-
-  it("forgetting the key when Decaid can't be reached says its copy goes later, and the switch still turns off without a key", async () => {
-    const services = renderSettings({ settings: withChoice(true), key: SECRET });
-    vi.spyOn(services.storage.keyBackup, 'forgetKey').mockImplementation(async () => {
-      services.storage.apiKey = null;
-      return false;
-    });
-    const setOn = vi.spyOn(services.storage.keyBackup, 'setOn');
-    const toggle = await screen.findByTestId(TID.keyInDecaid);
-    await waitFor(() => expect(toggle).toBeChecked());
-
-    await userEvent.click(screen.getByTestId(TID.forgetKey));
-    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Forget key' }));
-    await waitFor(() => expect(services.storage.apiKey).toBeNull());
-    expect(
-      await screen.findByText(
-        "The key is gone from this device. Decaid can't be reached right now, so CafAI will delete its copy there as soon as it can.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/turn Keep my API key in Decaid off/)).toBeNull();
-
-    // No key here, but a choice that is on can be turned off: Decaid's copy goes, and the switch waits for a key.
-    expect(toggle).toBeChecked();
-    expect(toggle).toBeEnabled();
-    await userEvent.click(toggle);
-    await waitFor(() => expect(toggle).not.toBeChecked());
-    expect(setOn).toHaveBeenCalledWith(false);
-    expect((await services.storage.settings.get()).keepKeyInDecaid).toBe(false);
-    expect(toggle).toBeDisabled();
-    expect(screen.getByText('Add a key above before turning this on.')).toBeInTheDocument();
-  });
-
-  it("keeps MUI's switch size, with the label row around it as the 48 px touch target", async () => {
-    renderSettings();
-    const toggle = await screen.findByTestId(TID.keyInDecaid);
-    expect(getComputedStyle(toggle.closest('label')!).minHeight).toBe('48px');
-    expect(getComputedStyle(toggle.closest('.MuiSwitch-root')!).padding).toBe('12px');
+describe('Settings saves as it changes (D234)', () => {
+  it('has no Save button in any group', () => {
+    setViewport(1280, 800);
+    for (const id of SETTINGS_GROUP_IDS) {
+      const { unmount } = renderWithServices(<SettingsScreen group={id} />);
+      expect(screen.queryByRole('button', { name: /^save( settings)?$/i }), id).toBeNull();
+      unmount();
+    }
   });
 });

@@ -12,7 +12,7 @@ import { renderWithServices } from '../chat/testing/render.tsx';
 import { createFakeServices, createFakeUsage, type FakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
 import { CoachSourceSection } from './CoachSourceSection.tsx';
-import { SettingsScreen } from './SettingsScreen.tsx';
+import { CoachGroup } from './groups/CoachGroup.tsx';
 
 /** GET /v1/status?probe=1 from a bridge that is ready. */
 const STATUS = {
@@ -249,11 +249,11 @@ describe('CoachSourceSection', () => {
   });
 });
 
-describe('SettingsScreen with the coach on the computer', () => {
+describe('Settings > Coach with the coach on the computer', () => {
   const keyRegion = () => screen.queryByRole('region', { name: 'Anthropic API key' });
 
   it("puts the choice above the API key, and swaps the key's field for the bridge's with the choice (D140)", async () => {
-    renderSection({}, <SettingsScreen />);
+    renderSection({}, <CoachGroup />);
     // The key shows once the choice is read as Anthropic.
     await screen.findByRole('region', { name: 'Anthropic API key' });
     const titles = screen.getAllByRole('region').map((region) => region.getAttribute('aria-label'));
@@ -277,7 +277,7 @@ describe('SettingsScreen with the coach on the computer', () => {
   });
 
   it('reads the saved choice when the screen opens, and never shows the key meanwhile', async () => {
-    renderSection(SAVED, <SettingsScreen />);
+    renderSection(SAVED, <CoachGroup />);
     // Before the store answers: neither the key nor a guess at the choice.
     expect(keyRegion()).not.toBeInTheDocument();
     expect(await screen.findByTestId(TID.computerAddress)).toBeInTheDocument();
@@ -288,7 +288,7 @@ describe('SettingsScreen with the coach on the computer', () => {
     const services: FakeServices = createFakeServices({ coach: { hasApiKey: true } });
     services.coachSource = createMemoryCoachSourceStore(SAVED);
     services.storage.apiKey = 'sk-ant-api03-saved-here';
-    renderWithServices(<SettingsScreen />, services);
+    renderWithServices(<CoachGroup />, services);
     await userEvent.click(await screen.findByTestId(TID.coachSourceAnthropic));
     const keySection = await screen.findByRole('region', { name: 'Anthropic API key' });
     await waitFor(() => expect(keySection).toHaveTextContent('A key is saved on this device.'));

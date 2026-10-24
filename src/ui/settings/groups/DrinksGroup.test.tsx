@@ -1,12 +1,24 @@
 // @vitest-environment jsdom
-import '../chat/testing/setup.ts';
+import '../../chat/testing/setup.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Workflow, WorkflowPatch } from '../../api/types.ts';
-import { renderWithServices } from '../chat/testing/render.tsx';
-import { createFakeServices, IDLE_TELEMETRY, SAMPLE_WORKFLOW, type FakeServices } from '../testing/fakeServices.ts';
-import { DrinkSettingsSection } from './DrinkSettingsSection.tsx';
+import type { Workflow, WorkflowPatch } from '../../../api/types.ts';
+import type { Services } from '../../../app/types.ts';
+import { applySettingsPatch, normalizeSettings } from '../../../storage/settings.ts';
+import type { DrinkScreensSettings } from '../../../storage/types.ts';
+import { renderWithServices } from '../../chat/testing/render.tsx';
+import type { DrinkKind } from '../../drinks/kinds.ts';
+import { createFakeServices, IDLE_TELEMETRY, SAMPLE_WORKFLOW, type FakeServices } from '../../testing/fakeServices.ts';
+import { TID } from '../../testIds.ts';
+import { STAYS } from '../DrinkCard.tsx';
+import { DRINKS_HELP, DrinksGroup } from './DrinksGroup.tsx';
+
+/**
+ * Settings > Drinks (D235): a card for each drink, what the machine runs it
+ * with (Decaid's preset) and then "On screen" (CafAI's own), under one line
+ * over the three cards.
+ */
 
 /** Decaid's own PUT /workflow deep-merge, for just the three objects this screen writes. */
 function mergeWorkflow(workflow: Workflow, patch: WorkflowPatch): Workflow {
@@ -32,22 +44,60 @@ function renderDrink(overrides: Partial<Workflow> = {}, model = 'DE1Pro') {
   });
   services.decaid.updateWorkflow = updateWorkflow;
   services.decaid.getMachineInfo = async () => ({ version: '1358', model, serialNumber: '1', GHC: false });
-  renderWithServices(<DrinkSettingsSection />, services);
+  renderWithServices(<DrinksGroup />, services);
   return { services, updateWorkflow };
 }
 
-const HELP = 'The Steam, Hot water and Flush buttons use these. Changes go to Decaid at once.';
+const MODEL = 'claude-opus-5-5';
+
+/**
+ * The group over CafAI's own settings rules (src/storage/settings.ts), which
+ * change one field of one drink's screen at a time, as the app saves them.
+ */
+function renderScreens(drinkScreens?: DrinkScreensSettings) {
+  let stored = normalizeSettings({ model: MODEL, drinkScreens }, MODEL);
+  const services = createFakeServices({ storage: { settings: stored } });
+  services.storage.settings.get = async () => stored;
+  services.storage.settings.update = async (patch) => (stored = applySettingsPatch(stored, patch, MODEL));
+  renderWithServices(<DrinksGroup />, services);
+  return { services, saved: () => stored.drinkScreens, user: userEvent.setup() };
+}
+
+/** The three cards in the machine row's order: each drink's kind, name, the row's icon and the machine's settings. */
+const CARDS: readonly { kind: DrinkKind; name: string; icon: string; fields: readonly string[] }[] = [
+  { kind: 'steam', name: 'Steam', icon: 'AirRoundedIcon', fields: ['Steam temperature', 'Steam time', 'Steam flow'] },
+  {
+    kind: 'hotWater',
+    name: 'Hot water',
+    icon: 'WaterDropRoundedIcon',
+    fields: ['Hot water temperature', 'Hot water volume', 'Hot water time', 'Hot water flow'],
+  },
+  { kind: 'flush', name: 'Flush', icon: 'ShowerRoundedIcon', fields: ['Flush temperature', 'Flush time', 'Flush flow'] },
+];
+const KINDS = ['steam', 'hotWater', 'flush'] as const;
+const NAMES = ['Steam', 'Hot water', 'Flush'];
 
 /** A setting's value: a spin button named for its drink ("Steam time"). */
 const field = (name: string) => screen.getByRole('spinbutton', { name });
 /** The same, once Decaid's presets are in: the help line takes the place of "Reading…". */
 async function findField(name: string): Promise<HTMLElement> {
-  await screen.findByText(HELP);
+  await screen.findByText(DRINKS_HELP);
   return field(name);
 }
 const button = (name: string) => screen.queryByRole('button', { name });
+/** Decaid's presets are in: the line over the cards says what they are for. */
+const presetsIn = () => screen.findByText(DRINKS_HELP);
+/** A drink's card: a region named by its title. */
+const card = (name: string) => within(screen.getByRole('region', { name }));
+const animation = (kind: DrinkKind) => screen.getByTestId(TID.drinkScene(kind));
+const goBack = (kind: DrinkKind) => screen.getByTestId(TID.drinkGoBackSwitch(kind));
+/** After, the drinks' stepper named for its drink ("Steam go back after"); null while Go back by itself is off. */
+const after = (drink: string) => screen.queryByRole('spinbutton', { name: `${drink} go back after` });
+/** Each element comes after the one before it in the document. */
+const inOrder = (elements: readonly Element[]) =>
+  elements.slice(1).every((element, index) => (elements[index]!.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0);
 
-describe('DrinkSettingsSection loading', () => {
+describe('DrinksGroup loading', () => {
   it("loads steam, hot water and flush settings from Decaid's workflow", async () => {
     renderDrink();
     expect(await findField('Steam temperature')).toHaveValue('150');
@@ -60,23 +110,48 @@ describe('DrinkSettingsSection loading', () => {
     expect(field('Flush temperature')).toHaveValue('90');
     expect(field('Flush time')).toHaveValue('10');
     expect(field('Flush flow')).toHaveValue('6');
-    expect(screen.getByText(HELP)).toBeInTheDocument();
+    expect(screen.getByText(DRINKS_HELP)).toBeInTheDocument();
   });
 
-  it('groups the settings by drink, as the machine row names them, each under its own heading with short labels', async () => {
+  it('says what the cards are for in one line over the three of them, and in its place why the machine settings are held', async () => {
+    const { services } = renderDrink();
+    const help = await screen.findByText(DRINKS_HELP);
+    const drinks = screen.getByTestId(TID.drinkSettings);
+    const cards = screen.getByTestId(TID.drinkScreens);
+    expect(screen.getAllByText(DRINKS_HELP)).toHaveLength(1);
+    expect(drinks).toContainElement(help);
+    expect(drinks).toContainElement(cards);
+    for (const name of NAMES) expect(cards).toContainElement(screen.getByRole('region', { name }));
+    // Over the cards, in none of them.
+    expect(cards).not.toContainElement(help);
+    expect(inOrder([help, cards])).toBe(true);
+    act(() => services.telemetry.setState({ machineConnected: false }));
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('Connect the DE1 to change these.');
+    expect(cards).not.toContainElement(status);
+    expect(inOrder([status, cards])).toBe(true);
+  });
+
+  it('puts the settings in a card for each drink, as the machine row names them, each under its own heading with short labels', async () => {
     renderDrink();
     await findField('Steam temperature');
-    const names = (group: string) =>
-      within(screen.getByRole('group', { name: group }))
+    const names = (drink: string) =>
+      card(drink)
         .getAllByRole('spinbutton')
         .map((input) => input.getAttribute('aria-label'));
-    expect(names('Steam')).toEqual(['Steam temperature', 'Steam time', 'Steam flow']);
-    expect(names('Hot water')).toEqual(['Hot water temperature', 'Hot water volume', 'Hot water time', 'Hot water flow']);
-    expect(names('Flush')).toEqual(['Flush temperature', 'Flush time', 'Flush flow']);
-    expect(screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)).toEqual(['Steam', 'Hot water', 'Flush']);
+    // The drink's own settings, then On screen's After.
+    expect(names('Steam')).toEqual(['Steam temperature', 'Steam time', 'Steam flow', 'Steam go back after']);
+    expect(names('Hot water')).toEqual([
+      'Hot water temperature',
+      'Hot water volume',
+      'Hot water time',
+      'Hot water flow',
+      'Hot water go back after',
+    ]);
+    expect(names('Flush')).toEqual(['Flush temperature', 'Flush time', 'Flush flow', 'Flush go back after']);
+    expect(screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual(['Steam', 'Hot water', 'Flush']);
     // The label shown says what, the heading says which drink; the label still names the field.
-    const steam = within(screen.getByRole('group', { name: 'Steam' }));
-    expect(steam.getByText('Temperature').closest('label')).toHaveAttribute('for', field('Steam temperature').id);
+    expect(card('Steam').getByText('Temperature').closest('label')).toHaveAttribute('for', field('Steam temperature').id);
   });
 
   it('says the value with its unit: shown beside the number, and in words to a screen reader', async () => {
@@ -89,7 +164,7 @@ describe('DrinkSettingsSection loading', () => {
     expect(field('Steam temperature')).toHaveAttribute('aria-valuemax', '160');
     expect(field('Steam temperature')).toHaveAttribute('aria-valuetext', '150 degrees Celsius');
     expect(field('Steam flow')).toHaveAttribute('aria-valuetext', '0.8 millilitres per second');
-    const unit = within(screen.getByRole('group', { name: 'Hot water' })).getByText('ml');
+    const unit = card('Hot water').getByText('ml');
     expect(unit).toHaveAttribute('aria-hidden', 'true');
   });
 
@@ -98,17 +173,21 @@ describe('DrinkSettingsSection loading', () => {
     services.decaid.getWorkflow = async () => {
       throw new Error('Decaid is offline');
     };
-    renderWithServices(<DrinkSettingsSection />, services);
-    expect(await screen.findByText("Could not read Decaid's drink settings: Decaid is offline")).toBeInTheDocument();
+    renderWithServices(<DrinksGroup />, services);
+    const message = await screen.findByText("Could not read Decaid's drink settings: Decaid is offline");
+    expect(message).toBeInTheDocument();
+    // Once, over the three cards.
+    expect(screen.getByTestId(TID.drinkSettings)).toContainElement(message);
+    expect(screen.getByTestId(TID.drinkScreens)).not.toContainElement(message);
   });
 
   it('shows a dash, never a made-up value, until Decaid answers, with nothing to step', async () => {
     const services = createFakeServices();
     let answer: (workflow: Workflow) => void = () => {};
     services.decaid.getWorkflow = () => new Promise<Workflow>((resolve) => (answer = resolve));
-    renderWithServices(<DrinkSettingsSection />, services);
+    renderWithServices(<DrinksGroup />, services);
     expect(screen.getByRole('status')).toHaveTextContent("Reading Decaid's drink settings…");
-    expect(screen.queryByText(HELP)).toBeNull();
+    expect(screen.queryByText(DRINKS_HELP)).toBeNull();
     for (const name of ['Steam temperature', 'Hot water volume', 'Flush flow']) {
       expect(field(name)).toHaveValue('—');
       expect(field(name)).toBeDisabled();
@@ -120,7 +199,7 @@ describe('DrinkSettingsSection loading', () => {
     await waitFor(() => expect(field('Hot water volume')).toHaveValue('50'));
     expect(button('More hot water volume')).toBeEnabled();
     expect(screen.queryByText("Reading Decaid's drink settings…")).toBeNull();
-    expect(screen.getByText(HELP)).toBeInTheDocument();
+    expect(screen.getByText(DRINKS_HELP)).toBeInTheDocument();
   });
 
   it('after a read that failed, the fields stay dashes and Retry reads again', async () => {
@@ -130,7 +209,7 @@ describe('DrinkSettingsSection loading', () => {
       if (fail) throw new Error('Decaid is offline');
       return SAMPLE_WORKFLOW;
     };
-    renderWithServices(<DrinkSettingsSection />, services);
+    renderWithServices(<DrinksGroup />, services);
     await screen.findByText("Could not read Decaid's drink settings: Decaid is offline");
     expect(field('Steam time')).toHaveValue('—');
     fail = false;
@@ -154,13 +233,13 @@ describe('DrinkSettingsSection loading', () => {
   });
 });
 
-describe('DrinkSettingsSection without a machine', () => {
+describe('DrinksGroup without a machine', () => {
   it('shows the values, but disables every field and says why: Decaid refuses these writes without a DE1', async () => {
     const { services, updateWorkflow } = renderDrink();
     await findField('Steam temperature');
     act(() => services.telemetry.setState({ machineConnected: false }));
     expect(screen.getByRole('status')).toHaveTextContent('Connect the DE1 to change these.');
-    expect(screen.queryByText(HELP)).toBeNull();
+    expect(screen.queryByText(DRINKS_HELP)).toBeNull();
     expect(field('Steam time')).toHaveValue('50');
     expect(field('Steam time')).toBeDisabled();
     expect(button('More steam time')).toBeDisabled();
@@ -168,12 +247,12 @@ describe('DrinkSettingsSection without a machine', () => {
     expect(updateWorkflow).not.toHaveBeenCalled();
     act(() => services.telemetry.setState({ machineConnected: true }));
     expect(screen.queryByText('Connect the DE1 to change these.')).toBeNull();
-    expect(screen.getByText(HELP)).toBeInTheDocument();
+    expect(screen.getByText(DRINKS_HELP)).toBeInTheDocument();
     expect(button('More steam time')).toBeEnabled();
   });
 });
 
-describe('DrinkSettingsSection steam temperature range (the DE1 vs. the Bengle)', () => {
+describe('DrinksGroup steam temperature range (the DE1 vs. the Bengle)', () => {
   it("clamps to the DE1's 135-160 range when the model is a DE1 (or not yet known)", async () => {
     const { updateWorkflow } = renderDrink({}, 'DE1Pro');
     const input = await findField('Steam temperature');
@@ -204,7 +283,7 @@ describe('DrinkSettingsSection steam temperature range (the DE1 vs. the Bengle)'
     };
     const updateWorkflow = vi.fn(async (patch: WorkflowPatch) => mergeWorkflow(workflow, patch));
     services.decaid.updateWorkflow = updateWorkflow;
-    renderWithServices(<DrinkSettingsSection />, services);
+    renderWithServices(<DrinksGroup />, services);
     const input = await findField('Steam temperature');
     await userEvent.clear(input);
     await userEvent.type(input, '999');
@@ -214,7 +293,7 @@ describe('DrinkSettingsSection steam temperature range (the DE1 vs. the Bengle)'
   });
 });
 
-describe('DrinkSettingsSection steam off (D97, the spec allows 0)', () => {
+describe('DrinksGroup steam off (D97, the spec allows 0)', () => {
   const steamOff = { steamSettings: { targetTemperature: 0, duration: 50, flow: 0.8, stopAtTemperature: 0 } };
 
   it('shows steam temperature 0 as "Off in Decaid" in the field, read-only, and offers no stepper for it', async () => {
@@ -245,7 +324,7 @@ describe('DrinkSettingsSection steam off (D97, the spec allows 0)', () => {
   });
 });
 
-describe('DrinkSettingsSection edits', () => {
+describe('DrinksGroup edits', () => {
   it('writes only the changed object, clamped to its range', async () => {
     const { updateWorkflow } = renderDrink();
     const input = await findField('Hot water volume');
@@ -368,7 +447,7 @@ describe('DrinkSettingsSection edits', () => {
     await userEvent.tab();
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Could not save the steam temperature: Decaid is busy');
-    expect(within(screen.getByRole('group', { name: 'Steam' })).getByRole('alert')).toBe(alert);
+    expect(card('Steam').getByRole('alert')).toBe(alert);
     expect(input).toHaveAttribute('aria-describedby', alert.id);
     expect(input).toHaveValue('150');
     await userEvent.click(button('More steam temperature')!);
@@ -444,7 +523,7 @@ describe('DrinkSettingsSection edits', () => {
     // Not at once: a write that lands quickly never flashes the word.
     expect(screen.queryByText('Saving…')).toBeNull();
     const saving = await screen.findByText('Saving…', undefined, { timeout: 2000 });
-    expect(within(screen.getByRole('group', { name: 'Hot water' })).getByText('Saving…')).toBe(saving);
+    expect(card('Hot water').getByText('Saving…')).toBe(saving);
     await act(async () => land(SAMPLE_WORKFLOW));
     await waitFor(() => expect(screen.queryByText('Saving…')).toBeNull());
     expect(input).toHaveValue('60');
@@ -452,7 +531,7 @@ describe('DrinkSettingsSection edits', () => {
   });
 });
 
-describe('DrinkSettingsSection while the machine runs', () => {
+describe('DrinksGroup while the machine runs', () => {
   for (const state of ['espresso', 'steam', 'hotWater', 'flush', 'steamRinse', 'skipStep', 'cleaning', 'descaling', 'airPurge'] as const) {
     it(`disables every field and says why while the machine is "${state}"`, async () => {
       const { services } = renderDrink();
@@ -498,5 +577,218 @@ describe('DrinkSettingsSection while the machine runs', () => {
     expect(updateWorkflow).not.toHaveBeenCalled();
     // What was typed gives way to Decaid's own value, rather than stay on screen unsaved.
     expect(input).toHaveValue('50');
+  });
+});
+
+describe('DrinksGroup On screen (D217, D222)', () => {
+  it('has a card for each drink, its On screen on the default scene and going back after 10 s', async () => {
+    renderScreens();
+    expect(await presetsIn()).toBeInTheDocument();
+    for (const name of NAMES) expect(screen.getByRole('region', { name })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual(['Steam', 'Hot water', 'Flush']);
+    // Each card's own subheading, a level under its title.
+    for (const name of NAMES) expect(card(name).getByRole('heading', { level: 3 })).toHaveTextContent('On screen');
+    expect(animation('steam')).toHaveDisplayValue('Wand and spray');
+    expect(animation('hotWater')).toHaveDisplayValue('Pour');
+    expect(animation('flush')).toHaveDisplayValue('Shower');
+    for (const kind of KINDS) expect(goBack(kind)).toBeChecked();
+    for (const drink of NAMES) {
+      expect(after(drink)).toHaveValue('10');
+      expect(after(drink)).toHaveAttribute('aria-valuetext', '10 seconds');
+      expect(after(drink)).toBeEnabled();
+    }
+    expect(screen.queryByText(STAYS)).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('each card holds its machine settings first, then "On screen": Animation, Go back by itself and After', async () => {
+    renderScreens();
+    await presetsIn();
+    for (const { kind, name, icon, fields } of CARDS) {
+      const inCard = card(name);
+      const order = [
+        // The machine row's icon before the title.
+        inCard.getByTestId(icon),
+        inCard.getByRole('heading', { level: 2, name }),
+        ...fields.map((label) => inCard.getByRole('spinbutton', { name: label })),
+        inCard.getByRole('heading', { level: 3, name: 'On screen' }),
+        inCard.getByTestId(TID.drinkScene(kind)),
+        inCard.getByTestId(TID.drinkGoBackSwitch(kind)),
+        inCard.getByRole('spinbutton', { name: `${name} go back after` }),
+      ];
+      expect(inOrder(order), name).toBe(true);
+    }
+  });
+
+  it("offers each drink's scenes by name, the default first, and names every control for its drink", async () => {
+    renderScreens();
+    await presetsIn();
+    const names = (kind: DrinkKind) => within(animation(kind)).getAllByRole('option').map((option) => option.textContent);
+    expect(names('steam')).toEqual(['Wand and spray', 'Whirlpool', 'Rosetta', 'Simple']);
+    expect(names('hotWater')).toEqual(['Pour', 'From above', 'Simple']);
+    expect(names('flush')).toEqual(['Shower', 'Screen', 'Simple']);
+    // The label shown says what, the heading says which drink; each control's name says both.
+    const steam = card('Steam');
+    expect(steam.getByRole('combobox', { name: 'Steam animation' })).toBe(animation('steam'));
+    expect(steam.getByText('Animation').closest('label')).toHaveAttribute('for', animation('steam').id);
+    expect(steam.getByRole('switch', { name: 'Go back by itself after Steam' })).toBe(goBack('steam'));
+    expect(steam.getByText('After').closest('label')).toHaveAttribute('for', after('Steam')!.id);
+    expect(card('Hot water').getByRole('switch', { name: 'Go back by itself after Hot water' })).toBe(goBack('hotWater'));
+    expect(card('Flush').getByRole('combobox', { name: 'Flush animation' })).toBe(animation('flush'));
+  });
+
+  it('shows what was chosen on this device, and a scene this build does not know as the default', async () => {
+    renderScreens({ steam: { scene: 'tornado' }, hotWater: { scene: 'above', goBackSeconds: 45 }, flush: { scene: 'simple', goBack: false } });
+    await presetsIn();
+    expect(animation('steam')).toHaveDisplayValue('Wand and spray');
+    expect(animation('hotWater')).toHaveDisplayValue('From above');
+    expect(after('Hot water')).toHaveValue('45');
+    expect(animation('flush')).toHaveDisplayValue('Simple');
+    expect(goBack('flush')).not.toBeChecked();
+    expect(after('Flush')).toBeNull();
+    expect(card('Flush').getByText(STAYS)).toBeInTheDocument();
+  });
+
+  it("a scene picked applies at once and is saved with CafAI's settings", async () => {
+    const { services, saved, user } = renderScreens();
+    await presetsIn();
+    await user.selectOptions(animation('steam'), 'Whirlpool');
+    expect(animation('steam')).toHaveValue('whirlpool');
+    // The drink's view reads the store, so its next run draws it.
+    expect(services.drinkScreens.get().steam.scene).toBe('whirlpool');
+    await waitFor(() => expect(saved()).toEqual({ steam: { scene: 'whirlpool' } }));
+  });
+
+  it('Go back by itself off puts the line in place of After; on again brings After back with its time', async () => {
+    const { services, saved, user } = renderScreens({ flush: { goBackSeconds: 25 } });
+    await presetsIn();
+    await user.click(goBack('flush'));
+    expect(goBack('flush')).not.toBeChecked();
+    expect(services.drinkScreens.get().flush.goBack).toBe(false);
+    expect(after('Flush')).toBeNull();
+    expect(card('Flush').getByText(STAYS)).toBeInTheDocument();
+    await waitFor(() => expect(saved()).toEqual({ flush: { goBack: false, goBackSeconds: 25 } }));
+    // A tap on its label toggles it too.
+    await user.click(card('Flush').getByText('Go back by itself'));
+    expect(goBack('flush')).toBeChecked();
+    expect(after('Flush')).toHaveValue('25');
+    expect(screen.queryByText(STAYS)).toBeNull();
+    await waitFor(() => expect(saved()).toEqual({ flush: { goBack: true, goBackSeconds: 25 } }));
+    expect(goBack('steam')).toBeChecked();
+  });
+
+  it('After moves 5 s a tap within 5 to 60 s and takes any whole second typed', async () => {
+    const { saved, user } = renderScreens({ flush: { goBackSeconds: 5 } });
+    await presetsIn();
+    await user.click(screen.getByRole('button', { name: 'More steam go back after' }));
+    expect(after('Steam')).toHaveValue('15');
+    await waitFor(() => expect(saved()?.steam).toEqual({ goBackSeconds: 15 }));
+
+    const hotWater = after('Hot water')!;
+    await user.clear(hotWater);
+    await user.type(hotWater, '22');
+    await user.tab();
+    await waitFor(() => expect(saved()?.hotWater).toEqual({ goBackSeconds: 22 }));
+    await user.clear(hotWater);
+    await user.type(hotWater, '90');
+    await user.tab();
+    expect(hotWater).toHaveValue('60');
+    await waitFor(() => expect(saved()?.hotWater).toEqual({ goBackSeconds: 60 }));
+
+    // At the floor Less sends nothing.
+    await user.click(screen.getByRole('button', { name: 'Less flush go back after' }));
+    expect(after('Flush')).toHaveValue('5');
+    expect(saved()?.flush).toEqual({ goBackSeconds: 5 });
+  });
+
+  it("stays live while the machine's settings are held: without a machine, and while it runs", async () => {
+    const { services, saved, user } = renderScreens();
+    await presetsIn();
+    const live = () => {
+      for (const kind of KINDS) {
+        expect(animation(kind)).toBeEnabled();
+        expect(goBack(kind)).toBeEnabled();
+      }
+      for (const drink of NAMES) {
+        expect(after(drink)).toBeEnabled();
+        expect(button(`More ${drink.toLowerCase()} go back after`)).toBeEnabled();
+      }
+    };
+    act(() => services.telemetry.setState({ machineConnected: false }));
+    expect(screen.getByRole('status')).toHaveTextContent('Connect the DE1 to change these.');
+    expect(field('Steam time')).toBeDisabled();
+    live();
+    act(() => services.telemetry.setState({ machineConnected: true, machine: { ...IDLE_TELEMETRY.machine!, state: { state: 'steam', substate: 'idle' } } }));
+    expect(screen.getByRole('status')).toHaveTextContent('Not while the machine is running.');
+    expect(field('Steam time')).toBeDisabled();
+    live();
+    // A change made now shows and saves as ever.
+    await user.click(goBack('steam'));
+    expect(goBack('steam')).not.toBeChecked();
+    await waitFor(() => expect(saved()).toEqual({ steam: { goBack: false } }));
+  });
+
+  it("a failed save says why in its drink's card and keeps the change on screen; the next change that saves clears it", async () => {
+    const { services, saved, user } = renderScreens();
+    await presetsIn();
+    const update = services.storage.settings.update;
+    services.storage.settings.update = async () => {
+      throw new Error('Storage is full.');
+    };
+    await user.selectOptions(animation('steam'), 'Rosetta');
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Could not save the drink screens: Storage is full.');
+    expect(screen.getByTestId(TID.drinkScreensError)).toBe(alert);
+    expect(card('Steam').getByRole('alert')).toBe(alert);
+    expect(animation('steam')).toHaveValue('rosetta');
+    expect(services.drinkScreens.get().steam.scene).toBe('rosetta');
+
+    services.storage.settings.update = update;
+    await user.click(goBack('hotWater'));
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    expect(saved()).toEqual({ hotWater: { goBack: false } });
+  });
+
+  it('a failed save shows in the card of the drink whose save failed, one at a time, until a change saves', async () => {
+    const { services, user } = renderScreens();
+    await presetsIn();
+    const update = services.storage.settings.update;
+    services.storage.settings.update = async () => {
+      throw new Error('Storage is full.');
+    };
+    await user.click(goBack('flush'));
+    const alert = await card('Flush').findByTestId(TID.drinkScreensError);
+    expect(alert).toHaveTextContent('Could not save the drink screens: Storage is full.');
+    expect(card('Steam').queryByRole('alert')).toBeNull();
+    expect(card('Hot water').queryByRole('alert')).toBeNull();
+    // Hot water's save fails next: the error moves to its card.
+    await user.selectOptions(animation('hotWater'), 'From above');
+    await waitFor(() => expect(card('Hot water').getByTestId(TID.drinkScreensError)).toBeInTheDocument());
+    expect(screen.getAllByTestId(TID.drinkScreensError)).toHaveLength(1);
+    expect(card('Flush').queryByRole('alert')).toBeNull();
+    // A change of another drink that saves clears it; the changes that failed stay on screen.
+    services.storage.settings.update = update;
+    await user.click(screen.getByRole('button', { name: 'More steam go back after' }));
+    await waitFor(() => expect(screen.queryByTestId(TID.drinkScreensError)).toBeNull());
+    expect(goBack('flush')).not.toBeChecked();
+    expect(animation('hotWater')).toHaveValue('above');
+  });
+
+  it('without the store, as in a preview, each card keeps its machine settings and has no On screen', async () => {
+    const services = createFakeServices();
+    delete (services as Services).drinkScreens;
+    renderWithServices(<DrinksGroup />, services);
+    // The line says nothing of a screen the cards do not have.
+    await screen.findByText('Changes go to Decaid at once.');
+    expect(screen.queryByText(DRINKS_HELP)).toBeNull();
+    for (const { kind, name, fields } of CARDS) {
+      const inCard = card(name);
+      expect(inCard.getAllByRole('spinbutton').map((input) => input.getAttribute('aria-label'))).toEqual(fields);
+      expect(inCard.queryByRole('heading', { name: 'On screen' })).toBeNull();
+      expect(screen.queryByTestId(TID.drinkScene(kind))).toBeNull();
+      expect(screen.queryByTestId(TID.drinkGoBackSwitch(kind))).toBeNull();
+    }
+    expect(field('Steam temperature')).toHaveValue('150');
+    expect(screen.queryByText(STAYS)).toBeNull();
   });
 });

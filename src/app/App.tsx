@@ -63,13 +63,14 @@ function Routed() {
       />
     );
   } else if (route.name === 'settings') {
-    screen = <SettingsScreen />;
+    screen = <SettingsScreen group={route.group ?? null} />;
   } else if (route.name === 'care') {
     screen = (
       <CareScreen
         routine={route.routine}
         onRoutine={(routine) => replaceRoute({ name: 'care', routine })}
-        onBack={() => navigate({ name: 'settings' })}
+        // Back to the group the guide belongs to: Settings > Machine (D233).
+        onBack={() => navigate({ name: 'settings', group: 'machine' })}
       />
     );
   } else {

@@ -107,7 +107,15 @@ export const TID = {
   exportData: 'export-data',
   importData: 'import-data',
 
-  // Settings
+  // Settings: its list of groups, a group's pane (tablet) or page (phone), the page's back arrow and search (D232, D236)
+  settingsList: 'settings-list',
+  settingsGroupRow: (group: string) => `settings-group-row-${slug(group)}`,
+  settingsPane: (group: string) => `settings-pane-${slug(group)}`,
+  settingsBack: 'settings-back',
+  settingsSearch: 'settings-search',
+  settingsSearchResult: (id: string) => `settings-search-result-${slug(id)}`,
+  /** The line under a card that says what a change did ("Saved.", or why not), kept at its height (D234). */
+  settingsSaved: (card: string) => `settings-saved-${slug(card)}`,
   appearanceMode: (mode: string) => `appearance-mode-${mode}`,
   tintSwatch: (id: string) => `tint-${id}`,
   tintHue: 'tint-hue',
