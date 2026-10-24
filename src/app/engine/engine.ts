@@ -107,7 +107,7 @@ import {
 } from '../../api/types.ts';
 import { isShotRunning as shotInProgress } from '../../api/workflow.ts';
 import { redactKeyLike } from '../../storage/redact.ts';
-import { finerIsHigher, grinderDirectionKey, withGrinderDirection } from '../../storage/settings.ts';
+import { DEFAULT_COACH_EFFORT, finerIsHigher, grinderDirectionKey, withGrinderDirection } from '../../storage/settings.ts';
 import type { GrinderInfo, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
 import type { BagPhoto, ExtractedBag } from '../../llm/extractBag.ts';
 import type { ContentBlock, Effort, LlmMessage, PendingUiCall, RunnerTool, RunResult, ToolResultBlock, ToolValidation } from '../../llm/types.ts';
@@ -127,7 +127,6 @@ import type { BudgetState, SpendKind, SpendService } from '../../spend/types.ts'
 import { createBudgetNotes, type BudgetNotes } from '../../spend/budget.ts';
 import { monthOf } from '../../spend/records.ts';
 import type { CoachSourceStore } from '../../storage/coachSource.ts';
-import { DEFAULT_COACH_EFFORT } from '../../storage/settings.ts';
 import type {
   BeanChoice,
   BeanPickerOption,
