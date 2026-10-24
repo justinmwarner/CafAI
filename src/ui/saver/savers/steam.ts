@@ -123,6 +123,8 @@ export const steam: CanvasSaver = {
     let model: SteamModel | null = createSteamModel(env.seed);
     // The still's steam, grown once from a fresh model: it is the same each time it is painted.
     let grown: SteamModel | null = null;
+    /** How many times the still has been painted (the host paints it again each minute). */
+    let stills = 0;
     let width = 0;
     let height = 0;
     let scale = 1;
@@ -243,10 +245,11 @@ export const steam: CanvasSaver = {
       );
     };
 
-    const paint = (shown: SteamModel) => {
+    /** Paints a state of the steam, the scene drifted to where it is `driftSeconds` into the showing. */
+    const paint = (shown: SteamModel, driftSeconds = shown.time) => {
       if (!backdrop || !front || !fine || !body || width === 0 || height === 0) return;
       // The drift, in whole device pixels, so the still life stays crisp.
-      const drift = sceneDrift(env.seed, shown.time);
+      const drift = sceneDrift(env.seed, driftSeconds);
       const dx = Math.round(drift.x * unit * scale);
       const dy = Math.round(-drift.y * unit * scale);
       context.setTransform(1, 0, 0, 1, 0, 0);
@@ -284,7 +287,9 @@ export const steam: CanvasSaver = {
           grown = createSteamModel(env.seed);
           advanceSteam(grown, STILL_MS);
         }
-        paint(grown);
+        // The same steam each time, but the scene a minute further along its drift: a jump of a pixel or so, not motion.
+        paint(grown, STILL_MS / 1000 + stills * 60);
+        stills += 1;
       },
       dispose() {
         release(backdrop);

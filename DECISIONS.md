@@ -4262,14 +4262,17 @@ Nightstand, both still drawn in code and made for a screen dimmed to 30.
   the seed) under a liquid's sheen. The table is never drawn: only the
   shadow thrown forward on it and the contact under the saucer show it. The
   cup is 1.12 times round 1's (about 175 px across its rim at 962), the
-  saucer's near edge 94 % down the screen. The render takes about 160 ms on
-  this PC, cold, and 0.8 s with the CPU throttled sixfold (a stand-in for a
-  slow tablet), once per start or resize; each frame then only places
-  images. The cup's near side is a second image laid over the steam, so
-  steam low in the cup stays behind its wall. The scene drifts
-  (`sceneDrift`): two slow sines, 6 and 3.5 px at most, periods of 503 and
-  367 s, about 5 px a minute at most, moved in whole device pixels so the
-  render stays crisp. Why: round 1's outline read as a placeholder; a still
+  saucer's near edge 94 % down the screen. The render takes about 120 ms on
+  this PC in Chromium, cold, and 0.8 s with the CPU throttled sixfold (a
+  stand-in for a slow tablet), once per start or resize; each frame then
+  only places images (under 1 ms a frame, step and draw). The cup's near
+  side is a second image laid over the steam, so steam low in the cup stays
+  behind its wall. The scene drifts (`sceneDrift`): two slow sines, 6 and
+  3.5 px at most, periods of 503 and 367 s, about 5 px a minute at most,
+  moved in whole device pixels so the render stays crisp; under reduced
+  motion the still, painted again each minute, takes the drift's place a
+  minute on each time (a jump of a pixel or so, not motion). Why: round 1's
+  outline read as a placeholder; a still
   life lit from behind is how steam is seen at all, so the one light shows
   the steam and models the cup; per pixel because porcelain's soft shading,
   its rim and its glaze's highlight are what make a cup look real, and

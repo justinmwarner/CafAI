@@ -131,10 +131,14 @@ const GLAZE: Vec = [0.84, 0.8, 0.72];
 const WRAP = 0.2;
 const GLAZE_F0 = 0.045;
 /** The coffee's colours: its dark body, the crema at the wall, the swirl's paler crema (linear). */
-const COFFEE_DARK: Vec = [0.032, 0.0135, 0.0055];
-const CREMA: Vec = [0.3, 0.135, 0.042];
-const CREMA_PALE: Vec = [0.5, 0.27, 0.105];
+const COFFEE_DARK: Vec = [0.026, 0.011, 0.0045];
+const CREMA: Vec = [0.46, 0.22, 0.075];
+const CREMA_PALE: Vec = [0.66, 0.41, 0.18];
 const COFFEE_F0 = 0.03;
+/** Crema is foam, nearly matte: of the sheen a liquid at that angle would show, the coffee keeps this much. */
+const COFFEE_SHEEN = 0.4;
+/** The soft light the coffee gets from the fill, in front, whatever the fill's angle. */
+const COFFEE_FILL = 0.42;
 /** How dark the table's shadow is at its darkest, and its soft contact round the saucer. */
 const SHADOW_DARK = 0.62;
 const CONTACT_DARK = 0.42;
@@ -360,6 +364,10 @@ function handleCurve(): Handle {
   return handle;
 }
 
+/** The cup's shadow's soft edge (units): this wide where it begins, and wider by this much a unit away from the cup (the key is a broad light). */
+const PENUMBRA_NEAR = 1.8;
+const PENUMBRA_GROWTH = 0.1;
+
 /** The light from the key reaching a point outside the cup, 0 to 1, as the cup's body lets it by. */
 export function cupShadow(px: number, py: number, pz: number, lx: number, ly: number, lz: number): number {
   if (ly <= 0.01) return 1;
@@ -368,12 +376,12 @@ export function cupShadow(px: number, py: number, pz: number, lx: number, ly: nu
   const nearest = across > 0 ? Math.max(0, -(px * lx + pz * lz) / across) : 0;
   const nx = px + nearest * lx;
   const nz = pz + nearest * lz;
-  const reach = RIM_R + 1 + 0.07 * Math.max(0, (RIM_TOP - py) / ly);
+  const reach = RIM_R + PENUMBRA_NEAR + 0.2 + PENUMBRA_GROWTH * Math.max(0, (RIM_TOP - py) / ly);
   if (nx * nx + nz * nz > reach * reach) return 1;
   const { outer } = radiusTables();
   let light = 1;
   const from = Math.max(py, WELL);
-  const steps = 12;
+  const steps = 24;
   for (let k = 0; k <= steps; k += 1) {
     const y = from + ((RIM_TOP - from) * k) / steps;
     const s = (y - py) / ly;
@@ -382,7 +390,7 @@ export function cupShadow(px: number, py: number, pz: number, lx: number, ly: nu
     const qz = pz + s * lz;
     const margin = Math.sqrt(qx * qx + qz * qz) - tableAt(outer, y);
     // The farther the cup is from the point, the softer its edge.
-    const soft = 0.8 + 0.07 * s;
+    const soft = PENUMBRA_NEAR + PENUMBRA_GROWTH * s;
     light = Math.min(light, smoothstep(-soft, soft, margin));
     if (light <= 0) return 0;
   }
@@ -977,7 +985,7 @@ class StillLifeRenderer {
     const lightTo = this.lightTo;
     const keyLight = cavityShadow(px, py, pz, lightTo[0], lightTo[1], lightTo[2]);
     const key = Math.max(0, lightTo[1]) * keyLight * reach;
-    const fill = Math.max(0, FILL_TOWARD[1]);
+    const fill = COFFEE_FILL;
     const rho = Math.sqrt(px * px + pz * pz) / COFFEE_RADIUS;
     const occlusion = 0.84 + 0.16 * (1 - smoothstep(0.9, 1, rho));
     // A liquid's gloss: the key's soft highlight where the angles meet, and the room in a Fresnel sheen.
@@ -992,7 +1000,7 @@ class StillLifeRenderer {
     const shine = this.shine;
     for (let c = 0; c < 3; c += 1) {
       const diffuse = albedo[c]! * (KEY[c]! * key + FILL[c]! * fill + SKY[c]!) * occlusion;
-      colour[c] = diffuse * (1 - fresnel) + (shine[c]! * fresnel + KEY[c]! * gloss * 0.5) * occlusion;
+      colour[c] = diffuse * (1 - fresnel) + (shine[c]! * fresnel * COFFEE_SHEEN + KEY[c]! * gloss * 0.5) * occlusion;
     }
   }
 
