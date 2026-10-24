@@ -1,7 +1,6 @@
 /**
- * Settings > About (D233): CafAI's and Decaid's versions, the verified line
- * and the drift report (AboutCard.tsx); What's new and Report a problem
- * (D248) follow it in the same column.
+ * Settings > About (D233): CafAI's and Decaid's versions, the verified line,
+ * the drift report, What's new and Report a problem (AboutCard.tsx, D248).
  */
 import { AboutCard } from '../AboutCard.tsx';
 import { CardColumn, CardColumns } from '../groupLayout.tsx';

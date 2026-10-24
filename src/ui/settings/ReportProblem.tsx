@@ -25,17 +25,18 @@ import { outsideLinkProps } from '../care/videoPlace.ts';
 import { copyText } from '../history/exportFile.ts';
 import { useDecaidVersion } from './decaidVersion.ts';
 import { canShare } from './logShare.ts';
+import { TID } from '../testIds.ts';
 
 /** GitHub's new issue page for CafAI: package.json's "bugs". */
 export const ISSUES_NEW_URL = 'https://github.com/justinmwarner/CafAI/issues/new';
 
 /** The link's and the copy's test ids, for TID (src/ui/testIds.ts) once they have their place in About. */
 export const REPORT_PROBLEM_TID = {
-  reportProblem: 'report-problem',
+  reportProblem: TID.reportProblem,
   /** Inside Decaid only: the address, its Copy and what the copy did. */
-  reportProblemAddress: 'report-problem-address',
-  reportProblemCopy: 'report-problem-copy',
-  reportProblemSaid: 'report-problem-said',
+  reportProblemAddress: TID.reportProblemAddress,
+  reportProblemCopy: TID.reportProblemCopy,
+  reportProblemSaid: TID.reportProblemSaid,
 } as const;
 
 export interface ReportFacts {

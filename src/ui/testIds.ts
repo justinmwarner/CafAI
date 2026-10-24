@@ -106,6 +106,9 @@ export const TID = {
   historyIteration: (iterationId: string) => `history-iteration-${iterationId}`,
   exportData: 'export-data',
   importData: 'import-data',
+  /** Settings > Data and privacy > Your data's Export (D244), and the line under it when an export failed; History keeps exportData. */
+  settingsExport: 'settings-export',
+  settingsExportSaid: 'settings-export-said',
 
   // Settings: its list of groups, a group's pane (tablet) or page (phone), the page's back arrow and search (D232, D236)
   settingsList: 'settings-list',
@@ -121,15 +124,46 @@ export const TID = {
   tintHue: 'tint-hue',
   /** Settings > Display > Units > Temperatures (D172): 'celsius' or 'fahrenheit'. */
   temperatureUnit: (unit: string) => `temperature-unit-${unit}`,
+  /** Settings > Display > Units > Clock (D245): '24h' or '12h'. */
+  clockFormat: (format: string) => `clock-format-${format}`,
+  /** Settings > Display > Shot cards' switch for the TDS cell (D246), on its input. */
+  showTds: 'show-tds',
   apiKeyInput: 'api-key-input',
   apiKeySave: 'api-key-save',
   forgetKey: 'forget-key',
   forgetKeyConfirm: 'forget-key-confirm',
   modelSelect: 'model-select',
+  /** Settings > Coach > How the coach replies (D243): 'low', 'medium' or 'high'. */
+  coachEffort: (effort: string) => `coach-effort-${effort}`,
   /** Settings > Coach > Fun facts (D198): where they come from. */
   funFacts: 'fun-facts',
+  // Settings > Coach > Usage and cost (D239): the card, its numbers, the plan's use on the computer
+  coachUsage: 'coach-usage',
+  coachUsageCost: 'coach-usage-cost',
+  coachUsageSummary: 'coach-usage-summary',
+  coachUsageAlso: 'coach-usage-also',
+  coachUsageUnpriced: 'coach-usage-unpriced',
+  coachUsageDays: 'coach-usage-days',
+  /** Each tile: today, last-month, all-time on the API key; month-tokens, today-tokens, on-api on the computer. */
+  coachUsagePeriod: (period: string) => `coach-usage-period-${period}`,
+  coachUsageKinds: 'coach-usage-kinds',
+  coachUsagePlan: 'coach-usage-plan',
+  coachUsagePlanWindow: (window: string) => `coach-usage-plan-${window}`,
+  // Its budget (D240): the field (a spin button), its steps and None, the meter, the pause switch's input
+  coachBudgetAmount: 'coach-budget-amount',
+  coachBudgetLower: 'coach-budget-lower',
+  coachBudgetRaise: 'coach-budget-raise',
+  coachBudgetNone: 'coach-budget-none',
+  coachBudgetMeter: 'coach-budget-meter',
+  coachBudgetPause: 'coach-budget-pause',
+  /** The chat's card while the budget pauses the coach (D240), and its Open Settings. */
+  budgetPaused: 'budget-paused',
+  budgetPausedOpenSettings: 'budget-paused-open-settings',
   grinderName: 'grinder-name',
   grinderSetting: 'grinder-setting',
+  /** Settings > Grinder > Finer is (D241): Lower numbers and Higher numbers. */
+  grinderFinerLower: 'grinder-finer-lower',
+  grinderFinerHigher: 'grinder-finer-higher',
   // Add a grinder to Decaid's library (D125), and DYE2's page to edit them
   addGrinder: 'add-grinder',
   addGrinderModel: 'add-grinder-model',
@@ -194,10 +228,15 @@ export const TID = {
   wakeDialogKeepAwake: 'wake-dialog-keep-awake',
   wakeDialogSave: 'wake-dialog-save',
   wakeDialogDelete: 'wake-dialog-delete',
+  /** The wake time dialog's am and pm on the 12-hour clock (D245). */
+  wakeDialogHalf: (half: string) => `wake-dialog-${half}`,
   // Settings > Display > Screensaver, and the screensaver over the shell (D223-D227)
   saverSection: 'saver-section',
   saverOn: 'saver-on',
   saverPick: 'saver-pick',
+  /** Starts after and Dims the screen to (D247). */
+  saverStartAfter: 'saver-start-after',
+  saverDimTo: 'saver-dim-to',
   saverPreview: 'saver-preview',
   /** The screensaver (or a Preview) covering CafAI; data-saver names which, data-phase says showing or black. */
   saver: 'saver',
@@ -239,6 +278,13 @@ export const TID = {
   driftReport: 'drift-report',
   copyDriftReport: 'copy-drift-report',
   backupHealth: 'backup-health',
+  // Settings > About: What's new and its dialog, Report a problem and, inside Decaid, its address, Copy and what the copy did (D248)
+  whatsNew: 'whats-new',
+  whatsNewDialog: 'whats-new-dialog',
+  reportProblem: 'report-problem',
+  reportProblemAddress: 'report-problem-address',
+  reportProblemCopy: 'report-problem-copy',
+  reportProblemSaid: 'report-problem-said',
 
   // Where the coach runs: Anthropic or CafAI Bridge on the user's computer
   coachSourceAnthropic: 'coach-source-anthropic',

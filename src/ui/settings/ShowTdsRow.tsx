@@ -16,9 +16,10 @@ import Switch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
 import type { DisplayPrefsStore } from '../../app/displayPrefs.ts';
 import { useOptionalServices, useShowTds } from '../../app/services.tsx';
+import { TID } from '../testIds.ts';
 
-/** The switch's test id; the coordinator moves it into testIds.ts (Task P). */
-export const SHOW_TDS_TID = 'show-tds';
+/** The switch's test id, as kept with the rest in TID (src/ui/testIds.ts). */
+export const SHOW_TDS_TID = TID.showTds;
 
 export const SHOW_TDS_LINE = "On shot cards and in History, for a refractometer's reading.";
 

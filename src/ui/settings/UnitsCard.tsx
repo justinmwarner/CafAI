@@ -1,10 +1,11 @@
 /**
- * Settings > Display > Units: how CafAI writes what it measures. For now the
- * temperatures, °C or °F (TemperatureUnitRow.tsx, D172), which left
- * Appearance for this card; the clock (D245) takes its place under them.
- * Each row applies at once, with no Save, as the rest of Display does.
+ * Settings > Display > Units: how CafAI writes what it measures and tells:
+ * the temperatures, °C or °F (TemperatureUnitRow.tsx, D172), which left
+ * Appearance for this card, and the clock, 24-hour or 12-hour (ClockRow.tsx,
+ * D245). Each row applies at once, with no Save, as the rest of Display does.
  */
 import Stack from '@mui/material/Stack';
+import { ClockRow } from './ClockRow.tsx';
 import { Section } from './Section.tsx';
 import { TemperatureUnitRow } from './TemperatureUnitRow.tsx';
 
@@ -15,6 +16,7 @@ export function UnitsCard() {
     <Section title={UNITS_CARD_TITLE}>
       <Stack spacing={2}>
         <TemperatureUnitRow />
+        <ClockRow />
       </Stack>
     </Section>
   );

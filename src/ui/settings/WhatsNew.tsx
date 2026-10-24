@@ -18,12 +18,10 @@ import ArticleRoundedIcon from '@mui/icons-material/ArticleRounded';
 import { useServices } from '../../app/services.tsx';
 import { formatDate } from '../chat/format.ts';
 import { whatsNew, type NotesBlock, type Span } from './whatsNew.ts';
+import { TID } from '../testIds.ts';
 
 /** The button's and the dialog's test ids, for TID (src/ui/testIds.ts) once they have their place in About. */
-export const WHATS_NEW_TID = {
-  whatsNew: 'whats-new',
-  whatsNewDialog: 'whats-new-dialog',
-} as const;
+export const WHATS_NEW_TID = { whatsNew: TID.whatsNew, whatsNewDialog: TID.whatsNewDialog } as const;
 
 function Words({ spans }: { spans: readonly Span[] }) {
   return (

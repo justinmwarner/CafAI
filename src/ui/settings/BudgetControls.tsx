@@ -40,6 +40,7 @@ import type { CoachBudget } from '../../storage/types.ts';
 import { DASH } from '../machine/format.ts';
 import { budgetPercent, sayDay } from './usageFormat.ts';
 import { UsageMeter } from './UsageMeter.tsx';
+import { TID } from '../testIds.ts';
 
 // The test ids go on the inputs themselves, the elements a test (or a keyboard) can focus: the
 // budget's spin button and the switch's checkbox.
@@ -54,17 +55,17 @@ declare module '@mui/material/Switch' {
   }
 }
 
-/** The controls' test ids, for TID in src/ui/testIds.ts when the card is placed in the Coach group (the coordinator moves them). */
+/** The controls' test ids, as kept with the rest in TID (src/ui/testIds.ts). */
 export const BUDGET_TID = {
   /** The budget's field (a spin button). */
-  amount: 'coach-budget-amount',
-  lower: 'coach-budget-lower',
-  raise: 'coach-budget-raise',
-  none: 'coach-budget-none',
+  amount: TID.coachBudgetAmount,
+  lower: TID.coachBudgetLower,
+  raise: TID.coachBudgetRaise,
+  none: TID.coachBudgetNone,
   /** The meter of the month's spend and its words. */
-  meter: 'coach-budget-meter',
+  meter: TID.coachBudgetMeter,
   /** The pause switch's input. */
-  pause: 'coach-budget-pause',
+  pause: TID.coachBudgetPause,
 } as const;
 
 const NBSP = '\xa0';

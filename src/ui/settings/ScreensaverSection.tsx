@@ -48,8 +48,8 @@ export const SAVER_HELP = saverHelp(1);
 export const SAVER_HERE_ONLY = 'Only on the Decent tablet: here, Preview shows it.';
 const DAILY_LABEL = 'A different one each day';
 
-/** The wait's and the brightness's test ids (D247); the coordinator moves them into testIds.ts. */
-export const SAVER_TIMING_TID = { startAfter: 'saver-start-after', dimTo: 'saver-dim-to' } as const;
+/** The wait's and the brightness's test ids (D247), as kept with the rest in TID (src/ui/testIds.ts). */
+export const SAVER_TIMING_TID = { startAfter: TID.saverStartAfter, dimTo: TID.saverDimTo } as const;
 
 /** Every brightness on offer: 10 % to 60 % in tens (SAVER_DIM_TO). */
 const DIM_LEVELS = Array.from({ length: (SAVER_DIM_TO.max - SAVER_DIM_TO.min) / SAVER_DIM_TO.step + 1 }, (_, index) => SAVER_DIM_TO.min + index * SAVER_DIM_TO.step);

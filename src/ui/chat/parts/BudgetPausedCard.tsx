@@ -6,12 +6,10 @@ import PauseCircleOutlineRounded from '@mui/icons-material/PauseCircleOutlineRou
 import { pausedLine } from '../../../spend/budget.ts';
 import { requestUsageReveal } from '../../../spend/reveal.ts';
 import { routeHref } from '../../router.ts';
+import { TID } from '../../testIds.ts';
 
 /** The card's test ids, here until they join src/ui/testIds.ts (the layout's file). */
-export const BUDGET_PAUSED_TID = {
-  card: 'budget-paused',
-  openSettings: 'budget-paused-open-settings',
-} as const;
+export const BUDGET_PAUSED_TID = { card: TID.budgetPaused, openSettings: TID.budgetPausedOpenSettings } as const;
 
 /** Settings > Coach, where the usage card holds the budget (D233). */
 const COACH_SETTINGS = routeHref({ name: 'settings', group: 'coach' });

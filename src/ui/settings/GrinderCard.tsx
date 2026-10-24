@@ -2,8 +2,10 @@
  * Settings > Grinder > Your grinder: the grinder the coach turns, linked to
  * Decaid's grinder library where it is listed, whose step size the coach
  * then uses (GrinderFields.tsx, grinderPicker.ts), or named by hand; its
- * current setting; Add a grinder for one the library lacks (AddGrinder.tsx);
- * and what the coach does with it.
+ * current setting; which way is finer on it (GrinderDirectionRow.tsx, D241,
+ * which reads and saves its own setting for the grinder as saved); Add a
+ * grinder for one the library lacks (AddGrinder.tsx); and what the coach does
+ * with it.
  *
  * Everything applies as it changes (D234): a pick from Decaid's list saves at
  * once (grinderPatch, as Save did), so it links at once, and so does a
@@ -24,10 +26,12 @@ import Typography from '@mui/material/Typography';
 import { addOrFindGrinder, listGrinders, type Grinder } from '../../api/grinders.ts';
 import { PLUGIN } from '../../api/plugins.ts';
 import { useServices } from '../../app/services.tsx';
+import { grinderDirectionKey } from '../../storage/settings.ts';
 import type { Settings } from '../../storage/types.ts';
 import { TID } from '../testIds.ts';
 import { AddGrinder, type AddedGrinder } from './AddGrinder.tsx';
 import { dye2GrindersUrl } from './addGrinder.ts';
+import { GrinderDirectionRow } from './GrinderDirectionRow.tsx';
 import { GrinderFields } from './GrinderFields.tsx';
 import {
   canAddGrinder,
@@ -216,6 +220,8 @@ export function GrinderCard() {
             settingRef={settingRef}
           />
         </Box>
+        {/* Which way is finer on the grinder as saved, the one the coach turns (D241). */}
+        <GrinderDirectionRow grinderKey={grinderDirectionKey(saved)} disabled={disabled} />
         <AddGrinder
           canAdd={canAddGrinder(library)}
           dye2Url={dye2Loaded ? dye2GrindersUrl(decaid.httpOrigin) : null}

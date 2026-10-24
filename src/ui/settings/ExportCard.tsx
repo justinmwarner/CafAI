@@ -12,13 +12,14 @@ import Typography from '@mui/material/Typography';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { useExportData } from '../data/ExportData.tsx';
 import { Section } from './Section.tsx';
+import { TID } from '../testIds.ts';
 
 /** The card's test ids, for TID (src/ui/testIds.ts) once the card has its place in the Data and privacy group. */
 export const EXPORT_CARD_TID = {
   /** The card's Export button; History's keeps TID.exportData. */
-  settingsExport: 'settings-export',
+  settingsExport: TID.settingsExport,
   /** The line under it when an export failed. */
-  settingsExportSaid: 'settings-export-said',
+  settingsExportSaid: TID.settingsExportSaid,
 } as const;
 
 export const EXPORT_CARD_LINE = 'Your bags, versions and shots, as a file to keep or move to another device. Never your API key.';

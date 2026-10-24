@@ -23,12 +23,10 @@ import Typography from '@mui/material/Typography';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useServices } from '../../app/services.tsx';
 import { withGrinderDirection } from '../../storage/settings.ts';
+import { TID } from '../testIds.ts';
 
-/** The row's test ids, for TID in src/ui/testIds.ts when the row is placed in the Grinder group (the coordinator moves them). */
-export const GRINDER_DIRECTION_TID = {
-  grinderFinerLower: 'grinder-finer-lower',
-  grinderFinerHigher: 'grinder-finer-higher',
-} as const;
+/** The row's test ids, as kept with the rest in TID (src/ui/testIds.ts). */
+export const GRINDER_DIRECTION_TID = { grinderFinerLower: TID.grinderFinerLower, grinderFinerHigher: TID.grinderFinerHigher } as const;
 
 /** The line under the control while a grinder is named. */
 export const FINER_IS_LINE = 'So the coach turns the dial the right way.';
@@ -65,6 +63,9 @@ const trackSx: SxProps<Theme> = (theme) => ({
       color: 'text.primary',
       boxShadow: `0 1px 2px rgba(0, 0, 0, ${theme.palette.mode === 'dark' ? 0.35 : 0.14})`,
     },
+    // Held, MUI would draw each segment's outline back in: the track stays as it is, its words greyed, as EffortRow's.
+    '&.Mui-disabled': { border: 0, color: theme.palette.action.disabled },
+    '&.Mui-selected.Mui-disabled': { color: theme.palette.text.secondary },
   },
 });
 

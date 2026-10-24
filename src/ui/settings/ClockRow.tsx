@@ -18,11 +18,12 @@ import type { SxProps, Theme } from '@mui/material/styles';
 import type { DisplayPrefsStore } from '../../app/displayPrefs.ts';
 import { useClockFormat, useOptionalServices } from '../../app/services.tsx';
 import { formatClock, type ClockFormat } from '../clock.ts';
+import { TID } from '../testIds.ts';
 
-/** The row's test ids; the coordinator moves them into testIds.ts (Task P). */
+/** The row's test ids, as kept with the rest in TID (src/ui/testIds.ts). */
 export const CLOCK_TID = {
   /** Each choice: clock-format-24h, clock-format-12h. */
-  format: (format: ClockFormat) => `clock-format-${format}`,
+  format: (format: ClockFormat) => TID.clockFormat(format),
 } as const;
 
 const FORMATS: ReadonlyArray<{ format: ClockFormat; name: string; sample: string }> = [

@@ -1,15 +1,13 @@
 /**
  * Settings > Coach > Model and replies: the model the coach runs on, with
- * what it suits and costs, and where fun facts come from (FunFactsRow.tsx,
- * D198). Each applies as it changes (D234): saved, then the coach re-reads
- * its settings, as Save settings did, and the line under the card says
- * "Saved." or why not. Fun facts are written only once chosen on this
- * device, so a restore can still fill a device that never chose (D198).
- * A model this build no longer offers stays chosen, listed as no longer
- * offered, until another is picked.
- *
- * A card a row at a time: How the coach replies (D243) takes its place
- * between the model and fun facts.
+ * what it suits and costs, how hard it thinks (EffortRow.tsx, D243, which
+ * reads and saves its own setting) and where fun facts come from
+ * (FunFactsRow.tsx, D198). Each applies as it changes (D234): saved, then
+ * the coach re-reads its settings, as Save settings did, and the line under
+ * the card says "Saved." or why not. Fun facts are written only once chosen
+ * on this device, so a restore can still fill a device that never chose
+ * (D198). A model this build no longer offers stays chosen, listed as no
+ * longer offered, until another is picked.
  */
 import { useEffect, useRef, useState } from 'react';
 import Alert from '@mui/material/Alert';
@@ -17,19 +15,22 @@ import Box from '@mui/material/Box';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { DEFAULT_FUN_FACTS, type FunFactsSource } from '../../coach/facts/types.ts';
+import { priceText } from '../../llm/models.ts';
 import type { ModelInfo } from '../../llm/types.ts';
 import { useServices } from '../../app/services.tsx';
 import type { Settings } from '../../storage/types.ts';
 import { TID } from '../testIds.ts';
 import { useCoachRunsOnComputer } from './coachSourceView.ts';
+import { EffortRow } from './EffortRow.tsx';
 import { FunFactsRow } from './FunFactsRow.tsx';
 import { couldNotSave, KEY_TAKEN_OUT, SaveLine, tookKeyOut, useSaveNote } from './SaveLine.tsx';
 import { Section } from './Section.tsx';
 
 export const MODEL_CARD_TITLE = 'Model and replies';
 
+/** Its prices with their cents (D242): "$0.10 in", never "$0.1 in". */
 function price(model: ModelInfo): string {
-  return `$${model.inputPerMTok} in / $${model.outputPerMTok} out per million tokens`;
+  return `${priceText(model.inputPerMTok)} in / ${priceText(model.outputPerMTok)} out per million tokens`;
 }
 
 const fieldSx = { '& .MuiInputBase-root': { minHeight: 48 } } as const;
@@ -118,7 +119,7 @@ export function ModelCard() {
           {loading ? <option value="">Loading…</option> : null}
           {models.map((model) => (
             <option key={model.id} value={model.id}>
-              {model.label} · ${model.inputPerMTok} / ${model.outputPerMTok} per MTok
+              {model.label} · {priceText(model.inputPerMTok)} / {priceText(model.outputPerMTok)} per MTok
             </option>
           ))}
         </TextField>
@@ -127,6 +128,7 @@ export function ModelCard() {
             The prices do not apply while the coach runs on your computer: it uses your Claude plan.
           </Typography>
         ) : null}
+        <EffortRow model={form?.model} />
         <FunFactsRow
           value={form ? (form.funFacts ?? DEFAULT_FUN_FACTS) : null}
           onComputer={onComputer}

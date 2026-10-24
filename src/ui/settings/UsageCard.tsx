@@ -49,28 +49,29 @@ import { Section } from './Section.tsx';
 import { formatCost, formatPercent, formatTokens, sayDate, sayDay } from './usageFormat.ts';
 import { UsageMeter } from './UsageMeter.tsx';
 import { describeWhen } from './wakeSchedule.ts';
+import { TID } from '../testIds.ts';
 
 /** The tiles of the month, today and the rest: the API key's in dollars, the computer's in tokens. */
 type UsagePeriod = 'today' | 'last-month' | 'all-time' | 'month-tokens' | 'today-tokens' | 'on-api';
 type PlanWindowId = 'five-hour' | 'seven-day';
 
-/** The card's test ids, for TID in src/ui/testIds.ts when the card is placed in the Coach group (the coordinator moves them). */
+/** The card's test ids, as kept with the rest in TID (src/ui/testIds.ts). */
 export const USAGE_CARD_TID = {
-  card: 'coach-usage',
+  card: TID.coachUsage,
   /** The month's estimated cost (the API key's). */
-  cost: 'coach-usage-cost',
+  cost: TID.coachUsageCost,
   /** The line under it: its tokens and replies, or nothing yet. */
-  summary: 'coach-usage-summary',
+  summary: TID.coachUsageSummary,
   /** What the other place spent this month: the computer's tokens on the API key, the API key's dollars on the computer. */
-  also: 'coach-usage-also',
-  unpriced: 'coach-usage-unpriced',
-  days: 'coach-usage-days',
+  also: TID.coachUsageAlso,
+  unpriced: TID.coachUsageUnpriced,
+  days: TID.coachUsageDays,
   /** Each tile: today, last-month, all-time on the API key; month-tokens, today-tokens, on-api on the computer. */
-  period: (period: UsagePeriod) => `coach-usage-period-${period}`,
-  kinds: 'coach-usage-kinds',
+  period: (period: UsagePeriod) => TID.coachUsagePeriod(period),
+  kinds: TID.coachUsageKinds,
   /** The plan's use on the computer, and each of its windows. */
-  plan: 'coach-usage-plan',
-  planWindow: (window: PlanWindowId) => `coach-usage-plan-${window}`,
+  plan: TID.coachUsagePlan,
+  planWindow: (window: PlanWindowId) => TID.coachUsagePlanWindow(window),
 } as const;
 
 /** The plan's use is read again this often while the card shows. */

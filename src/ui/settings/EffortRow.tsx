@@ -31,11 +31,12 @@ import { KNOWN_MODELS, resolveModel } from '../../llm/models.ts';
 import { DEFAULT_COACH_EFFORT } from '../../storage/settings.ts';
 import type { CoachEffort } from '../../storage/types.ts';
 import { useCoachRunsOnComputer } from './coachSourceView.ts';
+import { TID } from '../testIds.ts';
 
-/** The row's test ids, for TID in src/ui/testIds.ts when the row is placed in the Coach group (the coordinator moves them). */
+/** The row's test ids, as kept with the rest in TID (src/ui/testIds.ts). */
 export const EFFORT_TID = {
   /** Each choice: coach-effort-low, coach-effort-medium, coach-effort-high. */
-  effort: (effort: CoachEffort) => `coach-effort-${effort}`,
+  effort: (effort: CoachEffort) => TID.coachEffort(effort),
 } as const;
 
 const CHOICES: ReadonlyArray<{ effort: CoachEffort; label: string }> = [

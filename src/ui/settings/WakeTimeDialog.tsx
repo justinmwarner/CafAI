@@ -59,8 +59,8 @@ const MINUTES = Array.from({ length: 60 }, (_, minute) => pad(minute));
 
 const HALVES: readonly ClockHalf[] = ['am', 'pm'];
 
-/** The am and pm choices' test ids (D245); the coordinator moves them into testIds.ts. */
-export const WAKE_DIALOG_HALF_TID: Readonly<Record<ClockHalf, string>> = { am: 'wake-dialog-am', pm: 'wake-dialog-pm' };
+/** The am and pm choices' test ids (D245), as kept with the rest in TID (src/ui/testIds.ts). */
+export const WAKE_DIALOG_HALF_TID: Readonly<Record<ClockHalf, string>> = { am: TID.wakeDialogHalf('am'), pm: TID.wakeDialogHalf('pm') };
 
 /**
  * The days as the Appearance mode control draws its choices: on the raised

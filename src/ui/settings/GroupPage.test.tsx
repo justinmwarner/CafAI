@@ -2,8 +2,9 @@
 import '../chat/testing/setup.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
+import { createDisplayPrefsStore } from '../../app/displayPrefs.ts';
 import { createMemoryCoachSourceStore } from '../../storage/coachSource.ts';
-import { createFakeServices, createFakeUsage, type FakeServices } from '../testing/fakeServices.ts';
+import { createFakeServices, createFakeSpend, createFakeUsage, type FakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
 import { renderWithServices } from '../chat/testing/render.tsx';
 import type { SettingsGroupId } from './groupIds.ts';
@@ -28,27 +29,40 @@ const cards = (id: SettingsGroupId) =>
     .getAllByRole('region')
     .map((region) => region.getAttribute('aria-label'));
 
+/** Services with every store a card needs: where the coach runs, usage sharing, the coach's spend and the display choices. */
 function servicesWithAll(): FakeServices {
-  const services = createFakeServices();
+  const services = createFakeServices({ spend: createFakeSpend() });
   services.coachSource = createMemoryCoachSourceStore({ kind: 'anthropic' });
   services.usage = createFakeUsage().usage;
-  return services;
+  return Object.assign(services, { displayPrefs: createDisplayPrefsStore(services.storage.settings) });
 }
 
 describe('Settings groups and what moved where (D233)', () => {
-  it('Coach: where the coach runs, the Anthropic API key while it runs there, and the model and its replies', async () => {
+  it('Coach: where the coach runs, the Anthropic API key while it runs there, the model and its replies, and usage and cost', async () => {
     renderWithServices(<GroupPage id="coach" layout="pane" />, servicesWithAll());
-    await waitFor(() => expect(cards('coach')).toEqual(['Where the coach runs', 'Anthropic API key', 'Model and replies']));
-    for (const testId of [TID.coachSourceAnthropic, TID.apiKeyInput, TID.keyInDecaid, TID.modelSelect, TID.funFacts]) {
+    await waitFor(() => expect(cards('coach')).toEqual(['Where the coach runs', 'Anthropic API key', 'Model and replies', 'Usage and cost']));
+    for (const testId of [TID.coachSourceAnthropic, TID.apiKeyInput, TID.keyInDecaid, TID.modelSelect, TID.funFacts, TID.coachUsage]) {
       expect(screen.getByTestId(testId)).toBeInTheDocument();
     }
+    // How the coach replies (D243) sits between the model and fun facts, in the same card.
+    const model = within(screen.getByTestId(TID.settingsPane('coach'))).getByRole('region', { name: 'Model and replies' });
+    expect(await within(model).findByTestId(TID.coachEffort('medium'))).toBeInTheDocument();
   });
 
-  it('Grinder: your grinder, its setting and Add a grinder, in one card', async () => {
+  it('Coach leaves usage and cost out without a spend service, as in a preview', async () => {
+    const services = createFakeServices();
+    services.coachSource = createMemoryCoachSourceStore({ kind: 'anthropic' });
+    renderWithServices(<GroupPage id="coach" layout="pane" />, services);
+    await waitFor(() => expect(cards('coach')).toEqual(['Where the coach runs', 'Anthropic API key', 'Model and replies']));
+  });
+
+  it('Grinder: your grinder, its setting, which way is finer and Add a grinder, in one card', async () => {
     renderWithServices(<GroupPage id="grinder" layout="pane" />, servicesWithAll());
     expect(cards('grinder')).toEqual(['Your grinder']);
     expect(await screen.findByTestId(TID.grinderName)).toBeInTheDocument();
     expect(screen.getByTestId(TID.grinderSetting)).toBeInTheDocument();
+    expect(screen.getByTestId(TID.grinderFinerLower)).toBeInTheDocument();
+    expect(screen.getByTestId(TID.grinderFinerHigher)).toBeInTheDocument();
     expect(await screen.findByTestId(TID.addGrinder)).toBeInTheDocument();
   });
 
@@ -67,36 +81,47 @@ describe('Settings groups and what moved where (D233)', () => {
     expect(screen.getByTestId(TID.careOpen)).toBeInTheDocument();
   });
 
-  it('Display: appearance, units with the temperatures (no longer in appearance), and the screensaver', () => {
+  it('Display: appearance, units with the temperatures (no longer in appearance) and the clock, shot cards, and the screensaver', () => {
     renderWithServices(<GroupPage id="display" layout="pane" />, servicesWithAll());
-    expect(cards('display')).toEqual(['Appearance', 'Units', 'Screensaver']);
+    expect(cards('display')).toEqual(['Appearance', 'Units', 'Shot cards', 'Screensaver']);
     const pane = screen.getByTestId(TID.settingsPane('display'));
     const units = within(pane).getByRole('region', { name: 'Units' });
     expect(within(units).getByTestId(TID.temperatureUnit('celsius'))).toBeInTheDocument();
+    expect(within(units).getByTestId(TID.clockFormat('24h'))).toBeInTheDocument();
     expect(within(within(pane).getByRole('region', { name: 'Appearance' })).queryByTestId(TID.temperatureUnit('celsius'))).toBeNull();
-    for (const testId of [TID.appearanceMode('dark'), TID.tintSwatch('crema'), TID.tintHue, TID.saverSection, TID.saverPreview]) {
+    expect(within(within(pane).getByRole('region', { name: 'Shot cards' })).getByTestId(TID.showTds)).toBeInTheDocument();
+    for (const testId of [TID.appearanceMode('dark'), TID.tintSwatch('crema'), TID.tintHue, TID.saverSection, TID.saverStartAfter, TID.saverDimTo, TID.saverPreview]) {
       expect(screen.getByTestId(testId)).toBeInTheDocument();
     }
   });
 
-  it('Data and privacy: the backup and what it holds, sharing usage, and the log', async () => {
+  it('Display leaves the clock and shot cards out without the display store, as in a preview', () => {
+    renderWithServices(<GroupPage id="display" layout="pane" />, createFakeServices());
+    expect(cards('display')).toEqual(['Appearance', 'Units', 'Screensaver']);
+    expect(screen.queryByTestId(TID.clockFormat('24h'))).toBeNull();
+  });
+
+  it('Data and privacy: the backup and what it holds, your data, sharing usage, and the log', async () => {
     renderWithServices(<GroupPage id="data" layout="pane" />, servicesWithAll());
-    expect(cards('data')).toEqual(['Backup in Decaid', 'Share usage', 'Log']);
+    expect(cards('data')).toEqual(['Backup in Decaid', 'Your data', 'Share usage', 'Log']);
     expect(await screen.findByTestId(TID.backupHealth)).toBeInTheDocument();
-    for (const testId of [TID.usageSwitch, TID.logSection, TID.logOpen]) expect(screen.getByTestId(testId)).toBeInTheDocument();
+    for (const testId of [TID.settingsExport, TID.usageSwitch, TID.logSection, TID.logOpen]) expect(screen.getByTestId(testId)).toBeInTheDocument();
   });
 
   it('Data and privacy leaves sharing out where the build shares nothing', () => {
     renderWithServices(<GroupPage id="data" layout="pane" />, createFakeServices());
-    expect(cards('data')).toEqual(['Backup in Decaid', 'Log']);
+    expect(cards('data')).toEqual(['Backup in Decaid', 'Your data', 'Log']);
   });
 
-  it("About: CafAI's and Decaid's versions, the backup line no longer among them", async () => {
+  it("About: CafAI's and Decaid's versions and Report a problem, the backup line no longer among them", async () => {
     renderWithServices(<GroupPage id="about" layout="pane" />, servicesWithAll());
     expect(cards('about')).toEqual(['CafAI and Decaid']);
     expect(screen.getByText('CafAI 0.1.0-test')).toBeInTheDocument();
     expect(await screen.findByText('Decaid 0.9.0+1 (CafAI was verified with 0.8.8)')).toBeInTheDocument();
     expect(screen.getByTestId(TID.aboutDecaid)).toBeInTheDocument();
+    expect(screen.getByTestId(TID.reportProblem)).toBeInTheDocument();
+    // The test build's version has no CHANGELOG section, so What's new stays out.
+    expect(screen.queryByTestId(TID.whatsNew)).toBeNull();
     expect(screen.queryByTestId(TID.backupHealth)).toBeNull();
   });
 
