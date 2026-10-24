@@ -157,7 +157,8 @@ describe('Settings across the line', () => {
 });
 
 describe('Settings saves as it changes (D234)', () => {
-  it('has no Save button in any group', () => {
+  // The credentials keep theirs (Save key; the bridge's address and code, absent here): a key is never saved half typed.
+  it('has no Save settings, nor any other Save, in any group', () => {
     setViewport(1280, 800);
     for (const id of SETTINGS_GROUP_IDS) {
       const { unmount } = renderWithServices(<SettingsScreen group={id} />);

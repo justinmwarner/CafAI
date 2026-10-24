@@ -83,7 +83,7 @@ export function SaveLine({ note, testId, lineRef }: SaveLineProps) {
       variant="body2"
       role="status"
       data-testid={testId}
-      sx={{ minHeight: '1.5em', mt: 1.5, color: error ? 'error.main' : 'success.main' }}
+      sx={{ minHeight: '1.5em', mt: 1, color: error ? 'error.main' : 'success.main' }}
     >
       {note === null ? '' : note.tone === 'saved' ? SAVED : note.text}
     </Typography>
