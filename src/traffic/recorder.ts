@@ -31,7 +31,16 @@
  * secret headers, the log looks for the secrets CafAI last used
  * (rememberSecret: the key, the pairing code), wherever they show.
  */
-import { holdsSecret, isKeyStoreCall, keyStoreBody, redactHeaders, redactText, type HeaderSource } from './redact.ts';
+import {
+  coachSourceStoreBody,
+  holdsSecret,
+  isCoachSourceStoreCall,
+  isKeyStoreCall,
+  keyStoreBody,
+  redactHeaders,
+  redactText,
+  type HeaderSource,
+} from './redact.ts';
 
 export type TrafficChannel = 'rest' | 'socket' | 'coach';
 export type TrafficDirection = 'sent' | 'received';
@@ -277,8 +286,12 @@ export function createTrafficLog(options: TrafficLogOptions = {}): TrafficLog {
     const what = redactText(input.what, secrets);
     const original = input.body ?? '';
     // The key's copy in Decaid is the key itself, whatever it looks like (D99): no body there is kept
-    // but one with no room for a key ("null": no copy).
-    const body = isKeyStoreCall(what) ? keyStoreBody(original) : keepText(original, maxBodyChars, secrets);
+    // but one with no room for a key ("null": no copy). Where the coach runs, copied there, holds the code (D229).
+    const body = isKeyStoreCall(what)
+      ? keyStoreBody(original)
+      : isCoachSourceStoreCall(what)
+        ? coachSourceStoreBody(original)
+        : keepText(original, maxBodyChars, secrets);
     const rawHeldSecret = input.rawJoined !== undefined && holdsSecret(input.rawJoined, secrets);
     return {
       id: nextId++,

@@ -15,6 +15,7 @@ import { loadProfileOnMachine } from '../../src/api/machineProfile.ts';
 import { activateProfile, createProfileVersion } from '../../src/api/workflow.ts';
 import type { WorkflowContext } from '../../src/api/types.ts';
 import { EXTRAS_KEY, cafaiNotesLine, mergeNotes } from '../../src/app/engine/shotNotes.ts';
+import { COACH_SOURCE_KEY, COACH_SOURCE_NAMESPACE } from '../../src/storage/coachSourceBackup.ts';
 import { KEY_NAME, KEY_NAMESPACE } from '../../src/storage/keyBackup.ts';
 import { getTemplate } from '../../src/coach/templates/index.ts';
 import { createMockServer } from '../node.ts';
@@ -323,6 +324,9 @@ const ROUTES: ReadonlyArray<[Method, RegExp]> = [
   ['POST', /^\/api\/v1\/store\/cafai-key\/anthropic$/],
   ['GET', /^\/api\/v1\/store\/cafai-key\/anthropic$/],
   ['DELETE', /^\/api\/v1\/store\/cafai-key\/anthropic$/],
+  ['POST', /^\/api\/v1\/store\/cafai-coach-source\/current$/],
+  ['GET', /^\/api\/v1\/store\/cafai-coach-source\/current$/],
+  ['DELETE', /^\/api\/v1\/store\/cafai-coach-source\/current$/],
 ];
 
 /** The channels CafAI opens (src/api/telemetry.ts) and time-to-ready's (spec 6.3). */
@@ -475,6 +479,10 @@ describe('the mock against the spec', () => {
     await attempt(() => client.kv.set(KEY_NAMESPACE, KEY_NAME, 'not-a-real-key'));
     await attempt(() => client.kv.get(KEY_NAMESPACE, KEY_NAME));
     await attempt(() => client.kv.delete(KEY_NAMESPACE, KEY_NAME));
+    // Where the coach runs, copied in Decaid (D229), with a stand-in code.
+    await attempt(() => client.kv.set(COACH_SOURCE_NAMESPACE, COACH_SOURCE_KEY, { kind: 'computer', address: '127.0.0.1:8877', code: 'NOTACODE' }));
+    await attempt(() => client.kv.get(COACH_SOURCE_NAMESPACE, COACH_SOURCE_KEY));
+    await attempt(() => client.kv.delete(COACH_SOURCE_NAMESPACE, COACH_SOURCE_KEY));
 
     // A wake from sleep starts time-to-ready (spec 6.3), then a whole shot with a skipped step.
     await attempt(() => client.setMachineState('sleeping'));

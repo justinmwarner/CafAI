@@ -227,6 +227,17 @@ export interface Settings {
    * which it keeps, from none, which it may fill.
    */
   screensaver?: ScreensaverSetting;
+  /**
+   * The choice to keep where the coach runs, with CafAI Bridge's address
+   * and code, in Decaid too (D229), so a Decaid update does not lose it.
+   * Absent until someone chooses on this device, and read as on, the
+   * opposite of keepKeyInDecaid; like it, storage never writes it as a
+   * default, so a merge (an import, a restore) can tell a choice made here,
+   * which it keeps, from none, which it may fill. Mirrored, so a choice
+   * comes back to a new origin with the rest of the settings.
+   * src/storage/coachSourceBackup.ts does the copying.
+   */
+  keepCoachSourceInDecaid?: boolean;
 }
 
 /** Settings > Screensaver (D225). */

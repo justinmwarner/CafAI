@@ -4,20 +4,27 @@
  * the local network with the user's Claude plan
  * (docs/superpowers/specs/2026-10-11-local-claude-design.md).
  *
- * Kept on this device only, in its own IndexedDB database like the API key
+ * Kept on this device, in its own IndexedDB database like the API key
  * (secrets.ts): the bridge's pairing code lets anyone on the network who has
- * it use the user's plan, so it is never mirrored to Decaid, never exported
- * and never logged. Switching back to Anthropic keeps the address and the
- * code, so switching loses nothing. Errors are fixed sentences that carry no
- * cause, so the code cannot ride along in one.
+ * it use the user's plan, so it is never mirrored to Decaid with CafAI's
+ * records, never exported and never logged. Unless the user turns it off, a
+ * copy goes to a namespace of its own in Decaid's store, so a Decaid update
+ * that moves CafAI to a new origin does not lose it (coachSourceBackup.ts,
+ * D229); what that copy is still owed is kept here, beside the source.
+ * Switching back to Anthropic keeps the address and the code, so switching
+ * loses nothing. Errors are fixed sentences that carry no cause, so the code
+ * cannot ride along in one.
  */
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import type { CoachSourceCopyState, CoachSourceCopyStore } from './coachSourceBackup.ts';
 import { closeEventTarget, createDbHandle, DURABLE, type LostReason } from './db.ts';
 import { isVersionError, StorageError } from './errors.ts';
 
 export const COACH_SOURCE_DB_NAME = 'cafai-coach-source';
 const COACH_SOURCE_DB_VERSION = 1;
 const RECORD_KEY = 'current';
+/** What the source's copy in Decaid is still owed (D229), in the same store under its own key. */
+const COPY_STATE_KEY = 'copy';
 /** CafAI Bridge's port unless it was started with another. */
 export const BRIDGE_PORT = 8877;
 
@@ -35,14 +42,26 @@ export const DEFAULT_COACH_SOURCE: Readonly<CoachSource> = Object.freeze({ kind:
 
 export interface CoachSourceStore {
   get(): Promise<CoachSource>;
+  /**
+   * What was saved on this device, or null when nothing ever was: a first
+   * visit, or the empty storage of a new origin (D229). get() reads that as
+   * the default.
+   */
+  getSaved(): Promise<CoachSource | null>;
   set(source: CoachSource): Promise<void>;
   /** Calls `listener` with every source saved from now on (Settings shows it live). Returns the unsubscribe. */
   subscribe(listener: (source: CoachSource) => void): () => void;
   close(): void;
 }
 
+/** The store as kept in IndexedDB, with what its copy in Decaid is owed kept beside the source (D229). */
+export interface IdbCoachSourceStore extends CoachSourceStore {
+  readonly copyState: CoachSourceCopyStore;
+}
+
 interface CoachSourceDbSchema extends DBSchema {
-  source: { key: string; value: CoachSource };
+  /** The source (a CoachSource), and what its copy in Decaid is owed (CoachSourceCopyState). */
+  source: { key: string; value: unknown };
 }
 
 type CoachSourceDb = IDBPDatabase<CoachSourceDbSchema>;
@@ -98,14 +117,20 @@ function listeners() {
 
 export function createCoachSourceStore(db: () => Promise<CoachSourceDb>): Omit<CoachSourceStore, 'close'> {
   const changes = listeners();
+  async function getSaved(): Promise<CoachSource | null> {
+    let value: unknown;
+    try {
+      value = await (await db()).get('source', RECORD_KEY);
+    } catch (error) {
+      throw sourceError(error, 'read');
+    }
+    return value === undefined ? null : toCoachSource(value);
+  }
   return {
     async get() {
-      try {
-        return toCoachSource(await (await db()).get('source', RECORD_KEY));
-      } catch (error) {
-        throw sourceError(error, 'read');
-      }
+      return (await getSaved()) ?? { ...DEFAULT_COACH_SOURCE };
     },
+    getSaved,
     async set(source) {
       const record = toCoachSource(source);
       try {
@@ -120,21 +145,51 @@ export function createCoachSourceStore(db: () => Promise<CoachSourceDb>): Omit<C
   };
 }
 
-export async function openCoachSourceStore(name: string = COACH_SOURCE_DB_NAME): Promise<CoachSourceStore> {
+/** A stored CoachSourceCopyState, read leniently: anything else owes nothing. */
+function copyState(value: unknown): CoachSourceCopyState {
+  return { owed: typeof value === 'object' && value !== null && (value as Record<string, unknown>)['owed'] === true };
+}
+
+/** What the source's copy in Decaid is owed, beside the source: no import, export or mirror ever opens this database. */
+export function createCoachSourceCopyStore(db: () => Promise<CoachSourceDb>): CoachSourceCopyStore {
+  return {
+    async get() {
+      try {
+        return copyState(await (await db()).get('source', COPY_STATE_KEY));
+      } catch (error) {
+        throw sourceError(error, 'read');
+      }
+    },
+    async set(state) {
+      try {
+        const tx = (await db()).transaction('source', 'readwrite', DURABLE);
+        await Promise.all([tx.store.put({ owed: state.owed }, COPY_STATE_KEY), tx.done]);
+      } catch (error) {
+        throw sourceError(error, 'save');
+      }
+    },
+  };
+}
+
+export async function openCoachSourceStore(name: string = COACH_SOURCE_DB_NAME): Promise<IdbCoachSourceStore> {
   const handle = createDbHandle((onLost) => openCoachSourceDb(name, onLost));
   // Fail at start-up, not on the first save, when storage is blocked.
   await handle.get();
-  return { ...createCoachSourceStore(() => handle.get()), close: () => handle.close() };
+  const db = () => handle.get();
+  return { ...createCoachSourceStore(db), copyState: createCoachSourceCopyStore(db), close: () => handle.close() };
 }
 
-/** The same store in memory, for tests and previews. */
+/** The same store in memory, for tests and previews: something is saved once it starts with a field or one is saved. */
 export function createMemoryCoachSourceStore(initial: Partial<CoachSource> = {}): CoachSourceStore {
   let current = toCoachSource({ ...DEFAULT_COACH_SOURCE, ...initial });
+  let saved = Object.keys(initial).length > 0;
   const changes = listeners();
   return {
     get: async () => ({ ...current }),
+    getSaved: async () => (saved ? { ...current } : null),
     async set(source) {
       current = toCoachSource(source);
+      saved = true;
       changes.notify(current);
     },
     subscribe: changes.subscribe,

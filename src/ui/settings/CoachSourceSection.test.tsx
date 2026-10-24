@@ -5,6 +5,8 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { createMemoryCoachSourceStore, type CoachSource } from '../../storage/coachSource.ts';
+import { COACH_SOURCE_KEY, COACH_SOURCE_NAMESPACE, createCoachSourceBackup } from '../../storage/coachSourceBackup.ts';
+import { createMemoryKv, type MemoryKv } from '../../storage/testing/memoryKv.ts';
 import { renderWithServices } from '../chat/testing/render.tsx';
 import { createFakeServices, createFakeUsage, type FakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
@@ -290,5 +292,111 @@ describe('SettingsScreen with the coach on the computer', () => {
     const keySection = await screen.findByRole('region', { name: 'Anthropic API key' });
     await waitFor(() => expect(keySection).toHaveTextContent('A key is saved on this device.'));
     expect(screen.getByTestId(TID.forgetKey)).toBeInTheDocument();
+  });
+});
+
+describe('the copy in Decaid (D229)', () => {
+  const NOTE = "So you do not have to type them again after a Decaid update. Any device on your network can read Decaid's store, and Decaid's backups include it.";
+
+  function renderWithCopy(source: Partial<CoachSource> = SAVED) {
+    const services: FakeServices = createFakeServices();
+    const store = createMemoryCoachSourceStore(source);
+    const kv = createMemoryKv();
+    let owed = false;
+    services.coachSource = store;
+    services.coachSourceBackup = createCoachSourceBackup(
+      kv,
+      store,
+      {
+        get: async () => ({ owed }),
+        set: async (state) => {
+          owed = state.owed;
+        },
+      },
+      async () => (await services.storage.settings.get()).keepCoachSourceInDecaid ?? true,
+    );
+    renderWithServices(<CoachSourceSection />, services);
+    return { services, store, kv };
+  }
+
+  const copy = (kv: MemoryKv) => kv.values(COACH_SOURCE_NAMESPACE)[COACH_SOURCE_KEY];
+
+  it('offers the switch with the computer, on until turned off here, and says what it costs', async () => {
+    renderWithCopy();
+    const toggle = await screen.findByTestId(TID.sourceInDecaid);
+    await waitFor(() => expect(toggle).toBeChecked());
+    expect(screen.getByRole('switch', { name: 'Keep the address and code in Decaid' })).toBe(toggle);
+    expect(screen.getByText(NOTE)).toBeInTheDocument();
+    await userEvent.click(screen.getByTestId(TID.coachSourceAnthropic));
+    await waitFor(() => expect(screen.queryByTestId(TID.sourceInDecaid)).not.toBeInTheDocument());
+  });
+
+  it('copies what Save saves, and with the coach back on Anthropic takes the copy off Decaid', async () => {
+    const { kv } = renderWithCopy({ kind: 'computer' });
+    await userEvent.type(await screen.findByTestId(TID.computerAddress), '192.168.1.20');
+    await userEvent.type(screen.getByTestId(TID.computerCode), 'abcd efgh');
+    await userEvent.click(screen.getByTestId(TID.computerSave));
+    expect(await screen.findByText('Saved on this device.')).toBeInTheDocument();
+    expect(copy(kv)).toEqual(SAVED);
+    await userEvent.click(screen.getByTestId(TID.coachSourceAnthropic));
+    await waitFor(() => expect(copy(kv)).toBeUndefined());
+  });
+
+  it('says a copy Decaid did not take goes there later, while the source is saved here', async () => {
+    const { kv, store } = renderWithCopy({ kind: 'computer' });
+    kv.failNext('set');
+    await userEvent.type(await screen.findByTestId(TID.computerAddress), '192.168.1.20');
+    await userEvent.type(screen.getByTestId(TID.computerCode), 'abcd efgh');
+    await userEvent.click(screen.getByTestId(TID.computerSave));
+    expect(await screen.findByText("Saved on this device. Decaid can't be reached right now, so CafAI will copy it there as soon as it can.")).toBeInTheDocument();
+    expect(await store.get()).toEqual(SAVED);
+    expect(copy(kv)).toBeUndefined();
+  });
+
+  it('turned off, deletes the copy, remembers the choice and copies nothing more; turned on, copies again', async () => {
+    const { services, kv } = renderWithCopy();
+    await services.coachSourceBackup!.setOn(true);
+    expect(copy(kv)).toEqual(SAVED);
+    const toggle = await screen.findByTestId(TID.sourceInDecaid);
+    await waitFor(() => expect(toggle).toBeChecked());
+    await userEvent.click(toggle);
+    await waitFor(() => expect(toggle).not.toBeChecked());
+    expect(copy(kv)).toBeUndefined();
+    expect((await services.storage.settings.get()).keepCoachSourceInDecaid).toBe(false);
+    await userEvent.click(screen.getByTestId(TID.computerSave));
+    expect(await screen.findByText('Saved on this device.')).toBeInTheDocument();
+    expect(copy(kv)).toBeUndefined();
+    await userEvent.click(toggle);
+    await waitFor(() => expect(toggle).toBeChecked());
+    expect(copy(kv)).toEqual(SAVED);
+    expect((await services.storage.settings.get()).keepCoachSourceInDecaid).toBe(true);
+  });
+
+  it('a switch that cannot reach Decaid goes back and says why', async () => {
+    const { services, kv } = renderWithCopy();
+    const toggle = await screen.findByTestId(TID.sourceInDecaid);
+    await waitFor(() => expect(toggle).toBeChecked());
+    kv.failNext('delete');
+    await userEvent.click(toggle);
+    expect(await screen.findByText('Could not reach Decaid: Decaid is not answering.')).toBeInTheDocument();
+    expect(toggle).toBeChecked();
+    expect((await services.storage.settings.get()).keepCoachSourceInDecaid).toBeUndefined();
+  });
+
+  it('shows a source its copy brought back while Settings is open, unless the fields were being edited', async () => {
+    const { services, store } = renderWithCopy({});
+    await waitFor(() => expect(screen.getByTestId(TID.coachSourceAnthropic)).toBeChecked());
+    // Decaid answers late, after an update (D100): the copy lands while the screen shows the default.
+    await store.set(SAVED);
+    await waitFor(() => expect(screen.getByTestId(TID.coachSourceComputer)).toBeChecked());
+    expect(screen.getByTestId(TID.computerAddress)).toHaveValue('192.168.1.20:8877');
+    expect(screen.getByTestId(TID.computerCode)).toHaveValue('ABCD-EFGH');
+
+    await userEvent.clear(screen.getByTestId(TID.computerAddress));
+    await userEvent.type(screen.getByTestId(TID.computerAddress), '10.0.0.5');
+    await store.set({ ...SAVED, code: 'WXYZ2345' });
+    await waitFor(() => expect(screen.getByTestId(TID.computerCode)).toHaveValue('ABCD-EFGH'));
+    expect(screen.getByTestId(TID.computerAddress)).toHaveValue('10.0.0.5');
+    expect(services.coach.calls.filter((call) => call.method === 'refresh')).toEqual([]);
   });
 });

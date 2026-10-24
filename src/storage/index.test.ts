@@ -16,6 +16,8 @@ import {
   type LateRestore,
   type RestoreTimers,
 } from './index.ts';
+import { createMemoryCoachSourceStore, type CoachSource } from './coachSource.ts';
+import { COACH_SOURCE_KEY, COACH_SOURCE_NAMESPACE, createCoachSourceBackup } from './coachSourceBackup.ts';
 import { KEY_NAME, KEY_NAMESPACE } from './keyBackup.ts';
 import { createMemoryKv, type MemoryKv } from './testing/memoryKv.ts';
 import type { Bag, IterationRecord } from './types.ts';
@@ -391,7 +393,7 @@ describe('startLateRestore (5.4)', () => {
     clock.fire();
     await late.settled();
     expect(onRestored).toHaveBeenCalledTimes(1);
-    expect(onRestored).toHaveBeenCalledWith({ records: true, care: false, key: false });
+    expect(onRestored).toHaveBeenCalledWith({ records: true, care: false, key: false, coachSource: false });
     expect(await fresh.bags.list()).toEqual([makeBag()]);
     expect(clock.delays()).toEqual([]);
   });
@@ -432,7 +434,7 @@ describe('startLateRestore (5.4)', () => {
     expect(clock.delays()).toEqual([4000]);
     clock.fire();
     await late.settled();
-    expect(onRestored).toHaveBeenCalledWith({ records: true, care: false, key: false });
+    expect(onRestored).toHaveBeenCalledWith({ records: true, care: false, key: false, coachSource: false });
   });
 
   it('stops the timed tries after 10 minutes, but still restores when told Decaid is back later', async () => {
@@ -454,7 +456,7 @@ describe('startLateRestore (5.4)', () => {
     kv.failNext('getAll', 0);
     late.retryNow();
     await late.settled();
-    expect(onRestored).toHaveBeenCalledWith({ records: true, care: false, key: false });
+    expect(onRestored).toHaveBeenCalledWith({ records: true, care: false, key: false, coachSource: false });
   });
 
   it('brings the API key back from its copy in Decaid in the same tries, and writes nothing to Decaid (D99)', async () => {
@@ -471,8 +473,44 @@ describe('startLateRestore (5.4)', () => {
 
     clock.fire();
     await late.settled();
-    expect(onRestored).toHaveBeenCalledWith({ records: false, care: false, key: true });
+    expect(onRestored).toHaveBeenCalledWith({ records: false, care: false, key: true, coachSource: false });
     expect(await fresh.secrets.getApiKey()).toBe(API_KEY);
+    expect(kv.writes()).toEqual([]);
+  });
+
+  it('brings where the coach runs back from its copy in Decaid in the same tries (D229)', async () => {
+    const computer: CoachSource = { kind: 'computer', address: '192.168.1.20:8877', code: 'ABCDEFGH' };
+    const kv = createMemoryKv({ [COACH_SOURCE_NAMESPACE]: { [COACH_SOURCE_KEY]: computer } });
+    const fresh = await open(kv);
+    const coachSource = createMemoryCoachSourceStore();
+    let owed = false;
+    const backup = createCoachSourceBackup(
+      kv,
+      coachSource,
+      {
+        get: async () => ({ owed }),
+        set: async (state) => {
+          owed = state.owed;
+        },
+      },
+      async () => true,
+    );
+    const clock = manualTimers();
+    kv.failNext('getAll', 1, away());
+    // The key's copy and the source's: neither answers in the first try.
+    kv.failNext('get', 2, away());
+    const onRestored = vi.fn();
+    const late = startLateRestore(fresh, { onRestored, timers: clock.timers, now: clock.now, coachSource: backup });
+    restores.push(late);
+    clock.fire();
+    await late.settled();
+    expect(await coachSource.getSaved()).toBeNull();
+    expect(onRestored).not.toHaveBeenCalled();
+
+    clock.fire();
+    await late.settled();
+    expect(onRestored).toHaveBeenCalledWith({ records: false, care: false, key: false, coachSource: true });
+    expect(await coachSource.get()).toEqual(computer);
     expect(kv.writes()).toEqual([]);
   });
 
@@ -491,7 +529,7 @@ describe('startLateRestore (5.4)', () => {
     expect(onRestored).not.toHaveBeenCalled();
     clock.fire();
     await late.settled();
-    expect(onRestored).toHaveBeenCalledWith({ records: false, care: true, key: false });
+    expect(onRestored).toHaveBeenCalledWith({ records: false, care: true, key: false, coachSource: false });
     expect(await fresh.care.list()).toEqual([makeCareRecord()]);
     expect(clock.delays()).toEqual([]);
   });

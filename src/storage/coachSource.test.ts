@@ -57,6 +57,31 @@ describe('openCoachSourceStore', () => {
     expect(await store.get()).toEqual({ kind: 'anthropic', address: '', code: '' });
   });
 
+  it('says whether anything was saved on this device: nothing on a first visit, or in storage a new origin left behind (D229)', async () => {
+    const store = await openCoachSourceStore(uniqueDbName('coach-source'));
+    expect(await store.getSaved()).toBeNull();
+    await store.set({ ...COMPUTER, kind: 'anthropic' });
+    expect(await store.getSaved()).toEqual({ ...COMPUTER, kind: 'anthropic' });
+  });
+
+  it('keeps what its copy in Decaid is owed beside the source, across a reload, and never as a source (D229)', async () => {
+    const name = uniqueDbName('coach-source');
+    const first = await openCoachSourceStore(name);
+    expect(await first.copyState.get()).toEqual({ owed: false });
+    await first.copyState.set({ owed: true });
+    expect(await first.getSaved()).toBeNull();
+    first.close();
+    const second = await openCoachSourceStore(name);
+    expect(await second.copyState.get()).toEqual({ owed: true });
+    await second.copyState.set({ owed: false });
+    expect(await second.copyState.get()).toEqual({ owed: false });
+
+    const db = await openDB(name);
+    await db.put('source', 'not a state', 'copy');
+    db.close();
+    expect(await second.copyState.get()).toEqual({ owed: false });
+  });
+
   it('tells its subscribers what was saved', async () => {
     const store = await openCoachSourceStore(uniqueDbName('coach-source'));
     const seen: CoachSource[] = [];
@@ -109,6 +134,15 @@ describe('createMemoryCoachSourceStore', () => {
     // A copy each time: changing what get() returned changes nothing stored.
     (await store.get()).code = 'XXXXXXXX';
     expect((await store.get()).code).toBe('ABCDEFGH');
+  });
+
+  it('has something saved once it starts with a source or one is saved', async () => {
+    const empty = createMemoryCoachSourceStore();
+    expect(await empty.getSaved()).toBeNull();
+    expect(await empty.get()).toEqual({ kind: 'anthropic', address: '', code: '' });
+    await empty.set(COMPUTER);
+    expect(await empty.getSaved()).toEqual(COMPUTER);
+    expect(await createMemoryCoachSourceStore(COMPUTER).getSaved()).toEqual(COMPUTER);
   });
 });
 

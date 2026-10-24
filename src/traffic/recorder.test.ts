@@ -13,7 +13,7 @@ import {
   type TrafficLogOptions,
   type TrafficTimers,
 } from './recorder.ts';
-import { KEY_COPY_MARKER, KEY_MARKER } from './redact.ts';
+import { COACH_SOURCE_COPY_MARKER, KEY_COPY_MARKER, KEY_MARKER } from './redact.ts';
 
 /** A made-up key, built at run time so no key-shaped literal sits in the source. */
 const KEY = ['sk', 'ant', 'api03', 'ReCoRdErTeSt0123456789', 'AbCdEfGhIjKlMnOpQrStUvWxYz_0123456789AA'].join('-');
@@ -252,6 +252,10 @@ describe('the key never enters the log', () => {
     // The key's copy in Decaid (D99), in a shape no pattern knows.
     recordExchange('rest', 'POST /api/v1/store/cafai-key/anthropic', { body: JSON.stringify(PLAIN_KEY) }, log).reply(200, { body: '{}' });
     recordExchange('rest', 'GET /api/v1/store/cafai-key/anthropic', {}, log).reply(200, { body: JSON.stringify(PLAIN_KEY) });
+    // Where the coach runs, copied in Decaid (D229), with a code CafAI has not used yet.
+    const copy = JSON.stringify({ kind: 'computer', address: '192.168.1.20:8877', code: 'QRST2345' });
+    recordExchange('rest', 'POST /api/v1/store/cafai-coach-source/current', { body: copy }, log).reply(200, { body: '{}' });
+    recordExchange('rest', 'GET /api/v1/store/cafai-coach-source/current', {}, log).reply(200, { body: copy });
     // A plain key in a header comes out of the reply too.
     recordExchange('coach', 'POST 127.0.0.1:8877/v1/messages', { headers: { 'x-api-key': PLAIN_KEY } }, log).fail('failed', { body: `rejected ${PLAIN_KEY}` });
     // CafAI Bridge's code, echoed back with its dash.
@@ -269,6 +273,9 @@ describe('the key never enters the log', () => {
     // Nothing said to or by the key's copy is kept, but a body with no room for a key (Decaid's "{}").
     const copies = log.list().filter((entry) => entry.what.includes('cafai-key'));
     expect(copies.map((entry) => entry.body)).toEqual([KEY_COPY_MARKER, '{}', '', KEY_COPY_MARKER]);
+    expect(everything).not.toContain('QRST2345');
+    const sources = log.list().filter((entry) => entry.what.includes('cafai-coach-source'));
+    expect(sources.map((entry) => entry.body)).toEqual([COACH_SOURCE_COPY_MARKER, '{}', '', COACH_SOURCE_COPY_MARKER]);
   });
 });
 

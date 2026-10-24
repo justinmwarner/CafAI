@@ -787,3 +787,74 @@ describe('the screensaver (D225)', () => {
     expect(restored?.settings.screensaver).toEqual({ on: false, pick: 'nightstand' });
   });
 });
+
+describe('the choice to keep where the coach runs in Decaid (D229)', () => {
+  function setup() {
+    const handle = createDbHandle((onLost) => openCafaiDb(uniqueDbName(), onLost));
+    const db = () => handle.get();
+    const repos = createRepositories({ db, onWrite: () => undefined, defaultModel: MODEL });
+    const porter = createDataPorter({
+      db,
+      careDb: careDbOfItsOwn(),
+      secrets: { getApiKey: async () => null },
+      mirror: { schedulePush: () => undefined },
+      appVersion: '1.2.3',
+      defaultModel: MODEL,
+      now: () => new Date('2026-10-23T21:00:00.000Z'),
+    });
+    return { repos, porter };
+  }
+  const exportWith = (settings: Settings): CafaiExport => ({
+    format: 'cafai-export',
+    schemaVersion: 1,
+    exportedAt: '2026-10-23T20:00:00.000Z',
+    appVersion: '1.2.3',
+    settings,
+    bags: [],
+    versions: [],
+    iterations: [],
+    conversations: [],
+  });
+
+  it('is absent until someone chooses on this device, and only a yes or a no is kept', () => {
+    expect(defaultSettings(MODEL)).not.toHaveProperty('keepCoachSourceInDecaid');
+    expect(normalizeSettings(makeSettings(), MODEL)).not.toHaveProperty('keepCoachSourceInDecaid');
+    expect(normalizeSettings({ ...makeSettings(), keepCoachSourceInDecaid: 'yes' }, MODEL)).not.toHaveProperty('keepCoachSourceInDecaid');
+    expect(normalizeSettings(makeSettings({ keepCoachSourceInDecaid: false }), MODEL)).toHaveProperty('keepCoachSourceInDecaid', false);
+    expect(normalizeSettings(makeSettings({ keepCoachSourceInDecaid: true }), MODEL)).toHaveProperty('keepCoachSourceInDecaid', true);
+    expect(applySettingsPatch(makeSettings(), { activeBagId: 'bag_1' }, MODEL)).not.toHaveProperty('keepCoachSourceInDecaid');
+    const off = applySettingsPatch(makeSettings(), { keepCoachSourceInDecaid: false }, MODEL);
+    expect(off).toHaveProperty('keepCoachSourceInDecaid', false);
+    expect(applySettingsPatch(off, { grinderSetting: '14' }, MODEL)).toHaveProperty('keepCoachSourceInDecaid', false);
+  });
+
+  it('keeps a choice made on this device, off as much as on, and fills only a device that never chose', () => {
+    const on = makeSettings({ keepCoachSourceInDecaid: true });
+    const off = makeSettings({ keepCoachSourceInDecaid: false });
+    expect(fillBlankSettings(off, on, MODEL)).toHaveProperty('keepCoachSourceInDecaid', false);
+    expect(fillBlankSettings(on, off, MODEL)).toHaveProperty('keepCoachSourceInDecaid', true);
+    expect(fillBlankSettings(makeSettings(), off, MODEL)).toHaveProperty('keepCoachSourceInDecaid', false);
+    expect(fillBlankSettings(makeSettings(), makeSettings(), MODEL)).not.toHaveProperty('keepCoachSourceInDecaid');
+  });
+
+  it('is stored, exported and imported with the other settings', async () => {
+    const { repos, porter } = setup();
+    await repos.settings.update({ keepCoachSourceInDecaid: false });
+    expect((await repos.settings.get()).keepCoachSourceInDecaid).toBe(false);
+    const exported = await porter.exportAll();
+    expect(exported.settings.keepCoachSourceInDecaid).toBe(false);
+    for (const mode of ['replace', 'merge'] as const) {
+      const other = setup();
+      await other.porter.importAll(exportWith(exported.settings), mode);
+      expect((await other.repos.settings.get()).keepCoachSourceInDecaid, mode).toBe(false);
+    }
+  });
+
+  it('survives the Decaid mirror round trip, so turned off it stays off on a new origin', () => {
+    const settings = makeSettings({ keepCoachSourceInDecaid: false });
+    const { entries } = buildMirrorEntries({ settings, bags: [], versions: [], iterations: [], conversations: [] }, null, MODEL);
+    const data = Object.fromEntries([...entries].map(([key, text]) => [key, JSON.parse(text)]));
+    const restored = exportFromMirror(data, { appVersion: '1.2.3', defaultModel: MODEL, now: () => new Date(0) });
+    expect(restored?.settings.keepCoachSourceInDecaid).toBe(false);
+  });
+});

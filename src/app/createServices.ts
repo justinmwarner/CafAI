@@ -14,6 +14,7 @@ import { createToldList } from '../coach/facts/told.ts';
 import { DEFAULT_MODEL, MODELS } from '../llm/index.ts';
 import { createIdbStorage, restoreFromMirrorIfEmpty, startLateRestore } from '../storage/index.ts';
 import { openCoachSourceStore } from '../storage/coachSource.ts';
+import { createCoachSourceBackup } from '../storage/coachSourceBackup.ts';
 import { rememberSecret } from '../traffic/recorder.ts';
 import { clarityProjectId } from '../usage/projectId.ts';
 import { createUsageService } from '../usage/service.ts';
@@ -46,9 +47,15 @@ export async function createServices(win: Window): Promise<AppServices> {
   const stopPluginWatch = watchPlugins(plugins, { telemetry });
 
   const storage = await createIdbStorage({ kv: decaid.kv, appVersion: APP_VERSION, defaultModel: DEFAULT_MODEL });
-  // Where the coach runs: Anthropic, or CafAI Bridge on the user's computer. This device only, like the key.
+  // Where the coach runs: Anthropic, or CafAI Bridge on the user's computer. This device's, like the key.
   // Storage that refuses it leaves the coach on Anthropic rather than stopping CafAI.
   const coachSource = await openCoachSourceStore().catch(() => undefined);
+  // Its copy in Decaid, unless the user turned that off (D229): a Decaid update that moves CafAI to a new
+  // origin leaves this device's storage behind, and the copy brings where the coach runs back.
+  const keepSourceInDecaid = async () => (await storage.settings.get()).keepCoachSourceInDecaid ?? true;
+  const coachSourceBackup = coachSource
+    ? createCoachSourceBackup(decaid.kv, coachSource, coachSource.copyState, keepSourceInDecaid)
+    : undefined;
   // Settings > Log looks for the key and the bridge's code wherever they show, a chat
   // in a backup read back included, from before the restore on (D139).
   await Promise.all([
@@ -60,8 +67,12 @@ export async function createServices(win: Window): Promise<AppServices> {
   // update): bring the non-secret records back from Decaid's key-value backup
   // before anything reads them, and the API key from its copy in Decaid when
   // the user keeps one there and did not forget it here, once what that copy
-  // is owed has gone out (D99).
-  const [restore] = await Promise.all([restoreFromMirrorIfEmpty(storage), storage.keyBackup.restoreIfMissing()]);
+  // is owed has gone out (D99); where the coach runs likewise (D229).
+  const [restore] = await Promise.all([
+    restoreFromMirrorIfEmpty(storage),
+    storage.keyBackup.restoreIfMissing(),
+    coachSourceBackup?.sync(),
+  ]);
 
   const appearance = createAppearanceStore(storage.settings, (await storage.settings.get()).appearance);
   // °C or °F (D172): the screens read it, and so does every request's prompt (D175).
@@ -159,16 +170,20 @@ export async function createServices(win: Window): Promise<AppServices> {
   const late =
     restore === 'unreachable'
       ? startLateRestore(storage, {
-          onRestored({ records, care: careAlone, key }) {
+          coachSource: coachSourceBackup,
+          onRestored({ records, care: careAlone, key, coachSource: sourceBack }) {
             if (records || careAlone) landed({ records });
-            if (key && !records) void coach.refresh();
+            if ((key || sourceBack) && !records) void coach.refresh();
           },
         })
       : null;
-  // The key's copy in Decaid (D99): a copy or delete Decaid did not take goes out when it may be back,
-  // before anything is restored from it, and a key it brings back reaches the coach.
-  const syncKey = () => {
+  // The key's copy in Decaid (D99) and where the coach runs (D229): what Decaid did not take goes out when
+  // it may be back, before anything is restored from it, and a key or a source it brings back reaches the coach.
+  const syncCopies = () => {
     void storage.keyBackup.restoreIfMissing().then((restored) => {
+      if (restored) void coach.refresh();
+    });
+    void coachSourceBackup?.sync().then((restored) => {
       if (restored) void coach.refresh();
     });
   };
@@ -181,7 +196,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     decaidOpen = now.sockets.devices === 'open';
     if (!back) return;
     late?.retryNow();
-    syncKey();
+    syncCopies();
   });
 
   // Backgrounding can unload the page after ten minutes: back up on the way out.
@@ -193,7 +208,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     } else {
       void plugins.refresh();
       late?.retryNow();
-      syncKey();
+      syncCopies();
     }
   };
   win.document.addEventListener('visibilitychange', onVisibility);
@@ -214,6 +229,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     saverScreen,
     plugins,
     coachSource,
+    coachSourceBackup,
     care,
     usage,
     dispose() {

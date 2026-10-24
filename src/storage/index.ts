@@ -10,6 +10,7 @@
  */
 import { GatewayError, type KvClient } from '../api/types.ts';
 import { CARE_DB_NAME, createCareRepository, openCareDb } from './careDb.ts';
+import type { CoachSourceBackup } from './coachSourceBackup.ts';
 import { CAFAI_DB_NAME, createDbHandle, openCafaiDb, readAll, requestPersistentStorage } from './db.ts';
 import { toStorageError } from './errors.ts';
 import { createKeyBackup } from './keyBackup.ts';
@@ -209,10 +210,12 @@ export const LATE_RESTORE_FOR_MS = 10 * 60_000;
 export interface LateRestoreOptions {
   /**
    * Records came back (`records`: bags, versions, iterations or chats),
-   * machine care's last times alone (`care`), or the API key from its copy
-   * in Decaid (`key`).
+   * machine care's last times alone (`care`), the API key from its copy in
+   * Decaid (`key`), or where the coach runs from its own (`coachSource`).
    */
-  onRestored(restored: { records: boolean; care: boolean; key: boolean }): void;
+  onRestored(restored: { records: boolean; care: boolean; key: boolean; coachSource: boolean }): void;
+  /** Where the coach runs, copied in Decaid (D229): each try syncs it too. Absent when this device's storage refused the source. */
+  coachSource?: Pick<CoachSourceBackup, 'sync'>;
   timers?: RestoreTimers;
   now?: () => number;
 }
@@ -236,9 +239,10 @@ const browserTimers: RestoreTimers = {
  * records come back or Decaid says it holds none. The tries run on a timer
  * for 10 minutes and whenever `retryNow` says Decaid may be back. Each try
  * also sends what the API key's copy in Decaid is owed and brings the key
- * back from it, unless the key was forgotten on this device (D99). The store
- * started empty, so a try merges the backup in even if a bag was started
- * meanwhile: a merge fills blanks only.
+ * back from it, unless the key was forgotten on this device (D99), and does
+ * the same for where the coach runs (D229). The store started empty, so a
+ * try merges the backup in even if a bag was started meanwhile: a merge
+ * fills blanks only.
  */
 export function startLateRestore(storage: Storage, options: LateRestoreOptions): LateRestore {
   const timers = options.timers ?? browserTimers;
@@ -259,13 +263,16 @@ export function startLateRestore(storage: Storage, options: LateRestoreOptions):
   }
 
   async function tryOnce(): Promise<void> {
-    const [records, key] = await Promise.all([
+    const [records, key, coachSource] = await Promise.all([
       restoreFromMirror(storage),
       storage.keyBackup.restoreIfMissing().catch(() => false),
+      options.coachSource ? options.coachSource.sync().catch(() => false) : false,
     ]);
     if (done) return;
     if (records === 'restored' || records === 'care' || records === 'nothing') done = true;
-    if (records === 'restored' || records === 'care' || key) options.onRestored({ records: records === 'restored', care: records === 'care', key });
+    if (records === 'restored' || records === 'care' || key || coachSource) {
+      options.onRestored({ records: records === 'restored', care: records === 'care', key, coachSource });
+    }
     schedule();
   }
 
