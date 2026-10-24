@@ -27,6 +27,13 @@ export const BADGE_ASPECT = 0.88;
 export const ROAST_FADE_MS = 300;
 /** A corner's ring of light spreads out of it and fades over this long. */
 export const RING_MS = 900;
+/**
+ * A screen smaller than this either way, px, is no screen to bounce on (a
+ * canvas not laid out yet, or a screenshot that shrinks the page to 1x1 for a
+ * moment): the logo keeps its place, its path and its planned first corner
+ * for when the size comes back (D-RAIN-6).
+ */
+export const MIN_SCREEN = 16;
 /** "Corner 2" shows this long by the badge. */
 export const CORNER_LABEL_MS = 3000;
 /** The label fades over its last part. */
@@ -208,6 +215,7 @@ export function createPortafilterModel(seed: number, start?: PortafilterStart): 
     firstCornerMs: null,
 
     resize(width, height) {
+      if (width < MIN_SCREEN || height < MIN_SCREEN) return;
       model.width = width;
       model.height = height;
       model.w = badgeWidth(width);

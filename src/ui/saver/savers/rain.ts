@@ -53,8 +53,6 @@ const FADE_PER_FRAME = 0.044;
 const FRAME_MS = 1000 / 30;
 /** The trail fades every other frame, by both frames' worth: half the work, and no eye sees a fade 15 times a second. */
 const FADE_EVERY_MS = 2 * FRAME_MS - 1;
-/** The still's trails have faded within the last few seconds before it, so only those are painted. */
-const STILL_PAINTED_MS = 2500;
 /** The colours down the screen come in this many steps, each with its glow drawn once. */
 const STEPS = 16;
 /** A near head's glow reaches this far from its middle, px; a far one's is scaled to its size. */
@@ -170,6 +168,14 @@ interface Painted {
   row: number;
   glyph: string;
   bright: boolean;
+}
+
+/** A cell of the trail a head has left: its column and row, its glyph, and when it was left, ms. */
+interface TrailCell {
+  col: number;
+  row: number;
+  glyph: string;
+  at: number;
 }
 
 export const rain: CanvasSaver = {
@@ -776,19 +782,51 @@ export const rain: CanvasSaver = {
     /** Whether the scene is built for the canvas's size now, and so can be drawn. */
     const ready = () => built !== '' && built === sizeKey();
 
-    /** Plays the rain on by `ms`, its trail built up frame by frame: only the last few seconds are painted, older trails would be gone. */
-    const playOn = (ms: number) => {
+    /**
+     * Plays the rain on until `done` says so, a step of `stepMs` at a time, drawing no frame on the way, then
+     * paints its trail as it stands, each cell a head has left that no wipe has taken since, at the opacity
+     * the fade has left it, and the frame over it. The picture the frames would have built, for a sliver of
+     * their cost: a frame's fade of the whole trail is most of what one costs where a canvas is drawn
+     * without the GPU, and a still or a new size would pay for dozens at once.
+     */
+    const playTo = (done: (found: RainModel) => boolean, stepMs: (found: RainModel) => number = () => FRAME_MS) => {
       const found = model!;
-      const end = found.time + ms;
-      while (found.time < end - STILL_PAINTED_MS - 1e-6) {
-        found.step(Math.min(FRAME_MS, end - STILL_PAINTED_MS - found.time));
-        found.takeEvents();
+      const cells = new Map<number, TrailCell>();
+      const heads = painted.slice();
+      const cellOf = (col: number, row: number) => col * 65_536 + row;
+      while (!done(found)) {
+        found.step(stepMs(found));
+        for (const event of found.takeEvents()) {
+          const before = heads[event.col];
+          if (before && !before.bright) cells.set(cellOf(event.col, before.row), { col: event.col, row: before.row, glyph: before.glyph, at: found.time });
+          heads[event.col] = event.glyph ? { row: event.row, glyph: event.glyph, bright: event.bright } : null;
+          if (event.erase >= 0) cells.delete(cellOf(event.col, event.erase));
+        }
       }
-      while (found.time < end - 1e-6) {
-        instance.step(Math.min(FRAME_MS, end - found.time));
-        draw();
+      painted = heads;
+      trailCtx.setTransform(1, 0, 0, 1, 0, 0);
+      trailCtx.clearRect(0, 0, trail.width, trail.height);
+      trailCtx.textAlign = 'center';
+      trailCtx.textBaseline = 'alphabetic';
+      for (const cell of cells.values()) {
+        const column = found.columns[cell.col]!;
+        const alpha = Math.pow(1 - FADE_PER_FRAME, (found.time - cell.at) / FRAME_MS);
+        // Faded to nothing, or under the coffee since the cup rose over it.
+        if (alpha < 0.02 || cell.row >= found.floorOf(column.layer)) continue;
+        const shades = shadesOf(stepFor(found, column.layer, cell.row), column.layer);
+        trailCtx.globalAlpha = alpha;
+        trailFont = glyphAt(trailCtx, trailFont, cell.glyph, column.x, cellY(found, column, cell.row), column.size, shades.trail, shades.trailDetail, trailScale);
       }
+      trailCtx.globalAlpha = 1;
+      for (const layer of [NEAR, FAR]) clearedFloors.set(layer, found.floorOf(layer));
+      blank = false;
+      pendingMs = 0;
+      draw();
     };
+
+    /** The still once painted at a size, and the size: every still there is the same picture, so it is copied, not played again. */
+    let stillPicture: HTMLCanvasElement | null = null;
+    let stillOf = '';
 
     /**
      * The scene for the size now. A rain already falling goes on at the time it had got to: the cup as full,
@@ -802,10 +840,19 @@ export const rain: CanvasSaver = {
       trail.width = Math.max(1, Math.round(width * trailScale));
       trail.height = Math.max(1, Math.round(height * trailScale));
       trailFont = '';
+      release([stillPicture]);
+      stillPicture = null;
+      stillOf = '';
       const replay = Math.min(carried, REPLAY_MS);
       start(carried - replay);
       if (layout) makeSprites(layout);
-      if (replay > 0) playOn(replay);
+      if (replay > 0) {
+        const end = carried;
+        playTo(
+          (found) => found.time >= end - 1e-6,
+          (found) => Math.min(FRAME_MS, end - found.time),
+        );
+      }
     };
 
     // Figtree is most likely here already (CafAI sets everything in it); if not, ask for the weight the letters use.
@@ -837,17 +884,31 @@ export const rain: CanvasSaver = {
       },
       still() {
         if (!ready() || !layout) return;
-        // The still's moment, found on a model of its own (stepping one costs next to nothing); the rain then
-        // falls to it with its trails built up frame by frame.
-        const probe = createRainModel(env.seed, layout, env.numbers);
-        while (!isStillMoment(probe)) probe.step(FRAME_MS);
+        if (stillPicture && stillOf === built) {
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.globalCompositeOperation = 'copy';
+          ctx.drawImage(stillPicture, 0, 0);
+          ctx.globalCompositeOperation = 'source-over';
+          return;
+        }
+        // The rain falls to the still's moment (D-RAIN-3) and is painted there, once for this size.
         start();
-        playOn(probe.time);
+        playTo(isStillMoment);
+        const kept = stillPicture ?? doc.createElement('canvas');
+        kept.width = canvas.width;
+        kept.height = canvas.height;
+        const keep = kept.getContext('2d');
+        if (!keep) return;
+        keep.drawImage(canvas, 0, 0);
+        stillPicture = kept;
+        stillOf = built;
       },
       dispose() {
         canvas.style.backgroundColor = hostBackground;
         releaseSprites();
-        release([trail]);
+        release([trail, stillPicture]);
+        stillPicture = null;
+        stillOf = '';
         model = null;
         layout = null;
         painted = [];

@@ -11,6 +11,7 @@ import {
   cornerLabelAlpha,
   createPortafilterModel,
   FIRST_CORNER_MS,
+  MIN_SCREEN,
   type PortafilterModel,
   type PortafilterStart,
   RING_MS,
@@ -409,6 +410,26 @@ describe('the corners', () => {
       stepFor(made, 4 * frameMs, frameMs);
       expect(made.corners).toBe(1);
     }
+  });
+
+  it('keeps its place, its path and its planned corner through a screen too small to bounce on (a screenshot\'s 1x1)', () => {
+    const made = model(4);
+    const due = made.firstCornerMs!;
+    const before = snapshot(made);
+    made.resize(1, 1);
+    expect(snapshot(made)).toEqual(before);
+    expect([made.width, made.height]).toEqual([962, 602]);
+    stepFor(made, 400);
+    made.resize(MIN_SCREEN - 1, 300);
+    made.resize(962, 602);
+    expect(made.firstCornerMs).toBe(due);
+    let time = 400;
+    while (made.corners === 0 && time < due + 5000) {
+      made.step(FRAME_MS);
+      time += FRAME_MS;
+    }
+    expect(made.corners).toBe(1);
+    expect(Math.abs(time - due)).toBeLessThanOrEqual(FRAME_MS + 1);
   });
 
   it('plans no corner for a badge put down by hand, nor after the screen changes size', () => {

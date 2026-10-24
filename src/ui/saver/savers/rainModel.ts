@@ -106,11 +106,11 @@ export const MAX_DROPLETS = 120;
 export const LETTER_HOLD_MS = 1600;
 export const LETTER_FADE_MS = 1400;
 
-/** The still (D-RAIN-3): from 8 s on, the first moment a word has just been spelled in full; 14 s at the latest. */
+/** The still (D-RAIN-3): from 8 s on, the first moment a word has just been spelled in full, every letter lit; 14 s at the latest. */
 export const STILL_FROM_MS = 8000;
 export const STILL_LATEST_MS = 14_000;
-/** "Just": its last letter came between these long ago, ms (every letter still lit). */
-const STILL_WORD_AGE: readonly [number, number] = [300, 900];
+/** "Just": its last letter came at least this long ago, ms, its head a row or two on (and its first within LETTER_HOLD_MS). */
+const STILL_LAST_LETTER_MS = 100;
 
 /** Where everything sits on a screen of a size: the shower screen along the top, the columns under its holes. */
 export interface RainLayout {
@@ -144,6 +144,9 @@ export interface RainColumn {
   bright: boolean;
   /** The rest of the word this column is spelling. */
   word: string[];
+  /** That word, whole, and when its first letter was spelled (null before). */
+  wordText: string;
+  wordStartedAt: number | null;
   /** Whether this fall has let its drop go. */
   landed: boolean;
 }
@@ -169,6 +172,15 @@ export interface LitLetter {
   size: number;
   /** Ms since its head spelled it. */
   age: number;
+}
+
+/** A word a column has spelled in full. */
+export interface SpelledWord {
+  col: number;
+  text: string;
+  /** When its first letter was spelled, and its last, ms. */
+  startedAt: number;
+  endedAt: number;
 }
 
 /** The drop a head lets go into the cup. */
@@ -219,6 +231,8 @@ export interface RainModel {
   readonly drops: RainDrop[];
   readonly ripples: Ripple[];
   readonly droplets: Droplet[];
+  /** The last word spelled in full: its column, its text, and when its first and last letters were spelled, ms; null before the first. */
+  readonly lastWord: SpelledWord | null;
   /** When the last word's last letter was spelled, ms; null before the first. */
   readonly wordEndedAt: number | null;
   /** The events since the last call, in order. */
@@ -282,11 +296,12 @@ export function letterAlpha(age: number): number {
 }
 
 /** True when this is the still's moment (D-RAIN-3): a word just spelled in full, from 8 s on; or 14 s. */
-export function isStillMoment(model: Pick<RainModel, 'time' | 'wordEndedAt'>): boolean {
+export function isStillMoment(model: Pick<RainModel, 'time' | 'lastWord'>): boolean {
   if (model.time >= STILL_LATEST_MS) return true;
-  if (model.time < STILL_FROM_MS || model.wordEndedAt === null) return false;
-  const age = model.time - model.wordEndedAt;
-  return age >= STILL_WORD_AGE[0] && age <= STILL_WORD_AGE[1];
+  const word = model.lastWord;
+  if (model.time < STILL_FROM_MS || word === null) return false;
+  // Its last letter spelled a moment ago, and its first still lit: every letter of it shows in full.
+  return model.time - word.endedAt >= STILL_LAST_LETTER_MS && model.time - word.startedAt <= LETTER_HOLD_MS;
 }
 
 /**
@@ -305,7 +320,7 @@ export function createRainModel(seed: number, layout: RainLayout, numbers: reado
     [NEAR, floorAt(layout, time, NEAR)],
     [FAR, floorAt(layout, time, FAR)],
   ]);
-  let wordEndedAt: number | null = null;
+  let lastWord: SpelledWord | null = null;
   let letters: LitLetter[] = [];
   const drops: RainDrop[] = [];
   let ripples: Ripple[] = [];
@@ -320,12 +335,28 @@ export function createRainModel(seed: number, layout: RainLayout, numbers: reado
     column.glyph = '';
     column.bright = false;
     column.word = [];
+    column.wordText = '';
+    column.wordStartedAt = null;
     column.landed = false;
   };
 
   const columns: RainColumn[] = [];
   const add = (layer: RainLayer, x: number) => {
-    const column: RainColumn = { layer, x, y: 0, row: -1, speed: 0, lag: 0, size: pickOne(random, layer.sizes), glyph: '', bright: false, word: [], landed: false };
+    const column: RainColumn = {
+      layer,
+      x,
+      y: 0,
+      row: -1,
+      speed: 0,
+      lag: 0,
+      size: pickOne(random, layer.sizes),
+      glyph: '',
+      bright: false,
+      word: [],
+      wordText: '',
+      wordStartedAt: null,
+      landed: false,
+    };
     restart(column, between(random, 0, FIRST_GAP_ROWS));
     columns.push(column);
   };
@@ -347,7 +378,10 @@ export function createRainModel(seed: number, layout: RainLayout, numbers: reado
       wordIn = WORD_RETRY_MS;
       return;
     }
-    columns[pickOne(random, room)]!.word = spelling;
+    const chosen = columns[pickOne(random, room)]!;
+    chosen.word = spelling;
+    chosen.wordText = text;
+    chosen.wordStartedAt = null;
     wordIn = between(random, WORD_EVERY_MS[0], WORD_EVERY_MS[1]);
   };
 
@@ -393,8 +427,11 @@ export function createRainModel(seed: number, layout: RainLayout, numbers: reado
     get droplets() {
       return droplets;
     },
+    get lastWord() {
+      return lastWord;
+    },
     get wordEndedAt() {
-      return wordEndedAt;
+      return lastWord ? lastWord.endedAt : null;
     },
     takeEvents() {
       const taken = events;
@@ -423,7 +460,10 @@ export function createRainModel(seed: number, layout: RainLayout, numbers: reado
             column.bright = column.word.length > 0;
             column.glyph = column.bright ? column.word.shift()! : randomGlyph(layer);
             if (column.bright && column.glyph !== ' ') letters.push({ col: c, row: column.row, glyph: column.glyph, size: column.size, age: 0 });
-            if (column.bright && column.word.length === 0) wordEndedAt = time;
+            if (column.bright && column.wordStartedAt === null) column.wordStartedAt = time;
+            if (column.bright && column.word.length === 0) {
+              lastWord = { col: c, text: column.wordText, startedAt: column.wordStartedAt ?? time, endedAt: time };
+            }
           } else {
             column.bright = false;
             column.glyph = '';

@@ -4245,13 +4245,18 @@ glow (D226's one place for play allows them) rather than flat outlines.
   word is what says coffee from across the kitchen, and in the first round
   it faded with its trail among random katakana.
 - **D-RAIN-3. Brew Rain's still is the moment a word has just been spelled,
-  from 8 s on.** The first moment from 8 s on when a word's last letter
-  came 0.3 to 0.9 s before, so every letter is lit; 14 s at the latest,
-  found first on a model of its own. The last 2.5 s before it are drawn
-  frame by frame, so the trails are there.
-  Why: the still stands for the screensaver, and a word with the rain says
-  it best; the moment is the seed's, so each day's still is the same each
-  minute.
+  from 8 s on.** The first moment from 8 s on when a word's last letter came
+  at least 0.1 s before and its first no more than the 1.6 s a letter stays
+  lit, so every letter of it shows in full; 14 s at the latest. The rain is
+  played to it without drawing a frame, then its trail is painted once, each
+  cell a head has left at the opacity the fade has left it, and one frame
+  over it: under 0.15 s at 1366x1024 at 1.5 on the build PC, where drawing
+  the last seconds frame by frame took up to 4 s. The picture is kept for
+  its size, so the still painted again each minute, or after a passing
+  resize, is a copy of it. Why: the still stands for the screensaver, and a
+  word with the rain says it best; the moment is the seed's, so each day's
+  still is the same each minute; and a still painted each minute under
+  reduced motion must not hold a tap up for seconds.
 - **D-RAIN-4. The Bouncing Portafilter's badge is a logo with a portafilter
   in it.** Drawn in code (`portafilterLogo.ts`): a portafilter from the
   side, as a logo mark, its group ring with two lugs, the basket, a double
@@ -4268,31 +4273,35 @@ glow (D226's one place for play allows them) rather than flat outlines.
 - **D-RAIN-5. Its colour crosses over, it glows, and a corner throws light
   as well as beans.** A wall's change of roast crosses over in 300 ms,
   eased; one that comes mid-crossing goes on from where the colour had got
-  to, and a corner's two roasts cross by way of the one between. A soft
-  glow of its colour lies on the page around the logo: its shape blurred,
-  drawn once for each roast at each size. A corner sends a ring of warm
-  light out of the screen's corner, spreading over a little more than half
-  the screen's shorter side and gone in 0.9 s, with a flash where it
-  starts; its dozen beans are shaded sprites (`beanShape.ts`), flying out in
-  front of the logo, growing a little as they come at you, solid for half
-  their 1.2 s and then fading. Under 0.1 ms a frame on the build PC. Why: a
-  colour that switches at once flickers; the glow and the light give the
-  logo and its corner the "premium product's ambient screen" the owner's
-  ask was after, for next to nothing a frame.
-- **D-RAIN-6. Brew Rain goes on through a change of size.** A size too
-  small to draw on (under 64x120 px: a canvas not laid out yet, or a
-  screenshot that shrinks the page for a moment) leaves the rain as it was,
-  and back at the size it was laid out for it goes on where it was, painted
-  again at once. A real new size (a tablet turned, a window resized) lays
-  the rain out again at the time it had got to: the cup as full, the rain
-  played four seconds first so it falls as it was, a held picture played to
-  its moment again. The crema thins on a screen under 600 px tall, so its
-  layers always fit the cup's sprite. Why: Brew Rain started over at any
-  change of size. Puppeteer's screenshot, as the Chromium 91 smoke takes it,
-  shrinks the page to its content (1x1 under the fixed overlay) and back
-  before capturing, so the smoke caught the rain just begun, a held one at
-  its first frame, with no trail and no heads; and the 1x1 size built a cup
-  too short for its crema, which threw (D-SAVE-3).
+  to, and a corner's two roasts cross by way of the one between. A soft glow
+  of its colour lies on the page around the logo: its shape blurred, drawn
+  once for each roast at each size. A corner sends a ring of warm light out
+  of the screen's corner, spreading over a little more than half the
+  screen's shorter side and gone in 0.9 s, with a flash where it starts; its
+  dozen beans are drawn as they fly (`beanShape.ts`'s drawBean), lit from
+  the screen's upper left however they spin, flying out in front of the
+  logo, growing a little as they come at you, solid for half their 1.2 s and
+  then fading. Under 0.2 ms a frame on the build PC, under 1 ms through a
+  burst. Why: a colour that switches at once flickers; the glow and the
+  light give the logo and its corner the "premium product's ambient screen"
+  the owner's ask was after, for next to nothing a frame.
+- **D-RAIN-6. Brew Rain goes on through a change of size.** A size too small
+  to draw on (under 64x120 px: a canvas not laid out yet, or a screenshot
+  that shrinks the page for a moment) leaves the rain as it was, and back at
+  the size it was laid out for it goes on where it was, painted again at
+  once. A real new size (a tablet turned, a window resized) lays the rain
+  out again at the time it had got to: the cup as full, the rain played four
+  seconds first so it falls as it was, a held picture played to its moment
+  again. The crema thins on a screen under 600 px tall, so its layers always
+  fit the cup's sprite. Why: Brew Rain started over at any change of size.
+  Puppeteer's screenshot, as the Chromium 91 smoke takes it, shrinks the
+  page to its content (1x1 under the fixed overlay) and back before
+  capturing, so the smoke caught the rain just begun, a held one at its
+  first frame, with no trail and no heads; and the 1x1 size built a cup too
+  short for its crema, which threw (D-SAVE-3). The Bouncing Portafilter does
+  the same: a screen under 16 px either way changes nothing in its model, so
+  a passing 1x1 keeps its place, its path and its planned first corner, and
+  it is painted again at once when the size comes back.
 
 ### Rising Steam and Nightstand: round 2 (2026-10-24)
 

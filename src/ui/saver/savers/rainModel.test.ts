@@ -370,11 +370,20 @@ describe('the drops', () => {
         const far = drop.size < 1;
         expect(rings[0]!.reach).toBeGreaterThanOrEqual(RIPPLE_REACH[0] * drop.size - 1e-9);
         expect(rings[0]!.reach).toBeLessThanOrEqual(RIPPLE_REACH[1] * drop.size + 1e-9);
+        // Its droplets, thrown up from the surface where it landed and still rising: four to six for a near
+        // drop, fewer and smaller for a far one.
+        const thrown = model.droplets.filter((droplet) => droplet.surface === rings[0]!.y);
+        expect(thrown.length).toBeGreaterThanOrEqual(Math.max(1, Math.round(DROPLETS[0] * drop.size)));
+        expect(thrown.length).toBeLessThanOrEqual(Math.max(1, Math.round(DROPLETS[1] * drop.size)));
+        for (const droplet of thrown) {
+          expect(droplet.vy).toBeLessThan(0);
+          expect(Math.abs(droplet.x - drop.x)).toBeLessThan(3);
+          expect(droplet.size).toBeLessThanOrEqual(2.1 * drop.size + 1e-9);
+        }
         seen[far ? 'far' : 'near'] = true;
       }
     }
     expect(seen).toEqual({ near: true, far: true });
-    expect(model.droplets.length + DROPLETS[0]).toBeGreaterThan(0);
   });
 
   it('let droplets fall back into the cup and rings fade within their time, and keep both to a bounded number', () => {
@@ -518,21 +527,39 @@ describe('the words', () => {
 });
 
 describe('the still', () => {
-  it('is the moment, from 8 s on, a word has just been spelled in full, all its letters lit; 14 s at the latest', () => {
-    for (let seed = 1; seed <= 24; seed += 1) {
-      const model = createRainModel(seed, SCREEN, ['9.0', '36.4', '28']);
-      while (!isStillMoment(model)) {
-        model.step(FRAME_MS);
-        model.takeEvents();
-      }
-      expect(model.time, `seed ${seed}`).toBeGreaterThanOrEqual(STILL_FROM_MS);
-      expect(model.time, `seed ${seed}`).toBeLessThanOrEqual(STILL_LATEST_MS + FRAME_MS);
-      if (model.time < STILL_LATEST_MS) {
-        expect(model.wordEndedAt).not.toBeNull();
-        expect(model.letters.length, `seed ${seed}`).toBeGreaterThan(0);
-        for (const letter of model.letters.filter((one) => one.age < 1500)) expect(letterAlpha(letter.age)).toBe(1);
+  it('is the moment, from 8 s on, a word has just been spelled in full, every letter of it lit; 14 s at the latest', () => {
+    let words = 0;
+    let stills = 0;
+    for (const [width, height] of [
+      [962, 602],
+      [1280, 800],
+      [1366, 1024],
+      [1920, 1200],
+    ] as const) {
+      const screen = layoutFor(width, height);
+      for (let seed = 1; seed <= 200; seed += 1) {
+        const model = createRainModel(seed, screen, ['9.0', '36.4', '28']);
+        while (!isStillMoment(model)) {
+          model.step(FRAME_MS);
+          model.takeEvents();
+        }
+        const at = `seed ${seed} at ${width}x${height}`;
+        stills += 1;
+        expect(model.time, at).toBeGreaterThanOrEqual(STILL_FROM_MS);
+        expect(model.time, at).toBeLessThanOrEqual(STILL_LATEST_MS + FRAME_MS);
+        if (model.time >= STILL_LATEST_MS) continue;
+        words += 1;
+        const word = model.lastWord!;
+        expect(word, at).not.toBeNull();
+        expect(model.wordEndedAt).toBe(word.endedAt);
+        // The word's letters: its column's, spelled since its first.
+        const letters = model.letters.filter((letter) => letter.col === word.col && letter.age <= model.time - word.startedAt + 1e-6);
+        expect(letters.map((letter) => letter.glyph).join(''), at).toBe(word.text.replace(/ /g, ''));
+        for (const letter of letters) expect(letterAlpha(letter.age), `${word.text}, ${at}`).toBe(1);
       }
     }
+    // Nearly always a word: the 14 s fallback is for the odd seed whose words all come late or slow.
+    expect(words / stills).toBeGreaterThan(0.9);
   });
 
   it('comes at the same moment every time for a seed', () => {

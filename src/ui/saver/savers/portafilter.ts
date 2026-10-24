@@ -7,14 +7,25 @@
  * to French, crossing over in 300 ms; a corner throws a dozen beans and a
  * ring of light out of it and shows "Corner 2" by the logo for 3 s. The bounce
  * itself is portafilterModel.ts; this only paints it, with the dark palette
- * and the roasts' colours, from sprites drawn once a size: the logo and its
- * glow in each roast, the beans, the ring.
+ * and the roasts' colours, from sprites drawn once a size (the logo and its
+ * glow in each roast, the ring), and the burst's few beans as they fly, lit
+ * from the screen's upper left however they turn.
  */
 import { parseHex } from '../../color.ts';
 import type { CanvasSaver, SaverInstance } from '../types.ts';
-import { BEAN_RATIO, drawBean } from './beanShape.ts';
+import { drawBean } from './beanShape.ts';
 import { CAPTION, FAMILY, layoutLogo, paintLogo, TITLE, type LogoLayout } from './portafilterLogo.ts';
-import { BADGE_ASPECT, burstAlpha, BURST_MS, cornerLabelAlpha, createPortafilterModel, ringAt, roastBetween, shownTone } from './portafilterModel.ts';
+import {
+  BADGE_ASPECT,
+  burstAlpha,
+  BURST_MS,
+  cornerLabelAlpha,
+  createPortafilterModel,
+  MIN_SCREEN,
+  ringAt,
+  roastBetween,
+  shownTone,
+} from './portafilterModel.ts';
 import { ROASTS } from './roasts.ts';
 
 /** The glow reaches this far out from the logo, as a share of its width. */
@@ -54,7 +65,6 @@ export const portafilter: CanvasSaver = {
     let scale = 1;
     let layout: LogoLayout | null = null;
     let dressed: Dressed[] = [];
-    let beans: HTMLCanvasElement[] = [];
     let ring: HTMLCanvasElement | null = null;
     let flash: HTMLCanvasElement | null = null;
     let disposed = false;
@@ -79,9 +89,8 @@ export const portafilter: CanvasSaver = {
     };
 
     const releaseSprites = () => {
-      release([...dressed.flatMap((one) => [one.logo, one.glow]), ...beans, ring, flash]);
+      release([...dressed.flatMap((one) => [one.logo, one.glow]), ring, flash]);
       dressed = [];
-      beans = [];
       ring = null;
       flash = null;
     };
@@ -112,16 +121,6 @@ export const portafilter: CanvasSaver = {
       g.setTransform(scale, 0, 0, scale, pad * scale - away, pad * scale);
       paintLogo(g, found, colour, colour, true);
       return glow;
-    };
-
-    /** A bean of each roast, front up, at the most a burst bean grows to. */
-    const makeBean = (length: number, roast: number): HTMLCanvasElement | null => {
-      const made = sprite(length + 4, length / BEAN_RATIO + 4);
-      if (!made) return null;
-      const [bean, g] = made;
-      g.translate(bean.width / 2, bean.height / 2);
-      drawBean(g, length, ROASTS[roast]!, 'front');
-      return bean;
     };
 
     /** A soft ring of warm light, drawn scaled up as it spreads. */
@@ -170,11 +169,6 @@ export const portafilter: CanvasSaver = {
         if (!logo || !glow) return;
         dressed.push({ logo, glow });
       }
-      const longest = Math.ceil(model.w * 0.15 * BEAN_GROWTH * scale);
-      for (let roast = 0; roast < ROASTS.length; roast += 1) {
-        const bean = makeBean(longest, roast);
-        if (bean) beans.push(bean);
-      }
       ring = makeRing();
       flash = makeFlash();
       labelSize = Math.max(13, model.w * 0.085);
@@ -202,18 +196,21 @@ export const portafilter: CanvasSaver = {
       ctx.globalAlpha = 1;
     };
 
-    /** The corner's beans flying out at you: growing a little, solid for half their time, then fading. */
+    /**
+     * The corner's beans flying out at you: growing a little, solid for half their time, then fading. Drawn
+     * as they are, each frame of a burst (a dozen, for 1.2 s), into the turned context: drawBean keeps the
+     * key light at the screen's upper left however a bean spins, where a turned sprite would turn its light.
+     */
     const drawBeans = () => {
       for (const bean of model.burst) {
-        const sprite = beans[bean.roast];
-        if (!sprite) continue;
+        const roast = ROASTS[bean.roast];
+        if (!roast) continue;
         const grown = 1 + (BEAN_GROWTH - 1) * Math.min(1, bean.age / BURST_MS);
-        const unit = (bean.length * grown * scale) / (sprite.width - 4);
-        const cos = Math.cos(bean.angle) * unit;
-        const sin = Math.sin(bean.angle) * unit;
+        const cos = Math.cos(bean.angle) * scale;
+        const sin = Math.sin(bean.angle) * scale;
         ctx.setTransform(cos, sin, -sin, cos, bean.x * scale, bean.y * scale);
         ctx.globalAlpha = Math.min(1, 2 * burstAlpha(bean.age));
-        ctx.drawImage(sprite, -sprite.width / 2, -sprite.height / 2);
+        drawBean(ctx, bean.length * grown, roast, 'front');
       }
       ctx.globalAlpha = 1;
     };
@@ -261,7 +258,8 @@ export const portafilter: CanvasSaver = {
     };
 
     const draw = () => {
-      if (width <= 0 || height <= 0) return;
+      // No screen to bounce on (MIN_SCREEN): nothing to draw on either.
+      if (width < MIN_SCREEN || height < MIN_SCREEN) return;
       if (!layout || layout.forWidth !== model.w || dressed.length === 0) makeSprites();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = palette.background;
@@ -296,13 +294,17 @@ export const portafilter: CanvasSaver = {
       resize(nextWidth, nextHeight, nextScale) {
         width = nextWidth;
         height = nextHeight;
+        // The sprites are drawn at the backing scale: a new one draws them again (a new width does, in draw).
+        if (nextScale !== scale) layout = null;
         scale = nextScale;
+        // A size too small to bounce on changes nothing in the model (MIN_SCREEN, D-RAIN-6), and is not drawn on; back
+        // at a size, the logo goes on where it was, painted again at once, as resizing the canvas cleared it.
         model.resize(width, height);
-        layout = null;
+        draw();
       },
       still() {
         model = createPortafilterModel(env.seed);
-        if (width > 0) model.resize(width, height);
+        model.resize(width, height);
         draw();
       },
       dispose() {
