@@ -711,21 +711,21 @@ laptop on the same network for steps 4 and 5. Put any setting back after.
    card's line "Weekly clean due: … shots since …", and a tap opens Weekly
    on that step.
 
-## 20. Screensavers (D223-D227)
+## 20. Screensavers (D223-D228, D-SAVE-1 to D-SAVE-3)
 
 Once Decaid says the DE1 is asleep and nobody has touched the tablet for a
 minute, a screensaver covers CafAI; it dims the screen to 30 and holds it on
 through Decaid's display socket for 30 minutes, then turns black and lets
 Android's own timeout turn the screen off. The mock and the simulator show
 the commands go out; only the tablet shows the dim, the hold, the frame
-rate and the fonts. Allow about an hour, most of it waiting. For steps 2 to
+rate and how each one looks dimmed. Allow about an hour, most of it waiting. For steps 2 to
 7, a computer on the same network can read the display:
 `curl http://<tablet>:8080/api/v1/display` (`requestedBrightness`,
 `wakeLockOverride`). Put the setting back after.
 
 1. **Settings, and each one.** Settings > Screensaver. Expected: on, "A
    different one each day" with today's named under it, the line without
-   "Only on the Decent tablet". Pick each of the six in turn and tap
+   "Only on the Decent tablet". Pick each of the eight in turn and tap
    **Preview** (a tap closes it). Record for each whether it moves smoothly,
    a little unevenly, or in jerks; with Chrome's remote debugging
    (`chrome://inspect` on the computer, Rendering > Frame rendering stats)
@@ -758,8 +758,27 @@ rate and the fonts. Allow about an hour, most of it waiting. For steps 2 to
    Expected: CafAI starts again at the brightness from before the dim (it
    puts the dim back at start), and a minute later the screensaver is up
    again, dimmed.
-8. **The katakana.** Preview Brew Rain. Expected: Japanese katakana
-   (コーヒー, エスプレッソ) falling in the columns, not empty boxes.
+8. **The looks, dimmed** (round 2, D-SAVE-1). Let each come up dimmed
+   (or Preview each with the brightness turned down to about a third) and
+   look from a step back. Expected, and record what is not so:
+   - **Bouncing Portafilter**: the portafilter logo glowing in its roast,
+     the colour crossing over at each wall; at a corner, a ring of light and
+     a burst of beans.
+   - **Espresso Pipes**: offered (not greyed out); gauges and espresso cups
+     readable; smooth up to just before the fade, about 40 s in (record the
+     frame rate near the fullest), and whether its pace feels busy.
+   - **Beanfield**: roasted beans, the dark ones by their rim and glint;
+     no stutter in its first seconds.
+   - **Rising Steam**: the first picture within about a second, the cup
+     crisp as it drifts, the steam readable.
+   - **Lava Latte**: the glass, the cream and the glowing bottom read; say
+     whether the foam band at the top reads as a lid.
+   - **Brew Rain**: the steel screen along the top, coffee symbols falling
+     in two layers, a lit word every few seconds, splashes and rings on the
+     crema, no empty boxes.
+   - **Latte Art**: each pour reads as what its name says, under the cup.
+   - **Nightstand**: the date in the tablet's language; the minute's fade
+     smooth.
 9. **Machine off.** With the screensaver up, switch the DE1 off. Expected:
    the screensaver goes within a few seconds and the brightness comes back;
    the screen then goes off by Android's own timeout, as before CafAI had
@@ -874,14 +893,14 @@ nothing until then.
 | 19 | 5 | Streamline's Descale seen; its states and substates | | |
 | 19 | 6 | Forward Flush x5: no shot in Decaid, nothing in the chat, the clean not marked, the profile banner's Retry after; what the Shot view showed | | |
 | 19 | 7 | The stats card's line when due; a tap opens the step | | |
-| 20 | 1 | Settings > Screensaver as described; each of the six in Preview: smooth? frames a second; no dim, no wake | | |
+| 20 | 1 | Settings > Screensaver as described; each of the eight in Preview: smooth? frames a second; no dim, no wake | | |
 | 20 | 2 | Up a minute after Sleep, over the top bar; dimmed (`requestedBrightness` 30, `wakeLockOverride` true) | | |
 | 20 | 3 | Held on, dimmed, past Android's own timeout | | |
 | 20 | 4 | A tap over Espresso wakes the DE1 and starts nothing; the brightness back | | |
 | 20 | 5 | Black at 30 minutes, then the screen off; how long after; the dim kept, the lock gone | | |
 | 20 | 6 | Screen on again: moving, dimmed and held; a tap wakes the DE1 | | |
 | 20 | 7 | After 11 minutes off: CafAI starts at the old brightness; the screensaver back a minute later | | |
-| 20 | 8 | Brew Rain's katakana show, not boxes | | |
+| 20 | 8 | Each look reads dimmed; Espresso Pipes and Beanfield smooth; Latte Art's pours read as their names | | |
 | 20 | 9 | DE1 switched off: the screensaver goes, the brightness back | | |
 | 21 | 1 | The copy in Decaid holds the choice, the address and the code; CafAI's port | | |
 | 21 | 2 | After a Decaid update: the coach on the computer, nothing asked; the port before and after | | |
