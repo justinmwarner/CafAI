@@ -99,6 +99,8 @@ const ROOM_HALF = (() => {
   return [ROOM[0] / length, ROOM[1] / length, (ROOM[2] + 1) / length] as const;
 })();
 const ROOM_LIGHT = 0.34;
+/** The coffee round the cream gives it a little of its own warmth, high or low. */
+const COFFEE_BOUNCE = 0.1;
 
 /** The coffee, as the bulb's light goes through it: gold where it is strongest, amber, brown, espresso where none is left. */
 const COFFEE_GOLD = linearOf(oklch(0.72, 0.13, 70));
@@ -597,7 +599,7 @@ export const lava: CanvasSaver = {
           const half = nx * ROOM_HALF[0] + ny * ROOM_HALF[1] + nz * ROOM_HALF[2];
           const edge = (1 - nz) * (1 - nz);
           // The bulb's light: on the undersides, through the cream, and glowing at its thin edges.
-          const warm = bulb * (CREAM_BULB * (below > 0 ? below : 0) + CREAM_THROUGH + CREAM_RIM * edge);
+          const warm = bulb * (CREAM_BULB * (below > 0 ? below : 0) + CREAM_THROUGH + CREAM_RIM * edge) + COFFEE_BOUNCE;
           const white = CREAM_FILL + ROOM_LIGHT * (room > 0 ? room : 0);
           const sheen = half > 0.9 ? CREAM_SHEEN * ((half - 0.9) / 0.1) ** 3 : 0;
           const o = (row * FINE_COLS + col) * 4;
