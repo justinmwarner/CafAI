@@ -68,7 +68,11 @@ const TRAIL_SECONDS = 0.9;
 const DEPOSIT_RATE = 3.7;
 /** How much of a stroke goes into the mist round it. */
 const MIST_SHARE = 0.18;
-/** The body: how long it takes to fade to a third (seconds), how fast it rises (units a second), how fast it spreads (cells² a second), and how much a particle feeds it a second. */
+/**
+ * The body: how long it takes to fade to a third (seconds), how fast it rises
+ * (units a second), how fast it spreads (the share of a cell passed to each
+ * neighbour, a second), and how much a particle feeds it a second.
+ */
 const HAZE_SECONDS = 2.4;
 const HAZE_RISE = 26;
 const HAZE_SPREAD = 1.6;

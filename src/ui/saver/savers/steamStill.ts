@@ -11,7 +11,7 @@
  * above (VIEW_SIN) with no perspective, so each is its profile (radius against
  * height) turned about the axis, and the visible surface along any column of
  * the image comes from rasterizing the profile into a depth buffer for that
- * column, three samples a pixel each way. The handle is a tube along a curve
+ * column, two samples a pixel each way. The handle is a tube along a curve
  * beside the cup. Each sample is shaded: the glaze as a wrapped diffuse (the
  * soft light porcelain lets through) and a Fresnel reflection of the room and
  * its two lights; the coffee as its crema, a pale ring at the wall and a
@@ -53,25 +53,25 @@ const SAUCER_FOOT = 64;
 /** On the screen, in design units below the middle of the rim: the saucer's near edge, and the table straight under the rim. */
 export const SAUCER_BELOW_RIM = ((RIM_TOP - BEAD_Y) * COS + SAUCER_RADIUS * SIN) * CUP_SCALE;
 export const TABLE_BELOW_RIM = RIM_TOP * COS * CUP_SCALE;
+/** The cup's foot, bottom and top. */
+const FOOT_BOTTOM_R = 31;
+const FOOT_TOP_R = 32.5;
 
 /** Where a point of the still life's world shows on the screen, in design units from the middle of the rim, y down. */
 export function onScreen(x: number, y: number, z: number): { x: number; y: number } {
   return { x: x * CUP_SCALE, y: (RIM_TOP * COS - (y * COS - z * SIN)) * CUP_SCALE };
 }
-/** The cup's foot, bottom and top. */
-const FOOT_BOTTOM_R = 31;
-const FOOT_TOP_R = 32.5;
 
 /** What a sample sees. */
-export const NOTHING = 0;
-export const OUTER = 1;
-export const LIP_PART = 2;
-export const INNER = 3;
-export const COFFEE = 4;
-export const SAUCER_TOP = 5;
-export const SAUCER_BEAD = 6;
-export const SAUCER_UNDER = 7;
-export const HANDLE = 8;
+const NOTHING = 0;
+const OUTER = 1;
+const LIP_PART = 2;
+const INNER = 3;
+const COFFEE = 4;
+const SAUCER_TOP = 5;
+const SAUCER_BEAD = 6;
+const SAUCER_UNDER = 7;
+const HANDLE = 8;
 
 /** The image's extent round the middle of the rim (units): the saucer, and the shadow the cup throws forward. */
 const EXTENT_LEFT = 148;
@@ -398,7 +398,7 @@ export function cupShadow(px: number, py: number, pz: number, lx: number, ly: nu
 }
 
 /** The same from the cup's own walls for a point inside it (the coffee, the inner wall): the light must leave by the mouth. */
-export function cavityShadow(px: number, py: number, pz: number, lx: number, ly: number, lz: number): number {
+function cavityShadow(px: number, py: number, pz: number, lx: number, ly: number, lz: number): number {
   if (ly <= 0.01) return 0;
   const { inner } = radiusTables();
   let light = 1;
@@ -435,7 +435,7 @@ function saucerShadow(px: number, pz: number, lx: number, ly: number, lz: number
 }
 
 /** The ACES filmic curve (Narkowicz's fit): soft highlights, a gentle toe. */
-export function toneCurve(value: number): number {
+function toneCurve(value: number): number {
   const v = Math.max(0, value * EXPOSURE);
   return clamp01((v * (2.51 * v + 0.03)) / (v * (2.43 * v + 0.59) + 0.14));
 }
