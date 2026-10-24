@@ -12,6 +12,8 @@ import { createDisplayChannel } from '../api/display.ts';
 import { createPluginDirectory, watchPlugins } from '../api/plugins.ts';
 import { createToldList } from '../coach/facts/told.ts';
 import { DEFAULT_MODEL, MODELS } from '../llm/index.ts';
+import { KNOWN_MODELS } from '../llm/models.ts';
+import { openSpendService } from '../spend/service.ts';
 import { createIdbStorage, restoreFromMirrorIfEmpty, startLateRestore } from '../storage/index.ts';
 import { openCoachSourceStore } from '../storage/coachSource.ts';
 import { createCoachSourceBackup } from '../storage/coachSourceBackup.ts';
@@ -122,13 +124,18 @@ export async function createServices(win: Window): Promise<AppServices> {
   usage?.tag('cafai_version', APP_VERSION);
   usage?.tag('host', host.platform ?? 'browser');
 
+  // The coach's usage and cost (D237-D240): every finished request counted per day on this device (cafai-spend,
+  // a database of its own) and copied month by month to Decaid's store, so the totals and the budget add every
+  // device and an iPad's Decaid update gets the month back. Read from Decaid at start, and when Decaid is back.
+  const spend = await openSpendService({ kv: decaid.kv, deviceStorage, models: KNOWN_MODELS });
+
   const coach = createCoachEngine({
     // Its "is a key stored" means "has what the selected source needs".
     storage: withCoachCredential(storage, coachSource),
     telemetry,
     api: createApiPort(decaid),
     coach: createCoachPort({ temperatureUnit: temperatureUnit.get }),
-    llm: createLlmPort(storage.secrets, coachSource),
+    llm: createLlmPort(storage.secrets, coachSource, spend),
     clock: { now: () => new Date(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
     newId,
     visibility: {
@@ -148,6 +155,7 @@ export async function createServices(win: Window): Promise<AppServices> {
 
   telemetry.start();
   await coach.start();
+  void spend.refresh();
 
   // Which coach this device runs, for Clarity's filters (D213): none until the chosen source has its key or code.
   let sourceKind = (await coachSource?.get().catch(() => null))?.kind ?? 'anthropic';
@@ -213,6 +221,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     if (!back) return;
     late?.retryNow();
     syncCopies();
+    void spend.refresh();
   });
 
   // Backgrounding can unload the page after ten minutes: back up on the way out.
@@ -249,6 +258,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     coachSourceBackup,
     care,
     usage,
+    spend,
     dispose() {
       win.document.removeEventListener('visibilitychange', onVisibility);
       stopPluginWatch();
@@ -259,6 +269,7 @@ export async function createServices(win: Window): Promise<AppServices> {
       stopSourceTag?.();
       stopCoachTag?.();
       usage?.dispose();
+      spend.dispose();
       coach.dispose();
       care.dispose();
       saverScreen?.dispose();

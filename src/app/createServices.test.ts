@@ -8,6 +8,9 @@ import { buildMirrorEntries } from '../storage/mirror.ts';
 import { KEY_NAME, KEY_NAMESPACE } from '../storage/keyBackup.ts';
 import { API_KEY, MODEL, makeBag, makeCareRecord, makeConversation, makeSettings, makeVersion } from '../storage/testing/fixtures.ts';
 import type { IdbStorage } from '../storage/index.ts';
+import { monthOf } from '../spend/records.ts';
+import { SPEND_NAMESPACE } from '../spend/sync.ts';
+import { makeRecord } from '../spend/testing/fixtures.ts';
 import { createServices, type AppServices } from './createServices.ts';
 
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
@@ -120,6 +123,14 @@ describe('createServices: bags and the key back from Decaid (D99, D100)', () => 
     services = await createServices(window);
     expect(services.coach.getState()).toMatchObject({ restoredFromBackup: true, activeBag: { id: 'bag_kiambu' } });
     expect(services.appearance.get()).toEqual({ mode: 'light', tint: { hue: 200 } });
+  });
+
+  it("counts the coach's spend, and brings the month's back from Decaid's copy at start, to a new origin too (D238)", async () => {
+    const month = monthOf(new Date());
+    decaid.state.store.set(SPEND_NAMESPACE, new Map([[month, { v: 1, records: [makeRecord({ day: `${month}-01`, device: 'olddevic', costMicros: 1_840_000 })] }]]));
+    services = await createServices(window);
+    expect(services.spend).toBeDefined();
+    await vi.waitFor(() => expect(services!.spend!.summary().anthropic.month.costMicros).toBe(1_840_000));
   });
 
   it('keeps trying when Decaid does not answer at start, and shows the bags, the look and a note once it does (5.4)', async () => {

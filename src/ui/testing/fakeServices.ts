@@ -45,6 +45,10 @@ import type {
   Storage,
 } from '../../storage/types.ts';
 import { DEFAULT_BUDGET, DEFAULT_CARE } from '../../storage/settings.ts';
+import { KNOWN_MODELS } from '../../llm/models.ts';
+import { createSpendService } from '../../spend/service.ts';
+import { createMemorySpendStore } from '../../spend/store.ts';
+import type { SpendRecord, SpendService } from '../../spend/types.ts';
 
 export interface Call {
   method: string;
@@ -554,6 +558,22 @@ export const FAKE_MODELS: readonly ModelInfo[] = [
   },
 ];
 
+/**
+ * The coach's spend as the real service keeps it (D237-D240), in memory: the
+ * same counting, totals and budget over `records`, at the catalog's prices,
+ * with no Decaid copy (refresh() resolves at once). For a test or a preview
+ * that shows usage: createFakeServices({ spend: createFakeSpend(...) }).
+ */
+export function createFakeSpend(options: { records?: readonly SpendRecord[]; now?: () => Date } = {}): SpendService {
+  return createSpendService({
+    store: createMemorySpendStore(options.records),
+    initial: options.records,
+    deviceId: 'fake0001',
+    models: KNOWN_MODELS,
+    now: options.now,
+  });
+}
+
 export interface FakeServices extends Services {
   decaid: FakeDecaid;
   telemetry: FakeTelemetry;
@@ -579,6 +599,8 @@ export function createFakeServices(options: {
   insideDecaid?: boolean;
   /** Decaid's platform (HostEnvironment.platform); inside Decaid a Decent tablet's, 'android', unless given. */
   platform?: string | null;
+  /** The coach's spend (createFakeSpend); none by default, as in previews. */
+  spend?: SpendService;
 } = {}): FakeServices {
   const heartbeat = {
     count: 0,
@@ -611,6 +633,7 @@ export function createFakeServices(options: {
     drinkScreens: createDrinkScreensStore(storage.settings, options.storage?.settings?.drinkScreens),
     screensaver: createScreensaverSettingStore(storage.settings, options.storage?.settings?.screensaver),
     plugins: createFakePluginDirectory(),
+    ...(options.spend ? { spend: options.spend } : {}),
   };
 }
 

@@ -17,6 +17,7 @@ import type { CoachSourceStore } from '../storage/coachSource.ts';
 import type { CoachSourceBackup } from '../storage/coachSourceBackup.ts';
 import type { Bag, ProfileVersion, Storage } from '../storage/types.ts';
 import type { UsageService } from '../usage/service.ts';
+import type { SpendService } from '../spend/types.ts';
 import type { AppearanceStore } from './appearance.ts';
 import type { DisplayPrefsStore } from './displayPrefs.ts';
 import type { DrinkScreensStore } from './drinkScreens.ts';
@@ -86,6 +87,13 @@ export interface Services {
    * other build leave it out, and then no card, notice or switch shows.
    */
   usage?: UsageService;
+  /**
+   * The coach's token use and estimated cost, every device's added, and the
+   * month's budget (D237-D240, src/spend/service.ts). Optional: fakes and
+   * previews leave it out unless a test gives one (createFakeSpend), and
+   * then Settings shows no usage.
+   */
+  spend?: SpendService;
 }
 
 export type UiRole = 'user' | 'assistant' | 'system';
