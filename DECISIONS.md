@@ -4440,10 +4440,13 @@ desktop).
   two frames its sprite is stretched to the roll's own silhouette. Sprites
   are made the first time they are wanted and kept: the two small sizes all
   of them, the two big ones their most recently used, about 1.3 million
-  pixels each (some 16 MB in all); a frame makes at most two big ones, and a
-  bean past that is drawn from a frame of its roll one or two away; a still
-  makes all it needs. About 2 ms a frame on the desktop once running, 1 ms of
-  it the drawing. Why: the owner asked for nicer, and a gradient on an oval
+  pixels each (some 16 MB in all); a frame makes at most two big sprites and
+  casts the rays of at most one big roll frame, and a bean past that is drawn
+  from a frame of its roll one or two away, or from the next size down; a
+  still makes all it needs. The skin's grain is worked out once into a table
+  for each half of the bean. On the desktop the first frame takes about a
+  tenth of a second, the first few seconds about 4 ms a frame, and then about
+  1.5 ms. Why: the owner asked for nicer, and a gradient on an oval
   only ever looks like a lozenge; per-pixel light is what makes a small solid
   read as lit, and Chromium 91's 2D canvas can only have it made once in
   script and kept. A bean that turned on the screen would cross from one

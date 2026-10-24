@@ -49,10 +49,54 @@ const CUT_CORE_WIDTH = 0.36;
 /**
  * The skin's grain: smooth noise fixed to the solid (every bean has the same
  * skin, so its sprites can be shared), a little uneven in colour and blotchy
- * where the oil lies, so a glint breaks up as it does on a real bean.
+ * where the oil lies, so a glint breaks up as it does on a real bean. Where a
+ * point is across the bean settles where it is on each half, so the grain is
+ * worked out once into a table for each half, the first time it is wanted.
  */
-const GRAIN = createNoise(createRandom(0xbea4));
 const GRAIN_SCALE = 6.5;
+const GRAIN_COLS = 168;
+const GRAIN_ROWS = 122;
+let grainTables: readonly [back: Float32Array, face: Float32Array] | null = null;
+
+function makeGrainTables(): readonly [Float32Array, Float32Array] {
+  const noise = createNoise(createRandom(0xbea4));
+  return [DOME, FACE].map((depth) => {
+    const table = new Float32Array(GRAIN_COLS * GRAIN_ROWS);
+    const sign = depth === DOME ? -1 : 1;
+    for (let row = 0; row < GRAIN_ROWS; row += 1) {
+      const y = (row / (GRAIN_ROWS - 1)) * 2 - 1;
+      for (let col = 0; col < GRAIN_COLS; col += 1) {
+        const x = ((col / (GRAIN_COLS - 1)) * 2 - 1) * BEAN_RATIO;
+        const z = sign * depth * Math.sqrt(Math.max(0, 1 - (x * x) / (BEAN_RATIO * BEAN_RATIO) - y * y));
+        // Two scales of it, each the noise and the noise turned half round about the bean's
+        // middle, added, so the grain too looks the same turned half round (shadeBean's `turned`).
+        const gx = x * GRAIN_SCALE;
+        const gy = y * GRAIN_SCALE;
+        const gz = z * GRAIN_SCALE;
+        const coarse = noise(gx, gy, gz) + noise(-gx, -gy, gz);
+        const fine = noise(gx * 2.3, gy * 2.3, gz * 2.3 + 7.1) + noise(-gx * 2.3, -gy * 2.3, gz * 2.3 + 7.1);
+        table[row * GRAIN_COLS + col] = Math.min(1, Math.max(0, 0.5 + 0.42 * (coarse + 0.5 * fine)));
+      }
+    }
+    return table;
+  }) as unknown as readonly [Float32Array, Float32Array];
+}
+
+/** The grain, about 0 to 1, at (x, y) on the back or the flat side: from its table, between its four nearest entries. */
+function grainAt(onFace: boolean, x: number, y: number): number {
+  grainTables ??= makeGrainTables();
+  const table = grainTables[onFace ? 1 : 0];
+  const col = Math.min(GRAIN_COLS - 1.001, Math.max(0, (x / BEAN_RATIO + 1) * 0.5 * (GRAIN_COLS - 1)));
+  const row = Math.min(GRAIN_ROWS - 1.001, Math.max(0, (y + 1) * 0.5 * (GRAIN_ROWS - 1)));
+  const c = col | 0;
+  const r = row | 0;
+  const fx = col - c;
+  const fy = row - r;
+  const at = r * GRAIN_COLS + c;
+  const top = table[at]! + (table[at + 1]! - table[at]!) * fx;
+  const bottom = table[at + GRAIN_COLS]! + (table[at + GRAIN_COLS + 1]! - table[at + GRAIN_COLS]!) * fx;
+  return top + (bottom - top) * fy;
+}
 
 /** Room around a sprite's bean, px. */
 export const SPRITE_PAD = 2;
@@ -247,7 +291,7 @@ export function beanGeometry(length: number, roll: number, samples: number): Bea
         }
       }
       if (count === 0) continue;
-      const size = Math.hypot(sx, sy, Math.max(sz, 1e-6));
+      const size = Math.sqrt(sx * sx + sy * sy + Math.max(sz, 1e-6) ** 2);
       coverage[at] = Math.round(count * each * 255);
       normal[at * 2] = sx / size;
       normal[at * 2 + 1] = sy / size;
@@ -292,7 +336,7 @@ function meet(depth: number, x: number, p: number, u: number, room: number, cos:
   let nx = x / A2;
   let ny = by;
   let nz = bz / k2;
-  let size = Math.hypot(nx, ny, nz);
+  let size = Math.sqrt(nx * nx + ny * ny + nz * nz);
   nx /= size;
   ny /= size;
   nz /= size;
@@ -304,7 +348,7 @@ function meet(depth: number, x: number, p: number, u: number, room: number, cos:
     cut(x, by, hit);
     nx -= hit.nx;
     ny -= hit.ny;
-    size = Math.hypot(nx, ny, nz);
+    size = Math.sqrt(nx * nx + ny * ny + nz * nz);
     nx /= size;
     ny /= size;
     nz /= size;
@@ -314,7 +358,7 @@ function meet(depth: number, x: number, p: number, u: number, room: number, cos:
   let sz = ny * sin + nz * cos;
   if (sz < 0) {
     // A slope of the cut seen past edge on: no farther than edge on.
-    const across = Math.hypot(nx, sy);
+    const across = Math.sqrt(nx * nx + sy * sy);
     nx /= across;
     sy /= across;
     sz = 0;
@@ -322,15 +366,7 @@ function meet(depth: number, x: number, p: number, u: number, room: number, cos:
   hit.nx = nx;
   hit.ny = sy;
   hit.nz = sz;
-  // The grain, two scales of it, fixed to the solid; about 0 to 1. Each is
-  // the noise and the noise turned half round about the bean's middle, added,
-  // so the grain too looks the same turned half round (shadeBean's `turned`).
-  const gx = x * GRAIN_SCALE;
-  const gy = by * GRAIN_SCALE;
-  const gz = bz * GRAIN_SCALE;
-  const coarse = GRAIN(gx, gy, gz) + GRAIN(-gx, -gy, gz);
-  const fine = GRAIN(gx * 2.3, gy * 2.3, gz * 2.3 + 7.1) + GRAIN(-gx * 2.3, -gy * 2.3, gz * 2.3 + 7.1);
-  const grain = Math.min(1, Math.max(0, 0.5 + 0.42 * (coarse + 0.5 * fine)));
+  const grain = grainAt(depth === FACE, x, by);
   hit.grain = grain;
   // The oil: in patches along the grain, smooth on the round back, sparse on the wrinkled flat side.
   hit.oil = depth === DOME ? 0.45 + 0.55 * smoothstep(0.3, 0.75, grain) : 0.12 + 0.48 * smoothstep(0.5, 0.85, grain);

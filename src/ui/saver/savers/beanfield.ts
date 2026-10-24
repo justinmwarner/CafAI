@@ -54,12 +54,16 @@ const LARGEST = 168;
 /** How many sprite pixels a size keeps at most: all of the small sizes' sprites, the big ones' most recently used. */
 const KEEP_PIXELS = 1_300_000;
 /**
- * Sprites of a big size (a bean this long, device px, or longer) a frame
- * makes at most: past that, a bean is drawn from a frame of its roll already
- * made, one or two away, so no frame takes long. A still makes all it needs.
+ * What a frame may make of a big size (a bean this long, device px, or
+ * longer) at most: sprites, and the rays of roll frames, which cost far more.
+ * Past that, a bean is drawn from a frame of its roll already made, one or
+ * two away, or else from the next size down, a little enlarged; so no frame
+ * takes long, and the first second of a showing does not stutter. A still
+ * makes all it needs.
  */
 const BIG = 64;
-const BIG_A_FRAME = 2;
+const BIG_SPRITES_A_FRAME = 2;
+const BIG_RAYS_A_FRAME = 1;
 
 /**
  * The drum light behind the field (D-BEAN-2): a warm glow deep in the middle,
@@ -167,8 +171,11 @@ export const beanfield: CanvasSaver = {
       return geometry;
     };
 
-    /** Big sprites this frame may still make. */
-    let bigLeft = BIG_A_FRAME;
+    /** Big sprites, and big roll frames' rays, this frame may still make. */
+    let bigSpritesLeft = BIG_SPRITES_A_FRAME;
+    let bigRaysLeft = BIG_RAYS_A_FRAME;
+    /** The size of the sprite spriteFor found last: smaller than asked for where it fell back. */
+    let drawnLevel: Level | null = null;
 
     const keyOf = (roast: number, frame: number, bin: number) => (roast * ROLL_FRAMES + frame) * SPIN_BINS + bin;
 
@@ -183,17 +190,21 @@ export const beanfield: CanvasSaver = {
     };
 
     /**
-     * The lit sprite for `view` at this size, made the first time it is
-     * wanted (in the canvas of the one let go for it, once the size keeps all
-     * it may). Past the frame's big ones, a frame of the roll one or two away
-     * that is made already: `view.frame` says which.
+     * The lit sprite for `view` at the size `levelIndex`, made the first time
+     * it is wanted (in the canvas of the one let go for it, once the size
+     * keeps all it may). Past what a frame may make of a big size, a frame of
+     * the roll one or two away that is made already (`view.frame` says which),
+     * or else the size below. `drawnLevel` says which size it is.
      */
-    const spriteFor = (level: Level, roast: number): HTMLCanvasElement => {
+    const spriteFor = (levelIndex: number, roast: number): HTMLCanvasElement => {
+      const level = levels[levelIndex]!;
       const { frame, bin } = view;
+      drawnLevel = level;
       const found = madeSprite(level, keyOf(roast, frame, bin));
       if (found) return found;
       if (level.length >= BIG) {
-        if (bigLeft <= 0) {
+        const needsRays = !level.geometry[sourceFrame(frame)];
+        if (bigSpritesLeft <= 0 || (needsRays && bigRaysLeft <= 0)) {
           for (const away of [1, -1, 2, -2]) {
             const near = (frame + away + ROLL_FRAMES) % ROLL_FRAMES;
             const nearSprite = madeSprite(level, keyOf(roast, near, bin));
@@ -202,8 +213,10 @@ export const beanfield: CanvasSaver = {
               return nearSprite;
             }
           }
+          if (levelIndex > 0) return spriteFor(levelIndex - 1, roast);
         }
-        bigLeft -= 1;
+        bigSpritesLeft -= 1;
+        if (needsRays) bigRaysLeft -= 1;
       }
       let sprite: HTMLCanvasElement;
       if (level.sprites.size >= level.keep) {
@@ -226,9 +239,9 @@ export const beanfield: CanvasSaver = {
     };
 
     /** The smallest size at least as long as this (device px): so a bean is only ever scaled down, by less than half, but past the biggest. */
-    const levelFor = (deviceLength: number): Level => {
-      for (const level of levels) if (level.length >= deviceLength) return level;
-      return levels[levels.length - 1]!;
+    const levelFor = (deviceLength: number): number => {
+      for (let i = 0; i < levels.length; i += 1) if (levels[i]!.length >= deviceLength) return i;
+      return levels.length - 1;
     };
 
     const releaseSprites = () => {
@@ -255,9 +268,11 @@ export const beanfield: CanvasSaver = {
       ctx.drawImage(sprite, -level.width / 2, -level.height / 2 + shift / squeeze);
     };
 
-    const paint = (bigSprites: number) => {
+    /** Paints the field; `makeAll`, for a still, makes every sprite it wants, however long that takes. */
+    const paint = (makeAll: boolean) => {
       if (width <= 0 || height <= 0 || levels.length === 0) return;
-      bigLeft = bigSprites;
+      bigSpritesLeft = makeAll ? Infinity : BIG_SPRITES_A_FRAME;
+      bigRaysLeft = makeAll ? Infinity : BIG_RAYS_A_FRAME;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalAlpha = 1;
       ctx.fillStyle = palette.background;
@@ -274,11 +289,11 @@ export const beanfield: CanvasSaver = {
         projectBean(bean, width, height, at);
         // Off the screen: nothing to draw.
         if (at.x < -at.length || at.x > width + at.length || at.y < -at.length || at.y > height + at.length) continue;
-        const level = levelFor(at.length * scale);
         // Lit for the bean's own angle, turned to its wobble: the light keeps its side on every bean.
         spriteView(bean.spin, bean.roll, view);
         view.turn += turnOf(bean) - bean.spin;
-        const sprite = spriteFor(level, bean.roast);
+        const sprite = spriteFor(levelFor(at.length * scale), bean.roast);
+        const level = drawnLevel!;
         // The frame's silhouette stretched to the roll's own, so the bean's edge rolls smoothly between frames.
         rollExtent(view.roll, exact);
         rollExtent(frameRoll(view.frame), framed);
@@ -312,7 +327,7 @@ export const beanfield: CanvasSaver = {
         if (Number.isFinite(dtMs) && dtMs > 0) seconds = (seconds + Math.min(dtMs, 10_000) / 1000) % 3600;
       },
       draw() {
-        paint(BIG_A_FRAME);
+        paint(false);
       },
       resize(nextWidth, nextHeight, nextScale) {
         if (nextWidth === width && nextHeight === height && nextScale === scale) return;
@@ -342,7 +357,7 @@ export const beanfield: CanvasSaver = {
         model = createBeanfieldModel(env.seed);
         seconds = 0;
         for (let left = STILL_MS; left > 0; left -= FRAME_MS) instance.step(Math.min(FRAME_MS, left));
-        paint(Infinity);
+        paint(true);
       },
       dispose() {
         releaseSprites();
