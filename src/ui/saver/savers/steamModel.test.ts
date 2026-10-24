@@ -1,14 +1,66 @@
 import { describe, expect, it } from 'vitest';
-import { advanceSteam, COLS, CELL, createSteamModel, LEFT, lifeEnvelope, MAX_LIFE, MIN_LIFE, PARTICLES, RISE_SPEED, ROWS, STRANDS, TOP, type SteamModel } from './steamModel.ts';
+import {
+  advanceSteam,
+  backlight,
+  CELL,
+  coffeeSpan,
+  COFFEE_DROP,
+  COFFEE_HALF_WIDTH,
+  COLS,
+  createSteamModel,
+  DRIFT_X,
+  DRIFT_Y,
+  GLOW_X,
+  GLOW_Y,
+  HAZE_CELL,
+  HAZE_COLS,
+  HAZE_ROWS,
+  LEFT,
+  lifeEnvelope,
+  MAX_LIFE,
+  MIN_LIFE,
+  MOUTH_HALF_WIDTH,
+  PARTICLES,
+  RISE_SPEED,
+  sceneDrift,
+  ROWS,
+  STRANDS,
+  TOP,
+  VIEW_COS,
+  VIEW_SIN,
+  type SteamModel,
+} from './steamModel.ts';
+
+function sum(values: Float32Array): number {
+  let total = 0;
+  for (const value of values) total += value;
+  return total;
+}
 
 function total(model: SteamModel): number {
-  let sum = 0;
-  for (const value of model.density) sum += value;
-  return sum;
+  return sum(model.density);
 }
 
 function snapshot(model: SteamModel) {
-  return { x: Array.from(model.x), y: Array.from(model.y), age: Array.from(model.age), density: Array.from(model.density) };
+  return { x: Array.from(model.x), y: Array.from(model.y), age: Array.from(model.age), density: Array.from(model.density), haze: Array.from(model.haze) };
+}
+
+/** How far across a buffer's mass spreads: the standard deviation of x, weighted by density. */
+function spreadAcross(values: Float32Array, cols: number, rows: number, cell: number, fromRow = 0, toRow = rows): number {
+  let mass = 0;
+  let first = 0;
+  let second = 0;
+  for (let row = fromRow; row < toRow; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      const value = values[row * cols + col]!;
+      const x = LEFT + (col + 0.5) * cell;
+      mass += value;
+      first += value * x;
+      second += value * x * x;
+    }
+  }
+  const mean = first / mass;
+  return Math.sqrt(Math.max(0, second / mass - mean * mean));
 }
 
 describe('createSteamModel', () => {
@@ -26,7 +78,9 @@ describe('createSteamModel', () => {
     const c = createSteamModel(8);
     for (const model of [a, b, c]) advanceSteam(model, 9000);
     expect(snapshot(a)).toEqual(snapshot(b));
+    expect([a.driftX, a.driftY]).toEqual([b.driftX, b.driftY]);
     expect(snapshot(a).density).not.toEqual(snapshot(c).density);
+    expect(snapshot(a).haze).not.toEqual(snapshot(c).haze);
   });
 
   it('steps in pieces of 50 ms at most, so one long step is as good as many short ones', () => {
@@ -49,16 +103,22 @@ describe('createSteamModel', () => {
     // Two steps, each held to ten seconds; the odd one did nothing.
     expect(model.time).toBeCloseTo(20, 6);
     expect(Array.from(model.density).every(Number.isFinite)).toBe(true);
+    expect(Array.from(model.haze).every(Number.isFinite)).toBe(true);
+    expect(Number.isFinite(model.driftX) && Number.isFinite(model.driftY)).toBe(true);
   });
 
-  it('starts from nothing and has built its trails by 12 s', () => {
+  it('starts from nothing and has built its trails and its body by 12 s', () => {
     const model = createSteamModel(1);
     expect(total(model)).toBe(0);
+    expect(sum(model.haze)).toBe(0);
     advanceSteam(model, 1000);
     const early = total(model);
+    const earlyBody = sum(model.haze);
     advanceSteam(model, 11_000);
     expect(early).toBeGreaterThan(0);
+    expect(earlyBody).toBeGreaterThan(0);
     expect(total(model)).toBeGreaterThan(early * 5);
+    expect(sum(model.haze)).toBeGreaterThan(earlyBody * 5);
   });
 
   it('gives each particle 6 to 10 s of life, as often as it is born again', () => {
@@ -74,9 +134,31 @@ describe('createSteamModel', () => {
     expect(Math.max(...lives)).toBeLessThanOrEqual(MAX_LIFE);
   });
 
-  it('keeps every particle on screen: inside the buffer, above the rim', () => {
+  it('lets the steam leave the coffee: each particle born on the coffee showing inside the rim', () => {
+    const model = createSteamModel(4);
+    let births = 0;
+    let wrong = 0;
+    const lived = Float64Array.from(model.age);
+    for (let i = 0; i < 30 * 20; i += 1) {
+      const wasBorn = Uint8Array.from(model.born);
+      model.step(1000 / 30);
+      for (let p = 0; p < model.count; p += 1) {
+        // Born this step, or born again (its age started over): where it is now is a frame's rise from the coffee.
+        if (!(wasBorn[p] === 0 && model.born[p] === 1) && !(model.age[p]! < lived[p]!)) continue;
+        births += 1;
+        const span = coffeeSpan(model.x[p]!);
+        if (!span || model.y[p]! < span.low - 1 || model.y[p]! > span.high + 3) wrong += 1;
+      }
+      lived.set(model.age);
+    }
+    expect(births).toBeGreaterThan(300);
+    expect(wrong).toBe(0);
+  });
+
+  it('keeps every particle on screen: inside the buffer, and held by the cup until it clears the rim', () => {
     let outside = 0;
     let seen = 0;
+    const lowest = -COFFEE_DROP * VIEW_COS - COFFEE_HALF_WIDTH * VIEW_SIN;
     for (const seed of [1, 2]) {
       const model = createSteamModel(seed);
       for (let i = 0; i < 30 * 30; i += 1) {
@@ -84,7 +166,11 @@ describe('createSteamModel', () => {
         for (let p = 0; p < model.count; p += 1) {
           if (model.born[p] === 0) continue;
           seen += 1;
-          if (model.x[p]! <= LEFT || model.x[p]! >= -LEFT || model.y[p]! < 0 || model.y[p]! > TOP) outside += 1;
+          const x = model.x[p]!;
+          const y = model.y[p]!;
+          if (x <= LEFT || x >= -LEFT || y < lowest || y > TOP) outside += 1;
+          // Below the rim, inside the cup.
+          else if (y < 0 && Math.abs(x) > MOUTH_HALF_WIDTH) outside += 1;
         }
       }
     }
@@ -103,7 +189,7 @@ describe('createSteamModel', () => {
       const lived = Float64Array.from(model.age);
       model.step(dt);
       for (let p = 0; p < model.count; p += 1) {
-        // A particle born again this step jumped back to the rim: not a rise.
+        // A particle born again this step jumped back to the coffee: not a rise.
         if (model.age[p]! < lived[p]!) continue;
         distance += model.y[p]! - before[p]!;
         seconds += dt / 1000;
@@ -158,27 +244,118 @@ describe('createSteamModel', () => {
     expect(busy).toBeLessThan(COLS * ROWS * 0.3);
   });
 
+  it('wraps the filaments in a body: broader and fainter than they are, rising and spreading', () => {
+    const model = createSteamModel(6);
+    advanceSteam(model, 15_000);
+    expect(HAZE_COLS * HAZE_CELL).toBe(COLS * CELL);
+    expect(HAZE_ROWS * HAZE_CELL).toBe(ROWS * CELL);
+    // Broader: a body, not lines. The area where it shows at a tenth of its most is far larger than the filaments'.
+    const area = (values: Float32Array, cell: number) => {
+      const most = Math.max(...values);
+      return values.filter((value) => value > most / 10).length * cell * cell;
+    };
+    expect(area(model.haze, HAZE_CELL)).toBeGreaterThan(area(model.density, CELL) * 2);
+    // Fainter: no cell of it as dense as the filaments' densest.
+    expect(Math.max(...model.haze)).toBeLessThan(Math.max(...model.density));
+    // And so at any height: high up, where the wisps have curled, the body still spreads wider than they do.
+    const high = [(TOP - 300) / HAZE_CELL, (TOP - 180) / HAZE_CELL] as const;
+    expect(spreadAcross(model.haze, HAZE_COLS, HAZE_ROWS, HAZE_CELL, ...high)).toBeGreaterThan(
+      spreadAcross(model.density, COLS, ROWS, CELL, (high[0] * HAZE_CELL) / CELL, (high[1] * HAZE_CELL) / CELL),
+    );
+    expect(Array.from(model.haze).every((value) => Number.isFinite(value) && value >= 0)).toBe(true);
+  });
+
   it('fades exactly to nothing once no more steam comes: the page is left clean', () => {
     const model = createSteamModel(5);
     advanceSteam(model, 15_000);
     expect(total(model)).toBeGreaterThan(1);
+    expect(sum(model.haze)).toBeGreaterThan(0.1);
     // The cup goes cold: nothing is born again.
     for (let p = 0; p < model.count; p += 1) {
       model.born[p] = 0;
       model.age[p] = -1e9;
     }
-    advanceSteam(model, 20_000);
+    advanceSteam(model, 30_000);
     expect(total(model)).toBe(0);
+    expect(sum(model.haze)).toBe(0);
   });
 
   it('lays down about as much steam however long the steps are', () => {
-    const totals = [1000 / 60, 1000 / 30, 100].map((stepMs) => {
+    const models = [1000 / 60, 1000 / 30, 100].map((stepMs) => {
       const model = createSteamModel(6);
       advanceSteam(model, 14_000, stepMs);
-      return total(model);
+      return model;
     });
-    const mean = totals.reduce((sum, value) => sum + value, 0) / totals.length;
-    for (const value of totals) expect(Math.abs(value - mean) / mean).toBeLessThan(0.2);
+    for (const amount of [total, (model: SteamModel) => sum(model.haze)]) {
+      const values = models.map(amount);
+      const mean = values.reduce((a, b) => a + b, 0) / values.length;
+      for (const value of values) expect(Math.abs(value - mean) / mean).toBeLessThan(0.2);
+    }
+  });
+
+  it('drifts with the steps, as sceneDrift says', () => {
+    const model = createSteamModel(9);
+    advanceSteam(model, 3000);
+    expect([model.driftX, model.driftY]).toEqual(Object.values(sceneDrift(9, model.time)));
+    expect(sceneDrift(9, 0)).not.toEqual(sceneDrift(10, 0));
+  });
+});
+
+describe('sceneDrift', () => {
+  it('moves the scene a few pixels over minutes, never far, never fast', () => {
+    for (const seed of [1, 20_385]) {
+      const xs: number[] = [];
+      const ys: number[] = [];
+      let fastest = 0;
+      let last = sceneDrift(seed, 0);
+      // The thirty minutes of a showing, a reading every ten seconds.
+      for (let seconds = 10; seconds <= 1800; seconds += 10) {
+        const now = sceneDrift(seed, seconds);
+        xs.push(now.x);
+        ys.push(now.y);
+        fastest = Math.max(fastest, Math.hypot(now.x - last.x, now.y - last.y) * 6);
+        last = now;
+      }
+      expect(Math.max(...xs.map(Math.abs))).toBeLessThanOrEqual(DRIFT_X);
+      expect(Math.max(...ys.map(Math.abs))).toBeLessThanOrEqual(DRIFT_Y);
+      // A few pixels a minute at most...
+      expect(fastest).toBeLessThan(6);
+      // ...and over half an hour it has been most of the way across its range, both ways.
+      expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(DRIFT_X);
+      expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(DRIFT_Y);
+    }
+  });
+});
+
+describe('coffeeSpan', () => {
+  it('is the coffee showing inside the rim: below the rim, as wide as the coffee, cut by the near lip', () => {
+    const middle = coffeeSpan(0)!;
+    expect(middle.low).toBeCloseTo(-MOUTH_HALF_WIDTH * VIEW_SIN, 6);
+    expect(middle.high).toBeCloseTo(-COFFEE_DROP * VIEW_COS + COFFEE_HALF_WIDTH * VIEW_SIN, 6);
+    expect(middle.high).toBeGreaterThan(0);
+    const side = coffeeSpan(COFFEE_HALF_WIDTH * 0.9)!;
+    expect(side.high - side.low).toBeLessThan(middle.high - middle.low);
+    expect(coffeeSpan(COFFEE_HALF_WIDTH + 1)).toBeNull();
+    expect(coffeeSpan(-30)).toEqual(coffeeSpan(30));
+  });
+});
+
+describe('backlight', () => {
+  it('is brightest where the steam crosses the glow, fading toward the cup and with height above it', () => {
+    expect(backlight(GLOW_X, GLOW_Y)).toBeCloseTo(1, 6);
+    expect(backlight(GLOW_X, 0)).toBeLessThan(0.6);
+    expect(backlight(GLOW_X, 0)).toBeGreaterThan(0.2);
+    expect(backlight(GLOW_X, GLOW_Y + 200)).toBeLessThan(backlight(GLOW_X, GLOW_Y + 100));
+    expect(backlight(GLOW_X, GLOW_Y + 100)).toBeLessThan(backlight(GLOW_X, GLOW_Y));
+    expect(backlight(GLOW_X + 180, GLOW_Y)).toBeLessThan(0.5);
+    for (const [x, y] of [
+      [0, 0],
+      [-200, 448],
+      [200, -30],
+    ] as const) {
+      expect(backlight(x, y)).toBeGreaterThanOrEqual(0);
+      expect(backlight(x, y)).toBeLessThanOrEqual(1);
+    }
   });
 });
 

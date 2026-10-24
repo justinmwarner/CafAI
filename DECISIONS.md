@@ -4244,6 +4244,53 @@ them nicer." Round 1 was flat and drawn in outline; round 2 aims at a lit
 still life for Rising Steam and a calmer, more finished bedside clock for
 Nightstand, both still drawn in code and made for a screen dimmed to 30.
 
+- **D-STEAM-1. Rising Steam is a lit still life: a porcelain cup of coffee
+  on its saucer, rendered once per pixel, the whole scene drifting a few
+  pixels over minutes.** The cup and the saucer are solids of revolution
+  seen from 17.5° above, without perspective. At each size,
+  `src/ui/saver/savers/steamStill.ts` rasterizes their profiles column by
+  column into a depth buffer (two samples a pixel each way; a pixel whose
+  samples all see one surface is shaded once) and shades what each sample
+  sees: a warm white glaze, its diffuse wrapped a little as porcelain's is,
+  with a Fresnel reflection of a dark room and its lights; a warm key light
+  behind the cup, a little above it and to the left, aimed at the cup so
+  that the saucer's rim falls into the dark, its shadows soft (the cup's on
+  the saucer and on the table, the walls' on the coffee); a cool fill from
+  in front and to the right; and a tall strip light in front and to the
+  left, seen only as a highlight down the glaze. The coffee is dark, with a
+  ring of crema at the wall and a paler swirl (its turn and its noise from
+  the seed) under a liquid's sheen. The table is never drawn: only the
+  shadow thrown forward on it and the contact under the saucer show it. The
+  cup is 1.12 times round 1's (about 175 px across its rim at 962), the
+  saucer's near edge 94 % down the screen. The render takes about 160 ms on
+  this PC, cold, and 0.8 s with the CPU throttled sixfold (a stand-in for a
+  slow tablet), once per start or resize; each frame then only places
+  images. The cup's near side is a second image laid over the steam, so
+  steam low in the cup stays behind its wall. The scene drifts
+  (`sceneDrift`): two slow sines, 6 and 3.5 px at most, periods of 503 and
+  367 s, about 5 px a minute at most, moved in whole device pixels so the
+  render stays crisp. Why: round 1's outline read as a placeholder; a still
+  life lit from behind is how steam is seen at all, so the one light shows
+  the steam and models the cup; per pixel because porcelain's soft shading,
+  its rim and its glaze's highlight are what make a cup look real, and
+  gradients alone look drawn; once per size because it is far too slow for
+  a frame; and the drift because the white cup is the brightest thing on
+  the screen for half an hour.
+- **D-STEAM-2. The steam is backlit and has a body: a broad faint haze
+  round finer filaments, bright where it crosses the light.** It leaves the
+  coffee's surface (each particle is born on the coffee showing inside the
+  rim, and the cup's walls hold it until it clears the rim), keeps round
+  1's curl-noise flow, and is two layers in `steamModel.ts`: the filaments,
+  finer and quicker to fade than round 1's trails (0.9 s to a third), and
+  the body, a grid of 8 px cells every particle feeds, which rises at
+  26 px/s, spreads, and fades over 2.4 s, drawn soft. Behind the steam a
+  warm glow (the key light in the air: `GLOW_X`, `GLOW_Y`, a radial gradient
+  at 15 % at its middle) is where the steam shows brightest: each cell's
+  colour runs from a dim grey to a warm white with `backlight(x, y)`, and
+  its strength from 30 % to all of it, fading with height above the glow.
+  Why: steam is seen by the light behind it; round 1's one buffer of grey
+  trails read as smoke; and the body costs little, its grid a sixteenth of
+  the filaments'.
 - **D-STEAM-3. Nightstand: the date over a large, light time, the lines
   under hairlines, and a fade at each minute's move.** The time 23 % of the
   screen's shorter side (72 to 216 px), weight 300 (Figtree's lightest),
