@@ -1,18 +1,18 @@
 /**
- * Brew Rain (D-RAIN-1 to D-RAIN-3): after The Matrix's falling code, water
- * falls from a group head's shower screen and brews on its way down into the
- * cup. Along the top, the underside of the dispersion screen: brushed steel
- * with rows of small holes, a column under each hole of the front two rows.
- * Down each column a head falls, a coffee glyph (a bean, a drop, a cup,
- * cherries, a leaf, steam, a latte-art heart: rainGlyphs.ts) or a letter of
- * coffee's words and numbers in Figtree; pale water near the top, crema gold
- * further down, amber near the cup, each glowing softly; its trail sinks
- * through amber and espresso brown into the page. The far columns, between
- * the near ones, are smaller, slower and fainter. Every few seconds a column
- * spells a word (ESPRESSO, 9 BAR, the last shot's 36.4), lit a moment. At the
- * bottom, the cup: coffee under its crema, a slow wave on the surface, and
- * each head that reaches it drops in with a splash and rings spreading on the
- * crema. Where everything is is rainModel.ts.
+ * Brew Rain (D-RAIN-1 to D-RAIN-3, D-RAIN-6): after The Matrix's falling
+ * code, water falls from a group head's shower screen and brews on its way
+ * down into the cup. Along the top, the underside of the dispersion screen:
+ * brushed steel with rows of small holes, a column under each hole of the
+ * front two rows. Down each column a head falls, a coffee glyph (a bean, a
+ * drop, a cup, cherries, a leaf, steam, a latte-art heart: rainGlyphs.ts) or
+ * a letter of coffee's words and numbers in Figtree; pale water near the top,
+ * crema gold further down, amber near the cup, each glowing softly; its trail
+ * sinks through amber and espresso brown into the page. The far columns,
+ * between the near ones, are smaller, slower and fainter. Every few seconds a
+ * column spells a word (ESPRESSO, 9 BAR, the last shot's 36.4), lit a moment.
+ * At the bottom, the cup: coffee under its crema, a slow wave on the surface,
+ * and each head that reaches it drops in with a splash and rings spreading on
+ * the crema. Where everything is is rainModel.ts.
  *
  * The trail is the classic one: a canvas of its own, faded a little each
  * frame, where only the cells the heads leave are painted (the fade is of the
@@ -62,8 +62,16 @@ const GLOW_RADIUS = 30;
 /** A far column, against a near one: its colours this far toward the page, its glow this bright. */
 const FAR_FADE = 0.42;
 const FAR_GLOW = 0.45;
-/** How deep the crema is under the surface, px, before the coffee. */
+/** How deep the crema is under the surface, px, before the coffee: this, or less on a short screen (a share of its height). */
 const CREMA_DEPTH = 20;
+const CREMA_SHARE = 0.034;
+/** Below this size, px, there is no rain to draw: the scene waits for a size it can fall on. */
+const MIN_WIDTH = 2 * PITCH;
+const MIN_HEIGHT = 120;
+/** A rain laid out again for a new size plays this long first, so it falls as it was rather than starting afresh. */
+const REPLAY_MS = 4000;
+/** After this long without a frame, whatever the trail held has faded: it starts clean. */
+const TRAIL_GONE_MS = 3000;
 /** The surface's line is drawn through a point every this many px. */
 const WAVE_STEP = 8;
 /** A head lights the crema under it from this many rows above it; the light lies in a patch this wide and tall, px. */
@@ -322,14 +330,16 @@ export const rain: CanvasSaver = {
       const [made2, g] = made;
       g.setTransform(scale, 0, 0, scale, 0, 0);
       const top = cupAbove - WAVE_REACH;
-      // Kept within the gradient (addColorStop throws outside 0 to 1): on a short sprite the crema's depth can outrun it (D-SAVE-3).
+      // The crema thins on a short screen, so its layers always fit in the sprite; the depth is still kept within
+      // the gradient, as addColorStop throws outside 0 to 1 (D-SAVE-3, D-RAIN-6).
+      const crema = Math.min(CREMA_DEPTH, found.height * CREMA_SHARE);
       const depth = (y: number) => Math.min(1, Math.max(0, (y - top) / (tall - top)));
       const body = g.createLinearGradient(0, top, 0, tall);
       body.addColorStop(0, css(CREMA_TOP));
-      body.addColorStop(depth(top + 2.5), css(CREMA_LIGHT));
-      body.addColorStop(depth(top + CREMA_DEPTH * 0.45), css(CREMA_MID));
-      body.addColorStop(depth(top + CREMA_DEPTH), css(CREMA_LOW));
-      body.addColorStop(depth(top + CREMA_DEPTH * 1.5), css(COFFEE_TOP));
+      body.addColorStop(depth(top + Math.min(2.5, crema * 0.15)), css(CREMA_LIGHT));
+      body.addColorStop(depth(top + crema * 0.45), css(CREMA_MID));
+      body.addColorStop(depth(top + crema), css(CREMA_LOW));
+      body.addColorStop(depth(top + crema * 1.5), css(COFFEE_TOP));
       body.addColorStop(1, css(COFFEE_LOW));
       g.fillStyle = css(CREMA_TOP);
       g.fillRect(0, 0, width, top);
@@ -352,11 +362,11 @@ export const rain: CanvasSaver = {
       const clouds = Math.round(width / 26);
       for (let i = 0; i < clouds; i += 1) {
         const lighter = next() < 0.5;
-        cloud(next() * width, top + 2 + next() * CREMA_DEPTH * 0.8, 20 + next() * 50, 3 + next() * 4, css(lighter ? CREMA_TOP : CREMA_LOW), 0.16 + next() * 0.16);
+        cloud(next() * width, top + 2 + next() * crema * 0.8, 20 + next() * 50, 3 + next() * 4, css(lighter ? CREMA_TOP : CREMA_LOW), 0.16 + next() * 0.16);
       }
       const flecks = Math.round(width / 9);
       for (let i = 0; i < flecks; i += 1) {
-        cloud(next() * width, top + CREMA_DEPTH * (0.4 + next() * 0.55), 1.5 + next() * 2.5, 3 + next() * 4, css(CREMA_LOW), 0.22 + next() * 0.25);
+        cloud(next() * width, top + crema * (0.4 + next() * 0.55), 1.5 + next() * 2.5, 3 + next() * 4, css(CREMA_LOW), 0.22 + next() * 0.25);
       }
       const bubbles = Math.round(width / 6);
       for (let i = 0; i < bubbles; i += 1) {
@@ -719,7 +729,12 @@ export const rain: CanvasSaver = {
     };
 
     const draw = () => {
-      if (!model || !layout || width <= 0 || height <= 0 || steps.length === 0) return;
+      if (!model || !layout || !ready() || steps.length === 0) return;
+      // Back after a while without frames (the canvas too small to draw on meanwhile): what the trail held has faded.
+      if (pendingMs > TRAIL_GONE_MS) {
+        blank = true;
+        painted = model.columns.map(() => null);
+      }
       drawTrail(model);
       blank = false;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -745,14 +760,52 @@ export const rain: CanvasSaver = {
       drawBeads(model);
     };
 
-    /** A new model for this size: the same seed gives the same rain at the same size. */
-    const start = () => {
+    /** A new model for this size, from `at` ms on: the same seed gives the same rain at the same size. */
+    const start = (at = 0) => {
       layout = layoutFor(width, height);
-      model = createRainModel(env.seed, layout, env.numbers);
+      model = createRainModel(env.seed, layout, env.numbers, at);
       painted = model.columns.map(() => null);
       clearedFloors.clear();
       blank = true;
       pendingMs = 0;
+    };
+
+    /** What the scene (the layout, the model, the trail and the sprites) was built for: empty before the first size. */
+    let built = '';
+    const sizeKey = () => `${width}x${height}@${scale}`;
+    /** Whether the scene is built for the canvas's size now, and so can be drawn. */
+    const ready = () => built !== '' && built === sizeKey();
+
+    /** Plays the rain on by `ms`, its trail built up frame by frame: only the last few seconds are painted, older trails would be gone. */
+    const playOn = (ms: number) => {
+      const found = model!;
+      const end = found.time + ms;
+      while (found.time < end - STILL_PAINTED_MS - 1e-6) {
+        found.step(Math.min(FRAME_MS, end - STILL_PAINTED_MS - found.time));
+        found.takeEvents();
+      }
+      while (found.time < end - 1e-6) {
+        instance.step(Math.min(FRAME_MS, end - found.time));
+        draw();
+      }
+    };
+
+    /**
+     * The scene for the size now. A rain already falling goes on at the time it had got to: the cup as full,
+     * the rain laid out afresh and played a few seconds, so it falls as it was (a held picture is played to
+     * its moment again).
+     */
+    const build = () => {
+      const carried = model ? model.time : 0;
+      built = sizeKey();
+      trailScale = Math.min(1, scale);
+      trail.width = Math.max(1, Math.round(width * trailScale));
+      trail.height = Math.max(1, Math.round(height * trailScale));
+      trailFont = '';
+      const replay = Math.min(carried, REPLAY_MS);
+      start(carried - replay);
+      if (layout) makeSprites(layout);
+      if (replay > 0) playOn(replay);
     };
 
     // Figtree is most likely here already (CafAI sets everything in it); if not, ask for the weight the letters use.
@@ -766,36 +819,30 @@ export const rain: CanvasSaver = {
       },
       draw,
       resize(nextWidth, nextHeight, nextScale) {
-        // The same size again: the trail keeps what is painted on it, so the rain goes on.
-        if (model && nextWidth === width && nextHeight === height && nextScale === scale) return;
         width = nextWidth;
         height = nextHeight;
         scale = nextScale;
-        trailScale = Math.min(1, scale);
-        trail.width = Math.max(1, Math.round(width * trailScale));
-        trail.height = Math.max(1, Math.round(height * trailScale));
+        // A new size resets the canvas's context, and with it the font it held.
         mainFont = '';
-        trailFont = '';
-        start();
-        if (layout) makeSprites(layout);
+        // Too small to draw on (a canvas not laid out yet, or a screenshot's passing resize to 1x1): the scene
+        // waits as it is for a size it can fall on (D-RAIN-6).
+        if (width < MIN_WIDTH || height < MIN_HEIGHT) return;
+        // Back at the size it was built for: the rain goes on as it was, painted again at once, as resizing
+        // the canvas cleared it.
+        if (sizeKey() === built) {
+          draw();
+          return;
+        }
+        build();
       },
       still() {
-        if (width <= 0 || height <= 0 || !layout) return;
-        // The still's moment, found on a model of its own (stepping one costs next to nothing).
+        if (!ready() || !layout) return;
+        // The still's moment, found on a model of its own (stepping one costs next to nothing); the rain then
+        // falls to it with its trails built up frame by frame.
         const probe = createRainModel(env.seed, layout, env.numbers);
         while (!isStillMoment(probe)) probe.step(FRAME_MS);
         start();
-        const found = model!;
-        // The rain falls to it with its trails built up frame by frame: up to its last few seconds the
-        // heads only move on (their trails would be gone), and those are painted.
-        while (found.time < probe.time - STILL_PAINTED_MS - 1e-6) {
-          found.step(FRAME_MS);
-          found.takeEvents();
-        }
-        while (found.time < probe.time - 1e-6) {
-          instance.step(FRAME_MS);
-          draw();
-        }
+        playOn(probe.time);
       },
       dispose() {
         canvas.style.backgroundColor = hostBackground;
@@ -804,6 +851,7 @@ export const rain: CanvasSaver = {
         model = null;
         layout = null;
         painted = [];
+        built = '';
       },
     };
     return instance;

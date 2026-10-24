@@ -4279,6 +4279,20 @@ glow (D226's one place for play allows them) rather than flat outlines.
   colour that switches at once flickers; the glow and the light give the
   logo and its corner the "premium product's ambient screen" the owner's
   ask was after, for next to nothing a frame.
+- **D-RAIN-6. Brew Rain goes on through a change of size.** A size too
+  small to draw on (under 64x120 px: a canvas not laid out yet, or a
+  screenshot that shrinks the page for a moment) leaves the rain as it was,
+  and back at the size it was laid out for it goes on where it was, painted
+  again at once. A real new size (a tablet turned, a window resized) lays
+  the rain out again at the time it had got to: the cup as full, the rain
+  played four seconds first so it falls as it was, a held picture played to
+  its moment again. The crema thins on a screen under 600 px tall, so its
+  layers always fit the cup's sprite. Why: Brew Rain started over at any
+  change of size. Puppeteer's screenshot, as the Chromium 91 smoke takes it,
+  shrinks the page to its content (1x1 under the fixed overlay) and back
+  before capturing, so the smoke caught the rain just begun, a held one at
+  its first frame, with no trail and no heads; and the 1x1 size built a cup
+  too short for its crema, which threw (D-SAVE-3).
 
 ### Rising Steam and Nightstand: round 2 (2026-10-24)
 

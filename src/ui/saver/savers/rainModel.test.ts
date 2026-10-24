@@ -135,6 +135,21 @@ describe('the cup', () => {
     expect(levelY(SCREEN, 0) - levelY(SCREEN, FILL_MS)).toBeGreaterThan(30);
   });
 
+  it('goes on filling from the time a rain laid out again for a new size starts at, its rain starting afresh', () => {
+    const at = 25 * 60_000;
+    const later = createRainModel(1, SCREEN, [], at);
+    expect(later.time).toBe(at);
+    expect(levelY(SCREEN, later.time)).toBeLessThan(levelY(SCREEN, 0) - 30);
+    expect(later.floor).toBe(floorAt(SCREEN, at));
+    expect(later.floorOf(FAR)).toBe(floorAt(SCREEN, at, FAR));
+    expect(later.floor).toBeLessThan(floorAt(SCREEN, 0));
+    for (const column of later.columns) expect(column.row).toBe(-1);
+    run(later, 4000);
+    expect(later.time).toBeCloseTo(at + 4000, 6);
+    expect(later.columns.some((column) => column.row >= 0)).toBe(true);
+    expect(createRainModel(1, SCREEN, [], -5).time).toBe(0);
+  });
+
   it('waves its surface gently about the level, and keeps every row a head enters above it', () => {
     for (const ms of [0, 5000, 61_000, FILL_MS, 1.5 * FILL_MS]) {
       for (const layer of [NEAR, FAR]) {

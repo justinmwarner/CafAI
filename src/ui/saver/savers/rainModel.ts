@@ -289,16 +289,21 @@ export function isStillMoment(model: Pick<RainModel, 'time' | 'wordEndedAt'>): b
   return age >= STILL_WORD_AGE[0] && age <= STILL_WORD_AGE[1];
 }
 
-export function createRainModel(seed: number, layout: RainLayout, numbers: readonly string[] = []): RainModel {
+/**
+ * A rain on `layout`, from the seed. `startMs` is the time it starts at, for a
+ * rain laid out again for a new size: the cup goes on filling from where it
+ * was, and the rain itself starts afresh above the screen.
+ */
+export function createRainModel(seed: number, layout: RainLayout, numbers: readonly string[] = [], startMs = 0): RainModel {
   const random: Random = createRandom(seed);
   const shotNumbers = numbers.map((text) => text.trim()).filter((text) => text.length > 0);
   const figures = [...BREW_NUMBERS, ...shotNumbers];
   let events: RainEvent[] = [];
   let wordIn = between(random, FIRST_WORD_MS[0], FIRST_WORD_MS[1]);
-  let time = 0;
+  let time = Math.max(0, startMs);
   const floors = new Map<RainLayer, number>([
-    [NEAR, floorAt(layout, 0, NEAR)],
-    [FAR, floorAt(layout, 0, FAR)],
+    [NEAR, floorAt(layout, time, NEAR)],
+    [FAR, floorAt(layout, time, FAR)],
   ]);
   let wordEndedAt: number | null = null;
   let letters: LitLetter[] = [];
