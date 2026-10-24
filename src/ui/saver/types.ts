@@ -12,8 +12,8 @@
  */
 import type { Palette } from '../palette.ts';
 
-/** The screensavers built so far. Latte Art joins later (docs/superpowers/specs/2026-10-22-screensavers-design.md). */
-export type SaverId = 'nightstand' | 'portafilter' | 'pipes' | 'beanfield' | 'steam' | 'lava' | 'rain';
+/** Every screensaver, in Settings' order (docs/superpowers/specs/2026-10-22-screensavers-design.md). */
+export type SaverId = 'nightstand' | 'portafilter' | 'pipes' | 'beanfield' | 'steam' | 'lava' | 'rain' | 'latte';
 
 /** The canvas ones: every screensaver but Nightstand. */
 export type CanvasSaverId = Exclude<SaverId, 'nightstand'>;

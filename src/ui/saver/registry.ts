@@ -3,6 +3,7 @@
  * (D227): Nightstand first, the quiet one, then the canvas ones.
  */
 import { beanfield } from './savers/beanfield.ts';
+import { latte } from './savers/latte.ts';
 import { lava } from './savers/lava.ts';
 import { pipes } from './savers/pipes.ts';
 import { portafilter } from './savers/portafilter.ts';
@@ -10,7 +11,7 @@ import { rain } from './savers/rain.ts';
 import { steam } from './savers/steam.ts';
 import type { CanvasSaver, SaverId } from './types.ts';
 
-export const CANVAS_SAVERS: readonly CanvasSaver[] = [portafilter, pipes, beanfield, steam, lava, rain];
+export const CANVAS_SAVERS: readonly CanvasSaver[] = [portafilter, pipes, beanfield, steam, lava, rain, latte];
 
 export interface SaverChoice {
   id: SaverId;

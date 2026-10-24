@@ -4556,3 +4556,85 @@ desktop).
   reflection go with it. Why: the brief's burn-in rule: the foot's glow and
   the foam are the brightest things on the screen, and a showing lasts half
   an hour.
+
+### Latte Art: round 2 (2026-10-24)
+
+The owner's ask of 2026-10-23: finish the screensavers planned (D227,
+D228), without questions, as far as can be done before they look. Latte Art
+was the one behind a gate: the heart and the tulip first, tuned from
+screenshots, then the rosetta and the swan; a pour that does not look right
+left out (`docs/superpowers/specs/2026-10-22-screensavers-design.md`,
+section 8).
+
+- **D-LATTE-1. Latte Art pours on a field the pour moves: no fluid
+  dynamics.** The cup's surface is two fields on grids over the coffee
+  (`src/ui/saver/savers/latteModel.ts`): the foam, 0 (crema) to 1 (white), on
+  192 by 192 cells, and the crema's tone, its tiger-striped marbling, on 96 by
+  96. Each step makes a velocity from the unseen pitcher alone
+  (`latteChoreo.ts`). A source where the stream lands pushes the surface
+  outward, more ahead than behind when the stream leans forward: a
+  (1 + lean cos θ) / r flow, which keeps the area, so a disc grows at the
+  rate the milk comes and pushes the foam before it into rings. A stream
+  lifted a little drags the surface along the stretch it moved over in the
+  step, through a kernel with a cusp, sharpest on the path, so a cleft and a
+  point come out as Vs; a thinner stream drags a narrower band, and a stream
+  at the surface drags nothing, only lays its foam. At the wall the surface
+  slows to a stop. The foam comes up under a low stream only; from high the
+  milk dives and lightens the crema a little. Both fields are carried
+  semi-Lagrangian with MacCormack's correction, held between the values they
+  came from, so edges stay crisp, at a fixed 15 steps a second inside
+  `step(dt)`. Each pour is a timeline of where the stream lands, how high
+  the pitcher is, how much milk comes, its wiggle and its lean: about 25 s,
+  then 12 s to admire it and 3 s for the cup to clear (the foam settles away,
+  a fresh crema comes back), the next in turn. Why: the real pours come out
+  of the real moves, and only those. A disc cut by a pull-through starting
+  just behind it is a heart (starting inside the disc there is no cleft).
+  Discs poured one behind the other, leaning forward, push the ones before
+  into nested crescents, and a thin pull-through turns them into stacked
+  hearts: a tulip. A wiggle drawn back with the stream leaning hard forward
+  lays a zigzag ribbon whose strokes pile up into thin leaves with crema
+  between: a rosetta. A purely radial source could not make the tulip (each
+  disc grew backward over the next one's landing) nor the rosetta (a filled
+  egg); the lean made both, and a drag on a stream at the surface washed the
+  rosetta's zigzag out, so a low stream drags nothing.
+- **D-LATTE-2. The heart, the tulip and the rosetta come round in turn; the
+  swan waits.** Each was tuned from its pictures until it read at a glance:
+  the heart's round lobes, cleft and point; the tulip's four nested layers
+  under a small heart; the rosetta's thin leaves either side of its stem. The
+  swan, a rosetta's wing off to the right, a neck drawn up out of its body as
+  an S and a small heart for a head, reads as a swan but its wing's leaves
+  come out thick and its neck thin, so it is poured by the model and tested
+  but left out of the rotation (`IN_ROTATION`) until it looks right. The
+  still is the finished heart, poured at 5 steps a second (the same heart for
+  a third of the work, done in one go before the still paints). Why: D228's
+  gate; latte-art clip art is what PRODUCT.md rules out, so a pour that only
+  half reads is worse than three that do.
+- **D-LATTE-3. The cup from straight above, on its saucer, lit from the
+  upper left.** A white glaze (warm, its light falling off from the upper
+  left to the lower right), the saucer's rim rolled over with a glint and a
+  cool rim light on its far edge, the window's soft reflection on its slope,
+  the cup's and the handle's shadows; the cup's lip glinting outside on the
+  upper left and inside on the lower right, its inner wall in shade on the
+  upper left and casting a soft shadow on the coffee there. The crema runs
+  through a smooth ramp from its lightest to its darkest streaks, darker at
+  the wall; the foam is ivory, thinner and warmer at its edge, with a thin
+  brown line where it meets the crema, a slight bevel and soft shadow on the
+  crema, and the window's sheen over all. The stream shows only where it
+  lands: its thread seen end on and two faint rings. The pour's name is under
+  the saucer in Figtree, in the page's muted ink, fading in as it starts and
+  out as the cup clears. The whole picture drifts by up to 12 by 8 px over a
+  quarter of an hour (whole device pixels). Why: the round's look, a lit still
+  life rather than an outline; midtones and lights that survive the dim
+  (crema, foam, glaze, none of them near black); and the drift so that no
+  bright porcelain sits in one place for 30 minutes.
+- **D-LATTE-4. Under 4 ms a frame.** The field steps at 15 a second, so
+  every other frame; the tone at half the foam's resolution; the two small
+  canvases coloured only when the surface changed (a version the model
+  counts), never while a pour is admired; the foam coloured twice as fine as
+  its grid (each pixel from its four nearest cells) so its edge is smooth
+  before the canvas scales it up; the porcelain, the shadows and the names
+  drawn once a size; the table and the saucer painted again only when the
+  drift moves a whole device pixel, each frame redrawing the coffee, the lip
+  over its edge, the stream and the name's patch. Why: the brief's 4 ms at
+  962 by 602 and a backing scale of 1.33, with a tablet several times slower;
+  a first, plain version of the field cost about 9 ms a step.

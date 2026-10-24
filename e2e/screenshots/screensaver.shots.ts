@@ -31,6 +31,7 @@ const FRAMES: ReadonlyArray<{ id: string; at: number }> = [
   { id: 'steam', at: 12_000 },
   { id: 'lava', at: 20_000 },
   { id: 'rain', at: 8000 },
+  { id: 'latte', at: 30_000 },
 ];
 
 test.use({ viewport: { width: 962, height: 602 }, deviceScaleFactor: 1.33 });
