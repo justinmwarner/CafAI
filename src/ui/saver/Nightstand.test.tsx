@@ -9,7 +9,7 @@ import { KIAMBU, sampleSummary } from '../chat/testing/fixtures.ts';
 import { TID } from '../testIds.ts';
 import { createFakeServicesShowing } from '../testing/displayServices.ts';
 import { createFakeServices } from '../testing/fakeServices.ts';
-import { clockText, lastShotSummary, Nightstand, nightstandPlace, shotLine, shotNumbers, wakeLine } from './Nightstand.tsx';
+import { clockText, dateText, FADE_OUT_MS, lastShotSummary, Nightstand, nightstandPlace, shotLine, shotNumbers, wakeLine } from './Nightstand.tsx';
 
 const PALETTE = paletteFor({ mode: 'dark', tint: 'crema' }, false);
 
@@ -48,6 +48,14 @@ describe('the lines', () => {
     expect(clockText(new Date(2026, 9, 22, 21, 40), '24h')).toBe('21:40');
     expect(clockText(new Date(2026, 9, 22, 6, 5), '12h')).toBe('6:05 am');
     expect(clockText(new Date(2026, 9, 22, 21, 40), '12h')).toBe('9:40 pm');
+  });
+
+  it("writes the day as the device's language does, and the device's own way for a language it does not know", () => {
+    const day = new Date(2026, 9, 23, 22, 15);
+    expect(dateText(day, 'en-GB')).toBe('Friday 23 October');
+    expect(dateText(day, 'en-US')).toBe('Friday, October 23');
+    expect(dateText(day, 'not a language')).toBe(dateText(day));
+    expect(dateText(day)).toMatch(/23/);
   });
 });
 
@@ -108,7 +116,16 @@ describe('Nightstand', () => {
     return { ...view, onPainted, services };
   }
 
-  it('shows the time, the next wake, the bag on the machine and the last shot', async () => {
+  /** The block that moves and fades: the date, the time and the lines inside it. */
+  const theBlock = () => screen.getByTestId(TID.nightstand).firstElementChild as HTMLElement;
+  const placeOf = (block: HTMLElement) => `${getComputedStyle(block).left} ${getComputedStyle(block).top}`;
+  /** Where the block of renderNightstand goes in the minute `at` falls in. */
+  const placeFor = (at: Date) => {
+    const place = nightstandPlace(20_383, Math.floor(at.getTime() / 60_000), { width: 962, height: 602 }, { width: 300, height: 200 });
+    return `${place.left}px ${place.top}px`;
+  };
+
+  it('shows the date, the time, the next wake, the bag on the machine and the last shot', async () => {
     const services = createFakeServices({
       coach: { activeBag: KIAMBU, messages: [shotMessage('s1', 28.1)] },
     });
@@ -122,48 +139,81 @@ describe('Nightstand', () => {
     });
     expect(screen.getByTestId(TID.nightstandTime)).toHaveTextContent('22:15');
     const block = screen.getByTestId(TID.nightstand);
+    expect(block).toHaveTextContent(dateText(new Date(2026, 9, 22)));
     expect(block).toHaveTextContent('Wakes at 06:00');
     expect(block).toHaveTextContent(KIAMBU.name);
     expect(block).toHaveTextContent('Last shot: 28.1 s · 18.0 g → 36.4 g · 1:2.0 · peak 8.9 bar');
+    expect(block.querySelector('time:not([data-testid])')).toHaveAttribute('datetime', '2026-10-22');
     expect(onPainted).toHaveBeenCalledTimes(1);
   });
 
-  it('shows the time alone when nothing else is known', async () => {
+  it('shows the date and the time alone when nothing else is known', async () => {
     const services = createFakeServices();
     services.decaid.failNext('getPresenceSettings', new Error('Decaid is away'));
     renderNightstand(services);
     await act(async () => {
       await Promise.resolve();
     });
-    expect(screen.getByTestId(TID.nightstand).textContent).toBe('22:15');
+    expect(screen.getByTestId(TID.nightstand).textContent).toBe(`${dateText(new Date(2026, 9, 22))}22:15`);
   });
 
-  it('moves the time on and jumps to a new place each minute', async () => {
+  it('each minute fades the block out where it was, then shows the new time at its new place', async () => {
     renderNightstand();
     await act(async () => {
       await Promise.resolve();
     });
-    const block = screen.getByTestId(TID.nightstandTime).parentElement!;
-    const place = () => `${getComputedStyle(block).left} ${getComputedStyle(block).top}`;
-    const first = place();
-    expect(first).toMatch(/^\d+px \d+px$/);
-    // The minute turns 30 s on: the clock follows it, a moment after it begins.
+    const first = placeOf(theBlock());
+    expect(first).toBe(placeFor(new Date(2026, 9, 22, 22, 15)));
+    expect(theBlock()).toHaveAttribute('data-phase', 'shown');
+    expect(getComputedStyle(theBlock()).opacity).toBe('1');
+    // The minute turns 30 s on: the block fades out where it was, the old time still on it.
     act(() => void vi.advanceTimersByTime(30_100));
+    expect(theBlock()).toHaveAttribute('data-phase', 'leaving');
+    expect(getComputedStyle(theBlock()).opacity).toBe('0');
+    expect(screen.getByTestId(TID.nightstandTime)).toHaveTextContent('22:15');
+    expect(placeOf(theBlock())).toBe(first);
+    // Faded out: the new time at its new place, fading in.
+    act(() => void vi.advanceTimersByTime(FADE_OUT_MS));
+    expect(theBlock()).toHaveAttribute('data-phase', 'shown');
+    expect(getComputedStyle(theBlock()).opacity).toBe('1');
     expect(screen.getByTestId(TID.nightstandTime)).toHaveTextContent('22:16');
-    const second = place();
+    const second = placeOf(theBlock());
+    expect(second).toBe(placeFor(new Date(2026, 9, 22, 22, 16)));
+    // A minute on, and the fade (an act each: React renders, and starts the fade, as each act ends).
     act(() => void vi.advanceTimersByTime(60_000));
+    act(() => void vi.advanceTimersByTime(FADE_OUT_MS));
     expect(screen.getByTestId(TID.nightstandTime)).toHaveTextContent('22:17');
-    const third = place();
+    const third = placeOf(theBlock());
+    expect(third).toBe(placeFor(new Date(2026, 9, 22, 22, 17)));
     expect(new Set([first, second, third]).size).toBeGreaterThan(1);
-    expect([second, third]).toEqual([
-      ((p) => `${p.left}px ${p.top}px`)(nightstandPlace(20_383, Math.floor(new Date(2026, 9, 22, 22, 16).getTime() / 60_000), { width: 962, height: 602 }, { width: 300, height: 200 })),
-      ((p) => `${p.left}px ${p.top}px`)(nightstandPlace(20_383, Math.floor(new Date(2026, 9, 22, 22, 17).getTime() / 60_000), { width: 962, height: 602 }, { width: 300, height: 200 })),
-    ]);
   });
 
-  it('draws outside a ServicesProvider too, with the time alone', () => {
+  it('jumps to its new place as the minute turns under reduced motion, with no fade', async () => {
+    const before = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+      media: query,
+      addEventListener() {},
+      removeEventListener() {},
+    })) as unknown as typeof window.matchMedia;
+    try {
+      renderNightstand();
+      await act(async () => {
+        await Promise.resolve();
+      });
+      act(() => void vi.advanceTimersByTime(30_100));
+      expect(theBlock()).toHaveAttribute('data-phase', 'shown');
+      expect(getComputedStyle(theBlock()).opacity).toBe('1');
+      expect(screen.getByTestId(TID.nightstandTime)).toHaveTextContent('22:16');
+      expect(placeOf(theBlock())).toBe(placeFor(new Date(2026, 9, 22, 22, 16)));
+    } finally {
+      window.matchMedia = before;
+    }
+  });
+
+  it('draws outside a ServicesProvider too, with the date and the time alone', () => {
     render(<Nightstand palette={PALETTE} seed={1} />);
-    expect(screen.getByTestId(TID.nightstand).textContent).toBe('22:15');
+    expect(screen.getByTestId(TID.nightstand).textContent).toBe(`${dateText(new Date(2026, 9, 22))}22:15`);
   });
 
   it('on the 12-hour clock writes the time with am or pm, the half smaller, and the wake that way (D245)', async () => {

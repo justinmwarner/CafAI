@@ -749,7 +749,7 @@ describe('the screensaver (D225)', () => {
     expect(normalizeScreensaver('off')).toEqual(DEFAULT_SCREENSAVER);
     expect(normalizeScreensaver({ on: false, pick: 'beanfield' })).toEqual({ on: false, pick: 'beanfield' });
     // A pick this build does not know is kept: a newer CafAI's choice survives, and the screen shows the day's.
-    expect(normalizeScreensaver({ on: true, pick: 'pipes' })).toEqual({ on: true, pick: 'pipes' });
+    expect(normalizeScreensaver({ on: true, pick: 'etching' })).toEqual({ on: true, pick: 'etching' });
     expect(normalizeScreensaver({ on: 'no', pick: 7 })).toEqual(DEFAULT_SCREENSAVER);
     expect(normalizeScreensaver({ on: false, pick: '' })).toEqual({ on: false, pick: 'daily' });
     expect(normalizeScreensaver({ on: false, pick: 'x'.repeat(40) }).pick).toBe('x'.repeat(40));

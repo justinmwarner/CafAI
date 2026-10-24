@@ -144,6 +144,31 @@ test('under reduced motion a canvas screensaver shows its still', async ({ page 
   await expect(page.getByTestId(TID.saverReady)).toBeAttached();
 });
 
+/** Every canvas screensaver, in Settings' order. */
+const CANVAS_IDS = ['portafilter', 'pipes', 'beanfield', 'steam', 'lava', 'rain', 'latte'] as const;
+
+// At each tablet project's size: a throw that only some sizes meet (a gradient stop past 1 on a
+// 1280x800 screen, once) shows Nightstand in its place, which only data-fallback tells apart (D251).
+for (const id of CANVAS_IDS) {
+  test(`${id} starts at this size, held and running, and never gives way to Nightstand`, async ({ page }) => {
+    const problems: string[] = [];
+    page.on('pageerror', (error) => problems.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() === 'warning' && message.text().includes('screensaver stopped')) problems.push(message.text());
+    });
+    const saver = page.getByTestId(TID.saver);
+    for (const held of ['&saverAt=3000', '']) {
+      await page.goto(`./?mockSpeed=25&saverPreview=${id}${held}#/`);
+      await expect(page.getByTestId(TID.saverReady)).toBeAttached({ timeout: 30_000 });
+      await expect(saver).toHaveAttribute('data-saver', id);
+      // Running: a second of frames after the first.
+      if (!held) await page.waitForTimeout(1000);
+      await expect(saver).not.toHaveAttribute('data-fallback', '1');
+    }
+    expect(problems).toEqual([]);
+  });
+}
+
 test('Preview shows the chosen one anywhere and a tap closes it, waking nothing and dimming nothing', async ({ page }) => {
   await open(page, { inside: false });
   await sleepMachine(page);

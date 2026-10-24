@@ -334,12 +334,27 @@ describe('SaverOverlay: which, and the fallback', () => {
     expect(screen.getByTestId(TID.saver)).toHaveAttribute('data-saver', dailyPick(runnableHere(), localDayNumber(new Date())));
   });
 
-  it('a screensaver that cannot start gives way to Nightstand for the rest of the showing', () => {
+  it('a screensaver that cannot start gives way to Nightstand for the rest of the showing, and says so', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     setup({ pick: 'beanfield', saverFor: (id) => (id === 'beanfield' ? NO_CONTEXT : undefined) });
     advance(SAVER_IDLE_MS);
     expect(screen.getByTestId(TID.saver)).toHaveAttribute('data-saver', 'beanfield');
+    expect(screen.getByTestId(TID.saver)).toHaveAttribute('data-fallback', '1');
     expect(screen.getByTestId(TID.nightstand)).toBeInTheDocument();
     expect(screen.queryByTestId(TID.saverCanvas)).toBeNull();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Nightstand shows instead'));
+    warn.mockRestore();
+  });
+
+  it('carries no fallback mark while its own screensaver shows', () => {
+    const working: CanvasSaver = {
+      ...NO_CONTEXT,
+      create: () => ({ step: () => undefined, draw: () => undefined, resize: () => undefined, still: () => undefined, dispose: () => undefined }),
+    };
+    setup({ pick: 'beanfield', saverFor: (id) => (id === 'beanfield' ? working : undefined) });
+    advance(SAVER_IDLE_MS);
+    expect(screen.getByTestId(TID.saverCanvas)).toBeInTheDocument();
+    expect(screen.getByTestId(TID.saver)).not.toHaveAttribute('data-fallback');
   });
 
   it('marks itself ready once its first picture is painted', () => {

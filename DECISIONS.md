@@ -4151,3 +4151,534 @@ database (D135), so it was gone.
   ships, CafAI keeps in Decaid's store whatever must survive the move:
   the mirror (D16), the key's optional copy (D99) and now where the coach
   runs.
+
+### Screensavers, round 2 (2026-10-24)
+
+The owner's word of 2026-10-23, after trying the first six: "I'd like to
+continue the screensavers and finish writing up the others we planned to do.
+Also Brew Rain is just matrix, nothing coffee related. And then for the
+others, can we get better visuals? I do like a lot of them, but just want to
+make them nicer." Five builders worked side by side, each from screenshots
+of its own: Brew Rain and the Bouncing Portafilter, Rising Steam and
+Nightstand, Espresso Pipes, Beanfield and Lava Latte, and Latte Art. This
+section holds what they share; each builder's decisions follow in a section
+of its own.
+
+- **D249. A screensaver is lit, not flat.** Inside a screensaver, the
+  light that draws a thing is allowed: soft gradients for volume, a key
+  light and a rim light, the sheen of metal, glass, glaze and oily beans,
+  and a soft glow where there is a light (a lamp under a glass, a head of
+  water, a window behind the steam). DESIGN.md's "no glassy gradients,
+  glassmorphism or glow" keeps everywhere else. Each is drawn for a screen
+  dimmed to 30: the subject and any words at least 3:1 on the page, the
+  look carried by its midtones and lights, never by near-black detail. A
+  scene with a fixed object drifts it a few pixels a minute (the cup, the
+  glass), against burn-in. Why: the owner asked for nicer visuals, the flat
+  outlines of the first round read as placeholders, and the screensaver is
+  already the one place for play (D226).
+- **D250. Espresso Pipes and Latte Art are built now, Latte Art's four
+  pours at once.** D228 had the owner judge the heart and the tulip before
+  the rosetta and the swan were built. The owner's go-ahead of 2026-10-23
+  ("finish writing up the others we planned to do", "we can do as far as we
+  can before needing questions answered") lifts that wait: the builder tuned
+  each pour from screenshots and left out any that did not look right, and
+  the owner judges them all at once on the iPad. D228's last rule stands: if
+  the heart and the tulip do not pass, Latte Art does not ship. Why: one
+  session instead of two, and the owner's eye still decides.
+- **D251. A screensaver that gives way says so.** When one cannot start
+  or throws, Nightstand still shows in its place (D226); now the overlay
+  also carries `data-fallback="1"` and writes one line to the console
+  ("CafAI: a screensaver stopped (...); Nightstand shows instead."), which
+  Decaid's WebView log keeps on a tablet. The screenshot scene, the
+  Chromium 91 smoke and a new e2e test (each canvas screensaver, held at
+  3 s and running, at each tablet size) fail on it. Why: Brew Rain threw
+  on a 1280x800 screen (a gradient stop past 1, from the crema's depth on a
+  short sprite) while the smoke passed, Nightstand drawn in its place and
+  nothing saying so.
+
+### Brew Rain and the Bouncing Portafilter: round 2 (2026-10-24)
+
+The owner's words after trying the first six screensavers (2026-10-23):
+"Brew Rain is just matrix, nothing coffee related", and of the others, "can
+we get better visuals? I do like a lot of them, but just want to make them
+nicer." Brew Rain is drawn again as coffee, and the Bouncing Portafilter's
+badge becomes a logo with a portafilter in it, both with light, depth and
+glow (D226's one place for play allows them) rather than flat outlines.
+
+- **D252. Brew Rain is water brewing on its way from the shower screen
+  into the cup.** Along the top, the underside of a group head's shower
+  screen: a band of brushed steel with five staggered rows of holes, each
+  row further back smaller. A near column falls under each hole of the front
+  row, 32 px apart, and a far one under each hole of the next, between them:
+  smaller (12 to 13 px against 18 to 20), slower, sparser, fainter and all
+  symbols, for depth. The glyphs are coffee's, drawn as paths
+  (`rainGlyphs.ts`): a bean with its crease, a drop, a cup on its saucer,
+  cherries, a leaf, steam and a latte-art heart, five heads in six near; the
+  rest are the Latin letters and figures of the words and numbers, in
+  Figtree. A head is pale water near the top, crema gold further down and
+  amber by the cup, with a soft glow; its trail sinks from gold and amber
+  through espresso brown into the page. At the bottom, the cup: crema over
+  coffee, mottled, its surface lit and moving in two slow waves, lit warm
+  under the heads and drops coming down to it; a head that reaches it lets a
+  drop go, which lands with two rings spreading on the crema and a few
+  droplets thrown up. The cup fills while it shows, from 12 % of the
+  screen's height to 18 % over 30 minutes, at most 2 px a minute, then back
+  as slowly. The trail is a canvas of its own, a pixel to a CSS pixel, faded
+  every other frame by both frames' worth and copied (not blended) each
+  frame onto the screensaver's canvas, whose CSS background is the page; the
+  heads, the words, the cup and the screen are drawn over it at full scale
+  from sprites made once a size: about 1.2 ms a frame on the build PC
+  (Beanfield's 0.5), against 2.3 ms for a trail at full scale faded every
+  frame. Why: the owner found the first one "just matrix, nothing coffee
+  related". The falling code stays in its columns, bright heads and fading
+  trails; everything else says coffee at a glance. Paths, not a font, end
+  the wait on the device's Japanese font (QUESTIONS 33). The rising cup
+  keeps a bright band from sitting in one place for the 30 minutes.
+- **D253. A spelled word stays lit, then fades on its own.** Every 3 to
+  6 s a near column spells, top to bottom, a coffee word in Latin capitals
+  (ESPRESSO, CREMA, RISTRETTO, LUNGO, DOPPIO, BLOOM, CORTADO, MACCHIATO) six
+  times in ten, otherwise a brew number (9 BAR, 93°, 1:2, 18 g, 36 g, 28 s)
+  or one of the last shot's numbers; a space is a cell left empty. Each
+  letter stays lit where it was spelled for 1.6 s, glowing a little, then
+  fades over 1.4 s, apart from the trail's fade. A word keeps a row clear
+  above the coffee, so a cup rising meanwhile never cuts it short. Why: a
+  word is what says coffee from across the kitchen, and in the first round
+  it faded with its trail among random katakana.
+- **D254. Brew Rain's still is the moment a word has just been spelled,
+  from 8 s on.** The first moment from 8 s on when a word's last letter came
+  at least 0.1 s before and its first no more than the 1.6 s a letter stays
+  lit, so every letter of it shows in full; 14 s at the latest. The rain is
+  played to it without drawing a frame, then its trail is painted once, each
+  cell a head has left at the opacity the fade has left it, and one frame
+  over it: under 0.15 s at 1366x1024 at 1.5 on the build PC, where drawing
+  the last seconds frame by frame took up to 4 s. The picture is kept for
+  its size, so the still painted again each minute, or after a passing
+  resize, is a copy of it. Why: the still stands for the screensaver, and a
+  word with the rain says it best; the moment is the seed's, so each day's
+  still is the same each minute; and a still painted each minute under
+  reduced motion must not hold a tap up for seconds.
+- **D255. The Bouncing Portafilter's badge is a logo with a portafilter
+  in it.** Drawn in code (`portafilterLogo.ts`): a portafilter from the
+  side, as a logo mark, its group ring with two lugs, the basket, a double
+  spout with a drop under each nozzle and the handle out to the right with
+  its collar; under it "CafAI" in Figtree, extra bold and italic, as wide as
+  the logo; under that the flat 4:1 oval with ESPRESSO cut out of it in the
+  page's colour. 0.88 as high as it is wide, a fifth of the screen wide,
+  still drifting at 70 px a second and bouncing as D227 has it. All of it
+  in the roast's colour, each part lit from above (a satin gradient from a
+  lighter tint to the colour itself, never darker, so the 3:1 holds). Why:
+  the owner liked it but wanted it nicer, and its name promised a
+  portafilter the badge never showed; the DVD logo's layout stays (the
+  word over the oval), never its mark.
+- **D256. Its colour crosses over, it glows, and a corner throws light
+  as well as beans.** A wall's change of roast crosses over in 300 ms,
+  eased; one that comes mid-crossing goes on from where the colour had got
+  to, and a corner's two roasts cross by way of the one between. A soft glow
+  of its colour lies on the page around the logo: its shape blurred, drawn
+  once for each roast at each size. A corner sends a ring of warm light out
+  of the screen's corner, spreading over a little more than half the
+  screen's shorter side and gone in 0.9 s, with a flash where it starts; its
+  dozen beans are drawn as they fly (`beanShape.ts`'s drawBean), lit from
+  the screen's upper left however they spin, flying out in front of the
+  logo, growing a little as they come at you, solid for half their 1.2 s and
+  then fading. Under 0.2 ms a frame on the build PC, under 1 ms through a
+  burst. Why: a colour that switches at once flickers; the glow and the
+  light give the logo and its corner the "premium product's ambient screen"
+  the owner's ask was after, for next to nothing a frame.
+- **D257. Brew Rain goes on through a change of size.** A size too small
+  to draw on (under 64x120 px: a canvas not laid out yet, or a screenshot
+  that shrinks the page for a moment) leaves the rain as it was, and back at
+  the size it was laid out for it goes on where it was, painted again at
+  once. A real new size (a tablet turned, a window resized) lays the rain
+  out again at the time it had got to: the cup as full, the rain played four
+  seconds first so it falls as it was, a held picture played to its moment
+  again. The crema thins on a screen under 600 px tall, so its layers always
+  fit the cup's sprite. Why: Brew Rain started over at any change of size.
+  Puppeteer's screenshot, as the Chromium 91 smoke takes it, shrinks the
+  page to its content (1x1 under the fixed overlay) and back before
+  capturing, so the smoke caught the rain just begun, a held one at its
+  first frame, with no trail and no heads; and the 1x1 size built a cup too
+  short for its crema, which threw (D251). The Bouncing Portafilter does
+  the same: a screen under 16 px either way changes nothing in its model, so
+  a passing 1x1 keeps its place, its path and its planned first corner, and
+  it is painted again at once when the size comes back.
+
+### Rising Steam and Nightstand: round 2 (2026-10-24)
+
+The owner, after trying the six on the iPad (2026-10-23): "for the others,
+can we get better visuals? I do like a lot of them, but just want to make
+them nicer." Round 1 was flat and drawn in outline; round 2 aims at a lit
+still life for Rising Steam and a calmer, more finished bedside clock for
+Nightstand, both still drawn in code and made for a screen dimmed to 30.
+
+- **D258. Rising Steam is a lit still life: a porcelain cup of coffee
+  on its saucer, rendered once per pixel, the whole scene drifting a few
+  pixels over minutes.** The cup and the saucer are solids of revolution
+  seen from 17.5° above, without perspective. At each size,
+  `src/ui/saver/savers/steamStill.ts` rasterizes their profiles column by
+  column into a depth buffer (two samples a pixel each way; a pixel whose
+  samples all see one surface is shaded once) and shades what each sample
+  sees: a warm white glaze, its diffuse wrapped a little as porcelain's is,
+  with a Fresnel reflection of a dark room and its lights; a warm key light
+  behind the cup, a little above it and to the left, aimed at the cup so
+  that the saucer's rim falls into the dark, its shadows soft (the cup's on
+  the saucer and on the table, the walls' on the coffee); a cool fill from
+  in front and to the right; and a tall strip light in front and to the
+  left, seen only as a highlight down the glaze. The coffee is dark, with a
+  ring of crema at the wall and a paler swirl (its turn and its noise from
+  the seed) under a liquid's sheen. The table is never drawn: only the
+  shadow thrown forward on it and the contact under the saucer show it. The
+  cup is 1.12 times round 1's (about 175 px across its rim at 962), the
+  saucer's near edge 94 % down the screen. The render takes about 120 ms on
+  this PC in Chromium, cold, and 0.7 s with the CPU throttled sixfold (a
+  stand-in for a slow tablet), once per start or resize; each frame then
+  only places images (under 1 ms a frame, step and draw). The cup's near
+  side is a second image laid over the steam, so steam low in the cup stays
+  behind its wall. The scene drifts (`sceneDrift`): two slow sines, 6 and
+  3.5 px at most, periods of 503 and 367 s, about 5 px a minute at most,
+  moved in whole device pixels so the render stays crisp; under reduced
+  motion the still, painted again each minute, takes the drift's place a
+  minute on each time (a jump of a pixel or so, not motion). Why: round 1's
+  outline read as a placeholder; a still life lit from behind is how steam
+  is seen at all, so the one light shows the steam and models the cup; per
+  pixel because porcelain's soft shading, its rim and its glaze's
+  highlight are what make a cup look real, and gradients alone look drawn;
+  once per size because it is far too slow for a frame; and the drift
+  because the white cup is the brightest thing on the screen for half an
+  hour.
+- **D259. The steam is backlit and has a body: a broad faint haze
+  round finer filaments, bright where it crosses the light.** It leaves the
+  coffee's surface (each particle is born on the coffee showing inside the
+  rim, and the cup's walls hold it until it clears the rim), keeps round
+  1's curl-noise flow, and is two layers in `steamModel.ts`: the filaments,
+  finer and quicker to fade than round 1's trails (0.9 s to a third), and
+  the body, a grid of 8 px cells every particle feeds, which rises at
+  26 px/s, spreads, and fades over 2.4 s, drawn soft. Behind the steam a
+  warm glow (the key light in the air: `GLOW_X`, `GLOW_Y`, a radial gradient
+  at 15 % at its middle) is where the steam shows brightest: each cell's
+  colour runs from a dim grey to a warm white with `backlight(x, y)`, and
+  its strength from 30 % to all of it, fading with height above the glow.
+  Why: steam is seen by the light behind it; round 1's one buffer of grey
+  trails read as smoke; and the body costs little, its grid a sixteenth of
+  the filaments'.
+- **D260. Nightstand: the date over a large, light time, the lines
+  under hairlines, and a fade at each minute's move.** The time 23 % of the
+  screen's shorter side (72 to 216 px), weight 300 (Figtree's lightest),
+  tabular, tracked in by 2 % and pulled back by its first figure's side
+  bearing, so the digits line up with the words above and below them; behind
+  it a very faint warm glow, the scene palette's warm end at 9 % in the
+  middle of a radial gradient and nothing at its edge. Above it, small, at
+  500 in muted ink, the day as the device writes one
+  (`toLocaleDateString` with the weekday, the day and the month: "Friday
+  23 October" in British English, "Friday, October 23" in American). Under
+  it, when they are known, the next wake, the bag and the last shot, each a
+  small line in muted ink under a 1 px hairline in the line colour. Each
+  minute the block fades out where it was (700 ms, ease-in) and in at its
+  new place (1.1 s, ease-out), the old time on it until it has gone; under
+  reduced motion it jumps at once, as before. Why: the owner asked for the
+  screensavers to be nicer; a bedside clock is read from across a room, so
+  the time stays the one big thing, and light figures that large stay
+  legible while they look calm; the date is the one more thing a glance at
+  a clock wants; a fade is calmer than a jump at night; and only the device
+  knows how its barista writes a date.
+
+### Espresso Pipes: round 2 (2026-10-24)
+
+The owner's words after trying the first six screensavers (2026-10-23):
+"I'd like to continue the screensavers and finish writing up the others we
+planned to do." Espresso Pipes is the first of the two planned and not yet
+built (`docs/superpowers/specs/2026-10-22-screensavers-design.md`, section 7,
+Later steps): Windows' 3D Pipes redrawn with coffee, and the one screensaver
+that needs WebGL (D227).
+
+- **D261. Pipes grow as the classic's do, with coffee at their
+  joints.** A grid of 20 by 12 by 12 cells, seen from a fixed camera a
+  little above its middle (`src/ui/saver/savers/pipesModel.ts`). Three to
+  five pipes grow at once, as the seed says, each at a pace of its own, a
+  cell every 80 to 120 ms; the run a pipe is growing lengthens a fraction
+  of a cell every frame, never a whole segment at once. A pipe goes straight
+  on, turns one time in five where it could go on (a turn toward or away
+  from the camera a little less often) and wherever it must; boxed in by the
+  walls and the other pipes, it ends in a ball, and a new pipe starts at a
+  free cell 0.3 to 0.9 s later. A ball 1.45 times as wide as the pipe
+  stands at each turn and at both ends, growing in over 110 ms. About one
+  turn in thirty is a coffee fitting instead, growing out of its ball over
+  320 ms: where both pipes run across the screen, a pressure gauge (0 to 16
+  bar, the espresso band of 8 to 10 in the pressure green, the needle just
+  past 9) or a valve wheel, facing the camera; where both run level, a small
+  espresso cup on its saucer, crema in it, its handle on the side neither
+  pipe takes. A fitting due at a turn where it would not read waits for the
+  next turn where it does. Each pipe is one metal: copper, brass and chrome
+  dealt in a shuffled order three pipes at a time, the dark anodised one now
+  and then (12 %), never the same two running. At 60 % of the cells taken,
+  or 4 minutes into a layout, growth stops, the picture fades to the page
+  over 2.5 s, eased, the page stays empty for 0.7 s, and a new layout grows
+  from the seed's next numbers. At this pace a layout fills in 35 to 60 s;
+  the 4 minutes bound a grid that could not fill. Its still is a fresh
+  layout from the seed grown to 42 % of the grid. Why: the classic's look
+  and pace, as the owner chose it. The grid's size sets the cycle and how
+  wide a pipe looks: 16 by 10 by 10 filled in 20 to 35 s with thin-looking
+  pipes on a 962 px screen. A fitting reads only from where the camera
+  stands: a dial seen edge on, or a cup on its side, says nothing. And a
+  few long pipes fill most of a layout, so a metal drawn at random for each
+  pipe sometimes left a layout mostly the dark one; the deal keeps every
+  layout a mix.
+- **D262. WebGL1 written by hand, built as it grows.**
+  `src/ui/saver/savers/pipes.ts` and `pipesMesh.ts`: no library, no
+  extension needed, one program for everything. The finished parts (runs,
+  balls, fittings) are built on the CPU into vertex buffers as they come,
+  nine floats a vertex (place, smooth normal, texture coordinate, material),
+  and appended to the GPU's copy with `bufferSubData`, never rebuilt: in one
+  chunk where `OES_element_index_uint` is to be had, else in chunks of at
+  most 65,535 vertices with 16-bit indices. The runs being grown and the
+  joints growing in are drawn one by one from a small shared buffer, each
+  with a matrix of its own. At its fullest a layout is about 175,000
+  vertices and 255,000 triangles in one draw call (three with 16-bit
+  indices), plus about ten small ones; a frame's step and draw take 0.2 to
+  0.6 ms of the CPU, and with the GPU waited for, 1 ms early in a layout and
+  2 ms at its fullest on this PC's GTX 1060 (Chromium 91). A lost context
+  (`webglcontextlost`, or `isContextLost()` before the event comes) makes
+  the next step, draw or still throw "Espresso Pipes lost its WebGL
+  context.", so the host shows Nightstand for the rest of that showing;
+  nothing is restored. `dispose()` deletes every buffer, the texture and
+  the program, then lets the context itself go (`WEBGL_lose_context`), and
+  a shader that will not compile throws from `create()` having deleted what
+  it made and let the context go, for the same fallback: the review found a
+  page warning "Too many active WebGL contexts" after 48 starts, each
+  showing's context kept until garbage collection. The still, which the
+  host paints again each minute under reduced motion, is grown and built
+  once. The shaders keep to GLSL ES 1.00's character set, comments
+  included. Settings greys it out
+  where WebGL cannot start, and the day's pick passes it by (D225);
+  `src/ui/saver/daily.ts` now answers no at once where the page has no
+  `WebGLRenderingContext` at all (jsdom in the tests), without making a
+  canvas. Why: the design's choice (D227), and D10's one bundle; a buffer
+  that only grows costs one small upload a frame and a handful of draw
+  calls whatever the fill. Current Chromium, Chromium 91 (puppeteer 9) and
+  WebKit 26.6 (Playwright) draw the same picture without an error.
+  Playwright's own Chromium draws WebGL in software (SwiftShader): 19
+  frames a second early in a layout, 5 at its fullest, so the screenshot
+  scene holds Espresso Pipes 8 s in.
+- **D263. Polished metal under studio lights, sinking into the
+  page's dark.** The pipes reflect a studio made up in the fragment shader:
+  warm grey walls, lighter toward a soft horizon set a little below level,
+  a dark floor, a tall warm softbox in front on the left with a narrow strip
+  beside it, a cool one on the right, a dim light behind the camera, a strip
+  overhead and a low one behind the pipes that rims their edges; with
+  Blinn-Phong highlights from the key and the fill, Schlick's Fresnel and a
+  soft exponential tone curve. Copper, brass and chrome tint what they
+  reflect as real metals do, and the dark anodised one reflects little.
+  Porcelain, the crema (darker toward the cup's wall) and the dial (a 256
+  px canvas painted once, mipmapped, with a glint on its glass) are lit as
+  glazes are. Fog toward the page's colour (`env.palette.background`, so it
+  follows the tint) from the grid's middle to 90 % at its back;
+  `antialias: true`. The camera is fixed in front of the grid, 3.4 cells
+  above its middle, looking a little down; the grid's middle plane covers
+  the screen, its sides cut on a 4:3 iPad. Why: round 2's look, richer and
+  made for a dimmed screen, where the midtones and the highlights carry the
+  picture. A darker studio left chrome nearly black and the pipes standing
+  upright reflecting the floor, so the softboxes stand from below the
+  horizon to high up; a brighter, broader one washed the pipes flat, so the
+  gaps between the lights are what make a pipe read round.
+
+### Beanfield and Lava Latte: round 2 (2026-10-24)
+
+The owner's words after trying the six on the tablet (2026-10-23): "for the
+others, can we get better visuals? I do like a lot of them, but just want to
+make them nicer", and earlier, that Beanfield's yellow roast read lemony.
+Round 1 drew both flat, outlined; round 2 lights them as a still life is lit
+(the shared brief: light and material, depth, calm, unmistakably coffee,
+still dark and dimmed, Chromium 91's canvas, under 4 ms a frame on a
+desktop).
+
+- **D264. Beanfield's beans are lit solids, drawn from sprites lit
+  pixel by pixel.** A bean is a small solid (`src/ui/saver/savers/beanShape.ts`):
+  an oval 1.38 times as long as wide, a domed back, a slightly swelled flat
+  side with the centre cut down it as a fold (a dark core between two
+  slopes), a grain fixed to the skin, and oil lying in patches, more on the
+  back than the flat side. A ray from each pixel finds it, rolled about its
+  long axis, once per roll frame (24 a turn; the second half of the roll is
+  the first turned half round, as the bean, its cut and its grain look the
+  same turned half round) and per size (4, the biggest 168 device px); each
+  sprite is then lit for a roast and for the side the key light will come
+  from once it is turned to its place: a warm key from the upper left, a dim
+  fill, a back light from the lower right (the bean's own colour on a side
+  turned to it, a warm glint on the edge it grazes), and a glint, strong on
+  the oily dark roasts. Each bean keeps its angle on the screen as it comes,
+  but for a 7° wobble, and rolls about its long axis, so it shows its flat
+  side, its edge and its back in turn while the light keeps its side; between
+  two frames its sprite is stretched to the roll's own silhouette. Sprites
+  are made the first time they are wanted and kept: the two small sizes all
+  of them, the two big ones their most recently used, about 1.3 million
+  pixels each (some 16 MB in all); a frame makes at most two big sprites and
+  casts the rays of at most one big roll frame, and a bean past that is drawn
+  from a frame of its roll one or two away, or from the next size down; a
+  still makes all it needs. The skin's grain is worked out once into a table
+  for each half of the bean. On the desktop the first frame takes about a
+  tenth of a second, the first few seconds about 4 ms a frame, and then about
+  1.5 ms. Why: the owner asked for nicer, and a gradient on an oval
+  only ever looks like a lozenge; per-pixel light is what makes a small solid
+  read as lit, and Chromium 91's 2D canvas can only have it made once in
+  script and kept. A bean that turned on the screen would cross from one
+  light's sprite to the next and its glint would jump, so beans keep their
+  angle and roll instead, which is how a thrown bean spins anyway.
+- **D265. Beanfield's depth: a haze, the drum light and streaks.** A
+  far bean comes out of the page quickly but only to 30% of itself, rising
+  through the haze to all of itself from a third of the way in, so the far
+  ones are dim and near the page's colour and the near ones crisp and full. A
+  warm glow lies deep in the middle, as if the roaster's drum light were
+  behind the beans: about 16% of a warm amber over the page at its heart,
+  gone by 55% of the screen's longer side, dithered so it shows no rings, and
+  breathing 12% over 14 s. A near bean faster than 160 px a second leaves a
+  streak, five fading copies of itself over its last 60 ms, all of it from
+  420 px a second. Why: haze, scale and the light behind give the field its
+  depth; the glow is dim and soft, never a bright area held in one place; the
+  copies say speed for what a few draws cost, where a blur would cost a
+  filter Chromium 91's canvas lacks.
+- **D266. The roasts are a roaster's stages.** Green coffee is a pale
+  grey-green, the yellowing straw (never lemon), then cinnamon, city, full
+  city, Vienna and French, each browner and redder as it darkens
+  (`src/ui/saver/savers/roasts.ts`). Their oil (`Roast.gloss`, new) grows
+  from 0.04 to 0.8, showing from full city on. Every rim light is at least
+  3:1 on the dark page of every tint, as before, and the badge colours
+  Bouncing Portafilter steps through follow the same stages, still 3:1. The
+  burst's beans (`drawBean`) are lit the same way with paths, the key kept on
+  the screen's upper left whatever the context's turn where the browser can
+  say it (`getTransform`). Why: the owner found the yellow lemony, and a
+  roast stage is a colour coffee people know; the dark roasts' bodies are as
+  dark as they are, and their rim light and their oil's glint show them on
+  the page.
+- **D267. Lava Latte's glass is a lit object.** Walls 7 design units
+  thick, an outer and an inner edge with the glass faintly tinted between
+  them, the outside's edge catching light; a heavy foot of solid glass (30);
+  the rim a ring seen from a little above, its far side faint through the
+  glass; vertical streaks of the room's light down it, a broad soft one and a
+  fine one on the left, a faint one on the right, fading toward their ends;
+  and a thin layer of milk foam on the coffee, its top a flat ellipse: a
+  latte (`src/ui/saver/savers/lava.ts`). All of it is made once at a resize.
+  Why: the owner asked for nicer, and an outline round a flat fill read as a
+  diagram of a glass, not a glass.
+- **D268. A warm light from below, as a lava lamp's bulb.** The bulb
+  under the glass glows through its foot and turns the bottom of the coffee
+  gold and amber, deepening to espresso up the glass as the coffee takes it
+  in (a third of it left 150 design units up, `bulbLight`), darker toward
+  the walls where there is less coffee to light: lit pixel by pixel at a
+  resize, dithered, so its long fall shows no rings. The cream takes the
+  light from below: brighter undersides, a glow through it and at its thin
+  edges, warmer the lower it is, and a faint room light from the upper left
+  so a high blob keeps its shape; it is shaded from the field's slope taken
+  as a normal (`fieldSlope`), the slope flattened deep in the cream so blobs
+  that merge are one body, on a grid three times as fine as the field's,
+  which stays the coarse one. Round the glass the light spills onto the page
+  as a soft halo, pools on what it stands on, and the foot and the coffee's
+  bottom are mirrored there, faint and fading. About 1.5 ms a frame on the
+  desktop. Why: the brief's lava lamp lit as a lamp is, its light making the
+  coffee translucent and the cream round; and a soft glow and a reflection
+  say where the glass stands.
+- **D269. The glass drifts.** It moves slowly about its place, 16
+  design units either way across and 6 up and down, over 14 and 10 minutes
+  (`drift`, from the model's own time), at most about 8 pixels a minute, to
+  the whole device pixel so its fine edges stay sharp; the halo and the
+  reflection go with it. Why: the brief's burn-in rule: the foot's glow and
+  the foam are the brightest things on the screen, and a showing lasts half
+  an hour.
+
+### Latte Art: round 2 (2026-10-24)
+
+The owner's ask of 2026-10-23: finish the screensavers planned (D227,
+D228), without questions, as far as can be done before they look. Latte Art
+was the one behind a gate: the heart and the tulip first, tuned from
+screenshots, then the rosetta and the swan; a pour that does not look right
+left out (`docs/superpowers/specs/2026-10-22-screensavers-design.md`,
+section 8).
+
+- **D270. Latte Art pours on a field the pour moves: no fluid
+  dynamics.** The cup's surface is two fields on grids over the coffee
+  (`src/ui/saver/savers/latteModel.ts`): the foam, 0 (crema) to 1 (white), on
+  192 by 192 cells, and the crema's tone, its tiger-striped marbling, on 96 by
+  96. Each step makes a velocity from the unseen pitcher alone
+  (`latteChoreo.ts`). A source where the stream lands pushes the surface
+  outward, more ahead than behind when the stream leans forward: a
+  (1 + lean cos θ) / r flow, which keeps the area, so a disc grows at the
+  rate the milk comes and pushes the foam before it into rings. A stream
+  lifted a little drags the surface along the stretch it moved over in the
+  step, through a kernel with a cusp, sharpest on the path, so a cleft and a
+  point come out as Vs; a thinner stream drags a narrower band, and a stream
+  at the surface drags a tenth as much, so its wiggle sways the surface near
+  it and mostly lays its foam. At the wall the surface
+  slows to a stop. The foam comes up under a low stream only; from high the
+  milk dives and lightens the crema a little. Both fields are carried
+  semi-Lagrangian with MacCormack's correction, held between the values they
+  came from, so edges stay crisp, at a fixed 15 steps a second inside
+  `step(dt)`. Each pour is a timeline of where the stream lands, how high
+  the pitcher is, how much milk comes, its wiggle and its lean: about 25 s,
+  then 12 s to admire it and 3 s for the cup to clear (the foam settles away,
+  a fresh crema comes back), the next in turn. Why: the real pours come out
+  of the real moves, and only those. A disc cut by a pull-through starting
+  just behind it is a heart (starting inside the disc there is no cleft).
+  Discs poured one behind the other, leaning forward, push the ones before
+  into nested crescents, and a thin pull-through turns them into stacked
+  hearts: a tulip. A wiggle drawn back with the stream leaning hard forward
+  lays a zigzag ribbon whose strokes pile up into thin leaves with crema
+  between: a rosetta. A purely radial source could not make the tulip (each
+  disc grew backward over the next one's landing) nor the rosetta (a filled
+  egg); the lean made both. The full drag on a stream at the surface washed
+  the rosetta's zigzag out, and a fifth of it ran its leaves together; a
+  tenth leaves them as crisp as none.
+- **D271. All four pours come round in turn: the heart, the tulip, the
+  rosetta and the swan.** Each was tuned from its pictures until it read at
+  a glance: the heart's round lobes, cleft and point; the tulip's four nested
+  layers under a small heart; the rosetta's thin leaves either side of its
+  stem; the swan's wing, a rosetta off to the right pulled through toward its
+  body, with a neck drawn up out of the body as an S and a small heart for a
+  head. The swan's first wing, not pulled through, came out as thick stacked
+  strokes, and was kept out of the rotation until the pull along it thinned
+  its leaves into feathers. A pour the owner finds wrong comes out of
+  `IN_ROTATION` (`latteModel.ts`), and nothing else changes. The still is
+  the finished heart, poured at 5 steps a second (the same heart for a third
+  of the work, done in one go before the still paints). Why: D228's gate;
+  latte-art clip art is what PRODUCT.md rules out, so a pour that only half
+  reads would be worse than one fewer. The owner's eye on the tablet is
+  still the test (QUESTIONS).
+- **D272. The cup from straight above, on its saucer, lit from the
+  upper left.** A white glaze (warm, its light falling off from the upper
+  left to the lower right), in a pool of light on the cup that leaves the
+  saucer's rim in shade; the saucer's rim rolled over with a glint and a
+  cool rim light on its far edge, the window's soft reflection on its slope,
+  the cup's and the handle's shadows; the cup's lip glinting outside on the
+  upper left and inside on the lower right, its inner wall in shade on the
+  upper left and casting a soft shadow on the coffee there. The crema runs
+  through a smooth ramp from its lightest to its darkest streaks, darker at
+  the wall; the foam is ivory, thinner and warmer at its edge, with a thin
+  brown line where it meets the crema, a slight bevel and soft shadow on the
+  crema, and the window's sheen over all. The stream shows only where it
+  lands: its thread seen end on and two faint rings. The pour's name is under
+  the saucer in Figtree, in the page's muted ink, fading in as it starts and
+  out as the cup clears. The whole picture drifts by up to 12 by 8 px over a
+  quarter of an hour, about 5 px a minute at most, on whole device pixels.
+  The saucer is 83% of the screen's height on the tablet, and most of a
+  narrow screen's width. Why: the round's look, a lit still life rather than
+  an outline; midtones and lights that survive the dim (crema, foam, glaze,
+  none of them near black); the coffee the subject, the porcelain modest;
+  and the drift so that no bright porcelain sits in one place for 30
+  minutes.
+- **D273. Under 4 ms a frame.** The field steps at 15 a second, so
+  every other frame. The tone has a grid of its own at half the foam's
+  resolution, with its own velocity. The foam is moved only in the box it is
+  in and a margin round it (where there is none, none can come from anywhere
+  it cannot reach in a step); a step that moves anything further than the
+  margin moves all of it, that once. The two small canvases are coloured
+  only when the surface changed (a version the model counts), never while a
+  pour is admired: the foam twice as fine as its grid, a cell at a time (its
+  four pixels from it and its neighbours, so the edge is smooth before the
+  canvas scales it up), only in the box it is in, each pixel one 32-bit word
+  from a table per step of light. The porcelain, the shadows and the names
+  are drawn once a size; the table and the saucer are painted again only when
+  the drift moves a whole device pixel, each frame redrawing the coffee, the
+  lip over its edge, the stream and the name's patch. Measured on this PC at
+  962 by 602 and a backing scale of 1.33 (the dev preview's average over a
+  second): 1.8 to 2.7 ms a frame while the foam pours (2.7 ms at the
+  rosetta's pull-through, the busiest), 0.6 ms in the base pour, 0.95 ms as
+  the cup clears, 0.14 ms while a pour is admired. Why: the brief's 4 ms,
+  with a tablet several times slower; a first, plain version cost about 9 ms
+  a field step and 6.6 ms a colouring.

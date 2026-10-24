@@ -1,12 +1,15 @@
 /**
- * The model behind Lava Latte (D227), pure: no canvas, no clock. Seven to
- * nine blobs of cream drift in a glass of coffee as they do in a lava lamp:
- * warmed at the bottom each rises, cooled at the top each sinks, wobbling
- * sideways as it goes, at about 15 px/s. The blobs are metaballs: the field
- * is the sum of a soft bump around each one (and a thin pool of cream on the
- * glass's floor), the cream is where the sum is high, so blobs that meet
- * merge and blobs that part split, with a neck between them for a moment. The
- * picture is a function of the seed and the steps.
+ * The model behind Lava Latte (D227, D267-D269), pure: no
+ * canvas, no clock. Seven to nine blobs of cream drift in a glass of coffee as
+ * they do in a lava lamp: warmed at the bottom each rises, cooled at the top
+ * each sinks, wobbling sideways as it goes, at about 15 px/s. The blobs are
+ * metaballs: the field is the sum of a soft bump around each one (and a thin
+ * pool of cream on the glass's floor), the cream is where the sum is high, so
+ * blobs that meet merge and blobs that part split, with a neck between them
+ * for a moment. A warm light under the glass, as a lava lamp's bulb, lights
+ * the coffee and the cream from below, less the higher they are; the whole
+ * glass drifts a few pixels a minute. The picture is a function of the seed
+ * and the steps.
  *
  * Units are design pixels, a pixel on a screen 962 wide and 602 high, so
  * the glass is 70% of the height: y runs up from the bottom of the glass, x
@@ -14,14 +17,14 @@
  */
 import { between, createRandom, wholeBetween, type Random } from '../random.ts';
 
-/** The glass: its outside, from the side, a little wider at the rim than at the foot. */
+/** The glass: its outside, from the side, a little wider at the rim than at the foot; its walls thick, its foot heavy. */
 export const GLASS = {
   height: 421,
   bottomHalf: 72,
   topHalf: 90,
-  wall: 3,
-  /** The thickness of its bottom. */
-  base: 14,
+  wall: 7,
+  /** The thickness of its bottom: the heavy foot of solid glass. */
+  base: 30,
   /** The coffee comes this far up the glass. */
   level: 0.93,
 } as const;
@@ -228,6 +231,52 @@ export function createLavaModel(seed: number): LavaModel {
       }
     },
   };
+}
+
+/**
+ * The field's slope at each cell of its grid, written into `outX` and `outY`
+ * (field a cell, x to the right and y down the grid, so up the glass is -y):
+ * central differences, one-sided at the grid's edges. Taken as a normal, it
+ * gives the cream its volume (D268): where the field falls away, the
+ * cream's surface turns away from the viewer.
+ */
+export function fieldSlope(field: Float32Array, outX: Float32Array, outY: Float32Array): void {
+  for (let row = 0; row < GRID_ROWS; row += 1) {
+    const up = row > 0 ? row - 1 : row;
+    const down = row < GRID_ROWS - 1 ? row + 1 : row;
+    for (let col = 0; col < GRID_COLS; col += 1) {
+      const left = col > 0 ? col - 1 : col;
+      const right = col < GRID_COLS - 1 ? col + 1 : col;
+      const at = row * GRID_COLS + col;
+      outX[at] = (field[row * GRID_COLS + right]! - field[row * GRID_COLS + left]!) / (right - left);
+      outY[at] = (field[down * GRID_COLS + col]! - field[up * GRID_COLS + col]!) / (down - up);
+    }
+  }
+}
+
+/**
+ * The light from below (D268): the bulb under the glass, as a lava lamp's,
+ * shines up through its foot into the coffee, which takes it in as it rises.
+ * How much of it reaches a height up the glass: all of it on the coffee's
+ * floor, a third of it BULB_FALL higher, and so on.
+ */
+export const BULB_FALL = 150;
+
+export function bulbLight(y: number): number {
+  return Math.exp(-Math.max(0, y - FLOOR) / BULB_FALL);
+}
+
+/**
+ * The glass's drift (D269), in design units: a slow figure about its
+ * place, so nothing bright stays on one spot of the screen for long. Its
+ * fastest is a few pixels a minute.
+ */
+export const DRIFT = { x: 16, y: 6, xSeconds: 840, ySeconds: 600 } as const;
+
+export function drift(seconds: number, out: { x: number; y: number } = { x: 0, y: 0 }): { x: number; y: number } {
+  out.x = DRIFT.x * Math.sin((2 * Math.PI * seconds) / DRIFT.xSeconds);
+  out.y = DRIFT.y * Math.sin((2 * Math.PI * seconds) / DRIFT.ySeconds + 1.3);
+  return out;
 }
 
 /** Steps a model through `ms`, a 30 fps frame at a time: for stills and tests. */

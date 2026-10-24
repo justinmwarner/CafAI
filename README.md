@@ -412,7 +412,8 @@ machine by itself.
   machine is asleep and nobody has touched the screen for a minute, a
   screensaver covers CafAI: **Nightstand** (a bedside clock with the next
   wake time, the bag and the last shot), **Bouncing Portafilter**,
-  **Beanfield**, **Rising Steam**, **Lava Latte** or **Brew Rain**, or **A
+  **Espresso Pipes** (where the device can run WebGL), **Beanfield**,
+  **Rising Steam**, **Lava Latte**, **Brew Rain** or **Latte Art**, or **A
   different one each day** (the default). The screen stays on, dimmed, for
   30 minutes, then goes dark as Android's timeout has it. A tap clears it
   and wakes the machine, as Wake does; the tap never reaches what is under

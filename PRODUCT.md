@@ -41,8 +41,10 @@ are the visual reference for anything that plots a shot.
 
 The one place for play is the screensaver (D226), shown only while the
 machine sleeps and nobody is there: classic screensavers (the bouncing DVD
-logo, Starfield, the lava lamp, the falling code) redrawn in code with coffee,
-always dark and dimmed. Still never clip art, mascots or novelty fonts. Like
+logo, the 3D pipes, Starfield, the lava lamp, the falling code) redrawn in
+code with coffee, and latte art poured in a cup, always dark and dimmed, and
+lit like a still life rather than drawn flat (D249). Still never clip
+art, mascots or novelty fonts. Like
 the drinks' dial while a drink runs, it moves for as long as it shows, and it
 is the one place whose motion may bounce.
 

@@ -18,7 +18,8 @@ function setup(options: { insideDecaid?: boolean; services?: FakeServices } & Sc
   const preview = options.preview ?? createSaverPreview();
   render(
     <ServicesProvider services={services}>
-      <ScreensaverSection savers={options.savers} webgl={options.webgl} preview={preview} />
+      {/* WebGL starts, unless a test says not: jsdom has none to ask. */}
+      <ScreensaverSection savers={options.savers} webgl={options.webgl ?? true} preview={preview} />
     </ServicesProvider>,
   );
   return { services, preview };
@@ -72,7 +73,7 @@ describe('ScreensaverSection', () => {
 
   it('shows a pick this build does not know as a different one each day', () => {
     const services = createFakeServices({ insideDecaid: true });
-    void services.screensaver.set({ on: true, pick: 'pipes' });
+    void services.screensaver.set({ on: true, pick: 'etching' });
     setup({ services });
     expect(pick().value).toBe('daily');
   });
@@ -102,20 +103,24 @@ describe('ScreensaverSection', () => {
     expect(screen.getByTestId(TID.saverOn)).not.toBeChecked();
   });
 
-  it('greys out a screensaver that needs WebGL where WebGL cannot start, says so, and leaves it out of the days', () => {
-    const savers = SAVERS.map((saver) => (saver.id === 'lava' ? { ...saver, context: 'webgl' as const } : saver));
-    setup({ savers, webgl: false });
-    const lava = [...pick().options].find((option) => option.value === 'lava')!;
-    expect(lava.disabled).toBe(true);
-    expect(screen.getByText("Lava Latte needs WebGL, which can't start on this device.")).toBeInTheDocument();
-    const today = SAVERS.find((saver) => saver.id === dailyPick(ALL.filter((id) => id !== 'lava'), localDayNumber(new Date())))!.label;
+  it('greys out Espresso Pipes, which needs WebGL, where WebGL cannot start, says so, and leaves it out of the days', () => {
+    setup({ webgl: false });
+    const pipes = [...pick().options].find((option) => option.value === 'pipes')!;
+    expect(pipes.disabled).toBe(true);
+    expect(screen.getByText("Espresso Pipes needs WebGL, which can't start on this device.")).toBeInTheDocument();
+    const today = SAVERS.find((saver) => saver.id === dailyPick(ALL.filter((id) => id !== 'pipes'), localDayNumber(new Date())))!.label;
     expect(screen.getByText(`Today: ${today}`)).toBeInTheDocument();
   });
 
-  it('offers it where WebGL starts', () => {
+  it('names every one that needs WebGL where it cannot start', () => {
     const savers = SAVERS.map((saver) => (saver.id === 'lava' ? { ...saver, context: 'webgl' as const } : saver));
-    setup({ savers, webgl: true });
-    expect([...pick().options].find((option) => option.value === 'lava')!.disabled).toBe(false);
+    setup({ savers, webgl: false });
+    expect(screen.getByText("Espresso Pipes and Lava Latte need WebGL, which can't start on this device.")).toBeInTheDocument();
+  });
+
+  it('offers it where WebGL starts', () => {
+    setup({ webgl: true });
+    expect([...pick().options].find((option) => option.value === 'pipes')!.disabled).toBe(false);
     expect(screen.queryByText(/needs WebGL/)).toBeNull();
   });
 });
