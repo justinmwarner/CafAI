@@ -4,6 +4,10 @@
  * it when Add or Save is tapped (usePresence.ts); a change sends only what
  * changed. Mounted only while open, so each opening starts from the wake time
  * it is for, or from a new one's 06:00, every day, awake for an hour.
+ *
+ * The time is taken in the clock the barista chose (D245): the hour 00-23 on
+ * the 24-hour clock; on the 12-hour one the hour 12, 1-11 and am or pm.
+ * Either way Decaid gets "HH:MM".
  */
 import { useId, useState, type FormEvent } from 'react';
 import Alert from '@mui/material/Alert';
@@ -19,6 +23,7 @@ import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
 import type { SxProps, Theme } from '@mui/material/styles';
 import type { WakeSchedule, WakeSchedulePatch, WakeScheduleRequest } from '../../api/types.ts';
+import { fromTwelveHour, toTwelveHour, type ClockFormat, type ClockHalf } from '../clock.ts';
 import { TID } from '../testIds.ts';
 import {
   daysPicked,
@@ -44,11 +49,18 @@ const timeSelectSx = { ...fieldSx, minWidth: 88, '& .MuiNativeSelect-select': { 
 const pad = (value: number) => String(value).padStart(2, '0');
 /**
  * The hour and the minute as two selects, not the browser's time field: that
- * one shows the device's own clock ("06:00 AM" in US English), and CafAI
- * writes every time in 24-hour figures. Every minute, as Decaid takes any.
+ * one shows the device's own clock ("06:00 AM" in US English), whatever the
+ * clock chosen in CafAI (D245). Every minute, as Decaid takes any. On the
+ * 12-hour clock the hours run as a clock face does, 12 first.
  */
 const HOURS = Array.from({ length: 24 }, (_, hour) => pad(hour));
+const TWELVE_HOURS = Array.from({ length: 12 }, (_, index) => String(index === 0 ? 12 : index));
 const MINUTES = Array.from({ length: 60 }, (_, minute) => pad(minute));
+
+const HALVES: readonly ClockHalf[] = ['am', 'pm'];
+
+/** The am and pm choices' test ids (D245); the coordinator moves them into testIds.ts. */
+export const WAKE_DIALOG_HALF_TID: Readonly<Record<ClockHalf, string>> = { am: 'wake-dialog-am', pm: 'wake-dialog-pm' };
 
 /**
  * The days as the Appearance mode control draws its choices: on the raised
@@ -84,9 +96,38 @@ const daysSx: SxProps<Theme> = (theme) => ({
   },
 });
 
+/** am and pm as the days are drawn, on the raised track, after the minute; each a 48 px target. */
+const halfSx: SxProps<Theme> = (theme) => ({
+  bgcolor: 'cafai.raised',
+  borderRadius: '14px',
+  p: '3px',
+  gap: '3px',
+  '& .MuiToggleButtonGroup-grouped': {
+    minWidth: 52,
+    minHeight: 48,
+    px: 1.5,
+    m: 0,
+    border: 0,
+    borderRadius: '11px',
+    color: 'text.secondary',
+    fontSize: '0.9375rem',
+    transition: theme.transitions.create(['background-color', 'color', 'box-shadow'], {
+      duration: theme.transitions.duration.shorter,
+    }),
+    '&.Mui-selected, &.Mui-selected:hover': {
+      bgcolor: 'background.paper',
+      color: 'text.primary',
+      fontWeight: 650,
+      boxShadow: `0 1px 2px rgba(0, 0, 0, ${theme.palette.mode === 'dark' ? 0.35 : 0.14})`,
+    },
+  },
+});
+
 export interface WakeTimeDialogProps {
   /** The wake time to change, or null to add one. */
   schedule: WakeSchedule | null;
+  /** The clock the time is shown and taken in (D245); Decaid gets "HH:MM" either way. */
+  clock: ClockFormat;
   /** Sleep when idle is on: only then does staying awake after the wake change anything. */
   sleepWhenIdle: boolean;
   onAdd(request: WakeScheduleRequest): Promise<void>;
@@ -97,8 +138,8 @@ export interface WakeTimeDialogProps {
 
 type Busy = 'saving' | 'deleting' | null;
 
-export function WakeTimeDialog({ schedule, sleepWhenIdle, onAdd, onSave, onDelete, onClose }: WakeTimeDialogProps) {
-  // "HH:MM", as CafAI reads every wake time (readers.ts).
+export function WakeTimeDialog({ schedule, clock, sleepWhenIdle, onAdd, onSave, onDelete, onClose }: WakeTimeDialogProps) {
+  // "HH:MM", as CafAI reads every wake time (readers.ts): the hour kept on the 24-hour day whatever the clock shows.
   const [hour, setHour] = useState(() => (schedule?.time ?? NEW_WAKE_TIME).slice(0, 2));
   const [minute, setMinute] = useState(() => (schedule?.time ?? NEW_WAKE_TIME).slice(3, 5));
   const [days, setDays] = useState<number[]>(() => daysPicked(schedule?.daysOfWeek ?? []));
@@ -109,6 +150,12 @@ export function WakeTimeDialog({ schedule, sleepWhenIdle, onAdd, onSave, onDelet
   const daysLabelId = useId();
 
   const picked = `${hour}:${minute}`;
+  // The hour as the 12-hour clock says it, and its half.
+  const said = toTwelveHour(Number(hour));
+  const setSaid = (next: { hour: number; half: ClockHalf }) => {
+    setHour(pad(fromTwelveHour(next.hour, next.half)));
+    setError(null);
+  };
   const noDays = days.length === 0;
   // A wake time Decaid holds outside the choices (set on its own page) is offered as it is.
   const choices = keepAwake === null || KEEP_AWAKE_CHOICES.includes(keepAwake) ? KEEP_AWAKE_CHOICES : [...KEEP_AWAKE_CHOICES, keepAwake];
@@ -174,20 +221,24 @@ export function WakeTimeDialog({ schedule, sleepWhenIdle, onAdd, onSave, onDelet
           <Typography variant="label" component="div" id={timeLabelId} sx={mutedSx}>
             Time
           </Typography>
-          <Box role="group" aria-labelledby={timeLabelId} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box role="group" aria-labelledby={timeLabelId} sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
             <TextField
               select
               size="small"
-              value={hour}
+              value={clock === '12h' ? String(said.hour) : hour}
               disabled={disabled}
               onChange={(event) => {
+                if (clock === '12h') {
+                  setSaid({ hour: Number(event.target.value), half: said.half });
+                  return;
+                }
                 setHour(event.target.value);
                 setError(null);
               }}
               sx={timeSelectSx}
               slotProps={{ select: { native: true }, htmlInput: { 'aria-label': 'Hour', 'data-testid': TID.wakeDialogHour } }}
             >
-              {HOURS.map((value) => (
+              {(clock === '12h' ? TWELVE_HOURS : HOURS).map((value) => (
                 <option key={value} value={value}>
                   {value}
                 </option>
@@ -214,6 +265,25 @@ export function WakeTimeDialog({ schedule, sleepWhenIdle, onAdd, onSave, onDelet
                 </option>
               ))}
             </TextField>
+            {clock === '12h' ? (
+              <ToggleButtonGroup
+                exclusive
+                value={said.half}
+                aria-label="am or pm"
+                disabled={disabled}
+                // A tap on the half already chosen reports null: it stays chosen.
+                onChange={(_event, half: ClockHalf | null) => {
+                  if (half !== null) setSaid({ hour: said.hour, half });
+                }}
+                sx={halfSx}
+              >
+                {HALVES.map((half) => (
+                  <ToggleButton key={half} value={half} data-testid={WAKE_DIALOG_HALF_TID[half]}>
+                    {half}
+                  </ToggleButton>
+                ))}
+              </ToggleButtonGroup>
+            ) : null}
           </Box>
           <Typography variant="body2" sx={mutedSx}>
             The machine takes a while to heat, so set it a little before you want coffee.

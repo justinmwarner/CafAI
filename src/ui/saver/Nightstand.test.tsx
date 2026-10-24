@@ -7,6 +7,7 @@ import type { CoachUiMessage } from '../../app/types.ts';
 import { paletteFor } from '../appearance.ts';
 import { KIAMBU, sampleSummary } from '../chat/testing/fixtures.ts';
 import { TID } from '../testIds.ts';
+import { createFakeServicesShowing } from '../testing/displayServices.ts';
 import { createFakeServices } from '../testing/fakeServices.ts';
 import { clockText, lastShotSummary, Nightstand, nightstandPlace, shotLine, shotNumbers, wakeLine } from './Nightstand.tsx';
 
@@ -36,13 +37,17 @@ describe('the lines', () => {
 
   it('says when the machine wakes: the time within a day, the day too beyond it', () => {
     const now = new Date(2026, 9, 22, 22, 15);
-    expect(wakeLine(new Date(2026, 9, 23, 6, 0), now)).toBe('Wakes at 06:00');
-    expect(wakeLine(new Date(2026, 9, 25, 6, 30), now)).toBe('Wakes Sunday at 06:30');
+    expect(wakeLine(new Date(2026, 9, 23, 6, 0), now, '24h')).toBe('Wakes at 06:00');
+    expect(wakeLine(new Date(2026, 9, 25, 6, 30), now, '24h')).toBe('Wakes Sunday at 06:30');
+    expect(wakeLine(new Date(2026, 9, 23, 6, 0), now, '12h')).toBe('Wakes at 6:00 am');
+    expect(wakeLine(new Date(2026, 9, 25, 6, 30), now, '12h')).toBe('Wakes Sunday at 6:30 am');
   });
 
-  it('writes the time in 24 hours', () => {
-    expect(clockText(new Date(2026, 9, 22, 6, 5))).toBe('06:05');
-    expect(clockText(new Date(2026, 9, 22, 21, 40))).toBe('21:40');
+  it('writes the time in the clock chosen: 24-hour, or 12-hour with am or pm (D245)', () => {
+    expect(clockText(new Date(2026, 9, 22, 6, 5), '24h')).toBe('06:05');
+    expect(clockText(new Date(2026, 9, 22, 21, 40), '24h')).toBe('21:40');
+    expect(clockText(new Date(2026, 9, 22, 6, 5), '12h')).toBe('6:05 am');
+    expect(clockText(new Date(2026, 9, 22, 21, 40), '12h')).toBe('9:40 pm');
   });
 });
 
@@ -159,5 +164,20 @@ describe('Nightstand', () => {
   it('draws outside a ServicesProvider too, with the time alone', () => {
     render(<Nightstand palette={PALETTE} seed={1} />);
     expect(screen.getByTestId(TID.nightstand).textContent).toBe('22:15');
+  });
+
+  it('on the 12-hour clock writes the time with am or pm, the half smaller, and the wake that way (D245)', async () => {
+    const services = createFakeServicesShowing({ clock: '12h' });
+    services.decaid.presence = { ...services.decaid.presence, schedules: [{ id: 'w1', time: '06:00', daysOfWeek: [], enabled: true }] };
+    renderNightstand(services);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const time = screen.getByTestId(TID.nightstandTime);
+    expect(time).toHaveTextContent('10:15 pm');
+    // The machine-readable time stays 24-hour.
+    expect(time).toHaveAttribute('datetime', '22:15');
+    expect(screen.getByText('pm').tagName).toBe('SPAN');
+    expect(screen.getByTestId(TID.nightstand)).toHaveTextContent('Wakes at 6:00 am');
   });
 });

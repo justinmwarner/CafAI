@@ -2,10 +2,12 @@
  * The words and sums of Settings > Sleep and wake (D157-D160): Decaid's wake
  * schedules said as a barista reads them, when the next one wakes the
  * machine, the choices for keeping it awake after, and the idle sleep's
- * stepper. Times are "HH:MM", 24-hour, as CafAI writes every time
- * (src/ui/chat/format.ts), in the clock of the device Decaid runs on.
+ * stepper. Decaid keeps its times as "HH:MM", 24-hour, in the clock of the
+ * device it runs on; they are shown in the clock the barista chose (D245,
+ * src/ui/clock.ts), which each caller passes.
  */
 import type { WakeSchedule } from '../../api/types.ts';
+import { formatClock, formatTime, type ClockFormat } from '../clock.ts';
 import type { DrinkFieldSpec } from './drinkSettings.ts';
 
 export interface Weekday {
@@ -108,9 +110,9 @@ export function describeSchedule(schedule: WakeSchedule): string {
   return schedule.keepAwakeFor ? `${days} · stays awake for ${formatMinutes(schedule.keepAwakeFor)}` : days;
 }
 
-/** The same said aloud, for the row's button: "06:30, Weekdays, stays awake for 1 h, off". */
-export function speakSchedule(schedule: WakeSchedule): string {
-  const parts = [schedule.time, describeDays(schedule.daysOfWeek)];
+/** The same said aloud, for the row's button: "06:30, Weekdays, stays awake for 1 h, off" ("6:30 am, …" on the 12-hour clock). */
+export function speakSchedule(schedule: WakeSchedule, clock: ClockFormat): string {
+  const parts = [formatWakeTime(schedule.time, clock), describeDays(schedule.daysOfWeek)];
   if (schedule.keepAwakeFor) parts.push(`stays awake for ${formatMinutes(schedule.keepAwakeFor)}`);
   if (!schedule.enabled) parts.push('off');
   return parts.join(', ');
@@ -122,13 +124,19 @@ export function sortSchedules(schedules: readonly WakeSchedule[]): WakeSchedule[
   return [...schedules].sort((a, b) => a.time.localeCompare(b.time) || firstDay(a) - firstDay(b));
 }
 
-/** Hours and minutes of "HH:MM", or null for anything else. */
-function clock(time: string): { hour: number; minute: number } | null {
+/** Hours and minutes of Decaid's "HH:MM", or null for anything else. */
+export function readWakeTime(time: string): { hour: number; minute: number } | null {
   const match = /^(\d{2}):(\d{2})$/.exec(time);
   if (!match) return null;
   const hour = Number(match[1]);
   const minute = Number(match[2]);
   return hour <= 23 && minute <= 59 ? { hour, minute } : null;
+}
+
+/** Decaid's "HH:MM" in the clock chosen: "06:30" or "6:30 am"; a time it cannot read as Decaid gave it. */
+export function formatWakeTime(time: string, clock: ClockFormat): string {
+  const read = readWakeTime(time);
+  return read ? formatClock(read.hour, read.minute, clock) : time;
 }
 
 /** ISO weekday of a local date: 1 = Monday to 7 = Sunday. */
@@ -154,7 +162,7 @@ export function nextWake(schedules: readonly WakeSchedule[], now: Date): NextWak
     const weekday = isoWeekday(day);
     let best: NextWake | null = null;
     for (const schedule of schedules) {
-      const time = clock(schedule.time);
+      const time = readWakeTime(schedule.time);
       if (!schedule.enabled || time === null || !daysPicked(schedule.daysOfWeek).includes(weekday)) continue;
       const at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), time.hour, time.minute);
       if (at.getTime() > now.getTime() && (best === null || at.getTime() < best.at.getTime())) best = { schedule, at };
@@ -171,9 +179,9 @@ function daysBetween(now: Date, at: Date): number {
   return Math.round((end.getTime() - start.getTime()) / 86_400_000);
 }
 
-/** "today at 06:30", "tomorrow at 06:30", "Friday at 06:30", "next Friday at 06:30". */
-export function describeWhen(at: Date, now: Date): string {
-  const time = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+/** "today at 06:30", "tomorrow at 06:30", "Friday at 06:30", "next Friday at 06:30" ("today at 6:30 am" on the 12-hour clock). */
+export function describeWhen(at: Date, now: Date, clock: ClockFormat): string {
+  const time = formatTime(at, clock);
   const ahead = daysBetween(now, at);
   const name = WEEKDAYS[isoWeekday(at) - 1]?.name ?? '';
   if (ahead <= 0) return `today at ${time}`;
@@ -182,14 +190,14 @@ export function describeWhen(at: Date, now: Date): string {
 }
 
 /**
- * "07:30" while a wake's keep-awake window runs: from Decaid's keepAwakeUntil,
- * a local time without a zone ("2026-10-15T07:30:00.000"), read from its own
- * digits. Null when there is none, or it has passed.
+ * "07:30" (or "7:30 am") while a wake's keep-awake window runs: from Decaid's
+ * keepAwakeUntil, a local time without a zone ("2026-10-15T07:30:00.000"),
+ * read from its own digits. Null when there is none, or it has passed.
  */
-export function keptAwakeUntil(value: string | null | undefined, now: Date): string | null {
+export function keptAwakeUntil(value: string | null | undefined, now: Date, clock: ClockFormat): string | null {
   const match = typeof value === 'string' ? /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value) : null;
   if (!match) return null;
   const [, year, month, day, hour, minute] = match.map(Number);
   const end = new Date(year ?? 0, (month ?? 1) - 1, day, hour, minute);
-  return end.getTime() > now.getTime() ? `${match[4]}:${match[5]}` : null;
+  return end.getTime() > now.getTime() ? formatClock(hour ?? 0, minute ?? 0, clock) : null;
 }

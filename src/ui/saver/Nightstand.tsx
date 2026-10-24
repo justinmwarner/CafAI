@@ -1,10 +1,12 @@
 /**
  * Nightstand (D227), after a bedside clock, and the screensaver every
  * other one falls back to: text drawn by React, not a canvas. The time,
- * large, 24-hour as CafAI writes times; under it, when they are known, the
- * next wake time from Decaid's wake times, the bag on the machine and the
- * last shot in one line, as History writes one. The time in ink, the rest in
- * muted ink, on the page's dark colour (D226).
+ * large, in the clock the barista chose (D245: 24-hour unless 12-hour was
+ * chosen, its am or pm smaller after the figures, as a bedside clock has
+ * it); under it, when they are known, the next wake time from Decaid's wake
+ * times, the bag on the machine and the last shot in one line, as History
+ * writes one. The time in ink, the rest in muted ink, on the page's dark
+ * colour (D226).
  *
  * The block jumps to a new place each minute, seeded, well inside the edges,
  * so nothing stays lit in one spot all night. A jump is not motion: it
@@ -13,10 +15,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Box from '@mui/material/Box';
 import type { WakeSchedule } from '../../api/types.ts';
-import { useOptionalServices } from '../../app/services.tsx';
+import { useClockFormat, useOptionalServices } from '../../app/services.tsx';
 import type { CoachUiMessage } from '../../app/types.ts';
 import type { ShotSummary } from '../../coach/types.ts';
 import { formatBar, formatGrams, formatRatio, formatSeconds, shotRatio } from '../chat/format.ts';
+import { formatTime, type ClockFormat } from '../clock.ts';
 import type { Palette } from '../palette.ts';
 import { describeWhen, nextWake } from '../settings/wakeSchedule.ts';
 import { TID } from '../testIds.ts';
@@ -57,15 +60,14 @@ export function shotNumbers(summary: ShotSummary | null): string[] {
   return numbers;
 }
 
-/** "Wakes at 06:00" within the next day; "Wakes Friday at 06:00" further off. */
-export function wakeLine(at: Date, now: Date): string {
-  const time = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
-  return at.getTime() - now.getTime() <= 86_400_000 ? `Wakes at ${time}` : `Wakes ${describeWhen(at, now)}`;
+/** "Wakes at 06:00" within the next day; "Wakes Friday at 06:00" further off; "6:00 am" on the 12-hour clock. */
+export function wakeLine(at: Date, now: Date, clock: ClockFormat): string {
+  return at.getTime() - now.getTime() <= 86_400_000 ? `Wakes at ${formatTime(at, clock)}` : `Wakes ${describeWhen(at, now, clock)}`;
 }
 
-/** "06:05", 24-hour, as CafAI writes times. */
-export function clockText(now: Date): string {
-  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+/** "06:05" on the 24-hour clock, "6:05 am" on the 12-hour one. */
+export function clockText(now: Date, clock: ClockFormat): string {
+  return formatTime(now, clock);
 }
 
 export interface Size {
@@ -101,7 +103,7 @@ const noSubscribe = () => () => undefined;
 const nothing = () => null;
 
 /** The lines under the time, from Decaid's wake times and the coach's state; none outside a ServicesProvider. */
-function useLines(now: Date): string[] {
+function useLines(now: Date, clock: ClockFormat): string[] {
   const services = useOptionalServices();
   const decaid = services?.decaid ?? null;
   const coach = services?.coach ?? null;
@@ -124,7 +126,7 @@ function useLines(now: Date): string[] {
   const bag = useSyncExternalStore(coach?.subscribe ?? noSubscribe, coach ? () => coach.getState().activeBag?.name ?? null : nothing);
   const shot = useSyncExternalStore(coach?.subscribe ?? noSubscribe, coach ? () => lastShotLine(coach.getState().messages) : nothing);
   const next = schedules ? nextWake(schedules, now) : null;
-  return [next ? wakeLine(next.at, now) : null, bag?.trim() ? bag.trim() : null, shot].filter((line): line is string => line !== null);
+  return [next ? wakeLine(next.at, now, clock) : null, bag?.trim() ? bag.trim() : null, shot].filter((line): line is string => line !== null);
 }
 
 /** One string for the selector, so a streamed token never re-renders the clock. */
@@ -142,7 +144,10 @@ export interface NightstandProps {
 
 export function Nightstand({ palette, seed, onPainted }: NightstandProps) {
   const now = useMinute();
-  const lines = useLines(now);
+  const clock = useClockFormat();
+  const lines = useLines(now, clock);
+  // On the 12-hour clock "10:15 pm": the figures large, the half after them small.
+  const [figures, half] = clockText(now, clock).split(' ');
   const minute = Math.floor(now.getTime() / 60_000);
   const area = useRef<HTMLDivElement>(null);
   const block = useRef<HTMLDivElement>(null);
@@ -167,7 +172,7 @@ export function Nightstand({ palette, seed, onPainted }: NightstandProps) {
     resized.observe(areaNode);
     resized.observe(blockNode);
     return () => resized.disconnect();
-  }, [seed, minute, linesKey]);
+  }, [seed, minute, linesKey, clock]);
 
   const placed = place !== null;
   const painted = useRef(onPainted);
@@ -195,10 +200,15 @@ export function Nightstand({ palette, seed, onPainted }: NightstandProps) {
         <Box
           component="time"
           data-testid={TID.nightstandTime}
-          dateTime={clockText(now)}
+          dateTime={clockText(now, '24h')}
           sx={{ display: 'block', color: palette.ink, fontSize: 'clamp(64px, 20vmin, 200px)', fontWeight: 300, lineHeight: 1 }}
         >
-          {clockText(now)}
+          {figures}
+          {half ? (
+            <Box component="span" sx={{ fontSize: '0.3em', fontWeight: 400 }}>
+              {` ${half}`}
+            </Box>
+          ) : null}
         </Box>
         {lines.map((line) => (
           <Box key={line} sx={{ fontSize: 'clamp(16px, 3.2vmin, 28px)', lineHeight: 1.35, mt: '0.4em' }}>
