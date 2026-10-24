@@ -4578,7 +4578,8 @@ section 8).
   lifted a little drags the surface along the stretch it moved over in the
   step, through a kernel with a cusp, sharpest on the path, so a cleft and a
   point come out as Vs; a thinner stream drags a narrower band, and a stream
-  at the surface drags nothing, only lays its foam. At the wall the surface
+  at the surface drags a tenth as much, so its wiggle sways the surface near
+  it and mostly lays its foam. At the wall the surface
   slows to a stop. The foam comes up under a low stream only; from high the
   milk dives and lightens the crema a little. Both fields are carried
   semi-Lagrangian with MacCormack's correction, held between the values they
@@ -4595,8 +4596,9 @@ section 8).
   lays a zigzag ribbon whose strokes pile up into thin leaves with crema
   between: a rosetta. A purely radial source could not make the tulip (each
   disc grew backward over the next one's landing) nor the rosetta (a filled
-  egg); the lean made both, and a drag on a stream at the surface washed the
-  rosetta's zigzag out, so a low stream drags nothing.
+  egg); the lean made both. The full drag on a stream at the surface washed
+  the rosetta's zigzag out, and a fifth of it ran its leaves together; a
+  tenth leaves them as crisp as none.
 - **D-LATTE-2. All four pours come round in turn: the heart, the tulip, the
   rosetta and the swan.** Each was tuned from its pictures until it read at
   a glance: the heart's round lobes, cleft and point; the tulip's four nested
@@ -4614,7 +4616,8 @@ section 8).
   (QUESTIONS).
 - **D-LATTE-3. The cup from straight above, on its saucer, lit from the
   upper left.** A white glaze (warm, its light falling off from the upper
-  left to the lower right), the saucer's rim rolled over with a glint and a
+  left to the lower right), in a pool of light on the cup that leaves the
+  saucer's rim in shade; the saucer's rim rolled over with a glint and a
   cool rim light on its far edge, the window's soft reflection on its slope,
   the cup's and the handle's shadows; the cup's lip glinting outside on the
   upper left and inside on the lower right, its inner wall in shade on the
@@ -4626,10 +4629,13 @@ section 8).
   lands: its thread seen end on and two faint rings. The pour's name is under
   the saucer in Figtree, in the page's muted ink, fading in as it starts and
   out as the cup clears. The whole picture drifts by up to 12 by 8 px over a
-  quarter of an hour (whole device pixels). Why: the round's look, a lit still
-  life rather than an outline; midtones and lights that survive the dim
-  (crema, foam, glaze, none of them near black); and the drift so that no
-  bright porcelain sits in one place for 30 minutes.
+  quarter of an hour, about 5 px a minute at most, on whole device pixels.
+  The saucer is 83% of the screen's height on the tablet, and most of a
+  narrow screen's width. Why: the round's look, a lit still life rather than
+  an outline; midtones and lights that survive the dim (crema, foam, glaze,
+  none of them near black); the coffee the subject, the porcelain modest;
+  and the drift so that no bright porcelain sits in one place for 30
+  minutes.
 - **D-LATTE-4. Under 4 ms a frame.** The field steps at 15 a second, so
   every other frame. The tone has a grid of its own at half the foam's
   resolution, with its own velocity. The foam is moved only in the box it is

@@ -16,7 +16,8 @@
  * - The drag: a stream lifted a little digs in and drags the surface near it
  *   along as the pitcher moves. Thin and quick, as a pull-through, it is a
  *   narrow drag along its path, which cuts a heart's cleft where it goes in
- *   and draws out its point where it comes out.
+ *   and draws out its point where it comes out. At the surface it drags only
+ *   a little, so its wiggle sways the foam it lays without smearing it.
  * - The wall: nothing flows through it; the surface slows to a stop at it,
  *   so the crema pushed there gathers in a ring.
  *
@@ -64,6 +65,8 @@ const CORE = 0.045;
 /** How much of the stream's own motion the surface right under it takes on, and how far that reaches for a stream of 0.45. */
 const DRAG = 0.85;
 const DRAG_REACH = 0.22;
+/** A stream at the surface drags only this share as much: its wiggle sways the surface near it, and no more, or a rosetta's leaves run together. */
+const DRAG_LOW = 0.1;
 /** Past this many reaches the drag is left out (the kernel is under 1%). */
 const DRAG_CUTOFF = 4.5;
 /** The surface slows to a stop over this much of the radius at the wall. */
@@ -217,9 +220,9 @@ export function lowness(height: number): number {
   return 1 - smoothstep(LOW_FROM, HIGH_FROM, height);
 }
 
-/** How much of the stream's motion it drags the surface by: a stream lifted a little digs in; one at the surface only lays its foam; one high dives through. */
+/** How much of the stream's motion it drags the surface by: a stream lifted a little digs in; one at the surface mostly lays its foam; one high dives through. */
 export function dragOf(flow: number, height: number): number {
-  return DRAG * smoothstep(0, 0.3, flow) * smoothstep(0.1, 0.4, height) * (1 - 0.9 * smoothstep(0.6, 0.85, height));
+  return DRAG * smoothstep(0, 0.3, flow) * (DRAG_LOW + (1 - DRAG_LOW) * smoothstep(0.1, 0.4, height)) * (1 - 0.9 * smoothstep(0.6, 0.85, height));
 }
 
 /** Rows and columns of a grid, first to last, both in. */
@@ -363,6 +366,13 @@ function carry(field: Float32Array, shape: Shape, work: Passes, outer: Box, inne
       const ddx = dx[index]!;
       const ddy = dy[index]!;
       if (ddx < STILL && ddx > -STILL && ddy < STILL && ddy > -STILL) continue;
+      // Come from where all is one value (inside the white, out in the crema): that is the value.
+      const lo = low[index]!;
+      const hi = high[index]!;
+      if (lo === hi) {
+        field[index] = lo;
+        continue;
+      }
       let sx = col + ddx;
       let sy = row + ddy;
       sx = sx < 0 ? 0 : sx > edge ? edge : sx;
@@ -378,8 +388,6 @@ function carry(field: Float32Array, shape: Shape, work: Passes, outer: Box, inne
       const d = hat[at + size + 1]!;
       const back = a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
       const corrected = hat[index]! + 0.5 * (field[index]! - back);
-      const lo = low[index]!;
-      const hi = high[index]!;
       field[index] = corrected < lo ? lo : corrected > hi ? hi : corrected;
     }
   }
