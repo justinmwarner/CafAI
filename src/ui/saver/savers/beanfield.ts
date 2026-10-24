@@ -149,7 +149,8 @@ export const beanfield: CanvasSaver = {
     const doc = canvas.ownerDocument;
     const { palette } = env;
     let model = createBeanfieldModel(env.seed);
-    let seconds = 0;
+    /** Where the drum light is in its breath, 0 to 1. */
+    let breath = 0;
     let width = 0;
     let height = 0;
     let scale = 1;
@@ -278,7 +279,7 @@ export const beanfield: CanvasSaver = {
       ctx.fillStyle = palette.background;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       if (glow) {
-        ctx.globalAlpha = 1 - GLOW.breath * (0.5 + 0.5 * Math.cos((2 * Math.PI * seconds) / GLOW.breathSeconds));
+        ctx.globalAlpha = 1 - GLOW.breath * (0.5 + 0.5 * Math.cos(2 * Math.PI * breath));
         ctx.imageSmoothingEnabled = true;
         ctx.drawImage(glow, 0, 0, canvas.width, canvas.height);
       }
@@ -324,7 +325,7 @@ export const beanfield: CanvasSaver = {
     const instance: SaverInstance = {
       step(dtMs) {
         model.step(dtMs);
-        if (Number.isFinite(dtMs) && dtMs > 0) seconds = (seconds + Math.min(dtMs, 10_000) / 1000) % 3600;
+        if (Number.isFinite(dtMs) && dtMs > 0) breath = (breath + Math.min(dtMs, 10_000) / 1000 / GLOW.breathSeconds) % 1;
       },
       draw() {
         paint(false);
@@ -355,7 +356,7 @@ export const beanfield: CanvasSaver = {
       },
       still() {
         model = createBeanfieldModel(env.seed);
-        seconds = 0;
+        breath = 0;
         for (let left = STILL_MS; left > 0; left -= FRAME_MS) instance.step(Math.min(FRAME_MS, left));
         paint(true);
       },
