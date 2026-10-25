@@ -3,9 +3,8 @@
  * Decaid's grinder library where it is listed, whose step size the coach
  * then uses (GrinderFields.tsx, grinderPicker.ts), or named by hand; its
  * current setting; which way is finer on it (GrinderDirectionRow.tsx, D241,
- * which reads and saves its own setting for the grinder as saved); Add a
- * grinder for one the library lacks (AddGrinder.tsx); and what the coach does
- * with it.
+ * which saves its own setting); Add a grinder for one the library lacks
+ * (AddGrinder.tsx); and what the coach does with it.
  *
  * Everything applies as it changes (D234): a pick from Decaid's list saves at
  * once (grinderPatch, as Save did), so it links at once, and so does a
@@ -14,10 +13,20 @@
  * value, and a value left as it was saves nothing. Each save sends the
  * whole grinder, so a later one carries an earlier one that failed; the
  * coach re-reads its settings after it, and the line under the card says
- * "Saved." or why not. A pick brings the setting and that line into view,
- * scrolling the group's own column. A key pasted into a typed field never
- * becomes a setting: storage takes it out (src/storage/settings.ts), the
- * field shows what was saved, and the card says why (D37).
+ * "Saved." or why not, as it does for Finer is. A pick brings the setting
+ * and that line into view, scrolling the group's own column. A key pasted
+ * into a typed field never becomes a setting: storage takes it out
+ * (src/storage/settings.ts), the field shows what was saved, and the card
+ * says why (D37).
+ *
+ * Finer is follows the grinder being saved, else the one saved: a tap on it
+ * leaves a typed field first, in the same gesture, so that field's save is on
+ * its way when the tap lands and the answer goes with the name just typed.
+ * Before any grinder is saved it follows the one the fields name, as a row
+ * still held when a tap began never gets its click. The same grinder linked
+ * or unlinked keeps Higher numbers under its new key in the same save
+ * (keptFinerHigher), as the engine does when the chat's grinder card links
+ * one.
  */
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FocusEvent, type KeyboardEvent } from 'react';
 import Alert from '@mui/material/Alert';
@@ -26,12 +35,12 @@ import Typography from '@mui/material/Typography';
 import { addOrFindGrinder, listGrinders, type Grinder } from '../../api/grinders.ts';
 import { PLUGIN } from '../../api/plugins.ts';
 import { useServices } from '../../app/services.tsx';
-import { grinderDirectionKey } from '../../storage/settings.ts';
+import { grinderDirectionKey, withGrinderDirection } from '../../storage/settings.ts';
 import type { Settings } from '../../storage/types.ts';
 import { TID } from '../testIds.ts';
 import { AddGrinder, type AddedGrinder } from './AddGrinder.tsx';
 import { dye2GrindersUrl } from './addGrinder.ts';
-import { GrinderDirectionRow } from './GrinderDirectionRow.tsx';
+import { GrinderDirectionRow, keptFinerHigher, useGrinderDirections } from './GrinderDirectionRow.tsx';
 import { GrinderFields } from './GrinderFields.tsx';
 import {
   canAddGrinder,
@@ -106,6 +115,10 @@ export function GrinderCard() {
   const latest = useRef(0);
   const stored = useRef<string | null>(null);
   const sending = useRef<string | null>(null);
+  // The grinder of the newest save on its way, which Finer is follows until it lands.
+  const [sent, setSent] = useState<SavedGrinder | null>(null);
+  // Which way is finer on each grinder, held here so a save of the grinder keeps its answer in step.
+  const directions = useGrinderDirections();
 
   useEffect(() => {
     let live = true;
@@ -155,12 +168,27 @@ export function GrinderCard() {
     if (key === (sending.current ?? stored.current)) return;
     sending.current = key;
     const ticket = ++latest.current;
+    const grinder: SavedGrinder = { grinderId: patch.grinderId, grinderName: patch.grinderName };
+    const sentKey = grinderDirectionKey(grinder);
+    // The same grinder linked or unlinked keeps Higher numbers: shown at once, as the save keeps it.
+    const keeps = sentKey !== null && directions.list !== null && keptFinerHigher(sent ?? saved, grinder, directions.list) !== null;
+    setSent(grinder);
+    if (keeps) directions.update((list) => withGrinderDirection(list, sentKey, true));
     try {
-      const result = await storage.settings.update(patch);
+      // On what storage holds then: the grinder this save changes from, and the answers it keeps one in.
+      const before = await storage.settings.get();
+      const kept = keptFinerHigher(before, grinder, before.grinderFinerHigher);
+      const result = await storage.settings.update(kept ? { ...patch, grinderFinerHigher: kept } : patch);
       if (ticket !== latest.current) return;
       sending.current = null;
       stored.current = keyOf(result);
+      setSent(null);
       setSaved({ grinderId: result.grinderId ?? null, grinderName: result.grinderName });
+      if (sentKey !== null && (keeps || kept !== null)) {
+        // The answer as storage now holds it, the rest of the list as shown: a tap's save may still be on its way.
+        const higher = (result.grinderFinerHigher ?? []).includes(sentKey);
+        directions.update((list) => withGrinderDirection(list, sentKey, higher));
+      }
       setForm((current) => (current ? afterSave(current, next, formFrom(result)) : current));
       setKeyNotice(tookKeyOut(['grinderName', 'grinderSetting'], patch, result));
       note.saved();
@@ -168,6 +196,9 @@ export function GrinderCard() {
     } catch (error) {
       if (ticket !== latest.current) return;
       sending.current = null;
+      setSent(null);
+      // Not saved, so not kept: the answer goes back to what storage holds.
+      if (keeps) directions.update((list) => withGrinderDirection(list, sentKey, false));
       note.failed(couldNotSave('the grinder', error));
     }
   };
@@ -206,6 +237,9 @@ export function GrinderCard() {
     void commit(next, lib);
   };
   const disabled = form === null;
+  // Finer is: the grinder being saved, else the one saved; before any is saved, the one the fields name.
+  const directionKey =
+    grinderDirectionKey(sent ?? saved) ?? (form === null ? null : grinderDirectionKey(grinderPatch(form, library, saved)));
 
   return (
     <Section title={GRINDER_CARD_TITLE}>
@@ -220,8 +254,8 @@ export function GrinderCard() {
             settingRef={settingRef}
           />
         </Box>
-        {/* Which way is finer on the grinder as saved, the one the coach turns (D241). */}
-        <GrinderDirectionRow grinderKey={grinderDirectionKey(saved)} disabled={disabled} />
+        {/* Which way is finer on the grinder being saved or saved, the one the coach turns (D241). */}
+        <GrinderDirectionRow grinderKey={directionKey} directions={directions} disabled={disabled} onSaved={note.alsoSaved} />
         <AddGrinder
           canAdd={canAddGrinder(library)}
           dye2Url={dye2Loaded ? dye2GrindersUrl(decaid.httpOrigin) : null}

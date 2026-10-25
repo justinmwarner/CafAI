@@ -9,6 +9,7 @@ import { createFakeServices, type FakeServices } from '../testing/fakeServices.t
 import { TID } from '../testIds.ts';
 import { renderWithServices } from '../chat/testing/render.tsx';
 import { GRINDER_CARD_TITLE, GrinderCard } from './GrinderCard.tsx';
+import { GRINDER_DIRECTION_TID, NAME_GRINDER_FIRST } from './GrinderDirectionRow.tsx';
 import { LIBRARY_HINT, MISSING_LINE, UNREACHABLE_LINE } from './grinderPicker.ts';
 import { GroupPage } from './GroupPage.tsx';
 import { KEY_TAKEN_OUT, SAVED } from './SaveLine.tsx';
@@ -95,6 +96,19 @@ const saved = () => waitFor(() => expect(line()).toHaveTextContent(SAVED));
 const loaded = () => waitFor(() => expect(screen.getByTestId(TID.grinderName)).toHaveValue('Niche Zero'));
 /** Leave a typed field, as a tap elsewhere does: its value is saved. */
 const leave = (testId: string) => act(() => screen.getByTestId(testId).blur());
+const lower = () => screen.getByTestId(GRINDER_DIRECTION_TID.grinderFinerLower);
+const higher = () => screen.getByTestId(GRINDER_DIRECTION_TID.grinderFinerHigher);
+const finerIs = () => screen.getByRole('group', { name: 'Finer is' });
+const directions = async (services: FakeServices) => (await services.storage.settings.get()).grinderFinerHigher;
+
+/** Holds the card's next save on its way until the test lets it land (the returned function). */
+function holdNextSave(services: FakeServices): () => Promise<void> {
+  let land: () => void = () => undefined;
+  const update = services.storage.settings.update as Mock<(patch: Partial<Settings>) => Promise<Settings>>;
+  const real = update.getMockImplementation()!;
+  update.mockImplementationOnce((patch: Partial<Settings>) => new Promise((resolve) => (land = () => resolve(real(patch)))));
+  return () => act(async () => land());
+}
 
 describe('Settings > Grinder > Your grinder: typed', () => {
   it('loads the stored grinder, with no Save', async () => {
@@ -488,6 +502,147 @@ describe('Settings > Grinder from Decaid', () => {
   });
 });
 
+describe('Settings > Grinder > Finer is, in the card (D241)', () => {
+  const picker = () => screen.getByLabelText('Grinder from Decaid');
+  const libraryReady = () => waitFor(() => expect(picker()).toBeEnabled());
+  const c40Typed: Settings = { ...typed, grinderName: 'Comandante C40 MK4', grinderFinerHigher: ['name:comandante c40 mk4'] };
+
+  // A tap on the row leaves the name field first, starting its save: in the tap itself, or once focus has moved.
+  const taps = [
+    ['in the tap itself', () => userEvent.click(higher())],
+    [
+      'once focus has moved',
+      async () => {
+        leave(TID.grinderName);
+        await userEvent.click(higher());
+      },
+    ],
+  ] as const;
+
+  for (const [when, tapHigher] of taps) {
+    it(`Higher numbers tapped as a rename goes out is for the new name, not the old (${when})`, async () => {
+      const services = renderCard();
+      await loaded();
+      await waitFor(() => expect(lower()).toHaveAttribute('aria-pressed', 'true'));
+      const land = holdNextSave(services);
+      await userEvent.clear(screen.getByTestId(TID.grinderName));
+      await userEvent.type(screen.getByTestId(TID.grinderName), 'DF64');
+      await tapHigher();
+      // The rename is still on its way, and the answer went with it.
+      await waitFor(async () => expect(await directions(services)).toEqual(['name:df64']));
+      expect((await services.storage.settings.get()).grinderName).toBe('Niche Zero');
+      expect(higher()).toHaveAttribute('aria-pressed', 'true');
+      await land();
+      await saved();
+      expect(await services.storage.settings.get()).toMatchObject({ grinderName: 'DF64', grinderFinerHigher: ['name:df64'] });
+      // Still Higher numbers once the rename lands, and nothing said for the Niche Zero.
+      expect(higher()).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it(`the first grinder named takes Higher numbers in the same tap (${when})`, async () => {
+      const services = renderCard({ ...typed, grinderName: null, grinderSetting: null });
+      await waitFor(() => expect(finerIs()).toHaveAccessibleDescription(NAME_GRINDER_FIRST));
+      expect(higher()).toBeDisabled();
+      const land = holdNextSave(services);
+      await userEvent.type(screen.getByTestId(TID.grinderName), 'DF64');
+      // Live as soon as a name is typed: a row still held when the tap began would never get its click.
+      expect(higher()).toBeEnabled();
+      await tapHigher();
+      await waitFor(async () => expect(await directions(services)).toEqual(['name:df64']));
+      await land();
+      await saved();
+      expect(await services.storage.settings.get()).toMatchObject({ grinderName: 'DF64', grinderFinerHigher: ['name:df64'] });
+      expect(higher()).toHaveAttribute('aria-pressed', 'true');
+    });
+  }
+
+  it('a rename that does not save puts Finer is back on the grinder saved, the one the coach still turns', async () => {
+    const services = renderCard({ ...typed, grinderFinerHigher: ['name:niche zero'] });
+    await waitFor(() => expect(higher()).toHaveAttribute('aria-pressed', 'true'));
+    (services.storage.settings.update as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('disk full'));
+    await userEvent.clear(screen.getByTestId(TID.grinderName));
+    await userEvent.type(screen.getByTestId(TID.grinderName), 'DF64');
+    leave(TID.grinderName);
+    await waitFor(() => expect(line()).toHaveTextContent('Could not save the grinder: disk full. Try again.'));
+    expect(screen.getByTestId(TID.grinderName)).toHaveValue('DF64');
+    expect(higher()).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('linking the grinder typed keeps Higher numbers under its id in the same save, and under its name too', async () => {
+    const services = renderCard(c40Typed);
+    await libraryReady();
+    await waitFor(() => expect(higher()).toHaveAttribute('aria-pressed', 'true'));
+    const land = holdNextSave(services);
+    await userEvent.selectOptions(picker(), 'g-c40');
+    // Never Lower numbers while the link is on its way.
+    expect(higher()).toHaveAttribute('aria-pressed', 'true');
+    await land();
+    await saved();
+    expect(updates(services)).toEqual([
+      { grinderId: 'g-c40', grinderName: 'Comandante C40 MK4', grinderSetting: '14', grinderFinerHigher: ['name:comandante c40 mk4', 'id:g-c40'] },
+    ]);
+    expect(await services.storage.settings.get()).toMatchObject({ grinderId: 'g-c40', grinderFinerHigher: ['name:comandante c40 mk4', 'id:g-c40'] });
+    expect(higher()).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('"Not in Decaid\'s list" keeps Higher numbers under the name, and under the id too', async () => {
+    const services = renderCard({ ...typed, grinderId: 'g-c40', grinderName: 'Comandante C40 MK4', grinderFinerHigher: ['id:g-c40'] });
+    await libraryReady();
+    await waitFor(() => expect(higher()).toHaveAttribute('aria-pressed', 'true'));
+    await userEvent.selectOptions(picker(), "Not in Decaid's list");
+    await saved();
+    expect(await services.storage.settings.get()).toMatchObject({
+      grinderId: null,
+      grinderName: 'Comandante C40 MK4',
+      grinderFinerHigher: ['id:g-c40', 'name:comandante c40 mk4'],
+    });
+    expect(higher()).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('another grinder picked starts at Lower numbers, the one typed keeping its answer', async () => {
+    const services = renderCard(c40Typed);
+    await libraryReady();
+    await waitFor(() => expect(higher()).toHaveAttribute('aria-pressed', 'true'));
+    await userEvent.selectOptions(picker(), 'g-niche');
+    await saved();
+    expect(updates(services)).toEqual([{ grinderId: 'g-niche', grinderName: 'Niche Zero', grinderSetting: '14' }]);
+    expect(await directions(services)).toEqual(['name:comandante c40 mk4']);
+    expect(lower()).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('a link that does not save keeps nothing, and Finer is stays on the grinder typed', async () => {
+    const services = renderCard(c40Typed);
+    await libraryReady();
+    await waitFor(() => expect(higher()).toHaveAttribute('aria-pressed', 'true'));
+    (services.storage.settings.update as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('disk full'));
+    await userEvent.selectOptions(picker(), 'g-c40');
+    await waitFor(() => expect(line()).toHaveTextContent('Could not save the grinder: disk full. Try again.'));
+    expect(await services.storage.settings.get()).toMatchObject({ grinderId: null, grinderFinerHigher: ['name:comandante c40 mk4'] });
+    expect(higher()).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('a tap on Finer is says "Saved." in the line under the card, as the grinder\'s own saves do (D234)', async () => {
+    renderCard();
+    await waitFor(() => expect(lower()).toHaveAttribute('aria-pressed', 'true'));
+    expect(line()).toHaveTextContent('');
+    await userEvent.click(higher());
+    await saved();
+  });
+
+  it('leaves the line on a grinder change that did not save, as the tap on Finer is did not carry it', async () => {
+    const services = renderCard();
+    await loaded();
+    (services.storage.settings.update as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('disk full'));
+    await userEvent.clear(screen.getByTestId(TID.grinderSetting));
+    await userEvent.type(screen.getByTestId(TID.grinderSetting), '16');
+    leave(TID.grinderSetting);
+    await waitFor(() => expect(line()).toHaveTextContent('Could not save the grinder: disk full. Try again.'));
+    await userEvent.click(higher());
+    await waitFor(async () => expect(await directions(services)).toEqual(['name:niche zero']));
+    expect(line()).toHaveTextContent('Could not save the grinder: disk full. Try again.');
+  });
+});
+
 describe('Settings > Grinder > Add a grinder (D125)', () => {
   const addTyped: Settings = { model: DEFAULT_MODEL, grinderName: 'DF64', grinderSetting: '14', activeBagId: 'bag-1' };
   const ADDED = {
@@ -550,6 +705,19 @@ describe('Settings > Grinder > Add a grinder (D125)', () => {
     // The note stays until the next change.
     await userEvent.type(screen.getByTestId(TID.grinderSetting), '{Backspace}5');
     expect(screen.queryByTestId(TID.addGrinderNote)).toBeNull();
+  });
+
+  it('keeps Higher numbers, said for the grinder typed, once Add a grinder adds and picks it (D241)', async () => {
+    const services = renderCard({ ...addTyped, grinderFinerHigher: ['name:df64'] });
+    expect(await screen.findByText(LIBRARY_HINT)).toBeInTheDocument();
+    await waitFor(() => expect(higher()).toHaveAttribute('aria-pressed', 'true'));
+    await userEvent.click(await addButton());
+    const dialog = await screen.findByRole('dialog', { name: 'Add a grinder to Decaid' });
+    await userEvent.click(within(dialog).getByTestId(TID.addGrinderSubmit));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await saved();
+    expect(await services.storage.settings.get()).toMatchObject({ grinderId: 'g-new', grinderName: 'DF64', grinderFinerHigher: ['name:df64', 'id:g-new'] });
+    expect(higher()).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('picks the grinder Decaid already has, read afresh, instead of adding it twice', async () => {
