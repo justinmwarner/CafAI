@@ -109,6 +109,7 @@ export function GrinderCard() {
   const [picks, setPicks] = useState(0);
   const settingRef = useRef<HTMLDivElement>(null);
   const lineRef = useRef<HTMLParagraphElement>(null);
+  const keyNoticeRef = useRef<HTMLDivElement>(null);
   const note = useSaveNote();
   const { failed } = note;
   // Only the newest save speaks; and what storage holds, or what is on its way there, is not sent again.
@@ -160,6 +161,12 @@ export function GrinderCard() {
     if (picks === 0 || !column?.current || !settingRef.current) return;
     revealInColumn(column.current, settingRef.current, lineRef.current);
   }, [picks, column]);
+
+  // A key taken out of a typed field is said where it is seen (D37): the line and the notice under it, below Finer is at 962x602.
+  useLayoutEffect(() => {
+    if (!keyNotice || !column?.current || !keyNoticeRef.current) return;
+    revealInColumn(column.current, lineRef.current ?? keyNoticeRef.current, keyNoticeRef.current);
+  }, [keyNotice, column]);
 
   const commit = async (next: GrinderForm, lib: GrinderLibrary = library) => {
     // Only CafAI's own settings: the engine carries the grinder to Decaid's workflow.
@@ -271,7 +278,7 @@ export function GrinderCard() {
       </Box>
       <SaveLine note={note.note} testId={TID.settingsSaved('grinder')} lineRef={lineRef} />
       {keyNotice ? (
-        <Alert severity="info" sx={{ mt: 1 }} onClose={() => setKeyNotice(false)}>
+        <Alert ref={keyNoticeRef} severity="info" sx={{ mt: 1 }} onClose={() => setKeyNotice(false)}>
           {KEY_TAKEN_OUT}
         </Alert>
       ) : null}

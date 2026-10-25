@@ -108,12 +108,12 @@ const resultSx: SxProps<Theme> = (theme) => ({
 /** Said to a screen reader, out of sight: how many were found. */
 const unseenSx = {
   position: 'absolute',
-  width: 1,
-  height: 1,
-  m: '-1px',
+  // Strings: in sx a bare 1 is 100%, a box as wide as the list that ran 11 px past a phone's side.
+  width: '1px',
+  height: '1px',
   p: 0,
   overflow: 'hidden',
-  clip: 'rect(0 0 0 0)',
+  clipPath: 'inset(50%)',
   whiteSpace: 'nowrap',
   border: 0,
 } as const;
