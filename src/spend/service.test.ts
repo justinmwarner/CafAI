@@ -37,14 +37,17 @@ function memoryKv(seed: Record<string, unknown> = {}): KvClient & { data: Map<st
   };
 }
 
-/** Timers that run when the test says. */
-function heldTimers(): SyncTimers & { fire(): void } {
+/** Timers that run when the test says, with the delays they were set for. */
+function heldTimers(): SyncTimers & { fire(): void; delays: number[] } {
   const due = new Map<number, () => void>();
+  const delays: number[] = [];
   let next = 0;
   return {
-    setTimeout(callback) {
+    delays,
+    setTimeout(callback, ms) {
       next += 1;
       due.set(next, callback);
+      delays.push(ms);
       return next;
     },
     clearTimeout: (handle) => void due.delete(handle as number),
@@ -109,6 +112,22 @@ describe('the spend service (D237-D240)', () => {
     expect(spend.summary()).not.toBe(before);
     stop();
     spend.count(COUNT);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells its subscribers when the day turns, so today starts again with nothing counted', () => {
+    const timers = heldTimers();
+    const spend = service({ timers });
+    const listener = vi.fn();
+    const stop = spend.subscribe(listener);
+    // From 15:00 to a second past midnight.
+    expect(timers.delays).toEqual([9 * 3_600_000 + 1000]);
+    timers.fire();
+    expect(listener).toHaveBeenCalledTimes(1);
+    // The next midnight's, at once.
+    expect(timers.delays).toHaveLength(2);
+    stop();
+    timers.fire();
     expect(listener).toHaveBeenCalledTimes(1);
   });
 

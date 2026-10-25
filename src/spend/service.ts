@@ -14,10 +14,10 @@ import type { ModelInfo } from '../llm/types.ts';
 import { createDbHandle } from '../storage/db.ts';
 import { budgetState } from './budget.ts';
 import { requestCost } from './pricing.ts';
-import { addRecords, countRecord, dayOf, recordKey } from './records.ts';
+import { addRecords, countRecord, dayOf, isNewer, recordKey } from './records.ts';
 import { createIdbSpendStore, createMemorySpendStore, openSpendDb, spendDeviceId, SPEND_DB_NAME, type SpendStore } from './store.ts';
 import { summarize } from './summary.ts';
-import { createSpendSync, type SyncTimers } from './sync.ts';
+import { browserTimers, createSpendSync, type SyncTimers } from './sync.ts';
 import type { SpendRecord, SpendService, SpendSummary } from './types.ts';
 
 export interface SpendServiceOptions {
@@ -31,7 +31,7 @@ export interface SpendServiceOptions {
   /** The models whose prices a count is worked out with: the catalog's (KNOWN_MODELS). */
   models: readonly ModelInfo[];
   now?: () => Date;
-  /** The Decaid copy's timers (the browser's by default). */
+  /** The timers of Decaid's copy and of the summary's midnight (the browser's by default). */
   timers?: SyncTimers;
 }
 
@@ -43,15 +43,17 @@ export interface CreatedSpendService extends SpendService {
 export function createSpendService(options: SpendServiceOptions): CreatedSpendService {
   const { store, deviceId } = options;
   const now = options.now ?? (() => new Date());
+  const timers = options.timers ?? browserTimers;
   const prices = new Map(options.models.map((model) => [model.id, model]));
   const records = new Map((options.initial ?? []).map((record) => [recordKey(record), record]));
   const listeners = new Set<() => void>();
   /** Bumped at every change: the summary is worked out again only after one, or on a new day. */
   let version = 0;
   let cached: { version: number; day: string; summary: SpendSummary } | null = null;
+  /** Midnight, while a screen listens: its "today" turns over with nothing counted. */
+  let dayTimer: unknown = null;
 
-  function changed(): void {
-    version += 1;
+  function notify(): void {
     for (const listener of [...listeners]) {
       try {
         listener();
@@ -61,13 +63,37 @@ export function createSpendService(options: SpendServiceOptions): CreatedSpendSe
     }
   }
 
+  function changed(): void {
+    version += 1;
+    notify();
+  }
+
+  function watchTheDay(): void {
+    if (dayTimer !== null || listeners.size === 0) return;
+    const at = now();
+    const midnight = new Date(at.getFullYear(), at.getMonth(), at.getDate() + 1).getTime();
+    dayTimer = timers.setTimeout(
+      () => {
+        dayTimer = null;
+        notify();
+        watchTheDay();
+      },
+      // A second past it, so the new day has begun.
+      midnight - at.getTime() + 1000,
+    );
+  }
+
+  function stopWatchingTheDay(): void {
+    if (dayTimer !== null) timers.clearTimeout(dayTimer);
+    dayTimer = null;
+  }
+
   /** Records that came from Decaid's copy, or from another page's count: per key, more requests wins. */
   function take(incoming: readonly SpendRecord[]): boolean {
     let any = false;
     for (const record of incoming) {
       const key = recordKey(record);
-      const held = records.get(key);
-      if (held && held.requests >= record.requests) continue;
+      if (!isNewer(record, records.get(key))) continue;
       records.set(key, record);
       any = true;
     }
@@ -85,7 +111,7 @@ export function createSpendService(options: SpendServiceOptions): CreatedSpendSe
           if (any) await store.merge(incoming).catch(() => undefined);
           return any;
         },
-        timers: options.timers,
+        timers,
       })
     : null;
 
@@ -120,11 +146,16 @@ export function createSpendService(options: SpendServiceOptions): CreatedSpendSe
     budget: (budget, at = now()) => budgetState(budget, summary(at).anthropic.month.costMicros, at),
     subscribe(listener) {
       listeners.add(listener);
-      return () => void listeners.delete(listener);
+      watchTheDay();
+      return () => {
+        listeners.delete(listener);
+        if (listeners.size === 0) stopWatchingTheDay();
+      };
     },
     refresh: () => (sync ? sync.refresh() : Promise.resolve()),
     dispose() {
       sync?.dispose();
+      stopWatchingTheDay();
       listeners.clear();
     },
   };

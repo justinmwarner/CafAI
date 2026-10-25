@@ -11,7 +11,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { closeEventTarget, DURABLE, type LostReason } from '../storage/db.ts';
 import { newId } from '../util/id.ts';
-import { addRecords, recordKey, readRecord } from './records.ts';
+import { addRecords, isNewer, recordKey, readRecord } from './records.ts';
 import type { SpendRecord } from './types.ts';
 
 export const SPEND_DB_NAME = 'cafai-spend';
@@ -69,8 +69,7 @@ export function createIdbSpendStore(db: () => Promise<SpendDb>): SpendStore {
       let changed = false;
       for (const record of records) {
         const key = recordKey(record);
-        const stored = readRecord(await tx.store.get(key));
-        if (stored && stored.requests >= record.requests) continue;
+        if (!isNewer(record, readRecord(await tx.store.get(key)))) continue;
         await tx.store.put(record, key);
         changed = true;
       }
@@ -97,8 +96,7 @@ export function createMemorySpendStore(seed: readonly SpendRecord[] = []): Spend
       let changed = false;
       for (const record of incoming) {
         const key = recordKey(record);
-        const held = records.get(key);
-        if (held && held.requests >= record.requests) continue;
+        if (!isNewer(record, records.get(key))) continue;
         records.set(key, { ...record });
         changed = true;
       }

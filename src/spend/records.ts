@@ -51,8 +51,8 @@ export function countRecord(count: SpendCount, device: string, cost: RequestCost
     model: count.model,
     kind: count.kind,
     requests: 1,
-    // A reply is one to six requests: its first call starts it.
-    replies: count.call === 0 ? 1 : 0,
+    // A reply is one to six requests: its first call starts it. A bag photo's read is no reply.
+    replies: count.call === 0 && count.kind !== 'photo' ? 1 : 0,
     inputTokens: tokens(usage.inputTokens),
     outputTokens: tokens(usage.outputTokens),
     cacheReadTokens: tokens(usage.cacheReadInputTokens),
@@ -85,6 +85,11 @@ export function addRecords(record: SpendRecord | undefined, delta: SpendRecord):
   return sum;
 }
 
+/** Whether `record` is newer than `held`, the copy of it kept so far: a device's counts only grow, so the one with more requests is. */
+export function isNewer(record: SpendRecord, held: SpendRecord | null | undefined): boolean {
+  return !held || record.requests > held.requests;
+}
+
 /**
  * `incoming` merged into `base`, per key: the record with more requests wins,
  * a tie keeps the base's. The base's order, then records it did not have.
@@ -94,8 +99,7 @@ export function mergeRecords(base: readonly SpendRecord[], incoming: readonly Sp
   let changed = false;
   for (const record of incoming) {
     const key = recordKey(record);
-    const held = merged.get(key);
-    if (held && held.requests >= record.requests) continue;
+    if (!isNewer(record, merged.get(key))) continue;
     merged.set(key, record);
     changed = true;
   }

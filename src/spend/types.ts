@@ -40,7 +40,7 @@ export interface SpendRecord {
   model: string;
   kind: SpendKind;
   requests: number;
-  /** Requests that began a reply (call 0). */
+  /** Requests that began a reply (call 0), to the barista or after a shot; a bag photo's read is none. */
   replies: number;
   inputTokens: number;
   outputTokens: number;

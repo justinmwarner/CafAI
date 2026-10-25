@@ -72,6 +72,8 @@ describe("the budget's words (D240)", () => {
       tone: 'info',
       text: 'The coach has used $4.02 of your $5 budget this month.',
     });
+    // Cents rounded down, so 99.9 % never reads as the whole budget.
+    expect(budgetNotice(budgetState(budget, 4_995_000, NOW))?.text).toBe('The coach has used $4.99 of your $5 budget this month.');
     expect(budgetNotice(budgetState(budget, dollars(5.3), NOW))).toEqual({
       step: 'over',
       tone: 'warning',
@@ -127,5 +129,16 @@ describe("the budget's notices, once a month at each step (D240)", () => {
     const storage = memoryStorage();
     storage.setItem(BUDGET_NOTES_KEY, '{not json');
     expect(createBudgetNotes(storage).take(near, '2026-10')?.step).toBe('near');
+  });
+
+  it('says each once on a page whose storage refuses to keep them (full)', () => {
+    const full = memoryStorage();
+    full.setItem = () => {
+      throw new DOMException('Quota exceeded', 'QuotaExceededError');
+    };
+    const notes = createBudgetNotes(full);
+    expect(notes.take(near, '2026-10')?.step).toBe('near');
+    expect(notes.take(near, '2026-10')).toBeNull();
+    expect(notes.take(near, '2026-10')).toBeNull();
   });
 });

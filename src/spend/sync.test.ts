@@ -204,18 +204,63 @@ describe("the coach's usage in Decaid (D238)", () => {
     expect(decaid.month('2026-10')).toEqual({ v: 1, records: [makeRecord({ requests: 2 })] });
   });
 
-  it('reads nothing at a refresh within a minute of a failure, and never rejects', async () => {
+  it('reads nothing at a refresh within a minute of a failure, but once the minute is up, and never rejects', async () => {
     const decaid = fakeKv();
     const a = device('dev12345', decaid.kv);
     decaid.state.down = true;
     await expect(a.sync.refresh()).resolves.toBeUndefined();
     decaid.state.down = false;
+    // Decaid back 30 s later: its refresh waits for the minute since the failure, then reads.
     a.clock.advance(30_000);
+    await a.sync.refresh();
     await a.sync.refresh();
     expect(decaid.calls).toEqual([`getAll ${SPEND_NAMESPACE}`]);
+    expect(a.clock.pending()).toEqual([30_000]);
     a.clock.advance(30_000);
-    await a.sync.refresh();
+    await settle();
     expect(decaid.calls).toEqual([`getAll ${SPEND_NAMESPACE}`, `getAll ${SPEND_NAMESPACE}`]);
+    await a.sync.refresh();
+    expect(decaid.calls).toHaveLength(3);
+  });
+
+  it('writes a count that lands while the write before it is out', async () => {
+    const decaid = fakeKv();
+    let answer!: () => void;
+    const held = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    // A Decaid slow to answer the first read.
+    const slow: KvClient = {
+      ...decaid.kv,
+      get: async <T,>(ns: string, key: string) => {
+        await held;
+        return decaid.kv.get<T>(ns, key);
+      },
+    };
+    const a = device('dev12345', slow);
+    a.count(makeRecord({ requests: 1 }));
+    a.clock.advance(2000);
+    await settle();
+    // The reply's next request, counted while the first write waits on Decaid.
+    a.count(makeRecord({ requests: 2 }));
+    answer();
+    await settle();
+    expect(decaid.month('2026-10')).toEqual({ v: 1, records: [makeRecord({ requests: 1 })] });
+    a.clock.advance(2000);
+    await settle();
+    expect(decaid.month('2026-10')).toEqual({ v: 1, records: [makeRecord({ requests: 2 })] });
+  });
+
+  it("keeps what it cannot read when it writes a month: a kind or a field a newer CafAI added", async () => {
+    const decaid = fakeKv();
+    const fact = { ...makeRecord({ device: 'other999' }), kind: 'fact' };
+    const tagged = { ...makeRecord({ device: 'other999', model: 'claude-haiku-5-5' }), region: 'eu' };
+    decaid.data.set(`${SPEND_NAMESPACE}/2026-10`, { v: 1, records: [fact, tagged, makeRecord({ requests: 1 })] });
+    const a = device('dev12345', decaid.kv);
+    a.count(makeRecord({ requests: 3 }));
+    a.clock.advance(2000);
+    await settle();
+    expect(decaid.month('2026-10')).toEqual({ v: 1, records: [fact, tagged, makeRecord({ requests: 3 })] });
   });
 
   it("leaves a month a newer CafAI wrote in a shape of its own alone, and reads only records that read", async () => {
@@ -232,7 +277,7 @@ describe("the coach's usage in Decaid (D238)", () => {
     expect(decaid.month('2026-10')).toEqual({ v: 2, rows: [] });
   });
 
-  it('stops its timer when disposed', async () => {
+  it('stops its timers when disposed', async () => {
     const decaid = fakeKv();
     const a = device('dev12345', decaid.kv);
     a.count(makeRecord());
@@ -240,5 +285,11 @@ describe("the coach's usage in Decaid (D238)", () => {
     a.clock.advance(5000);
     await settle();
     expect(decaid.calls).toEqual([]);
+    const b = device('other999', decaid.kv);
+    decaid.state.down = true;
+    await b.sync.refresh();
+    await b.sync.refresh();
+    b.sync.dispose();
+    expect(b.clock.pending()).toEqual([]);
   });
 });

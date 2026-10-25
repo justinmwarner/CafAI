@@ -43,10 +43,12 @@ describe('records (D238)', () => {
     expect(recordKey(makeRecord())).toBe('2026-10-24|dev12345|anthropic|claude-opus-5-5|reply');
   });
 
-  it("makes one request a record of its own: a reply's first call is a reply, a later call is not", () => {
+  it("makes one request a record of its own: a reply's first call is a reply, a later call or a bag photo's read is not", () => {
     const cost = { costMicros: 17900, webSearchMicros: 10000, priced: true };
     expect(countRecord(COUNT, 'dev12345', cost)).toEqual(makeRecord());
     expect(countRecord({ ...COUNT, call: 3 }, 'dev12345', cost)).toEqual(makeRecord({ replies: 0 }));
+    expect(countRecord({ ...COUNT, kind: 'shot' }, 'dev12345', cost)).toEqual(makeRecord({ kind: 'shot' }));
+    expect(countRecord({ ...COUNT, kind: 'photo' }, 'dev12345', cost)).toEqual(makeRecord({ kind: 'photo', replies: 0 }));
     expect(countRecord({ ...COUNT, usage: { inputTokens: 5, outputTokens: 6 } }, 'dev12345', { costMicros: 0, webSearchMicros: 0, priced: false })).toEqual(
       makeRecord({ inputTokens: 5, outputTokens: 6, cacheReadTokens: 0, cacheWriteTokens: 0, webSearches: 0, costMicros: 0, webSearchMicros: 0, unpriced: 1 }),
     );

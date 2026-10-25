@@ -61,7 +61,9 @@ export function budgetNotice(state: BudgetState): BudgetNotice | null {
   if (state.budgetMicros === null) return null;
   const budget = formatUsd(state.budgetMicros, false);
   if (state.step === 'near') {
-    return { step: 'near', tone: 'info', text: `The coach has used ${formatUsd(state.spentMicros)} of your ${budget} budget this month.` };
+    // Cents rounded down: at 99.9 % it says $4.99 of your $5, never $5.00.
+    const spent = formatUsd(Math.floor(state.spentMicros / 10_000) * 10_000);
+    return { step: 'near', tone: 'info', text: `The coach has used ${spent} of your ${budget} budget this month.` };
   }
   if (state.step === 'over') return { step: 'over', tone: 'warning', text: `This month's coach spend reached your ${budget} budget.` };
   return null;
@@ -100,11 +102,13 @@ export interface BudgetNotes {
 
 export function createBudgetNotes(storage: globalThis.Storage | null): BudgetNotes {
   let memory: Note | null = null;
+  // This page's own note first: storage that refused it would say every notice again.
   const read = (): Note | null => {
+    if (memory) return memory;
     try {
-      return storage ? readNote(storage.getItem(BUDGET_NOTES_KEY)) : memory;
+      return storage ? readNote(storage.getItem(BUDGET_NOTES_KEY)) : null;
     } catch {
-      return memory;
+      return null;
     }
   };
   const write = (note: Note): void => {
