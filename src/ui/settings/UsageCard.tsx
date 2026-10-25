@@ -45,7 +45,7 @@ import { formatTime, type ClockFormat } from '../clock.ts';
 import { DASH } from '../machine/format.ts';
 import { BudgetControls } from './BudgetControls.tsx';
 import { useCoachRunsOnComputer, useShowsApiKey } from './coachSourceView.ts';
-import { Section } from './Section.tsx';
+import { Section, useSubheadingLevel } from './Section.tsx';
 import { formatCost, formatPercent, formatTokens, sayDate, sayDay } from './usageFormat.ts';
 import { UsageMeter } from './UsageMeter.tsx';
 import { describeWhen } from './wakeSchedule.ts';
@@ -312,9 +312,11 @@ function Periods({ cells }: { cells: readonly PeriodCell[] }) {
 /** What the month went on: each kind's cost, a meter of its share of the month, and that share said for assistive tech. */
 function WentOn({ byKind, total }: { byKind: SpendPeriod['byKind']; total: number }) {
   const headingId = useId();
+  // Under the card's title: an h3 under a phone's h2, an h4 in a tablet's pane.
+  const subheading = useSubheadingLevel();
   return (
     <Box>
-      <Typography id={headingId} variant="subtitle2" component="h3">
+      <Typography id={headingId} variant="subtitle2" component={subheading}>
         What it went on
       </Typography>
       <Box role="list" aria-labelledby={headingId} data-testid={USAGE_CARD_TID.kinds} sx={{ display: 'grid', gap: 1.25, mt: 1 }}>
@@ -383,17 +385,32 @@ function ApiUsage({ summary, today }: { summary: SpendSummary; today: Date }) {
   );
 }
 
+/** When a window starts again, as Claude Code reported it; null when it did not say, or said something unreadable. */
+function resetOf(use: BridgeUsageWindow): Date | null {
+  const reset = use.resetsAt === null ? null : new Date(use.resetsAt);
+  return reset !== null && Number.isFinite(reset.getTime()) ? reset : null;
+}
+
+/** A window whose reset has passed since Claude Code reported it has started again: its old share no longer holds. */
+function startedAgain(use: BridgeUsageWindow, now: Date): boolean {
+  const reset = resetOf(use);
+  return reset !== null && reset.getTime() <= now.getTime();
+}
+
+/** A window's share as the card shows it: a whole percent, 0 to 100. */
+function percentOf(use: BridgeUsageWindow): number {
+  return Math.min(100, Math.max(0, Math.round(use.utilization * 100)));
+}
+
 /**
  * One window of the plan's use: its share and a meter, and when it starts
  * again. A window whose reset has passed since Claude Code reported it has
  * started again, its old share no longer true: it says so, and shows none.
  */
-function PlanWindow({ id, label, use, clock }: { id: PlanWindowId; label: string; use: BridgeUsageWindow; clock: ClockFormat }) {
-  const now = new Date();
-  const reset = use.resetsAt === null ? null : new Date(use.resetsAt);
-  const resets = reset !== null && Number.isFinite(reset.getTime()) ? reset : null;
-  const started = resets !== null && resets.getTime() <= now.getTime();
-  const percent = Math.min(100, Math.max(0, Math.round(use.utilization * 100)));
+function PlanWindow({ id, label, use, clock, now }: { id: PlanWindowId; label: string; use: BridgeUsageWindow; clock: ClockFormat; now: Date }) {
+  const resets = resetOf(use);
+  const started = startedAgain(use, now);
+  const percent = percentOf(use);
   return (
     <Box
       data-testid={USAGE_CARD_TID.planWindow(id)}
@@ -424,6 +441,12 @@ function PlanUse() {
   if (status === null) return null;
   const usage = status.usage;
   const reported = usage !== null && (usage.fiveHour !== undefined || usage.sevenDay !== undefined);
+  const now = new Date();
+  // Claude Code said no with the last reply; the limit still holds while a window it reported full has not started again.
+  const atLimit =
+    usage !== null &&
+    usage.status === 'rejected' &&
+    [usage.fiveHour, usage.sevenDay].some((use) => use !== undefined && !startedAgain(use, now) && percentOf(use) >= 100);
   return (
     <Box data-testid={USAGE_CARD_TID.plan} sx={{ display: 'grid', gap: 1.5 }}>
       {usage === null || !reported ? (
@@ -432,9 +455,9 @@ function PlanUse() {
         </Typography>
       ) : (
         <>
-          {usage.fiveHour ? <PlanWindow id="five-hour" label="Plan, this 5 hours" use={usage.fiveHour} clock={clock} /> : null}
-          {usage.sevenDay ? <PlanWindow id="seven-day" label="Plan, this week" use={usage.sevenDay} clock={clock} /> : null}
-          {usage.status === 'rejected' ? (
+          {usage.fiveHour ? <PlanWindow id="five-hour" label="Plan, this 5 hours" use={usage.fiveHour} clock={clock} now={now} /> : null}
+          {usage.sevenDay ? <PlanWindow id="seven-day" label="Plan, this week" use={usage.sevenDay} clock={clock} now={now} /> : null}
+          {atLimit ? (
             <Typography variant="body2" sx={{ color: 'warning.main' }}>
               {PLAN_LIMIT}
             </Typography>

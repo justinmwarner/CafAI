@@ -12,6 +12,7 @@ import { previewTheme } from '../chat/testing/previewTheme.ts';
 import { renderWithServices } from '../chat/testing/render.tsx';
 import { createFakeServices, createFakeSpend, type FakeServices } from '../testing/fakeServices.ts';
 import { BUDGET_TID } from './BudgetControls.tsx';
+import { SectionLevel } from './Section.tsx';
 import { USAGE_CARD_TID, UsageCard } from './UsageCard.tsx';
 import { sayDate } from './usageFormat.ts';
 
@@ -176,6 +177,23 @@ describe('Settings > Coach > Usage and cost, on the API key (D239)', () => {
     expect(fill(2).width).toBe('0%');
     expect(fill(3).width).toBe('8.7%');
     expect(fill(0).backgroundColor).toBe(rgb(previewTheme.palette.primary.main));
+  });
+
+  it("titles what it went on and the budget one level under the card's title: h3s under a phone's h2, h4s in a tablet's pane", async () => {
+    const { unmount } = renderWithServices(<UsageCard />, servicesWith(OCTOBER));
+    expect(await screen.findByRole('heading', { level: 2, name: 'Usage and cost' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: 'What it went on' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 3, name: 'Monthly budget' })).toBeInTheDocument();
+    unmount();
+    renderWithServices(
+      <SectionLevel.Provider value={3}>
+        <UsageCard />
+      </SectionLevel.Provider>,
+      servicesWith(OCTOBER),
+    );
+    expect(await screen.findByRole('heading', { level: 3, name: 'Usage and cost' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 4, name: 'What it went on' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 4, name: 'Monthly budget' })).toBeInTheDocument();
   });
 
   it("holds the budget's controls, then the footnote on where the count comes from", async () => {
@@ -432,6 +450,43 @@ describe('Settings > Coach > Usage, while the coach runs on the computer (D239)'
     expect(within(plan).queryByTestId(USAGE_CARD_TID.planWindow('seven-day'))).toBeNull();
     // One window reported: it, not them.
     expect(within(plan).getByText("As Claude Code reported it with the coach's last reply.")).toBeInTheDocument();
+  });
+
+  const PLAN_LIMIT = "The plan's limit is reached for now. The coach answers again once it resets.";
+  /** A status from Claude Code's last reply: rejected unless said, with these windows. */
+  const planStatus = (windows: Record<string, { utilization: number; resetsAt: string }>, status = 'rejected') =>
+    json(bridgeStatus({ usage: { status, ...windows } }));
+  const today = (hours: number) => new Date(2026, 9, 24, hours, 0).toISOString();
+  const nextWednesday = new Date(2026, 9, 28, 9, 0).toISOString();
+
+  it('says no more of the limit once the window that reached it has started again', async () => {
+    // Rejected at 100 % of the 5 hours that reset at 14:00; it is 15:00 now.
+    answer = () => planStatus({ fiveHour: { utilization: 1, resetsAt: today(14) }, sevenDay: { utilization: 0.41, resetsAt: nextWednesday } });
+    renderWithServices(<UsageCard />, servicesWith(onComputer(OCTOBER), createMemoryCoachSourceStore(BRIDGE)));
+    const plan = await screen.findByTestId(USAGE_CARD_TID.plan);
+    expect(within(plan).getByTestId(USAGE_CARD_TID.planWindow('five-hour'))).toHaveTextContent(/^Plan, this 5 hours—Started again at 14:00/);
+    expect(plan).not.toHaveTextContent(PLAN_LIMIT);
+  });
+
+  it('still says the limit is reached while another window at 100 % has not started again', async () => {
+    answer = () => planStatus({ fiveHour: { utilization: 1, resetsAt: today(14) }, sevenDay: { utilization: 1, resetsAt: nextWednesday } });
+    renderWithServices(<UsageCard />, servicesWith(onComputer(OCTOBER), createMemoryCoachSourceStore(BRIDGE)));
+    const plan = await screen.findByTestId(USAGE_CARD_TID.plan);
+    expect(plan).toHaveTextContent(PLAN_LIMIT);
+    expect(within(plan).getByTestId(USAGE_CARD_TID.planWindow('seven-day'))).toHaveTextContent('100 %');
+  });
+
+  it('says nothing of a limit without a reported window at 100 %, or while Claude Code still allowed replies', async () => {
+    answer = () => planStatus({ fiveHour: { utilization: 0.8, resetsAt: today(18) } });
+    const { unmount } = renderWithServices(<UsageCard />, servicesWith(onComputer(OCTOBER), createMemoryCoachSourceStore(BRIDGE)));
+    expect(await screen.findByTestId(USAGE_CARD_TID.planWindow('five-hour'))).toHaveTextContent('80 %');
+    expect(screen.getByTestId(USAGE_CARD_TID.plan)).not.toHaveTextContent(PLAN_LIMIT);
+    unmount();
+    // A plan that goes on past its limit (extra usage) is still allowed at 100 %.
+    answer = () => planStatus({ fiveHour: { utilization: 1, resetsAt: today(18) } }, 'allowed');
+    renderWithServices(<UsageCard />, servicesWith(onComputer(OCTOBER), createMemoryCoachSourceStore(BRIDGE)));
+    expect(await screen.findByTestId(USAGE_CARD_TID.planWindow('five-hour'))).toHaveTextContent('100 %');
+    expect(screen.getByTestId(USAGE_CARD_TID.plan)).not.toHaveTextContent(PLAN_LIMIT);
   });
 
   it('adds what the API key spent this month too', async () => {
