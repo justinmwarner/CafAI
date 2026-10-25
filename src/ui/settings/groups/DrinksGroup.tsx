@@ -58,22 +58,32 @@ export function DrinksGroup() {
   const store = useDrinkScreensStore();
   const choices = useDrinkScreenChoices();
   const wide = useGroupWide();
-  // The last screen change that did not save, in its drink's card, until a later one saves.
-  const [screenError, setScreenError] = useState<{ kind: DrinkKind; text: string } | null>(null);
-  const latestSave = useRef(0);
+  // Each drink's last screen change that did not save, in its own card, until a later change of that drink saves.
+  const [screenErrors, setScreenErrors] = useState<Partial<Record<DrinkKind, string>>>({});
+  const latestSave = useRef<Partial<Record<DrinkKind, number>>>({});
   const reason = drinks.reason === null ? null : REASON_WORDS[drinks.reason];
   const machine = drinksFor(drinks.model);
 
-  /** The store shows the change at once and saves it; a failure says so in the card until a later change saves. */
+  /**
+   * The store shows the change at once and saves it, with any of the drink's
+   * that did not save before; a failure says so in its card until a later
+   * change of the same drink saves. Another drink's save clears nothing.
+   */
   const saveScreen = (kind: DrinkKind, change: Partial<DrinkScreen>) => {
     if (!store) return;
-    const ticket = ++latestSave.current;
+    const ticket = (latestSave.current[kind] ?? 0) + 1;
+    latestSave.current[kind] = ticket;
     store.set(kind, change).then(
       () => {
         // An older change that saved clears nothing: a newer one may have failed.
-        if (ticket === latestSave.current) setScreenError(null);
+        if (ticket !== latestSave.current[kind]) return;
+        setScreenErrors((errors) => {
+          const next = { ...errors };
+          delete next[kind];
+          return next;
+        });
       },
-      (error: unknown) => setScreenError({ kind, text: `Could not save the drink screens: ${errorText(error)}` }),
+      (error: unknown) => setScreenErrors((errors) => ({ ...errors, [kind]: `Could not save the drink screens: ${errorText(error)}` })),
     );
   };
 
@@ -117,7 +127,7 @@ export function DrinksGroup() {
             drink={machine.find((drink) => drink.key === PRESET_KEY[kind])!}
             presets={drinks}
             screen={store ? choices[kind] : null}
-            screenError={screenError?.kind === kind ? screenError.text : null}
+            screenError={screenErrors[kind] ?? null}
             onScreenChange={(change) => saveScreen(kind, change)}
             stacked={wide}
           />

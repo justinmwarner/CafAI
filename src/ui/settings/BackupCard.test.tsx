@@ -53,7 +53,7 @@ describe('Settings > Data and privacy > Backup in Decaid (5.15)', () => {
     expect(within(card).getByTestId(TID.backupHealth)).toHaveTextContent('Backed up to Decaid 5 min ago');
     expect(within(card).getByText(BACKUP_SENTENCE)).toBeInTheDocument();
     expect(BACKUP_SENTENCE).toBe(
-      'CafAI copies your bags, versions, shots and settings to Decaid, so a new device or a Decaid update gets them back. Never the API key.',
+      "CafAI copies your bags, versions, shots and settings to Decaid, so a new device or a Decaid update gets them back. Never your API key or the bridge's code: each has its own switch in Settings > Coach for that.",
     );
   });
 

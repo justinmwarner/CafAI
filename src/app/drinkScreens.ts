@@ -28,7 +28,7 @@ export type DrinkScreenChoices = Readonly<Record<DrinkScreenKind, DrinkScreenCho
 export interface DrinkScreensStore {
   get(): DrinkScreenChoices;
   subscribe(listener: () => void): () => void;
-  /** Shows and saves one drink's change. A failed save rejects; the change stays on screen for this session. */
+  /** Shows and saves one drink's change. A failed save rejects; the change stays on screen for this session and goes again with that drink's next one. */
   set(kind: DrinkScreenKind, change: Partial<DrinkScreen>): Promise<void>;
   /** Re-reads what was saved (after an import or a restore). */
   reload(): Promise<void>;
@@ -56,7 +56,7 @@ const sameChoices = (a: DrinkScreenChoices, b: DrinkScreenChoices) =>
 /** `initial`: what was saved, or nothing (every default). */
 export function createDrinkScreensStore(settings: SettingsRepository, initial?: DrinkScreensSettings): DrinkScreensStore {
   let saved = resolveDrinkScreens(initial);
-  /** Changes a save refused: kept on screen for the session, over whatever is saved later. */
+  /** Changes a save refused: kept on screen for the session, over whatever is saved later, and sent with their drink's next change. */
   const unsaved: DrinkScreensSettings = {};
   let current = saved;
   let latest = 0;
@@ -80,15 +80,17 @@ export function createDrinkScreensStore(settings: SettingsRepository, initial?: 
     async set(kind, change) {
       const ticket = ++latest;
       show({ ...current, [kind]: { ...current[kind], ...change } });
+      // A change of this drink that did not save goes again with this one, as a card's does (D234).
+      const pending: Partial<DrinkScreen> = { ...unsaved[kind] };
       let result;
       try {
-        result = await settings.update({ drinkScreens: { [kind]: change } });
+        result = await settings.update({ drinkScreens: { [kind]: { ...pending, ...change } } });
       } catch (error) {
         unsaved[kind] = { ...unsaved[kind], ...change };
         throw error;
       }
-      // Saved now: no longer one to keep over what storage holds.
-      const left = Object.entries(unsaved[kind] ?? {}).filter(([field]) => !(field in change));
+      // Saved now, as it was or under this change: no longer kept over storage, unless refused again while this one was out.
+      const left = Object.entries(unsaved[kind] ?? {}).filter(([field, value]) => pending[field as keyof DrinkScreen] !== value);
       unsaved[kind] = Object.fromEntries(left);
       saved = resolveDrinkScreens(result.drinkScreens);
       // A later change may have been made while this one was saving: that one's save says what holds.

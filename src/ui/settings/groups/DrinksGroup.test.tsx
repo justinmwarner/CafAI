@@ -728,7 +728,7 @@ describe('DrinksGroup On screen (D217, D222)', () => {
     await waitFor(() => expect(saved()).toEqual({ steam: { goBack: false } }));
   });
 
-  it("a failed save says why in its drink's card and keeps the change on screen; the next change that saves clears it", async () => {
+  it("a failed save says why in its drink's card and keeps the change on screen; the drink's next change that saves takes it along and clears it", async () => {
     const { services, saved, user } = renderScreens();
     await presetsIn();
     const update = services.storage.settings.update;
@@ -744,13 +744,17 @@ describe('DrinksGroup On screen (D217, D222)', () => {
     expect(services.drinkScreens.get().steam.scene).toBe('rosetta');
 
     services.storage.settings.update = update;
+    // Another drink's save clears nothing: Steam's change is still unsaved.
     await user.click(goBack('hotWater'));
+    await waitFor(() => expect(saved()).toEqual({ hotWater: { goBack: false } }));
+    expect(card('Steam').getByRole('alert')).toBe(alert);
+    await user.click(goBack('steam'));
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
-    expect(saved()).toEqual({ hotWater: { goBack: false } });
+    expect(saved()).toEqual({ hotWater: { goBack: false }, steam: { scene: 'rosetta', goBack: false } });
   });
 
-  it('a failed save shows in the card of the drink whose save failed, one at a time, until a change saves', async () => {
-    const { services, user } = renderScreens();
+  it("a failed save stays in its own drink's card, one card each, until a change of that drink saves", async () => {
+    const { services, saved, user } = renderScreens();
     await presetsIn();
     const update = services.storage.settings.update;
     services.storage.settings.update = async () => {
@@ -761,17 +765,22 @@ describe('DrinksGroup On screen (D217, D222)', () => {
     expect(alert).toHaveTextContent('Could not save the drink screens: Storage is full.');
     expect(card('Steam').queryByRole('alert')).toBeNull();
     expect(card('Hot water').queryByRole('alert')).toBeNull();
-    // Hot water's save fails next: the error moves to its card.
+    // Hot water's save fails next: each card says its own.
     await user.selectOptions(animation('hotWater'), 'From above');
     await waitFor(() => expect(card('Hot water').getByTestId(TID.drinkScreensError)).toBeInTheDocument());
-    expect(screen.getAllByTestId(TID.drinkScreensError)).toHaveLength(1);
-    expect(card('Flush').queryByRole('alert')).toBeNull();
-    // A change of another drink that saves clears it; the changes that failed stay on screen.
+    expect(card('Flush').getByTestId(TID.drinkScreensError)).toBe(alert);
+    // Steam's change saves and clears neither; the changes that failed stay on screen.
     services.storage.settings.update = update;
     await user.click(screen.getByRole('button', { name: 'More steam go back after' }));
-    await waitFor(() => expect(screen.queryByTestId(TID.drinkScreensError)).toBeNull());
+    await waitFor(() => expect(saved()?.steam).toBeDefined());
+    expect(screen.getAllByTestId(TID.drinkScreensError)).toHaveLength(2);
     expect(goBack('flush')).not.toBeChecked();
     expect(animation('hotWater')).toHaveValue('above');
+    // Hot water's next change takes its failed one along: only its card clears.
+    await user.click(goBack('hotWater'));
+    await waitFor(() => expect(card('Hot water').queryByTestId(TID.drinkScreensError)).toBeNull());
+    expect(saved()?.hotWater).toEqual({ scene: 'above', goBack: false });
+    expect(card('Flush').getByTestId(TID.drinkScreensError)).toBe(alert);
   });
 
   it('without the store, as in a preview, each card keeps its machine settings and has no On screen', async () => {

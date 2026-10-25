@@ -16,9 +16,13 @@ import { Section } from './Section.tsx';
 
 export const BACKUP_CARD_TITLE = 'Backup in Decaid';
 
-/** What the copy in Decaid holds, and what it never does. */
+/**
+ * What the copy in Decaid holds, and what it never does: the API key and
+ * the bridge's code are kept in Decaid only by their own switches in
+ * Settings > Coach, which this copy must not seem to contradict.
+ */
 export const BACKUP_SENTENCE =
-  'CafAI copies your bags, versions, shots and settings to Decaid, so a new device or a Decaid update gets them back. Never the API key.';
+  "CafAI copies your bags, versions, shots and settings to Decaid, so a new device or a Decaid update gets them back. Never your API key or the bridge's code: each has its own switch in Settings > Coach for that.";
 
 /** "12 min ago", "5 h ago", "3 days ago": Decaid's record of the last backup can be days old after a quiet spell. */
 function agoText(iso: string, now: number): string {
