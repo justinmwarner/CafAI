@@ -21,6 +21,7 @@ import type { WorkflowPatch } from '../../api/types.ts';
 import { useServices, useTelemetry } from '../../app/services.tsx';
 import { fieldId, withField, type Drink, type Presets } from './DrinkFields.tsx';
 import { blocksDrinkSettings, type DrinkFieldSpec } from './drinkSettings.ts';
+import { keepDrinkPresets } from './statusReads.ts';
 
 function errorText(error: unknown): string {
   return error instanceof Error && error.message ? error.message : String(error);
@@ -100,6 +101,11 @@ export function useDrinkPresets(): DrinkPresetsState {
       live = false;
     };
   }, [decaid]);
+
+  // Settings' list says the drinks as this screen last read or wrote them (statusReads.ts, D236).
+  useEffect(() => {
+    if (presets) keepDrinkPresets(decaid, presets);
+  }, [decaid, presets]);
 
   const loaded = presets !== null;
   const disabled = blocked || !connected || !loaded;

@@ -14,15 +14,24 @@
  * becomes the tablet's pane with that group chosen, and the other way.
  * Everything in the groups applies as it changes (D234): no card has a
  * Save.
+ *
+ * The list says how each group stands (groupStatus.ts, D236). Its Coach and
+ * Grinder lines read the settings as the groups' cards read and save them:
+ * the cards here are handed a repository that tells the list what each read
+ * and save returned (statusReads.ts), so a model or a grinder saved beside
+ * the list shows in its row at once, with no read of the list's own but one
+ * as it opens.
  */
-import { useEffect, useLayoutEffect } from 'react';
+import { useEffect, useLayoutEffect, useMemo, type ReactNode } from 'react';
 import Box from '@mui/material/Box';
+import { ServicesProvider, useServices } from '../../app/services.tsx';
 import { replaceRoute } from '../router.ts';
 import { useScreenMode } from '../shell/screenMode.ts';
 import { useDecaidVersion } from './decaidVersion.ts';
 import type { SettingsGroupId } from './groupIds.ts';
 import { GroupPage } from './GroupPage.tsx';
 import { SettingsList } from './SettingsList.tsx';
+import { SettingsWatchContext, watchSettings } from './statusReads.ts';
 
 /** The group shown last in this page's life: what a tablet's `#/settings` opens on. */
 let opened: SettingsGroupId | null = null;
@@ -38,6 +47,24 @@ export function forgetOpenedGroup(): void {
 export interface SettingsScreenProps {
   /** The group in the address, or null for Settings' list. */
   group?: SettingsGroupId | null;
+}
+
+/**
+ * The services the list and the groups see: the app's, but for the settings
+ * repository, whose reads and saves the list is told of (statusReads.ts).
+ * One watch for as long as Settings stays open.
+ */
+function WatchedSettings({ children }: { children: ReactNode }) {
+  const services = useServices();
+  const { watch, watched } = useMemo(() => {
+    const watch = watchSettings(services.storage.settings);
+    return { watch, watched: { ...services, storage: { ...services.storage, settings: watch.repository } } };
+  }, [services]);
+  return (
+    <ServicesProvider services={watched}>
+      <SettingsWatchContext.Provider value={watch}>{children}</SettingsWatchContext.Provider>
+    </ServicesProvider>
+  );
 }
 
 export function SettingsScreen({ group = null }: SettingsScreenProps) {
@@ -56,8 +83,9 @@ export function SettingsScreen({ group = null }: SettingsScreenProps) {
     if (tablet && group === null && shown !== null) replaceRoute({ name: 'settings', group: shown });
   }, [tablet, group, shown]);
 
+  let content: ReactNode;
   if (tablet && shown !== null) {
-    return (
+    content = (
       <Box sx={{ height: '100%', minHeight: 0, display: 'flex' }}>
         <Box sx={{ flex: 'none', width: { xs: 280, lg: 300 }, minHeight: 0, borderRight: 1, borderColor: 'divider' }}>
           <SettingsList chosen={shown} chevrons={false} />
@@ -68,7 +96,10 @@ export function SettingsScreen({ group = null }: SettingsScreenProps) {
         </Box>
       </Box>
     );
+  } else if (shown === null) {
+    content = <SettingsList chosen={null} chevrons />;
+  } else {
+    content = <GroupPage key={shown} id={shown} layout="page" />;
   }
-  if (shown === null) return <SettingsList chosen={null} chevrons />;
-  return <GroupPage key={shown} id={shown} layout="page" />;
+  return <WatchedSettings>{content}</WatchedSettings>;
 }

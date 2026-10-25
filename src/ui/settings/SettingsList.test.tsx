@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '../chat/testing/setup.ts';
 import { afterEach, describe, expect, it } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithServices } from '../chat/testing/render.tsx';
 import { TID } from '../testIds.ts';
@@ -16,7 +16,7 @@ afterEach(() => {
 const rows = () => SETTINGS_GROUP_IDS.map((id) => screen.getByTestId(TID.settingsGroupRow(id)));
 
 describe('SettingsList (D232)', () => {
-  it('titles the list and shows the seven groups in order, each with how it stands', () => {
+  it('titles the list and shows the seven groups in order, each with how it stands', async () => {
     renderWithServices(<SettingsList chosen={null} chevrons />);
     expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
     const nav = screen.getByRole('navigation', { name: 'Settings' });
@@ -24,11 +24,21 @@ describe('SettingsList (D232)', () => {
     const links = within(nav).getAllByRole('link');
     expect(links.map((link) => link.getAttribute('href'))).toEqual(SETTINGS_GROUP_IDS.map((id) => `#/settings/${id}`));
     expect(SETTINGS_GROUPS.map((group) => group.name)).toEqual(['Coach', 'Grinder', 'Drinks', 'Machine', 'Display', 'Data and privacy', 'About']);
-    // Each row is named by its group and described by its status line (the group's contents, until it is live).
+    // Each row is named by its group and described by its status line (groupStatus.ts): the group's
+    // contents while there is nothing live to say, as for the drinks and the machine until their groups read Decaid.
+    const described = {
+      coach: 'Opus 5.5',
+      grinder: 'Not set yet',
+      drinks: settingsGroup('drinks').contents,
+      machine: settingsGroup('machine').contents,
+      display: 'Dark · Crema · °C',
+      data: 'Not backed up yet',
+      about: 'CafAI 0.1.0-test · Decaid 0.9.0',
+    } as const;
     for (const group of SETTINGS_GROUPS) {
       const row = screen.getByTestId(TID.settingsGroupRow(group.id));
       expect(row).toHaveAccessibleName(group.name);
-      expect(row).toHaveAccessibleDescription(group.contents);
+      await waitFor(() => expect(row).toHaveAccessibleDescription(described[group.id]));
     }
   });
 
@@ -83,6 +93,15 @@ describe('SettingsList (D232)', () => {
     const follows = (a: Element, b: Element) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
     expect(follows(screen.getByRole('heading', { name: 'Settings' }), search)).toBe(true);
     expect(follows(search, rows()[0]!)).toBe(true);
+  });
+
+  it('hides the rows while the search has words, what it finds taking their place', () => {
+    const search = <input aria-label="Search settings" />;
+    const { rerender } = renderWithServices(<SettingsList chosen={null} chevrons search={search} searching />);
+    expect(screen.getByRole('textbox', { name: 'Search settings' })).toBeInTheDocument();
+    expect(screen.queryAllByRole('link')).toEqual([]);
+    rerender(<SettingsList chosen={null} chevrons search={search} searching={false} />);
+    expect(screen.getAllByRole('link')).toHaveLength(SETTINGS_GROUP_IDS.length);
   });
 
   it('names each group once, its page and its row alike', () => {

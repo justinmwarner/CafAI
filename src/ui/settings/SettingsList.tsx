@@ -14,6 +14,10 @@
  * when the status line says something needs the barista (the words say it
  * too). One tab stop: the arrow keys, Home and End move between the rows,
  * round the ends, as Machine care's routines do.
+ *
+ * The search field (SettingsSearch.tsx) sits between the title and the rows;
+ * while it has words, what it finds takes the rows' place, and clearing it
+ * puts them back.
  */
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import Box from '@mui/material/Box';
@@ -25,15 +29,17 @@ import { routeHref } from '../router.ts';
 import { TID } from '../testIds.ts';
 import type { SettingsGroupId } from './groupIds.ts';
 import { SETTINGS_GROUPS, type SettingsGroup } from './groups.tsx';
-import { useGroupStatus } from './groupStatus.ts';
+import { useGroupStatuses, type GroupStatus } from './groupStatus.ts';
 
 export interface SettingsListProps {
   /** The group beside the list, marked current (a tablet); null on a phone's list, where a row opens a page. */
   chosen: SettingsGroupId | null;
   /** Rows end in a chevron: a phone's list, where each opens a page of its own. */
   chevrons: boolean;
-  /** The search field, between the title and the rows (D236). */
+  /** The search field, between the title and the rows (D236), and what it finds under it while it has words. */
   search?: ReactNode;
+  /** The search has words: what it finds takes the rows' place. */
+  searching?: boolean;
 }
 
 const rowSx: SxProps<Theme> = (theme) => ({
@@ -72,6 +78,7 @@ const dotSx = { width: 8, height: 8, borderRadius: '50%', bgcolor: 'warning.main
 
 interface RowProps {
   group: SettingsGroup;
+  status: GroupStatus;
   current: boolean;
   chevron: boolean;
   /** The one row in the tab order. */
@@ -81,8 +88,7 @@ interface RowProps {
   onKeyDown(event: KeyboardEvent<HTMLAnchorElement>): void;
 }
 
-function GroupRow({ group, current, chevron, tabStop, setRef, onFocus, onKeyDown }: RowProps) {
-  const status = useGroupStatus(group.id);
+function GroupRow({ group, status, current, chevron, tabStop, setRef, onFocus, onKeyDown }: RowProps) {
   const nameId = useId();
   const statusId = useId();
   return (
@@ -111,14 +117,15 @@ function GroupRow({ group, current, chevron, tabStop, setRef, onFocus, onKeyDown
         </Typography>
       </Box>
       <Box component="span" aria-hidden sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary' }}>
-        {status.attention ? <Box component="span" sx={dotSx} /> : null}
+        {status.attention ? <Box component="span" data-dot sx={dotSx} /> : null}
         {chevron ? <ChevronRightRounded /> : null}
       </Box>
     </ButtonBase>
   );
 }
 
-export function SettingsList({ chosen, chevrons, search }: SettingsListProps) {
+export function SettingsList({ chosen, chevrons, search, searching = false }: SettingsListProps) {
+  const statuses = useGroupStatuses();
   const rows = useRef<Array<HTMLAnchorElement | null>>([]);
   // The row the tab order comes back to: the last one focused, else the current group's, else the first.
   const [focused, setFocused] = useState<number | null>(null);
@@ -149,11 +156,12 @@ export function SettingsList({ chosen, chevrons, search }: SettingsListProps) {
           Settings
         </Typography>
         {search}
-        <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0, display: 'grid', gap: 0.5 }}>
+        <Box component="ul" hidden={searching} sx={{ listStyle: 'none', m: 0, p: 0, display: searching ? 'none' : 'grid', gap: 0.5 }}>
           {SETTINGS_GROUPS.map((group, index) => (
             <li key={group.id}>
               <GroupRow
                 group={group}
+                status={statuses[group.id]}
                 current={group.id === chosen}
                 chevron={chevrons}
                 tabStop={index === tabStop}
