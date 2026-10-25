@@ -1,8 +1,8 @@
 /**
- * Settings > Appearance > Temperatures (D172): °C or °F, wherever the
+ * Settings > Display > Units > Temperatures (D172): °C or °F, wherever the
  * barista reads or sets a temperature, and in the coach's words. Decaid and
- * the profiles keep °C either way (D171). Drawn as the Mode control
- * above it, and like the rest of Appearance it applies at once and is saved
+ * the profiles keep °C either way (D171). Drawn as Appearance's Mode
+ * control, and like the rest of Display it applies at once and is saved
  * with the other settings (TemperatureUnitStore, src/app/temperatureUnit.ts).
  */
 import { useId, useRef, useState } from 'react';

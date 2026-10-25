@@ -5,9 +5,9 @@ import { TID } from '../src/ui/testIds.ts';
 import { decaidRequests, goTo, openApp } from './helpers.ts';
 
 /**
- * Settings > Sleep and wake (D157-D160), against the mock Decaid's presence
- * routes (mock/decaid/presence.ts), on the tablets and the phones: every
- * change reaches Decaid at once with only what changed, the keep-awake
+ * Settings > Machine > Sleep and wake (D157-D160), against the mock Decaid's
+ * presence routes (mock/decaid/presence.ts), on the tablets and the phones:
+ * every change reaches Decaid at once with only what changed, the keep-awake
  * window's line follows Decaid after each one (D209), and the dialog's
  * seven days fit a phone.
  */
@@ -35,7 +35,7 @@ async function openSection(page: Page) {
 }
 
 test("Sleep when idle: the minutes and the switch go to Decaid at once, and off leaves Decaid's own switch on", async ({ page }) => {
-  await openApp(page, '#/settings');
+  await openApp(page, '#/settings/machine');
   const section = await openSection(page);
   const minutes = section.getByRole('spinbutton', { name: 'Sleep after' });
   const toggle = page.getByTestId(TID.sleepWhenIdle);
@@ -66,7 +66,7 @@ test("Sleep when idle: the minutes and the switch go to Decaid at once, and off 
 test('a weekday wake time added in the dialog reaches Decaid, with the next wake over the list', async ({ page }) => {
   // Thursday 15 October 2026, 05:00 here: the next weekday wake at 06:30 is today's.
   await page.clock.setFixedTime(new Date(2026, 9, 15, 5, 0));
-  await openApp(page, '#/settings');
+  await openApp(page, '#/settings/machine');
   const section = await openSection(page);
   await expect(page.getByTestId(TID.nextWake)).toHaveText('No wake times yet.');
 
@@ -95,7 +95,7 @@ test('a weekday wake time added in the dialog reaches Decaid, with the next wake
 test('a wake time set elsewhere changes, turns off and goes, each at once', async ({ page }) => {
   await openApp(page, '#/');
   const id = await seedWake(page, { time: '07:15', daysOfWeek: [6, 7], enabled: true });
-  await goTo(page, 'settings');
+  await goTo(page, 'settings', 'machine');
   const section = await openSection(page);
   const row = section.getByTestId(TID.wakeRow(id));
   await expect(row).toContainText('07:15');
@@ -136,7 +136,7 @@ test("the keep-awake window's line follows Decaid after every change: the wake t
   await page.clock.setFixedTime(new Date(2026, 9, 15, 8, 50));
   await openApp(page, '#/');
   const id = await seedWake(page, { time: '08:46', daysOfWeek: [], enabled: true, keepAwakeFor: 30 });
-  await goTo(page, 'settings');
+  await goTo(page, 'settings', 'machine');
   const section = await openSection(page);
   const windowLine = section.getByText(/^A wake time keeps the machine awake until/);
   await expect(windowLine).toHaveText('A wake time keeps the machine awake until 09:16.');
@@ -181,7 +181,7 @@ test("the keep-awake window's line follows Decaid after every change: the wake t
 });
 
 test('the section and the dialog fit the screen: the stepper in its row, seven days a thumb wide', async ({ page }) => {
-  await openApp(page, '#/settings');
+  await openApp(page, '#/settings/machine');
   const section = await openSection(page);
   const sectionBox = (await section.boundingBox())!;
   const stepperBox = (await section.getByRole('spinbutton', { name: 'Sleep after' }).locator('..').boundingBox())!;

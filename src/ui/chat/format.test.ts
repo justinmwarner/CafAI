@@ -69,12 +69,19 @@ describe('formatDateTime', () => {
     const d = new Date(iso);
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const expected = `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}, ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    expect(formatDateTime(iso)).toBe(expected);
+    expect(formatDateTime(iso, '24h')).toBe(expected);
   });
 
   it('accepts zone-less timestamps and passes garbage through', () => {
-    expect(formatDateTime('2026-10-03T08:05:00')).toMatch(/^3 Oct 2026, 08:05$/);
-    expect(formatDateTime('not a date')).toBe('not a date');
+    expect(formatDateTime('2026-10-03T08:05:00', '24h')).toMatch(/^3 Oct 2026, 08:05$/);
+    expect(formatDateTime('not a date', '24h')).toBe('not a date');
+  });
+
+  it('shows the time on the 12-hour clock when chosen (D245)', () => {
+    expect(formatDateTime('2026-10-03T08:05:00', '12h')).toBe('3 Oct 2026, 8:05 am');
+    expect(formatDateTime('2026-10-03T20:30:00', '12h')).toBe('3 Oct 2026, 8:30 pm');
+    expect(formatDateTime('2026-10-03T00:10:00', '12h')).toBe('3 Oct 2026, 12:10 am');
+    expect(formatDateTime('not a date', '12h')).toBe('not a date');
   });
 });
 

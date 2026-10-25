@@ -1,7 +1,10 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import type { CafaiMockWindow } from '../mock/browser.ts';
 import type { MockRequestLog } from '../mock/decaid/state.ts';
+import type { SettingsGroupId } from '../src/ui/settings/groupIds.ts';
 import { TID } from '../src/ui/testIds.ts';
+
+export type { SettingsGroupId } from '../src/ui/settings/groupIds.ts';
 
 /**
  * Open the mock-mode build. `mockSpeed` compresses the scripted shot's wall
@@ -52,8 +55,12 @@ const TABS: Record<Screen, string> = { coach: TID.tabCoach, shot: TID.tabShot, h
  * Go to a screen as the barista would: the top bar on a tablet, the tabs on a
  * phone. The tabs give way to the on-screen keyboard while a text field has
  * focus, so on a phone the field is left first, as a tap outside it would.
+ *
+ * Settings (D232) opens on its list: on a tablet beside the group opened
+ * last (Coach at first), whose address it takes; on a phone alone. Give a
+ * group to open it too (openSettingsGroup).
  */
-export async function goTo(page: Page, screen: Screen): Promise<void> {
+export async function goTo(page: Page, screen: Screen, group?: SettingsGroupId): Promise<void> {
   if (isPhone(page)) {
     await page.evaluate(() => {
       const field = document.activeElement;
@@ -63,10 +70,30 @@ export async function goTo(page: Page, screen: Screen): Promise<void> {
   } else {
     await page.getByTestId(TOP_BAR[screen]).click();
   }
+  if (screen === 'settings' && group !== undefined) await openSettingsGroup(page, group);
 }
 
-export async function saveApiKey(page: Page, key = 'sk-ant-e2e-test'): Promise<void> {
+/** A Settings group's pane (tablet) or page (phone). */
+export function settingsGroup(page: Page, group: SettingsGroupId): Locator {
+  return page.getByTestId(TID.settingsPane(group));
+}
+
+/**
+ * Open one of Settings' groups as the barista would, from wherever the page
+ * is: Settings in the top bar or the tabs, then the group's row in Settings'
+ * list (beside the pane on a tablet, the page itself on a phone). Resolves
+ * once the group's pane or page shows.
+ */
+export async function openSettingsGroup(page: Page, group: SettingsGroupId): Promise<void> {
   await goTo(page, 'settings');
+  await page.getByTestId(TID.settingsGroupRow(group)).click();
+  await expect(settingsGroup(page, group)).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`#/settings/${group}$`));
+}
+
+/** Settings > Coach > Anthropic API key: paste a key and save it. */
+export async function saveApiKey(page: Page, key = 'sk-ant-e2e-test'): Promise<void> {
+  await openSettingsGroup(page, 'coach');
   await fillField(page, TID.apiKeyInput, key);
   await page.getByTestId(TID.apiKeySave).click();
 }

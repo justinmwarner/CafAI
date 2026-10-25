@@ -4,17 +4,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GatewayError, type PresenceSettings, type WakeSchedule } from '../../api/types.ts';
+import type { ClockFormat } from '../../storage/types.ts';
 import { renderWithServices } from '../chat/testing/render.tsx';
-import { createFakeServices } from '../testing/fakeServices.ts';
+import { createFakeServicesShowing } from '../testing/displayServices.ts';
 import { TID } from '../testIds.ts';
 import { SleepWakeSection, SLEEP_WAKE_HELP } from './SleepWakeSection.tsx';
 import { WAKE_TIME_GONE } from './usePresence.ts';
+import { WAKE_DIALOG_HALF_TID } from './WakeTimeDialog.tsx';
 
 const WEEKDAYS_0630: WakeSchedule = { id: 'w1', time: '06:30', daysOfWeek: [1, 2, 3, 4, 5], enabled: true, keepAwakeFor: 60 };
 const WEEKENDS_0800: WakeSchedule = { id: 'w2', time: '08:00', daysOfWeek: [6, 7], enabled: true };
 
-function renderSection(presence: Partial<PresenceSettings> = {}, options: { connected?: boolean; failRead?: Error } = {}) {
-  const services = createFakeServices({ telemetry: { machineConnected: options.connected ?? true } });
+function renderSection(presence: Partial<PresenceSettings> = {}, options: { connected?: boolean; failRead?: Error; clock?: ClockFormat } = {}) {
+  const services = createFakeServicesShowing({ clock: options.clock }, { telemetry: { machineConnected: options.connected ?? true } });
   services.decaid.presence = { ...services.decaid.presence, ...presence };
   if (options.failRead) services.decaid.failNext('getPresenceSettings', options.failRead);
   renderWithServices(<SleepWakeSection />, services);
@@ -480,5 +482,84 @@ describe('the wake time dialog', () => {
     await loaded();
     await user.click(screen.getByTestId(TID.wakeAdd));
     expect(dialog().getByText('Sleep when idle is off, so the machine stays on after the wake anyway.')).toBeInTheDocument();
+  });
+
+  it('has no am or pm on the 24-hour clock', async () => {
+    const { user } = renderSection();
+    await loaded();
+    await user.click(screen.getByTestId(TID.wakeAdd));
+    expect(dialog().queryByTestId(WAKE_DIALOG_HALF_TID.am)).toBeNull();
+  });
+});
+
+describe('on the 12-hour clock (D245)', () => {
+  const WEEKDAYS_2015: WakeSchedule = { id: 'w3', time: '20:15', daysOfWeek: [1, 2, 3, 4, 5], enabled: true };
+
+  it('shows the wake times, the next wake and the window that way, and says them that way', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 15, 7, 0)); // a Thursday
+    renderSection({ keepAwakeUntil: '2026-10-15T07:30:00.000', schedules: [WEEKDAYS_2015, WEEKDAYS_0630] }, { clock: '12h' });
+    await loaded();
+    const rows = within(screen.getByRole('list', { name: 'Wake times' })).getAllByRole('listitem');
+    expect(rows.map((row) => row.textContent)).toEqual(['6:30 amWeekdays · stays awake for 1 h', '8:15 pmWeekdays']);
+    expect(screen.getByTestId(TID.wakeEdit('w1'))).toHaveAccessibleName('Change the wake time 6:30 am, Weekdays, stays awake for 1 h');
+    expect(screen.getByTestId(TID.wakeSwitch('w3'))).toHaveAccessibleName('Wake at 8:15 pm, Weekdays');
+    expect(screen.getByTestId(TID.nextWake)).toHaveTextContent('Next wake: today at 8:15 pm.');
+    expect(screen.getByText('A wake time keeps the machine awake until 7:30 am.')).toBeInTheDocument();
+  });
+
+  it('follows a change of the clock at once', async () => {
+    const { services } = renderSection({ schedules: [WEEKDAYS_2015] });
+    await loaded();
+    expect(screen.getByTestId(TID.wakeRow('w3'))).toHaveTextContent('20:15Weekdays');
+    await act(async () => {
+      await services.displayPrefs.setClock('12h');
+    });
+    expect(screen.getByTestId(TID.wakeRow('w3'))).toHaveTextContent('8:15 pmWeekdays');
+  });
+
+  it('takes a new wake time as an hour from 12 to 11, its minute and am or pm, and saves it as HH:MM', async () => {
+    const { calls, user } = renderSection({}, { clock: '12h' });
+    await loaded();
+    await user.click(screen.getByTestId(TID.wakeAdd));
+    const time = dialog().getByRole('group', { name: 'Time' });
+    const hour = within(time).getByRole('combobox', { name: 'Hour' });
+    expect(within(hour).getAllByRole('option').map((option) => option.textContent)).toEqual(['12', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']);
+    // A new one starts at 6 in the morning, as on the 24-hour clock.
+    expect(hour).toHaveValue('6');
+    expect(dialog().getByTestId(WAKE_DIALOG_HALF_TID.am)).toHaveAttribute('aria-pressed', 'true');
+    expect(dialog().getByTestId(WAKE_DIALOG_HALF_TID.pm)).toHaveAttribute('aria-pressed', 'false');
+    await user.selectOptions(hour, '10');
+    await user.selectOptions(within(time).getByRole('combobox', { name: 'Minute' }), '05');
+    await user.click(dialog().getByTestId(WAKE_DIALOG_HALF_TID.pm));
+    expect(dialog().getByTestId(WAKE_DIALOG_HALF_TID.pm)).toHaveAttribute('aria-pressed', 'true');
+    await user.click(dialog().getByTestId(TID.wakeDialogSave));
+    await waitFor(() => expect(calls('addWakeSchedule')).toEqual([[{ time: '22:05', daysOfWeek: [], enabled: true, keepAwakeFor: 60 }]]));
+  });
+
+  it('reads midnight and noon as 12 am and 12 pm', async () => {
+    const { calls, user } = renderSection({}, { clock: '12h' });
+    await loaded();
+    await user.click(screen.getByTestId(TID.wakeAdd));
+    await user.selectOptions(dialog().getByTestId(TID.wakeDialogHour), '12');
+    await user.click(dialog().getByTestId(TID.wakeDialogSave));
+    await waitFor(() => expect(calls('addWakeSchedule')).toEqual([[{ time: '00:00', daysOfWeek: [], enabled: true, keepAwakeFor: 60 }]]));
+  });
+
+  it('opens a wake time in its own half, and a change of half alone sends the new time', async () => {
+    const { calls, user } = renderSection({ schedules: [WEEKDAYS_2015] }, { clock: '12h' });
+    await loaded();
+    await user.click(screen.getByTestId(TID.wakeEdit('w3')));
+    expect(dialog().getByTestId(TID.wakeDialogHour)).toHaveValue('8');
+    expect(dialog().getByTestId(TID.wakeDialogMinute)).toHaveValue('15');
+    expect(dialog().getByTestId(WAKE_DIALOG_HALF_TID.pm)).toHaveAttribute('aria-pressed', 'true');
+    // A tap on the half already chosen keeps it.
+    await user.click(dialog().getByTestId(WAKE_DIALOG_HALF_TID.pm));
+    expect(dialog().getByTestId(WAKE_DIALOG_HALF_TID.pm)).toHaveAttribute('aria-pressed', 'true');
+    await user.click(dialog().getByTestId(WAKE_DIALOG_HALF_TID.am));
+    await user.click(dialog().getByTestId(TID.wakeDialogSave));
+    await waitFor(() => expect(screen.queryByTestId(TID.wakeDialog)).toBeNull());
+    expect(calls('updateWakeSchedule')).toEqual([['w3', { time: '08:15' }]]);
+    expect(screen.getByTestId(TID.wakeRow('w3'))).toHaveTextContent('8:15 amWeekdays');
   });
 });

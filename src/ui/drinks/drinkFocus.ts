@@ -8,7 +8,8 @@
  * video on the Care screen (D156), or the view is already on screen. The
  * screen the view took over is remembered for Go back: the last screen that
  * was not a drink's view, so hot water after a flush still goes back to the
- * coach. Once the run is done the view goes back there by itself, unless the
+ * coach, and a Settings group, address and all, is the group it returns to
+ * (D233: Settings > Drinks, not Settings' list). Once the run is done the view goes back there by itself, unless the
  * barista keeps it or turned that off (drinkReturn.ts, D221); off, it
  * stays, with the result, until the barista leaves it.
  */

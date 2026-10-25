@@ -1,6 +1,7 @@
 /**
- * Settings > Log (D139): how much the traffic log holds ("214 entries since
- * 21:04"), and Open log, Share, Email, Copy and Clear. The summary is read
+ * Settings > Data and privacy > Log (D139, D233): how much the traffic log
+ * holds ("214 entries since 21:04", or "since 9:04 pm" on the 12-hour clock,
+ * D245), and Open log, Share, Email, Copy and Clear. The summary is read
  * every 2 seconds, never on each entry, so traffic never re-renders Settings;
  * Share, Email and Copy read the log at the tap. The view itself
  * (LogView.tsx) belongs to the app, not this screen, so it stays open when a
@@ -12,8 +13,10 @@ import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import ClearAllIcon from '@mui/icons-material/ClearAll';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import { useClockFormat } from '../../app/services.tsx';
 import { formatBytes, formatHourMinute } from '../../traffic/format.ts';
 import { trafficLog, type TrafficStats } from '../../traffic/recorder.ts';
+import type { ClockFormat } from '../clock.ts';
 import { TID } from '../testIds.ts';
 import { LogActions } from './LogActions.tsx';
 import { openLogView } from './logShare.ts';
@@ -25,18 +28,22 @@ export const LOG_NOTE =
 /** How often the summary is read while Settings is open. */
 export const SUMMARY_EVERY_MS = 2000;
 
-/** "214 entries since 21:04, 1.2 MB", or "Nothing recorded since 21:04." for an empty log. */
-export function summaryText(stats: TrafficStats): string {
-  if (stats.count === 0 || stats.oldestAt === null) return `Nothing recorded since ${formatHourMinute(stats.since)}.`;
-  return `${stats.count} ${stats.count === 1 ? 'entry' : 'entries'} since ${formatHourMinute(stats.oldestAt)}, ${formatBytes(stats.chars)}`;
+/** "214 entries since 21:04, 1.2 MB", or "Nothing recorded since 21:04." for an empty log; the time in the clock chosen. */
+export function summaryText(stats: TrafficStats, clock: ClockFormat): string {
+  if (stats.count === 0 || stats.oldestAt === null) return `Nothing recorded since ${formatHourMinute(stats.since, clock)}.`;
+  return `${stats.count} ${stats.count === 1 ? 'entry' : 'entries'} since ${formatHourMinute(stats.oldestAt, clock)}, ${formatBytes(stats.chars)}`;
 }
 
-/** The summary, and a way to read it at once (after Clear). The same text never re-renders. */
-function useSummary(): [string, () => void] {
-  const read = useCallback(() => summaryText(trafficLog.stats()), []);
+/**
+ * The summary, and a way to read it at once (after Clear). The same text
+ * never re-renders; a change of clock reads it again at once.
+ */
+function useSummary(clock: ClockFormat): [string, () => void] {
+  const read = useCallback(() => summaryText(trafficLog.stats(), clock), [clock]);
   const [text, setText] = useState(read);
   const refresh = useCallback(() => setText(read()), [read]);
   useEffect(() => {
+    refresh();
     const timer = setInterval(refresh, SUMMARY_EVERY_MS);
     return () => clearInterval(timer);
   }, [refresh]);
@@ -46,7 +53,7 @@ function useSummary(): [string, () => void] {
 const readLog = () => trafficLog.list();
 
 export function LogSection() {
-  const [summary, refresh] = useSummary();
+  const [summary, refresh] = useSummary(useClockFormat());
   return (
     <Section title="Log">
       <Box data-testid={TID.logSection}>

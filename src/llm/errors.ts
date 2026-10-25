@@ -48,15 +48,15 @@ export interface ProviderWording {
 }
 
 export const ANTHROPIC_WORDING: ProviderWording = {
-  noKey: 'Add your Anthropic API key in Settings.',
+  noKey: 'Add your Anthropic API key in Settings > Coach.',
   unreachable: "Could not reach Anthropic. Check this device's internet connection.",
-  auth: 'Anthropic did not accept your API key. Check it in Settings.',
+  auth: 'Anthropic did not accept your API key. Check it in Settings > Coach.',
   rateLimit: 'Anthropic is rate limiting. Wait a moment and try again.',
   overloaded: 'Anthropic is overloaded right now. Try again in a minute.',
   server: 'Anthropic is having trouble at its end. Try again shortly.',
   rejected: (reason) => `Anthropic rejected the request: ${reason}`,
   badRequest: 'Anthropic rejected the request. If you changed the model, check it is one your account can use.',
-  notFound: 'Anthropic has no such model. Check the model name in Settings.',
+  notFound: 'Anthropic has no such model. Check the model name in Settings > Coach.',
   firstByteTimeout: 'Anthropic took too long to answer. Try again.',
   idleTimeout: 'The reply from Anthropic stalled. Try again.',
   dropped: 'The connection to Anthropic dropped before the reply finished. Try again.',
@@ -70,16 +70,16 @@ export const ANTHROPIC_WORDING: ProviderWording = {
  */
 export function computerWording(address: string): ProviderWording {
   return {
-    noKey: 'Add the code CafAI Bridge shows on your computer in Settings.',
+    noKey: 'Add the code CafAI Bridge shows on your computer in Settings > Coach.',
     unreachable: `Could not reach CafAI Bridge at ${address}. Check it is running on your computer and that this device is on the same network.`,
-    auth: 'CafAI Bridge did not accept the code. Check it in Settings.',
+    auth: 'CafAI Bridge did not accept the code. Check it in Settings > Coach.',
     rateLimit: 'CafAI Bridge is rate limiting. Wait a moment and try again.',
     overloaded: 'Claude is overloaded right now. Try again in a minute.',
     server: 'CafAI Bridge ran into trouble on your computer. Try again shortly.',
     rejected: (reason) => `CafAI Bridge rejected the request: ${reason}`,
     badRequest: 'CafAI Bridge rejected the request. Update CafAI Bridge and try again.',
     // The bridge names a model it cannot use itself; a bare 404 is something else answering there.
-    notFound: `Could not find CafAI Bridge at ${address}. Check the address in Settings.`,
+    notFound: `Could not find CafAI Bridge at ${address}. Check the address in Settings > Coach.`,
     firstByteTimeout: 'Your computer took too long to answer. Try again.',
     idleTimeout: 'The reply from your computer stalled. Try again.',
     dropped: 'The connection to your computer dropped before the reply finished. Try again.',

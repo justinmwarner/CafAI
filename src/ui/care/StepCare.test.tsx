@@ -55,12 +55,12 @@ describe("a step's last time on the Care screen (D183, D186)", () => {
     services.care.dispose();
   });
 
-  it('the descale says what the water sets, and links to Settings, asking it to bring Machine care into view (D187)', async () => {
+  it('the descale says what the water sets, and links to Settings > Machine, asking it to bring Machine care into view (D187, D233)', async () => {
     const services = await servicesWithCare();
     renderWithServices(<StepCare stepId="descale" title="Descale" />, services);
     expect(screen.getByText(/does not know your water/)).toBeInTheDocument();
     const link = screen.getByTestId(TID.careSetIn('descale'));
-    expect(link).toHaveAttribute('href', '#/settings');
+    expect(link).toHaveAttribute('href', '#/settings/machine');
     expect(link).toHaveTextContent('Set it in Settings');
     await userEvent.click(link);
     expect(takeReveal('settings-care')).toBe(true);

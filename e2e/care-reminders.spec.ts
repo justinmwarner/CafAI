@@ -11,8 +11,8 @@ import { goTo, loseBrowserStorage, openApp, openAppWithSwitches, settledMirror, 
  * Machine care's reminders (D183-D190), on the tablets and the
  * phones: a step's last time and Mark done on the Care screen, the stats
  * card's line for the most overdue step, the water and the filter in
- * Settings > Machine care, and the last times coming back from Decaid's
- * backup. The page's clock is moved on, as days are what bring a step due;
+ * Settings > Machine > Machine care, and the last times coming back from
+ * Decaid's backup. The page's clock is moved on, as days are what bring a step due;
  * the shots and steams since come from the mock Decaid's totals.
  */
 
@@ -51,9 +51,9 @@ function savedBackupHolds(page: Page, text: string): Promise<boolean> {
   );
 }
 
-/** Back to the Care screen's routine the way a barista goes: Settings > Machine care > Cleaning guide, then its segment. */
+/** Back to the Care screen's routine the way a barista goes: Settings > Machine > Machine care > Cleaning guide, then its segment. */
 async function openCare(page: Page, routine: 'weekly' | 'monthly' | 'asNeeded'): Promise<void> {
-  await goTo(page, 'settings');
+  await goTo(page, 'settings', 'machine');
   const open = page.getByTestId(TID.careOpen);
   await open.scrollIntoViewIfNeeded();
   await open.click();
@@ -124,7 +124,7 @@ test('the line opens a step further down with it in view, and the switch in Sett
   await expect(page.getByTestId(TID.careStep('intake-filter'))).toBeInViewport();
   await expect(page.getByTestId(TID.careStepLine('intake-filter'))).toHaveText(`Due · Not marked done since ${T0_DATE}`);
 
-  await goTo(page, 'settings');
+  await goTo(page, 'settings', 'machine');
   const reminders = page.getByTestId(TID.careReminders);
   await reminders.scrollIntoViewIfNeeded();
   await reminders.click();
@@ -134,12 +134,12 @@ test('the line opens a step further down with it in view, and the switch in Sett
   await expect(statsCard(page).getByTestId(TID.careDueLine)).toHaveCount(0);
 });
 
-test('the water and the intake filter, set in Settings > Machine care, change what the descale and the filter say', async ({ page }) => {
+test('the water and the intake filter, set in Settings > Machine > Machine care, change what the descale and the filter say', async ({ page }) => {
   await openApp(page, '#/care/as-needed');
   const descale = page.getByTestId(TID.careStepCare('descale'));
   await expect(descale).toContainText('CafAI does not know your water');
   await page.getByTestId(TID.careSetIn('descale')).click();
-  await expect(page).toHaveURL(/#\/settings$/);
+  await expect(page).toHaveURL(/#\/settings\/machine$/);
   await expect(page.getByTestId(TID.careSection)).toBeInViewport();
   await page.getByTestId(TID.careWater).selectOption('over120');
   await page.getByTestId(TID.careFilter).selectOption('v2');
@@ -151,7 +151,7 @@ test('the water and the intake filter, set in Settings > Machine care, change wh
   await expect(page.getByTestId(TID.careStepCare('intake-filter'))).toContainText('Your filter is V2: CafAI reminds you every month.');
 
   // Under 30 ppm needs no descaling: no reminder, and the step says so.
-  await goTo(page, 'settings');
+  await goTo(page, 'settings', 'machine');
   await page.getByTestId(TID.careWater).selectOption('under30');
   await openCare(page, 'asNeeded');
   await expect(page.getByTestId(TID.careStepCare('descale'))).toContainText('it needs no descaling, so CafAI does not remind you');

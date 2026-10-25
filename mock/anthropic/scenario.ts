@@ -18,7 +18,7 @@ import FACT_LIST from '../../src/coach/facts/facts.json';
 import { factFits, matchedKeys, type BagFacts } from '../../src/coach/facts/match.ts';
 import { coachKey } from '../../src/coach/facts/told.ts';
 import type { FunFact } from '../../src/coach/facts/types.ts';
-import { resolveGrindMove } from '../../src/coach/grinder.ts';
+import { finestFirst, resolveGrindMove } from '../../src/coach/grinder.ts';
 import type { TemperatureUnit } from '../../src/coach/temperature.ts';
 import { pourTime } from '../../src/coach/summary/pourClock.ts';
 import type { GrinderInfo } from '../../src/coach/types.ts';
@@ -496,13 +496,28 @@ function latestGrinder(messages: Message[]): Raw | null {
   return grinder;
 }
 
-/** The dial Decaid's grinder library describes (a numeric `step` or a list of `values`), else null. */
+/** Whether the grinder the coach hears runs finer at higher numbers (D241: the payload's "finer"). */
+function finerHigher(grinder: Raw): boolean {
+  return grinder.finer === 'higher';
+}
+
+/**
+ * The dial Decaid's grinder library describes (a numeric `step` or a list of
+ * `values`), else null. A numbered dial carries which way is finer (D241). A
+ * list's values come finest first already, so its dial says whichever way
+ * reads them as they came: finestFirst turns a list of numbers running down
+ * unless higher numbers are finer.
+ */
 function libraryDial(grinder: Raw): GrinderInfo | null {
   const model = typeof grinder.name === 'string' ? grinder.name : '';
   const step = num(grinder.step);
-  if (step !== null && step > 0) return { model, settingType: 'numeric', smallStep: step, bigStep: null, values: null };
+  if (step !== null && step > 0) {
+    return { model, settingType: 'numeric', smallStep: step, bigStep: null, values: null, ...(finerHigher(grinder) ? { finerIsHigher: true } : {}) };
+  }
   const values = Array.isArray(grinder.values) ? grinder.values.filter((v): v is string => typeof v === 'string') : [];
-  return values.length > 0 ? { model, settingType: 'preset', smallStep: null, bigStep: null, values } : null;
+  if (values.length === 0) return null;
+  const asTheyCame = finestFirst(values, false).every((value, i) => value === values[i]);
+  return { model, settingType: 'preset', smallStep: null, bigStep: null, values, ...(asTheyCame ? {} : { finerIsHigher: true }) };
 }
 
 type GrindDirection = 'finer' | 'coarser';
@@ -516,7 +531,8 @@ type GrindDirection = 'finer' | 'coarser';
  * it, or has no step for it) gets directions only, as Settings tells the
  * user. Otherwise a plain number goes down (finer) or up (coarser) by 1, as
  * the script did before the grinder library: the common convention is that a
- * lower number is finer.
+ * lower number is finer; on a grinder the barista said runs finer at higher
+ * numbers (D241), the other way round.
  */
 function movedSetting(messages: Message[], direction: GrindDirection): string | null {
   const grinder = latestGrinder(messages);
@@ -529,7 +545,8 @@ function movedSetting(messages: Message[], direction: GrindDirection): string | 
   }
   if (grinder.linked === true) return null;
   if (!/^\d+(\.\d+)?$/.test(setting)) return null;
-  const moved = Number(setting) + (direction === 'finer' ? -1 : 1);
+  const down = (direction === 'finer') !== finerHigher(grinder);
+  const moved = Number(setting) + (down ? -1 : 1);
   return moved >= 0 ? String(Math.round(moved * 100) / 100) : null;
 }
 

@@ -121,15 +121,18 @@ async function handleToolUse(use: ToolUseBlock, tools: Map<string, RunnerTool>):
 /**
  * `paused`: parts of this turn the server paused (pause_turn, D203). Its rest
  * streams on in the same bubble: no new turn start, and a paragraph break
- * first when those parts said something.
+ * first when those parts said something. `call`: the model call's number in
+ * the run, 0 first, so the coach's usage counts a reply once (D237).
  */
-async function streamTurn(run: RunRequest, messages: LlmMessage[], paused: readonly LlmMessage[]): Promise<LlmAssistantTurn> {
+async function streamTurn(run: RunRequest, messages: LlmMessage[], paused: readonly LlmMessage[], call: number): Promise<LlmAssistantTurn> {
   const request: LlmRequest = {
     model: run.model,
     system: run.system,
     // A copy: the provider must never see later appends to this run's transcript.
     messages: [...messages],
     tools: run.tools.map((tool) => tool.definition),
+    purpose: run.purpose ?? 'reply',
+    call,
   };
   if (run.serverTools !== undefined && run.serverTools.length > 0) request.serverTools = [...run.serverTools];
   if (run.maxTokens !== undefined) request.maxTokens = run.maxTokens;
@@ -180,7 +183,7 @@ export async function runConversation(run: RunRequest): Promise<RunResult> {
     if (calls >= maxCalls) throw stuckError();
     calls += 1;
 
-    const turn = await streamTurn(run, messages, goingOn ? held : []);
+    const turn = await streamTurn(run, messages, goingOn ? held : [], calls - 1);
     // Refused output is discarded, never stored or replayed.
     if (turn.stopReason === 'refusal') throw refusalError();
 

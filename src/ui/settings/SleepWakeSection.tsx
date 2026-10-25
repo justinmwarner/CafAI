@@ -10,7 +10,8 @@
  * drink settings' stepper). The wake times are rows, earliest first: the
  * time, its days and how long it keeps the machine awake, a tap on any of
  * which opens the dialog, and the wake time's own switch at the end, as a
- * phone's alarms are laid out. Over them, when the next wake is.
+ * phone's alarms are laid out. Over them, when the next wake is. Every time
+ * here is in the clock the barista chose (D245); Decaid keeps "HH:MM".
  */
 import { useEffect, useState } from 'react';
 import Alert from '@mui/material/Alert';
@@ -25,12 +26,23 @@ import type { SxProps, Theme } from '@mui/material/styles';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import type { WakeSchedule } from '../../api/types.ts';
-import { useTelemetry } from '../../app/services.tsx';
+import { useClockFormat, useTelemetry } from '../../app/services.tsx';
+import type { ClockFormat } from '../clock.ts';
 import { TID } from '../testIds.ts';
 import { DrinkField } from './DrinkFields.tsx';
 import { Section } from './Section.tsx';
 import { usePresence } from './usePresence.ts';
-import { describeDays, describeSchedule, describeWhen, keptAwakeUntil, nextWake, SLEEP_AFTER, sortSchedules, speakSchedule } from './wakeSchedule.ts';
+import {
+  describeDays,
+  describeSchedule,
+  describeWhen,
+  formatWakeTime,
+  keptAwakeUntil,
+  nextWake,
+  SLEEP_AFTER,
+  sortSchedules,
+  speakSchedule,
+} from './wakeSchedule.ts';
 import { WakeTimeDialog } from './WakeTimeDialog.tsx';
 
 export const SLEEP_WAKE_HELP = 'Decaid keeps these and acts on them while it runs, with CafAI open or not. Changes go to Decaid at once.';
@@ -87,20 +99,22 @@ function useMinuteClock(): Date {
 
 interface WakeRowProps {
   schedule: WakeSchedule;
+  clock: ClockFormat;
   switching: boolean;
   onEdit(): void;
   onSwitch(enabled: boolean): void;
 }
 
-function WakeRow({ schedule, switching, onEdit, onSwitch }: WakeRowProps) {
+function WakeRow({ schedule, clock, switching, onEdit, onSwitch }: WakeRowProps) {
   const days = describeDays(schedule.daysOfWeek);
+  const time = formatWakeTime(schedule.time, clock);
   const ink = schedule.enabled ? 'text.primary' : 'text.secondary';
   return (
     <Box role="listitem" sx={rowSx} data-testid={TID.wakeRow(schedule.id)}>
-      <ButtonBase onClick={onEdit} aria-label={`Change the wake time ${speakSchedule(schedule)}`} data-testid={TID.wakeEdit(schedule.id)} sx={editSx}>
+      <ButtonBase onClick={onEdit} aria-label={`Change the wake time ${speakSchedule(schedule, clock)}`} data-testid={TID.wakeEdit(schedule.id)} sx={editSx}>
         <Box sx={{ minWidth: 0 }}>
           <Typography component="div" sx={{ ...timeSx, color: ink }}>
-            {schedule.time}
+            {time}
           </Typography>
           <Typography variant="body2" component="div" sx={mutedSx}>
             {describeSchedule(schedule)}
@@ -113,7 +127,7 @@ function WakeRow({ schedule, switching, onEdit, onSwitch }: WakeRowProps) {
           checked={schedule.enabled}
           disabled={switching}
           onChange={(event) => onSwitch(event.target.checked)}
-          slotProps={{ input: { 'aria-label': `Wake at ${schedule.time}, ${days}`, 'data-testid': TID.wakeSwitch(schedule.id) } }}
+          slotProps={{ input: { 'aria-label': `Wake at ${time}, ${days}`, 'data-testid': TID.wakeSwitch(schedule.id) } }}
         />
       </Box>
     </Box>
@@ -125,6 +139,7 @@ type Editing = { schedule: WakeSchedule | null } | null;
 export function SleepWakeSection() {
   const presence = usePresence();
   const connected = useTelemetry((state) => state.machineConnected);
+  const clock = useClockFormat();
   const now = useMinuteClock();
   const [editing, setEditing] = useState<Editing>(null);
   const { settings } = presence;
@@ -132,8 +147,8 @@ export function SleepWakeSection() {
   const schedules = settings ? sortSchedules(settings.schedules) : [];
   const next = settings ? nextWake(settings.schedules, now) : null;
   // Only while the idle sleep is on does a keep-awake window hold anything off.
-  const awakeUntil = settings && presence.sleepWhenIdle ? keptAwakeUntil(settings.keepAwakeUntil, now) : null;
-  const wakesLine = schedules.length === 0 ? NO_WAKES : next ? `Next wake: ${describeWhen(next.at, now)}.` : ALL_OFF;
+  const awakeUntil = settings && presence.sleepWhenIdle ? keptAwakeUntil(settings.keepAwakeUntil, now, clock) : null;
+  const wakesLine = schedules.length === 0 ? NO_WAKES : next ? `Next wake: ${describeWhen(next.at, now, clock)}.` : ALL_OFF;
 
   return (
     <Section title="Sleep and wake">
@@ -210,6 +225,7 @@ export function SleepWakeSection() {
                     <WakeRow
                       key={schedule.id}
                       schedule={schedule}
+                      clock={clock}
                       switching={presence.switching.has(schedule.id)}
                       onEdit={() => setEditing({ schedule })}
                       onSwitch={(enabled) => presence.setScheduleEnabled(schedule, enabled)}
@@ -237,6 +253,7 @@ export function SleepWakeSection() {
       {editing ? (
         <WakeTimeDialog
           schedule={editing.schedule}
+          clock={clock}
           sleepWhenIdle={presence.sleepWhenIdle}
           onAdd={presence.addSchedule}
           onSave={presence.updateSchedule}

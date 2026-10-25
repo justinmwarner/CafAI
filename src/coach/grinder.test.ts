@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { decaidStepNote, grinderSettings, grinderStep, resolveGrindMove, type DialResult } from './grinder.ts';
+import { decaidStepNote, finestFirst, grinderSettings, grinderStep, resolveGrindMove, type DialResult } from './grinder.ts';
 import type { GrinderInfo } from './types.ts';
 import { GRIND_MAX_STEPS } from './validator.ts';
 
@@ -209,6 +209,103 @@ describe('resolveGrindMove: a preset list', () => {
     expect(errorOf(resolveGrindMove(long, '20', move('finer', 1, '99')))).toBe(
       'grind.setting "99" is not one of your grinder\'s settings. Your grinder\'s settings in Decaid\'s grinder library around "20", finest first: ' +
         '"15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25".',
+    );
+  });
+});
+
+describe('which way is finer (D241)', () => {
+  /** A numbered dial whose higher numbers are finer, as the barista said in Settings. */
+  const UPWARD: GrinderInfo = { ...NICHE, model: 'Upward', finerIsHigher: true };
+  /** A preset list in the grinder's own order, "1" to "8", on a grinder whose higher numbers are finer. */
+  const STEPPED: GrinderInfo = {
+    model: 'Stepped',
+    settingType: 'preset',
+    smallStep: null,
+    bigStep: null,
+    values: ['1', '2', '3', '4', '5', '6', '7', '8'],
+    finerIsHigher: true,
+  };
+  const UPWARD_STEP = "Your grinder moves in steps of 0.5 (Decaid's grinder library)";
+  const STEPPED_ALL = 'Your grinder\'s settings in Decaid\'s grinder library, finest first: "8", "7", "6", "5", "4", "3", "2", "1".';
+
+  it('reads a list of numbers in order from its lowest while lower numbers are finer (D62), whichever way Decaid keeps it', () => {
+    expect(finestFirst(['1', '2', '3'], false)).toEqual(['1', '2', '3']);
+    expect(finestFirst(['3', '2', '1'], false)).toEqual(['1', '2', '3']);
+    expect(finestFirst([' 3 ', '2.5', '2'], false)).toEqual(['2', '2.5', ' 3 ']);
+    expect(finestFirst(['5'], false)).toEqual(['5']);
+  });
+
+  it('reads a list of numbers in order from its highest on a grinder whose higher numbers are finer, whichever way Decaid keeps it', () => {
+    expect(finestFirst(['1', '2', '3'], true)).toEqual(['3', '2', '1']);
+    expect(finestFirst(['1', '1.5', '2'], true)).toEqual(['2', '1.5', '1']);
+    expect(finestFirst(['12', '11', '10'], true)).toEqual(['12', '11', '10']);
+    expect(finestFirst([' 3 ', '2.5', '2'], true)).toEqual([' 3 ', '2.5', '2']);
+    expect(finestFirst(['5'], true)).toEqual(['5']);
+  });
+
+  it("reads any other list in Decaid's order, finest first, and backwards where higher numbers are finer", () => {
+    expect(finestFirst(['Fine', 'Medium', 'Coarse'], false)).toEqual(['Fine', 'Medium', 'Coarse']);
+    expect(finestFirst(['E1', 'E2', 'E3'], true)).toEqual(['E3', 'E2', 'E1']);
+    // Numbers out of order are no direction to go by.
+    expect(finestFirst(['1', '3', '2'], false)).toEqual(['1', '3', '2']);
+    expect(finestFirst(['1', '3', '2'], true)).toEqual(['2', '3', '1']);
+  });
+
+  it('never changes the list it was given', () => {
+    const values = ['1', '2', '3'];
+    finestFirst(values, true);
+    expect(values).toEqual(['1', '2', '3']);
+  });
+
+  it("gives a preset grinder's settings finest first, trimmed, whichever way its numbers go", () => {
+    expect(grinderSettings(STEPPED)).toEqual(['8', '7', '6', '5', '4', '3', '2', '1']);
+    expect(grinderSettings({ ...STEPPED, values: [' 1 ', '2'] })).toEqual(['2', '1']);
+    expect(grinderSettings({ ...STEPPED, finerIsHigher: false })).toEqual(['1', '2', '3', '4', '5', '6', '7', '8']);
+    expect(decaidStepNote(STEPPED)).toBe('Decaid lists 8 settings for your Stepped');
+  });
+
+  it('moves a numbered dial up for finer and down for coarser', () => {
+    expect(okMove(resolveGrindMove(UPWARD, '15', move('finer', 1)))).toEqual({ setting: '15.5', steps: 1, notes: [] });
+    expect(okMove(resolveGrindMove(UPWARD, '15', move('finer', 2)))).toEqual({ setting: '16.0', steps: 2, notes: [] });
+    expect(okMove(resolveGrindMove(UPWARD, '15', move('coarser', 3)))).toEqual({ setting: '13.5', steps: 3, notes: [] });
+    // Absent or false reads as lower numbers finer, as before.
+    expect(okMove(resolveGrindMove({ ...UPWARD, finerIsHigher: false }, '15', move('finer', 1))).setting).toBe('14.5');
+  });
+
+  it('refuses a coarser move below 0, the end that is coarsest on such a dial', () => {
+    expect(errorOf(resolveGrindMove(UPWARD, '0.5', move('coarser', 2)))).toBe(
+      `grind: 2 steps coarser from 0.5 would be -0.5, below 0. ${UPWARD_STEP}: 1 step coarser from 0.5 is 0.0.`,
+    );
+    expect(errorOf(resolveGrindMove(UPWARD, '0', move('coarser', 1)))).toBe(
+      `grind: 1 step coarser from 0 would be -0.5, below 0. ${UPWARD_STEP}: it cannot go coarser than 0.`,
+    );
+    expect(okMove(resolveGrindMove(UPWARD, '0', move('finer', 1))).setting).toBe('0.5');
+  });
+
+  it("checks a given setting's direction the grinder's way, and says which way that is", () => {
+    expect(okMove(resolveGrindMove(UPWARD, '15', move('finer', 2, '16')))).toEqual({ setting: '16', steps: 2, notes: [] });
+    expect(okMove(resolveGrindMove(UPWARD, '15', move('coarser', 1, '14.5')))).toEqual({ setting: '14.5', steps: 1, notes: [] });
+    expect(errorOf(resolveGrindMove(UPWARD, '15', move('finer', 1, '14.5')))).toBe(
+      `grind.setting "14.5" is coarser than 15 (higher numbers are finer), but grind.direction is "finer". ${UPWARD_STEP}: 1 step finer from 15 is 15.5.`,
+    );
+    expect(errorOf(resolveGrindMove(UPWARD, '15', move('coarser', 1, '16')))).toBe(
+      `grind.setting "16" is finer than 15 (higher numbers are finer), but grind.direction is "coarser". ${UPWARD_STEP}: 1 step coarser from 15 is 14.5.`,
+    );
+  });
+
+  it('moves along a preset list from its finest end', () => {
+    expect(okMove(resolveGrindMove(STEPPED, '4', move('finer', 1)))).toEqual({ setting: '5', steps: 1, notes: [] });
+    expect(okMove(resolveGrindMove(STEPPED, '4', move('coarser', 2)))).toEqual({ setting: '2', steps: 2, notes: [] });
+    expect(okMove(resolveGrindMove(STEPPED, '4', move('finer', 2, '6')))).toEqual({ setting: '6', steps: 2, notes: [] });
+    expect(errorOf(resolveGrindMove(STEPPED, '7', move('finer', 3)))).toBe(
+      'grind: 3 steps finer from "7" goes past the end of the list: the finest setting, "8", is 1 step finer. ' +
+        'Your grinder\'s settings in Decaid\'s grinder library around "7", finest first: "8", "7", "6", "5", "4", "3", "2".',
+    );
+    expect(errorOf(resolveGrindMove(STEPPED, '1', move('coarser', 1)))).toMatch(
+      /^grind: 1 step coarser from "1" goes past the end of the list: "1" is already the coarsest setting\./,
+    );
+    expect(errorOf(resolveGrindMove(STEPPED, '4', move('finer', 1, '3')))).toBe(
+      `grind.setting "3" is coarser than "4" in the list, but grind.direction is "finer". ${STEPPED_ALL}`,
     );
   });
 });

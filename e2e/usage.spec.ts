@@ -1,14 +1,15 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { ClarityMockWindow } from '../mock/clarity.ts';
 import { TID } from '../src/ui/testIds.ts';
-import { goTo, openAppWithSwitches, recordRequests, saveApiKey, sendChat, type SeenRequest } from './helpers.ts';
+import { goTo, openAppWithSwitches, openSettingsGroup, recordRequests, saveApiKey, sendChat, type SeenRequest } from './helpers.ts';
 
 /**
  * Usage sharing (D210-D215) through mock mode's ?mockUsage=1: a
  * stand-in Clarity project whose tag the mock's service worker answers with
  * a stand-in that records every call (mock/clarity.ts), so nothing leaves
  * the browser. The time zone and the language decide whether CafAI asks
- * first (D211).
+ * first (D211). Each Settings group is a screen of its own ("settings-coach"),
+ * and the switch is in Settings > Data and privacy.
  */
 const CLARITY = /^https:\/\/([a-z0-9-]+\.)*clarity\.ms\//;
 
@@ -39,8 +40,10 @@ test.describe('in Europe', () => {
     await expect.poll(() => screenInAddress(page)).toBe('coach');
 
     await saveApiKey(page);
-    await expect.poll(() => screenInAddress(page)).toBe('settings');
+    await expect.poll(() => screenInAddress(page)).toBe('settings-coach');
     await expect.poll(() => clarityCalls(page)).toContainEqual(['event', 'coach_setup']);
+    await openSettingsGroup(page, 'data');
+    await expect.poll(() => screenInAddress(page)).toBe('settings-data');
     await expect(page.getByTestId(TID.usageSwitch)).toBeChecked();
 
     await goTo(page, 'coach');
@@ -73,7 +76,7 @@ test.describe('elsewhere', () => {
     expect((await clarityCalls(page)).slice(before)).toEqual([['stop']]);
     expect(screenInAddress(page)).toBeNull();
 
-    await goTo(page, 'settings');
+    await goTo(page, 'settings', 'data');
     await expect(page.getByTestId(TID.usageSwitch)).not.toBeChecked();
     expect(screenInAddress(page)).toBeNull();
     expect((await clarityCalls(page)).slice(before)).toEqual([['stop']]);

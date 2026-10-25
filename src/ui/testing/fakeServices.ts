@@ -44,7 +44,11 @@ import type {
   Settings,
   Storage,
 } from '../../storage/types.ts';
-import { DEFAULT_CARE } from '../../storage/settings.ts';
+import { DEFAULT_BUDGET, DEFAULT_CARE } from '../../storage/settings.ts';
+import { KNOWN_MODELS } from '../../llm/models.ts';
+import { createSpendService } from '../../spend/service.ts';
+import { createMemorySpendStore } from '../../spend/store.ts';
+import type { SpendRecord, SpendService } from '../../spend/types.ts';
 
 export interface Call {
   method: string;
@@ -371,9 +375,10 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
     },
     settings: {
       get: async () => settings,
-      // As the real one, the care block field by field (D187), and each drink's screen too (D222).
-      update: async ({ care: carePatch, drinkScreens: screensPatch, ...patch }) => {
+      // As the real one, the care and budget blocks field by field (D187, D240), and each drink's screen too (D222).
+      update: async ({ care: carePatch, drinkScreens: screensPatch, coachBudget: budgetPatch, ...patch }) => {
         const careEdits = Object.entries(carePatch ?? {}).filter(([, value]) => value !== undefined);
+        const budgetEdits = Object.entries(budgetPatch ?? {}).filter(([, value]) => value !== undefined);
         const screens = { ...settings.drinkScreens };
         for (const [kind, edit] of Object.entries(screensPatch ?? {}) as [keyof typeof screens, Record<string, unknown> | undefined][]) {
           const edits = Object.entries(edit ?? {}).filter(([, value]) => value !== undefined);
@@ -383,6 +388,7 @@ export function createFakeStorage(seed: Partial<CafaiExport> = {}): FakeStorage 
           ...settings,
           ...patch,
           ...(carePatch ? { care: { ...(settings.care ?? DEFAULT_CARE), ...Object.fromEntries(careEdits) } } : {}),
+          ...(budgetPatch ? { coachBudget: { ...(settings.coachBudget ?? DEFAULT_BUDGET), ...Object.fromEntries(budgetEdits) } } : {}),
           ...(screensPatch ? { drinkScreens: screens } : {}),
         };
         return settings;
@@ -536,6 +542,8 @@ export const FAKE_MODELS: readonly ModelInfo[] = [
     note: 'Sharpest advice.',
     inputPerMTok: 4,
     outputPerMTok: 20,
+    cacheWritePerMTok: 5,
+    cacheReadPerMTok: 0.2,
     supportsEffort: true,
   },
   {
@@ -544,9 +552,27 @@ export const FAKE_MODELS: readonly ModelInfo[] = [
     note: 'Cheapest and quickest.',
     inputPerMTok: 1,
     outputPerMTok: 5,
+    cacheWritePerMTok: 1.25,
+    cacheReadPerMTok: 0.1,
     supportsEffort: false,
   },
 ];
+
+/**
+ * The coach's spend as the real service keeps it (D237-D240), in memory: the
+ * same counting, totals and budget over `records`, at the catalog's prices,
+ * with no Decaid copy (refresh() resolves at once). For a test or a preview
+ * that shows usage: createFakeServices({ spend: createFakeSpend(...) }).
+ */
+export function createFakeSpend(options: { records?: readonly SpendRecord[]; now?: () => Date } = {}): SpendService {
+  return createSpendService({
+    store: createMemorySpendStore(options.records),
+    initial: options.records,
+    deviceId: 'fake0001',
+    models: KNOWN_MODELS,
+    now: options.now,
+  });
+}
 
 export interface FakeServices extends Services {
   decaid: FakeDecaid;
@@ -573,6 +599,8 @@ export function createFakeServices(options: {
   insideDecaid?: boolean;
   /** Decaid's platform (HostEnvironment.platform); inside Decaid a Decent tablet's, 'android', unless given. */
   platform?: string | null;
+  /** The coach's spend (createFakeSpend); none by default, as in previews. */
+  spend?: SpendService;
 } = {}): FakeServices {
   const heartbeat = {
     count: 0,
@@ -605,6 +633,7 @@ export function createFakeServices(options: {
     drinkScreens: createDrinkScreensStore(storage.settings, options.storage?.settings?.drinkScreens),
     screensaver: createScreensaverSettingStore(storage.settings, options.storage?.settings?.screensaver),
     plugins: createFakePluginDirectory(),
+    ...(options.spend ? { spend: options.spend } : {}),
   };
 }
 

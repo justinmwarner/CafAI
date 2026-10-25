@@ -238,6 +238,58 @@ export interface Settings {
    * src/storage/coachSourceBackup.ts does the copying.
    */
   keepCoachSourceInDecaid?: boolean;
+  /**
+   * How hard the coach thinks on a reply (D243), the request's effort:
+   * Settings > Coach > How the coach replies. Absent until someone chooses on
+   * this device, and read as DEFAULT_COACH_EFFORT, medium (D30); like
+   * temperatureUnit, storage never writes it as a default, so a merge (an
+   * import, a restore) can tell a choice made here, which it keeps, from none,
+   * which it may fill.
+   */
+  coachEffort?: CoachEffort;
+  /**
+   * The coach's monthly budget (D240): Settings > Coach > Usage and cost.
+   * Absent until someone sets it on this device, and read as DEFAULT_BUDGET,
+   * no budget and no pause. Like care, storage keeps the block once written,
+   * so a merge (an import, a restore) can tell a choice made here, which it
+   * keeps, from none, which it may fill.
+   */
+  coachBudget?: CoachBudget;
+  /**
+   * The grinders whose higher numbers are finer (D241), by
+   * grinderDirectionKey (settings.ts): Settings > Grinder > Finer is. A
+   * grinder not listed is finer at lower numbers, the coach's assumption
+   * before (D62). Absent until someone chooses on this device, an empty list
+   * once a choice was put back, so a merge can tell the two apart, as care.
+   */
+  grinderFinerHigher?: string[];
+  /**
+   * How clock times are shown and typed (D245): Settings > Display > Units >
+   * Clock. Absent until someone chooses on this device, and read as
+   * DEFAULT_CLOCK, 24-hour; storage never writes it as a default, as
+   * temperatureUnit. Decaid keeps its "HH:MM" either way.
+   */
+  clock?: ClockFormat;
+  /**
+   * Whether shot cards and History show the TDS cell and the extraction
+   * (D246): Settings > Display > Shot cards. Absent until someone chooses on
+   * this device, and read as on; storage never writes it as a default.
+   */
+  showTds?: boolean;
+}
+
+/** How hard the coach thinks on a reply (D243): Quicker, Balanced or Thorough. */
+export type CoachEffort = 'low' | 'medium' | 'high';
+
+/** How clock times are shown (D245): 14:30 or 2:30 pm. */
+export type ClockFormat = '24h' | '12h';
+
+/** Settings > Coach > Usage and cost's budget (D240). */
+export interface CoachBudget {
+  /** Whole US dollars a month, 1 to 1,000 (BUDGET_USD); null for no budget. */
+  monthlyUsd: number | null;
+  /** Whether the coach pauses once the month's spend on the API key reaches the budget; it warns either way. */
+  pauseAtBudget: boolean;
 }
 
 /** Settings > Screensaver (D225). */
@@ -250,6 +302,17 @@ export interface ScreensaverSetting {
    * not know as 'daily' (src/ui/saver/daily.ts).
    */
   pick: string;
+  /**
+   * Minutes untouched, with the machine asleep, before it shows (D247): one of
+   * SAVER_START_AFTER_MINUTES (settings.ts). Absent reads as the policy's own
+   * minute (D223, src/ui/saver/policy.ts).
+   */
+  startAfterMinutes?: number;
+  /**
+   * The brightness it dims the screen to, on Decaid's 0-100 (D247): 10 to 60
+   * in tens (SAVER_DIM_TO). Absent reads as the policy's own 30 (D224).
+   */
+  dimTo?: number;
 }
 
 /** The drinks whose views CafAI draws: src/ui/drinks/kinds.ts's DrinkKind, here where storage reads it. */
@@ -268,8 +331,11 @@ export interface DrinkScreen {
 /** What was chosen on this device, drink by drink and field by field. */
 export type DrinkScreensSettings = Partial<Record<DrinkScreenKind, Partial<DrinkScreen>>>;
 
-/** An edit of the settings: what it names changes, the care block and each drink's screen field by field (D187, D222). */
-export type SettingsPatch = Omit<Partial<Settings>, 'care'> & { care?: Partial<CareSettings> };
+/** An edit of the settings: what it names changes, the care and budget blocks and each drink's screen field by field (D187, D222, D240). */
+export type SettingsPatch = Omit<Partial<Settings>, 'care' | 'coachBudget'> & {
+  care?: Partial<CareSettings>;
+  coachBudget?: Partial<CoachBudget>;
+};
 
 /** How a care step's last time came about: marked done on the Care screen, or a cycle CafAI saw run (D186). */
 export type CareMark = 'tick' | 'seen';

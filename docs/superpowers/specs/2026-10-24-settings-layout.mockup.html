@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Settings: layout options</title>
+<style>
+  :root {
+    --bg: #140e09; --surface: #1c160f; --raised: #282018; --ink: #f4ede6; --muted: #b8afa6;
+    --line: #2f2924; --accent: #d5a776; --accent-soft: #3a2d1f; --on-accent: #1e1408;
+    --success: #6ad895; --warning: #eec05b; --error: #f47b74; --info: #65b2f1;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; background: #0b0806; color: var(--ink);
+    font-family: Figtree, "Segoe UI", Roboto, system-ui, sans-serif; font-size: 15px; line-height: 1.45; }
+  h1.doc { font-size: 26px; margin: 0 0 6px; }
+  p.doc { color: var(--muted); margin: 0 0 28px; max-width: 980px; }
+  .option { margin: 0 0 56px; }
+  .option > h2 { font-size: 20px; margin: 0 0 4px; display: flex; gap: 10px; align-items: center; }
+  .option > p { color: var(--muted); margin: 0 0 14px; max-width: 1100px; }
+  .rec { font-size: 12px; font-weight: 700; color: var(--on-accent); background: var(--accent); border-radius: 999px; padding: 2px 10px; }
+  .row-frames { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
+  .caption { color: var(--muted); font-size: 13px; margin-top: 8px; }
+
+  /* Device frames */
+  .tablet { width: 1280px; height: 800px; background: var(--bg); border: 1px solid #3a322b; border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+  .phone { width: 390px; height: 844px; background: var(--bg); border: 1px solid #3a322b; border-radius: 28px; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* App chrome */
+  .topbar { height: 56px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 12px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .logo { color: var(--accent); font-weight: 800; font-size: 19px; margin-right: 14px; display: flex; gap: 6px; align-items: center; }
+  .nav { display: flex; gap: 4px; }
+  .nav span { padding: 9px 14px; border-radius: 10px; color: var(--muted); font-weight: 600; font-size: 15px; }
+  .nav span.on { background: var(--accent-soft); color: var(--accent); }
+  .machine { margin-left: auto; display: flex; gap: 16px; align-items: center; color: var(--ink); font-size: 11px; }
+  .machine div { text-align: center; }
+  .machine i { display: block; font-style: normal; font-size: 16px; }
+  .exit { background: var(--raised); border-radius: 10px; padding: 6px 12px; font-size: 13px; font-weight: 700; }
+  .tabs-bottom { height: 64px; flex: none; display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); background: var(--surface); }
+  .tabs-bottom span { display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 13px; color: var(--muted); gap: 2px; }
+  .tabs-bottom span i { font-style: normal; font-size: 18px; }
+  .tabs-bottom span.on { color: var(--accent); }
+  .phone-top { height: 56px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--line); background: var(--surface); font-weight: 700; font-size: 18px; }
+  .back { color: var(--accent); font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 2px; }
+
+  /* Shared settings pieces */
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+  .card h3 { margin: 0 0 10px; font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .new { font-size: 12px; font-weight: 800; letter-spacing: .03em; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 1px 7px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  .field { border: 1px solid #4a4038; border-radius: 10px; min-height: 48px; padding: 6px 12px; position: relative; display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+  .field label { position: absolute; top: -10px; left: 10px; background: var(--surface); padding: 0 4px; font-size: 13px; color: var(--muted); }
+  .seg { display: flex; background: var(--raised); border-radius: 14px; padding: 4px; gap: 4px; }
+  .seg span { flex: 1; text-align: center; padding: 11px 6px; border-radius: 10px; color: var(--muted); font-weight: 600; font-size: 14px; }
+  .seg span.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.35); }
+  .btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border-radius: 999px; font-weight: 700; font-size: 14px; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); }
+  .btn.tonal { background: var(--accent-soft); color: var(--accent); }
+  .btn.text { color: var(--accent); padding: 0 8px; }
+  .switch { display: flex; align-items: center; gap: 12px; min-height: 48px; }
+  .sw { width: 38px; height: 22px; border-radius: 999px; background: #4a4038; position: relative; flex: none; }
+  .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #b8afa6; }
+  .sw.on { background: #6b5235; }
+  .sw.on::after { left: 19px; background: var(--accent); }
+  .status-ok { color: var(--success); font-weight: 600; }
+  .stack { display: grid; gap: 14px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warning); display: inline-block; }
+
+  /* Usage card */
+  .big { font-size: 34px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .bars { display: flex; align-items: flex-end; gap: 3px; height: 54px; margin: 12px 0 4px; }
+  .bars i { flex: 1; background: var(--accent); border-radius: 3px 3px 0 0; opacity: .85; }
+  .bars i.today { background: var(--ink); }
+  .periods { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+  .periods div { background: var(--raised); border-radius: 12px; padding: 8px 10px; }
+  .periods b { display: block; font-size: 17px; font-variant-numeric: tabular-nums; }
+  .split { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: 14px; align-items: center; }
+  .meter { height: 6px; border-radius: 999px; background: var(--raised); overflow: hidden; grid-column: 1 / -1; margin-bottom: 4px; }
+  .meter i { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* Option A: two panes */
+  .panes { flex: 1; display: grid; grid-template-columns: 320px 1fr; min-height: 0; }
+  .list { border-right: 1px solid var(--line); padding: 16px 12px; overflow: hidden; }
+  .list h1 { font-size: 19px; margin: 4px 8px 12px; }
+  .search { display: flex; align-items: center; gap: 8px; min-height: 44px; border-radius: 12px; background: var(--raised); color: var(--muted); padding: 0 12px; margin: 0 4px 12px; font-size: 14px; }
+  .cat { display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; align-items: center; padding: 10px 10px; border-radius: 14px; min-height: 64px; }
+  .cat .ic { width: 40px; height: 40px; border-radius: 12px; background: var(--raised); display: flex; align-items: center; justify-content: center; font-size: 19px; }
+  .cat b { display: block; font-size: 15px; }
+  .cat small { display: block; color: var(--muted); font-size: 13px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 214px; }
+  .cat.on { background: var(--accent-soft); }
+  .cat.on b { color: var(--accent); }
+  .cat.on .ic { background: var(--accent); color: var(--on-accent); }
+  .cat .chev { color: var(--muted); font-size: 18px; }
+  .detail { overflow: hidden; padding: 20px 28px; }
+  .detail h2 { font-size: 19px; margin: 4px 0 4px; }
+  .detail .lede { color: var(--muted); margin: 0 0 16px; font-size: 14px; }
+  .detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+
+  /* Option B: tabs */
+  .settings-head { padding: 14px 20px 0; border-bottom: 1px solid var(--line); }
+  .settings-head h1 { margin: 0 0 8px; font-size: 19px; }
+  .tabs { display: flex; gap: 4px; }
+  .tabs span { padding: 12px 14px; color: var(--muted); font-weight: 600; border-bottom: 3px solid transparent; font-size: 14px; }
+  .tabs span.on { color: var(--accent); border-color: var(--accent); }
+  .masonry { padding: 18px 20px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; overflow: hidden; }
+
+  /* Option C: one page with jump index */
+  .onepage { flex: 1; display: grid; grid-template-columns: 220px 1fr; min-height: 0; }
+  .index { padding: 20px 12px; border-right: 1px solid var(--line); }
+  .index h1 { font-size: 19px; margin: 0 8px 14px; }
+  .index span { display: block; padding: 10px 12px; border-radius: 10px; color: var(--muted); font-weight: 600; font-size: 14px; }
+  .index span.on { color: var(--accent); background: var(--accent-soft); }
+  .flow { padding: 16px 24px; overflow: hidden; }
+  .group-h { font-size: 17px; font-weight: 700; color: var(--ink); margin: 6px 0 10px; }
+
+  /* Option D: tiles */
+  .tiles { padding: 18px 24px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; overflow: hidden; }
+  .tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: grid; gap: 4px; min-height: 160px; align-content: start; }
+  .tile .ic { width: 40px; height: 40px; border-radius: 12px; background: var(--raised); display: flex; align-items: center; justify-content: center; font-size: 19px; margin-bottom: 6px; }
+  .tile b { font-size: 16px; }
+  .tile .go { margin-top: 8px; color: var(--accent); font-weight: 700; font-size: 14px; }
+
+  /* Phone list */
+  .plist { padding: 12px; display: grid; gap: 4px; overflow: hidden; flex: 1; align-content: start; }
+  .plist .cat small { max-width: 240px; }
+  .ppage { padding: 12px; overflow: hidden; flex: 1; display: grid; gap: 12px; align-content: start; }
+</style>
+</head>
+<body>
+
+<h1 class="doc">Settings: four ways to lay it out</h1>
+<p class="doc">Every option uses the same seven groups and the same controls as today, regrouped; the new pieces (status under each group, the coach's usage and cost, search) are marked NEW. Drawn at the Decent tablet's 1280×800, dark, Crema, with the coach on an API key.</p>
+
+<!-- ================= OPTION A ================= -->
+<section class="option">
+  <h2>A. Two panes: groups on the left, the chosen one on the right <span class="rec">Recommended</span></h2>
+  <p>As on an iPad or Android tablet's own Settings. Everything is one tap away, each group says how it stands without opening it, and the right side of the tablet is no longer empty. On a phone the list is a page of its own and a tap opens the group, with a back arrow, as History opens a bag. Each group has its own address (#/settings/coach), so "Set it in Settings" links, and a drink's Go back, land on the right page. The list is Settings' own first column, not an app-wide sidebar (PRODUCT.md rules those out).</p>
+  <div class="tablet">
+    <div class="topbar">
+      <div class="logo">☕ CafAI</div>
+      <div class="nav"><span>Coach</span><span>Shot</span><span>History</span><span class="on">Settings</span></div>
+      <div class="machine"><div><i>☕</i>Espresso</div><div><i>≋</i>Steam</div><div><i>☂</i>Flush</div><div><i>💧</i>Hot water</div><div class="exit">Exit</div></div>
+    </div>
+    <div class="panes">
+      <div class="list">
+        <h1>Settings</h1>
+        <div class="search">🔍 Search settings <span class="new" style="margin-left:auto">NEW</span></div>
+        <div class="cat on"><div class="ic">💬</div><div><b>Coach</b><small>Opus 5.5 · $1.84 this month</small></div><span></span></div>
+        <div class="cat"><div class="ic">⚙</div><div><b>Grinder</b><small>Niche Zero · setting 14</small></div><span></span></div>
+        <div class="cat"><div class="ic">≋</div><div><b>Drinks</b><small>Steam 50 s · Water 50 ml · Flush 10 s</small></div><span></span></div>
+        <div class="cat"><div class="ic">⏻</div><div><b>Machine</b><small>Sleeps after 30 min · Descale due</small></div><span class="dot"></span></div>
+        <div class="cat"><div class="ic">◐</div><div><b>Display</b><small>Dark · Crema · °C · Daily screensaver</small></div><span></span></div>
+        <div class="cat"><div class="ic">🛡</div><div><b>Data and privacy</b><small>Backed up 5 min ago</small></div><span></span></div>
+        <div class="cat"><div class="ic">ⓘ</div><div><b>About</b><small>CafAI 0.1.3 · Decaid 0.9.0</small></div><span></span></div>
+      </div>
+      <div class="detail">
+        <h2>Coach</h2>
+        <p class="lede">Where the coach runs, its model, fun facts, and what it has cost.</p>
+        <div class="detail-grid">
+          <div class="stack">
+            <div class="card">
+              <h3>Where the coach runs</h3>
+              <div class="seg"><span class="on">Anthropic API key</span><span>Claude on my computer</span></div>
+              <p class="small muted" style="margin:8px 0 6px">Billed per use to your key.</p>
+              <div class="status-ok small">✓ A key is saved on this device.</div>
+              <div style="display:flex; gap:8px; margin-top:10px"><span class="btn tonal">Replace key</span><span class="btn text" style="color:var(--error)">Forget key</span></div>
+              <div class="switch"><span class="sw"></span>Keep my API key in Decaid</div>
+            </div>
+            <div class="card">
+              <h3>Model and fun facts</h3>
+              <div class="field"><label>Model</label>Opus 5.5 · $4 / $20 per MTok <span>▾</span></div>
+              <p class="small muted" style="margin:6px 0 4px">Recommended. The best coaching for the price.</p>
+              <div class="field"><label>Fun facts</label>CafAI's and the coach's <span>▾</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Usage and cost <span class="new">NEW</span></h3>
+            <div class="big">$1.84</div>
+            <div class="small muted">estimated this month · 412 k tokens · 63 replies</div>
+            <div class="bars">
+              <i style="height:20%"></i><i style="height:35%"></i><i style="height:10%"></i><i style="height:0"></i><i style="height:55%"></i><i style="height:42%"></i><i style="height:18%"></i><i style="height:60%"></i><i style="height:24%"></i><i style="height:12%"></i><i style="height:0"></i><i style="height:38%"></i><i style="height:70%"></i><i style="height:30%"></i><i style="height:22%"></i><i style="height:48%"></i><i style="height:15%"></i><i style="height:0"></i><i style="height:40%"></i><i style="height:52%"></i><i style="height:28%"></i><i style="height:90%"></i><i style="height:33%"></i><i class="today" style="height:26%"></i>
+            </div>
+            <div class="small muted">Each day this month</div>
+            <div class="periods">
+              <div><span class="small muted">Today</span><b>$0.12</b></div>
+              <div><span class="small muted">Last month</span><b>$2.10</b></div>
+              <div><span class="small muted">All time</span><b>$5.32</b></div>
+            </div>
+            <div class="split">
+              <span>Chat replies</span><span class="num">$1.20</span><div class="meter"><i style="width:65%"></i></div>
+              <span>Shot reviews</span><span class="num">$0.48</span><div class="meter"><i style="width:26%"></i></div>
+              <span>Fun facts and web searches</span><span class="num">$0.16</span><div class="meter"><i style="width:9%"></i></div>
+            </div>
+            <div class="split" style="margin-top:10px">
+              <span>Monthly budget $5.00</span><span class="num muted">37%</span><div class="meter"><i style="width:37%; background: var(--success)"></i></div>
+            </div>
+            <div class="switch small"><span class="sw"></span>Pause the coach at the budget</div>
+            <p class="small muted" style="margin:4px 0 0">Counted on this device at Anthropic's prices. Your bill is in Anthropic's Console.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="row-frames" style="margin-top:20px">
+    <div>
+      <div class="phone">
+        <div class="phone-top">Settings</div>
+        <div class="plist">
+          <div class="search" style="margin:0 0 8px">🔍 Search settings</div>
+          <div class="cat"><div class="ic">💬</div><div><b>Coach</b><small>API key · Opus 5.5 · $1.84 this month</small></div><span class="chev">›</span></div>
+          <div class="cat"><div class="ic">⚙</div><div><b>Grinder</b><small>Niche Zero · setting 14</small></div><span class="chev">›</span></div>
+          <div class="cat"><div class="ic">≋</div><div><b>Drinks</b><small>Steam 50 s · Hot water 50 ml · Flush 10 s</small></div><span class="chev">›</span></div>
+          <div class="cat"><div class="ic">⏻</div><div><b>Machine</b><small>Sleeps after 30 min · Descale due</small></div><span class="chev"><span class="dot"></span> ›</span></div>
+          <div class="cat"><div class="ic">◐</div><div><b>Display</b><small>Dark · Crema · °C · Screensaver daily</small></div><span class="chev">›</span></div>
+          <div class="cat"><div class="ic">🛡</div><div><b>Data and privacy</b><small>Backed up 5 min ago · Sharing usage</small></div><span class="chev">›</span></div>
+          <div class="cat"><div class="ic">ⓘ</div><div><b>About</b><small>CafAI 0.1.3 · Decaid 0.9.0</small></div><span class="chev">›</span></div>
+        </div>
+        <div class="tabs-bottom"><span><i>💬</i>Coach</span><span><i>〰</i>Shot</span><span><i>↺</i>History</span><span class="on"><i>⚙</i>Settings</span></div>
+      </div>
+      <div class="caption">Phone: the list…</div>
+    </div>
+    <div>
+      <div class="phone">
+        <div class="phone-top"><span class="back">‹ Settings</span><span style="margin-left:8px">Coach</span></div>
+        <div class="ppage">
+          <div class="card">
+            <h3>Where the coach runs</h3>
+            <div class="seg"><span class="on">API key</span><span>My computer</span></div>
+            <div class="status-ok small" style="margin-top:10px">✓ A key is saved on this device.</div>
+          </div>
+          <div class="card">
+            <h3>Usage and cost <span class="new">NEW</span></h3>
+            <div class="big">$1.84</div>
+            <div class="small muted">estimated this month · 412 k tokens</div>
+            <div class="bars" style="height:40px"><i style="height:20%"></i><i style="height:35%"></i><i style="height:10%"></i><i style="height:55%"></i><i style="height:42%"></i><i style="height:18%"></i><i style="height:60%"></i><i style="height:24%"></i><i style="height:38%"></i><i style="height:70%"></i><i style="height:30%"></i><i style="height:48%"></i><i style="height:40%"></i><i style="height:90%"></i><i class="today" style="height:26%"></i></div>
+          </div>
+          <div class="card">
+            <h3>Model and fun facts</h3>
+            <div class="field"><label>Model</label>Opus 5.5 <span>▾</span></div>
+          </div>
+        </div>
+        <div class="tabs-bottom"><span><i>💬</i>Coach</span><span><i>〰</i>Shot</span><span><i>↺</i>History</span><span class="on"><i>⚙</i>Settings</span></div>
+      </div>
+      <div class="caption">…and a group's page.</div>
+    </div>
+    <div style="width:420px; background: var(--bg); padding: 20px; border: 1px solid #3a322b; border-radius: 14px;">
+      <div class="card">
+        <h3>Usage <span class="new">NEW</span></h3>
+        <p class="small muted" style="margin:0 0 8px">The coach runs on your Claude plan, so there is nothing to pay per reply.</p>
+        <div class="split">
+          <span>Plan, this 5 hours</span><span class="num">23%</span><div class="meter"><i style="width:23%"></i></div>
+          <span>Plan, this week</span><span class="num">41%</span><div class="meter"><i style="width:41%"></i></div>
+        </div>
+        <div class="periods" style="margin-top:14px">
+          <div><span class="small muted">This month</span><b>412 k</b><span class="small muted">tokens</span></div>
+          <div><span class="small muted">Today</span><b>18 k</b><span class="small muted">tokens</span></div>
+          <div><span class="small muted">On the API</span><b>≈ $1.84</b><span class="small muted">this month</span></div>
+        </div>
+        <p class="small muted" style="margin:4px 0 0">The plan's limits as Claude Code last reported them, 2 min ago.</p>
+      </div>
+      <div class="caption">The same card while the coach runs on your computer.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= OPTION B ================= -->
+<section class="option">
+  <h2>B. Tabs across the top, cards in two columns</h2>
+  <p>One row of tabs, one per group; the chosen group's cards fill two columns on a tablet. Simple, and close to what is there now, but seven tabs scroll sideways on a phone, and nothing says how a group stands until it is opened.</p>
+  <div class="tablet">
+    <div class="topbar">
+      <div class="logo">☕ CafAI</div>
+      <div class="nav"><span>Coach</span><span>Shot</span><span>History</span><span class="on">Settings</span></div>
+      <div class="machine"><div><i>☕</i>Espresso</div><div><i>≋</i>Steam</div><div><i>☂</i>Flush</div><div><i>💧</i>Hot water</div><div class="exit">Exit</div></div>
+    </div>
+    <div class="settings-head">
+      <h1>Settings</h1>
+      <div class="tabs"><span>Coach</span><span>Grinder</span><span class="on">Drinks</span><span>Machine</span><span>Display</span><span>Data and privacy</span><span>About</span></div>
+    </div>
+    <div class="masonry">
+      <div class="card">
+        <h3>≋ Steam</h3>
+        <div class="field"><label>Temperature</label>− &nbsp; 150 °C &nbsp; +</div>
+        <div class="field"><label>Time</label>− &nbsp; 50 s &nbsp; +</div>
+        <div class="field"><label>Flow</label>− &nbsp; 0.8 ml/s &nbsp; +</div>
+        <div class="field"><label>Animation</label>Wand and spray <span>▾</span></div>
+        <div class="switch"><span class="sw on"></span>Go back by itself after 10 s</div>
+      </div>
+      <div class="card">
+        <h3>💧 Hot water</h3>
+        <div class="field"><label>Temperature</label>− &nbsp; 75 °C &nbsp; +</div>
+        <div class="field"><label>Volume</label>− &nbsp; 50 ml &nbsp; +</div>
+        <div class="field"><label>Flow</label>− &nbsp; 10 ml/s &nbsp; +</div>
+        <div class="field"><label>Animation</label>Pour <span>▾</span></div>
+        <div class="switch"><span class="sw on"></span>Go back by itself after 10 s</div>
+      </div>
+      <div class="card">
+        <h3>☂ Flush</h3>
+        <div class="field"><label>Temperature</label>− &nbsp; 90 °C &nbsp; +</div>
+        <div class="field"><label>Time</label>− &nbsp; 10 s &nbsp; +</div>
+        <div class="field"><label>Animation</label>Shower <span>▾</span></div>
+      </div>
+      <div class="card">
+        <h3>How these work</h3>
+        <p class="small muted" style="margin:0">The machine settings go to Decaid at once and wait while the machine runs. The animations are kept on this device.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= OPTION C ================= -->
+<section class="option">
+  <h2>C. One page as now, grouped, with a jump list</h2>
+  <p>Everything stays on one page, so nothing is ever a tap away, but it is grouped under headings, two cards side by side on a tablet, and a list on the left jumps to a group and lights up as you scroll. The least change; still a long page, about two and a half screens instead of five and a half.</p>
+  <div class="tablet">
+    <div class="topbar">
+      <div class="logo">☕ CafAI</div>
+      <div class="nav"><span>Coach</span><span>Shot</span><span>History</span><span class="on">Settings</span></div>
+      <div class="machine"><div><i>☕</i>Espresso</div><div><i>≋</i>Steam</div><div><i>☂</i>Flush</div><div><i>💧</i>Hot water</div><div class="exit">Exit</div></div>
+    </div>
+    <div class="onepage">
+      <div class="index">
+        <h1>Settings</h1>
+        <span>Coach</span><span class="on">Grinder</span><span>Drinks</span><span>Machine</span><span>Display</span><span>Data and privacy</span><span>About</span>
+      </div>
+      <div class="flow">
+        <div class="detail-grid">
+          <div class="card"><h3>Model and fun facts</h3><div class="field"><label>Model</label>Opus 5.5 · $4 / $20 per MTok <span>▾</span></div><div class="field"><label>Fun facts</label>CafAI's and the coach's <span>▾</span></div></div>
+          <div class="card"><h3>Usage and cost <span class="new">NEW</span></h3><div class="big">$1.84</div><div class="small muted">estimated this month · 412 k tokens</div></div>
+        </div>
+        <div class="group-h" style="margin-top:22px">Grinder</div>
+        <div class="detail-grid">
+          <div class="card">
+            <h3>Your grinder</h3>
+            <div class="field"><label>Grinder from Decaid</label>Niche Zero <span>▾</span></div>
+            <div class="field"><label>Current grinder setting</label>14</div>
+            <div style="display:flex; gap:8px; margin-top:10px"><span class="btn text">+ Add a grinder</span><span class="btn text">✎ Edit grinders in DYE2</span></div>
+          </div>
+          <div class="card">
+            <h3>Which way is finer <span class="new">NEW</span></h3>
+            <div class="seg"><span class="on">Lower numbers</span><span>Higher numbers</span></div>
+            <p class="small muted" style="margin:8px 0 0">So the coach turns the dial the right way.</p>
+          </div>
+        </div>
+        <div class="group-h" style="margin-top:22px">Drinks</div>
+        <div class="detail-grid">
+          <div class="card"><h3>≋ Steam</h3><div class="field"><label>Temperature</label>− &nbsp; 150 °C &nbsp; +</div></div>
+          <div class="card"><h3>💧 Hot water</h3><div class="field"><label>Temperature</label>− &nbsp; 75 °C &nbsp; +</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= OPTION D ================= -->
+<section class="option">
+  <h2>D. Overview tiles, tap one to open it</h2>
+  <p>Settings opens on a board of tiles, each saying how its group stands; a tap opens the group full screen, with a back arrow. The clearest overview, but every change is two screens away, even on the tablet, and a board of status tiles is the closest of the four to the dashboards PRODUCT.md steers away from.</p>
+  <div class="tablet">
+    <div class="topbar">
+      <div class="logo">☕ CafAI</div>
+      <div class="nav"><span>Coach</span><span>Shot</span><span>History</span><span class="on">Settings</span></div>
+      <div class="machine"><div><i>☕</i>Espresso</div><div><i>≋</i>Steam</div><div><i>☂</i>Flush</div><div><i>💧</i>Hot water</div><div class="exit">Exit</div></div>
+    </div>
+    <div class="settings-head" style="border:0"><h1>Settings</h1></div>
+    <div class="tiles">
+      <div class="tile"><div class="ic">💬</div><b>Coach</b><span class="small muted">On your API key · Opus 5.5</span><span class="small muted">$1.84 this month, 37% of $5</span><span class="go">Open ›</span></div>
+      <div class="tile"><div class="ic">⚙</div><b>Grinder</b><span class="small muted">Niche Zero, from Decaid</span><span class="small muted">Setting 14 · lower is finer</span><span class="go">Open ›</span></div>
+      <div class="tile"><div class="ic">≋</div><b>Drinks</b><span class="small muted">Steam 150 °C, 50 s</span><span class="small muted">Hot water 75 °C, 50 ml · Flush 10 s</span><span class="go">Open ›</span></div>
+      <div class="tile"><div class="ic">⏻</div><b>Machine <span class="dot"></span></b><span class="small muted">Sleeps after 30 min · no wake times</span><span class="small" style="color:var(--warning)">Descale due</span><span class="go">Open ›</span></div>
+      <div class="tile"><div class="ic">◐</div><b>Display</b><span class="small muted">Dark · Crema · °C</span><span class="small muted">Screensaver: a different one each day</span><span class="go">Open ›</span></div>
+      <div class="tile"><div class="ic">🛡</div><b>Data and privacy</b><span class="small muted">Backed up to Decaid 5 min ago</span><span class="small muted">Sharing usage with the developer</span><span class="go">Open ›</span></div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

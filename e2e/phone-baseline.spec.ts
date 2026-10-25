@@ -1,13 +1,15 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { SETTINGS_GROUP_IDS } from '../src/ui/settings/groupIds.ts';
 import { TID } from '../src/ui/testIds.ts';
-import { goTo, machineRow, openApp, pullShot, saveApiKey, sendChat, type Screen } from './helpers.ts';
+import { goTo, machineRow, openApp, openSettingsGroup, pullShot, saveApiKey, sendChat, type Screen } from './helpers.ts';
 
 /**
  * The phone layout (D84), upright and on its side: one screen at a time
  * under a slim top bar, four tabs at the bottom (a rail on the left when the
  * phone lies on its side), Exit, Decaid settings and the machine row (its
- * icons alone, D90) on every screen, and nothing wider than the screen. The
- * Shot tab is the Shot view's big graph (D92).
+ * icons alone, D90) on every screen, Settings' groups each a page of its own
+ * (D232), and nothing wider than the screen. The Shot tab is the Shot view's
+ * big graph (D92).
  */
 
 /** How wide the page and its scrolling boxes are against the window, and any box that scrolls sideways. */
@@ -113,6 +115,19 @@ test('every tab shows its screen, with Exit and Decaid settings, and nothing run
       }
       await expectNoSidewaysOverflow(page, where);
     }
+  }
+});
+
+test("each of Settings' groups is a page with its way back, under the Settings tab, and nothing runs off the side", async ({ page }) => {
+  await openApp(page);
+  // The Settings tab is the list; every card is on one of its groups' pages, each checked as the tab's screens are.
+  for (const group of SETTINGS_GROUP_IDS) {
+    const where = `Settings > ${group}`;
+    await openSettingsGroup(page, group);
+    await expect(page.getByTestId(TID.settingsList), where).toHaveCount(0);
+    await expect(page.getByTestId(TID.settingsBack), where).toBeInViewport({ ratio: 1 });
+    await expect(page.getByTestId(TID.tabSettings), where).toHaveAttribute('aria-current', 'page');
+    await expectNoSidewaysOverflow(page, where);
   }
 });
 

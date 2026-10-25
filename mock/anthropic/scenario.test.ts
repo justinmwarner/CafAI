@@ -851,6 +851,20 @@ describe('scripted replies', () => {
       expect(grindAfter({ name: 'Comandante C40', setting: '24', settingType: null, step: null, values: null, linked: false }).grind.setting).toBe('23');
     });
 
+    it('goes up a step on a grinder the barista said runs finer at higher numbers (D241)', () => {
+      // A numbered dial: its step, the other way round.
+      expect(grindAfter({ ...numeric('15', 0.5), finer: 'higher' })).toMatchObject({
+        grind: { direction: 'finer', amount: 1, setting: '15.5' },
+        summary: 'Grind 1 step finer, to 15.5',
+      });
+      // Without Decaid's step data a plain number goes up by 1.
+      expect(grindAfter({ name: 'DF64', setting: '15', finer: 'higher' }).grind.setting).toBe('16');
+      // A list comes finest first whichever way its numbers run, so its previous entry is still finer.
+      expect(grindAfter({ ...preset('5'), finer: 'higher' }).grind.setting).toBe('4');
+      // "lower" is the convention, as before.
+      expect(grindAfter({ ...numeric('15', 0.5), finer: 'lower' }).grind.setting).toBe('14.5');
+    });
+
     it('gives directions only for a linked grinder Decaid has no steps for, as Settings tells the user', () => {
       // Decaid no longer lists it (a 404), or lists it without a step: nothing to size a setting with.
       expect(grindAfter({ name: 'Niche Zero', setting: '15', settingType: null, step: null, values: null, linked: true })).toMatchObject({

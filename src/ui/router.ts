@@ -9,11 +9,13 @@
 import { useMemo, useSyncExternalStore } from 'react';
 import { ROUTINE_IDS, type RoutineId } from './care/routines.ts';
 import type { DrinkKind } from './drinks/kinds.ts';
+import { isSettingsGroupId, type SettingsGroupId } from './settings/groupIds.ts';
 
 export type Route =
   | { name: 'coach' }
   | { name: 'history'; bagId?: string }
-  | { name: 'settings' }
+  /** Settings' list, or one of its groups (D232, D233): `#/settings`, `#/settings/coach`. */
+  | { name: 'settings'; group?: SettingsGroupId }
   /** Settings > Machine care's guide (D152), on one of its routines (D153). */
   | { name: 'care'; routine: RoutineId }
   | { name: 'shot' }
@@ -65,6 +67,11 @@ export function parseRoute(hash: string): Route {
   if (screen === 'care' && segments.length === 2) {
     return { name: 'care', routine: ROUTINE_OF_PATH.get(segments[1]!.toLowerCase()) ?? 'daily' };
   }
+  if (screen === 'settings' && segments.length === 2) {
+    // A group this build does not know (a newer build's link) is Settings' list.
+    const group = segments[1]!.toLowerCase();
+    return isSettingsGroupId(group) ? { name: 'settings', group } : { name: 'settings' };
+  }
   return COACH;
 }
 
@@ -76,7 +83,7 @@ export function routeHref(route: Route): string {
     case 'history':
       return route.bagId ? `#/history/${encodeURIComponent(route.bagId)}` : '#/history';
     case 'settings':
-      return '#/settings';
+      return route.group ? `#/settings/${route.group}` : '#/settings';
     case 'care': {
       const path = ROUTINE_PATHS[route.routine];
       return path ? `#/care/${path}` : '#/care';
@@ -92,6 +99,7 @@ export function sameRoute(a: Route, b: Route): boolean {
   if (a.name === 'history' && b.name === 'history') return (a.bagId ?? null) === (b.bagId ?? null);
   if (a.name === 'drink' && b.name === 'drink') return a.drink === b.drink;
   if (a.name === 'care' && b.name === 'care') return a.routine === b.routine;
+  if (a.name === 'settings' && b.name === 'settings') return (a.group ?? null) === (b.group ?? null);
   return a.name === b.name;
 }
 

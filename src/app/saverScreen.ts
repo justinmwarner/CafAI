@@ -4,8 +4,9 @@
  *
  * - hold(), as it comes up: from Decaid's first frame, remember the
  *   brightness asked for (in this device's storage, so a page unloaded while
- *   dimmed can put it back), unless one is remembered already; dim to 30, or
- *   leave a lower brightness where it is; and take the wake lock, which
+ *   dimmed can put it back), unless one is remembered already; dim to the
+ *   level Settings chose (D247; 30 without one), or leave a lower brightness
+ *   where it is; and take the wake lock, which
  *   Decaid lets go of itself while the machine sleeps, so without one
  *   Android's timeout would blank the screen within minutes. Each new
  *   opening of the socket asks for both again: the lock went with the old
@@ -32,7 +33,7 @@
  * never worth an error.
  */
 import type { DisplayChannel } from '../api/display.ts';
-import { dimTo } from '../ui/saver/policy.ts';
+import { dimTo, SAVER_BRIGHTNESS } from '../ui/saver/policy.ts';
 
 /** Where the brightness asked for before the dim is kept while it lasts. */
 export const SAVER_BRIGHTNESS_KEY = 'cafai.saver.brightness';
@@ -45,8 +46,8 @@ export interface BrightnessMemory {
 }
 
 export interface SaverScreen {
-  /** The screensaver came up, or starts over: remember, dim, hold on. */
-  hold(): void;
+  /** The screensaver came up, or starts over: remember, dim to `brightness` (Settings' choice, D247; SAVER_BRIGHTNESS without one), hold on. */
+  hold(brightness?: number): void;
   /** Its 30 minutes are over: let the wake lock go, keep the dim. */
   release(): void;
   /** It went (or CafAI starts with a dim left over): put the brightness back, let go, forget. */
@@ -71,6 +72,8 @@ export function createSaverScreen(channel: DisplayChannel, storage: BrightnessMe
     // Storage blocked: remembered for this page only.
   }
   let goal: Goal = 'none';
+  /** The level hold() dims to, from the last hold(). */
+  let level = SAVER_BRIGHTNESS;
   // On this opening of the socket: the wake lock asked for, the brightness last asked for, and Decaid's frames, counted.
   let locked = false;
   let commanded: number | null = null;
@@ -115,7 +118,7 @@ export function createSaverScreen(channel: DisplayChannel, storage: BrightnessMe
       const state = channel.state();
       if (state === null) return;
       if (remembered === null) remember(state.requestedBrightness);
-      const target = dimTo(remembered ?? state.requestedBrightness);
+      const target = dimTo(remembered ?? state.requestedBrightness, level);
       // Asked for already on this opening, or Decaid there already with nothing else on its way.
       if (commanded === target || (commanded === null && state.requestedBrightness === target)) return;
       setBrightness(target);
@@ -153,7 +156,8 @@ export function createSaverScreen(channel: DisplayChannel, storage: BrightnessMe
   });
 
   return {
-    hold() {
+    hold(brightness = SAVER_BRIGHTNESS) {
+      level = brightness;
       goal = 'hold';
       channel.want(true);
       act();

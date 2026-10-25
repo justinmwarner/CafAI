@@ -1,5 +1,5 @@
 /**
- * Clamps and field layout for Settings > Steam, hot water and flush (6.6).
+ * Clamps and field layout for Settings > Drinks' machine settings (6.6, D235).
  * A range comes from Decaid's spec (contract/decaid/spec/rest_v1.yml,
  * schemas SteamSettings, HotWaterData, RinseData) where it gives one; where
  * it does not, streamline's clamps (docs/audit/2026-10-09/streamline.md) and

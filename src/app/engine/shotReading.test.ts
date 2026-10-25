@@ -84,7 +84,7 @@ describe('untoldReadings (D167)', () => {
       levers: {},
       doseG: 18,
       targetYieldG: 40,
-      grinder: { name: null, setting: null, settingType: null, step: null, values: null, linked: false },
+      grinder: { name: null, setting: null, finer: 'lower', settingType: null, step: null, values: null, linked: false },
       roast: null,
       today: '2026-10-15',
       summary: forModel,

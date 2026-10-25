@@ -107,6 +107,7 @@ import {
 } from '../../api/types.ts';
 import { isShotRunning as shotInProgress } from '../../api/workflow.ts';
 import { redactKeyLike } from '../../storage/redact.ts';
+import { DEFAULT_COACH_EFFORT, finerIsHigher, grinderDirectionKey, withGrinderDirection } from '../../storage/settings.ts';
 import type { GrinderInfo, ProfileJson, ShotSummary, Template } from '../../coach/types.ts';
 import type { BagPhoto, ExtractedBag } from '../../llm/extractBag.ts';
 import type { ContentBlock, Effort, LlmMessage, PendingUiCall, RunnerTool, RunResult, ToolResultBlock, ToolValidation } from '../../llm/types.ts';
@@ -122,6 +123,10 @@ import type {
   Storage,
 } from '../../storage/types.ts';
 import { NO_USAGE, type UsageTracker } from '../../usage/types.ts';
+import type { BudgetState, SpendKind, SpendService } from '../../spend/types.ts';
+import { createBudgetNotes, type BudgetNotes } from '../../spend/budget.ts';
+import { monthOf } from '../../spend/records.ts';
+import type { CoachSourceStore } from '../../storage/coachSource.ts';
 import type {
   BeanChoice,
   BeanPickerOption,
@@ -219,7 +224,6 @@ export interface EngineDeps {
   llm: LlmPort;
   clock: Clock;
   newId(prefix: string): string;
-  effort?: Effort;
   maxTokens?: number;
   /** How long to keep asking Decaid for a just-finished shot record. */
   shotFetch?: { attempts: number; delayMs: number };
@@ -239,6 +243,14 @@ export interface EngineDeps {
   facts?: () => Promise<readonly FunFact[]>;
   /** Usage sharing's counts (D213); nothing by default. */
   usage?: UsageTracker;
+  /** The coach's spend (D240): the month's budget, which can pause the coach and warns as it nears; none by default. */
+  spend?: Pick<SpendService, 'budget'>;
+  /** The budget's notices given this month on this device (D240); kept in memory by default. */
+  budgetNotes?: BudgetNotes;
+  /** Where the coach runs, read before each reply: replies on the computer never count toward the budget (D240). Anthropic by default. */
+  coachSource?: Pick<CoachSourceStore, 'get'>;
+  /** Timers for the look at the budget as the month turns while a reply waits on it (the browser's by default). */
+  budgetTimers?: OutboxTimers;
 }
 
 /** The page's visibility: the WebView runs on with the page hidden behind another app or a dark screen. */
@@ -421,7 +433,7 @@ const ALREADY_IN_BEANS = "Already in Decaid's beans.";
 const BAGS_ARE_BACK = "Your bags are back from Decaid's backup.";
 /** The bean card lists at most this many batches (6.1). */
 const MAX_BEAN_OPTIONS = 8;
-const NEEDS_KEY = 'Add your API key in Settings first.';
+const NEEDS_KEY = 'Add your API key in Settings > Coach first.';
 const READING_BAG = 'Reading the bag…';
 const NO_PHOTO_READER = 'CafAI cannot read photos here. Describe the bag in the chat.';
 const DYE2_UNREACHABLE = "Decaid can't be reached right now, so DYE2's setups could not be read.";
@@ -430,6 +442,8 @@ const NO_WEB_SEARCH = 'Web search is not available for your Anthropic account, s
 /** How often, and for how long, CafAI looks for a shot's Visualizer upload: every 3 s for 30 s (streamline's rule, 6.4). */
 const VISUALIZER_LOOK_MS = 3_000;
 const VISUALIZER_WATCH_MS = 30_000;
+/** While a reply waits on the month's budget, it is looked at again at least this often, so a new month is not missed (D240). */
+const BUDGET_LOOK_MAX_MS = 60 * 60 * 1000;
 
 /** Text from Decaid or a photo that travels on to the coach and Decaid: never a key (D37). */
 function withoutKey(text: string | null): string | null {
@@ -588,7 +602,6 @@ function describe(error: unknown): string {
 
 export function createCoachEngine(deps: EngineDeps): CoachEngine {
   const { storage, telemetry, api, coach, llm, clock } = deps;
-  const effort: Effort = deps.effort ?? 'medium';
   const shotFetch = deps.shotFetch ?? { attempts: 6, delayMs: 500 };
   const checkTimers = deps.checkTimers ?? browserTimers;
   const visibility = deps.visibility ?? ALWAYS_VISIBLE;
@@ -596,6 +609,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   const told = deps.told ?? createToldList(null);
   const facts = deps.facts ?? loadFacts;
   const usage = deps.usage ?? NO_USAGE;
+  const spend = deps.spend ?? null;
+  const budgetNotes = deps.budgetNotes ?? createBudgetNotes(null);
+  const budgetTimers = deps.budgetTimers ?? browserTimers;
 
   let state: CoachState = {
     ready: false,
@@ -700,6 +716,16 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   /** Bags whose bean card is reading Decaid's batches now, so a second open reads them once. */
   const filling = new Set<string>();
   let chain: Promise<void> = Promise.resolve();
+  /**
+   * A reply the month's budget stopped (D240), with its bag and what its
+   * usage counts it as: sent once a refresh (the budget raised or cleared,
+   * the pause turned off) or a new month finds the coach no longer paused, as
+   * a reply waiting for a key is once one is saved. Another bag opened drops
+   * it: that reply waits for Retry, as after a reload.
+   */
+  let budgetWait: { bagId: string; purpose: SpendKind } | null = null;
+  /** The look at the budget as the month turns, while a reply waits on it. */
+  let budgetTimer: unknown = null;
 
   const nowIso = () => clock.now().toISOString();
 
@@ -953,15 +979,21 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     );
   }
 
-  /** The linked grinder's dial, when Decaid's library described it; never another grinder's. */
+  /**
+   * The linked grinder's dial, when Decaid's library described it; never
+   * another grinder's. Which way is finer is the barista's, from the
+   * settings (D241): Decaid's library never says.
+   */
   function grinderInfo(): GrinderInfo | null {
     const id = settings.grinderId ?? null;
-    return id !== null && linkedGrinder?.id === id ? linkedGrinder.info : null;
+    const info = id !== null && linkedGrinder?.id === id ? linkedGrinder.info : null;
+    return info && finerIsHigher(settings) ? { ...info, finerIsHigher: true } : info;
   }
 
-  /** The grinder as the model hears it: as last saved, with its dial when Decaid knows it. */
+  /** The grinder as the model hears it: as last saved, which way is finer (D241, typed grinders too), with its dial when Decaid knows it. */
   function grinderForModel() {
-    return grinderPayload(settings.grinderName, settings.grinderSetting, grinderInfo(), (settings.grinderId ?? null) !== null);
+    const linked = (settings.grinderId ?? null) !== null;
+    return grinderPayload(settings.grinderName, settings.grinderSetting, grinderInfo(), linked, finerIsHigher(settings));
   }
 
   // -------------------------------------------------------------------------
@@ -1434,6 +1466,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     };
     if (!llm.readBag) return warn(NO_PHOTO_READER);
     if (!(await storage.secrets.getApiKey())) return warn(NEEDS_KEY);
+    // Paused by the month's budget, the photo is not sent either (D240): it is never kept, so nothing waits.
+    const paused = await budgetPause();
+    if (paused) return waitOnBudget(s, paused, null);
     state = { ...state, busy: true };
     const progressId = showProgress(null, READING_BAG, { value: null, label: null });
     emit();
@@ -1459,10 +1494,13 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
           roastDate: read.roastDate,
         }),
       ]);
+      // A photo read on the key costs as a reply does (D240).
+      await noticeBudget();
       await persistConversation(s);
       emit();
       return;
     }
+    await noticeBudget();
     await warn(failure);
   }
 
@@ -1878,20 +1916,114 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     );
   }
 
-  async function runModel(): Promise<void> {
+  // -------------------------------------------------------------------------
+  // The month's budget (D240)
+  // -------------------------------------------------------------------------
+
+  /** Whether a reply costs money now: the coach runs on Anthropic with the API key, not on the computer's Claude plan. */
+  async function paysPerReply(): Promise<boolean> {
+    if (!spend) return false;
+    try {
+      return (await deps.coachSource?.get())?.kind !== 'computer';
+    } catch {
+      return true;
+    }
+  }
+
+  /** The budget while it pauses the coach: the month's spend on the key reached it with the pause on. Null otherwise. */
+  async function budgetPause(): Promise<BudgetState | null> {
+    if (!spend || !(await paysPerReply())) return null;
+    try {
+      const budget = spend.budget(settings.coachBudget, clock.now());
+      return budget.paused ? budget : null;
+    } catch {
+      // A spend that cannot be told pauses nothing.
+      return null;
+    }
+  }
+
+  /**
+   * The coach sends nothing: the pause card stands in for its reply, said
+   * once until something else is said, and the reply waits for the coach to
+   * be back. Shots still save and show; the coach reads them when it is back.
+   */
+  async function waitOnBudget(s: Session, budget: BudgetState, purpose: SpendKind | null): Promise<void> {
+    const part: CoachUiPart = { kind: 'budgetPaused', budgetUsd: (budget.budgetMicros ?? 0) / 1_000_000, resumesOn: budget.resumesOn };
+    const newest = state.messages[state.messages.length - 1];
+    if (!newest?.parts.some((shown) => JSON.stringify(shown) === JSON.stringify(part))) addMessage('system', [part]);
+    if (purpose) {
+      budgetWait = { bagId: s.bag.id, purpose };
+      lookAtBudgetLater(budget);
+    }
+    await persistConversation(s);
+    emit();
+  }
+
+  /** Look at the budget again as the month turns, at least hourly, while a reply waits on it: a new month lifts the pause. */
+  function lookAtBudgetLater(budget: BudgetState): void {
+    stopBudgetLook();
+    if (disposed) return;
+    const [year, month, day] = budget.resumesOn.split('-').map(Number);
+    const untilThen = new Date(year ?? 0, (month ?? 1) - 1, day ?? 1).getTime() - clock.now().getTime();
+    budgetTimer = budgetTimers.setTimeout(
+      () => {
+        budgetTimer = null;
+        void enqueue(async () => {
+          const wait = budgetWait;
+          if (!wait || disposed) return;
+          const still = await budgetPause();
+          if (still) return lookAtBudgetLater(still);
+          budgetWait = null;
+          if (session?.bag.id === wait.bagId && awaitingModel(session.conversation.apiMessages)) await runModel(wait.purpose);
+        });
+      },
+      Math.min(Math.max(untilThen, 0) + 1000, BUDGET_LOOK_MAX_MS),
+    );
+  }
+
+  function stopBudgetLook(): void {
+    if (budgetTimer !== null) budgetTimers.clearTimeout(budgetTimer);
+    budgetTimer = null;
+  }
+
+  /** After what cost money on the key: a quiet notice at 80 % of the budget and at 100 %, once a month at each step. Never throws. */
+  async function noticeBudget(): Promise<void> {
+    try {
+      if (!spend || !(await paysPerReply())) return;
+      const now = clock.now();
+      const notice = budgetNotes.take(spend.budget(settings.coachBudget, now), monthOf(now));
+      if (notice) addMessage('system', [noticePart(notice.tone, notice.text)]);
+    } catch {
+      // A notice missed: the usage card still shows where the month stands.
+    }
+  }
+
+  /**
+   * `purpose`: what the coach's usage counts the reply as (D237): the reply
+   * after a credited shot, or a reply to the barista, as a Retry and a reply
+   * sent once a key is saved always are.
+   */
+  async function runModel(purpose: SpendKind = 'reply'): Promise<void> {
     const s = session;
     if (!s) return;
     if (!(await storage.secrets.getApiKey())) {
       state = { ...state, hasApiKey: false };
-      setError('Add your Anthropic API key in Settings to start coaching.', runModel);
+      setError('Add your Anthropic API key in Settings > Coach to start coaching.', runModel);
       emit();
       return;
     }
+    // The budget is checked before each reply (D240); one already started finishes, its tool loop included.
+    const paused = await budgetPause();
+    if (paused) return waitOnBudget(s, paused, purpose);
+    budgetWait = null;
+    stopBudgetLook();
     state = { ...state, busy: true, error: null };
     lastFailed = null;
     emit();
     let streamingId: string | null = null;
     factShown = false;
+    // How hard the coach thinks, as Settings has it now (D243): medium until chosen (D30). A model without effort is sent none.
+    const effort: Effort = settings.coachEffort ?? DEFAULT_COACH_EFFORT;
     // The prompt, the tools and the web search follow the fun facts mode of the moment (D198, D203).
     const run = (source: FunFactsSource) =>
       llm.run({
@@ -1899,6 +2031,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         model: settings.model,
         system: coach.systemPrompt(source),
         effort,
+        purpose,
         ...(deps.maxTokens ? { maxTokens: deps.maxTokens } : {}),
         messages: s.conversation.apiMessages,
         tools: toolsFor(source),
@@ -1951,6 +2084,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       usage.track('coach_error');
     } finally {
       state = { ...state, busy: false };
+      // What the reply cost may have brought the month near its budget, or to it (D240).
+      await noticeBudget();
       await persistConversation(s);
       emit();
     }
@@ -2005,7 +2140,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     // What the barista typed may ask for a fun fact; a tap or a shot does not (D201).
     s.typedTurn = setAsideFor === 'typed';
     await persistConversation(s);
-    await runModel();
+    // A credited shot's turn is the reply after a shot in the coach's usage (D237).
+    await runModel(setAsideFor === 'shot' ? 'shot' : 'reply');
   }
 
   // -------------------------------------------------------------------------
@@ -2087,6 +2223,11 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       typedTurn: false,
     };
     session = s;
+    // A reply waiting on the budget is its own bag's: another bag opened leaves it to Retry (D240).
+    if (budgetWait && budgetWait.bagId !== bag.id) {
+      budgetWait = null;
+      stopBudgetLook();
+    }
     // A stored progress notice (an older build, a crash) describes work that is long over.
     state = { ...state, messages: withoutTransient(conversation.uiMessages), error: null };
     // Cards from before CafAI compared shots say what they compare with too (D126).
@@ -3079,7 +3220,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
    * into Decaid's grinder library, or the one Decaid already has is taken
    * (never a second entry), and it is linked as Settings links one: its id,
    * its model as the name, the dial's setting kept only when it was this
-   * grinder's (another grinder's number means nothing here). The next shots carry it
+   * grinder's (another grinder's number means nothing here), and so is
+   * which way is finer when the barista said it for this grinder by name
+   * (D241). The next shots carry it
    * in Decaid's workflow (D54), and the coach hears its dial. A failure says
    * why on the card, which stays open to tap again; the coach waits.
    */
@@ -3112,14 +3255,19 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       return;
     }
     const model = linked.model.trim();
-    // The setting belonged to the grinder linked before (by id), else the one named (by model).
+    // The setting belonged to the grinder linked before (by id), else the one named (by model, read as Finer is reads names).
     const previousId = settings.grinderId ?? null;
-    const previousName = settings.grinderName?.trim().toLowerCase() || null;
-    const sameGrinder = previousId !== null ? previousId === linked.id : previousName === null || previousName === model.toLowerCase();
+    const previousName = grinderDirectionKey({ grinderName: settings.grinderName });
+    const sameGrinder =
+      previousId !== null ? previousId === linked.id : previousName === null || previousName === grinderDirectionKey({ grinderName: model });
+    // Higher numbers finer, said for the typed grinder by its name, stays with it once linked by id (D241): nobody sees Finer is from here.
+    const linkedKey = grinderDirectionKey({ grinderId: linked.id, grinderName: model });
+    const keepFinerHigher = sameGrinder && previousId === null && linkedKey !== null && finerIsHigher(settings);
     settings = await storage.settings.update({
       grinderId: linked.id,
       grinderName: model || null,
       ...(sameGrinder ? {} : { grinderSetting: null }),
+      ...(keepFinerHigher ? { grinderFinerHigher: withGrinderDirection(settings.grinderFinerHigher, linkedKey, true) } : {}),
     });
     // Its dial as Decaid just answered it; a read still on its way is older.
     grinderReads += 1;
@@ -3247,7 +3395,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     const trimmed = redactKeyLike(typed, '[API key removed]');
     addMessage('user', [{ kind: 'text', text: trimmed }]);
     if (trimmed !== typed) {
-      addMessage('system', [noticePart('info', 'That looked like an API key, so CafAI took it out. Keys go in Settings.')]);
+      addMessage('system', [noticePart('info', 'That looked like an API key, so CafAI took it out. Keys go in Settings > Coach.')]);
     }
     emit();
     // Typed while the taste question is open, it is the taste; typed under
@@ -3277,11 +3425,12 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
 
   /**
    * Read the settings, the key and the bags again (after Settings saved, an
-   * import, or a restore from Decaid's backup). True when a coach reply waited
-   * for the key that is now there: the caller runs it once the screen is up
-   * to date.
+   * import, or a restore from Decaid's backup). When a coach reply waited for
+   * the key that is now there, or for a budget that no longer pauses, what
+   * its usage counts it as: the caller runs it once the screen is up to date.
+   * Null otherwise.
    */
-  async function reread(): Promise<boolean> {
+  async function reread(): Promise<SpendKind | null> {
     const before = settings;
     await refreshFromStorage();
     const grinderChanged =
@@ -3311,7 +3460,15 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (grinderChanged) await sendGrinder();
     const waitedForKey = state.hasApiKey && Boolean(state.error?.startsWith('Add your Anthropic API key'));
     if (waitedForKey) setError(null);
-    return waitedForKey && session !== null && awaitingModel(session.conversation.apiMessages);
+    // A reply the budget stopped goes once the coach is no longer paused: the budget raised or cleared, or the pause off (D240).
+    const waited = budgetWait && !(await budgetPause()) ? budgetWait : null;
+    if (waited) {
+      budgetWait = null;
+      stopBudgetLook();
+    }
+    if (!session || !awaitingModel(session.conversation.apiMessages)) return null;
+    if (waited?.bagId === session.bag.id) return waited.purpose;
+    return waitedForKey ? 'reply' : null;
   }
 
   return {
@@ -3383,6 +3540,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       unsubscribeVisibility?.();
       if (checkTimer !== null) checkTimers.clearTimeout(checkTimer);
       checkTimer = null;
+      stopBudgetLook();
       outbox.dispose();
       if (emitTimer) clearTimeout(emitTimer);
       listeners.clear();
@@ -3437,7 +3595,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       enqueue(async () => {
         const resume = await reread();
         emit();
-        if (resume) await runModel();
+        if (resume) await runModel(resume);
       }),
     restored: () =>
       enqueue(async () => {
@@ -3451,7 +3609,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
           await persistConversation(s);
         }
         emit();
-        if (resume) await runModel();
+        if (resume) await runModel(resume);
       }),
   };
 }

@@ -8,12 +8,12 @@ import type { TemperatureUnit } from '../../coach/temperature.ts';
 import { renderWithServices } from '../chat/testing/render.tsx';
 import { SAMPLE_WORKFLOW } from '../testing/fakeServices.ts';
 import { createFakeServicesIn } from '../testing/temperatureServices.ts';
-import { DrinkSettingsSection } from './DrinkSettingsSection.tsx';
+import { DRINKS_HELP, DrinksGroup } from './groups/DrinksGroup.tsx';
 
 /**
- * Settings > Steam, hot water and flush for a barista who reads °F
- * (D173), against a Decaid that keeps the three temperatures as whole °C
- * and truncates anything else, as its parseInt does (models/data/utils.dart).
+ * Settings > Drinks' steppers for a barista who reads °F (D173), against
+ * a Decaid that keeps the three temperatures as whole °C and truncates
+ * anything else, as its parseInt does (models/data/utils.dart).
  */
 type Drink = 'steamSettings' | 'hotWaterData' | 'rinseData';
 
@@ -37,14 +37,13 @@ function renderIn(unit: TemperatureUnit, model = 'DE1Pro') {
   });
   services.decaid.updateWorkflow = updateWorkflow;
   services.decaid.getMachineInfo = async () => ({ version: '1358', model, serialNumber: '1', GHC: false });
-  renderWithServices(<DrinkSettingsSection />, services);
+  renderWithServices(<DrinksGroup />, services);
   return { services, updateWorkflow, workflow: () => workflow };
 }
 
-const HELP = 'The Steam, Hot water and Flush buttons use these. Changes go to Decaid at once.';
 const field = (name: string) => screen.getByRole('spinbutton', { name });
 async function findField(name: string): Promise<HTMLElement> {
-  await screen.findByText(HELP);
+  await screen.findByText(DRINKS_HELP);
   return field(name);
 }
 
@@ -78,7 +77,7 @@ describe('the drink steppers in °F (D173)', () => {
 
   it("a Bengle's steam goes to 329 °F", async () => {
     renderIn('fahrenheit', 'Bengle');
-    await screen.findByText(HELP);
+    await screen.findByText(DRINKS_HELP);
     await waitFor(() => expect(field('Steam temperature')).toHaveAttribute('aria-valuemax', '329'));
   });
 

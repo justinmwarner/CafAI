@@ -50,6 +50,7 @@ import { TID } from '../testIds.ts';
 import { RichText } from './RichText.tsx';
 import { BagConfirmCard } from './parts/BagConfirmCard.tsx';
 import { BeanCard } from './parts/BeanCard.tsx';
+import { BudgetPausedCard } from './parts/BudgetPausedCard.tsx';
 import { DiffCard } from './parts/DiffCard.tsx';
 import { FactCard } from './parts/FactCard.tsx';
 import { SourcesLine } from './parts/SourcesLine.tsx';
@@ -397,6 +398,12 @@ function SourcesView({ data }: { data: unknown }) {
   return part && part.sites.length > 0 ? <SourcesLine sites={part.sites} /> : null;
 }
 
+/** The coach paused by the month's budget, in place of its reply (D240). */
+function BudgetPausedView({ data }: { data: unknown }) {
+  const part = cardOf(data, 'budgetPaused');
+  return part ? <BudgetPausedCard budgetUsd={part.budgetUsd} resumesOn={part.resumesOn} /> : null;
+}
+
 /** "Thinking… 12 s": the elapsed counter updates in place, so a slow reply never looks frozen. */
 function ThinkingView() {
   const [startedAt] = useState(() => Date.now());
@@ -437,6 +444,7 @@ const PART_RENDERERS: ChatPartRendererMap = {
   [`${DATA_PREFIX}grinderOffer`]: ({ part }: DataRendererProps) => <GrinderOfferView data={part.data} />,
   [`${DATA_PREFIX}fact`]: ({ part }: DataRendererProps) => <FactView data={part.data} />,
   [`${DATA_PREFIX}sources`]: ({ part }: DataRendererProps) => <SourcesView data={part.data} />,
+  [`${DATA_PREFIX}budgetPaused`]: ({ part }: DataRendererProps) => <BudgetPausedView data={part.data} />,
   [THINKING_TYPE]: () => <ThinkingView />,
   [STATS_TYPE]: () => <StatsCard />,
 };

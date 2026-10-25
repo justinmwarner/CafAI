@@ -5,6 +5,10 @@
  * (docs/superpowers/specs/2026-10-11-local-claude-design.md). Both speak the
  * Anthropic Messages API, so one provider serves both; it reads the saved
  * choice at every request, so a change in Settings applies to the next turn.
+ *
+ * Every request either way passes here, so here is where the coach's usage
+ * is counted (D237): the usage each stream reports at its end, with where it
+ * ran and what it was for.
  */
 import {
   computerWording,
@@ -12,15 +16,18 @@ import {
   LlmError,
   type AnthropicProviderOptions,
   type LlmProvider,
+  type LlmRequest,
+  type LlmUsage,
   type RetryContext,
 } from '../llm/index.ts';
+import type { SpendService, SpendSource } from '../spend/types.ts';
 import { normalizeAddress, normalizeCode, type CoachSource, type CoachSourceStore } from '../storage/coachSource.ts';
 import type { SecretStore, Storage } from '../storage/types.ts';
 
 type SourceReader = Pick<CoachSourceStore, 'get'>;
 type KeyReader = Pick<SecretStore, 'getApiKey'>;
 
-const NO_ADDRESS = 'Add the address CafAI Bridge shows on your computer in Settings.';
+const NO_ADDRESS = 'Add the address CafAI Bridge shows on your computer in Settings > Coach.';
 /** CafAI Bridge sends its first byte (a ping) as soon as a run takes the request; Anthropic's 60 s is for the internet. */
 const BRIDGE_FIRST_BYTE_MS = 30_000;
 
@@ -33,6 +40,10 @@ export interface CoachProviderOptions {
   /** For tests: the provider's retry delay and timeouts. */
   retryBaseMs?: number;
   timeouts?: AnthropicProviderOptions['timeouts'];
+  /** Counts what each finished request used, for the coach's usage and cost (D237); nothing is counted without it. */
+  spend?: Pick<SpendService, 'count'>;
+  /** The time a request is counted at; the device's clock by default. */
+  now?: () => Date;
 }
 
 /**
@@ -72,14 +83,37 @@ function providerFor(source: CoachSource, options: CoachProviderOptions): LlmPro
   });
 }
 
-/** The coach's provider: Anthropic or CafAI Bridge, whichever Settings says at each request. */
+/**
+ * The coach's provider: Anthropic or CafAI Bridge, whichever Settings says at
+ * each request. A request is counted once its stream has ended with its
+ * usage (message_done), before the turn goes on to the caller: a retry that
+ * got through counts once, and a stream that fails before its end counts
+ * nothing, what it used being unknown (D237).
+ */
 export function createCoachProvider(options: CoachProviderOptions): LlmProvider {
+  const now = options.now ?? (() => new Date());
   return {
     id: 'anthropic',
     async *stream(request) {
-      yield* providerFor(await options.coachSource.get(), options).stream(request);
+      const source = await options.coachSource.get();
+      for await (const event of providerFor(source, options).stream(request)) {
+        if (event.type === 'message_done') count(options.spend, now(), source.kind === 'computer' ? 'computer' : 'anthropic', request, event.turn.usage);
+        yield event;
+      }
     },
   };
+}
+
+/**
+ * Counting never stands in the way of a reply. Priced at the model asked: a
+ * reply a server-side fallback finished on another model is an estimate too.
+ */
+function count(spend: CoachProviderOptions['spend'], at: Date, source: SpendSource, request: LlmRequest, usage: LlmUsage): void {
+  try {
+    spend?.count({ at, source, model: request.model.trim(), kind: request.purpose ?? 'reply', call: request.call ?? 0, usage });
+  } catch {
+    // The coach's usage is an estimate: a count lost is better than a reply lost.
+  }
 }
 
 /**

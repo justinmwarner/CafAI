@@ -10,7 +10,8 @@ import { renderThemed, renderWithServices } from '../chat/testing/render.tsx';
 import { createFakeServices, type FakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
 import { FunFactsRow } from './FunFactsRow.tsx';
-import { SettingsScreen } from './SettingsScreen.tsx';
+import { ModelCard } from './ModelCard.tsx';
+import { SAVED } from './SaveLine.tsx';
 
 // What each choice does, as the spec words it (section 4).
 const OFF = 'No fun facts.';
@@ -74,19 +75,15 @@ describe('FunFactsRow (D198)', () => {
   });
 });
 
-describe('SettingsScreen > Coach > Fun facts (D198)', () => {
+describe('Settings > Coach > Model and replies > Fun facts (D198)', () => {
   const DEFAULT_MODEL = 'claude-opus-5-5';
   const BASE: Settings = { model: DEFAULT_MODEL, grinderName: 'Niche Zero', grinderSetting: '14', activeBagId: 'bag-1' };
 
-  // The screen reads Decaid's grinders with the global fetch; no test may reach a real network.
+  // Nothing here reads the network; no test may reach a real one.
   beforeEach(() => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (input: RequestInfo | URL) =>
-        String(input).endsWith('/api/v1/grinders')
-          ? new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } })
-          : new Response('Route not found', { status: 404 }),
-      ),
+      vi.fn(async () => new Response('Route not found', { status: 404 })),
     );
   });
 
@@ -94,7 +91,7 @@ describe('SettingsScreen > Coach > Fun facts (D198)', () => {
     vi.unstubAllGlobals();
   });
 
-  /** The screen over a settings store that keeps what CafAI's storage would (src/storage/settings.ts). */
+  /** The card over a settings store that keeps what CafAI's storage would (src/storage/settings.ts). */
   function renderSettings(settings: Settings = BASE, coachSource?: Partial<CoachSource>) {
     const services: FakeServices = createFakeServices({ storage: { settings } });
     let stored = normalizeSettings(settings, DEFAULT_MODEL);
@@ -103,56 +100,55 @@ describe('SettingsScreen > Coach > Fun facts (D198)', () => {
       update: async (patch) => (stored = applySettingsPatch(stored, patch, DEFAULT_MODEL)),
     };
     if (coachSource) services.coachSource = createMemoryCoachSourceStore(coachSource);
-    renderWithServices(<SettingsScreen />, services);
+    renderWithServices(<ModelCard />, services);
     return services;
   }
 
   const loaded = () => waitFor(() => expect(select()).toBeEnabled());
+  const saved = () => waitFor(() => expect(screen.getByTestId(TID.settingsSaved('model'))).toHaveTextContent(SAVED));
+  /** Another model the fakes offer: the catalog changes, the test does not. */
+  const another = (services: FakeServices) => services.models.find((each) => each.id !== DEFAULT_MODEL)!.id;
 
-  it('sits after the model, before the grinder, in the Coach section', async () => {
+  it('sits after the model in the Model and replies card', async () => {
     renderSettings();
     await loaded();
-    const coach = screen.getByRole('region', { name: 'Coach' });
-    expect(coach).toContainElement(select());
+    const card = screen.getByRole('region', { name: 'Model and replies' });
+    expect(card).toContainElement(select());
     const after = (a: HTMLElement, b: HTMLElement) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
     expect(after(screen.getByTestId(TID.modelSelect), select())).toBe(true);
-    expect(after(select(), screen.getByTestId(TID.grinderName))).toBe(true);
   });
 
-  it("reads CafAI's and the coach's while none was chosen here, and a save of the rest writes no choice for it", async () => {
+  it("reads CafAI's and the coach's while none was chosen here, and a model's save writes no choice for it", async () => {
     const services = renderSettings();
     await loaded();
     expect(select()).toHaveValue('coach');
     expect(select()).toHaveAccessibleDescription(COACH);
-    await userEvent.selectOptions(screen.getByTestId(TID.modelSelect), 'claude-haiku-4-5');
-    await userEvent.click(screen.getByTestId(TID.settingsSave));
-    expect(await screen.findByText('Settings saved.')).toBeInTheDocument();
-    const saved = await services.storage.settings.get();
-    expect(saved.model).toBe('claude-haiku-4-5');
+    const model = another(services);
+    await userEvent.selectOptions(screen.getByTestId(TID.modelSelect), model);
+    await saved();
+    const stored = await services.storage.settings.get();
+    expect(stored.model).toBe(model);
     // Absent until someone chooses on this device, so a restore can still fill it (D198, as D171).
-    expect(saved).not.toHaveProperty('funFacts');
+    expect(stored).not.toHaveProperty('funFacts');
   });
 
-  it('saves a choice with Save settings, refreshes the coach, and shows what was saved', async () => {
+  it('saves a choice at once, refreshes the coach, and shows what was saved', async () => {
     const services = renderSettings();
     await loaded();
     await userEvent.selectOptions(select(), 'off');
     expect(select()).toHaveAccessibleDescription(OFF);
-    // Saved with the rest of the Coach section, not before.
-    expect(await services.storage.settings.get()).not.toHaveProperty('funFacts');
-    await userEvent.click(screen.getByTestId(TID.settingsSave));
-    expect(await screen.findByText('Settings saved.')).toBeInTheDocument();
+    await saved();
     expect((await services.storage.settings.get()).funFacts).toBe('off');
     expect(services.coach.calls.map((call) => call.method)).toEqual(['refresh']);
     expect(select()).toHaveValue('off');
   });
 
-  it('shows a choice made before, and keeps it through a save of the rest', async () => {
+  it("shows a choice made before, and keeps it through a model's save", async () => {
     const services = renderSettings({ ...BASE, funFacts: 'list' });
     await waitFor(() => expect(select()).toHaveValue('list'));
     expect(select()).toHaveAccessibleDescription(LIST);
-    await userEvent.click(screen.getByTestId(TID.settingsSave));
-    expect(await screen.findByText('Settings saved.')).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByTestId(TID.modelSelect), another(services));
+    await saved();
     expect((await services.storage.settings.get()).funFacts).toBe('list');
   });
 

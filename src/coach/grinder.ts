@@ -4,12 +4,13 @@
  *
  * Decaid lists a numeric grinder's small step (`settingSmallStep`) or a
  * preset grinder's settings (`settingValues`), but no range and no "which
- * way is finer". CafAI assumes the common conventions: lower numbers are
- * finer, and a preset list runs finest first. With that, a relative move
- * ("1 step finer") becomes the new setting, and a setting the model names is
- * checked against the grinder's own grid. Without step data, or with a
- * current setting CafAI cannot read, the move stays exactly as the model
- * gave it.
+ * way is finer". The barista says which way in Settings > Grinder > Finer is
+ * (D241, `GrinderInfo.finerIsHigher`); until they do, CafAI assumes the
+ * common conventions: lower numbers are finer, and a preset list runs finest
+ * first. With that, a relative move ("1 step finer") becomes the new
+ * setting, and a setting the model names is checked against the grinder's
+ * own grid. Without step data, or with a current setting CafAI cannot read,
+ * the move stays exactly as the model gave it.
  */
 import type { ProposeAdjustment } from './contract.ts';
 import { decimalsOf } from './levers.ts';
@@ -37,10 +38,25 @@ export function grinderStep(grinder: GrinderInfo | null | undefined): number | n
   return Number(step.toPrecision(12));
 }
 
-/** Decaid's settings of a preset grinder, trimmed, finest first; null when there are none. */
+/**
+ * A preset grinder's list, finest first (D241). A list of numbers in order
+ * is read by the barista's answer, whichever way Decaid keeps it: from its
+ * lowest where lower numbers are finer (D62), from its highest where higher
+ * ones are, so Finer is always decides. Any other list (words, numbers out
+ * of order) is read in Decaid's order, finest first, and backwards on a
+ * grinder whose higher numbers are finer.
+ */
+export function finestFirst(values: readonly string[], finerIsHigher: boolean): string[] {
+  const numbers = values.map((value) => (SIGNED_NUMBER.test(value.trim()) ? Number(value) : Number.NaN));
+  const runsDown = numbers.every((n, i) => Number.isFinite(n) && (i === 0 || n < numbers[i - 1]!));
+  const backwards = finerIsHigher ? !runsDown : runsDown;
+  return backwards ? [...values].reverse() : [...values];
+}
+
+/** Decaid's settings of a preset grinder, trimmed, finest first whichever way its numbers go (finestFirst); null when there are none. */
 export function grinderSettings(grinder: GrinderInfo | null | undefined): string[] | null {
   if (!grinder || grinder.settingType !== 'preset' || !grinder.values || grinder.values.length === 0) return null;
-  return grinder.values.map((value) => String(value).trim());
+  return finestFirst(grinder.values.map((value) => String(value).trim()), grinder.finerIsHigher === true);
 }
 
 function modelName(grinder: GrinderInfo): string {
@@ -105,6 +121,13 @@ interface NumericDial {
   current: number;
   /** The reading as the user wrote it, for messages. */
   currentText: string;
+  /** Which way a finer move goes on the dial: 1, up, where higher numbers are finer (D241); -1, down (D62). */
+  finer: 1 | -1;
+}
+
+/** Which way a move goes on the dial: 1 up, -1 down. */
+function towards(dial: NumericDial, direction: Direction): number {
+  return direction === 'finer' ? dial.finer : -dial.finer;
 }
 
 /** A value on the dial's grid, without float noise or "-0" ("14.5" and "14.0" on a 0.5 dial; "14" on a 1 dial). */
@@ -114,10 +137,11 @@ function onGrid(value: number, decimals: number): string {
 }
 
 function numericHint(dial: NumericDial, direction: Direction): string {
-  const next = direction === 'finer' ? dial.current - dial.step : dial.current + dial.step;
+  const next = dial.current + towards(dial, direction) * dial.step;
+  // Only the move down the dial can pass 0: finer where lower numbers are finer, coarser where higher ones are (D241).
   const where =
     next < -GRID_SLACK * dial.step
-      ? `it cannot go finer than ${dial.currentText}`
+      ? `it cannot go ${direction} than ${dial.currentText}`
       : `1 step ${direction} from ${dial.currentText} is ${onGrid(next, dial.decimals)}`;
   return `Your grinder moves in steps of ${String(dial.step)} (Decaid's grinder library): ${where}.`;
 }
@@ -125,7 +149,7 @@ function numericHint(dial: NumericDial, direction: Direction): string {
 function moveNumeric(dial: NumericDial, grind: GrindInput, setting: string | null): DialResult {
   const { direction } = grind;
   const hint = numericHint(dial, direction);
-  const sign = direction === 'finer' ? -1 : 1;
+  const sign = towards(dial, direction);
 
   if (setting === null) {
     if (grind.amount === null) return done({ setting: null, steps: null, notes: [] });
@@ -149,11 +173,10 @@ function moveNumeric(dial: NumericDial, grind: GrindInput, setting: string | nul
   const steps = Math.round(exact);
   if (Math.abs(exact - steps) > GRID_SLACK) return refuse(`${named} is not a whole number of steps from ${dial.currentText}. ${hint}`);
   if (steps === 0) return refuse(sameSettingError(setting, direction));
-  const actual: Direction = steps < 0 ? 'finer' : 'coarser';
+  const actual: Direction = Math.sign(steps) === dial.finer ? 'finer' : 'coarser';
   if (actual !== direction) {
-    return refuse(
-      `${named} is ${actual} than ${dial.currentText} (lower numbers are finer), but grind.direction is "${direction}". ${hint}`,
-    );
+    const way = dial.finer === 1 ? 'higher' : 'lower';
+    return refuse(`${named} is ${actual} than ${dial.currentText} (${way} numbers are finer), but grind.direction is "${direction}". ${hint}`);
   }
   const distance = Math.abs(steps);
   if (distance > GRIND_MAX_STEPS) {
@@ -255,13 +278,14 @@ export function resolveGrindMove(
   const step = grinderStep(grinder);
   if (step !== null) {
     // A negative reading means the dial does not start at 0, so "below 0" and
-    // "lower is finer" may not hold: keep the move as given.
+    // which way is finer on its far side may not hold: keep the move as given.
     if (!DIAL_NUMBER.test(currentText)) return null;
     // The step's decimals, or the reading's when it is written finer (14.25 on
     // a 0.5 dial): 14.25 - 0.5 must print 13.75, not 13.8, to stay on its grid.
     const dot = currentText.indexOf('.');
     const decimals = Math.max(decimalsOf(step), dot < 0 ? 0 : currentText.length - dot - 1);
-    const dial: NumericDial = { grinder, step, decimals, current: Number(currentText), currentText };
+    const finer = grinder.finerIsHigher === true ? 1 : -1;
+    const dial: NumericDial = { grinder, step, decimals, current: Number(currentText), currentText, finer };
     return moveNumeric(dial, grind, setting);
   }
 

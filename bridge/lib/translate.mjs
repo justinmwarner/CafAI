@@ -198,13 +198,40 @@ export function toMcpResult(block, extraBlocks = []) {
   return block.is_error === true ? { content, isError: true } : { content };
 }
 
+const TOKEN_KEYS = ['input_tokens', 'output_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens'];
+
+/** What CafAI counts of a usage (D237): its tokens, and the web searches the server ran, nothing else. */
 function pickUsage(usage) {
   const out = {};
   if (!usage || typeof usage !== 'object') return out;
-  for (const key of ['input_tokens', 'output_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens']) {
+  for (const key of TOKEN_KEYS) {
     if (typeof usage[key] === 'number') out[key] = usage[key];
   }
+  const searches = usage.server_tool_use?.web_search_requests;
+  if (typeof searches === 'number') out.server_tool_use = { web_search_requests: searches };
   return out;
+}
+
+/** Two messages' usage added up, key by key. */
+function addUsage(a, b) {
+  const out = { ...a };
+  for (const key of TOKEN_KEYS) {
+    if (typeof b[key] === 'number') out[key] = (out[key] ?? 0) + b[key];
+  }
+  const searches = b.server_tool_use?.web_search_requests;
+  if (typeof searches === 'number') out.server_tool_use = { web_search_requests: (out.server_tool_use?.web_search_requests ?? 0) + searches };
+  return out;
+}
+
+/**
+ * A reply's usage with Claude Code's own searches in it: its WebSearch runs
+ * the server's search in a request of its own, which the stream does not
+ * report, so each call counts as one, as CafAI's own web search tool (one
+ * search a call) would have run, unless more were reported.
+ */
+function replyUsage(usage, ownSearches) {
+  if (ownSearches === 0) return usage;
+  return { ...usage, server_tool_use: { web_search_requests: Math.max(usage.server_tool_use?.web_search_requests ?? 0, ownSearches) } };
 }
 
 /**
@@ -224,8 +251,11 @@ const isCoachTool = (name) => typeof name === 'string' && name.startsWith(TOOL_P
  * the API would not take back (`caller`) go. Claude Code's own tool calls
  * (its WebSearch, D203) stay inside the run: a message that makes only those
  * does not end the reply, and the message Claude Code writes once it has run
- * them goes on in the same reply, its text on a paragraph of its own. It also
- * keeps the reply as sent, for the run's transcript.
+ * them goes on in the same reply, its text on a paragraph of its own. What
+ * every message of the reply used is added up in the usage CafAI gets at its
+ * end, and each of Claude Code's own searches counts as one web search, as
+ * CafAI's own web search tool runs one per call (D237). It also keeps the
+ * reply as sent, for the run's transcript.
  */
 export function createStreamTransformer() {
   let map = new Map();
@@ -241,6 +271,12 @@ export function createStreamTransformer() {
   let continuing = false;
   /** The next text starts a paragraph: the reply said something before Claude Code's own calls. */
   let breakText = false;
+  /** What this message used: its message_start's usage, then its message_delta's over it. */
+  let messageUsage = {};
+  /** What the reply's earlier messages used, those Claude Code went on from after its own calls; null for none. */
+  let carried = null;
+  /** Claude Code's own web searches in the reply. */
+  let ownSearches = 0;
 
   return {
     get started() {
@@ -282,10 +318,12 @@ export function createStreamTransformer() {
             ownCalls = 0;
             coachCalls = 0;
             breakText = blocks.some((block) => block.type === 'text' && block.text.trim() !== '');
+            messageUsage = pickUsage(event.message?.usage);
             return [];
           }
           started = true;
           const message = event.message ?? {};
+          messageUsage = pickUsage(message.usage);
           return [
             {
               type: 'message_start',
@@ -312,6 +350,7 @@ export function createStreamTransformer() {
             // Claude Code runs and answers it itself; CafAI would not know the tool.
             map.set(event.index, -1);
             ownCalls += 1;
+            if (block.name === 'WebSearch') ownSearches += 1;
             return [];
           }
           const index = next++;
@@ -356,7 +395,10 @@ export function createStreamTransformer() {
         case 'message_delta': {
           const delta = event.delta ?? {};
           if (typeof delta.stop_reason === 'string') stopReason = delta.stop_reason;
+          messageUsage = { ...messageUsage, ...pickUsage(event.usage) };
           if (delta.stop_reason === 'tool_use' && ownCalls > 0 && coachCalls === 0) {
+            // Its usage rides with the message the reply ends on.
+            carried = addUsage(carried ?? {}, messageUsage);
             continuing = true;
             return [];
           }
@@ -364,7 +406,7 @@ export function createStreamTransformer() {
             {
               type: 'message_delta',
               delta: { stop_reason: delta.stop_reason ?? null, stop_sequence: delta.stop_sequence ?? null },
-              usage: pickUsage(event.usage),
+              usage: carried === null && ownSearches === 0 ? pickUsage(event.usage) : replyUsage(addUsage(carried ?? {}, messageUsage), ownSearches),
             },
           ];
         }

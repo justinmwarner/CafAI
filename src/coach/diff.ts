@@ -144,9 +144,9 @@ export function describeManualSteps(input: ManualInput, options: GrindTextOption
       return [`${plain} That is the coach's estimate: ${why}, so note where the dial really lands in Settings.`];
     }
     const move = grindMove(input.grind, 'a little ');
-    if (decaid !== null) return [`Turn the grinder ${move} before the next shot (${decaid}), then note the new setting in Settings.`];
+    if (decaid !== null) return [`Turn the grinder ${move} before the next shot (${decaid}), then note the new setting in Settings > Grinder.`];
     return [
-      `Turn the grinder ${move} before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings.`,
+      `Turn the grinder ${move} before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings > Grinder.`,
     ];
   }
   return [];

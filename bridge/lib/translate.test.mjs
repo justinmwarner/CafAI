@@ -169,6 +169,14 @@ describe('createStreamTransformer', () => {
     expect(fingerprintMessage(transformer.message())).toBe(fingerprintMessage(asCafaiStoresIt));
   });
 
+  it('passes on the web searches a reply reports, and nothing else of its server tools (D237)', () => {
+    const transformer = createStreamTransformer();
+    const out = events
+      .map((event) => (event.type === 'message_delta' ? { ...event, usage: { output_tokens: 30, server_tool_use: { web_search_requests: 2, web_fetch_requests: 1 } } } : event))
+      .flatMap((event) => transformer.push(event));
+    expect(out).toContainEqual({ type: 'message_delta', delta: { stop_reason: 'tool_use', stop_sequence: null }, usage: { output_tokens: 30, server_tool_use: { web_search_requests: 2 } } });
+  });
+
   it('does not count a built-in tool as a coach tool, nor pass it on', () => {
     const transformer = createStreamTransformer();
     transformer.push(events[0]);
@@ -251,6 +259,44 @@ describe("Claude Code's own web search (D203)", () => {
     expect(fingerprintMessage(transformer.message())).toBe(
       fingerprintMessage({ role: 'assistant', content: [{ type: 'text', text: "I'll look up Onyx Coffee Lab for you." }, reply.content[1]] }),
     );
+  });
+
+  it("adds up what every message of the reply used, the ones around Claude Code's own search included, and counts its search (D237)", () => {
+    const transformer = createStreamTransformer();
+    const out = [...eventsOf('msg_search'), ...eventsOf('msg_fact')].flatMap((event) => transformer.push(event));
+    const [start] = out;
+    const [delta] = out.filter((event) => event.type === 'message_delta');
+    // msg_search used 2 + 1,595 written + 88 out; msg_fact 2 + 1,434 written + 1,595 read + 254 out.
+    expect(delta.usage).toEqual({
+      input_tokens: 4,
+      cache_creation_input_tokens: 3029,
+      cache_read_input_tokens: 1595,
+      output_tokens: 342,
+      server_tool_use: { web_search_requests: 1 },
+    });
+    // CafAI's assembler takes message_start's usage, then message_delta's over it: the totals win.
+    expect({ ...start.message.usage, ...delta.usage }).toEqual(delta.usage);
+  });
+
+  it('counts each of Claude Code\'s own searches once, as CafAI\'s own web search would, unless it reported more', () => {
+    const transformer = createStreamTransformer();
+    const out = [
+      { type: 'message_start', message: { id: 'msg_1', model: 'claude-opus-5-5', usage: { input_tokens: 10, output_tokens: 1 } } },
+      { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'toolu_s1', name: 'WebSearch', input: {} } },
+      { type: 'content_block_stop', index: 0 },
+      { type: 'content_block_start', index: 1, content_block: { type: 'tool_use', id: 'toolu_s2', name: 'WebSearch', input: {} } },
+      { type: 'content_block_stop', index: 1 },
+      { type: 'message_delta', delta: { stop_reason: 'tool_use' }, usage: { output_tokens: 20 } },
+      { type: 'message_stop' },
+      { type: 'message_start', message: { id: 'msg_2', model: 'claude-opus-5-5', usage: { input_tokens: 30, output_tokens: 1 } } },
+      { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+      { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Found it.' } },
+      { type: 'content_block_stop', index: 0 },
+      { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 5, server_tool_use: { web_search_requests: 3, web_fetch_requests: 1 } } },
+      { type: 'message_stop' },
+    ].flatMap((event) => transformer.push(event));
+    const [delta] = out.filter((event) => event.type === 'message_delta');
+    expect(delta.usage).toEqual({ input_tokens: 40, output_tokens: 25, server_tool_use: { web_search_requests: 3 } });
   });
 
   it("passes on no search results or citations Claude Code's model might get itself: they belong to the plan's organisation", () => {

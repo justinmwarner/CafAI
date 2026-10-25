@@ -33,6 +33,7 @@ import type { FunFactsSource } from '../coach/facts/types.ts';
 import { DEFAULT_TEMPERATURE_UNIT, type TemperatureUnit } from '../coach/temperature.ts';
 import type { GrinderInfo } from '../coach/types.ts';
 import { extractBag, resolveModel, runConversation, toToolDefinition, zodValidator } from '../llm/index.ts';
+import type { SpendService } from '../spend/types.ts';
 import { DEFAULT_COACH_SOURCE, type CoachSourceStore } from '../storage/coachSource.ts';
 import type { SecretStore } from '../storage/types.ts';
 import { createCoachProvider } from './coachAccess.ts';
@@ -113,13 +114,21 @@ export function createCoachPort(options: CoachPortOptions = {}): CoachPort {
 /** Without a saved choice the coach runs on Anthropic, as it always has. */
 const ON_ANTHROPIC: Pick<CoachSourceStore, 'get'> = { get: async () => ({ ...DEFAULT_COACH_SOURCE }) };
 
-/** `coachSource`: where the coach runs, Anthropic or CafAI Bridge, read at every request (coachAccess.ts). */
-export function createLlmPort(secrets: SecretStore, coachSource: Pick<CoachSourceStore, 'get'> = ON_ANTHROPIC): LlmPort {
+/**
+ * `coachSource`: where the coach runs, Anthropic or CafAI Bridge, read at
+ * every request (coachAccess.ts). `spend`: counts what every finished request
+ * used, the replies' and the bag photo's (D237).
+ */
+export function createLlmPort(
+  secrets: SecretStore,
+  coachSource: Pick<CoachSourceStore, 'get'> = ON_ANTHROPIC,
+  spend?: Pick<SpendService, 'count'>,
+): LlmPort {
   // A photo of the bag goes once (6.8): a failed request is not sent again
   // on its own; the barista takes another photo.
-  const photoReader = createCoachProvider({ secrets, coachSource, maxRetries: 0 });
+  const photoReader = createCoachProvider({ secrets, coachSource, maxRetries: 0, spend });
   return {
-    provider: createCoachProvider({ secrets, coachSource }),
+    provider: createCoachProvider({ secrets, coachSource, spend }),
     run: (request) => runConversation({ ...request, model: resolveModel(request.model) }),
     toolDefinition: toToolDefinition,
     validator: zodValidator,

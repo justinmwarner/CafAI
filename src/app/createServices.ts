@@ -12,6 +12,9 @@ import { createDisplayChannel } from '../api/display.ts';
 import { createPluginDirectory, watchPlugins } from '../api/plugins.ts';
 import { createToldList } from '../coach/facts/told.ts';
 import { DEFAULT_MODEL, MODELS } from '../llm/index.ts';
+import { KNOWN_MODELS } from '../llm/models.ts';
+import { createBudgetNotes } from '../spend/budget.ts';
+import { openSpendService } from '../spend/service.ts';
 import { createIdbStorage, restoreFromMirrorIfEmpty, startLateRestore } from '../storage/index.ts';
 import { openCoachSourceStore } from '../storage/coachSource.ts';
 import { createCoachSourceBackup } from '../storage/coachSourceBackup.ts';
@@ -24,6 +27,7 @@ import { createAppearanceStore } from './appearance.ts';
 import { createCareService, localTotalsCache } from './care/careService.ts';
 import { withCoachCredential } from './coachAccess.ts';
 import { createCoachEngine, type CoachEngine } from './engine/engine.ts';
+import { createDisplayPrefsStore } from './displayPrefs.ts';
 import { createDrinkScreensStore } from './drinkScreens.ts';
 import { createSaverScreen } from './saverScreen.ts';
 import { createScreensaverSettingStore } from './screensaverSetting.ts';
@@ -86,6 +90,8 @@ export async function createServices(win: Window): Promise<AppServices> {
   const drinkScreens = createDrinkScreensStore(storage.settings, (await storage.settings.get()).drinkScreens);
   // Settings > Screensaver (D225): the overlay over the shell acts on it at once.
   const screensaver = createScreensaverSettingStore(storage.settings, (await storage.settings.get()).screensaver);
+  // The clock and the TDS cell's switch (D245, D246): every screen that shows a time or a shot reads them.
+  const displayPrefs = createDisplayPrefsStore(storage.settings, await storage.settings.get());
 
   // Machine care's steps (D183-D190): read now, counted from Decaid's totals behind the start.
   const visibility = {
@@ -119,13 +125,19 @@ export async function createServices(win: Window): Promise<AppServices> {
   usage?.tag('cafai_version', APP_VERSION);
   usage?.tag('host', host.platform ?? 'browser');
 
+  // The coach's usage and cost (D237-D240): every finished request counted per day on this device (cafai-spend,
+  // a database of its own) and copied month by month to Decaid's store, so the totals and the budget add every
+  // device and an iPad's Decaid update gets the month back. Read from Decaid at start, and when Decaid is back.
+  const spend = await openSpendService({ kv: decaid.kv, deviceStorage, models: KNOWN_MODELS });
+  void spend.refresh();
+
   const coach = createCoachEngine({
     // Its "is a key stored" means "has what the selected source needs".
     storage: withCoachCredential(storage, coachSource),
     telemetry,
     api: createApiPort(decaid),
     coach: createCoachPort({ temperatureUnit: temperatureUnit.get }),
-    llm: createLlmPort(storage.secrets, coachSource),
+    llm: createLlmPort(storage.secrets, coachSource, spend),
     clock: { now: () => new Date(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
     newId,
     visibility: {
@@ -141,6 +153,10 @@ export async function createServices(win: Window): Promise<AppServices> {
     // The fun facts told, in the device's own storage beside the care counts' cache: never mirrored or exported (D200).
     told: createToldList(deviceStorage),
     usage,
+    // The month's budget (D240): checked before each reply on the API key, its notices noted on the device.
+    spend,
+    budgetNotes: createBudgetNotes(deviceStorage),
+    coachSource,
   });
 
   telemetry.start();
@@ -165,6 +181,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     if (records) void coach.restored();
     void appearance.reload();
     void temperatureUnit.reload();
+    void displayPrefs.reload();
     void drinkScreens.reload();
     void screensaver.reload();
     void care.reload();
@@ -209,6 +226,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     if (!back) return;
     late?.retryNow();
     syncCopies();
+    void spend.refresh();
   });
 
   // Backgrounding can unload the page after ten minutes: back up on the way out.
@@ -236,6 +254,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     appVersion: APP_VERSION,
     appearance,
     temperatureUnit,
+    displayPrefs,
     drinkScreens,
     screensaver,
     saverScreen,
@@ -244,6 +263,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     coachSourceBackup,
     care,
     usage,
+    spend,
     dispose() {
       win.document.removeEventListener('visibilitychange', onVisibility);
       stopPluginWatch();
@@ -254,6 +274,7 @@ export async function createServices(win: Window): Promise<AppServices> {
       stopSourceTag?.();
       stopCoachTag?.();
       usage?.dispose();
+      spend.dispose();
       coach.dispose();
       care.dispose();
       saverScreen?.dispose();

@@ -17,7 +17,9 @@ import type { CoachSourceStore } from '../storage/coachSource.ts';
 import type { CoachSourceBackup } from '../storage/coachSourceBackup.ts';
 import type { Bag, ProfileVersion, Storage } from '../storage/types.ts';
 import type { UsageService } from '../usage/service.ts';
+import type { SpendService } from '../spend/types.ts';
 import type { AppearanceStore } from './appearance.ts';
+import type { DisplayPrefsStore } from './displayPrefs.ts';
 import type { DrinkScreensStore } from './drinkScreens.ts';
 import type { SaverScreen } from './saverScreen.ts';
 import type { ScreensaverSettingStore } from './screensaverSetting.ts';
@@ -42,6 +44,12 @@ export interface Services {
   temperatureUnit: TemperatureUnitStore;
   /** Settings > Screensaver (D225), as live state. */
   screensaver: ScreensaverSettingStore;
+  /**
+   * The clock and the TDS cell's switch (D245, D246), as live state.
+   * Optional: fakes and previews leave it out, and then times read 24-hour
+   * and shot cards show the TDS cell, as before either was a choice.
+   */
+  displayPrefs?: DisplayPrefsStore;
   /**
    * The tablet's screen while a screensaver shows (D224): dimmed and
    * held on through Decaid's display socket. Only inside Decaid, whose
@@ -79,6 +87,13 @@ export interface Services {
    * other build leave it out, and then no card, notice or switch shows.
    */
   usage?: UsageService;
+  /**
+   * The coach's token use and estimated cost, every device's added, and the
+   * month's budget (D237-D240, src/spend/service.ts). Optional: fakes and
+   * previews leave it out unless a test gives one (createFakeSpend), and
+   * then Settings shows no usage.
+   */
+  spend?: SpendService;
 }
 
 export type UiRole = 'user' | 'assistant' | 'system';
@@ -317,6 +332,19 @@ export type CoachUiPart =
        */
       kind: 'sources';
       sites: string[];
+    }
+  | {
+      /**
+       * The coach paused by the month's budget (D240), in place of its reply:
+       * the budget reached, when the coach starts again by itself, and Open
+       * Settings. The reply waits, and goes once the budget is raised or
+       * cleared, the pause is turned off, or a month begins.
+       */
+      kind: 'budgetPaused';
+      /** The budget it reached, whole dollars. */
+      budgetUsd: number;
+      /** 'YYYY-MM-DD': the first of next month, when the pause lifts by itself. */
+      resumesOn: string;
     }
   | {
       kind: 'notice';

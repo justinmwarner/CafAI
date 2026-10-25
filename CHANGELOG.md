@@ -6,6 +6,25 @@ workflow checks against it. Settings > About shows the version you run.
 
 ## Unreleased
 
+### Settings
+
+- **Settings, regrouped.** Settings was one long column of eleven cards;
+  it is now seven groups: Coach, Grinder, Drinks, Machine, Display, Data and
+  privacy, About. On a tablet the list of groups sits beside the one you
+  chose; on a phone the list opens a group's page. Each group says in the
+  list how it stands ("Niche Zero · 14", "Backed up 5 min ago"), with a dot
+  when something needs you, and a search finds any setting by its words.
+  Everything applies as you change it: the Coach card's Save button is gone.
+  Each drink's machine settings and its screen are in one card.
+- **The 12-hour clock.** Settings > Display > Units > Clock: every time CafAI
+  shows, and the wake time you set, in 12-hour time if you like.
+- **Hide the TDS cell.** Settings > Display > Shot cards > Show TDS and
+  extraction, for anyone without a refractometer.
+- **Export from Settings**, in Data and privacy > Your data, as well as from
+  History.
+- **What's new and Report a problem** in About: this version's notes, and a
+  GitHub issue started with your versions filled in.
+
 ### Usage sharing
 
 - **Usage sharing reaches Clarity.** Clarity collected nothing from
@@ -16,17 +35,38 @@ workflow checks against it. Settings > About shows the version you run.
 
 ### The coach
 
+- **What the coach costs.** Settings > Coach > Usage and cost shows the
+  coach's tokens and an estimated cost: this month, today, last month and
+  all time, a bar a day, and what it went on (replies, replies after shots,
+  bag photos, web searches), at Anthropic's prices, every device on your
+  Decaid adding to the same count. A monthly budget warns in the chat at
+  80 % and 100 %, and can pause the coach until you raise it or the month
+  turns. With the coach on your computer, the card shows your Claude plan's
+  use instead, and what the same replies would cost on the API.
+- **How the coach replies**: Quicker, Balanced or Thorough, in Settings >
+  Coach > Model and replies.
+- **Sonnet 5.5 and Haiku 5.5** take Sonnet 5's and Haiku 4.5's places in the
+  model list; Haiku 5.5 costs a fortieth of Opus 5.5.
+- **Which way is finer.** Settings > Grinder > Finer is: for a grinder whose
+  numbers run the other way, the coach turns the dial that way. A grinder's
+  list of settings that are numbers goes by it too, whatever order the list
+  was typed in: from the lowest number on Lower numbers, from the highest on
+  Higher numbers.
 - **Where the coach runs survives a Decaid update.** On an iPad, each
   update of Decaid gives CafAI a fresh browser storage; your bags and
   settings came back from Decaid's backup, but Claude on my computer, with
   CafAI Bridge's address and code, was gone. CafAI now keeps a copy of them
-  in Decaid and puts them back by itself. **Settings > Where the coach runs
-  > Keep the address and code in Decaid** is on by default; turned off, or
-  with the coach back on the Anthropic API key, the copy is deleted. Any
-  device on your network can read Decaid's store, as the switch says.
+  in Decaid and puts them back by itself. **Settings > Coach > Where the
+  coach runs > Keep the address and code in Decaid** is on by default;
+  turned off, or with the coach back on the Anthropic API key, the copy is
+  deleted. Any device on your network can read Decaid's store, as the
+  switch says.
 
 ### Screensavers
 
+- **When it starts and how dim it goes.** Settings > Display >
+  Screensaver > Starts after (1 to 15 minutes) and Dims the screen to (10 to
+  60 %).
 - **Nicer screensavers.** Each is drawn lit now, not flat. The Bouncing
   Portafilter is a portafilter logo glowing in its roast, crossing to the
   next at each wall. Beanfield's beans are lit roasted beans rolling out of

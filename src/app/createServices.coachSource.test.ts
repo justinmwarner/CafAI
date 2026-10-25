@@ -86,7 +86,7 @@ describe('createServices: where the coach runs', () => {
     await services.coach.newBag();
     await services.coach.sendText('Kiambu AA, light roast, washed');
     // The engine's own sentence (src/app/engine/engine.ts), worded for the API key.
-    await vi.waitFor(() => expect(services!.coach.getState().error).toBe('Add your Anthropic API key in Settings to start coaching.'));
+    await vi.waitFor(() => expect(services!.coach.getState().error).toBe('Add your Anthropic API key in Settings > Coach to start coaching.'));
     expect(net.posts).toEqual([]);
 
     await services.coachSource!.set(COMPUTER);

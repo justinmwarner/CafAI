@@ -5,6 +5,7 @@
  * these shapes.
  */
 import { EVENT, type SaveBagDetails } from '../../coach/contract.ts';
+import { finestFirst } from '../../coach/grinder.ts';
 import type { GrinderInfo, ShotSummary } from '../../coach/types.ts';
 import type { ContentBlock, LlmMessage, TextBlock, ToolResultBlock, ToolUseBlock } from '../../llm/types.ts';
 import type { ShotBaseline } from '../types.ts';
@@ -29,18 +30,24 @@ export function userMessage(blocks: ContentBlock[]): LlmMessage {
 
 /**
  * The grinder as the model hears it (rules 1 and 3): name and setting as
- * last saved, and how its dial moves when it is linked to Decaid's grinder
- * library (D62). Every field is always sent, null when unknown; build it with
- * grinderPayload().
+ * last saved, which way its numbers go finer (D241), and how its dial moves
+ * when it is linked to Decaid's grinder library (D62). Every field is always
+ * sent, null when unknown; build it with grinderPayload().
  */
 export interface GrinderPayload {
   name: string | null;
   setting: string | null;
+  /**
+   * Which way the grinder's numbers go finer, for a linked grinder and a
+   * typed one alike: "higher" when the barista said higher numbers are finer
+   * on it (Settings > Grinder > Finer is, D241), else "lower" (D62).
+   */
+  finer: 'lower' | 'higher';
   /** Null when no grinder from Decaid's library is linked, or Decaid has no record of it. */
   settingType: GrinderInfo['settingType'] | null;
   /** A numeric dial's small step; null when unknown. */
   step: number | null;
-  /** A preset grinder's settings, finest first; null when unknown. */
+  /** A preset grinder's settings, finest first whichever way its numbers go (finestFirst); null when unknown. */
   values: string[] | null;
   /**
    * Settings links this grinder from Decaid's library, also when Decaid no
@@ -50,21 +57,29 @@ export interface GrinderPayload {
   linked: boolean;
 }
 
-/** The grinder for the model: as last saved, with what Decaid's grinder library says about its dial. */
+/**
+ * The grinder for the model: as last saved, with what Decaid's grinder
+ * library says about its dial, and which way is finer (D241): the dial's
+ * own `finerIsHigher` unless `finerIsHigher` is given, as it must be for a
+ * typed grinder, which has no dial to carry it. The dial's `values` are in
+ * Decaid's order; the payload's run finest first.
+ */
 export function grinderPayload(
   name: string | null,
   setting: string | null,
   dial: GrinderInfo | null,
   linked: boolean,
+  finerIsHigher = dial?.finerIsHigher === true,
 ): GrinderPayload {
   const step = dial?.settingType === 'numeric' ? dial.smallStep : null;
   const values = dial?.settingType === 'preset' ? dial.values : null;
   return {
     name,
     setting,
+    finer: finerIsHigher ? 'higher' : 'lower',
     settingType: dial?.settingType ?? null,
     step: step !== null && Number.isFinite(step) && step > 0 ? step : null,
-    values: values && values.length > 0 ? [...values] : null,
+    values: values && values.length > 0 ? finestFirst(values, finerIsHigher) : null,
     linked,
   };
 }

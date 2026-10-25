@@ -51,8 +51,9 @@ function machineCommands(page: Page): Promise<string[]> {
   return page.evaluate(() => [...(window as CafaiMockWindow).__CAFAI_MOCK__!.state.machineCommands]);
 }
 
+/** Settings > Display > Screensaver: pick one, then back to the coach. */
 async function choose(page: Page, pick: string): Promise<void> {
-  await goTo(page, 'settings');
+  await goTo(page, 'settings', 'display');
   await page.getByTestId(TID.saverPick).selectOption(pick);
   await goTo(page, 'coach');
 }
@@ -121,7 +122,7 @@ test('inside Decaid with the machine awake it never shows', async ({ page }) => 
 
 test('turned off in Settings, it never shows', async ({ page }) => {
   await open(page);
-  await goTo(page, 'settings');
+  await goTo(page, 'settings', 'display');
   const on = page.getByTestId(TID.saverOn);
   await expect(on).toBeChecked();
   await on.click();
@@ -172,7 +173,7 @@ for (const id of CANVAS_IDS) {
 test('Preview shows the chosen one anywhere and a tap closes it, waking nothing and dimming nothing', async ({ page }) => {
   await open(page, { inside: false });
   await sleepMachine(page);
-  await goTo(page, 'settings');
+  await goTo(page, 'settings', 'display');
   await page.getByTestId(TID.saverPick).selectOption('nightstand');
   await page.getByTestId(TID.saverPreview).click();
   const saver = page.getByTestId(TID.saver);
@@ -180,7 +181,8 @@ test('Preview shows the chosen one anywhere and a tap closes it, waking nothing 
   await expect(page.getByTestId(TID.nightstandTime)).toHaveText(/^21:3\d$/);
   await saver.tap();
   await expect(saver).toBeHidden();
-  // Still on Settings, the machine still asleep, the screen never touched.
+  // Still on Settings > Display, the machine still asleep, the screen never touched.
+  await expect(page).toHaveURL(/#\/settings\/display$/);
   await expect(page.getByTestId(TID.saverSection)).toBeVisible();
   await expect(machineRow(page).getByRole('button', { name: 'Wake', exact: true })).toBeVisible();
   expect(await machineCommands(page)).not.toContain('idle');

@@ -7,6 +7,8 @@ import { FAHRENHEIT_HEADING } from '../coach/fahrenheitPrompt.ts';
 import { buildSystemPrompt, getTemplate, TEMPLATES } from '../coach/index.ts';
 import type { TemperatureUnit } from '../coach/temperature.ts';
 import { createFakeDecaid } from '../ui/testing/fakeServices.ts';
+import { sseFrame } from '../../mock/anthropic/sse.ts';
+import type { SpendCount } from '../spend/types.ts';
 import { createApiPort, createCoachPort, createLlmPort, grinderInfo } from './adapters.ts';
 
 const profile = {
@@ -316,5 +318,45 @@ describe('createLlmPort', () => {
     expect(body.model).toBe('claude-opus-5-5');
     expect(body.messages[0].content[0]).toEqual({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: '/9j/4AAQ' } });
     expect(body.tools).toBeUndefined();
+  });
+
+  it("counts what the coach's replies and the bag photo used, each as what it was for (D237)", async () => {
+    const reply = (text: string) =>
+      [
+        { type: 'message_start', message: { id: 'msg_1', type: 'message', role: 'assistant', model: 'claude-opus-5-5', content: [], usage: { input_tokens: 700, output_tokens: 1 } } },
+        { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+        { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } },
+        { type: 'content_block_stop', index: 0 },
+        { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 30 } },
+        { type: 'message_stop' },
+      ]
+        .map((data) => sseFrame({ event: data.type, data }))
+        .join('');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const photo = String(init?.body).includes('"image"');
+        const bag = '{"name":"Kiambu AA","roaster":null,"origin":null,"process":null,"roastLevel":null,"roastDate":null,"notes":null}';
+        return new Response(reply(photo ? bag : 'Grind finer.'), { headers: { 'content-type': 'text/event-stream' } });
+      }),
+    );
+    const counts: SpendCount[] = [];
+    const port = createLlmPort({ getApiKey: async () => 'sk-ant-test', setApiKey: async () => {}, forgetApiKey: async () => {} }, undefined, {
+      count: (entry) => counts.push(entry),
+    });
+    await port.run({
+      provider: port.provider,
+      model: 'claude-sonnet-5-5',
+      system: 'You coach espresso.',
+      purpose: 'shot',
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'The shot ran.' }] }],
+      tools: [],
+      onAppend: () => undefined,
+    });
+    await port.readBag!({ model: 'claude-haiku-5-5', photo: { mediaType: 'image/jpeg', data: '/9j/4AAQ' } });
+    expect(counts.map(({ source, model, kind, call, usage }) => ({ source, model, kind, call, usage }))).toEqual([
+      { source: 'anthropic', model: 'claude-sonnet-5-5', kind: 'shot', call: 0, usage: { inputTokens: 700, outputTokens: 30 } },
+      { source: 'anthropic', model: 'claude-haiku-5-5', kind: 'photo', call: 0, usage: { inputTokens: 700, outputTokens: 30 } },
+    ]);
   });
 });

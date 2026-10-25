@@ -340,7 +340,7 @@ export class DecaidKvMirror implements KvMirror {
   /**
    * Calls `listener` whenever lastPushAt, lastError or backupKnown changes;
    * returns the unsubscribe. While this page does not know how the backup
-   * stands, a subscriber (Settings > About) has Decaid's record of the last
+   * stands, a subscriber (Settings > Data and privacy) has Decaid's record of the last
    * backup read, so a fresh page never says "not backed up" over a backup
    * Decaid holds.
    */

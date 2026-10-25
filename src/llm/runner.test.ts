@@ -133,6 +133,33 @@ describe('runConversation', () => {
     expect(sent.tools.map((t) => t.name)).toEqual(['lookup', 'ask']);
   });
 
+  it('tells the provider what every request of a run is for, and which call of the run it is, 0 first (D237)', async () => {
+    const run = start(
+      [
+        turn('tool_use', toolUse('t1', 'lookup', { shot: 'latest' })),
+        turn('tool_use', toolUse('t2', 'lookup', { shot: 'previous' })),
+        turn('end_turn', text('Both look fine.')),
+      ],
+      { purpose: 'shot' },
+    );
+    await run.promise;
+    expect(run.requests.map((request) => [request.purpose, request.call])).toEqual([
+      ['shot', 0],
+      ['shot', 1],
+      ['shot', 2],
+    ]);
+  });
+
+  it('counts a turn the server paused, going on, as the next call of the same run; a run said to be for nothing is a reply', async () => {
+    const SEARCH: ContentBlock = { type: 'server_tool_use', id: 'srvtoolu_1', name: 'web_search', input: { query: 'x' } };
+    const run = start([turn('pause_turn', SEARCH), turn('end_turn', text('Found it.'))]);
+    await run.promise;
+    expect(run.requests.map((request) => [request.purpose, request.call])).toEqual([
+      ['reply', 0],
+      ['reply', 1],
+    ]);
+  });
+
   it('runs auto tools and sends every result in one user message, in tool_use order', async () => {
     const run = start([
       turn('tool_use', text('Checking.'), toolUse('t1', 'lookup', { shot: 'latest' }), toolUse('t2', 'lookup', { shot: 'previous' })),

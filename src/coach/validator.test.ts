@@ -299,7 +299,7 @@ describe('validateProposal: grind', () => {
     });
     expect(plan.diffLines).toEqual(['Grind 1 step finer (now 14.5)']);
     expect(plan.manualSteps).toEqual([
-      "Turn the grinder 1 step finer before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings.",
+      "Turn the grinder 1 step finer before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings > Grinder.",
     ]);
   });
 
@@ -436,7 +436,7 @@ describe("validateProposal: grind with Decaid's grinder library (D62)", () => {
     expect(plan.contextPatch).toEqual({});
     expect(plan.diffLines).toEqual(['Grind a little finer (now 15)']);
     expect(plan.manualSteps).toEqual([
-      'Turn the grinder a little finer before the next shot (Decaid lists 0.5 steps for your Niche Zero), then note the new setting in Settings.',
+      'Turn the grinder a little finer before the next shot (Decaid lists 0.5 steps for your Niche Zero), then note the new setting in Settings > Grinder.',
     ]);
     expect(plan.grindSettingFrom).toBeNull();
   });
@@ -449,7 +449,7 @@ describe("validateProposal: grind with Decaid's grinder library (D62)", () => {
       expect(relative.contextPatch).toEqual({});
       expect(relative.diffLines).toEqual(['Grind 1 step finer (now 14.5)']);
       expect(relative.manualSteps).toEqual([
-        "Turn the grinder 1 step finer before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings.",
+        "Turn the grinder 1 step finer before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings > Grinder.",
       ]);
       // Off any 0.5 grid, yet passed through: there is no grid to check it against.
       const given = okPlan(validateProposal(grind('coarser', 2, '15.2'), ctx));
@@ -468,7 +468,7 @@ describe("validateProposal: grind with Decaid's grinder library (D62)", () => {
       const relative = okPlan(validateProposal(grind('finer', 1, null), ctx));
       expect(relative.contextPatch, String(grinderSetting)).toEqual({});
       expect(relative.manualSteps).toEqual([
-        'Turn the grinder 1 step finer before the next shot (Decaid lists 0.5 steps for your Niche Zero), then note the new setting in Settings.',
+        'Turn the grinder 1 step finer before the next shot (Decaid lists 0.5 steps for your Niche Zero), then note the new setting in Settings > Grinder.',
       ]);
       const given = okPlan(validateProposal(grind('finer', 1, '13.3'), ctx));
       expect(given.contextPatch).toEqual({ grinderSetting: '13.3' });
@@ -480,10 +480,44 @@ describe("validateProposal: grind with Decaid's grinder library (D62)", () => {
     const preset = okPlan(validateProposal(grind('finer', 1, null), on(DITTING, 'fine')));
     expect(preset.contextPatch).toEqual({});
     expect(preset.manualSteps).toEqual([
-      'Turn the grinder 1 step finer before the next shot (Decaid lists 8 settings for your Ditting 807), then note the new setting in Settings.',
+      'Turn the grinder 1 step finer before the next shot (Decaid lists 8 settings for your Ditting 807), then note the new setting in Settings > Grinder.',
     ]);
     // Same as before: a "new" setting equal to the one on the dial is refused.
     expect(errorsOf(validateProposal(grind('finer', 1, 'two turns'), on(NICHE, 'two turns')))).toMatch(/is the setting the grinder is on now/);
+  });
+
+  describe('on a grinder whose higher numbers are finer (D241)', () => {
+    const UPWARD: GrinderInfo = { ...NICHE, finerIsHigher: true };
+    const STEPPED: GrinderInfo = {
+      model: 'Baratza Encore ESP',
+      settingType: 'preset',
+      smallStep: null,
+      bigStep: null,
+      values: ['1', '2', '3', '4', '5', '6'],
+      finerIsHigher: true,
+    };
+
+    it('the change card says finer with the higher number, worked out on the dial', () => {
+      expect(okPlan(validateProposal(grind('finer', 2, null), on(UPWARD, '15')))).toMatchObject({
+        contextPatch: { grinderSetting: '16.0' },
+        diffLines: ['Grind 2 steps finer: 15 -> 16.0'],
+        manualSteps: ['Set the grinder to 16.0 before the next shot (Decaid lists 0.5 steps for your Niche Zero).'],
+        grindSettingFrom: 'decaid',
+      });
+      expect(okPlan(validateProposal(grind('finer', null, '16'), on(UPWARD, null))).diffLines).toEqual(['Grind finer, to 16']);
+      expect(okPlan(validateProposal(grind('coarser', 1, null), on(UPWARD, '15'))).diffLines).toEqual(['Grind 1 step coarser: 15 -> 14.5']);
+      expect(okPlan(validateProposal(grind('finer', 1, null), on(STEPPED, '4')))).toMatchObject({
+        diffLines: ['Grind 1 step finer: 4 -> 5'],
+        manualSteps: ['Set the grinder to 5 before the next shot (Decaid lists 6 settings for your Baratza Encore ESP).'],
+      });
+    });
+
+    it('sends a setting on the wrong side back to the model, saying which way is finer', () => {
+      expect(errorsOf(validateProposal(grind('finer', null, '14'), on(UPWARD, '15')))).toMatch(
+        /^grind\.setting "14" is coarser than 15 \(higher numbers are finer\), but grind\.direction is "finer"\. Your grinder moves in steps of 0\.5 \(Decaid's grinder library\): 1 step finer from 15 is 15\.5\./,
+      );
+      expect(errorsOf(validateProposal(grind('finer', 1, '3'), on(STEPPED, '4')))).toMatch(/^grind\.setting "3" is coarser than "4" in the list/);
+    });
   });
 });
 

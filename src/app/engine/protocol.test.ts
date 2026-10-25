@@ -65,7 +65,7 @@ describe('engine protocol', () => {
       { type: 'text', text: 'Kenya Kiambu, light, washed' },
       {
         type: 'text',
-        text: '[context]\n{"grinder":{"name":"Niche","setting":"12","settingType":null,"step":null,"values":null,"linked":false},"scaleConnected":true,"doseG":null,"bag":null,"roast":null,"today":"2026-10-10"}',
+        text: '[context]\n{"grinder":{"name":"Niche","setting":"12","finer":"lower","settingType":null,"step":null,"values":null,"linked":false},"scaleConnected":true,"doseG":null,"bag":null,"roast":null,"today":"2026-10-10"}',
       },
     ]);
   });
@@ -81,7 +81,7 @@ describe('engine protocol', () => {
     });
     expect(blocks[1]).toEqual({
       type: 'text',
-      text: '[context]\n{"grinder":{"name":"Niche Zero","setting":"15","settingType":"numeric","step":0.5,"values":null,"linked":true},"scaleConnected":true,"doseG":18,"bag":null,"roast":null,"today":"2026-10-10"}',
+      text: '[context]\n{"grinder":{"name":"Niche Zero","setting":"15","finer":"lower","settingType":"numeric","step":0.5,"values":null,"linked":true},"scaleConnected":true,"doseG":18,"bag":null,"roast":null,"today":"2026-10-10"}',
     });
   });
 
@@ -140,6 +140,7 @@ describe('engine protocol', () => {
       expect(grinderPayload('Niche Zero', '15', NICHE, true)).toEqual({
         name: 'Niche Zero',
         setting: '15',
+        finer: 'lower',
         settingType: 'numeric',
         step: 0.5,
         values: null,
@@ -152,6 +153,7 @@ describe('engine protocol', () => {
       expect(payload).toEqual({
         name: 'Baratza Encore ESP',
         setting: '5',
+        finer: 'lower',
         settingType: 'preset',
         step: null,
         values: ENCORE.values,
@@ -160,10 +162,38 @@ describe('engine protocol', () => {
       expect(payload.values).not.toBe(ENCORE.values);
     });
 
+    it('says which way is finer, for a linked grinder and a typed one alike (D241)', () => {
+      expect(grinderPayload('Niche Zero', '15', NICHE, true, true)).toMatchObject({ finer: 'higher', step: 0.5 });
+      expect(grinderPayload('Niche Zero', '15', NICHE, true, false).finer).toBe('lower');
+      // Without the argument, the dial's own answer (the engine adds it from the settings).
+      expect(grinderPayload('Niche Zero', '15', { ...NICHE, finerIsHigher: true }, true).finer).toBe('higher');
+      expect(grinderPayload('Encore', '5', { ...ENCORE, finerIsHigher: true }, true).values?.[0]).toBe('12');
+      expect(grinderPayload('DF64', '14', null, false, true)).toEqual({
+        name: 'DF64',
+        setting: '14',
+        finer: 'higher',
+        settingType: null,
+        step: null,
+        values: null,
+        linked: false,
+      });
+    });
+
+    it("gives a preset grinder's settings finest first where higher numbers are finer (D241)", () => {
+      expect(grinderPayload('Baratza Encore ESP', '5', ENCORE, true, true).values).toEqual([
+        '12', '11', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1',
+      ]);
+      // A list of numbers is read by the answer, whichever way it was typed.
+      expect(grinderPayload('Typed', '3', { ...ENCORE, values: ['3', '2', '1'] }, true, true).values).toEqual(['3', '2', '1']);
+      expect(grinderPayload('Typed', '3', { ...ENCORE, values: ['3', '2', '1'] }, true, false).values).toEqual(['1', '2', '3']);
+      expect(ENCORE.values?.[0]).toBe('1');
+    });
+
     it('says null for everything Decaid does not know', () => {
       expect(grinderPayload('DF64', '14', null, false)).toEqual({
         name: 'DF64',
         setting: '14',
+        finer: 'lower',
         settingType: null,
         step: null,
         values: null,
@@ -183,6 +213,7 @@ describe('engine protocol', () => {
       expect(grinderPayload('Niche Zero', '15', null, true)).toEqual({
         name: 'Niche Zero',
         setting: '15',
+        finer: 'lower',
         settingType: null,
         step: null,
         values: null,
@@ -221,7 +252,7 @@ describe('engine protocol', () => {
     expect(payload.roast).toBe('Roasted 2026-09-24 (9 days ago)');
     expect(payload.today).toBe('2026-10-03');
     expect(block.text).toContain('"roast":"Roasted 2026-09-24 (9 days ago)","today":"2026-10-03","summary":');
-    expect(payload.grinder).toEqual({ name: 'Niche Zero', setting: '13', settingType: null, step: null, values: null, linked: false });
+    expect(payload.grinder).toEqual({ name: 'Niche Zero', setting: '13', finer: 'lower', settingType: null, step: null, values: null, linked: false });
     expect(payload.summary.series).toBeUndefined();
     expect(payload.summary.yieldG).toBe(36.4);
     // Where the pour starts, so the coach counts a time it tells the user from there, as the shot card does.
@@ -243,7 +274,7 @@ describe('engine protocol', () => {
       summary: summaryForModel(summary),
     });
     expect(block.text).toContain(
-      '"grinder":{"name":"Baratza Encore ESP","setting":"5","settingType":"preset","step":null,"values":["1","2","3","4","5","6","7","8","9","10","11","12"],"linked":true}',
+      '"grinder":{"name":"Baratza Encore ESP","setting":"5","finer":"lower","settingType":"preset","step":null,"values":["1","2","3","4","5","6","7","8","9","10","11","12"],"linked":true}',
     );
   });
 

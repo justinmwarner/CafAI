@@ -4,7 +4,7 @@
  * shots since"), "Due" first in the warning colour once it is, and **Mark
  * done**, with **Undo** after a mark until the page reloads. The descale and
  * the intake filter also say what reminds them (the water, the filter) and
- * link to Settings > Machine care to change it. Nothing for Daily's steps,
+ * link to Settings > Machine > Machine care to change it. Nothing for Daily's steps,
  * and nothing where there is no care service (fakes, previews).
  */
 import { useEffect, useRef, useState } from 'react';
@@ -38,7 +38,8 @@ function SettingLine({ step, text, said }: { step: TrackedStepId; text: string; 
       </Typography>
       <Button
         component="a"
-        href={routeHref({ name: 'settings' })}
+        // Settings > Machine, where Machine care comes into view (D233).
+        href={routeHref({ name: 'settings', group: 'machine' })}
         onClick={() => requestReveal('settings-care')}
         variant="text"
         data-testid={TID.careSetIn(step)}

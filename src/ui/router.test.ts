@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { isRemembered, parseRoute, placeOf, routeHref, sameRoute, type Route } from './router.ts';
+import { SETTINGS_GROUP_IDS } from './settings/groupIds.ts';
 
 describe('parseRoute', () => {
   it('treats an empty or bare hash as the coach', () => {
@@ -25,6 +26,15 @@ describe('parseRoute', () => {
   it('reads settings', () => {
     expect(parseRoute('#/settings')).toEqual({ name: 'settings' });
     expect(parseRoute('#/settings/')).toEqual({ name: 'settings' });
+  });
+
+  it("reads Settings' groups (D233), and a group it does not know as the list", () => {
+    for (const group of SETTINGS_GROUP_IDS) expect(parseRoute(`#/settings/${group}`)).toEqual({ name: 'settings', group });
+    expect(parseRoute('#/Settings/Coach/')).toEqual({ name: 'settings', group: 'coach' });
+    expect(parseRoute('#/settings/data?_=1')).toEqual({ name: 'settings', group: 'data' });
+    expect(parseRoute('#/settings/extra')).toEqual({ name: 'settings' });
+    // Anything deeper is not Settings.
+    expect(parseRoute('#/settings/coach/extra')).toEqual({ name: 'coach' });
   });
 
   it('reads the shot route', () => {
@@ -68,7 +78,7 @@ describe('parseRoute', () => {
   });
 
   it('sends anything unknown to the coach', () => {
-    for (const hash of ['#/nope', '#/history/a/b', '#/settings/extra', '#/%%%', '#//']) {
+    for (const hash of ['#/nope', '#/history/a/b', '#/settings/a/b', '#/%%%', '#//']) {
       expect(parseRoute(hash)).toEqual({ name: 'coach' });
     }
   });
@@ -80,6 +90,7 @@ describe('routeHref', () => {
     expect(routeHref({ name: 'history' })).toBe('#/history');
     expect(routeHref({ name: 'history', bagId: 'bag 1/2' })).toBe('#/history/bag%201%2F2');
     expect(routeHref({ name: 'settings' })).toBe('#/settings');
+    expect(routeHref({ name: 'settings', group: 'data' })).toBe('#/settings/data');
   });
 
   it("builds a drink's link", () => {
@@ -100,6 +111,7 @@ describe('routeHref', () => {
       { name: 'history', bagId: 'bag_9f2c' },
       { name: 'history', bagId: 'odd id/with?chars#' },
       { name: 'settings' },
+      ...SETTINGS_GROUP_IDS.map((group): Route => ({ name: 'settings', group })),
       { name: 'drink', drink: 'steam' },
       { name: 'drink', drink: 'hotWater' },
       { name: 'drink', drink: 'flush' },
@@ -124,6 +136,13 @@ describe('sameRoute', () => {
     expect(sameRoute({ name: 'drink', drink: 'steam' }, { name: 'drink', drink: 'steam' })).toBe(true);
     expect(sameRoute({ name: 'drink', drink: 'steam' }, { name: 'drink', drink: 'flush' })).toBe(false);
     expect(sameRoute({ name: 'drink', drink: 'steam' }, { name: 'shot' })).toBe(false);
+  });
+
+  it("compares Settings by group, the list being a place of its own", () => {
+    expect(sameRoute({ name: 'settings', group: 'coach' }, { name: 'settings', group: 'coach' })).toBe(true);
+    expect(sameRoute({ name: 'settings', group: 'coach' }, { name: 'settings', group: 'data' })).toBe(false);
+    expect(sameRoute({ name: 'settings' }, { name: 'settings', group: 'coach' })).toBe(false);
+    expect(sameRoute({ name: 'settings' }, { name: 'settings' })).toBe(true);
   });
 
   it('compares the guide by routine', () => {

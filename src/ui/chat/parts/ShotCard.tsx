@@ -10,6 +10,7 @@ import LocalCafeIcon from '@mui/icons-material/LocalCafe';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { isVisualizerShotUrl } from '../../../api/pluginData.ts';
+import { useShowTds } from '../../../app/services.tsx';
 import { SHOT_VERDICTS, SHOT_VERDICT_WORDS, type ShotBaseline, type ShotVerdict } from '../../../app/types.ts';
 import { pourTime } from '../../../coach/summary/pourClock.ts';
 import type { ShotSummary } from '../../../coach/types.ts';
@@ -202,7 +203,12 @@ export interface ShotCardProps {
   onSaveTds?: (tdsPct: number | null) => void;
 }
 
-/** A finished shot at a glance: the numbers the coach reasons about, its curves, and the barista's verdict. */
+/**
+ * A finished shot at a glance: the numbers the coach reasons about, its
+ * curves, and the barista's verdict. The TDS cell and a reading's EY only
+ * while Settings > Display > Shot cards shows them (D246); a TDS given stays
+ * on the shot and goes to the coach either way.
+ */
 export function ShotCard({
   summary,
   baseline = null,
@@ -214,6 +220,7 @@ export function ShotCard({
   visualizerUrl = null,
   onSaveTds,
 }: ShotCardProps) {
+  const showTds = useShowTds();
   // The shot time is the pour, so every other time counts from its start too:
   // a peak "at 61 s" of a 60 s shot would come after the shot ended.
   const peakAt = pourTime(summary.peakPressureAtS, summary.pourStartS);
@@ -242,7 +249,7 @@ export function ShotCard({
         <Metric label="Ratio" value={formatRatio(shotRatio(summary))} />
         <Metric label="Peak pressure" value={peak} />
         <Metric label="First drop" value={formatSeconds(firstDrop)} />
-        <ShotTds summary={summary} onSave={onSaveTds} busy={disabled} />
+        {showTds ? <ShotTds summary={summary} onSave={onSaveTds} busy={disabled} /> : null}
       </Box>
       {/* The shot under is the one the question below names (D178): none where the card asks nothing. */}
       <ShotSparkline summary={summary} baseline={onRate && stars === null ? baseline : null} onOpenGraph={onOpenGraph} />

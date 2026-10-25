@@ -56,7 +56,7 @@ test('sleep and wake from the stats card; asleep, the row offers Wake alone', as
 });
 
 test('a way back to the skin switcher and Decaid settings is always on screen', async ({ page }) => {
-  for (const route of ['#/', '#/history', '#/settings']) {
+  for (const route of ['#/', '#/history', '#/settings', '#/settings/data']) {
     await openApp(page, route);
     await expect(page.getByTestId(TID.exitToSkins)).toBeVisible();
     await expect(page.getByTestId(TID.decaidSettings)).toBeVisible();
@@ -64,13 +64,13 @@ test('a way back to the skin switcher and Decaid settings is always on screen', 
 });
 
 test('the model select is a full 48 px touch target', async ({ page }) => {
-  await openApp(page, '#/settings');
+  await openApp(page, '#/settings/coach');
   const box = await page.getByTestId(TID.modelSelect).boundingBox();
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(47.5);
 });
 
 test('settings keep the API key local and can forget it', async ({ page }) => {
-  await openApp(page, '#/settings');
+  await openApp(page, '#/settings/coach');
   await fillField(page, TID.apiKeyInput, 'sk-ant-e2e-secret');
   await page.getByTestId(TID.apiKeySave).click();
   await expect(page.locator('body')).not.toContainText('sk-ant-e2e-secret');

@@ -84,6 +84,33 @@ describe('createSaverScreen', () => {
     expect(storage.values[SAVER_BRIGHTNESS_KEY]).toBe('100');
   });
 
+  it('hold(level): dims to the brightness chosen in Settings instead of 30 (D247)', () => {
+    const { sockets, storage, screen } = setup();
+    screen.hold(50);
+    const socket = sockets.latest(PATH);
+    const tablet = decaid(socket, 100);
+    tablet.answer();
+    expect(socket.sentJson()).toEqual([{ command: 'requestWakeLock' }, { command: 'setBrightness', brightness: 50 }]);
+    expect(tablet.requested).toBe(50);
+    expect(storage.values[SAVER_BRIGHTNESS_KEY]).toBe('100');
+    // Starting over at another level dims to that one, the first value still the one remembered.
+    screen.hold(10);
+    tablet.answer();
+    expect(socket.sentJson().at(-1)).toEqual({ command: 'setBrightness', brightness: 10 });
+    expect(storage.values[SAVER_BRIGHTNESS_KEY]).toBe('100');
+    screen.restore();
+    tablet.answer();
+    expect(tablet.requested).toBe(100);
+  });
+
+  it('leaves a brightness lower than the level chosen where it is', () => {
+    const { sockets, screen } = setup();
+    screen.hold(50);
+    const socket = sockets.latest(PATH);
+    decaid(socket, 40).answer();
+    expect(socket.sentJson()).toEqual([{ command: 'requestWakeLock' }]);
+  });
+
   it('leaves a brightness lower than 30 where it is, and remembers it', () => {
     const { sockets, storage, screen } = setup();
     screen.hold();

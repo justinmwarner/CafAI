@@ -8,6 +8,7 @@ import {
   describeSchedule,
   describeWhen,
   formatMinutes,
+  formatWakeTime,
   keptAwakeUntil,
   nextWake,
   sortSchedules,
@@ -74,8 +75,28 @@ describe('keeping awake', () => {
   });
 
   it('says a wake time aloud, the time first and whether it is off last', () => {
-    expect(speakSchedule(wake('a', '06:30', [1, 2, 3, 4, 5], { keepAwakeFor: 60 }))).toBe('06:30, Weekdays, stays awake for 1 h');
-    expect(speakSchedule(wake('b', '08:00', [6, 7], { enabled: false }))).toBe('08:00, Weekends, off');
+    expect(speakSchedule(wake('a', '06:30', [1, 2, 3, 4, 5], { keepAwakeFor: 60 }), '24h')).toBe('06:30, Weekdays, stays awake for 1 h');
+    expect(speakSchedule(wake('b', '08:00', [6, 7], { enabled: false }), '24h')).toBe('08:00, Weekends, off');
+  });
+
+  it('says it on the 12-hour clock when chosen (D245)', () => {
+    expect(speakSchedule(wake('a', '06:30', [1, 2, 3, 4, 5], { keepAwakeFor: 60 }), '12h')).toBe('6:30 am, Weekdays, stays awake for 1 h');
+    expect(speakSchedule(wake('b', '20:00', [6, 7], { enabled: false }), '12h')).toBe('8:00 pm, Weekends, off');
+  });
+});
+
+describe('formatWakeTime (D245)', () => {
+  it("shows Decaid's HH:MM in the clock chosen", () => {
+    expect(formatWakeTime('06:30', '24h')).toBe('06:30');
+    expect(formatWakeTime('06:30', '12h')).toBe('6:30 am');
+    expect(formatWakeTime('00:05', '12h')).toBe('12:05 am');
+    expect(formatWakeTime('12:00', '12h')).toBe('12:00 pm');
+    expect(formatWakeTime('22:45', '12h')).toBe('10:45 pm');
+  });
+
+  it('shows a time it cannot read as Decaid gave it', () => {
+    expect(formatWakeTime('6:30', '12h')).toBe('6:30');
+    expect(formatWakeTime('25:00', '12h')).toBe('25:00');
   });
 });
 
@@ -120,22 +141,35 @@ describe('nextWake', () => {
 describe('describeWhen', () => {
   it('says today, tomorrow, the day, or next week', () => {
     const now = thursday(5);
-    expect(describeWhen(thursday(6, 30), now)).toBe('today at 06:30');
-    expect(describeWhen(new Date(2026, 9, 16, 6, 5), now)).toBe('tomorrow at 06:05');
-    expect(describeWhen(new Date(2026, 9, 19, 6, 30), now)).toBe('Monday at 06:30');
-    expect(describeWhen(new Date(2026, 9, 22, 6, 30), now)).toBe('next Thursday at 06:30');
+    expect(describeWhen(thursday(6, 30), now, '24h')).toBe('today at 06:30');
+    expect(describeWhen(new Date(2026, 9, 16, 6, 5), now, '24h')).toBe('tomorrow at 06:05');
+    expect(describeWhen(new Date(2026, 9, 19, 6, 30), now, '24h')).toBe('Monday at 06:30');
+    expect(describeWhen(new Date(2026, 9, 22, 6, 30), now, '24h')).toBe('next Thursday at 06:30');
+  });
+
+  it('says the time on the 12-hour clock when chosen (D245)', () => {
+    const now = thursday(5);
+    expect(describeWhen(thursday(6, 30), now, '12h')).toBe('today at 6:30 am');
+    expect(describeWhen(new Date(2026, 9, 16, 18, 5), now, '12h')).toBe('tomorrow at 6:05 pm');
+    expect(describeWhen(new Date(2026, 9, 22, 0, 15), now, '12h')).toBe('next Thursday at 12:15 am');
   });
 });
 
 describe('keptAwakeUntil', () => {
   it("reads Decaid's local time from its own digits while the window runs", () => {
-    expect(keptAwakeUntil('2026-10-15T07:30:00.000', thursday(7))).toBe('07:30');
+    expect(keptAwakeUntil('2026-10-15T07:30:00.000', thursday(7), '24h')).toBe('07:30');
+    expect(keptAwakeUntil('2026-10-15T13:30:00.000', thursday(7), '24h')).toBe('13:30');
+  });
+
+  it('says it on the 12-hour clock when chosen (D245)', () => {
+    expect(keptAwakeUntil('2026-10-15T07:30:00.000', thursday(7), '12h')).toBe('7:30 am');
+    expect(keptAwakeUntil('2026-10-15T13:30:00.000', thursday(7), '12h')).toBe('1:30 pm');
   });
 
   it('says nothing once it has passed, or without one', () => {
-    expect(keptAwakeUntil('2026-10-15T07:30:00.000', thursday(7, 31))).toBeNull();
-    expect(keptAwakeUntil(null, thursday(7))).toBeNull();
-    expect(keptAwakeUntil(undefined, thursday(7))).toBeNull();
-    expect(keptAwakeUntil('soon', thursday(7))).toBeNull();
+    expect(keptAwakeUntil('2026-10-15T07:30:00.000', thursday(7, 31), '24h')).toBeNull();
+    expect(keptAwakeUntil(null, thursday(7), '24h')).toBeNull();
+    expect(keptAwakeUntil(undefined, thursday(7), '12h')).toBeNull();
+    expect(keptAwakeUntil('soon', thursday(7), '12h')).toBeNull();
   });
 });

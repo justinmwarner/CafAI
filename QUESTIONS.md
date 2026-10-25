@@ -3,16 +3,17 @@
 Ranked by the cost of a wrong guess (most expensive first). Each says what
 CafAI assumes now and what would change if the guess is wrong. Question 34,
 out of usage analytics of 2026-10-22, comes first: it is your next step.
-Questions 1-8 came out of the morning session of 2026-10-04, 9-13 out of the
-Decaid alignment of 2026-10-09, 14-16 out of Claude on your computer of
-2026-10-11, 17 out of your list of 2026-10-11, 18-21 out of the gap review's
-four items of 2026-10-15, 22-23 out of the simulator pre-run of 2026-10-16,
-24-27 out of fun facts of 2026-10-16, 28-29 out of the drink scenes of
-2026-10-22, 30-32 out of the screensavers of 2026-10-22, 35 out of where
-the coach runs after a Decaid update of 2026-10-23 and 36-39 out of the
-screensavers' second round of 2026-10-24 (each ranked the same way, in its
-own section); the questions you answered, and 33, which round 2 made moot,
-are in "Answered" at the end.
+Questions 1 and 3-8 came out of the morning session of 2026-10-04, 9-13 out
+of the Decaid alignment of 2026-10-09, 14-16 out of Claude on your computer
+of 2026-10-11, 17 out of your list of 2026-10-11, 18-20 out of the gap
+review's four items of 2026-10-15, 22-23 out of the simulator pre-run of
+2026-10-16, 24-27 out of fun facts of 2026-10-16, 28-29 out of the drink
+scenes of 2026-10-22, 32 out of the screensavers of 2026-10-22, 35 out of
+where the coach runs after a Decaid update of 2026-10-23, 36-39 out of the
+screensavers' second round of 2026-10-24 and 40-43 out of Settings
+regrouped of 2026-10-24 (each ranked the same way, in its own section); the
+questions you answered, 33, which round 2 made moot, and 2, 21, 30 and 31,
+which Settings regrouped turned into settings, are in "Answered" at the end.
 
 ## Your next step: usage analytics (2026-10-22)
 
@@ -66,11 +67,6 @@ are in "Answered" at the end.
    slow, or answers before the machine really holds the profile, shots are
    refused or mis-credited. The first hardware session measures it
    (docs/HARDWARE_TEST_PLAN.md sections 3 and 4).
-2. **Which way is finer on your grinder?** Decaid's grinder library has no
-   direction, so CafAI assumes lower numbers are finer and that a preset
-   list runs finest first (D62). If your grinder is the other way round, the
-   change card names a setting on the wrong side (it still says "finer"). The
-   fix would be a per-grinder "higher is finer" switch in Settings.
 3. **v1 now starts at the author's ratio times your dose (D57).** At 18 g
    that is Blooming 50 g (Decent ships 60), D-Flow 50, Londonium 36 (Decent
    ships 42), Rao Allongé 90 (Decent ships 135) and Gentle and Sweet 36. If
@@ -257,10 +253,6 @@ are in "Answered" at the end.
     another coffee), so the card never asks about one shot and draws
     another. After a grind move, which makes no new version, the two
     differ: the previous version's shot can be several shots back.
-21. **TDS on every card, or behind a setting (D162)?** Every shot card has
-    a quiet "TDS · Add" cell, even for a barista with no refractometer. A
-    setting would hide it from those who have one until they find it; on a
-    tablet it fills an empty column, on a phone it takes a short row.
 
 ## From the simulator pre-run (2026-10-16)
 
@@ -321,19 +313,6 @@ are in "Answered" at the end.
 
 ## From the screensavers (2026-10-22)
 
-30. **Is 30 the right brightness (D224)?** The screensaver dims the
-    tablet to 30 on Decaid's 0-100 (or leaves a lower brightness of yours
-    alone). Too dim and it reads as off from across the kitchen; too bright
-    and it lights the room at night. On Android's automatic brightness,
-    which Decaid reads as 100, CafAI cannot see how dim the room has set the
-    screen, so at night 30 may even be brighter than it was. The tablet
-    session (section 20 of docs/HARDWARE_TEST_PLAN.md) shows it; it is one
-    number, `SAVER_BRIGHTNESS` in `src/ui/saver/policy.ts`.
-31. **Is a minute untouched the right wait (D223)?** With the machine
-    asleep, the screensaver comes up after 60 s without a touch, so a tap
-    on Sleep does not cover what you were reading. Shorter and it comes up
-    while you read; longer and an unattended screen stays bright longer.
-    One number too, `SAVER_IDLE_MS`.
 32. **"A different one each day" as the default (D225)?** Anyone who
     never opens Settings gets a new one each day, Nightstand among them. If
     one stays your favourite, or a quieter default suits more people,
@@ -392,6 +371,34 @@ are in "Answered" at the end.
     the device's language, as clocks do ("Saturday, October 24"), while the
     rest of CafAI is English; a German tablet would show "Samstag, 24.
     Oktober". Always English is one line.
+
+## From Settings regrouped (2026-10-24)
+
+40. **Every device's spend added together (D238)?** In the form you left
+    "every device on this Decaid added together" unticked, but CafAI counts
+    the coach's spend that way: each device keeps its own records, copies
+    them to Decaid's store, and the card and the budget add every device's.
+    Two reasons: the bill is your API key's, whichever tablet or phone spent
+    it, so a $5 budget should mean $5 on the bill; and an iPad's Decaid update
+    empties CafAI's storage (D231), so a count kept on the device alone would
+    start the month at zero after every update. With one device it is the
+    same number. If you would rather each device show only its own spend,
+    that is a filter in `src/spend/summary.ts` and the card's footnote, and
+    the budget would then be per device.
+41. **Is Haiku 5.5 good enough to coach (D242)?** It is in the model list at
+    $0.10 / $0.50 per million tokens, a fortieth of Opus 5.5's price, but
+    nobody has dialled in a bag with it. If its advice is poor, its note in
+    the list can say so, or it leaves the list.
+42. **Should only the API key count toward the budget (D240)?** Replies
+    through CafAI Bridge cost your Claude plan, not money, so they never
+    count, warn or pause; the card shows their tokens and what they would
+    cost on the API. If you would rather the budget cover what the bridge
+    uses too (at API prices), that is one condition in `src/spend/budget.ts`.
+43. **Report a problem: a blank issue, or the repository's bug form
+    (D248)?** It opens a blank GitHub issue with CafAI's and Decaid's
+    versions and where it runs filled in, and a reminder to attach the log.
+    The repository's bug form (`bug_report.yml`) could be used instead, its
+    fields filled in through the address.
 
 ## Answered
 
@@ -537,3 +544,44 @@ are in "Answered" at the end.
     "just matrix, nothing coffee related", so it falls as coffee's own
     symbols, drawn as paths, and Latin letters in Figtree; no font of the
     device's is needed.
+
+11. **Which way is finer on your grinder?** Decaid's grinder library has no
+    direction, so CafAI assumes lower numbers are finer and that a preset
+    list runs finest first (D62). If your grinder is the other way round, the
+    change card names a setting on the wrong side (it still says "finer"). The
+    fix would be a per-grinder "higher is finer" switch in Settings.
+
+    Answered by a setting (2026-10-24, D241): Settings > Grinder > Finer
+    is, Lower numbers (the default) or Higher numbers, kept per grinder; the
+    coach's arithmetic, the change card's words and its prompt follow it.
+
+12. **TDS on every card, or behind a setting (D162)?** Every shot card has
+    a quiet "TDS · Add" cell, even for a barista with no refractometer. A
+    setting would hide it from those who have one until they find it; on a
+    tablet it fills an empty column, on a phone it takes a short row.
+
+    Answered by a setting (2026-10-24, D246): Settings > Display > Shot
+    cards > Show TDS and extraction, on by default; off hides the cell on
+    shot cards and in History, and a TDS already given is kept and read.
+
+13. **Is 30 the right brightness (D224)?** The screensaver dims the
+    tablet to 30 on Decaid's 0-100 (or leaves a lower brightness of yours
+    alone). Too dim and it reads as off from across the kitchen; too bright
+    and it lights the room at night. On Android's automatic brightness,
+    which Decaid reads as 100, CafAI cannot see how dim the room has set the
+    screen, so at night 30 may even be brighter than it was. The tablet
+    session (section 20 of docs/HARDWARE_TEST_PLAN.md) shows it; it is one
+    number, `SAVER_BRIGHTNESS` in `src/ui/saver/policy.ts`.
+
+    Now a choice (2026-10-24, D247): Settings > Display > Screensaver >
+    Dims the screen to, 10 to 60 %, 30 by default. Whether 30 suits most
+    kitchens is still worth a look on the tablet.
+
+14. **Is a minute untouched the right wait (D223)?** With the machine
+    asleep, the screensaver comes up after 60 s without a touch, so a tap
+    on Sleep does not cover what you were reading. Shorter and it comes up
+    while you read; longer and an unattended screen stays bright longer.
+    One number too, `SAVER_IDLE_MS`.
+
+    Now a choice (2026-10-24, D247): Settings > Display > Screensaver >
+    Starts after, 1 to 15 minutes, a minute by default.

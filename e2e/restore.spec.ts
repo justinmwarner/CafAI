@@ -5,7 +5,16 @@ import { CARE_DB_NAME } from '../src/storage/careDb.ts';
 import { CAFAI_DB_NAME } from '../src/storage/db.ts';
 import { SECRETS_DB_NAME } from '../src/storage/secrets.ts';
 import { TID } from '../src/ui/testIds.ts';
-import { everythingDecaidSaw, loseBrowserStorage, openAppWithSwitches, pullShot, saveApiKey, sendChat, settledMirror } from './helpers.ts';
+import {
+  everythingDecaidSaw,
+  loseBrowserStorage,
+  openAppWithSwitches,
+  openSettingsGroup,
+  pullShot,
+  saveApiKey,
+  sendChat,
+  settledMirror,
+} from './helpers.ts';
 
 /**
  * Restoring from the Decaid backup, end to end (D36, D60, D67): CafAI mirrors
@@ -80,12 +89,12 @@ test('a reload after lost browser storage restores bags, history and the chat fr
   // 3. Reload the app.
   await openAppWithSwitches(page, PERSIST);
 
-  // 4. The API key was not restored: the coach asks for one, Settings has
-  // none, and nothing the mock Decaid saw or stores holds it.
+  // 4. The API key was not restored: the coach asks for one, Settings >
+  // Coach has none, and nothing the mock Decaid saw or stores holds it.
   await expect(page.getByRole('heading', { name: 'Add your Anthropic API key to start coaching' })).toBeVisible();
   // The bags came back, and the card says so (machine care's last times alone would not: D189).
   await expect(page.getByText("Your bags came from Decaid's backup. Paste your API key to go on.")).toBeVisible();
-  await page.getByTestId(TID.navSettings).click();
+  await openSettingsGroup(page, 'coach');
   await expect(page.getByRole('status').filter({ hasText: 'No key saved yet' })).toBeVisible();
   await expect(page.getByTestId(TID.forgetKey)).toHaveCount(0);
   expect(await everythingDecaidSaw(page)).not.toContain(API_KEY);

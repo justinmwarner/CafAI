@@ -10,6 +10,7 @@
  * unchanged. Current Claude models reject (or silently degrade on) edited
  * history, so nothing may rewrite, reorder or drop earlier turns.
  */
+import type { SpendKind } from '../spend/types.ts';
 
 /** JSON Schema object (draft 2020-12 subset accepted by strict tool use). */
 export type JsonSchema = Record<string, unknown>;
@@ -131,7 +132,7 @@ export interface LlmRequest {
   /** Tools the provider runs itself, after the client tools; absent or empty for none (D203). */
   serverTools?: ServerToolDefinition[];
   maxTokens?: number;
-  /** Ignored for models that do not support effort (Haiku 4.5). */
+  /** Ignored for models that do not support effort (Haiku 4.5, no longer offered). */
   effort?: Effort;
   /**
    * False for a request that will not repeat (a photo of the bag): nothing is
@@ -139,6 +140,13 @@ export interface LlmRequest {
    * Cached by default.
    */
   cache?: boolean;
+  /**
+   * What the request is for, for the coach's usage and cost (D237): a reply
+   * by default. CafAI's own: never sent.
+   */
+  purpose?: SpendKind;
+  /** Which model call of its reply this is: 0 (the default) for the first, as a reply's tool loop goes on (D237). Never sent. */
+  call?: number;
   signal?: AbortSignal;
 }
 
@@ -251,6 +259,8 @@ export interface RunRequest {
   tools: RunnerTool[];
   /** Tools the provider runs itself, passed on with every model call of the run (D203). */
   serverTools?: ServerToolDefinition[];
+  /** What the run is for (D237): every model call of it carries it, with its number. A reply by default. */
+  purpose?: SpendKind;
   signal?: AbortSignal;
   /**
    * Called once for every message the runner appends (assistant turns and
@@ -280,12 +290,32 @@ export interface RunResult {
   finalText: string;
 }
 
+/** A second price tier for long prompts (Haiku 5.5's, D242), in USD per million tokens as ModelInfo's. */
+export interface LongPromptPrices {
+  /** A request whose prompt (input plus cache reads and writes) passes this many tokens is priced at this tier. */
+  aboveTokens: number;
+  inputPerMTok: number;
+  outputPerMTok: number;
+  cacheReadPerMTok: number;
+  cacheWritePerMTok: number;
+}
+
 export interface ModelInfo {
   id: string;
   label: string;
   note: string;
-  /** USD per million tokens, for the cost hint in Settings. */
+  /**
+   * USD per million tokens, as Anthropic's pricing page gave them on
+   * PRICES_AS_OF (models.ts): the cost hint in Settings and the coach's
+   * estimated cost (D237). 0 is "not known" (an id typed by hand).
+   */
   inputPerMTok: number;
   outputPerMTok: number;
+  /** A write to the prompt cache: the 5-minute cache CafAI asks for, 1.25x the input. */
+  cacheWritePerMTok: number;
+  /** A read from the prompt cache: 0.05x the input on Opus 5.5 and Sonnet 5.5, 0.025x on Fable 5.1, 0.1x on the others. */
+  cacheReadPerMTok: number;
+  /** Absent for a model priced the same whatever the prompt's length. */
+  longPrompt?: LongPromptPrices;
   supportsEffort: boolean;
 }

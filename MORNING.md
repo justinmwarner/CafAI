@@ -1,8 +1,85 @@
 # Good morning: CafAI after your answers (2026-10-04)
 
-**Newest (2026-10-24):** the screensavers' second round (D249-D273, branch
-`feat/screensavers-2`, merged into `main`): all eight now, each drawn lit
-rather than flat, and Brew Rain made of coffee.
+**Newest (2026-10-24, evening):** Settings regrouped (D232-D248, branch
+`feat/settings-layout`, merged into `main`): seven groups instead of one long
+list, each saying how it stands, a search, the coach's usage and cost with a
+budget, and the gaps you picked.
+
+- **Why.** You said Settings was "just a list of all the options the user
+  can do, it's annoying to use", and asked to clean it up and fill the gaps,
+  a token count and an estimated cost for the coach among them, with every
+  question asked in one go. Your answers chose the layout, the groups'
+  order, each drink in one card, everything applying as it changes, what the
+  usage card shows, a budget that warns with a switch to pause, the plan's
+  use on the computer, and ten gaps.
+- **The layout (D232-D235).** Coach, Grinder, Drinks, Machine, Display, Data
+  and privacy, About. On a tablet the list sits beside the group you chose;
+  on a phone the list opens the group's page. Each group has its own
+  address (`#/settings/coach`), so every link lands on its group. Save is
+  gone: everything applies as it changes, and the card says "Saved.". Steam,
+  Hot water and Flush are each one card, with their screen.
+- **How each group stands, and search (D236).** Each row says it ("Opus 5.5
+  · $1.84 this month", "Niche Zero · 14", "Descale due" with a dot). A
+  search finds any of 53 settings by its words and opens it, focused.
+- **What the coach costs (D237-D240).** Counted from what each reply
+  already carries, at Anthropic's prices: this month, today, last month and
+  all time, a bar a day, and what it went on. A monthly budget warns in the
+  chat at 80 and 100 %; with its switch on it pauses the coach until you
+  raise it or the month turns. With the coach on your computer: your plan's
+  5-hour and weekly use, and what the same replies would cost on the API.
+- **The gaps (D241-D248).** How the coach replies (Quicker, Balanced,
+  Thorough); Sonnet 5.5 and Haiku 5.5 in the model list; Finer is, for a
+  grinder whose numbers run the other way; the 12-hour clock; Show TDS; the
+  screensaver's wait and brightness; Export in Data and privacy; What's new
+  and Report a problem in About.
+- **One call against your form (D238).** You left "every device adds to the
+  same count" unticked, but the budget is the API key's bill, and an iPad's
+  Decaid update moves CafAI to an empty origin, so the count is kept in
+  Decaid too (`cafai-spend`, counts only, never a key or a prompt).
+  QUESTIONS 40 asks whether you want it per device instead.
+- **Finer is and lists of numbers.** A grinder's list of settings that are
+  numbers is read by Finer is, whichever way it was typed. If yours runs
+  from its highest number and higher numbers are finer, set Finer is to
+  Higher numbers.
+- **Review.** Two reviewers, core logic and UI. Fixed with tests:
+  - a count that arrived while its month was being written to Decaid was
+    dropped;
+  - a refresh just after Decaid's restart was never tried again;
+  - a list of numbers that no Finer is answer could turn;
+  - Finer is tapped straight after a rename saved to the old grinder;
+  - linking the same grinder in Settings dropped Higher numbers;
+  - cards open when a late restore landed wrote the old values back;
+  - and smaller ones, among them three controls that saved without saying
+    "Saved." and a drink's failed screen change cleared by another drink's
+    save.
+  - Left as before: a backup that brings back only care times, or only
+    settings, still tells no open screen; the usual restore, bags and
+    settings together after a Decaid update, does.
+- **Checks.** Typecheck, lint, 5656 unit tests (1 skipped), the build and
+  the release zip all passed. Playwright's 726 tests ran with 702 passing,
+  21 skipped by design and 3 failing, two faults:
+  - the search's hidden count for screen readers ran 11 px past a phone's
+    side;
+  - a key taken out of a grinder field was said below the fold at 962x602.
+  Both are fixed. After the fix, those two specs, the search's and the
+  gaps' passed on every project, with Settings' 667 unit tests. Chromium 91
+  ran Settings' search, Coach and Display with no errors.
+- **The bridge.** CafAI Bridge now passes on all of a reply's usage: its web
+  searches, and the turns around Claude Code's own web search, which it
+  dropped. The one running from `E:\source\cafai` keeps the old code until
+  it is restarted from a checkout of `main`. Until then the computer's
+  counts miss those parts.
+- **Numbers.** D232-D248 fill the gap `main` showed before the screensavers'
+  D249.
+- **Calls to check.** QUESTIONS 40-43: every device's spend added together,
+  Haiku 5.5 as a coach, only the API key counting toward the budget, and
+  Report a problem's blank issue.
+- **Cost.** Roughly 6-7M tokens, an estimate: eleven agents (nine that
+  built, two reviewers) and this session.
+
+**Before that (2026-10-24, afternoon):** the screensavers' second round
+(D249-D273, branch `feat/screensavers-2`, merged into `main`): all eight now,
+each drawn lit rather than flat, and Brew Rain made of coffee.
 
 - **Why.** Having tried the six, you asked to finish the two planned, for
   nicer visuals ("I do like a lot of them, but just want to make them

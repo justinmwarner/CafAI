@@ -24,6 +24,9 @@ import type {
   Appearance,
   AppearanceMode,
   CareSettings,
+  ClockFormat,
+  CoachBudget,
+  CoachEffort,
   DrinkScreen,
   DrinkScreenKind,
   DrinkScreensSettings,
@@ -53,6 +56,38 @@ const MAX_PICK_CHARS = 40;
  * key-copy choice is: read `settings.care ?? DEFAULT_CARE`.
  */
 export const DEFAULT_CARE: CareSettings = { water: null, filter: null, reminders: true };
+
+/** How hard the coach thinks while nobody chose on this device (D243): medium, as it always has (D30). */
+export const DEFAULT_COACH_EFFORT: CoachEffort = 'medium';
+const COACH_EFFORTS: readonly CoachEffort[] = ['low', 'medium', 'high'];
+
+export function isCoachEffort(value: unknown): value is CoachEffort {
+  return COACH_EFFORTS.some((effort) => effort === value);
+}
+
+/** The clock while nobody chose on this device (D245): 24-hour, as every time has read so far. */
+export const DEFAULT_CLOCK: ClockFormat = '24h';
+
+export function isClockFormat(value: unknown): value is ClockFormat {
+  return value === '24h' || value === '12h';
+}
+
+/** No budget and no pause (D240): read `settings.coachBudget ?? DEFAULT_BUDGET`. */
+export const DEFAULT_BUDGET: CoachBudget = { monthlyUsd: null, pauseAtBudget: false };
+
+/** A budget is whole dollars a month (D240). */
+export const BUDGET_USD = { min: 1, max: 1000 } as const;
+
+/** The screensaver's waits on offer, in minutes (D247); absent reads as the policy's minute (D223). */
+export const SAVER_START_AFTER_MINUTES: readonly number[] = [1, 2, 5, 10, 15];
+
+/** The brightness the screensaver dims to, on Decaid's 0-100 (D247); absent reads as the policy's 30 (D224). */
+export const SAVER_DIM_TO = { min: 10, max: 60, step: 10 } as const;
+
+/** The longest grinder key storage keeps (grinderDirectionKey): an id or a typed name of up to 60 characters, with its prefix. */
+const MAX_GRINDER_KEY_CHARS = 80;
+/** More grinders than anyone owns; a longer list is cut, so a bad import cannot grow the record without end. */
+const MAX_GRINDER_KEYS = 50;
 
 /** Without keepKeyInDecaid: nobody has chosen on this device yet, which reads as off (D99). */
 export function defaultSettings(defaultModel: string): Settings {
@@ -172,10 +207,74 @@ export function normalizeDrinkScreens(raw: unknown): DrinkScreensSettings {
 export function normalizeScreensaver(raw: unknown): ScreensaverSetting {
   if (!isRecord(raw)) return DEFAULT_SCREENSAVER;
   const pick = raw['pick'];
-  return {
+  const setting: ScreensaverSetting = {
     on: typeof raw['on'] === 'boolean' ? raw['on'] : DEFAULT_SCREENSAVER.on,
     pick: typeof pick === 'string' && pick.length >= 1 && pick.length <= MAX_PICK_CHARS ? pick : DEFAULT_SCREENSAVER.pick,
   };
+  // The wait and the brightness (D247): only a value on offer, else left out, so it reads as the policy's own.
+  const wait = raw['startAfterMinutes'];
+  if (typeof wait === 'number' && SAVER_START_AFTER_MINUTES.includes(wait)) setting.startAfterMinutes = wait;
+  const dim = raw['dimTo'];
+  if (typeof dim === 'number' && Number.isInteger(dim) && dim >= SAVER_DIM_TO.min && dim <= SAVER_DIM_TO.max && dim % SAVER_DIM_TO.step === 0) {
+    setting.dimTo = dim;
+  }
+  return setting;
+}
+
+/**
+ * A stored budget, read leniently (D240): whole dollars within 1 to 1,000,
+ * rounded and kept within them, or null for none; the pause off unless it
+ * says on.
+ */
+export function normalizeCoachBudget(raw: unknown): CoachBudget {
+  if (!isRecord(raw)) return DEFAULT_BUDGET;
+  const usd = raw['monthlyUsd'];
+  return {
+    monthlyUsd:
+      typeof usd === 'number' && Number.isFinite(usd) ? Math.min(BUDGET_USD.max, Math.max(BUDGET_USD.min, Math.round(usd))) : null,
+    pauseAtBudget: raw['pauseAtBudget'] === true,
+  };
+}
+
+/**
+ * The grinders whose higher numbers are finer, read leniently (D241): keys of
+ * 1 to 80 characters, nothing key-shaped (a typed name can hold a pasted
+ * key), each once, at most 50: the newest, which withGrinderDirection puts
+ * last, so a new answer is never the one dropped.
+ */
+export function normalizeGrinderFinerHigher(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const keys: string[] = [];
+  for (let i = raw.length - 1; i >= 0 && keys.length < MAX_GRINDER_KEYS; i -= 1) {
+    const value: unknown = raw[i];
+    if (typeof value !== 'string' || value.length === 0 || value.length > MAX_GRINDER_KEY_CHARS || containsKeyLike(value)) continue;
+    if (!keys.includes(value)) keys.unshift(value);
+  }
+  return keys;
+}
+
+/**
+ * The key a grinder's direction is kept under (D241): Decaid's grinder id
+ * while linked ("id:<id>"), else the typed name, trimmed, its spaces joined
+ * and lowercased ("name:niche zero"); null with no grinder at all.
+ */
+export function grinderDirectionKey(settings: Pick<Settings, 'grinderId' | 'grinderName'>): string | null {
+  const id = settings.grinderId?.trim();
+  if (id) return `id:${id}`;
+  const name = settings.grinderName?.trim().replace(/\s+/g, ' ').toLowerCase();
+  return name ? `name:${name}` : null;
+}
+
+/** Whether higher numbers are finer on the grinder these settings name (D241); lower is finer otherwise (D62). */
+export function finerIsHigher(settings: Pick<Settings, 'grinderId' | 'grinderName' | 'grinderFinerHigher'>): boolean {
+  const key = grinderDirectionKey(settings);
+  return key !== null && (settings.grinderFinerHigher ?? []).includes(key);
+}
+
+/** The direction list with this grinder's set (D241): `higher` true lists it, false takes it off. */
+export function withGrinderDirection(list: readonly string[] | undefined, key: string, higher: boolean): string[] {
+  const rest = (list ?? []).filter((entry) => entry !== key);
+  return higher ? [...rest, key] : rest;
 }
 
 export function sameAppearance(a: Appearance, b: Appearance): boolean {
@@ -211,6 +310,15 @@ export function normalizeSettings(raw: unknown, defaultModel: string): Settings 
   if (isRecord(raw['screensaver'])) settings.screensaver = normalizeScreensaver(raw['screensaver']);
   // Where the coach runs, kept in Decaid too (D229), as the key's copy: only a choice someone made, read as on without one.
   if (typeof raw['keepCoachSourceInDecaid'] === 'boolean') settings.keepCoachSourceInDecaid = raw['keepCoachSourceInDecaid'];
+  // How hard the coach thinks (D243), as the unit: one this build does not know reads as none chosen, so medium.
+  if (isCoachEffort(raw['coachEffort'])) settings.coachEffort = raw['coachEffort'];
+  // The budget (D240), as care: the block once someone set it here, no budget and the pause off included.
+  if (isRecord(raw['coachBudget'])) settings.coachBudget = normalizeCoachBudget(raw['coachBudget']);
+  // Which grinders are finer at higher numbers (D241): the list once someone chose, an emptied one included.
+  if (Array.isArray(raw['grinderFinerHigher'])) settings.grinderFinerHigher = normalizeGrinderFinerHigher(raw['grinderFinerHigher']);
+  // The clock (D245) and the TDS cell (D246), as the unit: only a choice someone made.
+  if (isClockFormat(raw['clock'])) settings.clock = raw['clock'];
+  if (typeof raw['showTds'] === 'boolean') settings.showTds = raw['showTds'];
   return settings;
 }
 
@@ -228,6 +336,11 @@ const FIELDS: ReadonlyArray<keyof Settings> = [
   'drinkScreens',
   'screensaver',
   'keepCoachSourceInDecaid',
+  'coachEffort',
+  'coachBudget',
+  'grinderFinerHigher',
+  'clock',
+  'showTds',
 ];
 
 /** `undefined` means "not part of this edit", never "clear it"; clearing takes an explicit null. */
@@ -253,6 +366,11 @@ export function applySettingsPatch(current: Settings, patch: SettingsPatch, defa
     }
     next['drinkScreens'] = screens;
   }
+  // The budget changes field by field too: setting the dollars never turns the pause off (D240).
+  if (isRecord(patch.coachBudget)) {
+    const edits = Object.entries(patch.coachBudget).filter(([, value]) => value !== undefined);
+    next['coachBudget'] = { ...(current.coachBudget ?? DEFAULT_BUDGET), ...Object.fromEntries(edits) };
+  }
   return normalizeSettings(next, defaultModel);
 }
 
@@ -273,9 +391,11 @@ function isBlank(value: string | null | undefined): boolean {
  * The key's copy in Decaid (D99) is the user's choice wherever this device
  * holds one, off as much as on; only a device that never chose takes it.
  * The temperature unit (D172), machine care's answers (D187), the source of
- * fun facts (D198), the drinks' screens (D222), the screensaver (D225) and
- * the choice to keep where the coach runs in Decaid (D229) follow the same
- * rule, the care, drink screens and screensaver blocks whole.
+ * fun facts (D198), the drinks' screens (D222), the screensaver (D225), the
+ * choice to keep where the coach runs in Decaid (D229), how hard the coach
+ * thinks (D243), its budget (D240), the grinders' directions (D241), the
+ * clock (D245) and the TDS cell (D246) follow the same rule, the care, drink
+ * screens, screensaver and budget blocks and the directions' list whole.
  */
 export function fillBlankSettings(local: Settings, incoming: Settings, defaultModel: string): Settings {
   const pick = (mine: string | null, theirs: string | null) => (isBlank(mine) && !isBlank(theirs) ? theirs : mine);
@@ -313,5 +433,17 @@ export function fillBlankSettings(local: Settings, incoming: Settings, defaultMo
   // Where the coach runs, kept in Decaid (D229), as the key's copy: a choice made here wins, off as much as on.
   const keepSource = local.keepCoachSourceInDecaid ?? incoming.keepCoachSourceInDecaid;
   if (keepSource !== undefined) merged.keepCoachSourceInDecaid = keepSource;
+  // How hard the coach thinks (D243), the budget (D240, the block whole), the grinders' directions (D241, the list whole),
+  // the clock (D245) and the TDS cell (D246), as the unit: a choice made here wins; a device that never chose takes the incoming one.
+  const effort = local.coachEffort ?? incoming.coachEffort;
+  if (effort !== undefined) merged.coachEffort = effort;
+  const budget = local.coachBudget ?? incoming.coachBudget;
+  if (budget !== undefined) merged.coachBudget = budget;
+  const directions = local.grinderFinerHigher ?? incoming.grinderFinerHigher;
+  if (directions !== undefined) merged.grinderFinerHigher = directions;
+  const clock = local.clock ?? incoming.clock;
+  if (clock !== undefined) merged.clock = clock;
+  const tds = local.showTds ?? incoming.showTds;
+  if (tds !== undefined) merged.showTds = tds;
   return merged;
 }

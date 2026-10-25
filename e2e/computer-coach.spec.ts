@@ -10,15 +10,15 @@ import { fillField, goTo, loseBrowserStorage, openApp, openAppWithSwitches, reco
 
 /**
  * "Claude on my computer" (docs/superpowers/specs/2026-10-11-local-claude-design.md):
- * Settings finds CafAI Bridge on this device, saves its address and code, and
- * Test says what the bridge reports; the coach's turns then go to the bridge,
- * with its code, and never to Anthropic. Mock mode answers
+ * Settings > Coach finds CafAI Bridge on this device, saves its address and
+ * code, and Test says what the bridge reports; the coach's turns then go to
+ * the bridge, with its code, and never to Anthropic. Mock mode answers
  * http://127.0.0.1:8877 with the same scripted coach (mock/anthropic/bridge.ts),
  * so no bridge runs here.
  */
 test('the coach answers through CafAI Bridge on this computer, without an API key', async ({ page }) => {
   const seen = recordRequests(page);
-  await openApp(page, '#/settings');
+  await openApp(page, '#/settings/coach');
 
   const section = page.getByRole('region', { name: 'Where the coach runs' });
   const keySection = page.getByRole('region', { name: 'Anthropic API key' });
@@ -86,7 +86,7 @@ test('a Decaid update that empties browser storage keeps the coach on the comput
   const lost = [CAFAI_DB_NAME, CARE_DB_NAME, SECRETS_DB_NAME, COACH_SOURCE_DB_NAME];
   const saved = { kind: 'computer', address: '127.0.0.1:8877', code: 'ABCDEFGH' };
 
-  await openAppWithSwitches(page, PERSIST, '#/settings');
+  await openAppWithSwitches(page, PERSIST, '#/settings/coach');
   const section = page.getByRole('region', { name: 'Where the coach runs' });
   await section.getByTestId(TID.coachSourceComputer).check();
   await expect(section.getByTestId(TID.sourceInDecaid)).toBeChecked();
@@ -104,7 +104,7 @@ test('a Decaid update that empties browser storage keeps the coach on the comput
   await goTo(page, 'coach');
   await page.getByTestId(TID.newBag).click();
   await expect(page.getByTestId(TID.chat)).toContainText('origin');
-  await goTo(page, 'settings');
+  await goTo(page, 'settings', 'coach');
   await expect(section.getByTestId(TID.coachSourceComputer)).toBeChecked();
   await expect(section.getByTestId(TID.computerAddress)).toHaveValue('127.0.0.1:8877');
   await expect(section.getByTestId(TID.computerCode)).toHaveValue('ABCD-EFGH');
@@ -115,6 +115,6 @@ test('a Decaid update that empties browser storage keeps the coach on the comput
   await expect(section.getByTestId(TID.sourceInDecaid)).not.toBeChecked();
   await expect.poll(() => savedSourceCopy(page), { message: 'the mock Decaid dropped the copy' }).toBeNull();
   await loseBrowserStorage(page, lost, MOCK_STORE_PREFIX);
-  await openAppWithSwitches(page, PERSIST, '#/settings');
+  await openAppWithSwitches(page, PERSIST, '#/settings/coach');
   await expect(section.getByTestId(TID.coachSourceAnthropic)).toBeChecked();
 });

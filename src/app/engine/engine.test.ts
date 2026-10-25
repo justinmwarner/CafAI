@@ -41,6 +41,9 @@ import type { FunFact, FunFactsSource } from '../../coach/facts/types.ts';
 import type { Bag } from '../../storage/types.ts';
 import type { CoachUiPart, ShotVerdict } from '../types.ts';
 import { createFakeStorage, createFakeTelemetry, SAMPLE_WORKFLOW, type FakeStorage, type FakeTelemetry } from '../../ui/testing/fakeServices.ts';
+import { budgetState, createBudgetNotes } from '../../spend/budget.ts';
+import type { CoachSource } from '../../storage/coachSource.ts';
+import type { CoachBudget } from '../../storage/types.ts';
 
 // ---------------------------------------------------------------------------
 // Fixtures and fakes
@@ -1534,7 +1537,7 @@ describe('coach engine', () => {
       .find((b) => b.type === 'text' && b.text.startsWith('[event:shot_completed]'));
     const payload = JSON.parse((shotEvent as { text: string }).text.split('\n')[1]!);
     // Typed in Settings, not linked to Decaid's grinder library: no steps to tell.
-    expect(payload.grinder).toEqual({ name: 'Niche Zero', setting: '13', settingType: null, step: null, values: null, linked: false });
+    expect(payload.grinder).toEqual({ name: 'Niche Zero', setting: '13', finer: 'lower', settingType: null, step: null, values: null, linked: false });
   });
 
   it('keeps the bag on screen while a shot is pulled', async () => {
@@ -3269,7 +3272,7 @@ describe('coach engine', () => {
         tips: [],
       });
 
-    const nicheOn = (setting: string) => ({ name: 'Niche Zero', setting, settingType: 'numeric', step: 0.5, values: null, linked: true });
+    const nicheOn = (setting: string) => ({ name: 'Niche Zero', setting, finer: 'lower', settingType: 'numeric', step: 0.5, values: null, linked: true });
 
     it("reads the linked grinder at start and tells the coach its dial at intake and with every shot", async () => {
       await startLinked('g-niche', NICHE, '15');
@@ -3368,6 +3371,7 @@ describe('coach engine', () => {
       expect(intakeGrinder()).toEqual({
         name: 'Baratza Encore ESP',
         setting: '5',
+        finer: 'lower',
         settingType: 'preset',
         step: null,
         values: ENCORE.values,
@@ -3391,7 +3395,7 @@ describe('coach engine', () => {
       await saveInSettings('g-encore', ENCORE, '5');
       expect(engine.getState().error).toBeNull();
       await throughShot();
-      expect(intakeGrinder()).toEqual({ name: 'Baratza Encore ESP', setting: '5', settingType: null, step: null, values: null, linked: true });
+      expect(intakeGrinder()).toEqual({ name: 'Baratza Encore ESP', setting: '5', finer: 'lower', settingType: null, step: null, values: null, linked: true });
 
       await engine.refresh();
       await grinderSettled();
@@ -3401,6 +3405,7 @@ describe('coach engine', () => {
       expect(shotEvents()[1]!.grinder).toEqual({
         name: 'Baratza Encore ESP',
         setting: '5',
+        finer: 'lower',
         settingType: 'preset',
         step: null,
         values: ENCORE.values,
@@ -3421,7 +3426,7 @@ describe('coach engine', () => {
       expect(callsOf('getGrinder').at(-1)!.args).toEqual(['g-gone']);
       await throughTemplateCards();
       // Still linked, so the coach gives directions only.
-      expect(intakeGrinder()).toEqual({ name: 'Old grinder', setting: '7', settingType: null, step: null, values: null, linked: true });
+      expect(intakeGrinder()).toEqual({ name: 'Old grinder', setting: '7', finer: 'lower', settingType: null, step: null, values: null, linked: true });
     });
 
     it('reads nothing when no grinder is linked, and forgets the steps when it is unlinked', async () => {
@@ -3431,7 +3436,7 @@ describe('coach engine', () => {
       expect(callsOf('getGrinder')).toHaveLength(1);
       expect(callsOf('updateWorkflow').at(-1)!.args[0]).toEqual({ context: { grinderId: null, grinderModel: 'Niche Zero', grinderSetting: '15', grinderBurrs: null } });
       await throughShot();
-      expect(intakeGrinder()).toEqual({ name: 'Niche Zero', setting: '15', settingType: null, step: null, values: null, linked: false });
+      expect(intakeGrinder()).toEqual({ name: 'Niche Zero', setting: '15', finer: 'lower', settingType: null, step: null, values: null, linked: false });
 
       // Without Decaid's steps a relative move stays as the coach gave it.
       scripts.push(() => [grindMove({ direction: 'finer', amount: 1, setting: null })]);
@@ -3481,7 +3486,7 @@ describe('coach engine', () => {
       expect(callsOf('getGrinder').length).toBeGreaterThan(1);
       // The shot event already says so: still linked, no steps.
       expect(shotEvents().map((e) => e.grinder)).toEqual([
-        { name: 'Niche Zero', setting: '15', settingType: null, step: null, values: null, linked: true },
+        { name: 'Niche Zero', setting: '15', finer: 'lower', settingType: null, step: null, values: null, linked: true },
       ]);
 
       scripts.push(() => [grindMove({ direction: 'finer', amount: 1, setting: null })]);
@@ -3490,7 +3495,7 @@ describe('coach engine', () => {
       const card = allParts().find((p) => p.kind === 'diff');
       expect(card).toMatchObject({
         lines: ['Grind 1 step finer (now 15)'],
-        manualSteps: ["Turn the grinder 1 step finer before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings."],
+        manualSteps: ["Turn the grinder 1 step finer before the next shot. CafAI doesn't know your grinder's step size, so note the new setting in Settings > Grinder."],
       });
       expect(JSON.stringify(card)).not.toContain('Decaid lists');
     });
@@ -3505,6 +3510,63 @@ describe('coach engine', () => {
       expect(callsOf('getGrinder')).toHaveLength(2);
       await throughTemplateCards();
       expect(intakeGrinder()).toMatchObject({ step: 1 });
+    });
+
+    describe('which way is finer (D241)', () => {
+      it('tells the coach a linked grinder goes finer at higher numbers, and works a move out that way', async () => {
+        await storage.settings.update({ grinderFinerHigher: ['id:g-niche'] });
+        await startLinked('g-niche', NICHE, '15');
+        await throughShot();
+        expect(intakeGrinder()).toEqual({ ...nicheOn('15'), finer: 'higher' });
+        expect(shotEvents().map((e) => e.grinder)).toEqual([{ ...nicheOn('15'), finer: 'higher' }]);
+
+        scripts.push(() => [grindMove({ direction: 'finer', amount: 1, setting: null })]);
+        await engine.answerOptions('t-ask', [OTHER_OPTION], 'Muddy');
+        expect(lastProposalContext?.grinder).toEqual({ ...NICHE, finerIsHigher: true });
+        expect(allParts().find((p) => p.kind === 'diff')).toMatchObject({
+          lines: ['Grind 1 step finer: 15 -> 15.5'],
+          manualSteps: ['Set the grinder to 15.5 before the next shot (Decaid lists 0.5 steps for your Niche Zero).'],
+        });
+        scripts.push(() => [text('Make that change, then pull another shot.')]);
+        await engine.confirmChange('t-grind');
+        expect((await storage.settings.get()).grinderSetting).toBe('15.5');
+      });
+
+      it("reads a linked preset grinder's list from its finest end, for the coach and the move", async () => {
+        await storage.settings.update({ grinderFinerHigher: ['id:g-encore'] });
+        await startLinked('g-encore', ENCORE, '5');
+        await throughShot();
+        expect(intakeGrinder()).toMatchObject({ finer: 'higher', values: ['12', '11', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1'] });
+        scripts.push(() => [grindMove({ direction: 'finer', amount: 1, setting: null })]);
+        await engine.answerOptions('t-ask', [OTHER_OPTION], 'Muddy');
+        expect(allParts().find((p) => p.kind === 'diff')).toMatchObject({ lines: ['Grind 1 step finer: 5 -> 6'] });
+      });
+
+      it('tells the coach for a typed grinder too, by its name', async () => {
+        await storage.settings.update({ grinderName: 'Niche  Zero', grinderSetting: '15', grinderFinerHigher: ['name:niche zero'] });
+        await engine.refresh();
+        await throughShot();
+        expect(intakeGrinder()).toEqual({ name: 'Niche  Zero', setting: '15', finer: 'higher', settingType: null, step: null, values: null, linked: false });
+        // Another grinder's answer is not this one's.
+        await storage.settings.update({ grinderName: 'DF64' });
+        await engine.refresh();
+        await pullAnother('shot-2');
+        expect(shotEvents().at(-1)!.grinder).toMatchObject({ name: 'DF64', finer: 'lower' });
+      });
+
+      it('takes an answer changed in Settings at the next refresh, with nothing written to Decaid', async () => {
+        await startLinked('g-niche', NICHE, '15');
+        await throughShot();
+        expect(intakeGrinder()).toMatchObject({ finer: 'lower' });
+        const writes = callsOf('updateWorkflow').length;
+        await storage.settings.update({ grinderFinerHigher: ['id:g-niche'] });
+        await engine.refresh();
+        await grinderSettled();
+        // Which way is finer is CafAI's, not the workflow's: Decaid has no field for it.
+        expect(callsOf('updateWorkflow')).toHaveLength(writes);
+        await pullAnother('shot-2');
+        expect(shotEvents().at(-1)!.grinder).toEqual({ ...nicheOn('15'), finer: 'higher' });
+      });
     });
   });
 
@@ -3562,7 +3624,7 @@ describe('coach engine', () => {
       expect(parsed(lastUserTurn(requests)[0])).toEqual({
         added: true,
         alreadyInDecaid: false,
-        grinder: { name: 'Mazzer Philos', setting: '12', settingType: 'numeric', step: 0.5, values: null, linked: true },
+        grinder: { name: 'Mazzer Philos', setting: '12', finer: 'lower', settingType: 'numeric', step: 0.5, values: null, linked: true },
       });
       expect(engine.getState()).toMatchObject({ busy: false, phase: 'awaiting_shot' });
     });
@@ -3643,6 +3705,35 @@ describe('coach engine', () => {
         context: { grinderId: 'g-added-1', grinderModel: 'Comandante C40', grinderSetting: null, grinderBurrs: null },
       });
       expect(parsed(lastUserTurn(requests)[0])).toMatchObject({ added: true, grinder: { name: 'Comandante C40', setting: null } });
+    });
+
+    it('keeps which way is finer, said for the typed grinder, once Add links it, and the coach hears it (D241)', async () => {
+      await storage.settings.update({ grinderFinerHigher: ['name:mazzer philos'] });
+      await throughOffer();
+      scripts.push(() => [text('Added. Pull a shot.')]);
+      await engine.addGrinder('t-grinder');
+      // Kept under its name too, so typing it again finds the answer.
+      expect((await storage.settings.get()).grinderFinerHigher).toEqual(['name:mazzer philos', 'id:g-added-1']);
+      expect(parsed(lastUserTurn(requests)[0])).toMatchObject({ added: true, grinder: { name: 'Mazzer Philos', finer: 'higher', linked: true } });
+    });
+
+    it('reads a typed name with its spaces joined, as Finer is does, when Add links the same grinder', async () => {
+      await throughOffer();
+      await storage.settings.update({ grinderName: ' mazzer   Philos ', grinderFinerHigher: ['name:mazzer philos'] });
+      await engine.refresh();
+      scripts.push(() => [text('Added.')]);
+      await engine.addGrinder('t-grinder');
+      expect(await storage.settings.get()).toMatchObject({ grinderId: 'g-added-1', grinderSetting: '12' });
+      expect((await storage.settings.get()).grinderFinerHigher).toEqual(['name:mazzer philos', 'id:g-added-1']);
+    });
+
+    it("never gives a typed grinder's answer to another grinder Add links", async () => {
+      await storage.settings.update({ grinderFinerHigher: ['name:mazzer philos'] });
+      await throughOffer({ model: 'Comandante C40', burrs: null, settingType: null, smallStep: null });
+      scripts.push(() => [text('Added.')]);
+      await engine.addGrinder('t-grinder');
+      expect((await storage.settings.get()).grinderFinerHigher).toEqual(['name:mazzer philos']);
+      expect(parsed(lastUserTurn(requests)[0])).toMatchObject({ grinder: { name: 'Comandante C40', finer: 'lower' } });
     });
 
     describe('offered beside another card (it comes alone)', () => {
@@ -5226,7 +5317,7 @@ describe('coach engine', () => {
       await engine.newBag();
       await engine.readBagPhoto(PHOTO);
       expect(reader.asked).toEqual([]);
-      expect(notices().map((p) => p.text)).toContain('Add your API key in Settings first.');
+      expect(notices().map((p) => p.text)).toContain('Add your API key in Settings > Coach first.');
       expect(beanCard()!.choice).toBeNull();
       expect(confirmCard()).toBeUndefined();
     });
@@ -5931,5 +6022,319 @@ describe('coach engine', () => {
       expect(engine.getState()).toMatchObject({ hasApiKey: false, restoredFromBackup: true, activeBag: { id: 'bag-restored' } });
       expect(notices().some((p) => p.text === BACK)).toBe(false);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// D237, D240, D243: what each reply is for, how hard the coach thinks, and the budget
+// ---------------------------------------------------------------------------
+
+describe("the coach's spend in the engine (D237, D240, D243)", () => {
+  let storage: FakeStorage;
+  let telemetry: FakeTelemetry;
+  let runs: RunRequest[];
+  let scripts: Script[];
+  let engine: CoachEngine;
+  let nowMs: number;
+
+  function build(extra: Partial<EngineDeps> = {}): CoachEngine {
+    let counter = 0;
+    return createCoachEngine({
+      storage,
+      telemetry,
+      api: makeApi([]),
+      coach,
+      llm: makeLlm(scripts, [], runs),
+      clock: { now: () => new Date(nowMs), sleep: async () => {} },
+      newId: (prefix) => `${prefix}-${++counter}`,
+      timers: manualTimers().timers,
+      checkTimers: manualTimers().timers,
+      ...extra,
+    });
+  }
+
+  beforeEach(async () => {
+    storage = createFakeStorage();
+    storage.apiKey = 'sk-ant-test';
+    telemetry = createFakeTelemetry();
+    runs = [];
+    scripts = [];
+    nowMs = Date.parse('2026-10-03T08:00:00Z');
+    reader.asked = [];
+    reader.answer = null;
+    engine = build();
+    await engine.start();
+  });
+
+  afterEach(() => {
+    engine.dispose();
+  });
+
+  /** Intake, a template, then a credited shot whose reply asks how it tasted. */
+  async function throughShot(): Promise<void> {
+    await engine.newBag();
+    scripts.push(() => [text('Lovely. Here is where I would start.'), saveBag, proposeTemplates]);
+    await engine.sendText('Kiambu AA, light, washed');
+    scripts.push(() => [text('Loaded. Pull a shot.')]);
+    await engine.pickTemplate('t-tpl', 'd-flow');
+    scripts.push(() => [text('Got it.'), askTaste]);
+    telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' });
+    await vi.waitFor(() => expect(engine.getState().phase).toBe('awaiting_feedback'));
+  }
+
+  describe('what each reply is for (D237)', () => {
+    it("asks the coach's reply after a credited shot as a shot's, and every other as a reply", async () => {
+      await throughShot();
+      expect(runs.map((run) => run.purpose)).toEqual(['reply', 'reply', 'shot']);
+      scripts.push(() => [text('Sour, then. Grind finer.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      expect(runs.at(-1)!.purpose).toBe('reply');
+    });
+
+    it("asks a Retry as a reply, even of a shot's", async () => {
+      await throughShot();
+      scripts.push(() => {
+        throw new LlmError('overloaded', 'Anthropic is overloaded right now.');
+      });
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: 'targetWeight' });
+      await vi.waitFor(() => expect(engine.getState().error).toBe('Anthropic is overloaded right now.'));
+      expect(runs.at(-1)!.purpose).toBe('shot');
+      scripts.push(() => [text('There it is.')]);
+      await engine.retry();
+      expect(runs.at(-1)!.purpose).toBe('reply');
+    });
+  });
+
+  describe('how hard the coach thinks (D243)', () => {
+    it('thinks at medium, as it always has (D30), until someone chooses', async () => {
+      await throughShot();
+      expect(runs.map((run) => run.effort)).toEqual(['medium', 'medium', 'medium']);
+    });
+
+    it('thinks as chosen in Settings from the next reply on, once Settings has the coach read its settings again', async () => {
+      await storage.settings.update({ coachEffort: 'high' });
+      await engine.refresh();
+      await engine.newBag();
+      scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);
+      await engine.sendText('Kiambu AA, light, washed');
+      expect(runs.at(-1)!.effort).toBe('high');
+      await storage.settings.update({ coachEffort: 'low' });
+      await engine.refresh();
+      scripts.push(() => [text('Loaded. Pull a shot.')]);
+      await engine.pickTemplate('t-tpl', 'd-flow');
+      expect(runs.at(-1)!.effort).toBe('low');
+    });
+  });
+
+  describe('the budget (D240)', () => {
+    /** This month's spend on the API key, in millionths of a dollar, as the spend service would say. */
+    let spent: number;
+    let source: CoachSource;
+    let budgetTimers: ReturnType<typeof manualTimers>;
+    const dollars = (usd: number) => Math.round(usd * 1_000_000);
+
+    beforeEach(async () => {
+      spent = 0;
+      source = { kind: 'anthropic', address: '', code: '' };
+      budgetTimers = manualTimers();
+      engine.dispose();
+      engine = build({
+        spend: { budget: (budget, now) => budgetState(budget, spent, now ?? new Date(nowMs)) },
+        coachSource: { get: async () => source },
+        budgetNotes: createBudgetNotes(null),
+        budgetTimers: budgetTimers.timers,
+      });
+      await engine.start();
+    });
+
+    async function setBudget(budget: CoachBudget): Promise<void> {
+      await storage.settings.update({ coachBudget: budget });
+      await engine.refresh();
+    }
+
+    const parts = () => engine.getState().messages.flatMap((m) => m.parts);
+    const pauseCards = () => parts().filter((part) => part.kind === 'budgetPaused');
+    const budgetNotices = () => parts().flatMap((part) => (part.kind === 'notice' && part.text.includes('budget') ? [part.text] : []));
+    const said = () => parts().flatMap((part) => (part.kind === 'text' ? [part.text] : []));
+    const newest = () => engine.getState().messages.at(-1)!.parts;
+
+    it('sends nothing while the month reached the budget with the pause on: the pause card stands in for the reply, and the shot still shows', async () => {
+      await throughShot();
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(5);
+      const asked = runs.length;
+      await engine.sendText('How was that one?');
+      expect(runs).toHaveLength(asked);
+      expect(newest()).toEqual([{ kind: 'budgetPaused', budgetUsd: 5, resumesOn: '2026-11-01' }]);
+      expect(engine.getState()).toMatchObject({ busy: false, error: null });
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: 'targetWeight' });
+      await vi.waitFor(() => expect(parts().some((part) => part.kind === 'shot' && part.shotId === 'shot-2')).toBe(true));
+      await vi.waitFor(() => expect(newest()).toEqual([{ kind: 'budgetPaused', budgetUsd: 5, resumesOn: '2026-11-01' }]));
+      expect(runs).toHaveLength(asked);
+      // Kept with the chat, as any card is.
+      const stored = await storage.conversations.get(engine.getState().activeBag!.conversationId);
+      expect(stored!.uiMessages.at(-1)!.parts).toEqual([{ kind: 'budgetPaused', budgetUsd: 5, resumesOn: '2026-11-01' }]);
+    });
+
+    it('says the pause once however often the coach is asked again before anything else is said', async () => {
+      await throughShot();
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(6);
+      await engine.sendText('Hello?');
+      await engine.refresh();
+      expect(pauseCards()).toHaveLength(1);
+    });
+
+    it('sends the reply that waited once the budget is raised, as a reply', async () => {
+      await throughShot();
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(5);
+      await engine.sendText('How was that one?');
+      const asked = runs.length;
+      scripts.push(() => [text('Grind a step finer.')]);
+      await setBudget({ monthlyUsd: 10, pauseAtBudget: true });
+      expect(runs).toHaveLength(asked + 1);
+      expect(runs.at(-1)!.purpose).toBe('reply');
+      expect(engine.getState().messages.at(-1)!.parts).toEqual([{ kind: 'text', text: 'Grind a step finer.' }]);
+    });
+
+    it("sends a shot's reply that waited as a shot's, so the usage counts it among replies after shots", async () => {
+      await throughShot();
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(5);
+      const asked = runs.length;
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: 'targetWeight' });
+      await vi.waitFor(() => expect(newest()).toEqual([{ kind: 'budgetPaused', budgetUsd: 5, resumesOn: '2026-11-01' }]));
+      expect(runs).toHaveLength(asked);
+      scripts.push(() => [text('That one ran fast.')]);
+      await setBudget({ monthlyUsd: 10, pauseAtBudget: true });
+      expect(runs).toHaveLength(asked + 1);
+      expect(runs.at(-1)!.purpose).toBe('shot');
+    });
+
+    it("leaves the reply that waited to Retry once another bag is opened, and sends none of that bag's in its place", async () => {
+      // Another bag whose last reply did not finish.
+      await engine.newBag();
+      scripts.push(() => {
+        throw new LlmError('overloaded', 'Anthropic is overloaded right now.');
+      });
+      await engine.sendText('Kiambu AA, light, washed');
+      const other = engine.getState().activeBag!.id;
+      await throughShot();
+      const first = engine.getState().activeBag!.id;
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(5);
+      await engine.sendText('How was that one?');
+      const asked = runs.length;
+      await engine.selectBag(other);
+      expect(budgetTimers.delays()).toEqual([]);
+      await setBudget({ monthlyUsd: 10, pauseAtBudget: true });
+      expect(runs).toHaveLength(asked);
+      await engine.selectBag(first);
+      expect(runs).toHaveLength(asked);
+      expect(engine.getState().error).toBe("The coach's last reply did not finish. Tap Retry to ask again.");
+    });
+
+    it('sends it once the pause is turned off, or the budget cleared', async () => {
+      await throughShot();
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(5);
+      await engine.sendText('One');
+      scripts.push(() => [text('Off.')]);
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: false });
+      expect(said()).toContain('Off.');
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      await engine.sendText('Two');
+      scripts.push(() => [text('Cleared.')]);
+      await setBudget({ monthlyUsd: null, pauseAtBudget: true });
+      expect(newest()).toEqual([{ kind: 'text', text: 'Cleared.' }]);
+    });
+
+    it('leaves a paused coach paused when its settings are read again unchanged', async () => {
+      await throughShot();
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(5);
+      await engine.sendText('How was that one?');
+      const asked = runs.length;
+      await engine.refresh();
+      expect(runs).toHaveLength(asked);
+    });
+
+    it('looks again as the month turns, at least hourly, and sends the reply that waited when a new month begins', async () => {
+      await throughShot();
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(5);
+      await engine.sendText('How was that one?');
+      const asked = runs.length;
+      expect(budgetTimers.delays()).toEqual([60 * 60 * 1000]);
+      budgetTimers.fire();
+      await drainEngine();
+      expect(runs).toHaveLength(asked);
+      expect(budgetTimers.delays()).toEqual([60 * 60 * 1000]);
+      // 1 November: a new month, nothing spent in it yet.
+      nowMs = new Date(2026, 10, 1, 0, 0, 5).getTime();
+      spent = 0;
+      scripts.push(() => [text('Back again.')]);
+      budgetTimers.fire();
+      await vi.waitFor(() => expect(runs).toHaveLength(asked + 1));
+      expect(budgetTimers.delays()).toEqual([]);
+    });
+
+    it('warns once a month at 80 % and once at 100 %, after the reply that got there, and keeps coaching without the pause', async () => {
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: false });
+      await throughShot();
+      expect(budgetNotices()).toEqual([]);
+      spent = dollars(4.02);
+      scripts.push(() => [text('Sour. Grind finer.')]);
+      await engine.answerOptions('t-ask', ['Sour'], null);
+      expect(newest()).toEqual([{ kind: 'notice', tone: 'info', text: 'The coach has used $4.02 of your $5 budget this month.' }]);
+      scripts.push(() => [text('Noted.')]);
+      await engine.sendText('Thanks');
+      spent = dollars(5.2);
+      scripts.push(() => [text('Noted again.')]);
+      await engine.sendText('And now?');
+      expect(newest()).toEqual([{ kind: 'notice', tone: 'warning', text: "This month's coach spend reached your $5 budget." }]);
+      scripts.push(() => [text('Still here.')]);
+      await engine.sendText('Still there?');
+      expect(newest()).toEqual([{ kind: 'text', text: 'Still here.' }]);
+      expect(budgetNotices()).toEqual(['The coach has used $4.02 of your $5 budget this month.', "This month's coach spend reached your $5 budget."]);
+      expect(pauseCards()).toEqual([]);
+    });
+
+    it('never pauses or warns while the coach runs on the computer, whose plan pays', async () => {
+      source = { kind: 'computer', address: '192.168.1.20:8877', code: 'ABCDEFGH' };
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(9);
+      await throughShot();
+      expect(pauseCards()).toEqual([]);
+      expect(budgetNotices()).toEqual([]);
+      expect(runs).toHaveLength(3);
+    });
+
+    it('reads no bag photo while paused: the bean card stays open beside the pause card', async () => {
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(5);
+      reader.answer = { name: 'Kiambu AA', roaster: null, origin: null, process: null, roastLevel: null, roastDate: null, notes: null };
+      await engine.newBag();
+      await engine.readBagPhoto({ mediaType: 'image/jpeg', data: 'UEhPVE8=' });
+      expect(reader.asked).toEqual([]);
+      expect(newest()).toEqual([{ kind: 'budgetPaused', budgetUsd: 5, resumesOn: '2026-11-01' }]);
+      expect(parts().find((part) => part.kind === 'beanPicker')).toMatchObject({ choice: null });
+    });
+
+    it('warns after a bag photo that got there too', async () => {
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: false });
+      spent = dollars(4.5);
+      reader.answer = { name: 'Kiambu AA', roaster: null, origin: null, process: null, roastLevel: null, roastDate: null, notes: null };
+      await engine.newBag();
+      await engine.readBagPhoto({ mediaType: 'image/jpeg', data: 'UEhPVE8=' });
+      expect(reader.asked).toHaveLength(1);
+      expect(budgetNotices()).toEqual(['The coach has used $4.50 of your $5 budget this month.']);
+    });
+
+    /** Let what the engine queued run to its end. */
+    async function drainEngine(): Promise<void> {
+      await engine.declineChange('no-such-card');
+    }
   });
 });

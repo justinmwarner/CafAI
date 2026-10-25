@@ -5,6 +5,7 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { recordExchange, recordFrame, recordSocket, trafficLog } from '../../traffic/recorder.ts';
 import { renderWithServices } from '../chat/testing/render.tsx';
+import { createFakeServicesShowing } from '../testing/displayServices.ts';
 import { TID } from '../testIds.ts';
 import { closeLogView, openLogView } from './logShare.ts';
 import { DETAIL_CHARS, LogView, moreNote } from './LogView.tsx';
@@ -74,6 +75,20 @@ describe('LogView', () => {
     expect(lines[4]).toMatch(/↓receivedRESTGET \/api\/v1\/workflow200\d+ B$/);
     expect(lines[5]).toMatch(/↑sentRESTGET \/api\/v1\/workflow$/);
     expect(screen.getByText('6 entries')).toBeInTheDocument();
+  });
+
+  it('writes each time in the clock chosen, the open entry’s line too, and follows a change of it (D245)', async () => {
+    seed();
+    openLogView();
+    const services = createFakeServicesShowing({ clock: '12h' });
+    renderWithServices(<LogView />, services);
+    expect(rows()[0]!.textContent).toMatch(/^\d{1,2}:\d\d:\d\d [ap]m↓receivedCoach/);
+    await userEvent.click(screen.getByTestId(TID.logEntry(idOf((what, direction) => what === 'GET /api/v1/workflow' && direction === 'received'))));
+    expect(screen.getByTestId(TID.logDetail)).toHaveTextContent(/^\d{1,2}:\d\d:\d\d\.\d{3} [ap]m ↓ REST GET \/api\/v1\/workflow/);
+    await act(async () => {
+      await services.displayPrefs.setClock('24h');
+    });
+    expect(rows()[0]!.textContent).toMatch(/^\d\d:\d\d:\d\d↓receivedCoach/);
   });
 
   it('opens an entry to its raw headers and body, JSON pretty-printed, and closes it again', async () => {

@@ -34,6 +34,7 @@ import {
   type WakeScheduleRequest,
 } from '../../api/types.ts';
 import { useServices } from '../../app/services.tsx';
+import { keepPresence } from './statusReads.ts';
 import { DEFAULT_SLEEP_MINUTES } from './wakeSchedule.ts';
 
 function errorText(error: unknown): string {
@@ -102,6 +103,11 @@ export function usePresence(): PresenceView {
       mounted.current = false;
     };
   }, []);
+
+  // Settings' list says when the machine sleeps and wakes as this section last read or wrote it (statusReads.ts, D236).
+  useEffect(() => {
+    if (settings) keepPresence(decaid, settings);
+  }, [decaid, settings]);
 
   useEffect(() => {
     let live = true;

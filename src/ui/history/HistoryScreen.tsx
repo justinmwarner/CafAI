@@ -2,18 +2,15 @@
  * The history route: #/history lists the bags, #/history/<bagId> shows one
  * bag's profile versions with the dial-in iterations under each. Reads
  * storage directly and re-reads whenever the coach commits something.
- * Export and import of all data live here too.
+ * Export and import of all data live here too: Export through the dialog it
+ * shares with Settings > Data and privacy (src/ui/data/ExportData.tsx, D244).
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
 import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import Paper from '@mui/material/Paper';
@@ -21,14 +18,13 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import type { Bag, IterationRecord, ProfileVersion } from '../../storage/types.ts';
 import { OTHER_OPTION } from '../../coach/contract.ts';
 import { formatEy, formatTds, readingOf } from '../../coach/extraction.ts';
 import { inTemperatureUnit } from '../../coach/temperature.ts';
-import { useCoach, useServices, useWordsTemperatureUnit } from '../../app/services.tsx';
+import { useClockFormat, useCoach, useServices, useShowTds, useWordsTemperatureUnit } from '../../app/services.tsx';
 import { TID } from '../testIds.ts';
 import {
   describeChannelingFlag,
@@ -41,7 +37,7 @@ import {
   splitDiffLine,
 } from '../chat/format.ts';
 import { VisualizerLink } from '../chat/parts/ShotCard.tsx';
-import { copyText, downloadText, exportFileName } from './exportFile.ts';
+import { useExportData } from '../data/ExportData.tsx';
 import { groupHistory, outcomeLabel, templateName, versionStatusLabel } from './historyModel.ts';
 
 export interface HistoryScreenProps {
@@ -79,6 +75,7 @@ function bagDetails(bag: Bag): string {
 }
 
 function BagList({ bags, shotCounts, onSelect }: { bags: Bag[]; shotCounts: Map<string, number>; onSelect(id: string): void }) {
+  const clock = useClockFormat();
   if (bags.length === 0) {
     return (
       <Typography sx={{ color: 'text.secondary', p: 2 }}>
@@ -110,7 +107,7 @@ function BagList({ bags, shotCounts, onSelect }: { bags: Bag[]; shotCounts: Map<
               <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
                 <Typography variant="body2">{shots === 1 ? '1 shot' : `${shots} shots`}</Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                  {formatDateTime(bag.updatedAt)}
+                  {formatDateTime(bag.updatedAt, clock)}
                 </Typography>
               </Box>
               <ChevronRightIcon sx={{ color: 'text.secondary' }} />
@@ -166,11 +163,11 @@ function ChangeLines({ lines }: { lines: string[] }) {
   );
 }
 
-function shotLine(record: IterationRecord): string {
+function shotLine(record: IterationRecord, showTds: boolean): string {
   const s = record.summary;
   if (!s) return 'No shot data';
-  // The barista's refractometer reading, and its EY when there is one (D166).
-  const reading = readingOf(s);
+  // The barista's refractometer reading, and its EY when there is one (D166), while Settings shows them (D246).
+  const reading = showTds ? readingOf(s) : null;
   const measured = reading ? [`TDS ${formatTds(reading.tdsPct)}`, ...(reading.eyPct === null ? [] : [`EY ${formatEy(reading.eyPct)}`])] : [];
   return [
     formatSeconds(s.durationS),
@@ -191,6 +188,8 @@ function feedbackText(record: IterationRecord): string | null {
 
 function IterationRow({ record }: { record: IterationRecord }) {
   const words = useWords();
+  const clock = useClockFormat();
+  const showTds = useShowTds();
   const feedback = feedbackText(record);
   const flags = record.summary?.channelingFlags ?? [];
   return (
@@ -200,9 +199,9 @@ function IterationRow({ record }: { record: IterationRecord }) {
     >
       <Typography variant="body2">
         <Box component="span" sx={{ color: 'text.secondary' }}>
-          {formatDateTime(record.createdAt)} ·{' '}
+          {formatDateTime(record.createdAt, clock)} ·{' '}
         </Box>
-        {shotLine(record)}
+        {shotLine(record, showTds)}
       </Typography>
       {flags.length > 0 ? (
         <Typography variant="body2" sx={{ color: 'warning.main' }}>
@@ -236,6 +235,7 @@ function IterationRow({ record }: { record: IterationRecord }) {
 
 function VersionCard({ version, iterations }: { version: ProfileVersion; iterations: IterationRecord[] }) {
   const words = useWords();
+  const clock = useClockFormat();
   return (
     <Paper
       variant="outlined"
@@ -263,7 +263,7 @@ function VersionCard({ version, iterations }: { version: ProfileVersion; iterati
         />
         <Box sx={{ flex: 1 }} />
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          {formatDateTime(version.createdAt)}
+          {formatDateTime(version.createdAt, clock)}
         </Typography>
       </Stack>
       <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
@@ -353,94 +353,20 @@ function BagDetail({ data, onBack }: { data: BagHistory; onBack(): void }) {
 }
 
 // ---------------------------------------------------------------------------
-// Export / import
-// ---------------------------------------------------------------------------
-
-interface ExportResult {
-  json: string;
-  fileName: string;
-  downloaded: boolean;
-}
-
-function ExportDialog({ result, onClose }: { result: ExportResult; onClose(): void }) {
-  const [copied, setCopied] = useState<boolean | null>(null);
-  const [downloaded, setDownloaded] = useState(result.downloaded);
-  // Copy's fallback over plain http puts its text area here: one outside the dialog loses the focus to its trap.
-  const content = useRef<HTMLDivElement>(null);
-  return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle>Your CafAI data</DialogTitle>
-      <DialogContent ref={content}>
-        <Typography variant="body2" sx={{ mb: 1.5 }}>
-          {downloaded
-            ? `Saved as ${result.fileName}. If no file appeared, copy the text below and keep it somewhere safe.`
-            : 'Downloads may not work inside Decaid. Copy the text below and keep it somewhere safe.'}{' '}
-          It holds your bags, versions and shots, never your API key.
-        </Typography>
-        <Box
-          component="textarea"
-          readOnly
-          value={result.json}
-          aria-label="Exported data"
-          onFocus={(event) => event.currentTarget.select()}
-          sx={{
-            width: '100%',
-            height: '40vh',
-            resize: 'none',
-            fontFamily: 'monospace',
-            fontSize: 12,
-            color: 'text.primary',
-            bgcolor: 'background.default',
-            border: 1,
-            borderColor: 'divider',
-            borderRadius: 1,
-            p: 1,
-          }}
-        />
-        {copied !== null ? (
-          <Typography variant="body2" role="status" sx={{ mt: 1, color: copied ? 'success.main' : 'error.main' }}>
-            {copied ? 'Copied.' : 'Copying failed. Tap the text, select all, then copy.'}
-          </Typography>
-        ) : null}
-      </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button
-          startIcon={<FileDownloadIcon />}
-          onClick={() => setDownloaded(downloadText(result.fileName, result.json))}
-          sx={{ minHeight: 48 }}
-        >
-          Download file
-        </Button>
-        <Button
-          startIcon={<ContentCopyIcon />}
-          onClick={() => void copyText(result.json, content.current ?? undefined).then(setCopied)}
-          sx={{ minHeight: 48 }}
-        >
-          Copy
-        </Button>
-        <Button variant="contained" onClick={onClose} sx={{ minHeight: 48 }}>
-          Done
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
 
 type ListData = { bags: Bag[]; shotCounts: Map<string, number> };
 
 export function HistoryScreen({ bagId, onSelectBag = hashNavigate }: HistoryScreenProps) {
-  const { storage, coach, host, appearance, temperatureUnit, drinkScreens, care } = useServices();
+  const { storage, coach, appearance, temperatureUnit, drinkScreens, displayPrefs, care } = useServices();
   const [coachBags, coachVersions, coachPhase, coachBusy] = useCoachCommits();
   const [reloads, setReloads] = useState(0);
   const [list, setList] = useState<ListData | null>(null);
   const [detail, setDetail] = useState<(BagHistory & { id: string }) | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [message, setMessage] = useState<Message | null>(null);
-  const [exportResult, setExportResult] = useState<ExportResult | null>(null);
+  const { start: startExport, dialog: exportDialog } = useExportData();
   const [working, setWorking] = useState<'export' | 'import' | null>(null);
 
   useEffect(() => {
@@ -478,18 +404,13 @@ export function HistoryScreen({ bagId, onSelectBag = hashNavigate }: HistoryScre
     setWorking('export');
     setMessage(null);
     try {
-      const data = await storage.porter.exportAll();
-      const json = JSON.stringify(data, null, 2);
-      const fileName = exportFileName(new Date());
-      // Inside Decaid's WebView a download usually goes nowhere; go straight to copying.
-      const downloaded = host.insideDecaid ? false : downloadText(fileName, json);
-      setExportResult({ json, fileName, downloaded });
-    } catch (error) {
-      setMessage({ tone: 'error', text: `Export failed: ${errorText(error)}` });
+      // The file, and the dialog, are the shared export's (D244); a failure is said in this screen's alert.
+      const failed = await startExport();
+      if (failed) setMessage({ tone: 'error', text: failed });
     } finally {
       setWorking(null);
     }
-  }, [storage, host]);
+  }, [startExport]);
 
   const onImport = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
@@ -522,6 +443,8 @@ export function HistoryScreen({ bagId, onSelectBag = hashNavigate }: HistoryScre
         temperatureUnit.reload().catch(() => undefined);
         // And the drinks' screens, on a device that never chose them (D222).
         drinkScreens?.reload().catch(() => undefined);
+        // And the clock and the TDS cell's switch, on a device that never chose them (D245, D246).
+        displayPrefs?.reload().catch(() => undefined);
         // And machine care's last times (D189).
         care?.reload().catch(() => undefined);
       } catch (error) {
@@ -530,7 +453,7 @@ export function HistoryScreen({ bagId, onSelectBag = hashNavigate }: HistoryScre
         setWorking(null);
       }
     },
-    [storage, coach, appearance, temperatureUnit, drinkScreens, care],
+    [storage, coach, appearance, temperatureUnit, drinkScreens, displayPrefs, care],
   );
 
   const current = bagId === null ? list : detail?.id === bagId ? detail : null;
@@ -595,7 +518,7 @@ export function HistoryScreen({ bagId, onSelectBag = hashNavigate }: HistoryScre
           <BagDetail data={detail} onBack={() => onSelectBag(null)} />
         ) : null}
       </Box>
-      {exportResult ? <ExportDialog result={exportResult} onClose={() => setExportResult(null)} /> : null}
+      {exportDialog}
     </Box>
   );
 }

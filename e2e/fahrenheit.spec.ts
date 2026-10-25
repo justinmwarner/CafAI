@@ -1,13 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { CafaiMockWindow } from '../mock/browser.ts';
 import { TID } from '../src/ui/testIds.ts';
-import { goTo, machineRow, openApp, pullShot, recordRequests, saveApiKey, sendChat, statsCard } from './helpers.ts';
+import { goTo, machineRow, openApp, openSettingsGroup, pullShot, recordRequests, saveApiKey, sendChat, statsCard } from './helpers.ts';
 
 /**
- * °F (D171-D177), on the tablets and the phones: Settings >
- * Appearance > Temperatures turns every temperature a barista reads or sets
- * into °F, the coach's words too, while the mock Decaid, as Decaid does,
- * keeps whole °C and truncates anything else (mock/decaid/workflow.ts).
+ * °F (D171-D177), on the tablets and the phones: Settings > Display >
+ * Units > Temperatures turns every temperature a barista reads or sets into
+ * °F (Settings > Drinks among them), the coach's words too, while the mock
+ * Decaid, as Decaid does, keeps whole °C and truncates anything else
+ * (mock/decaid/workflow.ts).
  *
  * mockSpeed 10 plays the scripted shot (about 30 s of data) in about 3 s.
  */
@@ -18,8 +19,9 @@ function decaidKeeps(page: Page, drink: 'steamSettings' | 'hotWaterData' | 'rins
   return page.evaluate((name) => (window as CafaiMockWindow).__CAFAI_MOCK__?.state.getWorkflow()[name].targetTemperature, drink);
 }
 
-/** Settings > Appearance > Temperatures, as a barista taps it. */
+/** Settings > Display > Units > Temperatures, as a barista gets there and taps it. */
 async function choose(page: Page, unit: 'celsius' | 'fahrenheit'): Promise<void> {
+  await openSettingsGroup(page, 'display');
   const segment = page.getByTestId(TID.temperatureUnit(unit));
   await segment.click();
   await expect(segment).toHaveAttribute('aria-pressed', 'true');
@@ -35,11 +37,13 @@ async function typeInto(page: Page, name: string, value: string): Promise<void> 
 }
 
 test('°F in Settings: the drink settings and the stats card read °F, a value set in °F is the whole °C Decaid keeps, read back as set', async ({ page }) => {
-  await openApp(page, '#/settings');
-  await expect(page.getByTestId(TID.temperatureUnit('celsius'))).toHaveAttribute('aria-pressed', 'true');
+  await openApp(page, '#/settings/drinks');
   await expect(stepper(page, 'Steam temperature')).toHaveValue('150');
+  await openSettingsGroup(page, 'display');
+  await expect(page.getByTestId(TID.temperatureUnit('celsius'))).toHaveAttribute('aria-pressed', 'true');
 
   await choose(page, 'fahrenheit');
+  await openSettingsGroup(page, 'drinks');
   await expect(stepper(page, 'Steam temperature')).toHaveValue('302');
   await expect(stepper(page, 'Steam temperature')).toHaveAttribute('aria-valuetext', '302 degrees Fahrenheit');
   await expect(stepper(page, 'Hot water temperature')).toHaveValue('167');
@@ -82,18 +86,20 @@ test('°F in Settings: the drink settings and the stats card read °F, a value s
   await page.reload();
   await expect(page.getByTestId(TID.appReady)).toBeVisible();
   await expect(statsCard(page).getByTestId(TID.groupTemp)).toContainText('°F');
-  await goTo(page, 'settings');
+  await goTo(page, 'settings', 'display');
   await expect(page.getByTestId(TID.temperatureUnit('fahrenheit'))).toHaveAttribute('aria-pressed', 'true');
+  await openSettingsGroup(page, 'drinks');
   await expect(stepper(page, 'Steam temperature')).toHaveValue('302');
 
   // And °C again.
   await choose(page, 'celsius');
+  await openSettingsGroup(page, 'drinks');
   await expect(stepper(page, 'Steam temperature')).toHaveValue('150');
 });
 
 test('the coach in °F: its prompt asks for °F, its change and the change card read °F, a change without the 32, and History too', async ({ page }) => {
   const seen = recordRequests(page);
-  await openApp(page, '#/settings', SPEED);
+  await openApp(page, '#/', SPEED);
   await choose(page, 'fahrenheit');
   await saveApiKey(page);
   await goTo(page, 'coach');
@@ -132,7 +138,6 @@ test('the coach in °F: its prompt asks for °F, its change and the change card 
   await expect(v2).not.toContainText('°C');
 
   // Back to °C: CafAI's lines as they were kept, and the coach's °F words read in °C.
-  await goTo(page, 'settings');
   await choose(page, 'celsius');
   await goTo(page, 'history');
   await page.locator('[data-testid^="history-bag-"]').first().click();
@@ -142,7 +147,7 @@ test('the coach in °F: its prompt asks for °F, its change and the change card 
 });
 
 test("a drink's view reads its temperature in °F, and its settings too", async ({ page }) => {
-  await openApp(page, '#/settings');
+  await openApp(page);
   await choose(page, 'fahrenheit');
   await machineRow(page).getByTestId(TID.steamButton).click();
   const view = page.getByTestId(TID.drinkView);
@@ -160,8 +165,9 @@ test("a drink's view reads its temperature in °F, and its settings too", async 
 });
 
 test("the cleaning guide's descale reads its 60 °C as 140 °F", async ({ page }) => {
-  await openApp(page, '#/settings');
+  await openApp(page);
   await choose(page, 'fahrenheit');
+  await openSettingsGroup(page, 'machine');
   const open = page.getByTestId(TID.careOpen);
   await open.scrollIntoViewIfNeeded();
   await open.click();

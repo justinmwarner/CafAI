@@ -9,6 +9,8 @@ import {
   SAVER_IDLE_MS,
   SAVER_SETTLE_MS,
   SAVER_SHOW_MS,
+  saverBrightness,
+  saverIdleMs,
   saverWanted,
   type SaverInputs,
 } from './policy.ts';
@@ -18,7 +20,7 @@ function telemetry(state: string | null, patch: Partial<TelemetryState> = {}): T
   return { ...IDLE_TELEMETRY, machineConnected: true, unreachable: false, machine, ...patch } as TelemetryState;
 }
 
-const UP: SaverInputs = { on: true, insideDecaid: true, asleep: true, untouchedMs: SAVER_IDLE_MS, asleepMs: SAVER_IDLE_MS };
+const UP: SaverInputs = { on: true, insideDecaid: true, asleep: true, untouchedMs: SAVER_IDLE_MS, asleepMs: SAVER_IDLE_MS, idleMs: SAVER_IDLE_MS };
 
 describe('the numbers', () => {
   it('a minute untouched, 30 minutes shown, dimmed to 30, asleep 3 s without a break', () => {
@@ -99,6 +101,33 @@ describe('msUntilWanted', () => {
     expect(msUntilWanted({ ...UP, untouchedMs: 59_000, asleepMs: 1_000 })).toBe(2_000);
     expect(msUntilWanted({ ...UP, untouchedMs: 50_000, asleepMs: 1_000 })).toBe(10_000);
   });
+
+  it('waits the minutes chosen in Settings instead of the minute (D247)', () => {
+    const fiveMinutes = { ...UP, idleMs: 5 * 60_000 };
+    expect(msUntilWanted({ ...fiveMinutes, untouchedMs: 60_000 })).toBe(4 * 60_000);
+    expect(saverWanted({ ...fiveMinutes, untouchedMs: 5 * 60_000 - 1 })).toBe(false);
+    expect(saverWanted({ ...fiveMinutes, untouchedMs: 5 * 60_000 })).toBe(true);
+    // A broken wait reads as the minute.
+    expect(msUntilWanted({ ...UP, idleMs: Number.NaN, untouchedMs: 15_000 })).toBe(45_000);
+  });
+});
+
+describe('the wait and the brightness chosen (D247)', () => {
+  it('waits the minutes chosen, else the minute (D223)', () => {
+    expect(saverIdleMs({})).toBe(SAVER_IDLE_MS);
+    expect(saverIdleMs({ startAfterMinutes: 1 })).toBe(60_000);
+    expect(saverIdleMs({ startAfterMinutes: 15 })).toBe(15 * 60_000);
+    expect(saverIdleMs({ startAfterMinutes: 0 })).toBe(SAVER_IDLE_MS);
+    expect(saverIdleMs({ startAfterMinutes: Number.NaN })).toBe(SAVER_IDLE_MS);
+  });
+
+  it('dims to the brightness chosen, else 30 (D224)', () => {
+    expect(saverBrightness({})).toBe(SAVER_BRIGHTNESS);
+    expect(saverBrightness({ dimTo: 10 })).toBe(10);
+    expect(saverBrightness({ dimTo: 60 })).toBe(60);
+    expect(saverBrightness({ dimTo: Number.NaN })).toBe(SAVER_BRIGHTNESS);
+    expect(saverBrightness({ dimTo: 140 })).toBe(100);
+  });
 });
 
 describe('dimTo (spec 4, It comes up)', () => {
@@ -114,5 +143,12 @@ describe('dimTo (spec 4, It comes up)', () => {
     expect(dimTo(Number.NaN)).toBe(30);
     expect(dimTo(-5)).toBe(0);
     expect(dimTo(12.4)).toBe(12);
+  });
+
+  it('dims to the brightness chosen instead, and still leaves a lower one where it is (D247)', () => {
+    expect(dimTo(100, 50)).toBe(50);
+    expect(dimTo(40, 50)).toBe(40);
+    expect(dimTo(100, 10)).toBe(10);
+    expect(dimTo(Number.NaN, 50)).toBe(50);
   });
 });

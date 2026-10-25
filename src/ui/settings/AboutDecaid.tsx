@@ -1,19 +1,18 @@
 /**
- * Settings > About's Decaid-specific lines (4.6, 5.15, D96): the running
- * version against the one CafAI was verified with, anything Decaid sent
- * that CafAI did not expect, and the health of the backup into Decaid's
- * store. SettingsScreen.tsx keeps finding the running version (host or
- * decaid.getInfo()) and the plain "CafAI <version>" line; this component
- * is everything that follows from it.
+ * Settings > About's Decaid-specific lines (4.6, D96): the running version
+ * against the one CafAI was verified with, and anything Decaid sent that
+ * CafAI did not expect. AboutCard.tsx keeps finding the running version
+ * (host or decaid.getInfo()) and the plain "CafAI <version>" line; this
+ * component is everything that follows from it. The backup's line, which
+ * was last here, is Data and privacy's now (BackupCard.tsx).
  */
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import { driftLog, formatDriftReport } from '../../api/drift.ts';
 import { VERIFIED_DECAID } from '../../api/decaidVersion.ts';
 import { useServices } from '../../app/services.tsx';
-import type { KvMirror } from '../../storage/types.ts';
 import { copyText } from '../history/exportFile.ts';
 import { TID } from '../testIds.ts';
 
@@ -37,65 +36,12 @@ export function isOlderDecaid(running: string, verified: string): boolean {
 
 const OLDER_NOTE = 'Older than the Decaid CafAI was checked against; update Decaid if something does not work.';
 
-/** "12 min ago", "5 h ago", "3 days ago": Decaid's record of the last backup can be days old after a quiet spell. */
-function agoText(iso: string, now: number): string {
-  const minutes = Math.max(0, Math.round((now - Date.parse(iso)) / 60_000));
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 48) return `${hours} h ago`;
-  return `${Math.round(hours / 24)} days ago`;
-}
-
-/** mirror.ts's own lastError already reads "Could not back up to Decaid: <reason>"; strip that so the reason is said once, not "Backup paused: Could not back up to Decaid: ...". */
-function backupReason(lastError: string): string {
-  return lastError.replace(/^Could not back up to Decaid:\s*/, '');
-}
-
-interface BackupStatus {
-  lastPushAt: string | null;
-  lastError: string | null;
-  known: boolean;
-}
-
-/**
- * Spec 5.15: the mirror's lastPushAt/lastError. Nothing while the mirror does
- * not know yet how the backup stands (a fresh page, until Decaid's record of
- * the last backup is read): "Not backed up yet" could be false there.
- */
-function backupHealthText({ lastPushAt, lastError, known }: BackupStatus, now: number): string | null {
-  if (lastError) return `Backup paused: ${backupReason(lastError)}`;
-  if (lastPushAt) return `Backed up to Decaid ${agoText(lastPushAt, now)}`;
-  return known ? 'Not backed up yet' : null;
-}
-
-/** The mirror's status as it changes: a push that lands while About is open shows at once. */
-function useBackupStatus(mirror: KvMirror): BackupStatus {
-  const subscribe = useCallback((listener: () => void) => mirror.subscribe(listener), [mirror]);
-  const lastPushAt = useSyncExternalStore(subscribe, () => mirror.lastPushAt);
-  const lastError = useSyncExternalStore(subscribe, () => mirror.lastError);
-  const known = useSyncExternalStore(subscribe, () => mirror.backupKnown);
-  return { lastPushAt, lastError, known };
-}
-
-/** The time, moved on once a minute, so "N min ago" counts up while About stays open. */
-function useMinuteClock(): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(timer);
-  }, []);
-  return now;
-}
-
 const mutedSx = { color: 'text.secondary' } as const;
 
 export function AboutDecaid({ decaidVersion }: { decaidVersion: string | null }) {
-  const { appVersion, storage } = useServices();
+  const { appVersion } = useServices();
   const entries = useSyncExternalStore(driftLog.subscribe, driftLog.list);
   const [copied, setCopied] = useState<boolean | null>(null);
-  const backupStatus = useBackupStatus(storage.mirror);
-  const now = useMinuteClock();
-  const backup = backupHealthText(backupStatus, now);
 
   const copyReport = () => {
     const report = formatDriftReport(entries, { appVersion, decaidVersion, verifiedWith: VERIFIED_DECAID.release });
@@ -131,11 +77,6 @@ export function AboutDecaid({ decaidVersion }: { decaidVersion: string | null })
             </Typography>
           ) : null}
         </Box>
-      ) : null}
-      {backup !== null ? (
-        <Typography variant="body2" data-testid={TID.backupHealth} sx={{ ...mutedSx, mt: 1 }}>
-          {backup}
-        </Typography>
       ) : null}
     </Box>
   );

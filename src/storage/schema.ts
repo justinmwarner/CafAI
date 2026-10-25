@@ -19,7 +19,17 @@ import type { ProfileJson, ShotSummary } from '../coach/types.ts';
 import type { TemperatureUnit } from '../coach/temperature.ts';
 import type { LlmMessage } from '../llm/types.ts';
 import type { CoachUiMessage } from '../app/types.ts';
-import type { Appearance, AppliedChange, CareSettings, DrinkScreensSettings, Feedback, ScreensaverSetting } from './types.ts';
+import type {
+  Appearance,
+  AppliedChange,
+  CareSettings,
+  ClockFormat,
+  CoachBudget,
+  CoachEffort,
+  DrinkScreensSettings,
+  Feedback,
+  ScreensaverSetting,
+} from './types.ts';
 
 /** Checked against `shape`, but the original value is kept, untouched. */
 function exact<T>(shape: z.ZodType) {
@@ -141,6 +151,16 @@ export const SettingsSchema = z.object({
   screensaver: exact<ScreensaverSetting>(z.unknown()).optional(),
   /** Where the coach runs, kept in Decaid too (D229); absent from exports made before it, and read as on (settings.ts). */
   keepCoachSourceInDecaid: z.boolean().optional(),
+  /** How hard the coach thinks (D243); absent from exports made before it. Not shape-checked here, as temperatureUnit. */
+  coachEffort: exact<CoachEffort>(z.unknown()).optional(),
+  /** The coach's monthly budget (D240); absent from exports made before it. Re-validated by normalizeCoachBudget, as care is. */
+  coachBudget: exact<CoachBudget>(z.unknown()).optional(),
+  /** The grinders finer at higher numbers (D241); absent from exports made before them. Re-validated by settings.ts. */
+  grinderFinerHigher: exact<string[]>(z.unknown()).optional(),
+  /** The clock (D245); absent from exports made before it. Not shape-checked here, as temperatureUnit. */
+  clock: exact<ClockFormat>(z.unknown()).optional(),
+  /** Whether shot cards show the TDS cell (D246); absent from exports made before it, and read as on (settings.ts). */
+  showTds: z.boolean().optional(),
 });
 
 export const BagSchema = z.object({

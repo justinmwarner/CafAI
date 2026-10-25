@@ -12,14 +12,12 @@ import {
   GRINDER_LIMITS,
   NO_GRINDER_LIBRARY,
   grinderRequest,
-  type Grinder,
   type GrinderCreateRequest,
   type GrinderSettingType,
 } from '../../api/grinders.ts';
 import { PLUGIN } from '../../api/plugins.ts';
 import { GatewayError } from '../../api/types.ts';
 import { containsKeyLike } from '../../storage/redact.ts';
-import { grinderLabel } from './grinderPicker.ts';
 
 export interface AddGrinderForm {
   model: string;
@@ -39,7 +37,7 @@ export type AddGrinderCheck =
   | { ok: false; field: AddGrinderField; message: string };
 
 export const NEEDS_MODEL = 'Name the grinder, like Niche Zero.';
-export const KEY_REFUSED = "That looked like an API key, so CafAI won't send it to Decaid. Keys go in the API key field above.";
+export const KEY_REFUSED = "That looked like an API key, so CafAI won't send it to Decaid. Keys go in Settings > Coach.";
 export const STEP_HELP = 'A step is a number more than 0, like 0.5.';
 export const NEEDS_SETTINGS = "List the grinder's settings, finest first, with commas between them.";
 export const SETTING_TOO_LONG = `Each setting is at most ${GRINDER_LIMITS.setting} characters.`;
@@ -99,14 +97,6 @@ export function addGrinderError(error: unknown): string {
   if (error instanceof GatewayError && error.status === 404) return NO_GRINDER_LIBRARY;
   const why = error instanceof Error && error.message ? error.message : String(error);
   return `Couldn't add the grinder: ${why}`;
-}
-
-/** What Settings says once the grinder is in Decaid's list and picked. */
-export function addedNote(grinder: Grinder, added: boolean): string {
-  const label = grinderLabel(grinder);
-  return added
-    ? `Added ${label} to Decaid's grinders. Save settings to use it.`
-    : `Decaid already has ${label}, so CafAI picked it. Save settings to use it.`;
 }
 
 /**

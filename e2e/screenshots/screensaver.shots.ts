@@ -5,10 +5,11 @@ import { goTo } from '../helpers.ts';
 
 /**
  * The screensavers' pictures (D227), for looking at them: Settings >
- * Screensaver, and one frame of each screensaver through the mock builds'
- * held Preview (`?saverPreview=<id>&saverAt=<ms>`, src/ui/saver/preview.ts),
- * on the Decent tablet's own screen, 962x602 CSS px at DPR 1.33, at a pinned
- * clock, so a fixed seed (the day's number) and a fixed moment.
+ * Display > Screensaver, and one frame of each screensaver through the mock
+ * builds' held Preview (`?saverPreview=<id>&saverAt=<ms>`,
+ * src/ui/saver/preview.ts), on the Decent tablet's own screen, 962x602 CSS px
+ * at DPR 1.33, at a pinned clock, so a fixed seed (the day's number) and a
+ * fixed moment.
  *
  *   SCREENSHOTS_PORT=4192 npx playwright test --config playwright.screenshots.config.ts e2e/screenshots/screensaver.shots.ts
  *
@@ -50,12 +51,12 @@ async function snap(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: `${OUT_DIR}/${name}.png`, animations: 'disabled', caret: 'hide' });
 }
 
-test('Settings > Screensaver', async ({ page }) => {
+test('Settings > Display > Screensaver', async ({ page }) => {
   await page.clock.install({ time: NOW });
   // The demo opens on the coach, whatever the route.
   await page.goto('./?demo=1&mockSpeed=25#/');
   await expect(page.getByTestId(TID.appReady)).toBeVisible();
-  await goTo(page, 'settings');
+  await goTo(page, 'settings', 'display');
   const section = page.getByTestId(TID.saverSection);
   await expect(section).toBeVisible();
   await section.scrollIntoViewIfNeeded();
