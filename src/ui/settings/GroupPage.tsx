@@ -10,12 +10,21 @@
  * lays itself out (useOwnLayout.ts: the Chromium 91 WebView has no container
  * queries), and in one column of at most 760 px under it; a phone's page is
  * always one column (groupLayout.tsx).
+ *
+ * The cards read their settings as they open, and each save sends its whole
+ * card (D234). When Decaid's backup comes back after start (D100: an iPad's
+ * storage starts empty after a Decaid update, and the backup may land with
+ * Settings open), the bags and the settings come back together, and the coach
+ * says so (restoredFromBackup); the group's cards then open again, reading
+ * what came back, so their next change never writes the defaults they showed
+ * over it.
  */
 import { useRef, type ComponentType } from 'react';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
+import { useCoach } from '../../app/services.tsx';
 import { useOwnLayout } from '../machine/useOwnLayout.ts';
 import { routeHref } from '../router.ts';
 import { TID } from '../testIds.ts';
@@ -61,11 +70,13 @@ export function GroupPage({ id, layout }: GroupPageProps) {
   const measured = useOwnLayout(scroller, chooseWide);
   // A phone's page is one column whatever its width (a phone on its side has the rail beside it).
   const wide = layout === 'pane' && measured;
+  // Decaid's backup came back after start: the cards open again and read it.
+  const restored = useCoach((state) => state.restoredFromBackup === true);
 
   const content = (
     <GroupWide.Provider value={wide}>
       <GroupScroll.Provider value={scroller}>
-        <Page />
+        <Page key={restored ? 'restored' : 'read'} />
       </GroupScroll.Provider>
     </GroupWide.Provider>
   );

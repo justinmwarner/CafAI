@@ -1,14 +1,18 @@
 // @vitest-environment jsdom
 import '../chat/testing/setup.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { createDisplayPrefsStore } from '../../app/displayPrefs.ts';
+import { MODELS } from '../../llm/models.ts';
 import { createMemoryCoachSourceStore } from '../../storage/coachSource.ts';
+import type { Settings } from '../../storage/types.ts';
 import { createFakeServices, createFakeSpend, createFakeUsage, type FakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
 import { renderWithServices } from '../chat/testing/render.tsx';
 import type { SettingsGroupId } from './groupIds.ts';
 import { GroupPage, TWO_COLUMNS_FROM } from './GroupPage.tsx';
+import { SAVED } from './SaveLine.tsx';
 
 beforeEach(() => {
   // The groups read Decaid's grinders with the global fetch; no test may reach a real network.
@@ -130,6 +134,69 @@ describe('Settings groups and what moved where (D233)', () => {
     renderWithServices(<GroupPage id="about" layout="pane" />, services);
     expect(screen.getByText('Decaid 0.9.0 (CafAI was verified with 0.8.8)')).toBeInTheDocument();
     expect(services.decaid.calls.map((c) => c.method)).not.toContain('getInfo');
+  });
+});
+
+describe("Decaid's backup landing while a group is open (D100, D234)", () => {
+  /** What the backup brings back: its settings fill this device's blanks (src/storage/porter.ts), and the coach says the bags are back. */
+  const backupLands = (services: FakeServices, settings: Partial<Settings>) =>
+    act(async () => {
+      await services.storage.settings.update(settings);
+      services.coach.setState({ restoredFromBackup: true });
+    });
+
+  it('Coach: the cards show the model, how the coach replies and the budget that came back, and the next changes keep them', async () => {
+    const services = servicesWithAll();
+    services.models = MODELS;
+    renderWithServices(<GroupPage id="coach" layout="pane" />, services);
+    const model = () => screen.getByTestId(TID.modelSelect);
+    const budget = () => screen.getByTestId(TID.coachBudgetAmount);
+    await waitFor(() => expect(model()).toHaveValue('claude-opus-5-5'));
+    await waitFor(() => expect(budget()).toHaveValue(''));
+    await waitFor(() => expect(screen.getByTestId(TID.coachEffort('medium'))).toHaveAttribute('aria-pressed', 'true'));
+
+    await backupLands(services, { model: 'claude-sonnet-5-5', coachEffort: 'high', coachBudget: { monthlyUsd: 5, pauseAtBudget: true } });
+    await waitFor(() => expect(model()).toHaveValue('claude-sonnet-5-5'));
+    await waitFor(() => expect(budget()).toHaveValue('5'));
+    await waitFor(() => expect(screen.getByTestId(TID.coachEffort('high'))).toHaveAttribute('aria-pressed', 'true'));
+    expect(screen.getByTestId(TID.coachBudgetPause)).toBeChecked();
+
+    // Each save sends its whole card as it shows now: a fun facts pick keeps the model, + goes from $5.
+    await userEvent.selectOptions(screen.getByTestId(TID.funFacts), 'off');
+    await waitFor(() => expect(screen.getByTestId(TID.settingsSaved('model'))).toHaveTextContent(SAVED));
+    await userEvent.click(screen.getByTestId(TID.coachBudgetRaise));
+    await waitFor(async () => expect((await services.storage.settings.get()).coachBudget).toEqual({ monthlyUsd: 6, pauseAtBudget: true }));
+    expect(await services.storage.settings.get()).toMatchObject({ model: 'claude-sonnet-5-5', funFacts: 'off', coachEffort: 'high' });
+  });
+
+  it('Grinder: the card shows the grinder and which way is finer that came back, and the next change keeps them', async () => {
+    const services = servicesWithAll();
+    renderWithServices(<GroupPage id="grinder" layout="pane" />, services);
+    const name = () => screen.getByTestId(TID.grinderName);
+    await waitFor(() => expect(name()).toBeEnabled());
+    expect(name()).toHaveValue('');
+
+    await backupLands(services, { grinderName: 'Niche Zero', grinderSetting: '14', grinderFinerHigher: ['name:niche zero'] });
+    await waitFor(() => expect(name()).toHaveValue('Niche Zero'));
+    expect(screen.getByTestId(TID.grinderSetting)).toHaveValue('14');
+    await waitFor(() => expect(screen.getByTestId(TID.grinderFinerHigher)).toHaveAttribute('aria-pressed', 'true'));
+
+    await userEvent.type(screen.getByTestId(TID.grinderSetting), '.5{Enter}');
+    await waitFor(() => expect(screen.getByTestId(TID.settingsSaved('grinder'))).toHaveTextContent(SAVED));
+    expect(await services.storage.settings.get()).toMatchObject({ grinderName: 'Niche Zero', grinderSetting: '14.5', grinderFinerHigher: ['name:niche zero'] });
+  });
+
+  it('reads nothing again when the backup came back before the group opened', async () => {
+    const services = servicesWithAll();
+    services.coach.setState({ restoredFromBackup: true });
+    const read = vi.spyOn(services.storage.settings, 'get');
+    renderWithServices(<GroupPage id="grinder" layout="pane" />, services);
+    await waitFor(() => expect(screen.getByTestId(TID.grinderName)).toBeEnabled());
+    const reads = read.mock.calls.length;
+    // Something else the coach says changes nothing here.
+    act(() => services.coach.setState({ busy: true }));
+    await act(async () => undefined);
+    expect(read).toHaveBeenCalledTimes(reads);
   });
 });
 
