@@ -517,7 +517,7 @@ machine by itself.
   0.8.8)", with a note when yours is older); anything Decaid sent that CafAI
   did not expect, with **Copy report** (Decaid's routes and field names,
   with counts and both versions, never your notes or the key); **What's new
-  in 0.1.3**, this version's notes from the changelog; and **Report a
+  in 0.1.4**, this version's notes from the changelog; and **Report a
   problem**, which opens GitHub's new issue page with CafAI's and Decaid's
   versions filled in (it needs a GitHub account, and the issue is public).
 

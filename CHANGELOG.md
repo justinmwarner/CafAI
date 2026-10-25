@@ -6,6 +6,8 @@ workflow checks against it. Settings > About shows the version you run.
 
 ## Unreleased
 
+## 0.1.4 (2026-10-25)
+
 ### Settings
 
 - **Settings, regrouped.** Settings was one long column of eleven cards;
