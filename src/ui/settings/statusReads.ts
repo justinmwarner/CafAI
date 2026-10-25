@@ -17,7 +17,7 @@
  */
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react';
 import type { DecaidClient, PresenceSettings } from '../../api/types.ts';
-import { useServices } from '../../app/services.tsx';
+import { useCoach, useServices } from '../../app/services.tsx';
 import type { Settings, SettingsRepository } from '../../storage/types.ts';
 import type { Presets } from './DrinkFields.tsx';
 
@@ -69,12 +69,14 @@ const nothing = () => null;
 
 /**
  * The settings for the status lines: the screen's watch, read once as the
- * list mounts, then whatever its cards read and save; without a watch, one
- * read of its own. Null until read, and when they cannot be.
+ * list mounts and again when Decaid's backup lands (restoredFromBackup, as
+ * the open group's cards are, D100), then whatever its cards read and save;
+ * without a watch, reads of its own. Null until read, and when they cannot be.
  */
 export function useWatchedSettings(): Settings | null {
   const watch = useContext(SettingsWatchContext);
   const { storage } = useServices();
+  const restored = useCoach((state) => state.restoredFromBackup === true);
   const watched = useSyncExternalStore(watch?.subscribe ?? unchanging, watch?.current ?? nothing);
   const [own, setOwn] = useState<Settings | null>(null);
   useEffect(() => {
@@ -88,7 +90,7 @@ export function useWatchedSettings(): Settings | null {
     return () => {
       live = false;
     };
-  }, [watch, storage]);
+  }, [watch, storage, restored]);
   return watch ? watched : own;
 }
 

@@ -85,6 +85,23 @@ describe('useWatchedSettings', () => {
     expect(screen.getByTestId('probe')).toHaveTextContent('Niche Zero 12');
   });
 
+  it("reads them again when Decaid's backup lands, which writes past the watch (D100)", async () => {
+    const services = createFakeServices({ storage: { settings: SETTINGS } });
+    const watch = watchSettings(services.storage.settings);
+    render(
+      <ServicesProvider services={services}>
+        <SettingsWatchContext.Provider value={watch}>
+          <WatchedProbe />
+        </SettingsWatchContext.Provider>
+      </ServicesProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('probe')).toHaveTextContent('Niche Zero 14'));
+    await services.storage.settings.update({ grinderName: 'EK43', grinderSetting: '7' });
+    expect(screen.getByTestId('probe')).toHaveTextContent('Niche Zero 14');
+    act(() => services.coach.setState({ restoredFromBackup: true }));
+    await waitFor(() => expect(screen.getByTestId('probe')).toHaveTextContent('EK43 7'));
+  });
+
   it('reads them once on its own without a watch, as a list alone in a test', async () => {
     const services = createFakeServices({ storage: { settings: SETTINGS } });
     render(
