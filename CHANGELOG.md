@@ -25,6 +25,14 @@ workflow checks against it. Settings > About shows the version you run.
 - **What's new and Report a problem** in About: this version's notes, and a
   GitHub issue started with your versions filled in.
 
+### Usage sharing
+
+- **Usage sharing reaches Clarity.** Clarity collected nothing from
+  0.1.3: CafAI is a web page, but 0.1.3's Clarity project had been made
+  for a mobile app, and Clarity's web code collects nothing for one.
+  Releases now name a website project. What is shared, and how to turn it
+  off, are unchanged.
+
 ### The coach
 
 - **What the coach costs.** Settings > Coach > Usage and cost shows the
@@ -45,10 +53,11 @@ workflow checks against it. Settings > About shows the version you run.
   update of Decaid gives CafAI a fresh browser storage; your bags and
   settings came back from Decaid's backup, but Claude on my computer, with
   CafAI Bridge's address and code, was gone. CafAI now keeps a copy of them
-  in Decaid and puts them back by itself. **Settings > Coach > Where the coach
-  runs > Keep the address and code in Decaid** is on by default; turned off, or
-  with the coach back on the Anthropic API key, the copy is deleted. Any
-  device on your network can read Decaid's store, as the switch says.
+  in Decaid and puts them back by itself. **Settings > Coach > Where the
+  coach runs > Keep the address and code in Decaid** is on by default;
+  turned off, or with the coach back on the Anthropic API key, the copy is
+  deleted. Any device on your network can read Decaid's store, as the
+  switch says.
 
 ### Screensavers
 
