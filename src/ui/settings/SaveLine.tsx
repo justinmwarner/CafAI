@@ -3,7 +3,9 @@
  * it sits in says what the change did in one line under it, "Saved." for
  * 3 s, or why it was not saved, in the error colour, with what to do, until
  * a later change saves. The line keeps its height, empty or not, so nothing
- * under it moves as it comes and goes.
+ * under it moves as it comes and goes. A control of the card that saves on
+ * its own (How the coach replies, Finer is) says "Saved." there too, and its
+ * failure under itself.
  *
  * Also here, as the cards that save typed text share them: what CafAI says
  * when storage took a pasted API key out of a field (D37), and the test for
@@ -30,6 +32,12 @@ export interface SaveNoteControl {
   saved(): void;
   /** A change did not save: why, until the next one saves. */
   failed(text: string): void;
+  /**
+   * A control of the card that saves on its own saved: "Saved." as for the
+   * card's own change, unless the line says one of those did not save. That
+   * still stands, as this save did not carry it.
+   */
+  alsoSaved(): void;
 }
 
 /** Stop a pending clear of "Saved.". */
@@ -40,21 +48,33 @@ function stopTimer(timer: { current: ReturnType<typeof setTimeout> | null }): vo
 
 export function useSaveNote(): SaveNoteControl {
   const [note, setNote] = useState<SaveNote>(null);
+  // What the line says, as this hook last set it: alsoSaved reads it when a save lands, between renders.
+  const shown = useRef<SaveNote>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => stopTimer(timer), []);
+  const show = useCallback((next: SaveNote) => {
+    shown.current = next;
+    setNote(next);
+  }, []);
   const saved = useCallback(() => {
     stopTimer(timer);
-    setNote({ tone: 'saved' });
+    show({ tone: 'saved' });
     timer.current = setTimeout(() => {
       timer.current = null;
-      setNote(null);
+      show(null);
     }, SAVED_FOR_MS);
-  }, []);
-  const failed = useCallback((text: string) => {
-    stopTimer(timer);
-    setNote({ tone: 'error', text });
-  }, []);
-  return useMemo(() => ({ note, saved, failed }), [note, saved, failed]);
+  }, [show]);
+  const failed = useCallback(
+    (text: string) => {
+      stopTimer(timer);
+      show({ tone: 'error', text });
+    },
+    [show],
+  );
+  const alsoSaved = useCallback(() => {
+    if (shown.current?.tone !== 'error') saved();
+  }, [saved]);
+  return useMemo(() => ({ note, saved, failed, alsoSaved }), [note, saved, failed, alsoSaved]);
 }
 
 function errorText(error: unknown): string {

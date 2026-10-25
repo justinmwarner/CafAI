@@ -1,13 +1,14 @@
 /**
  * Settings > Coach > Model and replies: the model the coach runs on, with
  * what it suits and costs, how hard it thinks (EffortRow.tsx, D243, which
- * reads and saves its own setting) and where fun facts come from
- * (FunFactsRow.tsx, D198). Each applies as it changes (D234): saved, then
- * the coach re-reads its settings, as Save settings did, and the line under
- * the card says "Saved." or why not. Fun facts are written only once chosen
- * on this device, so a restore can still fill a device that never chose
- * (D198). A model this build no longer offers stays chosen, listed as no
- * longer offered, until another is picked.
+ * reads and saves its own setting, saying a failure under itself) and where
+ * fun facts come from (FunFactsRow.tsx, D198). Each applies as it changes
+ * (D234): saved, then the coach re-reads its settings, as Save settings did,
+ * and the line under the card says "Saved." or why not; the row's own saves
+ * say "Saved." there too. Fun facts are written only once chosen on this
+ * device, so a restore can still fill a device that never chose (D198). A
+ * model this build no longer offers stays chosen, listed as no longer
+ * offered, until another is picked.
  */
 import { useEffect, useRef, useState } from 'react';
 import Alert from '@mui/material/Alert';
@@ -128,7 +129,7 @@ export function ModelCard() {
             The prices do not apply while the coach runs on your computer: it uses your Claude plan.
           </Typography>
         ) : null}
-        <EffortRow model={form?.model} />
+        <EffortRow model={form?.model} onSaved={save.alsoSaved} />
         <FunFactsRow
           value={form ? (form.funFacts ?? DEFAULT_FUN_FACTS) : null}
           onComputer={onComputer}

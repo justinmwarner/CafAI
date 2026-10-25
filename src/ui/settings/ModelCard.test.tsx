@@ -78,6 +78,26 @@ describe('Settings > Coach > Model and replies', () => {
     expect(await services.storage.settings.get()).toMatchObject({ model: next.id, funFacts: 'off' });
   });
 
+  it('How the coach replies says "Saved." in the line under the card too, as the model does (D234)', async () => {
+    const services = renderCard();
+    await waitFor(() => expect(screen.getByTestId(TID.coachEffort('medium'))).toHaveAttribute('aria-pressed', 'true'));
+    expect(line()).toHaveTextContent('');
+    await userEvent.click(screen.getByTestId(TID.coachEffort('high')));
+    await waitFor(() => expect(line()).toHaveTextContent(SAVED));
+    expect(await services.storage.settings.get()).toMatchObject({ coachEffort: 'high', model: DEFAULT_MODEL });
+  });
+
+  it('leaves the line on a change of the card that did not save: How the coach replies saved alone, not carrying it', async () => {
+    const services = renderCard();
+    await waitFor(() => expect(model()).toBeEnabled());
+    (services.storage.settings.update as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('disk full'));
+    await userEvent.selectOptions(screen.getByTestId(TID.funFacts), 'off');
+    await waitFor(() => expect(line()).toHaveTextContent('Could not save the model and fun facts: disk full. Try again.'));
+    await userEvent.click(screen.getByTestId(TID.coachEffort('high')));
+    await waitFor(async () => expect((await services.storage.settings.get()).coachEffort).toBe('high'));
+    expect(line()).toHaveTextContent('Could not save the model and fun facts: disk full. Try again.');
+  });
+
   it('keeps a model this build no longer offers, listed as such, until another is picked', async () => {
     const services = renderCard({ ...BASE, model: 'claude-sonnet-4' });
     await waitFor(() => expect(model()).toHaveValue('claude-sonnet-4'));

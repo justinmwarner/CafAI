@@ -9,6 +9,8 @@ import { previewTheme } from '../chat/testing/previewTheme.ts';
 import { renderWithServices } from '../chat/testing/render.tsx';
 import { createFakeServices, createFakeSpend, type FakeServices } from '../testing/fakeServices.ts';
 import { BUDGET_TID, BudgetControls, NO_BUDGET_LINE, PAUSE_LINE } from './BudgetControls.tsx';
+import { SAVED } from './SaveLine.tsx';
+import { SectionLevel } from './Section.tsx';
 
 const NOW = new Date(2026, 9, 24, 15, 0);
 
@@ -41,6 +43,8 @@ const pause = () => screen.getByRole('switch', { name: 'Pause the coach at the b
 const meterFill = () => screen.getByTestId(BUDGET_TID.meter).querySelector<HTMLElement>('.usage-meter-fill');
 const refreshes = (services: FakeServices) => services.coach.calls.filter((call) => call.method === 'refresh').length;
 const savedBudget = async (services: FakeServices) => (await services.storage.settings.get()).coachBudget;
+/** The line under the controls (D234). */
+const line = () => screen.getByTestId(BUDGET_TID.saved);
 
 /** Words as a text query matches them: Testing Library reads a no-break space as a space. */
 const plain = (text: string) => text.split('\xa0').join(' ');
@@ -263,18 +267,19 @@ describe('Settings > Coach > Usage and cost > Monthly budget (D240)', () => {
     };
     await shown(services, '5');
     await userEvent.click(raise());
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not save the budget: Storage is full.');
+    await waitFor(() => expect(line()).toHaveTextContent('Could not save the budget: Storage is full.'));
+    expect(line()).toHaveStyle({ color: rgb(previewTheme.palette.error.main) });
     expect(amount()).toHaveValue('5');
     expect(refreshes(services)).toBe(0);
 
     await userEvent.click(pause());
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not save the budget: Storage is full.');
+    await waitFor(() => expect(line()).toHaveTextContent('Could not save the budget: Storage is full.'));
     expect(pause()).not.toBeChecked();
 
-    // A later save that works clears it.
+    // A later save that works says so in its place.
     services.storage.settings.update = update;
     await userEvent.click(raise());
-    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    await waitFor(() => expect(line()).toHaveTextContent(SAVED));
     await waitFor(async () => expect((await savedBudget(services))?.monthlyUsd).toBe(6));
   });
 
@@ -284,7 +289,7 @@ describe('Settings > Coach > Usage and cost > Monthly budget (D240)', () => {
       throw new Error('IndexedDB is closed.');
     };
     renderWithServices(<BudgetControls />, services);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not read the budget: IndexedDB is closed.');
+    await waitFor(() => expect(line()).toHaveTextContent('Could not read the budget: IndexedDB is closed.'));
     expect(amount()).toBeDisabled();
     expect(amount()).toHaveAttribute('aria-valuetext', 'Unknown');
     expect(pause()).toBeDisabled();
@@ -292,6 +297,44 @@ describe('Settings > Coach > Usage and cost > Monthly budget (D240)', () => {
     // Nothing claims there is no budget, or measures against one: neither is known.
     expect(screen.queryByText(plain(NO_BUDGET_LINE))).toBeNull();
     expect(screen.queryByTestId(BUDGET_TID.meter)).toBeNull();
+  });
+
+  it('each change that saves says "Saved." in the line under them, kept at its height while empty (D234)', async () => {
+    const services = servicesWith({ monthlyUsd: 5, pauseAtBudget: false });
+    await shown(services, '5');
+    expect(line()).toHaveTextContent('');
+    expect(line()).toHaveAttribute('role', 'status');
+    // One line of body-small: 15 px at line height 1.5.
+    expect(getComputedStyle(line()).minHeight).toBe('22.5px');
+
+    await userEvent.click(raise());
+    await waitFor(() => expect(line()).toHaveTextContent(SAVED));
+    expect(line()).toHaveStyle({ color: rgb(previewTheme.palette.success.main) });
+    expect(await savedBudget(services)).toEqual({ monthlyUsd: 6, pauseAtBudget: false });
+  });
+
+  it('says "Saved." for the pause switch and No budget too', async () => {
+    for (const change of ['pause', 'none'] as const) {
+      const services = servicesWith({ monthlyUsd: 5, pauseAtBudget: false });
+      const { unmount } = renderWithServices(<BudgetControls />, services);
+      await waitFor(() => expect(amount()).toHaveValue('5'));
+      await userEvent.click(change === 'pause' ? pause() : noBudget());
+      await waitFor(() => expect(line()).toHaveTextContent(SAVED));
+      unmount();
+    }
+  });
+
+  it("titles the budget one level under the card's title: an h3 under a phone's card, an h4 in a tablet's pane", async () => {
+    const { unmount } = renderWithServices(<BudgetControls />, servicesWith());
+    expect(await screen.findByRole('heading', { level: 3, name: 'Monthly budget' })).toBeInTheDocument();
+    unmount();
+    renderWithServices(
+      <SectionLevel.Provider value={3}>
+        <BudgetControls />
+      </SectionLevel.Provider>,
+      servicesWith(),
+    );
+    expect(await screen.findByRole('heading', { level: 4, name: 'Monthly budget' })).toBeInTheDocument();
   });
 
   it('draws nothing without a spend service', () => {

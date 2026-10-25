@@ -15,9 +15,10 @@
  * Each is saved on its own (Settings.coachBudget, patched field by field),
  * then the coach reads its settings again: that is what sends a reply that
  * waited on the budget once it is raised, cleared or the pause turned off.
- * A save that fails says so under them, and they go back to what the coach
- * still uses. Without a spend service there is nothing to measure, and
- * nothing is drawn.
+ * The line under them says "Saved." for 3 s, or why a change did not save,
+ * keeping its height, as the line under a card does (D234); a change that
+ * did not save goes back to what the coach still uses. Without a spend
+ * service there is nothing to measure, and nothing is drawn.
  */
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import Box from '@mui/material/Box';
@@ -38,6 +39,8 @@ import { useSpendSummary } from '../../spend/useSpend.ts';
 import { BUDGET_USD, DEFAULT_BUDGET } from '../../storage/settings.ts';
 import type { CoachBudget } from '../../storage/types.ts';
 import { DASH } from '../machine/format.ts';
+import { SaveLine, useSaveNote } from './SaveLine.tsx';
+import { useSubheadingLevel } from './Section.tsx';
 import { budgetPercent, sayDay } from './usageFormat.ts';
 import { UsageMeter } from './UsageMeter.tsx';
 import { TID } from '../testIds.ts';
@@ -66,6 +69,8 @@ export const BUDGET_TID = {
   meter: TID.coachBudgetMeter,
   /** The pause switch's input. */
   pause: TID.coachBudgetPause,
+  /** The line under them: "Saved.", or why a change did not save. */
+  saved: TID.settingsSaved('budget'),
 } as const;
 
 const NBSP = '\xa0';
@@ -267,9 +272,12 @@ export function BudgetControls() {
   useSpendSummary();
   const headingId = useId();
   const pauseNoteId = useId();
+  // Under the card's title: an h3 under a phone's h2, an h4 in a tablet's pane.
+  const subheading = useSubheadingLevel();
   // As last read or saved here; null until the settings are read (held meanwhile).
   const [budget, setBudget] = useState<CoachBudget | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const note = useSaveNote();
+  const { failed } = note;
   const latestSave = useRef(0);
   /** What storage holds, as far as these controls know: where a failed save goes back to. */
   const confirmed = useRef<CoachBudget>(DEFAULT_BUDGET);
@@ -284,13 +292,13 @@ export function BudgetControls() {
       },
       (reason: unknown) => {
         // Held: a budget shown without the saved one could hide one set here.
-        if (live) setError(`Could not read the budget: ${errorText(reason)}`);
+        if (live) failed(`Could not read the budget: ${errorText(reason)}`);
       },
     );
     return () => {
       live = false;
     };
-  }, [storage]);
+  }, [storage, failed]);
 
   if (!spend) return null;
 
@@ -298,18 +306,20 @@ export function BudgetControls() {
   const save = async (patch: Partial<CoachBudget>) => {
     if (budget === null) return;
     const ticket = ++latestSave.current;
-    setError(null);
     // Shown at once; what storage holds after the save replaces it.
     setBudget({ ...budget, ...patch });
     try {
       const saved = await storage.settings.update({ coachBudget: patch });
       confirmed.current = saved.coachBudget ?? DEFAULT_BUDGET;
-      if (ticket === latestSave.current) setBudget(confirmed.current);
+      if (ticket === latestSave.current) {
+        setBudget(confirmed.current);
+        note.saved();
+      }
     } catch (reason) {
       // Only the newest change speaks: one made after this that saved carried its own value.
       if (ticket === latestSave.current) {
         setBudget(confirmed.current);
-        setError(`Could not save the budget: ${errorText(reason)}`);
+        note.failed(`Could not save the budget: ${errorText(reason)}`);
       }
       return;
     }
@@ -324,60 +334,58 @@ export function BudgetControls() {
   const pauseNote = noBudget ? PAUSE_NEEDS_BUDGET : state.paused ? pausedLine(state.resumesOn) : PAUSE_LINE;
 
   return (
-    <Stack spacing={1.5}>
-      <Box>
-        <Typography variant="subtitle2" component="h3" id={headingId}>
-          Monthly budget
-        </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-          <Box sx={{ flex: '0 1 184px', minWidth: 0 }}>
-            <BudgetField value={usd} disabled={budget === null} labelledBy={headingId} onCommit={(next) => void save({ monthlyUsd: next })} />
+    <Box>
+      <Stack spacing={1.5}>
+        <Box>
+          <Typography variant="subtitle2" component={subheading} id={headingId}>
+            Monthly budget
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+            <Box sx={{ flex: '0 1 184px', minWidth: 0 }}>
+              <BudgetField value={usd} disabled={budget === null} labelledBy={headingId} onCommit={(next) => void save({ monthlyUsd: next })} />
+            </Box>
+            <Button
+              variant="text"
+              disabled={budget === null || noBudget}
+              onClick={() => void save({ monthlyUsd: null })}
+              data-testid={BUDGET_TID.none}
+              sx={{ minHeight: 48, flex: 'none' }}
+            >
+              No budget
+            </Button>
           </Box>
-          <Button
-            variant="text"
-            disabled={budget === null || noBudget}
-            onClick={() => void save({ monthlyUsd: null })}
-            data-testid={BUDGET_TID.none}
-            sx={{ minHeight: 48, flex: 'none' }}
-          >
-            No budget
-          </Button>
         </Box>
-      </Box>
-      {budget === null ? null : state.budgetMicros !== null && percent !== null ? (
-        <Box data-testid={BUDGET_TID.meter} sx={{ display: 'grid', gap: 0.75 }}>
-          <UsageMeter share={percent / 100} color={STEP_COLOUR[state.step]} />
-          <Typography variant="body2" sx={{ fontVariantNumeric: 'tabular-nums' }}>
-            {`${percent}${NBSP}% of ${formatUsd(state.budgetMicros)}`}
+        {budget === null ? null : state.budgetMicros !== null && percent !== null ? (
+          <Box data-testid={BUDGET_TID.meter} sx={{ display: 'grid', gap: 0.75 }}>
+            <UsageMeter share={percent / 100} color={STEP_COLOUR[state.step]} />
+            <Typography variant="body2" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+              {`${percent}${NBSP}% of ${formatUsd(state.budgetMicros)}`}
+            </Typography>
+          </Box>
+        ) : (
+          <Typography variant="body2" sx={mutedSx}>
+            {NO_BUDGET_LINE}
+          </Typography>
+        )}
+        <Box>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={budget?.pauseAtBudget ?? false}
+                disabled={budget === null || noBudget}
+                onChange={(event) => void save({ pauseAtBudget: event.target.checked })}
+                slotProps={{ input: { 'data-testid': BUDGET_TID.pause, 'aria-describedby': pauseNoteId } }}
+              />
+            }
+            label="Pause the coach at the budget"
+            sx={{ minHeight: 48, mr: 0 }}
+          />
+          <Typography id={pauseNoteId} variant="body2" sx={mutedSx}>
+            {pauseNote}
           </Typography>
         </Box>
-      ) : (
-        <Typography variant="body2" sx={mutedSx}>
-          {NO_BUDGET_LINE}
-        </Typography>
-      )}
-      <Box>
-        <FormControlLabel
-          control={
-            <Switch
-              checked={budget?.pauseAtBudget ?? false}
-              disabled={budget === null || noBudget}
-              onChange={(event) => void save({ pauseAtBudget: event.target.checked })}
-              slotProps={{ input: { 'data-testid': BUDGET_TID.pause, 'aria-describedby': pauseNoteId } }}
-            />
-          }
-          label="Pause the coach at the budget"
-          sx={{ minHeight: 48, mr: 0 }}
-        />
-        <Typography id={pauseNoteId} variant="body2" sx={mutedSx}>
-          {pauseNote}
-        </Typography>
-      </Box>
-      {error ? (
-        <Typography variant="body2" role="alert" sx={{ color: 'error.main' }}>
-          {error}
-        </Typography>
-      ) : null}
-    </Stack>
+      </Stack>
+      <SaveLine note={note.note} testId={BUDGET_TID.saved} />
+    </Box>
   );
 }

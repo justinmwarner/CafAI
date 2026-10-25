@@ -9,8 +9,9 @@
  * saved as coachEffort, then the coach reads its settings again, so its next
  * reply takes it. A change costs one fuller request, once: the prompt cache
  * starts again (through CafAI Bridge, a new Claude Code session). A save that
- * fails says so under it, and the control goes back to what the coach still
- * uses.
+ * lands says "Saved." in the line under the card it sits in (D234); one that
+ * fails says so under the row, and the control goes back to what the coach
+ * still uses.
  *
  * It applies on the computer too: CafAI Bridge passes the request's effort to
  * Claude Code (--effort). Held, with a line saying why, on a model without
@@ -110,9 +111,11 @@ export interface EffortRowProps {
    * saved model.
    */
   model?: string;
+  /** The newest change saved: the card says "Saved." in its line, as for its own (D234). */
+  onSaved?: () => void;
 }
 
-export function EffortRow({ model: shownModel }: EffortRowProps) {
+export function EffortRow({ model: shownModel, onSaved }: EffortRowProps) {
   const { storage, coach, models } = useServices();
   const onComputer = useCoachRunsOnComputer();
   const helpId = useId();
@@ -163,7 +166,10 @@ export function EffortRow({ model: shownModel }: EffortRowProps) {
     try {
       const saved = await storage.settings.update({ coachEffort: next });
       confirmed.current = saved.coachEffort ?? DEFAULT_COACH_EFFORT;
-      if (ticket === latestSave.current) setEffort(confirmed.current);
+      if (ticket === latestSave.current) {
+        setEffort(confirmed.current);
+        onSaved?.();
+      }
     } catch (reason) {
       // Only the newest change speaks: one made after this that saved carried its own choice.
       if (ticket === latestSave.current) {

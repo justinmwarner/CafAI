@@ -57,6 +57,22 @@ describe('Settings > Coach > How the coach replies (D243)', () => {
     await waitFor(() => expect(refreshes(services)).toBe(2));
   });
 
+  it('tells the card each change that saved, so its line says "Saved.", and none that failed', async () => {
+    const services = servicesWith();
+    const onSaved = vi.fn();
+    renderWithServices(<EffortRow onSaved={onSaved} />, services);
+    await waitFor(() => expect(choice('medium')).toHaveAttribute('aria-pressed', 'true'));
+    await userEvent.click(choice('high'));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+
+    services.storage.settings.update = async () => {
+      throw new Error('Storage is full.');
+    };
+    await userEvent.click(choice('low'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not save how the coach replies: Storage is full.');
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
   it('a tap on the chosen one saves nothing', async () => {
     const services = servicesWith({ coachEffort: 'low' });
     const update = vi.spyOn(services.storage.settings, 'update');

@@ -33,6 +33,23 @@ describe('the line under a card (D234)', () => {
     expect(result.current.note).toEqual({ tone: 'saved' });
   });
 
+  it('says "Saved." for a control that saves on its own, unless a change of the card did not save', () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useSaveNote());
+    act(() => result.current.alsoSaved());
+    expect(result.current.note).toEqual({ tone: 'saved' });
+    act(() => vi.advanceTimersByTime(SAVED_FOR_MS));
+    expect(result.current.note).toBeNull();
+    // The card's failure still stands: the control's save did not carry its change.
+    act(() => result.current.failed('Could not save the grinder: disk full. Try again.'));
+    act(() => result.current.alsoSaved());
+    expect(result.current.note).toEqual({ tone: 'error', text: 'Could not save the grinder: disk full. Try again.' });
+    // Until a change of the card saves.
+    act(() => result.current.saved());
+    act(() => result.current.alsoSaved());
+    expect(result.current.note).toEqual({ tone: 'saved' });
+  });
+
   it('keeps its height while empty, and is a polite status in the success or error colour', () => {
     const { rerender } = renderThemed(<SaveLine note={null} testId="line" />);
     const line = screen.getByTestId('line');
