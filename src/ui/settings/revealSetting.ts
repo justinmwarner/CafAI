@@ -104,7 +104,11 @@ function revealSpan(column: HTMLElement, card: HTMLElement | null, block: HTMLEl
   revealInColumn(column, fits ? card : block, block, MARGIN);
 }
 
-/** Keep the span in view while the column's content changes size: for HOLD_MS, or until the barista takes over. */
+/**
+ * Keep the span in view while the column or its content changes size (a card
+ * above still reading; a phone's tabs coming back as the search field loses
+ * the focus): for HOLD_MS, or until the barista takes over.
+ */
 function holdInView(column: HTMLElement, card: HTMLElement | null, block: HTMLElement): void {
   if (typeof ResizeObserver !== 'function') return;
   const observer = new ResizeObserver(() => {
@@ -117,6 +121,7 @@ function holdInView(column: HTMLElement, card: HTMLElement | null, block: HTMLEl
     window.clearTimeout(timer);
     for (const type of TAKE_OVER) column.removeEventListener(type, release);
   }
+  observer.observe(column);
   for (const child of Array.from(column.children)) observer.observe(child);
   for (const type of TAKE_OVER) column.addEventListener(type, release, { passive: true });
 }

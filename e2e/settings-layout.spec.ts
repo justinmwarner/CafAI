@@ -10,7 +10,8 @@ import { goTo, isPhone, openApp, openSettingsGroup, settingsGroup } from './help
  * on a phone the list, then a group's page with a back arrow. Each group has
  * its own address, which a reload keeps and the links into Settings land on:
  * the coach screen's Open Settings, the Care screen's back arrow and its
- * "Set it in Settings", and a drink view's Go back.
+ * "Set it in Settings", and a drink view's Go back. Its search (D236) finds
+ * a setting by its words or the words people use, and opens it in view.
  */
 
 const hash = (page: Page) => new URL(page.url()).hash;
@@ -146,6 +147,56 @@ test('crossing the line keeps the group: a tablet pane becomes a phone page, and
   await expect(list(page)).toBeVisible();
   await expect(row(page, 'data')).toHaveAttribute('aria-current', 'page');
   expect(hash(page)).toBe('#/settings/data');
+});
+
+// Search (D236): a field over the list's rows, what it finds in their place, a result opening its
+// group (a phone's page) with the setting in view in the group's own column and focused.
+
+const searchField = (page: Page) => page.getByTestId(TID.settingsSearch);
+
+test('search: "tint" opens Display with the tint swatches in view', async ({ page }) => {
+  await openApp(page);
+  await goTo(page, 'settings');
+  await searchField(page).fill('tint');
+  const result = page.getByTestId(TID.settingsSearchResult('tint'));
+  await expect(result).toBeVisible();
+  await expect(result).toContainText('Tint');
+  await expect(result).toContainText('Display');
+  await searchField(page).press('Enter');
+  await expect(page).toHaveURL(/#\/settings\/display$/);
+  const display = settingsGroup(page, 'display');
+  await expect(display.getByRole('radiogroup', { name: 'Tint' })).toBeInViewport({ ratio: 1 });
+  // The tint chosen takes the focus: Crema, until another is chosen.
+  await expect(display.getByTestId(TID.tintSwatch('crema'))).toBeFocused();
+  if (isPhone(page)) await expect(list(page)).toHaveCount(0);
+});
+
+test('search: "budget" opens Coach with the budget field in view and focused, on a phone as its page', async ({ page }) => {
+  await openApp(page);
+  await goTo(page, 'settings');
+  await searchField(page).fill('budget');
+  await page.getByTestId(TID.settingsSearchResult('coach-budget')).click();
+  await expect(page).toHaveURL(/#\/settings\/coach$/);
+  if (isPhone(page)) {
+    await expect(list(page)).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 1, name: 'Coach' })).toBeVisible();
+  }
+  const budget = settingsGroup(page, 'coach').getByTestId(TID.coachBudgetAmount);
+  await expect(budget).toBeFocused();
+  await expect(budget).toBeInViewport({ ratio: 1 });
+});
+
+test('search: words that match nothing say so, and clearing the field puts the rows back', async ({ page }) => {
+  await openApp(page);
+  await goTo(page, 'settings');
+  await searchField(page).fill('zzz');
+  await expect(page.getByTestId(TID.settingsSearchNone)).toHaveText('No setting matches “zzz”.');
+  await expect(row(page, 'coach')).toBeHidden();
+  await page.getByTestId(TID.settingsSearchClear).click();
+  await expect(searchField(page)).toHaveValue('');
+  await expect(page.getByTestId(TID.settingsSearchNone)).toHaveCount(0);
+  await expect(list(page).getByRole('link')).toHaveCount(7);
+  await expect(row(page, 'coach')).toBeVisible();
 });
 
 test("the Coach card's Save is gone: the model, fun facts and the grinder apply as they change (D234)", async ({ page }) => {
