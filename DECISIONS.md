@@ -4234,9 +4234,68 @@ ten of eleven gaps (all but "reset a group"). The design is
   at once. On screen is kept on this device.", or why the machine's fields
   are held, at its height. Three across from 840 px of the pane's width,
   stacked rows under it; a screen setting that failed to save says so in its
-  drink's card; every test id stays. Why: a barista finds a drink in one
-  place; the line and the "On screen" heading keep D222's difference (Decaid's
-  or CafAI's) in view.
+  drink's card until a change of that drink saves, which takes the failed one
+  along (the review: another drink's save cleared it while it was still
+  unsaved); every test id stays. Why: a barista finds a drink in one place;
+  the line and the "On screen" heading keep D222's difference (Decaid's or
+  CafAI's) in view.
+- **D236. Each group says how it stands, and a search finds any setting.**
+  - **The lines**, under each row of the list: Coach "Opus 5.5 · $1.84 this
+    month" on the API key ("$0.00" before anything is spent) or "On your
+    computer · Opus 5.5"; Grinder "Niche Zero · 14", the name or "Setting 14"
+    alone, or "Not set yet"; Drinks "Steam 50 s · Water 50 ml · Flush 10 s"
+    ("Steam off" below 135 °C); Machine "Sleeps after 30 min" or "Never
+    sleeps", then " · Next wake 06:30" in the chosen clock ("Mon 06:30"
+    beyond tomorrow); Display "Dark · Crema · °C" (" · 12-hour" when chosen,
+    "Custom" for a hue); Data and privacy "Backed up 5 min ago" or "Not
+    backed up yet" once known; About "CafAI 0.1.3 · Decaid 0.9.0", Decaid's
+    release without its build number. Until there is something live to say,
+    a row shows the group's contents.
+  - **The dot**, always with words that say it too: "No key yet", "Not set
+    up yet" (the bridge's address or code not valid) and "Paused: budget
+    reached" for Coach; a care step due while reminders are on, by its name
+    ("Descale due"), for Machine; "Backup paused"; "Decaid 0.8.6 is older
+    than checked" or "Decaid sent something unexpected" for About. A grinder
+    not set has none: the coach works without one.
+  - **Where they come from**: nothing asks Decaid for the list and nothing
+    polls. Coach and Grinder read the settings through a watch on Settings'
+    own services (`watchSettings`), so a model or grinder saved in the pane
+    shows in its row at once and an older answer never hides a newer save.
+    Drinks and Machine show what their groups last read or wrote, kept per
+    Decaid client for the page's life by `useDrinkPresets` and `usePresence`,
+    their contents until the group has been opened once: one more read of
+    Decaid at each Settings open would be shared with nothing on a phone's
+    list. The rest read stores that already exist.
+  - **Two lines where a tablet's column has no room**: the column leaves
+    about 163-191 px, and the spec's Drinks, Machine with a wake and About's
+    two warnings need 200-222. Each fact stays whole, so a line breaks only
+    after a middle dot, and is cut with an ellipsis after two; on a phone each
+    fits on one. The spec said one line, which lost "Flush 10 s", the wake
+    time and "checked".
+  - **Search**, between the list's title and its rows, on the tablet's
+    column and the phone's list alike: an index of every setting (53, in
+    page order), each with its words as its card shows them, more words a
+    barista might use, its group and card, and its control. Every word typed
+    must be found in a setting's name, its other words or its card's title,
+    case, accents and apostrophes aside ("12-hour" is "12 hour"); a name that
+    starts with the words comes first, then each word starting a word of the
+    name, then of its other words, then anywhere; page order within each, at
+    most eight. The results stand in for the rows, drawn as rows: the
+    group's icon, the setting's name, the group's name. Some names say on
+    their own what they are ("Screensaver dims the screen to", "Go back by
+    itself after steam"). The field is a combobox: the arrow keys choose a
+    result, round the ends; Enter opens it, or the best; Escape or Clear the
+    search brings the rows back. No match says `No setting matches “zzz”.`,
+    in the curly quotes CafAI quotes the barista in. The words stay while
+    Settings is open, so a phone's back arrow returns to the results.
+  - **Opening a result** goes to its group (a phone's page), waits up to
+    2.5 s for the control to be there and enabled, brings it into view in
+    the group's own column (with its card's title when both fit), focuses it
+    (a set of choices on the chosen one, else the card), and washes the card
+    in accent-wash for 1.2 s; none under reduced motion.
+  - **Why**: the list was only names, so it said nothing of what a group
+    held; a barista who knows the word ("budget", "tint") should not have to
+    know the group.
 - **D237. The coach's tokens and cost are counted from what each reply
   already carries.** Every response streams its `usage` (input, output,
   cache reads and writes, web searches), which CafAI assembled and dropped.
