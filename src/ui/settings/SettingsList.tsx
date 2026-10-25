@@ -8,7 +8,8 @@
  *
  * Each row is a link to its group's address (#/settings/coach), drawn as
  * History's rows are: 64 px, a 40 px icon tile, the name (15 px at 600) and
- * the status line (13 px, ink-muted, one line). The current one is accent on
+ * the status line (13 px, ink-muted, one line, or two where a tablet's
+ * column has no room for it in one). The current one is accent on
  * accent-wash, as the current place in the top bar is, its tile accent;
  * never a stripe down its side. A dot at the end, in the warning colour,
  * when the status line says something needs the barista (the words say it
@@ -19,7 +20,7 @@
  * while it has words, what it finds takes the rows' place, and clearing it
  * puts them back.
  */
-import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Fragment, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import Box from '@mui/material/Box';
 import ButtonBase from '@mui/material/ButtonBase';
 import Typography from '@mui/material/Typography';
@@ -76,6 +77,37 @@ const rowSx: SxProps<Theme> = (theme) => ({
 /** The dot beside words that say something needs the barista: decoration for them, never the only signal. */
 const dotSx = { width: 8, height: 8, borderRadius: '50%', bgcolor: 'warning.main', flex: 'none' } as const;
 
+/**
+ * The status line: one line where it fits, as on a phone, a second where it
+ * does not (a tablet's list column has some 165 to 190 px for it), cut with an
+ * ellipsis after that; each of its facts kept whole, so it breaks only after
+ * a middle dot ("Sleeps after 30 min ·" over "Next wake 06:30").
+ */
+const statusSx = {
+  display: '-webkit-box',
+  WebkitBoxOrient: 'vertical',
+  WebkitLineClamp: 2,
+  overflow: 'hidden',
+  color: 'text.secondary',
+  '& .status-fact': { whiteSpace: 'nowrap' },
+} as const;
+
+/** A line of facts joined by middle dots, each fact unbroken, the dot ending the fact before it. */
+function StatusWords({ line }: { line: string }) {
+  const facts = line.split(' · ');
+  if (facts.length < 2) return <>{line}</>;
+  return (
+    <>
+      {facts.map((fact, index) => (
+        <Fragment key={index}>
+          {index > 0 ? ' ' : null}
+          <span className="status-fact">{index < facts.length - 1 ? `${fact} ·` : fact}</span>
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
 interface RowProps {
   group: SettingsGroup;
   status: GroupStatus;
@@ -112,8 +144,8 @@ function GroupRow({ group, status, current, chevron, tabStop, setRef, onFocus, o
         <Typography id={nameId} variant="subtitle2" component="span" className="row-name" sx={{ display: 'block' }}>
           {group.name}
         </Typography>
-        <Typography id={statusId} variant="caption" component="span" noWrap sx={{ display: 'block', color: 'text.secondary' }}>
-          {status.line}
+        <Typography id={statusId} variant="caption" component="span" sx={statusSx}>
+          <StatusWords line={status.line} />
         </Typography>
       </Box>
       <Box component="span" aria-hidden sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary' }}>

@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import '../chat/testing/setup.ts';
 import { afterEach, describe, expect, it } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithServices } from '../chat/testing/render.tsx';
+import { SAMPLE_WORKFLOW } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
+import { keepDrinkPresets } from './statusReads.ts';
 import { SETTINGS_GROUP_IDS } from './groupIds.ts';
 import { SETTINGS_GROUPS, settingsGroup } from './groups.tsx';
 import { SettingsList } from './SettingsList.tsx';
@@ -93,6 +95,18 @@ describe('SettingsList (D232)', () => {
     const follows = (a: Element, b: Element) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
     expect(follows(screen.getByRole('heading', { name: 'Settings' }), search)).toBe(true);
     expect(follows(search, rows()[0]!)).toBe(true);
+  });
+
+  it('keeps each fact of a status line whole, so a line too long for a tablet breaks only after a middle dot', () => {
+    const { services } = renderWithServices(<SettingsList chosen={null} chevrons />);
+    act(() => keepDrinkPresets(services.decaid, SAMPLE_WORKFLOW));
+    const drinks = screen.getByTestId(TID.settingsGroupRow('drinks'));
+    expect(drinks).toHaveAccessibleDescription('Steam 50 s · Water 50 ml · Flush 10 s');
+    const facts = Array.from(drinks.querySelectorAll<HTMLElement>('.status-fact'));
+    expect(facts.map((fact) => fact.textContent)).toEqual(['Steam 50 s ·', 'Water 50 ml ·', 'Flush 10 s']);
+    for (const fact of facts) expect(getComputedStyle(fact).whiteSpace).toBe('nowrap');
+    // A line of one fact wraps where it must.
+    expect(screen.getByTestId(TID.settingsGroupRow('grinder')).querySelector('.status-fact')).toBeNull();
   });
 
   it('hides the rows while the search has words, what it finds taking their place', () => {
