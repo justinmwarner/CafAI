@@ -48,7 +48,10 @@ workflow checks against it. Settings > About shows the version you run.
 - **Sonnet 5.5 and Haiku 5.5** take Sonnet 5's and Haiku 4.5's places in the
   model list; Haiku 5.5 costs a fortieth of Opus 5.5.
 - **Which way is finer.** Settings > Grinder > Finer is: for a grinder whose
-  numbers run the other way, the coach turns the dial that way.
+  numbers run the other way, the coach turns the dial that way. A grinder's
+  list of settings that are numbers goes by it too, whatever order the list
+  was typed in: from the lowest number on Lower numbers, from the highest on
+  Higher numbers.
 - **Where the coach runs survives a Decaid update.** On an iPad, each
   update of Decaid gives CafAI a fresh browser storage; your bags and
   settings came back from Decaid's backup, but Claude on my computer, with

@@ -239,15 +239,16 @@ export function normalizeCoachBudget(raw: unknown): CoachBudget {
 /**
  * The grinders whose higher numbers are finer, read leniently (D241): keys of
  * 1 to 80 characters, nothing key-shaped (a typed name can hold a pasted
- * key), each once, at most 50.
+ * key), each once, at most 50: the newest, which withGrinderDirection puts
+ * last, so a new answer is never the one dropped.
  */
 export function normalizeGrinderFinerHigher(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   const keys: string[] = [];
-  for (const value of raw) {
+  for (let i = raw.length - 1; i >= 0 && keys.length < MAX_GRINDER_KEYS; i -= 1) {
+    const value: unknown = raw[i];
     if (typeof value !== 'string' || value.length === 0 || value.length > MAX_GRINDER_KEY_CHARS || containsKeyLike(value)) continue;
-    if (!keys.includes(value)) keys.push(value);
-    if (keys.length === MAX_GRINDER_KEYS) break;
+    if (!keys.includes(value)) keys.unshift(value);
   }
   return keys;
 }

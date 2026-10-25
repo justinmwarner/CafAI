@@ -104,7 +104,10 @@ export function createCoachProvider(options: CoachProviderOptions): LlmProvider 
   };
 }
 
-/** Counting never stands in the way of a reply. */
+/**
+ * Counting never stands in the way of a reply. Priced at the model asked: a
+ * reply a server-side fallback finished on another model is an estimate too.
+ */
 function count(spend: CoachProviderOptions['spend'], at: Date, source: SpendSource, request: LlmRequest, usage: LlmUsage): void {
   try {
     spend?.count({ at, source, model: request.model.trim(), kind: request.purpose ?? 'reply', call: request.call ?? 0, usage });

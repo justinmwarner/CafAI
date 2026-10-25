@@ -162,7 +162,8 @@ export interface GrinderInfo {
   /**
    * The barista said higher numbers are finer on this grinder (D241,
    * Settings > Grinder > Finer is): a finer move goes up the dial, and a
-   * preset list is read the other way round (finestFirst in grinder.ts).
+   * preset list is read from its highest number, or the other way round
+   * when it is not numbers in order (finestFirst in grinder.ts).
    * Absent or false: lower numbers are finer (D62). Never Decaid's: the
    * engine adds it from the settings.
    */

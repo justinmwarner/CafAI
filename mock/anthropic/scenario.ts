@@ -18,7 +18,7 @@ import FACT_LIST from '../../src/coach/facts/facts.json';
 import { factFits, matchedKeys, type BagFacts } from '../../src/coach/facts/match.ts';
 import { coachKey } from '../../src/coach/facts/told.ts';
 import type { FunFact } from '../../src/coach/facts/types.ts';
-import { resolveGrindMove } from '../../src/coach/grinder.ts';
+import { finestFirst, resolveGrindMove } from '../../src/coach/grinder.ts';
 import type { TemperatureUnit } from '../../src/coach/temperature.ts';
 import { pourTime } from '../../src/coach/summary/pourClock.ts';
 import type { GrinderInfo } from '../../src/coach/types.ts';
@@ -503,8 +503,10 @@ function finerHigher(grinder: Raw): boolean {
 
 /**
  * The dial Decaid's grinder library describes (a numeric `step` or a list of
- * `values`), else null. A numbered dial carries which way is finer (D241); a
- * list never does, as the payload sends its values finest first already.
+ * `values`), else null. A numbered dial carries which way is finer (D241). A
+ * list's values come finest first already, so its dial says whichever way
+ * reads them as they came: finestFirst turns a list of numbers running down
+ * unless higher numbers are finer.
  */
 function libraryDial(grinder: Raw): GrinderInfo | null {
   const model = typeof grinder.name === 'string' ? grinder.name : '';
@@ -513,7 +515,9 @@ function libraryDial(grinder: Raw): GrinderInfo | null {
     return { model, settingType: 'numeric', smallStep: step, bigStep: null, values: null, ...(finerHigher(grinder) ? { finerIsHigher: true } : {}) };
   }
   const values = Array.isArray(grinder.values) ? grinder.values.filter((v): v is string => typeof v === 'string') : [];
-  return values.length > 0 ? { model, settingType: 'preset', smallStep: null, bigStep: null, values } : null;
+  if (values.length === 0) return null;
+  const asTheyCame = finestFirst(values, false).every((value, i) => value === values[i]);
+  return { model, settingType: 'preset', smallStep: null, bigStep: null, values, ...(asTheyCame ? {} : { finerIsHigher: true }) };
 }
 
 type GrindDirection = 'finer' | 'coarser';

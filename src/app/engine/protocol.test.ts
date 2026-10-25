@@ -183,8 +183,9 @@ describe('engine protocol', () => {
       expect(grinderPayload('Baratza Encore ESP', '5', ENCORE, true, true).values).toEqual([
         '12', '11', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1',
       ]);
-      // A list of numbers typed finest first already runs from its highest: kept.
+      // A list of numbers is read by the answer, whichever way it was typed.
       expect(grinderPayload('Typed', '3', { ...ENCORE, values: ['3', '2', '1'] }, true, true).values).toEqual(['3', '2', '1']);
+      expect(grinderPayload('Typed', '3', { ...ENCORE, values: ['3', '2', '1'] }, true, false).values).toEqual(['1', '2', '3']);
       expect(ENCORE.values?.[0]).toBe('1');
     });
 

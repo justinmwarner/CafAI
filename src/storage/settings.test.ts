@@ -947,7 +947,10 @@ describe('the settings of Settings regrouped (D240, D241, D243, D245, D246, D247
 
   it("keep the grinders' directions as a clean list: each key once, nothing key-shaped, an emptied list a choice too", () => {
     expect(normalizeGrinderFinerHigher(['id:a', 'id:a', '', 7, 'x'.repeat(81), `name:${PASTED_KEY}`, 'name:ek43'])).toEqual(['id:a', 'name:ek43']);
-    expect(normalizeGrinderFinerHigher(Array.from({ length: 60 }, (_, i) => `id:g${i}`))).toHaveLength(50);
+    // Past 50, the oldest go: a new answer is added last (withGrinderDirection).
+    const sixty = normalizeGrinderFinerHigher(Array.from({ length: 60 }, (_, i) => `id:g${i}`));
+    expect(sixty).toHaveLength(50);
+    expect([sixty[0], sixty[49]]).toEqual(['id:g10', 'id:g59']);
     expect(normalizeGrinderFinerHigher('id:a')).toEqual([]);
     expect(normalizeSettings({ ...makeSettings(), grinderFinerHigher: [] }, MODEL).grinderFinerHigher).toEqual([]);
   });

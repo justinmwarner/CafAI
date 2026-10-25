@@ -4385,11 +4385,13 @@ ten of eleven gaps (all but "reset a group"). The design is
     dial a finer move goes up a step and a coarser one down, the floor of 0
     is the coarser end's, and a setting named on the wrong side is refused
     with "(higher numbers are finer)". A preset list is read finest first
-    (`finestFirst`): Decaid's order backwards on such a grinder, except a
-    list of plain numbers that already runs from its highest, as Add a
-    grinder and the coach's grinder offer ask lists to be typed (finest
-    first), which reversing would turn the wrong way. The change card's
-    words follow ("Grind 2 steps finer: 15 -> 16.0").
+    (`finestFirst`): a list of plain numbers in order by the answer, from
+    its lowest on Lower numbers and from its highest on Higher numbers,
+    whichever way Decaid keeps it, so the answer always decides (the
+    review found a list typed from its highest on a lower-is-finer grinder
+    that no answer could turn); any other list in Decaid's order, backwards
+    on Higher numbers. The change card's words follow ("Grind 2 steps finer:
+    15 -> 16.0").
   - **The coach hears it**: the grinder in every context, shot event and
     grinder offer carries `"finer": "lower" | "higher"`, its values finest
     first. The prompt says "lower" is CafAI's assumption until the barista

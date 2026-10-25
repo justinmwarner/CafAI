@@ -3717,6 +3717,16 @@ describe('coach engine', () => {
       expect(parsed(lastUserTurn(requests)[0])).toMatchObject({ added: true, grinder: { name: 'Mazzer Philos', finer: 'higher', linked: true } });
     });
 
+    it('reads a typed name with its spaces joined, as Finer is does, when Add links the same grinder', async () => {
+      await throughOffer();
+      await storage.settings.update({ grinderName: ' mazzer   Philos ', grinderFinerHigher: ['name:mazzer philos'] });
+      await engine.refresh();
+      scripts.push(() => [text('Added.')]);
+      await engine.addGrinder('t-grinder');
+      expect(await storage.settings.get()).toMatchObject({ grinderId: 'g-added-1', grinderSetting: '12' });
+      expect((await storage.settings.get()).grinderFinerHigher).toEqual(['name:mazzer philos', 'id:g-added-1']);
+    });
+
     it("never gives a typed grinder's answer to another grinder Add links", async () => {
       await storage.settings.update({ grinderFinerHigher: ['name:mazzer philos'] });
       await throughOffer({ model: 'Comandante C40', burrs: null, settingType: null, smallStep: null });
@@ -6186,6 +6196,43 @@ describe("the coach's spend in the engine (D237, D240, D243)", () => {
       expect(runs).toHaveLength(asked + 1);
       expect(runs.at(-1)!.purpose).toBe('reply');
       expect(engine.getState().messages.at(-1)!.parts).toEqual([{ kind: 'text', text: 'Grind a step finer.' }]);
+    });
+
+    it("sends a shot's reply that waited as a shot's, so the usage counts it among replies after shots", async () => {
+      await throughShot();
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(5);
+      const asked = runs.length;
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-2', stopReason: 'targetWeight' });
+      await vi.waitFor(() => expect(newest()).toEqual([{ kind: 'budgetPaused', budgetUsd: 5, resumesOn: '2026-11-01' }]));
+      expect(runs).toHaveLength(asked);
+      scripts.push(() => [text('That one ran fast.')]);
+      await setBudget({ monthlyUsd: 10, pauseAtBudget: true });
+      expect(runs).toHaveLength(asked + 1);
+      expect(runs.at(-1)!.purpose).toBe('shot');
+    });
+
+    it("leaves the reply that waited to Retry once another bag is opened, and sends none of that bag's in its place", async () => {
+      // Another bag whose last reply did not finish.
+      await engine.newBag();
+      scripts.push(() => {
+        throw new LlmError('overloaded', 'Anthropic is overloaded right now.');
+      });
+      await engine.sendText('Kiambu AA, light, washed');
+      const other = engine.getState().activeBag!.id;
+      await throughShot();
+      const first = engine.getState().activeBag!.id;
+      await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
+      spent = dollars(5);
+      await engine.sendText('How was that one?');
+      const asked = runs.length;
+      await engine.selectBag(other);
+      expect(budgetTimers.delays()).toEqual([]);
+      await setBudget({ monthlyUsd: 10, pauseAtBudget: true });
+      expect(runs).toHaveLength(asked);
+      await engine.selectBag(first);
+      expect(runs).toHaveLength(asked);
+      expect(engine.getState().error).toBe("The coach's last reply did not finish. Tap Retry to ask again.");
     });
 
     it('sends it once the pause is turned off, or the budget cleared', async () => {

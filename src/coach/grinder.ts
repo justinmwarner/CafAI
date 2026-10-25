@@ -39,20 +39,18 @@ export function grinderStep(grinder: GrinderInfo | null | undefined): number | n
 }
 
 /**
- * A preset grinder's list, finest first (D241). Decaid's list has no
- * direction, so CafAI reads it finest first, as lower numbers are finer on
- * most grinders (D62). On a grinder whose higher numbers are finer it is
- * read backwards, so a list in the grinder's own order ("1" to "40") runs
- * from its highest number; a list of numbers that already runs from its
- * highest is kept as it is, since Add a grinder and the coach's offer ask
- * for a list finest first, and reading that one backwards would make its
- * lowest number the finest.
+ * A preset grinder's list, finest first (D241). A list of numbers in order
+ * is read by the barista's answer, whichever way Decaid keeps it: from its
+ * lowest where lower numbers are finer (D62), from its highest where higher
+ * ones are, so Finer is always decides. Any other list (words, numbers out
+ * of order) is read in Decaid's order, finest first, and backwards on a
+ * grinder whose higher numbers are finer.
  */
 export function finestFirst(values: readonly string[], finerIsHigher: boolean): string[] {
-  if (!finerIsHigher) return [...values];
   const numbers = values.map((value) => (SIGNED_NUMBER.test(value.trim()) ? Number(value) : Number.NaN));
-  const fromHighest = numbers.every((n, i) => Number.isFinite(n) && (i === 0 || n < numbers[i - 1]!));
-  return fromHighest ? [...values] : [...values].reverse();
+  const runsDown = numbers.every((n, i) => Number.isFinite(n) && (i === 0 || n < numbers[i - 1]!));
+  const backwards = finerIsHigher ? !runsDown : runsDown;
+  return backwards ? [...values].reverse() : [...values];
 }
 
 /** Decaid's settings of a preset grinder, trimmed, finest first whichever way its numbers go (finestFirst); null when there are none. */

@@ -228,24 +228,27 @@ describe('which way is finer (D241)', () => {
   const UPWARD_STEP = "Your grinder moves in steps of 0.5 (Decaid's grinder library)";
   const STEPPED_ALL = 'Your grinder\'s settings in Decaid\'s grinder library, finest first: "8", "7", "6", "5", "4", "3", "2", "1".';
 
-  it('reads a list as Decaid gives it, finest first, while lower numbers are finer (D62)', () => {
+  it('reads a list of numbers in order from its lowest while lower numbers are finer (D62), whichever way Decaid keeps it', () => {
     expect(finestFirst(['1', '2', '3'], false)).toEqual(['1', '2', '3']);
-    expect(finestFirst(['3', '2', '1'], false)).toEqual(['3', '2', '1']);
-    expect(finestFirst(['Fine', 'Medium', 'Coarse'], false)).toEqual(['Fine', 'Medium', 'Coarse']);
+    expect(finestFirst(['3', '2', '1'], false)).toEqual(['1', '2', '3']);
+    expect(finestFirst([' 3 ', '2.5', '2'], false)).toEqual(['2', '2.5', ' 3 ']);
+    expect(finestFirst(['5'], false)).toEqual(['5']);
   });
 
-  it('reads a list backwards on a grinder whose higher numbers are finer', () => {
+  it('reads a list of numbers in order from its highest on a grinder whose higher numbers are finer, whichever way Decaid keeps it', () => {
     expect(finestFirst(['1', '2', '3'], true)).toEqual(['3', '2', '1']);
     expect(finestFirst(['1', '1.5', '2'], true)).toEqual(['2', '1.5', '1']);
-    expect(finestFirst(['E1', 'E2', 'E3'], true)).toEqual(['E3', 'E2', 'E1']);
-    // Numbers out of order are no grinder's own order to trust: read backwards, as any other list.
-    expect(finestFirst(['1', '3', '2'], true)).toEqual(['2', '3', '1']);
-  });
-
-  it('keeps a list of numbers that already runs from its highest, as Add a grinder and the coach ask lists to be typed (finest first)', () => {
     expect(finestFirst(['12', '11', '10'], true)).toEqual(['12', '11', '10']);
     expect(finestFirst([' 3 ', '2.5', '2'], true)).toEqual([' 3 ', '2.5', '2']);
     expect(finestFirst(['5'], true)).toEqual(['5']);
+  });
+
+  it("reads any other list in Decaid's order, finest first, and backwards where higher numbers are finer", () => {
+    expect(finestFirst(['Fine', 'Medium', 'Coarse'], false)).toEqual(['Fine', 'Medium', 'Coarse']);
+    expect(finestFirst(['E1', 'E2', 'E3'], true)).toEqual(['E3', 'E2', 'E1']);
+    // Numbers out of order are no direction to go by.
+    expect(finestFirst(['1', '3', '2'], false)).toEqual(['1', '3', '2']);
+    expect(finestFirst(['1', '3', '2'], true)).toEqual(['2', '3', '1']);
   });
 
   it('never changes the list it was given', () => {
