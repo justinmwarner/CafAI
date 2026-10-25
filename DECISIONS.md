@@ -4221,7 +4221,14 @@ ten of eleven gaps (all but "reset a group"). The design is
   change carries an earlier one that failed; only the newest says anything,
   and a save already on its way is not sent twice; what is typed while a save
   is out stays typed. The line under the card says "Saved." for 3 s, or
-  "Could not save the grinder: <why>. Try again.", and keeps its height. A
+  "Could not save the grinder: <why>. Try again.", and keeps its height; How
+  the coach replies and Finer is, which save on their own, say "Saved." there
+  too, unless the line says a change of the card did not save, which stands
+  (their own failures stay under them), and the budget has a line of its own
+  (D240). When Decaid's backup lands with Settings open (restoredFromBackup,
+  D100), the open group's cards and the list's lines read again, so no save
+  sends the defaults back over what came back (the review); what was being
+  typed in the group then is lost, once at most. A
   pick still brings the setting into view in the group's own scroll; a key
   pasted into a field is still taken out and said (D37). Add a grinder then
   says "Added X to Decaid's grinders, and picked it." or "Decaid already has
@@ -4381,8 +4388,10 @@ ten of eleven gaps (all but "reset a group"). The design is
   the card shows, every 60 s while the page is in view, and when the address
   or code is saved; the status carries no time, so the card says "As Claude
   Code reported them with the coach's last reply.", a window whose reset has
-  passed shows "—" until the next reply, a reached limit says so, and a
-  failure hides the block. The card reads Decaid's copy when it opens (D238),
+  passed shows "—" until the next reply, a reached limit says so (only while
+  Claude Code says no and a window it reported at 100 % has not started
+  again; a plan still allowed at 100 %, with extra usage, never shows it),
+  and a failure hides the block. The card reads Decaid's copy when it opens (D238),
   keeps its view while a change of place is read, and is brought into view
   by the pause card's Open Settings. Numbers keep their places (tabular
   figures; no-break spaces keep a number and its unit together). Without a
@@ -4426,9 +4435,10 @@ ten of eleven gaps (all but "reset a group"). The design is
     what it does, or while paused "Paused now: the coach starts again on 1
     November, or as soon as you raise the budget or turn this off.". Each
     change saves at once and refreshes the coach, which sends a reply that
-    waited; a failed save goes back to what is saved and says "Could not save
-    the budget: ..."; nothing claims there is no budget until the settings
-    are read.
+    waited; a line under the controls says "Saved." for 3 s, or "Could not
+    save the budget: ...", at its height, as a card's does (D234), and a
+    failed save goes back to what is saved; nothing claims there is no budget
+    until the settings are read.
 
   Why: the owner chose "warns as you near it, with a switch to also pause";
   a hard stop by surprise would cost a dial-in mid-bag, so pausing is the
@@ -4457,13 +4467,20 @@ ten of eleven gaps (all but "reset a group"). The design is
     says otherwise, and asks a barista who says their grinder goes the other
     way to set it in Settings > Grinder > Finer is.
   - **Linking keeps it**: Add on the coach's grinder card, linking the same
-    grinder the barista had typed, keeps its answer under the new id too;
-    another grinder starts at lower. A change reaches the coach at the next
-    refresh and writes nothing to Decaid, whose workflow has no field for it.
-  - **The row**: a failed save says "Could not save which way is finer: ..."
-    and the control goes back to the answer the coach still uses; unreadable
-    settings hold it and say so. The scripted coach turns the dial the same
-    way.
+    grinder the barista had typed, keeps its answer under the new id too, and
+    so do Settings' pick from Decaid's list, Add a grinder's pick and "Not in
+    Decaid's list" of the same grinder (the same name, read as Finer is reads
+    names), in the same save, the old key kept (the review: Settings dropped
+    it); another grinder, or another of Decaid's grinders of the same name,
+    starts at lower. A change reaches the coach at the next refresh and
+    writes nothing to Decaid, whose workflow has no field for it.
+  - **The row**: it follows the grinder being saved, else the one saved, and
+    before any grinder is saved the name typed, so a tap made as the name
+    field is left (one gesture on a touch screen) goes with the name just
+    typed, not the one before (the review); it says "Saved." in the card's
+    line. A failed save says "Could not save which way is finer: ..." and the
+    control goes back to the answer the coach still uses; unreadable settings
+    hold it and say so. The scripted coach turns the dial the same way.
 
   Why: a grinder numbered the other way got every move backwards, and only
   the barista knows their dial. Answers QUESTIONS 2.
