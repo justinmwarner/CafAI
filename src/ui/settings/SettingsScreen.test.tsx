@@ -2,9 +2,12 @@
 import '../chat/testing/setup.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
-import { createFakeServices } from '../testing/fakeServices.ts';
+import userEvent from '@testing-library/user-event';
+import { createMemoryCoachSourceStore } from '../../storage/coachSource.ts';
+import { createFakeServices, createFakeSpend, type FakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
 import { renderWithServices } from '../chat/testing/render.tsx';
+import { useRoute } from '../router.ts';
 import { ScreenModeContext } from '../shell/screenMode.ts';
 import { knownDecaidVersion } from './decaidVersion.ts';
 import { SETTINGS_GROUP_IDS } from './groupIds.ts';
@@ -171,6 +174,73 @@ describe("Settings and Decaid's version", () => {
     const services = createFakeServices();
     renderWithServices(<SettingsScreen group={null} />, services);
     await waitFor(() => expect(knownDecaidVersion(services.decaid)).toBe('0.9.0+1'));
+  });
+});
+
+/** Settings as the app routes it: the group from the address, the same screen kept while the address moves within Settings. */
+function RoutedSettings() {
+  const route = useRoute();
+  return route.name === 'settings' ? <SettingsScreen group={route.group ?? null} /> : null;
+}
+
+/** Services with what the Coach group's usage card and budget need: the spend and where the coach runs. */
+function servicesWithSpend(): FakeServices {
+  const services = createFakeServices({ spend: createFakeSpend() });
+  services.coachSource = createMemoryCoachSourceStore({ kind: 'anthropic' });
+  return services;
+}
+
+const searchField = () => screen.getByRole('combobox', { name: 'Search settings' });
+
+describe('Settings search (D236)', () => {
+  it("puts its field over the list's rows, and what it finds in their place until it is cleared", async () => {
+    setViewport(1280, 800);
+    window.location.hash = '#/settings/coach';
+    renderWithServices(<RoutedSettings />);
+    const field = searchField();
+    expect(field).toHaveAttribute('data-testid', TID.settingsSearch);
+    const list = screen.getByTestId(TID.settingsList);
+    expect(list).toContainElement(field);
+    await userEvent.type(field, 'zzz');
+    expect(within(list).queryAllByRole('link')).toEqual([]);
+    expect(screen.getByTestId(TID.settingsSearchNone)).toHaveTextContent('No setting matches “zzz”.');
+    await userEvent.click(screen.getByTestId(TID.settingsSearchClear));
+    expect(within(list).getAllByRole('link')).toHaveLength(SETTINGS_GROUP_IDS.length);
+  });
+
+  it('opens a result on a tablet: its group beside the list, the chosen tint focused, its card washed for a moment', async () => {
+    setViewport(1280, 800);
+    window.location.hash = '#/settings/coach';
+    renderWithServices(<RoutedSettings />);
+    await userEvent.type(searchField(), 'tint{Enter}');
+    expect(window.location.hash).toBe('#/settings/display');
+    const display = await screen.findByTestId(TID.settingsPane('display'));
+    const crema = within(display).getByTestId(TID.tintSwatch('crema'));
+    await waitFor(() => expect(crema).toHaveFocus());
+    const appearance = within(display).getByRole('region', { name: 'Appearance' });
+    expect(appearance.style.backgroundColor).not.toBe('');
+    // The search keeps its words, and the list what it found.
+    expect(searchField()).toHaveValue('tint');
+    expect(screen.getByTestId(TID.settingsSearchResult('tint'))).toBeInTheDocument();
+  });
+
+  it("opens a result on a phone as the group's page, the setting focused once its card has read it", async () => {
+    setViewport(390, 844);
+    window.location.hash = '#/settings';
+    renderWithServices(<RoutedSettings />, servicesWithSpend());
+    await userEvent.type(searchField(), 'budget');
+    await userEvent.click(screen.getByTestId(TID.settingsSearchResult('coach-budget')));
+    expect(window.location.hash).toBe('#/settings/coach');
+    expect(screen.queryByTestId(TID.settingsList)).toBeNull();
+    const budget = await screen.findByTestId(TID.coachBudgetAmount);
+    await waitFor(() => expect(budget).toHaveFocus());
+    // Back on the list, the search still says what it found.
+    act(() => {
+      window.location.hash = '#/settings';
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    });
+    expect(await screen.findByTestId(TID.settingsSearchResult('coach-budget'))).toBeInTheDocument();
+    expect(searchField()).toHaveValue('budget');
   });
 });
 

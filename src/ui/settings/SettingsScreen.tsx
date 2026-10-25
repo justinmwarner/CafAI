@@ -21,8 +21,13 @@
  * and save returned (statusReads.ts), so a model or a grinder saved beside
  * the list shows in its row at once, with no read of the list's own but one
  * as it opens.
+ *
+ * Over the list's rows, its search (SettingsSearch.tsx, D236). Its words are
+ * kept here while Settings stays open, so the list a phone comes back to
+ * from a group's page still shows what was found; what it finds takes the
+ * rows' place until it is cleared.
  */
-import { useEffect, useLayoutEffect, useMemo, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import Box from '@mui/material/Box';
 import { ServicesProvider, useServices } from '../../app/services.tsx';
 import { replaceRoute } from '../router.ts';
@@ -31,6 +36,7 @@ import { useDecaidVersion } from './decaidVersion.ts';
 import type { SettingsGroupId } from './groupIds.ts';
 import { GroupPage } from './GroupPage.tsx';
 import { SettingsList } from './SettingsList.tsx';
+import { SettingsSearch } from './SettingsSearch.tsx';
 import { SettingsWatchContext, watchSettings } from './statusReads.ts';
 
 /** The group shown last in this page's life: what a tablet's `#/settings` opens on. */
@@ -74,6 +80,9 @@ export function SettingsScreen({ group = null }: SettingsScreenProps) {
   useDecaidVersion();
   // A tablet always shows a group beside the list; a phone shows the list until a group is opened.
   const shown = group ?? (tablet ? (opened ?? FIRST_GROUP) : null);
+  const [query, setQuery] = useState('');
+  const search = <SettingsSearch query={query} onQueryChange={setQuery} />;
+  const searching = query.trim() !== '';
 
   useEffect(() => {
     if (shown !== null) opened = shown;
@@ -88,7 +97,7 @@ export function SettingsScreen({ group = null }: SettingsScreenProps) {
     content = (
       <Box sx={{ height: '100%', minHeight: 0, display: 'flex' }}>
         <Box sx={{ flex: 'none', width: { xs: 280, lg: 300 }, minHeight: 0, borderRight: 1, borderColor: 'divider' }}>
-          <SettingsList chosen={shown} chevrons={false} />
+          <SettingsList chosen={shown} chevrons={false} search={search} searching={searching} />
         </Box>
         <Box sx={{ flex: '1 1 auto', minWidth: 0, minHeight: 0 }}>
           {/* Keyed by the group, so a group opens at its top. */}
@@ -97,7 +106,7 @@ export function SettingsScreen({ group = null }: SettingsScreenProps) {
       </Box>
     );
   } else if (shown === null) {
-    content = <SettingsList chosen={null} chevrons />;
+    content = <SettingsList chosen={null} chevrons search={search} searching={searching} />;
   } else {
     content = <GroupPage key={shown} id={shown} layout="page" />;
   }

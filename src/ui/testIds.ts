@@ -117,6 +117,9 @@ export const TID = {
   settingsBack: 'settings-back',
   settingsSearch: 'settings-search',
   settingsSearchResult: (id: string) => `settings-search-result-${slug(id)}`,
+  /** The search field's clear button, and the line that says no setting matches (D236). */
+  settingsSearchClear: 'settings-search-clear',
+  settingsSearchNone: 'settings-search-none',
   /** The line under a card that says what a change did ("Saved.", or why not), kept at its height (D234). */
   settingsSaved: (card: string) => `settings-saved-${slug(card)}`,
   appearanceMode: (mode: string) => `appearance-mode-${mode}`,
