@@ -2,6 +2,7 @@ import './ui/fonts.ts';
 import { createRoot } from 'react-dom/client';
 import { App, restoreRoute } from './app/App.tsx';
 import { createServices } from './app/createServices.ts';
+import { watchStart } from './app/startWatch.ts';
 import { detectHost } from './api/host.ts';
 import { bootColors, loadBootColors } from './ui/appearance.ts';
 import { buildPalette, DEFAULT_TINT_ID, namedTint } from './ui/palette.ts';
@@ -37,7 +38,15 @@ const buttonStyle = {
   textDecoration: 'none',
 } as const;
 
-function Message({ title, detail }: { title: string; detail?: string }) {
+const STARTING = 'Starting CafAI…';
+
+/** Once the start is slow (D274): what it waits on, and that Try again starts over. */
+function slowDetail(stage: string | null): string {
+  const waiting = stage ? `still ${stage}` : 'nothing has started yet';
+  return `This is taking longer than usual: ${waiting}. Try again starts CafAI over.`;
+}
+
+function Message({ title, detail, retry = false }: { title: string; detail?: string; retry?: boolean }) {
   const host = detectHost(window);
   return (
     <div
@@ -59,6 +68,11 @@ function Message({ title, detail }: { title: string; detail?: string }) {
       {detail ? <div style={{ fontSize: 16, maxWidth: 520, color: BOOT.inkMuted }}>{detail}</div> : null}
       {/* A way back to the skin switcher and Decaid's settings even before (or without) the app. */}
       <div style={{ display: 'flex', gap: 12, marginTop: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+        {retry ? (
+          <button type="button" data-testid="start-try-again" onClick={() => window.location.reload()} style={buttonStyle}>
+            Try again
+          </button>
+        ) : null}
         <button type="button" data-testid="exit-to-skins" onClick={() => host.exitToSkinSwitcher()} style={buttonStyle}>
           Exit to Decaid
         </button>
@@ -68,6 +82,15 @@ function Message({ title, detail }: { title: string; detail?: string }) {
       </div>
     </div>
   );
+}
+
+/** sessionStorage, where the start watch notes its one automatic retry; null where storage is blocked. */
+function startStorage(): globalThis.Storage | null {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
 }
 
 async function startMocks(): Promise<void> {
@@ -118,14 +141,26 @@ async function startMocks(): Promise<void> {
 
 async function boot(): Promise<void> {
   restoreRoute();
-  root.render(<Message title="Starting CafAI…" />);
+  root.render(<Message title={STARTING} />);
+  // A start that hangs (the page Decaid reloads after the tablet slept, say) is said so, retried once
+  // by itself, and left with Try again (D274): never "Starting CafAI…" for good.
+  const watch = watchStart({
+    storage: startStorage(),
+    reload: () => window.location.reload(),
+    onSlow: (stage) => root.render(<Message title={STARTING} detail={slowDetail(stage)} retry />),
+  });
   try {
-    if (import.meta.env.MODE === 'mock') await startMocks();
-    const services = await createServices(window);
+    if (import.meta.env.MODE === 'mock') {
+      watch.stage('starting the mocks');
+      await startMocks();
+    }
+    const services = await createServices(window, { onStage: watch.stage });
+    watch.done();
     root.render(<App services={services} />);
   } catch (error) {
+    watch.failed();
     const detail = error instanceof Error && error.message ? error.message : 'Something went wrong while starting.';
-    root.render(<Message title="CafAI could not start" detail={detail} />);
+    root.render(<Message title="CafAI could not start" detail={detail} retry />);
   }
 }
 

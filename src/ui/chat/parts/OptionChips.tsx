@@ -25,6 +25,8 @@ export interface OptionChipsProps {
   expired?: boolean;
   /** Why it was set aside, for the note under the chips. */
   setAsideReason?: SetAsideReason;
+  /** The barista typed past the question (D275): it stays open, and a note says so. */
+  keptOpen?: boolean;
   onAnswer(selected: string[], otherText: string | null): void;
 }
 
@@ -45,6 +47,7 @@ export function OptionChips({
   disabled = false,
   expired = false,
   setAsideReason,
+  keptOpen = false,
   onAnswer,
 }: OptionChipsProps) {
   const [selected, setSelected] = useState<string[]>([]);
@@ -147,6 +150,11 @@ export function OptionChips({
       {expired && !answered ? (
         <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
           {setAsideNote(setAsideReason, 'Set aside: you answered in the chat instead.')}
+        </Typography>
+      ) : null}
+      {keptOpen && !closed ? (
+        <Typography variant="body2" data-testid={TID.optionsKeptOpen} sx={{ mt: 1, color: 'text.secondary' }}>
+          Still open: tap or type how it tasted whenever you like.
         </Typography>
       ) : null}
       {!closed && otherOpen ? (

@@ -99,6 +99,23 @@ export function setGrinderOfferStatus(
   );
 }
 
+/** A taste question the barista typed past (D275): its card stays open, its answer owed as an event. */
+export function keepOpen(part: CoachUiPart): CoachUiPart {
+  return part.kind === 'options' ? { ...part, keptOpen: true } : part;
+}
+
+export type OpenTastePart = Extract<CoachUiPart, { kind: 'options' }> & { keptOpen: true };
+
+/** The taste question kept open on its card (D275), still unanswered, or null. */
+export function keptOpenTaste(messages: readonly CoachUiMessage[]): OpenTastePart | null {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    for (const part of messages[i]!.parts) {
+      if (part.kind === 'options' && part.keptOpen === true && part.answer === null && part.expired !== true) return part as OpenTastePart;
+    }
+  }
+  return null;
+}
+
 /** The bean card while it waits for an answer. */
 export function isOpenBeanCard(part: CoachUiPart): boolean {
   return part.kind === 'beanPicker' && part.choice === null && !part.expired;

@@ -151,6 +151,7 @@ import {
   FACT_NOT_SHOWN_AGAIN,
   FACT_SHOWN,
   ONE_FACT_PER_REPLY,
+  TASTE_STILL_OPEN,
   UNANSWERED_SHOT,
   UNANSWERED_TEXT,
   grinderPayload,
@@ -160,6 +161,7 @@ import {
   shotCompletedBlock,
   shotMeasuredBlock,
   shotRatedBlock,
+  shotTastedBlock,
   summaryForModel,
   textBlock,
   toolResult,
@@ -170,7 +172,7 @@ import {
   type GrinderOfferResultPayload,
   type TemplatePickedPayload,
 } from './protocol.ts';
-import { EXTRAS_KEY, cafaiNotesLine, isTasteQuestion, lastCafaiNotes, mergeNotes, tasteWords } from './shotNotes.ts';
+import { EXTRAS_KEY, asksInstead, cafaiNotesLine, isTasteQuestion, lastCafaiNotes, mergeNotes, tasteWords } from './shotNotes.ts';
 import { setShotTds as setCardTds, shotCard, untoldReadings } from './shotReading.ts';
 import {
   baselineFor,
@@ -195,6 +197,8 @@ import {
   isLoadingBeanCard,
   isOpenBagConfirm,
   isOpenBeanCard,
+  keepOpen,
+  keptOpenTaste,
   loadingBeanPickerPart,
   message,
   noticePart,
@@ -214,6 +218,7 @@ import {
   updatePart,
   withPart,
   withoutTransient,
+  type OpenTastePart,
 } from './uiMessages.ts';
 
 export interface EngineDeps {
@@ -745,6 +750,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (names.includes(TOOL.proposeAdjustment)) return 'awaiting_confirmation';
     if (names.includes(TOOL.askUser)) return 'awaiting_feedback';
     if (names.includes(TOOL.proposeTemplates)) return 'choosing_template';
+    // A taste question the barista typed past (D275) still waits for the taste.
+    if (keptOpenTaste(state.messages)) return 'awaiting_feedback';
     // Described, but no profile yet (e.g. the suggestions were set aside).
     if (!activeVersion(s)) return s.conversation.apiMessages.length === 0 ? 'intake' : 'idle';
     return 'awaiting_shot';
@@ -1861,6 +1868,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       s.pending.push({ id: call.id, name, input: call.input });
     } else if (name === TOOL.askUser) {
       const input = call.input as AskUser;
+      // The coach asks the taste again: the question kept open (D275) is closed for it.
+      if (isTasteQuestion(input.question)) closeKeptOpenTaste('other');
       addMessage('assistant', [
         optionsPart(call.id, input.question, coach.withOther(input.options), input.multiSelect, isTasteQuestion(input.question)),
       ]);
@@ -2125,6 +2134,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     }
     s.pending = [];
     s.held = [];
+    // A new shot's taste is its own: the question kept open for the shot before (D275) closes.
+    if (setAsideFor === 'shot') closeKeptOpenTaste('shot');
     if (results.length === 0 && extra.length === 0) return;
     // A verdict comes after the shot's own event left, so it rides with the next turn; so does a TDS reading (D167).
     // Untold means untold by this turn too: a shot's own event in `extra` tells the reading its record came with
@@ -3039,10 +3050,21 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     const s = session;
     if (!s) return;
     const call = requireCall(s, requestId, TOOL.askUser);
-    if (!call) return;
+    if (!call) {
+      // The taste question kept open (D275): its call is answered, so the taste goes as an event.
+      const open = keptOpenTaste(state.messages);
+      if (open && open.requestId === requestId) {
+        usage.track('coach_message');
+        await lateTaste(s, open, selected, otherText, 'other');
+      }
+      return;
+    }
     usage.track('coach_message');
     // Typed text, like a chat message: a pasted key never reaches the coach or Decaid (D37).
     const other = redactKeyLike(otherText?.trim() ?? '', '[API key removed]') || null;
+    if (otherText && other !== otherText.trim()) {
+      addMessage('system', [noticePart('info', 'That looked like an API key, so CafAI took it out. Keys go in Settings > Coach.')]);
+    }
     setMessages(
       updatePart(state.messages, byRequestId(requestId), (part) =>
         part.kind === 'options' ? { ...part, answer: { selected, otherText: other } } : part,
@@ -3061,6 +3083,42 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     }
     const answers = new Map([[call.id, toolResult(call.id, { selected, other })]]);
     await sendUser(s, answers, { answered: false, note: 'Not answered.' }, [], 'other');
+  }
+
+  /** The taste question kept open on its card (D275) closes unanswered, and says why. */
+  function closeKeptOpenTaste(reason: SetAsideReason): void {
+    const open = keptOpenTaste(state.messages);
+    if (open) setMessages(updatePart(state.messages, byRequestId(open.requestId), (part) => setAside(part, reason)));
+  }
+
+  /**
+   * The taste given on a question kept open (D275), tapped on its card or
+   * typed: kept as the shot's taste like an answer to the coach's call, and
+   * sent as [event:shot_tasted], since the call itself was answered when the
+   * barista typed past it. Without a shot still waiting for its taste (none
+   * should remain: a new shot closes the card), the words go as a message.
+   */
+  async function lateTaste(s: Session, open: OpenTastePart, selected: string[], otherText: string | null, setAsideFor: SetAsideReason): Promise<void> {
+    const other = redactKeyLike(otherText?.trim() ?? '', '[API key removed]') || null;
+    if (otherText && other !== otherText.trim()) {
+      addMessage('system', [noticePart('info', 'That looked like an API key, so CafAI took it out. Keys go in Settings > Coach.')]);
+    }
+    setMessages(
+      updatePart(state.messages, byRequestId(open.requestId), (part) =>
+        part.kind === 'options' ? { ...part, answer: { selected, otherText: other } } : part,
+      ),
+    );
+    const said = tasteWords(selected, other);
+    if (said) addMessage('user', [{ kind: 'text', text: said }]);
+    emit();
+    const iteration = await latestPendingIteration(s);
+    if (iteration && !iteration.feedback) {
+      await putIteration({ ...iteration, feedback: { question: open.question, selected, otherText: other } });
+      noteTaste(s, iteration, selected, other);
+    }
+    const block = iteration?.shotId ? shotTastedBlock({ shotId: iteration.shotId, selected, other }) : textBlock(said);
+    const fallback = setAsideFor === 'typed' ? UNANSWERED_TEXT : { answered: false, note: 'Not answered.' };
+    await sendUser(s, new Map(), fallback, [block], setAsideFor);
   }
 
   async function confirmChange(requestId: string): Promise<void> {
@@ -3385,12 +3443,25 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   async function sendText(text: string): Promise<void> {
     const typed = text.trim();
     if (!typed) return;
-    usage.track('coach_message');
     const s = session ?? (await createBag(false));
     // The bag described in words instead of picked or read from a photo: those cards close (6.1, 6.8).
     for (const open of [isOpenBeanCard, isOpenBagConfirm]) {
       if (state.messages.some((m) => m.parts.some(open))) setMessages(updatePart(state.messages, open, (part) => setAside(part, 'typed')));
     }
+    // Typed while the taste question is open, the taste is the answer, as the same words under Other (D79);
+    // a question or a request instead goes to the coach as a message, and the question stays open (D275).
+    const tasteQuestion = s.pending.find((p) => p.name === TOOL.askUser && isTasteQuestion((p.input as AskUser).question));
+    if (tasteQuestion && !asksInstead(typed)) {
+      await answerOptions(tasteQuestion.id, [], typed);
+      return;
+    }
+    const keptOpen = tasteQuestion ? null : keptOpenTaste(state.messages);
+    if (keptOpen && !asksInstead(typed)) {
+      usage.track('coach_message');
+      await lateTaste(s, keptOpen, [], typed, 'typed');
+      return;
+    }
+    usage.track('coach_message');
     // A pasted API key never reaches the coach, the transcript or Decaid.
     const trimmed = redactKeyLike(typed, '[API key removed]');
     addMessage('user', [{ kind: 'text', text: trimmed }]);
@@ -3398,24 +3469,17 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       addMessage('system', [noticePart('info', 'That looked like an API key, so CafAI took it out. Keys go in Settings > Coach.')]);
     }
     emit();
-    // Typed while the taste question is open, it is the taste; typed under
-    // any other question, it is a reply like any other.
-    const tasteQuestion = s.pending.find((p) => p.name === TOOL.askUser && isTasteQuestion((p.input as AskUser).question));
-    if (tasteQuestion) {
-      const iteration = await latestPendingIteration(s);
-      if (iteration && !iteration.feedback) {
-        await putIteration({
-          ...iteration,
-          feedback: { question: (tasteQuestion.input as AskUser).question, selected: [], otherText: trimmed },
-        });
-        noteTaste(s, iteration, [], trimmed);
-      }
-    }
     if (s.conversation.apiMessages.length === 0) {
       await startIntake(s, trimmed, null);
-    } else {
-      await sendUser(s, new Map(), UNANSWERED_TEXT, [textBlock(trimmed)], 'typed');
+      return;
     }
+    const answers = new Map<string, ToolResultBlock>();
+    if (tasteQuestion) {
+      // The card stays open; the coach hears why its call has no taste, and answers what was typed.
+      setMessages(updatePart(state.messages, byRequestId(tasteQuestion.id), keepOpen));
+      answers.set(tasteQuestion.id, toolResult(tasteQuestion.id, TASTE_STILL_OPEN));
+    }
+    await sendUser(s, answers, UNANSWERED_TEXT, [textBlock(trimmed)], 'typed');
   }
 
   async function refreshFromStorage(): Promise<void> {

@@ -326,6 +326,10 @@ export const DEMO_VOICE: Voice = {
 
   fallback: () => "Noted. Pull a shot when you're ready and I'll read its curves with you, or tell me more about the coffee.",
 
+  // A question past the taste question (rule 7b): an answer about the machine, never about the cup (D127).
+  pastTaste: () =>
+    `Good question. Every lever changes how the water meets the coffee: the grind and the dose set how hard it has to push, the temperature and the pressure how much it pulls out on the way. Your taste tells us which one to move, so I've left that question open: ${bold('tap or type how it tasted')} whenever you're ready.`,
+
   // What the reading is, never what it tastes like (D127, D168).
   measured({ tdsPct, eyPct }) {
     if (tdsPct === null) return "Got it: I'll leave that TDS reading out.";

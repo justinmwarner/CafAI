@@ -426,35 +426,59 @@ const TASTE_QUESTION = /\btast(?:e|ed|es|ing)\b/i;
 /** Text the user typed, not an event or context block the engine added. */
 const typedTexts = (message: Message | undefined) => textsOf(message).filter((t) => !t.startsWith('[event:') && !t.startsWith(EVENT.context));
 
+/** The last message's note on an `ask_user` the user typed a question past (rule 7b): the taste question stays open. */
+const KEPT_OPEN_NOTE = /\bnot the taste\b/;
+
 /**
- * Rule 3b: the text typed after a shot that set the taste question aside
- * (its ask_user answered with {"answered":false}), lower-cased. The app keeps
- * that text as the shot's taste (D79), so it is the taste answer, read as the
- * same words under "Other" are: a taste word picks the move, none means one
- * step finer. Null when no taste question was set aside for it.
+ * Rule 7b: a taste question kept open on the user's screen. True when the
+ * latest taste question (an `ask_user` whose question mentions taste) was
+ * answered with the kept-open note, and nothing since gave the taste (rule
+ * 12), asked it again or ended another shot.
  */
-function typedTaste(messages: Message[], index: number): string | null {
-  const message = messages[index];
-  if (message?.role !== 'user') return null;
-  const words = typedTexts(message).join(' ').toLowerCase();
-  if (words.trim() === '' || latestShot(messages.slice(0, index)) === null) return null;
-  const asked = new Map(toolUses(messages[index - 1]).map((b) => [b.id as string, b]));
-  const setAside = toolResults(message).some((block) => {
-    const payload = parseJson(resultText(block));
-    const call = asked.get(block.tool_use_id as string);
-    const question = isRecord(call?.input) ? call.input.question : undefined;
-    return (
-      isRecord(payload) &&
-      payload.answered === false &&
-      call?.name === TOOL.askUser &&
-      typeof question === 'string' &&
-      TASTE_QUESTION.test(question)
-    );
+function tasteKeptOpen(messages: Message[]): boolean {
+  let open = false;
+  messages.forEach((message, i) => {
+    if (message.role === 'assistant') {
+      if (toolUses(message).some((b) => b.name === TOOL.askUser && isRecord(b.input) && typeof b.input.question === 'string' && TASTE_QUESTION.test(b.input.question))) {
+        open = false;
+      }
+      return;
+    }
+    const asked = new Map(toolUses(messages[i - 1]).map((b) => [b.id as string, b]));
+    for (const block of toolResults(message)) {
+      const payload = parseJson(resultText(block));
+      const call = asked.get(block.tool_use_id as string);
+      const question = isRecord(call?.input) ? call.input.question : undefined;
+      if (
+        isRecord(payload) &&
+        payload.answered === false &&
+        typeof payload.note === 'string' &&
+        KEPT_OPEN_NOTE.test(payload.note) &&
+        call?.name === TOOL.askUser &&
+        typeof question === 'string' &&
+        TASTE_QUESTION.test(question)
+      ) {
+        open = true;
+      }
+    }
+    for (const text of textsOf(message)) {
+      if (text.startsWith(EVENT.shotTasted) || text.startsWith(EVENT.shotCompleted)) open = false;
+    }
   });
-  return setAside ? words : null;
+  return open;
 }
 
-/** The most recent taste answer: a real ask_user answer ("selected" plus "other") or a typed taste (rule 3b), lower-cased. */
+/** Rule 12: the taste given late, on a question kept open, lower-cased as an answer reads; null without one in the message. */
+function tastedLate(message: Message | undefined): string | null {
+  const event = textsOf(message).find((t) => t.startsWith(EVENT.shotTasted));
+  if (event === undefined) return null;
+  const payload = eventPayload(event);
+  const selected = Array.isArray(payload?.selected) ? payload.selected.filter((s): s is string => typeof s === 'string') : [];
+  const other = typeof payload?.other === 'string' ? payload.other : '';
+  return `${selected.join(' ')} ${other}`.toLowerCase();
+}
+
+/** The most recent taste answer: an ask_user answer ("selected" plus "other"; a typed taste comes so, rule 7a) or one given late (rule 12), lower-cased. */
 function latestAnswer(messages: Message[]): string {
   let answer = '';
   messages.forEach((message, i) => {
@@ -464,7 +488,7 @@ function latestAnswer(messages: Message[]): string {
       const other = typeof payload.other === 'string' ? payload.other : '';
       answer = `${payload.selected.filter((s) => typeof s === 'string').join(' ')} ${other}`.toLowerCase();
     }
-    answer = typedTaste(messages, i) ?? answer;
+    answer = tastedLate(message) ?? answer;
   });
   return answer;
 }
@@ -958,9 +982,9 @@ function decide(script: Script): Reply {
     return { blocks: lead === null ? [proposal] : [{ type: 'text', text: lead }, proposal], stopReason: 'tool_use' };
   }
 
-  // 3. The taste answer, or (3b) text typed after a shot instead of a tap,
-  // which set the taste question aside and so is the taste: look at the curve.
-  if (resultFor(TOOL.askUser) || typedTaste(messages, lastIndex) !== null) {
+  // 3. The taste answer (tapped, or typed and answered as under Other, rule
+  // 7a), or one given late on a question kept open (rule 12): look at the curve.
+  if (resultFor(TOOL.askUser) || tastedLate(last) !== null) {
     return {
       blocks: [
         { type: 'text', text: voice.tasteAnswer({ taste: tasteOf(latestAnswer(messages)), roastLevel: savedRoast(messages) }) },
@@ -974,6 +998,10 @@ function decide(script: Script): Reply {
       stopReason: 'tool_use',
     };
   }
+
+  // 3c. A question or a request typed past the taste question (rule 7b), or
+  // while it stays open: answer in a line and leave the question open.
+  if (typedTexts(last).length > 0 && tasteKeptOpen(messages)) return say(voice.pastTaste());
 
   // 4. A shot finished: sum it up and ask how it tasted; due a fun fact, share one that fits first (4a).
   const shotText = texts.find((t) => t.startsWith(EVENT.shotCompleted));

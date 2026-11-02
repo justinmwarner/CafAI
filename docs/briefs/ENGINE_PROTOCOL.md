@@ -138,7 +138,27 @@ All JSON payloads are compact `JSON.stringify` output.
 7. **Free text while UI calls are pending**: a tool_result for each pending
    call with JSON `{"answered":false,"note":"The user typed a message instead."}`,
    then the user's text block.
-8. **Plain free text** otherwise: one text block.
+7a. **Free text while the taste question is pending** (D79, D275): text
+   that reads as the taste (anything but 7b) answers the question as the
+   same words under Other would: a tool_result for the `ask_user` with
+   `{"selected":[],"other":<text>}`, no text block; the app keeps it as the
+   shot's taste. Every other pending call is answered as in rule 7.
+7b. **A question or a request typed while the taste question is pending**
+   (D275): text with a question mark, or opening with an asking word
+   ("why", "how", "can", "should"), a request ("change", "show", "try",
+   "let's", "I want") or a put-off ("not now", "later"; the list is
+   `asksInstead` in src/app/engine/shotNotes.ts). The `ask_user` gets
+   `{"answered":false,"note":"The user typed a message instead, not the
+   taste: answer it. The taste question stays open on their screen, so do
+   not ask it again; their taste comes as [event:shot_tasted] when they
+   give it."}`, every other pending call rule 7's result, then the text
+   block. The card stays open (`keptOpen`), and the phase stays
+   `awaiting_feedback`, until the taste is given (rule 12), the coach asks
+   the taste again, or another shot ends (then it is set aside, "a new shot
+   came in").
+8. **Plain free text** otherwise: one text block. Typed while a taste
+   question is kept open (7b), text that reads as the taste is rule 12
+   instead.
 9. **Verdict** (D126): a text block `"[event:shot_rated]\n" + JSON` with JSON
    `{"shotId":string,"verdict":"much worse"|"worse"|"about the same"|"better"|"much better","comparedWith":<baseline>}`,
    `<baseline>` being `{"kind":"previous","shotId":string}` (the shot before
@@ -240,6 +260,17 @@ Outside the `coach` and `web` modes it is not offered, and the runner
 answers it as any unknown tool. Invalid tool input (schema or coach bounds)
 is answered with `is_error: true` and the validation sentences, so the
 model can retry.
+12. **Tasted late** (D275): a text block `"[event:shot_tasted]\n" + JSON`
+   with JSON `{"shotId":string,"selected":[string,...],"other":string|null}`,
+   the fields of an `ask_user` answer, for the shot whose taste question
+   was kept open (7b): the barista tapped the card (a turn of its own, every
+   other pending call answered "Not answered.") or typed the taste (rule 7
+   for the other pending calls). The app keeps it as the shot's taste as it
+   would an answer. The coach reads it as the `ask_user` answer and goes
+   on as after one (the query tools, then `propose_adjustment`). It never
+   comes for a shot whose taste question was answered or set aside; a card
+   kept open with no shot still waiting for its taste sends the words as
+   rule 8 text instead.
 
 ## The bag photo request (6.8)
 
@@ -302,8 +333,9 @@ mock/anthropic/handlers.ts).
    instead." End turn.
 2. tool_result for a query tool (`get_shot_series`, `get_shot_summary`,
    `get_phase_stats`, `compare_shots`, `get_bag_history`) -> `propose_adjustment`
-   chosen from the most recent taste answer (an `ask_user` answer, or text
-   typed instead, rule 3b; lower-cased, the first match below wins)
+   chosen from the most recent taste answer (an `ask_user` answer, a typed
+   taste being one with `selected` empty, user turn 7a, or one given late,
+   user turn 12; lower-cased, the first match below wins)
    and the most recent `[event:shot_completed]` payload's `levers` and
    `summary`. A yield move only when that shot reached its yield: it stopped
    on weight (`summary.stopReason` `"targetWeight"`) or its `summary.yieldG`
@@ -337,16 +369,17 @@ mock/anthropic/handlers.ts).
    Fill summary/rationale/expectedEffect/tips with short plausible text.
 3. tool_result for `ask_user` -> text "Thanks. Let me look at the pressure
    curve." + tool_use `get_shot_series` `{shot:"latest", metric:"pressure", fromS:null, toS:null}`.
-3b. Text typed after a shot instead of a tap: the last user message sets
-   the taste question aside (an `ask_user` whose question mentions taste,
-   answered `{"answered":false,...}` as in user turn 7 above) and holds the
-   user's text. The app keeps that text as the shot's taste (D79), so it is
-   the taste answer, read exactly as the same words under Other: rule 3's
-   reply, then rule 2 decides from it (the words rule 2 reads, "sour",
-   "bitter", "weak" or "watery", "strong", "balanced" in any case, pick the
-   move; none means one step finer). Text typed when no taste question was
-   open (another question set aside, such as the puck, a change set aside,
-   or nothing set aside) gets the rule 8 reply as before.
+3b. Text `[event:shot_tasted]` (user turn 12: the taste given late on a
+   question kept open) -> rule 3's reply, and rule 2 then decides from its
+   `selected` and `other` as from an answer.
+3c. A question or a request typed past the taste question (user turn 7b:
+   the last user message holds an `ask_user` result whose note says "not
+   the taste", or typed text while such a question stays open: no
+   `[event:shot_tasted]`, no new taste question and no shot since) -> text
+   "Good question; the short answer is in the curves. The taste question
+   stays open: answer it when you are ready." End turn. Text typed when no
+   taste question is open (another question set aside, such as the puck, a
+   change set aside, or nothing set aside) gets the rule 8 reply as before.
 4. text starting `[event:shot_completed]` -> text "Got it: {durationS} s,
    {yieldG} g out." + tool_use `ask_user` `{question:"How did it taste?",
    options:["Sour / sharp","Bitter / harsh","Balanced, sweet","Weak / watery"],

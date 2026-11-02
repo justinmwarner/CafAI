@@ -6,6 +6,28 @@ workflow checks against it. Settings > About shows the version you run.
 
 ## Unreleased
 
+### The coach
+
+- **Ask the coach anything after a shot.** A question or a request typed
+  while the coach is asking how the shot tasted ("why did you lower the
+  temperature?", "what could we try for the rest of the bag") is answered
+  as one. The taste question stays open on its card, with a note saying
+  so, until you tap or type how it tasted, and the coach no longer asks it
+  again after every message. Before, whatever you typed was kept as the
+  shot's taste and the card closed. Words that read as the taste ("a bit
+  sour, thin at the end") still count as the taste, as if typed under Other.
+
+### Starting
+
+- **A start that hangs no longer stays on "Starting CafAI…".** When the
+  tablet comes back from sleep, Decaid reloads CafAI, and a start that
+  never finished left that screen with no way on but Exit to Decaid. Now,
+  after 8 seconds, the screen says the start is slow and what it waits on,
+  with a **Try again** button; after 20 seconds CafAI starts over once by
+  itself. The "CafAI could not start" screen has Try again too, and each
+  stage of the start is logged with its time in the WebView's console,
+  which Decaid keeps, so a stuck stage can be found.
+
 ## 0.1.4 (2026-10-25)
 
 ### Settings

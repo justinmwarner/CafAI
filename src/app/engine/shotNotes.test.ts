@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { driftLog } from '../../api/drift.ts';
-import { cafaiNotesLine, isTasteQuestion, lastCafaiNotes, mergeNotes, tasteWords } from './shotNotes.ts';
+import { asksInstead, cafaiNotesLine, isTasteQuestion, lastCafaiNotes, mergeNotes, tasteWords } from './shotNotes.ts';
 
 describe('isTasteQuestion', () => {
   it('is true when the question mentions taste, in any case', () => {
@@ -19,6 +19,73 @@ describe('isTasteQuestion', () => {
     for (const question of ['What does the puck look like?', 'How was the shot?', 'Which grinder do you use?', 'Any aftertaste?']) {
       expect(isTasteQuestion(question), question).toBe(false);
     }
+  });
+});
+
+describe('asksInstead (D275)', () => {
+  it('is false for the taste, however it is put', () => {
+    for (const words of [
+      'Sour',
+      'a bit sour, sharp at the end',
+      'It was quite thin and watery',
+      'I found it harsh',
+      'Too strong for me',
+      'Balanced, I like it',
+      'Better than the last one',
+      'Not bad, still a little sharp',
+      'Flat and a bit dull, the fruit is hiding',
+      'was fine',
+      'Really good now',
+      'And a bit sour',
+      'Hmm, sharp',
+      'OK so, balanced',
+    ]) {
+      expect(asksInstead(words), words).toBe(false);
+    }
+  });
+
+  it('is true for a question, with or without its question mark', () => {
+    for (const words of [
+      'Why did it do that?',
+      'why did you lower the temperature',
+      'What does the bloom do',
+      'How come the pressure dipped?',
+      'Sour? Is that the grind',
+      'can you explain the last change',
+      'Could we try a longer preinfusion',
+      'Should I grind finer',
+      'Did the scale drop out',
+      "Isn't 94 too hot for a light roast",
+      'And what would a longer bloom do',
+      'OK, so why the dip',
+      'But can we try the Allongé',
+    ]) {
+      expect(asksInstead(words), words).toBe(true);
+    }
+  });
+
+  it('is true for a request or an idea, and for putting the taste off', () => {
+    for (const words of [
+      'Change the temperature to 92',
+      'Show me the pressure curve',
+      'Compare this with the last shot',
+      "Let's try the Allongé for the rest of the bag",
+      'I want something different for the last third',
+      "I'd like to see the history",
+      'Try a lower pressure',
+      'Not now',
+      'Later',
+      'Skip the taste for now',
+      'Tell me about this profile',
+      'You said it would run slower',
+    ]) {
+      expect(asksInstead(words), words).toBe(true);
+    }
+  });
+
+  it('is false for nothing', () => {
+    expect(asksInstead('')).toBe(false);
+    expect(asksInstead('   ')).toBe(false);
   });
 });
 

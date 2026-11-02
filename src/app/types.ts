@@ -226,6 +226,13 @@ export type CoachUiPart =
        * before CafAI marked it.
        */
       taste?: boolean;
+      /**
+       * The barista typed a question or a request instead of the taste
+       * (D275): the coach's call was answered without it, and the question
+       * stays open on the card until they answer it or pull another shot.
+       * A tap or a typed taste then goes to the coach as [event:shot_tasted].
+       */
+      keptOpen?: boolean;
     }
   | {
       kind: 'diff';

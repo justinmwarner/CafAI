@@ -41,7 +41,17 @@ export interface AppServices extends Services {
   dispose(): void;
 }
 
-export async function createServices(win: Window): Promise<AppServices> {
+export interface CreateServicesOptions {
+  /**
+   * Hears each stage of the start as a phrase after "still" ("opening this
+   * device's storage"): the start watch (D274) logs it and names it when the
+   * start is slow.
+   */
+  onStage?: (stage: string) => void;
+}
+
+export async function createServices(win: Window, options: CreateServicesOptions = {}): Promise<AppServices> {
+  const stage = (name: string) => options.onStage?.(name);
   const decaid = createDecaidClient({ origin: defaultGatewayOrigin(win) });
   const host = detectHost(win);
   const telemetry = createTelemetryStore({ client: decaid, wsOrigin: decaid.wsOrigin });
@@ -50,6 +60,7 @@ export async function createServices(win: Window): Promise<AppServices> {
   // Decaid starts its plugins after it serves the skin: read now and keep reading for a while (D103).
   const stopPluginWatch = watchPlugins(plugins, { telemetry });
 
+  stage("opening this device's storage");
   const storage = await createIdbStorage({ kv: decaid.kv, appVersion: APP_VERSION, defaultModel: DEFAULT_MODEL });
   // Where the coach runs: Anthropic, or CafAI Bridge on the user's computer. This device's, like the key.
   // Storage that refuses it leaves the coach on Anthropic rather than stopping CafAI.
@@ -77,12 +88,14 @@ export async function createServices(win: Window): Promise<AppServices> {
   // the user keeps one there and did not forget it here, once what that copy
   // is owed has gone out (D99); and where the coach runs from its own copy (D229), which reads no
   // choice: the settings that hold it may be the ones coming back (D230).
+  stage("reading Decaid's backup");
   const [restore] = await Promise.all([
     restoreFromMirrorIfEmpty(storage),
     storage.keyBackup.restoreIfMissing(),
     coachSourceBackup?.restoreIfMissing(),
   ]);
 
+  stage('reading the settings');
   const appearance = createAppearanceStore(storage.settings, (await storage.settings.get()).appearance);
   // °C or °F (D172): the screens read it, and so does every request's prompt (D175).
   const temperatureUnit = createTemperatureUnitStore(storage.settings, (await storage.settings.get()).temperatureUnit);
@@ -113,6 +126,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     ? createSaverScreen(createDisplayChannel({ wsOrigin: decaid.wsOrigin, visibility: win.document }), deviceStorage)
     : undefined;
   saverScreen?.restore();
+  stage("reading machine care's steps");
   const care = createCareService({ storage, decaid, telemetry, cache: localTotalsCache(deviceStorage), visibility });
   await care.start();
 
@@ -128,6 +142,7 @@ export async function createServices(win: Window): Promise<AppServices> {
   // The coach's usage and cost (D237-D240): every finished request counted per day on this device (cafai-spend,
   // a database of its own) and copied month by month to Decaid's store, so the totals and the budget add every
   // device and an iPad's Decaid update gets the month back. Read from Decaid at start, and when Decaid is back.
+  stage("reading the coach's usage");
   const spend = await openSpendService({ kv: decaid.kv, deviceStorage, models: KNOWN_MODELS });
   void spend.refresh();
 
@@ -159,6 +174,7 @@ export async function createServices(win: Window): Promise<AppServices> {
     coachSource,
   });
 
+  stage("opening the coach's chat");
   telemetry.start();
   await coach.start();
 
