@@ -131,6 +131,15 @@ export function photoIntakeText(bag: SaveBagDetails): string {
 }
 
 export const UNANSWERED_TEXT = { answered: false, note: 'The user typed a message instead.' } as const;
+/**
+ * The taste question's result when the barista typed a question or a request
+ * instead of their taste (D275): the card stays open on their screen, and
+ * the taste comes later as [event:shot_tasted].
+ */
+export const TASTE_STILL_OPEN = {
+  answered: false,
+  note: 'The user typed a message instead, not the taste: answer it. The taste question stays open on their screen, so do not ask it again; their taste comes as [event:shot_tasted] when they give it.',
+} as const;
 export const UNANSWERED_SHOT = { answered: false, note: 'A new shot was pulled instead.' } as const;
 
 export interface ShotCompletedPayload {
@@ -199,6 +208,21 @@ export interface ShotMeasuredPayload {
 
 export function shotMeasuredBlock(payload: ShotMeasuredPayload): TextBlock {
   return textBlock(`${EVENT.shotMeasured}\n${JSON.stringify(payload)}`);
+}
+
+/**
+ * The taste given on a taste question kept open (D275): the same fields as
+ * an ask_user answer, for the shot the question was about. It goes with the
+ * next user turn, which is its own when the barista tapped the card.
+ */
+export interface ShotTastedPayload {
+  shotId: string;
+  selected: string[];
+  other: string | null;
+}
+
+export function shotTastedBlock(payload: ShotTastedPayload): TextBlock {
+  return textBlock(`${EVENT.shotTasted}\n${JSON.stringify(payload)}`);
 }
 
 /** The share_fun_fact result once the fact is in the chat (D201). */

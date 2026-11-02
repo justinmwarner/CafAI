@@ -224,7 +224,6 @@ const toProposal = (
 /** It ran out of steps at 41.5 g of its 50 g: a yield move is never reached (like the demo's shot four). */
 const STOPPED_SHORT = { yieldG: 41.5, stopReason: 'machineEnded' };
 const typedPast = { answered: false, note: 'The user typed a message instead.' };
-const typed = (words: string) => user(toolResult('t_ask', typedPast), text(words));
 const AFTER_PROPOSAL = [...toProposal(['Sour / sharp']), ADJUST_REPLY];
 const decided = (payload: unknown) => [...AFTER_PROPOSAL, user(toolResult('t_adj', payload))];
 
@@ -390,20 +389,20 @@ describe('the demo voice, branch by branch', () => {
       expect(proposal.rationale).not.toMatch(/did not stop/);
     });
 
-    it('a typed taste: read like the answer, in the same words', () => {
-      const look = compare([...UP_TO_SHOT, shot(), SHOT_REPLY, typed('It tasted a bit sour, sharp at the end')]);
+    it('a typed taste, answered as under Other (rule 7a): read like the answer, in the same words', () => {
+      const look = compare([...UP_TO_SHOT, shot(), SHOT_REPLY, answer([], 'It tasted a bit sour, sharp at the end')]);
       expect(look.demo.tools.map((t) => t.name)).toEqual([TOOL.getShotSeries]);
       expect(look.demo.text).toMatch(/Sour on a light roast usually means \*\*under-extraction\*\*/);
-      const { proposal } = proposalFor([...UP_TO_SHOT, shot(), SHOT_REPLY, typed('It tasted a bit sour, sharp at the end'), ANSWER_REPLY, SERIES]);
+      const { proposal } = proposalFor([...UP_TO_SHOT, shot(), SHOT_REPLY, answer([], 'It tasted a bit sour, sharp at the end'), ANSWER_REPLY, SERIES]);
       expect(proposal).toMatchObject({ variable: 'profile', lever: 'temp', value: 93 });
     });
 
-    it('a typed taste without a taste word: read like the same words under Other, one step finer', () => {
+    it('a typed taste without a taste word: the same words under Other, one step finer', () => {
       const words = 'Flat and a bit dull, the fruit is hiding';
-      const look = compare([...UP_TO_SHOT, shot(), SHOT_REPLY, typed(words)]);
+      const look = compare([...UP_TO_SHOT, shot(), SHOT_REPLY, answer([], words)]);
       expect(look.demo.tools.map((t) => t.name)).toEqual([TOOL.getShotSeries]);
       expect(look.demo.text).toBe(compare([...UP_TO_SHOT, shot(), SHOT_REPLY, answer(['Other'], words)]).demo.text);
-      const fromTyped = proposalFor([...UP_TO_SHOT, shot(), SHOT_REPLY, typed(words), ANSWER_REPLY, SERIES]);
+      const fromTyped = proposalFor([...UP_TO_SHOT, shot(), SHOT_REPLY, answer([], words), ANSWER_REPLY, SERIES]);
       const fromOther = proposalFor(toProposal(['Other'], words));
       expect(fromTyped.proposal).toMatchObject({ variable: 'grind', grind: { direction: 'finer', amount: 1, setting: '13' } });
       expect(fromTyped.proposal).toEqual(fromOther.proposal);
@@ -506,5 +505,13 @@ describe('the demo voice, branch by branch', () => {
 
   it('the fallback line', () => {
     expect(compare([...UP_TO_SHOT, user(text('It smells amazing'))]).demo.tools).toEqual([]);
+  });
+
+  it('a question typed past the taste question: an answer about the machine, the question left open (D275)', () => {
+    const keptOpen = { answered: false, note: 'The user typed a message instead, not the taste: answer it. The taste question stays open on their screen.' };
+    const { demo } = compare([...UP_TO_SHOT, shot(), SHOT_REPLY, user(toolResult('t_ask', keptOpen), text('Why did it run so fast?'))]);
+    expect(demo.tools).toEqual([]);
+    expect(demo.text).toContain('**tap or type how it tasted**');
+    expect(demo.text).not.toMatch(/sour|bitter|sweet/i);
   });
 });

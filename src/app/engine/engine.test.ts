@@ -1143,12 +1143,21 @@ describe('coach engine', () => {
   });
 
   it('answers pending UI calls as unanswered when the user types instead', async () => {
+    await throughProposal();
+    scripts.push(() => [text('Sure.')]);
+    await engine.sendText('What does that change do, exactly?');
+    const turn = lastUserTurn(requests);
+    expect(parsed(turn[0])).toEqual({ answered: false, note: 'The user typed a message instead.' });
+    expect(turn[1]).toEqual({ type: 'text', text: 'What does that change do, exactly?' });
+  });
+
+  it('answers the taste question with what was typed, as under Other, when it reads as the taste (D79, D275)', async () => {
     await throughShot();
     scripts.push(() => [text('Sure.')]);
     await engine.sendText('It was fine, actually');
     const turn = lastUserTurn(requests);
-    expect(parsed(turn[0])).toEqual({ answered: false, note: 'The user typed a message instead.' });
-    expect(turn[1]).toEqual({ type: 'text', text: 'It was fine, actually' });
+    expect(turn).toHaveLength(1);
+    expect(parsed(turn[0])).toEqual({ selected: [], other: 'It was fine, actually' });
   });
 
   it('asks for an API key instead of calling the model, then recovers via refresh and retry', async () => {
@@ -1643,12 +1652,13 @@ describe('coach engine', () => {
     expect(activations.at(-1)!.args[1]).toMatchObject({ coffeeName: 'Kiambu AA' });
   });
 
-  it('closes the taste chips and keeps the typed answer as feedback when the user types', async () => {
+  it('marks the taste chips answered and keeps the typed answer as feedback when the user types the taste', async () => {
     await throughShot();
     scripts.push(() => [text('Noted.')]);
     await engine.sendText('Quite sour and thin');
     const options = engine.getState().messages.flatMap((m) => m.parts).find((p) => p.kind === 'options');
-    expect(options).toMatchObject({ expired: true, setAsideReason: 'typed' });
+    expect(options).toMatchObject({ answer: { selected: [], otherText: 'Quite sour and thin' } });
+    expect(options).not.toHaveProperty('expired');
     expect((await storage.iterations.listAll())[0]!.feedback).toEqual({
       question: 'How did it taste?',
       selected: [],
@@ -4241,10 +4251,10 @@ describe('coach engine', () => {
     }
 
     it('records that a card was set aside because the barista typed in the chat', async () => {
-      await throughShot();
+      await throughProposal();
       scripts.push(() => [text('Noted.')]);
       await engine.sendText('Can you explain the curve first?');
-      expect(card('t-ask')).toMatchObject({ expired: true, setAsideReason: 'typed' });
+      expect(card('t-adj')).toMatchObject({ status: 'expired', setAsideReason: 'typed' });
     });
 
     it('records that a card was set aside because a new shot came in', async () => {
@@ -4331,6 +4341,109 @@ describe('coach engine', () => {
       expect(await feedback()).toBeNull();
       expect(callsOf('updateShot')).toEqual([]);
       expect(card('t-puck')).toMatchObject({ expired: true, setAsideReason: 'typed' });
+    });
+
+    describe('a question typed past the taste question (D275)', () => {
+      const keptOpenNote =
+        'The user typed a message instead, not the taste: answer it. The taste question stays open on their screen, so do not ask it again; their taste comes as [event:shot_tasted] when they give it.';
+      const tastedEvent = (shotId: string, selected: string[], other: string | null) =>
+        `[event:shot_tasted]\n${JSON.stringify({ shotId, selected, other })}`;
+
+      /** Shot 1, then a question typed past its taste question, answered by the coach in words. */
+      async function throughQuestion() {
+        await throughShot();
+        scripts.push(() => [text('The pressure dipped because the puck gave way early.')]);
+        await engine.sendText('Why did the pressure dip at the start?');
+      }
+
+      it('keeps the card open, tells the coach so, and sends the question: nothing is the taste', async () => {
+        await throughQuestion();
+        const turn = lastUserTurn(requests);
+        expect(parsed(turn[0])).toEqual({ answered: false, note: keptOpenNote });
+        expect(turn[1]).toEqual({ type: 'text', text: 'Why did the pressure dip at the start?' });
+        expect(card('t-ask')).toMatchObject({ keptOpen: true, answer: null });
+        expect(card('t-ask')).not.toHaveProperty('expired');
+        expect(await feedback()).toBeNull();
+        expect(callsOf('updateShot')).toEqual([]);
+        expect(userBubbles().at(-1)).toBe('Why did the pressure dip at the start?');
+        // The chat still waits for the taste.
+        expect(engine.getState().phase).toBe('awaiting_feedback');
+      });
+
+      it('takes a later tap on the card as the taste, sent as its own event in a turn of its own', async () => {
+        await throughQuestion();
+        scripts.push(() => [text('Thanks.')]);
+        await engine.answerOptions('t-ask', ['Sour'], null);
+        expect(card('t-ask')).toMatchObject({ keptOpen: true, answer: { selected: ['Sour'], otherText: null } });
+        expect(userBubbles().at(-1)).toBe('Sour');
+        expect(await feedback()).toEqual({ question: 'How did it taste?', selected: ['Sour'], otherText: null });
+        await vi.waitFor(() => expect(machine.annotations.get('shot-1')?.espressoNotes).toBe('Taste: Sour. Kiambu AA v1 (CafAI)'));
+        expect(lastUserTurn(requests)).toEqual([{ type: 'text', text: tastedEvent('shot-1', ['Sour'], null) }]);
+        expect(engine.getState().phase).toBe('awaiting_shot');
+      });
+
+      it('takes a taste typed later as the taste too, and a second question as just a question', async () => {
+        await throughQuestion();
+        scripts.push(() => [text('A longer bloom lets the puck wet through before the pressure comes.')]);
+        await engine.sendText('And what would a longer bloom do');
+        expect(lastUserTurn(requests)).toEqual([{ type: 'text', text: 'And what would a longer bloom do' }]);
+        expect(card('t-ask')).toMatchObject({ keptOpen: true, answer: null });
+        expect(await feedback()).toBeNull();
+
+        scripts.push(() => [text('Thanks.')]);
+        await engine.sendText('A bit sour, thin at the end');
+        expect(card('t-ask')).toMatchObject({ answer: { selected: [], otherText: 'A bit sour, thin at the end' } });
+        expect(userBubbles().at(-1)).toBe('A bit sour, thin at the end');
+        expect(await feedback()).toEqual({ question: 'How did it taste?', selected: [], otherText: 'A bit sour, thin at the end' });
+        expect(lastUserTurn(requests)).toEqual([{ type: 'text', text: tastedEvent('shot-1', [], 'A bit sour, thin at the end') }]);
+      });
+
+      it('keeps a key typed late away from the coach and Decaid', async () => {
+        await throughQuestion();
+        scripts.push(() => [text('Thanks.')]);
+        await engine.answerOptions('t-ask', ['Other'], 'sour, sk-ant-api03-pasted-key-1234567890');
+        await vi.waitFor(() => expect(machine.annotations.get('shot-1')).toBeDefined());
+        expect(JSON.stringify(machine.annotations.get('shot-1'))).not.toContain('sk-ant-');
+        expect(JSON.stringify(requests)).not.toContain('sk-ant-api03');
+      });
+
+      it('closes the card when another shot comes in, so its taste cannot land on the new shot', async () => {
+        await throughQuestion();
+        await pullAnother('shot-2', 't-ask-2');
+        expect(card('t-ask')).toMatchObject({ expired: true, setAsideReason: 'shot', answer: null });
+        expect(card('t-ask-2')).not.toHaveProperty('keptOpen');
+        // A tap on the closed card does nothing.
+        const before = requests.length;
+        await engine.answerOptions('t-ask', ['Sour'], null);
+        await drain();
+        expect(requests).toHaveLength(before);
+        expect((await storage.iterations.listAll()).map((i) => i.feedback)).toEqual([null, null]);
+      });
+
+      it('closes the card when the coach asks the taste again', async () => {
+        await throughShot();
+        scripts.push(() => [text('Fair question. Anyway:'), askTasteAs('t-ask-again')]);
+        await engine.sendText('Why did the pressure dip at the start?');
+        expect(card('t-ask')).toMatchObject({ expired: true, setAsideReason: 'other' });
+        expect(card('t-ask-again')).toMatchObject({ answer: null });
+        scripts.push(() => [text('Thanks.')]);
+        await engine.answerOptions('t-ask-again', ['Sour'], null);
+        expect(parsed(lastUserTurn(requests)[0])).toEqual({ selected: ['Sour'], other: null });
+        expect(await feedback()).toEqual({ question: 'How did it taste?', selected: ['Sour'], otherText: null });
+      });
+
+      it('keeps the card open across a reload, and a tap then still gives the taste', async () => {
+        await throughQuestion();
+        engine.dispose();
+        engine = build();
+        await engine.start();
+        expect(engine.getState().phase).toBe('awaiting_feedback');
+        expect(card('t-ask')).toMatchObject({ keptOpen: true, answer: null });
+        scripts.push(() => [text('Thanks.')]);
+        await engine.answerOptions('t-ask', ['Bitter'], null);
+        expect(await feedback()).toEqual({ question: 'How did it taste?', selected: ['Bitter'], otherText: null });
+        expect(lastUserTurn(requests)).toEqual([{ type: 'text', text: tastedEvent('shot-1', ['Bitter'], null) }]);
+      });
     });
 
     it('stops asking for a confirmation once Confirm is tapped, while the change applies and loads', async () => {

@@ -240,6 +240,12 @@ export const EVENT = {
   shotRated: '[event:shot_rated]',
   /** The barista's TDS reading of a shot and the EY CafAI worked out from it (D167), with the next user turn. */
   shotMeasured: '[event:shot_measured]',
+  /**
+   * The taste given on a taste question kept open after the barista typed
+   * something else (D275): read as the ask_user answer, with the next user
+   * turn or on its own.
+   */
+  shotTasted: '[event:shot_tasted]',
   undo: '[event:undo]',
   bagResumed: '[event:bag_resumed]',
 } as const;

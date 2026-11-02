@@ -63,6 +63,8 @@ export const TID = {
   templateCard: (templateId: string) => `template-card-${templateId}`,
   templatePick: (templateId: string) => `template-pick-${templateId}`,
   optionChip: (label: string) => `option-${slug(label)}`,
+  /** The note under a taste question kept open after the barista typed past it (D275). */
+  optionsKeptOpen: 'options-kept-open',
   optionsSubmit: 'options-submit',
   otherInput: 'other-input',
   diffCard: 'diff-card',

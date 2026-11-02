@@ -205,6 +205,19 @@ describe('buildSystemPrompt: content', () => {
     expect(taste).toMatch(/keep that word out of any other question/);
   });
 
+  it('welcomes a question or a request at any point, and keeps the taste question open past one (D275)', () => {
+    const talk = prompt.slice(prompt.indexOf('# How you talk'), prompt.indexOf('# The loop'));
+    expect(talk).toMatch(/Questions are welcome at any point: why you proposed a change, what a lever or a curve means, how a shot compared, what to try with the rest of the bag/);
+    expect(talk).toMatch(/Call propose_adjustment only when they want a change made/);
+    const loop = prompt.slice(prompt.indexOf('# The loop'), prompt.indexOf('# Template catalog'));
+    const taste = loop.split('\n').find((line) => line.startsWith('4. Taste.'))!;
+    expect(taste).toMatch(/the result then says the question stays open on their screen\. Answer them, and do not ask the taste again/);
+    expect(taste).toContain('their taste comes as [event:shot_tasted] with {"shotId":...,"selected":[...],"other":string|null}');
+    expect(taste).toMatch(/Read it as the ask_user answer and go on as after one/);
+    const typed = loop.split('\n').find((line) => line.startsWith('8. When the user types'))!;
+    expect(typed).toMatch(/A proposal set aside that way was not declined: once their question is answered, propose again/);
+  });
+
   it("gives the grinder object with its dial from Decaid's grinder library, at intake and with every shot (D62)", () => {
     const grinder =
       '"grinder":{"name":string|null,"setting":string|null,"finer":"lower"|"higher","settingType":"numeric"|"preset"|null,"step":number|null,"values":string[]|null,"linked":boolean}';

@@ -451,61 +451,66 @@ describe('scripted replies', () => {
     expect(pastChange.text).toBe(nudge);
   });
 
-  describe('rule 3b: a taste typed instead of tapped, after a shot', () => {
-    const typedPast = { answered: false, note: 'The user typed a message instead.' };
-    const typed = (words: string) => user(toolResult('t_ask', typedPast), text(words));
+  describe('rules 7a, 7b and 12: text typed under the taste question', () => {
     const AFTER_SHOT = [...UP_TO_SHOT, shot(BLOOMING_LEVERS), SHOT_REPLY];
+    const keptOpen = {
+      answered: false,
+      note: 'The user typed a message instead, not the taste: answer it. The taste question stays open on their screen, so do not ask it again; their taste comes as [event:shot_tasted] when they give it.',
+    };
+    const typedPast = { answered: false, note: 'The user typed a message instead.' };
+    const asked = (words: string) => user(toolResult('t_ask', keptOpen), text(words));
+    const tasted = (selected: string[], other: string | null = null) =>
+      user(text(`[event:shot_tasted]\n${JSON.stringify({ shotId: 'shot-1', selected, other })}`));
+    const open = 'Good question; the short answer is in the curves. The taste question stays open: answer it when you are ready.';
     const nudge = 'Got it. Pull a shot when you are ready, or tell me more about the coffee.';
 
-    it('reads a typed sour like the answer: the pressure curve first, then the change', () => {
-      const look = ok(call([...AFTER_SHOT, typed('It tasted a bit sour, sharp at the end')]));
+    it('7a: a typed taste comes as the answer under Other, and reads as one', () => {
+      const look = ok(call([...AFTER_SHOT, answer([], 'It tasted a bit sour, sharp at the end')]));
       expect(look.text).toBe('Thanks. Let me look at the pressure curve.');
       expect(look.tools.map((t) => [t.name, t.input])).toEqual([
         [TOOL.getShotSeries, { shot: 'latest', metric: 'pressure', fromS: null, toS: null }],
       ]);
-      const proposal = ok(call([...AFTER_SHOT, typed('It tasted a bit sour, sharp at the end'), ANSWER_REPLY, SERIES]));
+      const proposal = ok(call([...AFTER_SHOT, answer([], 'It tasted a bit sour, sharp at the end'), ANSWER_REPLY, SERIES]));
       expect(proposal.tools.map((t) => t.name)).toEqual([TOOL.proposeAdjustment]);
       expect(proposal.tools[0]?.input).toMatchObject({ variable: 'profile', lever: 'temp', value: 93 });
       expectValidInputs(proposal.tools);
     });
 
-    it('reads the same words as Other', () => {
-      const cases: Array<[string, Record<string, unknown>]> = [
-        ['Bitter and dry', { lever: 'temp', value: 91 }],
-        ['Weak', { lever: 'yield', value: 34 }],
-        ['Thin and watery', { lever: 'yield', value: 34 }],
-        ['Way too STRONG for me', { lever: 'yield', value: 38 }],
-        ['Balanced, I like it', { variable: 'none' }],
-      ];
-      for (const [words, decision] of cases) {
-        expect(ok(call([...AFTER_SHOT, typed(words)])).tools.map((t) => t.name), words).toEqual([TOOL.getShotSeries]);
-        expect(ok(call([...AFTER_SHOT, typed(words), ANSWER_REPLY, SERIES])).tools[0]?.input, words).toMatchObject(decision);
-      }
-      // The same words in Other, which also reads "watery" as weak.
-      expect(adjustmentFor(['Other'], BLOOMING_LEVERS, 'blooming-espresso', { other: 'Thin and watery' })).toMatchObject({ lever: 'yield', value: 34 });
+    it('7b: a question typed past the taste question gets a line, no tool call, and the question stays open', () => {
+      const reply = ok(call([...AFTER_SHOT, asked('Why did the pressure dip at the start?')]));
+      expect(reply.text).toBe(open);
+      expect(reply.tools).toEqual([]);
+      // A second question while it stays open: the same, not the nudge to pull a shot.
+      const again = ok(call([...AFTER_SHOT, asked('Why did the pressure dip at the start?'), assistant(text(open)), user(text('And what would a longer bloom do'))]));
+      expect(again.text).toBe(open);
+      expect(again.tools).toEqual([]);
     });
 
-    it('reads text without a taste word as the same words under Other: the curve, then one step finer', () => {
-      // The app keeps text typed while the taste question is open as the shot's taste (D79).
-      for (const words of ['Flat and a bit dull, the fruit is hiding', 'Is the grinder too coarse?']) {
-        const look = ok(call([...AFTER_SHOT, typed(words)]));
-        expect(look.text, words).toBe('Thanks. Let me look at the pressure curve.');
-        expect(look.tools.map((t) => [t.name, t.input]), words).toEqual([
-          [TOOL.getShotSeries, { shot: 'latest', metric: 'pressure', fromS: null, toS: null }],
-        ]);
-        const change = ok(call([...AFTER_SHOT, typed(words), ANSWER_REPLY, SERIES]));
-        expect(change.tools.map((t) => t.name), words).toEqual([TOOL.proposeAdjustment]);
-        expectValidInputs(change.tools);
-        expect(change.tools[0]?.input, words).toMatchObject({ variable: 'grind', grind: { direction: 'finer', amount: 1, setting: '13' } });
-        // Word for word the card the same words under Other get.
-        expect(change.tools[0]?.input, words).toEqual(adjustmentFor(['Other'], BLOOMING_LEVERS, 'blooming-espresso', { other: words }));
-      }
+    it('12: the taste given late reads as the answer: the curve first, then the change from its words', () => {
+      const base = [...AFTER_SHOT, asked('Why did the pressure dip at the start?'), assistant(text(open))];
+      const look = ok(call([...base, tasted(['Sour / sharp'])]));
+      expect(look.text).toBe('Thanks. Let me look at the pressure curve.');
+      expect(look.tools.map((t) => t.name)).toEqual([TOOL.getShotSeries]);
+      const proposal = ok(call([...base, tasted(['Sour / sharp']), ANSWER_REPLY, SERIES]));
+      expect(proposal.tools[0]?.input).toMatchObject({ variable: 'profile', lever: 'temp', value: 93 });
+      // Typed late: the same words as under Other.
+      const typed = ok(call([...base, tasted([], 'Thin and watery'), ANSWER_REPLY, SERIES]));
+      expect(typed.tools[0]?.input).toMatchObject({ lever: 'yield', value: 34 });
+      expect(typed.tools[0]?.input).toEqual(adjustmentFor(['Other'], BLOOMING_LEVERS, 'blooming-espresso', { other: 'Thin and watery' }));
+    });
+
+    it('a question is no longer past the taste once the taste came, the coach asked again, or another shot ended', () => {
+      const base = [...AFTER_SHOT, asked('Why did the pressure dip at the start?'), assistant(text(open))];
+      expect(ok(call([...base, tasted(['Sour / sharp']), ANSWER_REPLY, SERIES, ADJUST_REPLY, user(toolResult('t_adj', typedPast), text('Still sour though'))])).text).toBe(
+        nudge,
+      );
+      expect(ok(call([...base, shot(BLOOMING_LEVERS), SHOT_REPLY, user(toolResult('t_ask', typedPast), text('Hmm'))])).text).toBe(nudge);
     });
 
     it('keeps the reply when no taste question was open: another question set aside, a change set aside, or nothing', () => {
       // The puck question set aside: not a taste question.
       const puckQuestion = assistant(text('Hm.'), toolUse('t_ask', TOOL.askUser, { question: 'What does the puck look like?' }));
-      const pastPuck = ok(call([...UP_TO_SHOT, shot(BLOOMING_LEVERS), puckQuestion, typed('It was sour')]));
+      const pastPuck = ok(call([...UP_TO_SHOT, shot(BLOOMING_LEVERS), puckQuestion, user(toolResult('t_ask', typedPast), text('It was sour'))]));
       expect(pastPuck.text).toBe(nudge);
       expect(pastPuck.tools).toEqual([]);
       // A change set aside, and text with nothing set aside: today's reply.

@@ -5086,3 +5086,52 @@ section 8).
   the cup clears, 0.14 ms while a pour is admired. Why: the brief's 4 ms,
   with a tablet several times slower; a first, plain version cost about 9 ms
   a field step and 6.6 ms a colouring.
+- **D274. A start that hangs says so, retries once, and offers Try again.**
+  Decaid reloads a backgrounded skin when the tablet comes back from
+  sleep, and a start that never finished left "Starting CafAI…" on the
+  screen with Exit to Decaid and Decaid settings as the only ways on; the
+  engine check in index.html cannot help, as it stands down once anything
+  has rendered. main.tsx now watches the start (src/app/startWatch.ts):
+  each stage of createServices (this device's storage, Decaid's backup,
+  the settings, machine care, the coach's usage, the coach's chat) is
+  logged with its time in the WebView's console, which Decaid keeps, so a
+  stuck stage can be read on a real tablet; after 8 s the screen says the
+  start is slow and which stage it waits on, with Try again (a reload);
+  after 20 s the page reloads once by itself, noted in sessionStorage so a
+  second start as slow is left to the barista; a start that finishes clears
+  the note. Where storage is blocked there is no automatic reload, only Try
+  again, which the failed-start screen now has too. Why: nobody has seen
+  which stage hangs on the tablet, so the cure is to make it visible and
+  recoverable rather than to guess; and one automatic retry mends the
+  common case (a WebView restored into a bad state) before the barista
+  reaches the tablet, while a cap keeps a broken start from reloading for
+  ever.
+- **D275. A question typed under the taste question is a question, not
+  the taste; the question stays open.** Text typed while the taste question
+  was open was kept as the shot's taste (D79) whatever it said, so "why did
+  you lower the temperature?" went to Decaid's shot notes as the taste, the
+  card closed "you answered in the chat instead", and the coach, told only
+  that the user had typed instead, asked how it tasted again; the barista
+  could not ask anything after a shot without answering the taste first.
+  Now text typed under the taste question that reads as a question or a
+  request (a question mark, or an asking word, a request or a put-off first:
+  `asksInstead` in src/app/engine/shotNotes.ts, with a follow-up's lead-in
+  such as "And" or "OK, so" skipped) goes to the coach as a message; its
+  ask_user call is answered `{"answered":false,"note":"…not the taste…the
+  taste question stays open…"}`, the card stays open (`keptOpen`), the
+  phase stays `awaiting_feedback`, and a note under the chips says it is
+  still open. Text that reads as the taste answers the call as the same
+  words under Other would (`{"selected":[],"other":<text>}`), so the coach
+  reads it as an answer and nothing is set aside. A tap or a typed taste on
+  a card kept open is kept as the shot's taste as before and goes to the
+  coach as `[event:shot_tasted]` with the answer's fields, since its call
+  was answered when the barista typed past it; the card closes unanswered
+  when another shot comes in (its taste would land on the new shot) or the
+  coach asks the taste again. The prompt tells the coach questions are
+  welcome at any point (why a change, what a lever does, what to try with
+  the rest of the bag) and that a proposal set aside by a typed question
+  was not declined. Why: the barista's taste is theirs to give when they
+  are ready (D127), and a question should never cost them the card or
+  bring the same question back; the heuristic errs towards the taste, as a
+  question misread as the taste is one tap on the card from being right,
+  while a taste misread as a question leaves the card open to tap.

@@ -31,6 +31,22 @@ describe('OptionChips', () => {
     expect(screen.getByTestId(TID.optionChip('Sour / sharp'))).toBeInTheDocument();
   });
 
+  it('says a question kept open stays open, and keeps its chips tappable (D275)', async () => {
+    const onAnswer = setup({ keptOpen: true });
+    expect(screen.getByTestId(TID.optionsKeptOpen)).toHaveTextContent('Still open: tap or type how it tasted whenever you like.');
+    await userEvent.click(screen.getByTestId(TID.optionChip('Sour / sharp')));
+    expect(onAnswer).toHaveBeenCalledWith(['Sour / sharp'], null);
+  });
+
+  it('drops the kept-open note once the question is answered or set aside', () => {
+    setup({ keptOpen: true, answer: { selected: ['Sour / sharp'], otherText: null } });
+    expect(screen.queryByTestId(TID.optionsKeptOpen)).toBeNull();
+    document.body.innerHTML = '';
+    setup({ keptOpen: true, expired: true, setAsideReason: 'shot' });
+    expect(screen.queryByTestId(TID.optionsKeptOpen)).toBeNull();
+    expect(screen.getByText('Set aside: a new shot came in.')).toBeInTheDocument();
+  });
+
   it('adds Other when the list lacks it', () => {
     setup({ options: ['Sour / sharp', 'Bitter / harsh'] });
     expect(chipLabels()).toEqual(['Sour / sharp', 'Bitter / harsh', 'Other']);

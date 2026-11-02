@@ -31,6 +31,33 @@ export function isTasteQuestion(question: string): boolean {
   return TASTE_WORD.test(question);
 }
 
+/**
+ * How a question or a request opens, lower-cased: an asking word, a verb
+ * that asks for something, the coach addressed, or a put-off. A taste opens
+ * with the cup ("sour", "a bit thin", "it was", "too strong", "I found it
+ * sharp"), so "I", "it", "was" and the like are not here.
+ */
+const ASKS_INSTEAD =
+  /^(?:why|what|whats|what's|how|when|where|which|who|whose|can|can't|cant|could|would|should|will|won't|wont|isn't|aren't|do|does|did|don't|dont|doesn't|didn't|explain|tell|show|compare|remind|help|teach|walk|talk|let's|lets|let|give|suggest|recommend|propose|change|try|use|set|make|go|switch|load|undo|keep|raise|lower|bump|drop|increase|decrease|grind|skip|later|wait|hold|instead|you|you're|your|we|we're|we'd|we'll|please)\b|^(?:i want|i'd like|i would like|i don't want|i dont want|i'm not|im not|not now|no thanks|hang on|hold on|one sec|just a sec)\b/;
+
+/** Words a follow-up opens with before saying anything, with their punctuation. */
+const LEAD_IN = /^(?:(?:and|but|so|also|ok|okay|hmm|hm|well|oh|yes|yeah|no|nope)\b[\s,.:;-]*)+/;
+
+/**
+ * True when text typed under the taste question is not the taste (D275): a
+ * question (a question mark anywhere, or an asking word first), a request
+ * ("change the temperature", "show me the curve") or a put-off ("not now",
+ * "later"). Such text goes to the coach as a message, and the taste question
+ * stays open. Anything else is the taste, as the same words under Other.
+ */
+export function asksInstead(text: string): boolean {
+  const words = text.trim().toLowerCase();
+  if (words === '') return false;
+  if (words.includes('?')) return true;
+  // A follow-up's lead-in ("And what would…", "OK, so why…", "Hmm, sour") says nothing itself.
+  return ASKS_INSTEAD.test(words.replace(LEAD_IN, ''));
+}
+
 /** The taste in words: the options picked (Other replaced by what was typed), or the typed reply. */
 export function tasteWords(selected: readonly string[], text: string | null): string {
   const typed = text?.trim() || null;

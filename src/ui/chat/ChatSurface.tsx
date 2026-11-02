@@ -290,6 +290,7 @@ function OptionsView({ data }: { data: unknown }) {
       disabled={busy}
       expired={part.expired ?? false}
       setAsideReason={part.setAsideReason}
+      keptOpen={part.keptOpen ?? false}
       onAnswer={(selected, otherText) => actions.answerOptions(part.requestId, selected, otherText)}
     />
   );

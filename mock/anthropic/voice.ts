@@ -137,8 +137,10 @@ export interface Voice {
   picked(pick: PickFacts): string;
   /** Rule 4: a shot finished; the line before "How did it taste?". */
   shotCompleted(shot: ShotFacts): string;
-  /** Rule 3: the taste answer, tapped or typed (3b); the line before get_shot_series. */
+  /** Rule 3: the taste answer, tapped, typed (7a) or given late (12); the line before get_shot_series. */
   tasteAnswer(answer: TasteFacts): string;
+  /** Rule 3c: a question typed past the taste question (7b), which stays open. */
+  pastTaste(): string;
   /** Rule 2: the text before propose_adjustment, or null for the tool call alone. */
   proposalLead(change: ChangeFacts): string | null;
   /** propose_adjustment's summary, rationale and expectedEffect (rules 1 and 2). */
@@ -239,6 +241,7 @@ export const TERSE_VOICE: Voice = {
   },
   shotCompleted: ({ durationS, yieldG }) => `Got it: ${formatNumber(durationS)} s, ${formatNumber(yieldG)} g out.`,
   tasteAnswer: () => 'Thanks. Let me look at the pressure curve.',
+  pastTaste: () => 'Good question; the short answer is in the curves. The taste question stays open: answer it when you are ready.',
   proposalLead: () => null,
   proposalText: (change) => TERSE_CHANGES[change.kind](change),
   rejected: () => 'That one is outside what this profile allows. Here is another change.',

@@ -46,7 +46,7 @@ const PLACEHOLDERS: Record<CoachPhase, string> = {
   intake: 'Origin, roast, process, tasting notes…',
   choosing_template: 'Pick a starting profile, or ask a question',
   awaiting_shot: 'Pull a shot, or ask the coach',
-  awaiting_feedback: 'Tap an answer, or say how it tasted',
+  awaiting_feedback: 'Tap an answer, say how it tasted, or ask anything',
   awaiting_confirmation: 'Confirm the change, or ask a question',
   idle: 'Ask for starting profiles, or ask a question',
 };

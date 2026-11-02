@@ -166,7 +166,7 @@ describe('CoachScreen', () => {
     expect(within(picker).getAllByRole('option').map((o) => o.textContent)).toEqual(['Kiambu AA', 'Brazil Santos']);
     expect(screen.getByTestId(TID.activeVersion)).toHaveTextContent('Kiambu AA v1');
     expect(screen.getByTestId(TID.chat)).toBeInTheDocument();
-    expect(screen.getByTestId(TID.composerInput)).toHaveAttribute('placeholder', 'Tap an answer, or say how it tasted');
+    expect(screen.getByTestId(TID.composerInput)).toHaveAttribute('placeholder', 'Tap an answer, say how it tasted, or ask anything');
 
     await userEvent.selectOptions(picker, SANTOS.id);
     expect(services.coach.calls).toEqual([{ method: 'selectBag', args: [SANTOS.id] }]);
@@ -206,7 +206,7 @@ describe('CoachScreen', () => {
       parts: m.parts.map((p) => (p.kind === 'options' ? { ...p, taste: undefined } : p)),
     }));
     renderCoach({ ...state, messages });
-    expect(placeholder()).toBe('Tap an answer, or say how it tasted');
+    expect(placeholder()).toBe('Tap an answer, say how it tasted, or ask anything');
   });
 
   it('tells same-named bags apart in the picker by when they were started', () => {

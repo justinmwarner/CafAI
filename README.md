@@ -193,7 +193,11 @@ no API key ([docs/DEMO.md](docs/DEMO.md)).
    (aggregates plus a 1-per-second series) and gives the coach named query
    tools to look closer (no code execution).
 5. **Feedback.** Tap how it tasted (the last option is always "Other"), or
-   say it in your own words. The coach never tells you what a shot should
+   say it in your own words. You can also ask the coach anything first
+   ("why did you lower the temperature?", "what could we try for the rest
+   of the bag"): a question or a request is answered as one, and the taste
+   question stays open on its card until you answer it or pull another
+   shot. The coach never tells you what a shot should
    taste like; while it asks how the shot tasted, **Taste words** above the
    composer offers neutral words for the acidity, sweetness, bitterness,
    body and finish (a tap puts one in your message, a second takes it out;
@@ -726,6 +730,14 @@ troubleshooting.
   weight.", and **Let Decaid stop shots** sets Tracking.
 - **"Refill the water tank to continue."** or **"The machine reports an
   error. Check it first."**: the machine says so; see to the machine.
+- **"Starting CafAI…" stays on the screen**, often when the tablet comes
+  back from sleep (Decaid reloads the skin then). After 8 seconds the
+  screen says what the start waits on and offers **Try again**; after 20
+  seconds CafAI starts over once by itself. If it still hangs, tap Try
+  again, or Exit to Decaid and open CafAI again. Each stage of the start is
+  logged in the WebView's console (`GET /api/v1/webview/logs` on Decaid), as
+  `[CafAI] start: …`, which says where it stuck: please include those lines
+  in a report.
 - **The key is gone after a Decaid update.** Decaid clears a skin's browser
   storage when it updates. Your bags come back from Decaid's backup by
   themselves, and the key does too if **Keep my API key in Decaid** is on;
