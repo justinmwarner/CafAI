@@ -6,6 +6,8 @@ workflow checks against it. Settings > About shows the version you run.
 
 ## Unreleased
 
+## 0.1.5 (2026-11-05)
+
 ### The coach
 
 - **Ask the coach anything after a shot.** A question or a request typed
