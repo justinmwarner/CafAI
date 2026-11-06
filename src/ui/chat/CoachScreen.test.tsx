@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import './testing/setup.ts';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { CoachState, CoachUiMessage } from '../../app/types.ts';
@@ -8,6 +8,7 @@ import type { LiveSample, ShotStateEvent } from '../../api/types.ts';
 import { createFakeServicesShowing } from '../testing/displayServices.ts';
 import { createFakeServices, createFakeUsage, IDLE_TELEMETRY, type FakeServices } from '../testing/fakeServices.ts';
 import { TID } from '../testIds.ts';
+import { THINKING_SLOW_AFTER_S } from './ChatSurface.tsx';
 import { bagLabels, CoachScreen } from './CoachScreen.tsx';
 import { formatDateTime } from './format.ts';
 import { BAG_FROM_PHOTO, BEAN_OPTIONS, KIAMBU, SANTOS, coachStateFor } from './testing/fixtures.ts';
@@ -385,6 +386,22 @@ describe('CoachScreen', () => {
     expect(screen.getByTestId(TID.newBag)).toBeDisabled();
     expect(screen.getByTestId(TID.bagPicker)).toBeDisabled();
     for (const undo of [...screen.getAllByTestId(TID.undoButton), ...screen.queryAllByTestId(TID.diffUndo)]) expect(undo).toBeDisabled();
+  });
+
+  it("shows what the coach's reply waits on under Thinking…, as it changes, and passes Stop to the controller (D281, D282)", async () => {
+    // The row's clock only: x-chat's and the clicks' timers run as ever.
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    try {
+      const services = renderCoach({ ...coachStateFor('intake'), busy: true, waitNote: 'Waiting for Claude on your computer.' });
+      act(() => vi.advanceTimersByTime(THINKING_SLOW_AFTER_S * 1000));
+      expect(screen.getByTestId(TID.thinkingNote)).toHaveTextContent('Waiting for Claude on your computer.');
+      act(() => services.coach.setState({ waitNote: 'Claude Code is starting on your computer.' }));
+      expect(screen.getByTestId(TID.thinkingNote)).toHaveTextContent('Claude Code is starting on your computer.');
+      await userEvent.click(screen.getByTestId(TID.stopReply));
+      expect(methods(services)).toEqual(['stopReply']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   describe('the stats card', () => {

@@ -17,7 +17,8 @@ import {
   type ToolUseBlock,
 } from './types.ts';
 
-type ScriptedTurn = { content: ContentBlock[]; stopReason: string } | LlmError | 'no_done';
+/** `waits`: what the call says it waits on before its turn begins (D281). */
+type ScriptedTurn = { content: ContentBlock[]; stopReason: string; waits?: string[] } | LlmError | 'no_done';
 
 const THINKING: ContentBlock = { type: 'thinking', thinking: '', signature: 'sig' };
 const text = (t: string): ContentBlock => ({ type: 'text', text: t });
@@ -37,6 +38,7 @@ function scriptedProvider(turns: ScriptedTurn[]) {
       if (scripted === undefined) throw new Error('the script ran out');
       if (scripted instanceof LlmError) throw scripted;
       const id = `msg_${next}`;
+      if (scripted !== 'no_done') for (const note of scripted.waits ?? []) yield { type: 'waiting', note };
       yield { type: 'message_start', id, model: request.model };
       if (scripted === 'no_done') return;
       for (const [index, block] of scripted.content.entries()) {
@@ -131,6 +133,39 @@ describe('runConversation', () => {
     expect(sent.signal).toBe(controller.signal);
     expect(sent.messages).toEqual([USER]);
     expect(sent.tools.map((t) => t.name)).toEqual(['lookup', 'ask']);
+  });
+
+  it('passes on what each call waits on before its turn begins, and nothing of it to the turn or the transcript (D281)', async () => {
+    const said: string[] = [];
+    const run = start(
+      [
+        { ...turn('tool_use', toolUse('t1', 'lookup', { shot: 'latest' })), waits: ['Waiting for Anthropic.', 'Anthropic is busy right now. Trying again.'] },
+        { ...turn('end_turn', text('Grind finer.')), waits: ['Waiting for Anthropic.'] },
+      ],
+      {
+        onWaiting: (note) => said.push(`waiting: ${note}`),
+        onTurnStart: () => said.push('turn'),
+        onTextDelta: (delta) => said.push(`text: ${delta}`),
+      },
+    );
+    const result = await run.promise;
+    expect(said).toEqual([
+      'waiting: Waiting for Anthropic.',
+      'waiting: Anthropic is busy right now. Trying again.',
+      'turn',
+      'waiting: Waiting for Anthropic.',
+      'turn',
+      'text: Grind ',
+      'text: finer.',
+    ]);
+    expect(result).toEqual({ pendingUiCalls: [], heldResults: [], stopReason: 'end_turn', finalText: 'Grind finer.' });
+    expect(JSON.stringify(run.appended)).not.toContain('Waiting for');
+  });
+
+  it('runs on without anyone to tell what a call waits on', async () => {
+    const run = start([{ ...turn('end_turn', text('Hi')), waits: ['Waiting for Anthropic.'] }]);
+    expect((await run.promise).finalText).toBe('Hi');
+    expect(run.deltas.join('')).toBe('Hi');
   });
 
   it('tells the provider what every request of a run is for, and which call of the run it is, 0 first (D237)', async () => {

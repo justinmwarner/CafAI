@@ -2,7 +2,7 @@
 // Derived from Crema web/src/test/provider.test.ts (https://github.com/yarneo/crema @ 628cd714),
 // Copyright (C) 2026 Yarden (yarneo). Modified for CafAI: Vitest; Anthropic-only wording; LlmError kinds and retry hints.
 import { describe, expect, it } from 'vitest';
-import { LlmError } from './types.ts';
+import { LlmError, type LlmErrorKind } from './types.ts';
 import {
   ANTHROPIC_WORDING,
   computerWording,
@@ -17,6 +17,8 @@ import {
   streamDroppedError,
   timeoutError,
   unreadableReplyError,
+  type WaitReason,
+  type WaitReport,
 } from './errors.ts';
 
 const body = (type: string, message: string) => JSON.stringify({ type: 'error', error: { type, message } });
@@ -197,6 +199,58 @@ describe('wording per provider', () => {
 
   it('keeps a long sentence from the bridge to a readable length', () => {
     expect(describeHttpError(500, body('api_error', 'x'.repeat(1000)), computer)).toHaveLength(300);
+  });
+});
+
+describe('what a request waits on, under "Thinking…" (D281)', () => {
+  const computer = computerWording('192.168.1.20:8877');
+  const OTHER_KINDS: LlmErrorKind[] = ['no_api_key', 'auth', 'bad_request', 'aborted', 'refusal', 'protocol'];
+
+  it("says Anthropic's wait, and why it tries again", () => {
+    expect(ANTHROPIC_WORDING.waiting).toBe('Waiting for Anthropic.');
+    expect(ANTHROPIC_WORDING.retrying('overloaded')).toBe('Anthropic is busy right now. Trying again.');
+    expect(ANTHROPIC_WORDING.retrying('rate_limit')).toBe('Anthropic is rate limiting. Trying again shortly.');
+    expect(ANTHROPIC_WORDING.retrying('server')).toBe('Anthropic is having trouble. Trying again.');
+    expect(ANTHROPIC_WORDING.retrying('network')).toBe('Could not reach Anthropic. Trying again.');
+    for (const kind of OTHER_KINDS) expect(ANTHROPIC_WORDING.retrying(kind), kind).toBe('Trying again.');
+    // Anthropic sends no reports of its own.
+    expect(ANTHROPIC_WORDING.reported).toBeUndefined();
+  });
+
+  it("says the computer's wait, and why CafAI tries it again: unreachable, or busy with other conversations (its 503)", () => {
+    expect(computer.waiting).toBe('Waiting for Claude on your computer.');
+    expect(computer.retrying('network')).toBe('Could not reach your computer. Trying again.');
+    expect(computer.retrying('overloaded')).toBe('Your computer is busy with other conversations. Trying again.');
+    for (const kind of ['server', 'rate_limit', ...OTHER_KINDS] as LlmErrorKind[]) expect(computer.retrying(kind), kind).toBe('Trying your computer again.');
+  });
+
+  it("tells CafAI Bridge's reports in a barista's words", () => {
+    const reported = (report: WaitReport) => computer.reported?.(report);
+    expect(reported({ stage: 'starting' })).toBe('Claude Code is starting on your computer.');
+    expect(reported({ stage: 'requesting' })).toBe('Your computer is waiting for Claude to answer.');
+    expect(reported({ stage: 'restarting' })).toBe('Claude Code went quiet. Starting it again.');
+
+    const retrying = (reason?: WaitReason) => ({ stage: 'retrying' as const, ...(reason ? { reason } : {}) });
+    const counted: Array<[WaitReason | undefined, string]> = [
+      ['overloaded', 'Claude is busy right now. Trying again (3 of 10).'],
+      ['rate_limited', 'Claude is limiting requests right now. Trying again (3 of 10).'],
+      ['server', 'Claude is having trouble right now. Trying again (3 of 10).'],
+      ['network', 'Your computer could not reach Claude. Trying again (3 of 10).'],
+      ['other', 'Trying Claude again (3 of 10).'],
+      [undefined, 'Trying Claude again (3 of 10).'],
+    ];
+    for (const [reason, sentence] of counted) {
+      expect(reported({ ...retrying(reason), attempt: 3, of: 10 }), String(reason)).toBe(sentence);
+      // Without Claude Code's try and its tries, the count is left out.
+      expect(reported(retrying(reason)), String(reason)).toBe(sentence.replace(' (3 of 10)', ''));
+      expect(reported({ ...retrying(reason), attempt: 3 }), String(reason)).toBe(sentence.replace(' (3 of 10)', ''));
+    }
+    expect(reported(retrying())).toBe('Trying Claude again.');
+    expect(reported(retrying('overloaded'))).toBe('Claude is busy right now. Trying again.');
+  });
+
+  it('says nothing of a stage it does not know', () => {
+    expect(computer.reported?.({ stage: 'dreaming' } as unknown as WaitReport)).toBeNull();
   });
 });
 

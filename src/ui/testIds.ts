@@ -89,6 +89,9 @@ export const TID = {
   tasteHelpDialog: 'taste-help-dialog',
   errorBanner: 'error-banner',
   retryButton: 'retry-button',
+  /** The thinking row's note of what the coach waits on (D281), and its Stop from 45 s (D282). */
+  thinkingNote: 'thinking-note',
+  stopReply: 'stop-reply',
   /** A shot card's TDS (D162): its cell (Add, or the reading), its EY, the field with Save, Remove and Cancel, and the line under the numbers. */
   tdsCell: 'shot-tds',
   tdsEy: 'shot-ey',

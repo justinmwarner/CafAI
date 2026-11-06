@@ -512,6 +512,7 @@ export function createFakeCoach(initial: Partial<CoachState> = {}): FakeCoach {
     declineGrinder: record('declineGrinder'),
     retry: record('retry'),
     dismissError: () => void calls.push({ method: 'dismissError', args: [] }),
+    stopReply: () => void calls.push({ method: 'stopReply', args: [] }),
     refresh: record('refresh'),
   };
 }
