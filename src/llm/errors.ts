@@ -12,9 +12,29 @@
  * The sentences that name the service come from a ProviderWording: Anthropic's
  * API by default, or CafAI Bridge, the coach on the user's own computer
  * (computerWording). The coach's own sentences (stopped, refused, stuck) name
- * no service and stay as they are.
+ * no service and stay as they are. The wording also says what a request waits
+ * on before its reply begins (D281), shown under "Thinking…".
  */
-import { LlmError } from './types.ts';
+import { LlmError, type LlmErrorKind } from './types.ts';
+
+/** What CafAI Bridge waits on before a reply begins (D281): Claude Code starting, asked, trying again, or started again. */
+export type WaitStage = 'starting' | 'requesting' | 'retrying' | 'restarting';
+
+/** Why Claude Code tries Anthropic again: 529, 429, another 5xx, no answer at all, or anything else. */
+export type WaitReason = 'overloaded' | 'rate_limited' | 'server' | 'network' | 'other';
+
+/**
+ * CafAI Bridge's report of what it waits on (D281), as read from its
+ * `cafai_wait` stream event (readWaitReport, anthropic.ts). Claude Code's try
+ * and how many it makes (`attempt`, `of`) and why (`reason`) come only with
+ * `retrying`, and only when the bridge sent them.
+ */
+export interface WaitReport {
+  stage: WaitStage;
+  attempt?: number;
+  of?: number;
+  reason?: WaitReason;
+}
 
 /** Every sentence below that names the service the coach talks to. */
 export interface ProviderWording {
@@ -45,6 +65,31 @@ export interface ProviderWording {
    * developers, so only a bad request's reason is repeated, after our words.
    */
   readonly serverSentences: boolean;
+  /** Under "Thinking…", said at the start of each request (D281). */
+  readonly waiting: string;
+  /** Under "Thinking…" before the provider tries a failed request again (D281), by how it failed. */
+  retrying(kind: LlmErrorKind): string;
+  /**
+   * Under "Thinking…": what CafAI Bridge reported it waits on (D281), or null
+   * to say nothing of it. Only the computer's wording has it: Anthropic sends
+   * no such report.
+   */
+  reported?(report: WaitReport): string | null;
+}
+
+function anthropicRetrying(kind: LlmErrorKind): string {
+  switch (kind) {
+    case 'overloaded':
+      return 'Anthropic is busy right now. Trying again.';
+    case 'rate_limit':
+      return 'Anthropic is rate limiting. Trying again shortly.';
+    case 'server':
+      return 'Anthropic is having trouble. Trying again.';
+    case 'network':
+      return 'Could not reach Anthropic. Trying again.';
+    default:
+      return 'Trying again.';
+  }
 }
 
 export const ANTHROPIC_WORDING: ProviderWording = {
@@ -62,7 +107,47 @@ export const ANTHROPIC_WORDING: ProviderWording = {
   dropped: 'The connection to Anthropic dropped before the reply finished. Try again.',
   unreadable: 'Anthropic sent a reply CafAI could not read. Try again.',
   serverSentences: false,
+  waiting: 'Waiting for Anthropic.',
+  retrying: anthropicRetrying,
 };
+
+/** CafAI's own tries of CafAI Bridge: one it could not reach, or one busy with other conversations (its 503). */
+function computerRetrying(kind: LlmErrorKind): string {
+  if (kind === 'network') return 'Could not reach your computer. Trying again.';
+  if (kind === 'overloaded') return 'Your computer is busy with other conversations. Trying again.';
+  return 'Trying your computer again.';
+}
+
+/** What CafAI Bridge reported (D281), in a barista's words: "Claude is busy right now. Trying again (3 of 10)." */
+function computerReported(report: WaitReport): string | null {
+  switch (report.stage) {
+    case 'starting':
+      return 'Claude Code is starting on your computer.';
+    case 'requesting':
+      return 'Your computer is waiting for Claude to answer.';
+    case 'restarting':
+      return 'Claude Code went quiet. Starting it again.';
+    case 'retrying': {
+      // Claude Code's try of how many, when the bridge said both.
+      const count = report.attempt !== undefined && report.of !== undefined ? ` (${report.attempt} of ${report.of})` : '';
+      switch (report.reason) {
+        case 'overloaded':
+          return `Claude is busy right now. Trying again${count}.`;
+        case 'rate_limited':
+          return `Claude is limiting requests right now. Trying again${count}.`;
+        case 'server':
+          return `Claude is having trouble right now. Trying again${count}.`;
+        case 'network':
+          return `Your computer could not reach Claude. Trying again${count}.`;
+        default:
+          return `Trying Claude again${count}.`;
+      }
+    }
+    default:
+      // A stage this build does not know: nothing said.
+      return null;
+  }
+}
 
 /**
  * CafAI Bridge on the user's Mac or PC, at `address` as Settings shows it
@@ -85,6 +170,9 @@ export function computerWording(address: string): ProviderWording {
     dropped: 'The connection to your computer dropped before the reply finished. Try again.',
     unreadable: 'CafAI Bridge sent a reply CafAI could not read. Update CafAI Bridge and try again.',
     serverSentences: true,
+    waiting: 'Waiting for Claude on your computer.',
+    retrying: computerRetrying,
+    reported: computerReported,
   };
 }
 

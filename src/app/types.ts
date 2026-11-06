@@ -436,6 +436,14 @@ export interface CoachState {
    * leaves it out.
    */
   restoredFromBackup?: boolean;
+  /**
+   * What the coach's reply waits on (D281), as the provider last said it
+   * ("Waiting for Claude on your computer."), shown under "Thinking…": null
+   * when nothing is known, once the reply's turn begins (Claude is thinking
+   * then, as "Thinking…" says), and when the reply ends. Optional: a
+   * controller that does not say leaves it out.
+   */
+  waitNote?: string | null;
 }
 
 export interface CoachController {
@@ -489,6 +497,12 @@ export interface CoachController {
   /** Re-send the last failed request. */
   retry(): Promise<void>;
   dismissError(): void;
+  /**
+   * Stop waiting for the coach's reply (D282): its request is given up, the
+   * barista's message stays, and the banner offers Retry. Nothing when no
+   * reply is being asked for.
+   */
+  stopReply(): void;
   /** Re-read settings and the stored key (call after Settings saves or forgets the key). */
   refresh(): Promise<void>;
 }

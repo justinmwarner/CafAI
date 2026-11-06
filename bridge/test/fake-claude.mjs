@@ -13,9 +13,13 @@
 //   LIMIT                    the plan's usage limit (a rejected rate limit, then the failure)
 //   RESTART                  a reply that breaks off and starts again mid-stream
 //   NOT_STREAMED             a whole message with no stream events (a plain-request fallback)
-//   HANG                     never answers
+//   HANG                     never answers (after init and the request's status)
+//   SILENT                   writes nothing at all, not even init (a start that never finished)
+//   QUIET_ONCE               SILENT in the first process of a work folder, then as anything else
+//   RETRYING                 Anthropic overloaded: an api_retry as 2.1.317 writes it every
+//                            FAKE_CLAUDE_RETRY_MS (200), with FAKE_CLAUDE_RETRY_STATUS (529); never answers
 //   anything else            "pid <pid> turn <n>: <the text>"
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 
 const argv = process.argv.slice(2);
@@ -116,6 +120,12 @@ async function streamJson() {
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('\n');
+    if (text.includes('SILENT')) return new Promise(() => {});
+    // The bridge runs Claude Code in its work folder: the first process there leaves a mark.
+    if (text.includes('QUIET_ONCE') && !existsSync('quiet-once.flag')) {
+      writeFileSync('quiet-once.flag', String(process.pid));
+      return new Promise(() => {});
+    }
     out({
       type: 'system',
       subtype: 'init',
@@ -124,7 +134,27 @@ async function streamJson() {
       mcp_servers: mcp ? [{ name: 'cafai', status: 'connected' }] : [],
       apiKeySource: 'none',
     });
+    out({ type: 'system', subtype: 'status', status: 'requesting', session_id: 'fake' });
     if (text.includes('HANG')) return new Promise(() => {});
+    if (text.includes('RETRYING')) {
+      const raw = process.env.FAKE_CLAUDE_RETRY_STATUS ?? '529';
+      const status = raw === 'none' ? null : Number(raw);
+      let attempt = 0;
+      setInterval(() => {
+        attempt += 1;
+        out({
+          type: 'system',
+          subtype: 'api_retry',
+          attempt,
+          max_retries: 10,
+          retry_delay_ms: 500,
+          error_status: status,
+          error: status === 529 ? 'overloaded' : 'unknown',
+          session_id: 'fake',
+        });
+      }, Number(process.env.FAKE_CLAUDE_RETRY_MS ?? 200));
+      return new Promise(() => {});
+    }
     if (text.includes('LIMIT')) {
       out({ type: 'rate_limit_event', rate_limit_info: rateLimit('rejected', 1.0) });
       const said = 'Claude AI usage limit reached';

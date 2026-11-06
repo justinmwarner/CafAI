@@ -14,6 +14,7 @@ import {
   backoffMs,
   buildAnthropicRequest,
   createAnthropicProvider,
+  readWaitReport,
   type AnthropicProviderOptions,
 } from './anthropic.ts';
 import { computerWording } from './errors.ts';
@@ -261,7 +262,10 @@ describe('backoffMs', () => {
 describe('createAnthropicProvider: streaming', () => {
   it('streams text deltas, tool calls and one finished turn', async () => {
     const events = await collect(provider().stream(request()));
-    expect(events[0]).toMatchObject({ type: 'message_start', model: 'claude-opus-5-5' });
+    // First what it waits on (D281), then the turn.
+    expect(events[0]).toEqual({ type: 'waiting', note: 'Waiting for Anthropic.' });
+    expect(events[1]).toMatchObject({ type: 'message_start', model: 'claude-opus-5-5' });
+    expect(events.filter((e) => e.type === 'waiting')).toHaveLength(1);
     const text = events.flatMap((e) => (e.type === 'text_delta' ? [e.text] : [])).join('');
     expect(text).toBe('Lovely. Here is where I would start.');
     expect(events.filter((e) => e.type === 'text_delta').length).toBeGreaterThan(1);
@@ -451,7 +455,7 @@ describe('createAnthropicProvider: errors', () => {
     const seen: LlmStreamEvent[] = [];
     const error = await failure(collect(provider().stream(request()), seen));
     expect(error.kind).toBe('overloaded');
-    expect(seen.map((e) => e.type)).toEqual(['message_start', 'text_delta']);
+    expect(seen.map((e) => e.type)).toEqual(['waiting', 'message_start', 'text_delta']);
     expect(counter.calls).toBe(1);
   });
 
@@ -548,7 +552,208 @@ describe('createAnthropicProvider: abort and timeouts', () => {
     const seen: LlmStreamEvent[] = [];
     const error = await failure(collect(provider({ timeouts: { firstByteMs: 1000, idleMs: 40 } }).stream(request()), seen));
     expect(error.message).toMatch(/stalled/);
-    expect(seen.map((e) => e.type)).toEqual(['message_start']);
+    expect(seen.map((e) => e.type)).toEqual(['waiting', 'message_start']);
+  });
+
+  it('sends nothing when the caller stops as it is told what the request waits on (D281)', async () => {
+    const counter = countRequests();
+    const controller = new AbortController();
+    const run = (async () => {
+      for await (const event of provider().stream(request({ signal: controller.signal }))) {
+        if (event.type === 'waiting') controller.abort();
+      }
+    })();
+    expect((await failure(run)).kind).toBe('aborted');
+    expect(counter.calls).toBe(0);
+  });
+});
+
+// ---- what a request waits on (D281) ------------------------------------------
+
+describe('readWaitReport (D281)', () => {
+  const wait = (fields: Record<string, unknown>) => ({ type: 'cafai_wait', ...fields });
+
+  it("reads CafAI Bridge's four stages, and a retry with Claude Code's try, its tries and why", () => {
+    for (const stage of ['starting', 'requesting', 'retrying', 'restarting']) expect(readWaitReport(wait({ stage })), stage).toEqual({ stage });
+    expect(readWaitReport(wait({ stage: 'retrying', attempt: 3, of: 10, reason: 'overloaded' }))).toEqual({
+      stage: 'retrying',
+      attempt: 3,
+      of: 10,
+      reason: 'overloaded',
+    });
+    for (const reason of ['overloaded', 'rate_limited', 'server', 'network', 'other']) {
+      expect(readWaitReport(wait({ stage: 'retrying', reason })), reason).toEqual({ stage: 'retrying', reason });
+    }
+  });
+
+  it('keeps the try, the tries and why only with a retry, and only when each is what the bridge sends', () => {
+    expect(readWaitReport(wait({ stage: 'starting', attempt: 3, of: 10, reason: 'overloaded' }))).toEqual({ stage: 'starting' });
+    expect(readWaitReport(wait({ stage: 'retrying', attempt: 3, of: 10, reason: 'tired' }))).toEqual({ stage: 'retrying', attempt: 3, of: 10 });
+    for (const [attempt, of] of [[3, undefined], [undefined, 10], ['3', 10], [3, '10'], [0, 10], [2.5, 10], [-1, 10], [11, 10], [3, null]]) {
+      expect(readWaitReport(wait({ stage: 'retrying', attempt, of, reason: 'server' })), `${String(attempt)} of ${String(of)}`).toEqual({
+        stage: 'retrying',
+        reason: 'server',
+      });
+    }
+  });
+
+  it('reads nothing else: another event, no stage, a stage it does not know', () => {
+    for (const data of [null, undefined, 'cafai_wait', 3, [], {}, { type: 'ping' }, { stage: 'starting' }, wait({}), wait({ stage: 'dreaming' }), wait({ stage: 3 })]) {
+      expect(readWaitReport(data), JSON.stringify(data) ?? 'undefined').toBeNull();
+    }
+  });
+});
+
+describe('createAnthropicProvider: what a request waits on (D281)', () => {
+  const BRIDGE = 'http://192.168.1.20:8877';
+  const bridge = () => provider({ baseUrl: BRIDGE, getApiKey: () => Promise.resolve('ABCDEFGH'), wording: computerWording('192.168.1.20:8877') });
+  const answerBridge = (respond: () => Response | Promise<Response>) => server.use(http.post(`${BRIDGE}/v1/messages`, respond));
+  const notes = (events: LlmStreamEvent[]) => events.flatMap((e) => (e.type === 'waiting' ? [e.note] : []));
+  const report = (fields: Record<string, unknown>) => ({ type: 'cafai_wait', ...fields });
+  const TURN = [
+    MESSAGE_START,
+    { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+    { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Grind finer.' } },
+    { type: 'content_block_stop', index: 0 },
+    { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 3 } },
+    { type: 'message_stop' },
+  ];
+
+  it("says what CafAI Bridge reports, in order, before the turn, and keeps none of it in the turn", async () => {
+    answerBridge(() =>
+      sse(
+        report({ stage: 'starting' }),
+        { type: 'ping' },
+        report({ stage: 'requesting' }),
+        report({ stage: 'retrying', attempt: 3, of: 10, reason: 'overloaded' }),
+        report({ stage: 'retrying', attempt: 4, of: 10, reason: 'rate_limited' }),
+        report({ stage: 'restarting' }),
+        report({ stage: 'starting' }),
+        ...TURN,
+      ),
+    );
+    const events = await collect(bridge().stream(request()));
+    expect(notes(events)).toEqual([
+      'Waiting for Claude on your computer.',
+      'Claude Code is starting on your computer.',
+      'Your computer is waiting for Claude to answer.',
+      'Claude is busy right now. Trying again (3 of 10).',
+      'Claude is limiting requests right now. Trying again (4 of 10).',
+      'Claude Code went quiet. Starting it again.',
+      'Claude Code is starting on your computer.',
+    ]);
+    expect(events.map((e) => e.type).slice(7)).toEqual(['message_start', 'text_delta', 'block_stop', 'message_done']);
+    expect(doneTurn(events).content).toEqual([{ type: 'text', text: 'Grind finer.' }]);
+  });
+
+  it('passes over a report it cannot read: a stage it does not know, one that is not JSON, one without a stage', async () => {
+    answerBridge(
+      () =>
+        new HttpResponse(
+          [
+            sseFrame({ event: 'cafai_wait', data: report({ stage: 'dreaming' }) }),
+            'event: cafai_wait\ndata: {not json\n\n',
+            sseFrame({ event: 'cafai_wait', data: report({}) }),
+            sseFrame({ event: 'cafai_wait', data: report({ stage: 'requesting' }) }),
+            ...TURN.map((data) => sseFrame({ event: data.type, data })),
+          ].join(''),
+          { headers: { 'content-type': 'text/event-stream' } },
+        ),
+    );
+    const events = await collect(bridge().stream(request()));
+    expect(notes(events)).toEqual(['Waiting for Claude on your computer.', 'Your computer is waiting for Claude to answer.']);
+    expect(doneTurn(events).stopReason).toBe('end_turn');
+  });
+
+  it('says nothing of a report on Anthropic: its wording has none', async () => {
+    countRequests(() => sse(report({ stage: 'starting' }), report({ stage: 'retrying', attempt: 1, of: 10, reason: 'server' }), ...TURN));
+    const events = await collect(provider().stream(request()));
+    expect(notes(events)).toEqual(['Waiting for Anthropic.']);
+    doneTurn(events);
+  });
+
+  it('says why it tries again before it does, and still does', async () => {
+    const order: string[] = [];
+    countRequests((call) => {
+      order.push(`request ${call}`);
+      return call === 1 ? HttpResponse.json(errorBody('overloaded_error', 'Overloaded'), { status: 529 }) : undefined;
+    });
+    const events: LlmStreamEvent[] = [];
+    for await (const event of provider().stream(request())) {
+      events.push(event);
+      if (event.type === 'waiting') order.push(event.note);
+    }
+    expect(order).toEqual(['Waiting for Anthropic.', 'request 1', 'Anthropic is busy right now. Trying again.', 'request 2']);
+    expect(events[2]).toMatchObject({ type: 'message_start' });
+    expect(doneTurn(events).stopReason).toBe('tool_use');
+  });
+
+  it.each([
+    [429, errorBody('rate_limit_error', 'slow down'), 'Anthropic is rate limiting. Trying again shortly.'],
+    [500, errorBody('api_error', 'Internal server error'), 'Anthropic is having trouble. Trying again.'],
+  ] as const)('tells a %i as it tries again', async (status, body, note) => {
+    const counter = countRequests((call) => (call === 1 ? HttpResponse.json(body, { status, headers: { 'retry-after': '0' } }) : undefined));
+    expect(notes(await collect(provider().stream(request())))).toEqual(['Waiting for Anthropic.', note]);
+    expect(counter.calls).toBe(2);
+  });
+
+  it('tells a request that never got there as it tries again', async () => {
+    const counter = countRequests((call) => (call === 1 ? HttpResponse.error() : undefined));
+    expect(notes(await collect(provider().stream(request())))).toEqual(['Waiting for Anthropic.', 'Could not reach Anthropic. Trying again.']);
+    expect(counter.calls).toBe(2);
+  });
+
+  it('tells why it tries the computer again: unreachable, or busy with other conversations', async () => {
+    let calls = 0;
+    answerBridge(() => {
+      calls += 1;
+      if (calls === 1) return HttpResponse.error();
+      if (calls === 2) {
+        return HttpResponse.json(errorBody('overloaded_error', 'CafAI Bridge is busy with other conversations. Try again in a moment.'), {
+          status: 503,
+          headers: { 'retry-after': '0' },
+        });
+      }
+      return sse(...TURN);
+    });
+    const events = await collect(bridge().stream(request()));
+    expect(notes(events)).toEqual([
+      'Waiting for Claude on your computer.',
+      'Could not reach your computer. Trying again.',
+      'Your computer is busy with other conversations. Trying again.',
+    ]);
+    expect(doneTurn(events).stopReason).toBe('end_turn');
+    expect(calls).toBe(3);
+  });
+
+  it('never counts a report as part of a turn: a failure after reports, before the turn, is still tried again', async () => {
+    let calls = 0;
+    answerBridge(() => {
+      calls += 1;
+      if (calls > 1) return sse(...TURN);
+      return sse(report({ stage: 'starting' }), report({ stage: 'requesting' }), { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } });
+    });
+    const events = await collect(bridge().stream(request()));
+    expect(calls).toBe(2);
+    expect(notes(events)).toEqual([
+      'Waiting for Claude on your computer.',
+      'Claude Code is starting on your computer.',
+      'Your computer is waiting for Claude to answer.',
+      'Your computer is busy with other conversations. Trying again.',
+    ]);
+    expect(doneTurn(events).content).toEqual([{ type: 'text', text: 'Grind finer.' }]);
+  });
+
+  it('still never tries again once the turn began, reports or not', async () => {
+    let calls = 0;
+    answerBridge(() => {
+      calls += 1;
+      return sse(report({ stage: 'requesting' }), MESSAGE_START, { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } });
+    });
+    const seen: LlmStreamEvent[] = [];
+    expect((await failure(collect(bridge().stream(request()), seen))).kind).toBe('overloaded');
+    expect(calls).toBe(1);
+    expect(seen.map((e) => e.type)).toEqual(['waiting', 'waiting', 'message_start']);
   });
 });
 

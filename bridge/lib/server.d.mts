@@ -20,7 +20,7 @@ export interface BridgeOptions {
   log?: (line: string) => void;
   onShutdownRequest?: () => void;
   env?: Record<string, string | undefined>;
-  timing?: { firstEventMs?: number; stallMs?: number; pingMs?: number; keepaliveMs?: number; authCacheMs?: number };
+  timing?: { quietMs?: number; maxWaitMs?: number; stallMs?: number; pingMs?: number; keepaliveMs?: number; authCacheMs?: number };
 }
 
 export interface BridgeHandle {

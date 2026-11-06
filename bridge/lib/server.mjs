@@ -137,6 +137,10 @@ function sseSink(res, pingMs) {
       open();
       write(event);
     },
+    // What the request waits on (D280), CafAI's own event: Anthropic's clients drop event types they do not know.
+    wait(report) {
+      if (opened && !done) write({ type: 'cafai_wait', ...report });
+    },
     fail(failure) {
       if (done) return;
       done = true;
@@ -177,6 +181,7 @@ function jsonSink(res) {
       return done;
     },
     open() {},
+    wait() {},
     event(event) {
       switch (event.type) {
         case 'message_start':
@@ -298,7 +303,7 @@ export function parseMessagesBody(body) {
  * @param {(line: string) => void} [options.log]
  * @param {() => void} [options.onShutdownRequest]
  * @param {NodeJS.ProcessEnv} [options.env]
- * @param {{ firstEventMs?: number, stallMs?: number, pingMs?: number, keepaliveMs?: number, authCacheMs?: number }} [options.timing]  For tests.
+ * @param {{ quietMs?: number, maxWaitMs?: number, stallMs?: number, pingMs?: number, keepaliveMs?: number, authCacheMs?: number }} [options.timing]  For tests.
  */
 export async function startBridgeServer(options) {
   const {
@@ -331,7 +336,8 @@ export async function startBridgeServer(options) {
     workDir,
     maxRuns,
     idleMs: idleMinutes * 60_000,
-    firstEventMs: timing.firstEventMs,
+    quietMs: timing.quietMs,
+    maxWaitMs: timing.maxWaitMs,
     stallMs: timing.stallMs,
     allowApiKey,
     env,

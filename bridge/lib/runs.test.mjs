@@ -1,5 +1,42 @@
 import { describe, expect, it } from 'vitest';
-import { TOOL_NOTE, configKey, runSystemPrompt, webSearchNote } from './runs.mjs';
+import { TOOL_NOTE, configKey, retryReason, runSystemPrompt, waitFailure, webSearchNote } from './runs.mjs';
+
+describe('retryReason (D280)', () => {
+  it('reads why Claude Code tries Anthropic again from the api_retry', () => {
+    expect(retryReason(529, 'overloaded')).toBe('overloaded');
+    expect(retryReason(null, 'overloaded')).toBe('overloaded');
+    expect(retryReason(429, 'rate_limit')).toBe('rate_limited');
+    expect(retryReason(500, 'api_error')).toBe('server');
+    expect(retryReason(503, null)).toBe('server');
+    expect(retryReason(null, 'unknown')).toBe('network');
+    expect(retryReason(undefined)).toBe('network');
+    expect(retryReason(408, 'timeout')).toBe('other');
+  });
+});
+
+describe('waitFailure (D280)', () => {
+  it('says what kept the reply from beginning, from the last api_retry', () => {
+    const retry = (status, error = null) => ({ attempt: 4, of: 10, status, error });
+    expect(waitFailure(retry(529, 'overloaded'), 300_000)).toEqual({
+      status: 529,
+      type: 'overloaded_error',
+      message: 'Claude is overloaded right now. Try again in a few minutes.',
+    });
+    expect(waitFailure(retry(429), 300_000).message).toBe('Claude is limiting requests right now. Try again in a few minutes.');
+    expect(waitFailure(retry(502), 300_000).message).toBe('Claude is having trouble right now. Try again in a few minutes.');
+    expect(waitFailure(retry(null), 300_000).message).toBe(
+      "Claude Code on your computer could not reach Claude. Check the computer's internet connection, then try again.",
+    );
+    for (const status of [429, 502, null]) expect(waitFailure(retry(status), 300_000)).toMatchObject({ status: 500, type: 'api_error' });
+  });
+
+  it('says how long it waited when Claude Code was not retrying', () => {
+    expect(waitFailure(null, 300_000)).toEqual({ status: 500, type: 'api_error', message: 'Claude Code on your computer did not answer in 5 minutes. Try again.' });
+    expect(waitFailure({ attempt: 1, of: 10, status: 408, error: 'timeout' }, 60_000).message).toBe(
+      'Claude Code on your computer did not answer in 1 minute. Try again.',
+    );
+  });
+});
 
 const request = (over = {}) => ({
   model: 'claude-opus-5-5',

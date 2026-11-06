@@ -306,6 +306,7 @@ export function CoachScreen({ settingsHref = '#/settings/coach' }: CoachScreenPr
   const phase = useCoach((s) => s.phase);
   const messages = useCoach((s) => s.messages);
   const busy = useCoach((s) => s.busy);
+  const waitNote = useCoach((s) => s.waitNote ?? null);
   const error = useCoach((s) => s.error);
   const onComputer = useCoachRunsOnComputer();
   const canUndo = useCoach((s) => s.canUndo);
@@ -383,6 +384,8 @@ export function CoachScreen({ settingsHref = '#/settings/coach' }: CoachScreenPr
           onOpenGraph={() => navigate({ name: 'shot' })}
           statsCard={statsShown}
           onStats={showStats}
+          waitNote={waitNote}
+          onStopReply={() => coach.stopReply()}
         />
       </Box>
     );

@@ -144,7 +144,9 @@ async function streamTurn(run: RunRequest, messages: LlmMessage[], paused: reado
   let lastText = -1;
   const spokeBefore = contentText(paused.flatMap((message) => message.content)) !== '';
   for await (const event of run.provider.stream(request)) {
-    if (event.type === 'message_start') {
+    // What the call waits on before its turn begins (D281): for the thinking row, nothing else.
+    if (event.type === 'waiting') run.onWaiting?.(event.note);
+    else if (event.type === 'message_start') {
       if (paused.length === 0) run.onTurnStart?.();
     } else if (event.type === 'text_delta') {
       if (lastText >= 0 ? event.index > lastText + 1 : spokeBefore) run.onTextDelta?.('\n\n');

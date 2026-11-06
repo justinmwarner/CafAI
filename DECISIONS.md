@@ -5135,3 +5135,91 @@ section 8).
   bring the same question back; the heuristic errs towards the taste, as a
   question misread as the taste is one tap on the card from being right,
   while a taste misread as a question leaves the card open to tap.
+
+### A long wait for the coach (2026-11-06)
+
+The owner's ask of 2026-11-06, after a morning reply on the computer failed:
+"we need error handling … gracefully handle. Add a longer-loading UX so that
+the user knows we're waiting for the server. And increase timeout too." At
+06:30 that day, and at 06:56 on 11-04, CafAI Bridge started Claude Code for
+a reply and Claude Code wrote nothing for 90 s. The bridge's one timer then
+closed the run with "Claude Code on your computer did not answer. Update it
+(claude update) and try again.": wrong advice, after 90 s of "Thinking… N s"
+that said nothing of what CafAI waited on, and the log kept nothing of what
+Claude Code had been doing. Claude Code 2.1.317 tells the bridge, in
+stream-json, when it has started (`init`), when it has sent the request
+(`status: requesting`), and when Anthropic failed and it tries again
+(`api_retry`, with the attempt, the retries it allows and the error's
+status): checked that day against a local server that answered every
+request 529. The design is
+`docs/superpowers/specs/2026-11-06-coach-long-wait-design.md`.
+
+- **D280. Until a reply begins, the bridge restarts a Claude Code that goes
+  quiet, once, waits while it retries, and says why it gives up.** In
+  `bridge/lib/runs.mjs` each request is timed from the moment a run takes it
+  until its `message_start`. A Claude Code silent for 90 s (`quietMs`; any
+  line it writes starts the 90 s again) is started again once, on the same
+  request: the run closes without failing the request, and a new run takes
+  the same reply, the conversation replayed as any new run's is. A second
+  silence fails the request: "Claude Code on your computer stopped
+  answering, even after a restart. Try again; if it keeps happening, restart
+  CafAI Bridge." A request waits 5 minutes at most (`maxWaitMs`), the restart
+  included, and then fails with a sentence from Claude Code's last
+  `api_retry`: overloaded (529, sent as `overloaded_error`), limiting
+  requests (429), having trouble (5xx), could not reach Claude (no status),
+  or did not answer in 5 minutes. The stall timer once the reply has begun
+  (180 s) and Claude Code's own last failures (its retries spent, a plan's
+  limit) are as before. On a streamed request the bridge writes CafAI's own
+  `cafai_wait` events beside its pings as the wait changes: `starting`
+  (Claude Code spawned), `requesting`, `retrying` (`attempt`, `of`, and a
+  `reason`: overloaded, rate_limited, server, network or other) and
+  `restarting`. Anthropic's clients drop event types they do not know, and
+  so does CafAI 0.1.5's assembler. Each restart and each give-up writes a
+  line to the log: how long the request waited, what Claude Code last wrote
+  and when, and the end of its error output. Why: a silent Claude Code is
+  stuck (a hung connection, a start that never finished). A fresh process
+  mends that and nothing else does, and nothing had reached CafAI, so the
+  restart cannot show anything twice. A Claude Code that writes `api_retry`
+  is alive and waiting on Anthropic, where only time helps, so it is waited
+  for, within a limit a barista can bear. And the last sentence should say
+  what happened, which "Update it" did not. The owner chose 90 s, one restart
+  and 5 minutes, over 2 minutes and 8, and over one longer timeout without a
+  restart.
+- **D281. The thinking row says what the reply waits on from 10 s, and that
+  it is taking longer than usual from 45 s.** The provider
+  (`src/llm/anthropic.ts`) yields a `waiting` stream event, a sentence from
+  the wording of the service it talks to (`src/llm/errors.ts`), no part of a
+  turn and never counted as one, so its retry rules are as before:
+  "Waiting for Anthropic." or "Waiting for Claude on your computer." at the
+  start of each request; for each `cafai_wait` the bridge sends (read by
+  `readWaitReport`, which passes over a stage or shape it does not know),
+  "Claude Code is starting on your computer.", "Your computer is waiting for
+  Claude to answer.", "Claude is busy right now. Trying again (3 of 10)."
+  (with the 429, 5xx and no-status sentences beside it) or "Claude Code went
+  quiet. Starting it again."; and before each of its own retries, why
+  ("Anthropic is busy right now. Trying again.", "Could not reach your
+  computer. Trying again."). The runner hands it to `onWaiting`, and the
+  engine keeps the latest as `waitNote` until the reply's turn begins, as the
+  turn's `message_start` says, and drops it when the reply ends. In the chat
+  (`ThinkingView`, `src/ui/chat/ChatSurface.tsx`) "Thinking…" counts its
+  seconds from 3 s as before; from 10 s the note shows under the words, a
+  status of its own for screen readers; from 45 s the first line reads
+  "Taking longer than usual… 52 s". Why: a reply that has not begun is
+  waiting on something the barista cannot see, and on the computer the
+  bridge knows what: it should be said where they are already looking, in
+  their words. Not before 10 s, when nearly every reply has begun and a line
+  would only flicker; and not once the turn has begun, when Claude is
+  thinking, "Thinking…" is true, and a "Claude is busy" kept from before
+  would not be. Owner's ask (2026-11-06).
+- **D282. Stop ends a long wait; the message stays for Retry.** From 45 s
+  the thinking row offers a text **Stop** (named "Stop waiting for the
+  coach" for screen readers, the machine's Stop being another). Each reply
+  has its own AbortController, its signal sent with the run; `stopReply()`
+  aborts it at once, not through the engine's queue, which waits on that
+  very reply. The barista's message stays, the banner says "You stopped
+  waiting for the coach. Tap Retry to ask again." with Retry, and no coach
+  error is counted, since nothing failed. On the bridge the closed request
+  closes its run and ends its Claude Code. Why: a wait of up to 5 minutes
+  (D280) needs a way out that keeps what the barista typed; and a stop is
+  the barista's choice, not the coach's failure, so it is neither counted
+  nor worded as one. Owner's ask (2026-11-06).
