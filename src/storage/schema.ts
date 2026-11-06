@@ -175,6 +175,11 @@ export const BagSchema = z.object({
   decaidBeanId: optionalNullableText,
   decaidBatchId: optionalNullableText,
   roastDate: optionalNullableText,
+  /** The details added on 2026-11-06 (D278): absent on older bags, and left absent so an old export round-trips exactly. */
+  producer: optionalNullableText,
+  variety: optionalNullableText,
+  altitude: optionalNullableText,
+  other: optionalNullableText,
   templateId: nullableText,
   activeVersionId: nullableText,
   conversationId: text,

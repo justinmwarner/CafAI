@@ -253,6 +253,10 @@ describe('scripted replies', () => {
       process: 'washed',
       notes: null,
       roastDate: null,
+      producer: null,
+      variety: null,
+      altitude: null,
+      other: null,
     });
     const suggestions = (reply.tools[1]?.input as { suggestions: Array<{ templateId: string; confidence: string }> })
       .suggestions;

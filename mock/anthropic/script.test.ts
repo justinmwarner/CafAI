@@ -89,7 +89,19 @@ describe('the scripted coach, end to end', () => {
     expect(coach.executed).toEqual([
       {
         name: TOOL.saveBagDetails,
-        input: { name: 'Kiambu AA', roaster: null, origin: 'Kenya', roastLevel: 'light', process: 'washed', notes: null, roastDate: null },
+        input: {
+          name: 'Kiambu AA',
+          roaster: null,
+          origin: 'Kenya',
+          roastLevel: 'light',
+          process: 'washed',
+          notes: null,
+          roastDate: null,
+          producer: null,
+          variety: null,
+          altitude: null,
+          other: null,
+        },
       },
     ]);
     const templates = intake.pendingUiCalls[0]!;

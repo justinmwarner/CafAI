@@ -198,6 +198,10 @@ describe('zodValidator', () => {
       roastLevel: 'very dark',
       process: null,
       notes: null,
+      producer: null,
+      variety: null,
+      altitude: null,
+      other: null,
     });
     expect(result).toEqual({
       ok: false,

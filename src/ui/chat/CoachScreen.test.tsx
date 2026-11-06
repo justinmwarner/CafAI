@@ -324,11 +324,11 @@ describe('CoachScreen', () => {
     const services = createFakeServices({ coach: { ...coachStateFor('intake'), messages: [bean] } });
     const asked: Array<[string, unknown[]]> = [];
     services.coach.pickBean = async (...args) => void asked.push(['pickBean', args]);
-    services.coach.skipBeanPick = async () => void asked.push(['skipBeanPick', []]);
+    services.coach.typeBagDetails = async () => void asked.push(['typeBagDetails', []]);
     services.coach.confirmBag = async (...args) => void asked.push(['confirmBag', args]);
     renderWithServices(<CoachScreen />, services);
     await userEvent.click(screen.getAllByTestId(TID.beanOption)[0]!);
-    await userEvent.click(screen.getByTestId(TID.beanSomethingElse));
+    await userEvent.click(screen.getByTestId(TID.beanTypeDetails));
     act(() =>
       services.coach.setState({
         messages: [bean, { id: 'm-confirm', role: 'assistant', parts: [{ kind: 'bagConfirm', details: BAG_FROM_PHOTO, confirmed: false }], createdAt: at }],
@@ -337,7 +337,7 @@ describe('CoachScreen', () => {
     await userEvent.click(within(screen.getByTestId(TID.bagConfirm)).getByRole('button', { name: 'Confirm' }));
     expect(asked).toEqual([
       ['pickBean', ['batch-red']],
-      ['skipBeanPick', []],
+      ['typeBagDetails', []],
       ['confirmBag', [BAG_FROM_PHOTO]],
     ]);
   });

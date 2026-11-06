@@ -13,7 +13,7 @@ export const COACH_TOOL_SPECS: Record<ToolName, { description: string; kind: 'ui
   [TOOL.saveBagDetails]: {
     kind: 'auto',
     description:
-      'Save what the user told you about this bag: a short name used in profile titles (e.g. "Kiambu AA", at most 40 characters), roaster, origin, roast level (light, medium-light, medium, medium-dark or dark), process, tasting notes and roast date (YYYY-MM-DD). Use null for anything the user has not told you; never guess. Call it once at intake, before propose_templates, and again only when the user corrects a detail: then send every detail as it was saved (your earlier call, or the intake\'s "bag") with the correction, because each call replaces all of them. Answers {"saved":true}.',
+      'Save what the user told you about this bag: a short name used in profile titles (e.g. "Kiambu AA", at most 40 characters), roaster, origin, roast level (light, medium-light, medium, medium-dark or dark), process, tasting notes, roast date (YYYY-MM-DD), the farm or producer ("produced by El Paraíso" is "El Paraíso"), the varieties, the altitude as written, and other: anything else the user said about the coffee that none of these hold (a lot, a harvest, a fermentation, their own note), in their words. Use null for anything the user has not told you; never guess. Call it once at intake, before propose_templates, and again only when the user corrects a detail: then send every detail as it was saved (your earlier call, or the intake\'s "bag") with the correction, because each call replaces all of them. Answers {"saved":true}.',
   },
   [TOOL.proposeTemplates]: {
     kind: 'ui',

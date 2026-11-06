@@ -238,7 +238,8 @@ test('a $1 budget with the pause on: the 80 % notice after a reply, the pause ca
   expect(total, 'one reply takes the month to 80 % and not past the budget').toBeGreaterThanOrEqual(800_000);
   expect(total).toBeLessThan(1_000_000);
   const chat = page.getByTestId(TID.chat);
-  const near = chat.getByText(`The coach has used ${formatUsd(total)} of your $1 budget this month.`);
+  // In cents rounded down, as the notice says them (budget.ts: never $1.00 of $1 at 99.9 %).
+  const near = chat.getByText(`The coach has used ${formatUsd(Math.floor(total / 10_000) * 10_000)} of your $1 budget this month.`);
   await expect(near).toBeVisible();
 
   // Replies until the month reaches the budget: said once, at 100 %.

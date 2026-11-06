@@ -6,6 +6,34 @@ workflow checks against it. Settings > About shows the version you run.
 
 ## Unreleased
 
+### The new bag screen
+
+- **Adding a new coffee comes first.** "Which coffee is it?" now leads
+  with **Photo of the bag** and **Type the details**; the coffees already
+  in Decaid's bean library come under them, headed "Already in Decaid's
+  beans". Before, the library's coffees came first and the way to add a
+  new one was a quiet "Something else" under them, so New bag read like
+  "change bag". **Type the details** opens a card to fill in, so a bag no
+  longer has to be described in a chat message (you still can).
+- **More of the label, and a place for your own notes.** A bag now keeps
+  its **producer or farm** ("Produced by El Paraíso"), its **variety**,
+  its **altitude** and **Other details**: anything else on the bag (a lot,
+  the harvest, a fermentation) or in your head. A photo of the bag reads
+  them too, the coach takes them into account, and the producer, the
+  variety and the altitude go to Decaid's bean library with the rest (and
+  come from it when you pick a coffee there).
+- **The new bag screen keeps its place.** While a bag has no starting
+  profile yet, Espresso, Steam, Flush or Hot water no longer switch the
+  screen away from it. A line at the top says what is running, with a
+  button to open it (Open the shot, Open Steam...) and one to dismiss it.
+- **The coach is quiet until the bag has a profile.** A shot pulled while
+  a bag is being set up (a tap on Espresso by mistake) no longer gets
+  "That shot stopped before it poured: nothing to taste." or "Pick a
+  starting profile first" in the chat, and the Shot view no longer says
+  it is reading a shot that nobody reads.
+- A photo whose reading leaves out the roast level or the roast date is no
+  longer refused as unreadable.
+
 ## 0.1.5 (2026-11-05)
 
 ### The coach

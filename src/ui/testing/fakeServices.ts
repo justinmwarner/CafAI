@@ -505,7 +505,7 @@ export function createFakeCoach(initial: Partial<CoachState> = {}): FakeCoach {
     rateShot: record('rateShot'),
     setShotTds: record('setShotTds'),
     pickBean: record('pickBean'),
-    skipBeanPick: record('skipBeanPick'),
+    typeBagDetails: record('typeBagDetails'),
     readBagPhoto: record('readBagPhoto'),
     confirmBag: record('confirmBag'),
     addGrinder: record('addGrinder'),

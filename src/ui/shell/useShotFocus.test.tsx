@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen } from '@testing-library/react';
-import type { CoachUiMessage } from '../../app/types.ts';
+import type { CoachState, CoachUiMessage } from '../../app/types.ts';
+import { makeBag } from '../../storage/testing/fixtures.ts';
 import type { ShotSummary } from '../../coach/types.ts';
 import { navigate, replaceRoute, useRoute } from '../router.ts';
 import { createFakeServices, type FakeServices } from '../testing/fakeServices.ts';
@@ -11,9 +12,10 @@ import { OUTCOME_WAIT_MS } from './shotFocus.ts';
 
 function Harness() {
   const route = useRoute();
-  const { awaitingOutcome, guardUntil } = useShotFocus(route);
+  const { awaitingOutcome, guardUntil, heldShot } = useShotFocus(route);
   return (
     <div>
+      <output data-testid="held">{heldShot === null ? 'none' : String(heldShot)}</output>
       <output data-testid="route">{route.name}</output>
       <output data-testid="awaiting">{String(awaitingOutcome)}</output>
       <output data-testid="guard">{guardUntil === null ? 'none' : String(guardUntil)}</output>
@@ -45,8 +47,8 @@ const settle = () =>
 
 const text = (id: string) => screen.getByTestId(id).textContent;
 
-function renderHarness(messages: CoachUiMessage[] = []): FakeServices {
-  const services = createFakeServices({ coach: { messages } });
+function renderHarness(messages: CoachUiMessage[] = [], coach: Partial<CoachState> = {}): FakeServices {
+  const services = createFakeServices({ coach: { messages, ...coach } });
   renderWithServices(<Harness />, services);
   return services;
 }
@@ -104,6 +106,30 @@ describe('useShotFocus', () => {
     expect(window.history.length).toBe(entries);
     await settle();
     expect(text('route')).toBe('shot');
+  });
+
+  it('stays on the new bag screen and holds the shot until it ends, never going back afterwards (D277)', async () => {
+    const services = renderHarness([], { activeBag: makeBag({ id: 'bag_1', name: 'New bag' }), activeVersion: null, phase: 'intake' });
+    start(services);
+    await settle();
+    expect(window.location.hash).toBe('#/');
+    expect(text('held')).not.toBe('none');
+    finish(services);
+    await settle();
+    expect(text('held')).toBe('none');
+    // No coach reads it, so nothing is waited for.
+    expect(text('awaiting')).toBe('false');
+    addMessages(services, notice('m1'));
+    await settle();
+    expect(window.location.hash).toBe('#/');
+  });
+
+  it('holds no shot while no bag is being set up', async () => {
+    const services = renderHarness();
+    start(services);
+    expect(window.location.hash).toBe('#/shot');
+    await settle();
+    expect(text('held')).toBe('none');
   });
 
   it('stays put while the barista is typing in a textarea or a text field', async () => {

@@ -24,6 +24,10 @@ export const TID = {
   tabHistory: 'tab-history',
   tabSettings: 'tab-settings',
   liveStrip: 'live-strip',
+  /** The new bag screen's line about a run that stayed off the screen (D277), its Open and its dismiss. */
+  heldRun: 'held-run',
+  heldRunOpen: 'held-run-open',
+  heldRunDismiss: 'held-run-dismiss',
   shotView: 'shot-view',
   coachNote: 'coach-note',
   tapGuard: 'tap-guard',
@@ -188,7 +192,8 @@ export const TID = {
   // Decaid alignment: bean library, gateway mode, connect, plugins, key backup, drift
   beanCard: 'bean-card',
   beanOption: 'bean-option',
-  beanSomethingElse: 'bean-something-else',
+  /** The bean card's Type the details (D279), which opens the bag's details card blank. */
+  beanTypeDetails: 'bean-type-details',
   bagPhoto: 'bag-photo',
   bagPhotoInput: 'bag-photo-input',
   bagConfirm: 'bag-confirm',

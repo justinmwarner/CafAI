@@ -12,8 +12,10 @@ import { TID } from '../../testIds.ts';
 import { formatDate, setAsideNote } from '../format.ts';
 
 export interface BagConfirmCardProps {
-  /** As read from the photo of the bag; a name the bag did not show is empty. */
+  /** As read from the photo of the bag (a name the bag did not show is empty), or blank to type into. */
   details: SaveBagDetails;
+  /** A photo's reading to check, or details the barista types (D279). */
+  source?: 'photo' | 'typed';
   confirmed: boolean;
   /** True while the coach is working; blocks Confirm. */
   disabled?: boolean;
@@ -24,7 +26,21 @@ export interface BagConfirmCardProps {
 }
 
 /** The fields as typed: every one text, a blank one unknown. */
-type Draft = Record<'name' | 'roaster' | 'origin' | 'process' | 'notes' | 'roastLevel' | 'roastDate', string>;
+type Draft = Record<
+  'name' | 'roaster' | 'origin' | 'process' | 'notes' | 'roastLevel' | 'roastDate' | 'producer' | 'variety' | 'altitude' | 'other',
+  string
+>;
+
+/** The one-line text fields, in the card's order, with their labels and an example where one helps. */
+const TEXT_FIELDS: ReadonlyArray<{ field: 'name' | 'roaster' | 'origin' | 'producer' | 'variety' | 'altitude' | 'process'; label: string; example?: string }> = [
+  { field: 'name', label: 'Name' },
+  { field: 'roaster', label: 'Roaster' },
+  { field: 'origin', label: 'Origin', example: 'Colombia, Huila' },
+  { field: 'producer', label: 'Producer or farm', example: 'El Paraíso' },
+  { field: 'variety', label: 'Variety', example: 'Castillo, Caturra' },
+  { field: 'altitude', label: 'Altitude', example: '1,950 masl' },
+  { field: 'process', label: 'Process', example: 'Washed' },
+];
 
 const LEVEL_LABELS: Record<(typeof ROAST_LEVELS)[number], string> = {
   light: 'Light',
@@ -53,6 +69,11 @@ function draftOf(details: SaveBagDetails): Draft {
     notes: details.notes ?? '',
     roastLevel: details.roastLevel ?? '',
     roastDate: details.roastDate ?? '',
+    // Absent on a card stored before them (D278).
+    producer: details.producer ?? '',
+    variety: details.variety ?? '',
+    altitude: details.altitude ?? '',
+    other: details.other ?? '',
   };
 }
 
@@ -67,6 +88,10 @@ function detailsOf(draft: Draft): SaveBagDetails {
     process: known(draft.process),
     notes: known(draft.notes),
     roastDate: /^\d{4}-\d{2}-\d{2}$/.test(draft.roastDate) ? draft.roastDate : null,
+    producer: known(draft.producer),
+    variety: known(draft.variety),
+    altitude: known(draft.altitude),
+    other: known(draft.other),
   };
 }
 
@@ -75,6 +100,9 @@ function DetailsText({ details }: { details: SaveBagDetails }) {
   const facts = [
     details.roaster,
     details.origin,
+    details.producer ? `Produced by ${details.producer}` : null,
+    details.variety,
+    details.altitude,
     details.process,
     details.roastLevel ? `${details.roastLevel} roast` : null,
     details.roastDate ? `Roasted ${formatDate(details.roastDate)}` : null,
@@ -94,30 +122,51 @@ function DetailsText({ details }: { details: SaveBagDetails }) {
           Tasting notes: {details.notes}
         </Typography>
       ) : null}
+      {details.other ? (
+        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25, whiteSpace: 'pre-line' }}>
+          Other details: {details.other}
+        </Typography>
+      ) : null}
     </Box>
   );
 }
 
 /**
- * The details the coach's model read from a photo of the bag (6.8), for the
- * barista to fix and confirm. Confirm saves them as the coach's
+ * The bag's details for the barista to fix or fill in, then confirm: read
+ * from a photo of the bag by the coach's model (6.8), or blank for the
+ * barista to type (D279). Confirm saves them as the coach's
  * save_bag_details would; until then nothing is saved. Afterwards the card
  * stays in the chat with the details as text.
  */
-export function BagConfirmCard({ details, confirmed, disabled = false, expired = false, setAsideReason, onConfirm }: BagConfirmCardProps) {
+export function BagConfirmCard({
+  details,
+  source = 'photo',
+  confirmed,
+  disabled = false,
+  expired = false,
+  setAsideReason,
+  onConfirm,
+}: BagConfirmCardProps) {
   const [draft, setDraft] = useState<Draft>(() => draftOf(details));
+  // A typed card starts blank: its name is asked for in red only once the barista has been to it.
+  const [nameTouched, setNameTouched] = useState(false);
   const open = !confirmed && !expired;
+  const typed = source === 'typed';
   const set = (field: keyof Draft) => (event: { target: { value: string } }) => setDraft((current) => ({ ...current, [field]: event.target.value }));
   const nameMissing = draft.name.trim() === '';
+  const nameError = nameMissing && (!typed || nameTouched);
 
-  const text = (field: 'name' | 'roaster' | 'origin' | 'process', label: string) => (
+  const text = ({ field, label, example }: (typeof TEXT_FIELDS)[number]) => (
     <TextField
+      key={field}
       size="small"
       label={label}
       value={draft[field]}
       onChange={set(field)}
-      error={field === 'name' && nameMissing}
-      helperText={field === 'name' && nameMissing ? 'Needed: it names the profiles.' : undefined}
+      onBlur={field === 'name' ? () => setNameTouched(true) : undefined}
+      placeholder={typed && example ? `e.g. ${example}` : undefined}
+      error={field === 'name' && nameError}
+      helperText={field === 'name' && (nameError || (typed && nameMissing)) ? 'Needed: it names the profiles.' : undefined}
       sx={fieldSx}
       slotProps={{
         htmlInput: { maxLength: BAG_LIMITS[field], ...(field === 'name' ? { 'aria-required': true } : {}) },
@@ -142,18 +191,17 @@ export function BagConfirmCard({ details, confirmed, disabled = false, expired =
       }}
     >
       <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 700 }}>
-        Check the bag&apos;s details
+        {typed ? "The bag's details" : "Check the bag's details"}
       </Typography>
       {open ? (
         <>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
-            Read from your photo. Fix anything that is wrong, then confirm.
+            {typed
+              ? 'Type what the bag says. Only the name is needed; leave blank what it does not say.'
+              : 'Read from your photo. Fix anything that is wrong, then confirm.'}
           </Typography>
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 1.5, mt: 1.5 }}>
-            {text('name', 'Name')}
-            {text('roaster', 'Roaster')}
-            {text('origin', 'Origin')}
-            {text('process', 'Process')}
+            {TEXT_FIELDS.map(text)}
             <TextField
               select
               size="small"
@@ -189,6 +237,18 @@ export function BagConfirmCard({ details, confirmed, disabled = false, expired =
               maxRows={4}
               sx={{ ...fieldSx, gridColumn: '1 / -1' }}
               slotProps={{ htmlInput: { maxLength: BAG_LIMITS.notes }, inputLabel: { shrink: true } }}
+            />
+            <TextField
+              size="small"
+              label="Other details"
+              value={draft.other}
+              onChange={set('other')}
+              placeholder="Anything else: a lot, the harvest, a fermentation, your own notes"
+              multiline
+              minRows={2}
+              maxRows={6}
+              sx={{ ...fieldSx, gridColumn: '1 / -1' }}
+              slotProps={{ htmlInput: { maxLength: BAG_LIMITS.other }, inputLabel: { shrink: true } }}
             />
           </Box>
           <Stack direction="row" sx={{ mt: 1.5 }}>

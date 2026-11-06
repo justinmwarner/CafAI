@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { drinkStarted, goBackLabel, goBackRoute, goBackWords, NO_ORIGIN } from './drinkFocus.ts';
+import { drinkOpened, drinkStarted, goBackLabel, goBackRoute, goBackWords, NO_ORIGIN } from './drinkFocus.ts';
 
 describe('drinkStarted', () => {
   it("switches to the drink's view and remembers the screen it took over", () => {
@@ -34,11 +34,29 @@ describe('drinkStarted', () => {
     expect(drinkStarted(origin, { kind: 'flush', typing: false, shown: { name: 'drink', drink: 'flush' } })).toEqual({ state: origin, go: null });
   });
 
+  it('stays on the new bag screen, keeping the screen an earlier run took over (D277)', () => {
+    const origin = { origin: { name: 'settings' as const } };
+    expect(drinkStarted(origin, { kind: 'steam', typing: false, held: true, shown: { name: 'coach' } })).toEqual({ state: origin, go: null });
+  });
+
   it("from one drink's view to another's, keeps the screen the first took over", () => {
     const origin = { origin: { name: 'history' as const, bagId: 'b1' } };
     const step = drinkStarted(origin, { kind: 'hotWater', typing: false, shown: { name: 'drink', drink: 'steam' } });
     expect(step).toEqual({ state: origin, go: { name: 'drink', drink: 'hotWater' } });
     expect(step.state).toBe(origin);
+  });
+});
+
+describe('drinkOpened', () => {
+  it("opens a held run's view and remembers the screen it leaves, so Go back returns there (D277)", () => {
+    const step = drinkOpened({ origin: { name: 'settings' } }, 'steam', { name: 'coach' });
+    expect(step).toEqual({ state: { origin: { name: 'coach' } }, go: { name: 'drink', drink: 'steam' } });
+    expect(goBackRoute(step.state)).toEqual({ name: 'coach' });
+  });
+
+  it("from another drink's view, keeps the screen that view took over", () => {
+    const origin = { origin: { name: 'coach' as const } };
+    expect(drinkOpened(origin, 'flush', { name: 'drink', drink: 'steam' })).toEqual({ state: origin, go: { name: 'drink', drink: 'flush' } });
   });
 });
 

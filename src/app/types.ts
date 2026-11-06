@@ -125,6 +125,10 @@ export interface BeanPickerOption {
   origin: string | null;
   process: string | null;
   notes: string | null;
+  /** The bean's farm or producer, varieties ("Castillo, Caturra") and altitude ("1,900-2,100 m"); absent on cards stored before them (D278). */
+  producer?: string | null;
+  variety?: string | null;
+  altitude?: string | null;
   /** The batch's roast level when it is one of CafAI's five, else null. */
   roastLevel: RoastLevel | null;
   /** YYYY-MM-DD, or null when the batch has none. */
@@ -134,8 +138,12 @@ export interface BeanPickerOption {
   unfreezeDate: string | null;
 }
 
-/** The answer on the bean card: a batch, a photo of the bag, or something else (the bag described in the chat). */
-export type BeanChoice = { kind: 'batch'; batchId: string } | { kind: 'photo' } | { kind: 'other' };
+/**
+ * The answer on the bean card: a batch, a photo of the bag, its details
+ * typed on the details card (D279), or, on cards answered before that card,
+ * something else (the bag described in the chat).
+ */
+export type BeanChoice = { kind: 'batch'; batchId: string } | { kind: 'photo' } | { kind: 'typed' } | { kind: 'other' };
 
 /**
  * How a shot compared with the one it is set against (D126), in the
@@ -296,8 +304,13 @@ export type CoachUiPart =
     }
   | {
       kind: 'bagConfirm';
-      /** The bag's details as read from its photo (a name not on the bag is empty), then as confirmed (6.8). */
+      /**
+       * The bag's details as read from its photo (a name not on the bag is
+       * empty), then as confirmed (6.8); or, typed (D279), blank until confirmed.
+       */
       details: SaveBagDetails;
+      /** Where the details come from: a photo (absent on cards stored before typing them), or typed by the barista. */
+      source?: 'photo' | 'typed';
       confirmed: boolean;
       /** The user typed in the chat instead: the details were not saved. */
       expired?: boolean;
@@ -472,11 +485,11 @@ export interface CoachController {
    * link it, and start the coach's intake with it.
    */
   pickBean(batchId: string): Promise<void>;
-  /** The bean card's "Something else": close it; the barista describes the bag in the chat. */
-  skipBeanPick(): Promise<void>;
+  /** The bean card's "Type the details" (D279): close it and open the bag's details card, blank, to fill in. */
+  typeBagDetails(): Promise<void>;
   /** Read a photo of the bag (6.8) into a confirm card. The photo is sent once and never kept. */
   readBagPhoto(photo: BagPhoto): Promise<void>;
-  /** The photo's details as the barista confirmed them: saved like save_bag_details, then the coach's intake. */
+  /** The details card as the barista confirmed it (read from a photo, or typed): saved like save_bag_details, then the coach's intake. */
   confirmBag(details: SaveBagDetails): Promise<void>;
   /**
    * The coach's grinder card (D125): add the grinder to Decaid's grinder

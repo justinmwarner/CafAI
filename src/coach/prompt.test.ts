@@ -147,9 +147,11 @@ describe('buildSystemPrompt: content', () => {
       .split('\n')
       .find((line) => line.startsWith('1. Intake.'))!;
     expect(intake).toContain(
-      '"bag":{"name":string,"roaster":string|null,"origin":string|null,"roastLevel":string|null,"process":string|null,"notes":string|null,"roastDate":string|null}|null,"roast":string|null,"today":"YYYY-MM-DD"}',
+      '"bag":{"name":string,"roaster":string|null,"origin":string|null,"roastLevel":string|null,"process":string|null,"notes":string|null,"roastDate":string|null,"producer":string|null,"variety":string|null,"altitude":string|null,"other":string|null}|null,"roast":string|null,"today":"YYYY-MM-DD"}',
     );
-    expect(intake).toMatch(/"bag" is set when the user picked the coffee from Decaid's bean library or confirmed the details read from a photo of the bag/);
+    expect(intake).toMatch(
+      /"bag" is set when the user picked the coffee from Decaid's bean library, confirmed the details read from a photo of the bag, or typed them on the details card/,
+    );
     expect(intake).toMatch(/already saved, so call save_bag_details only to correct one, with every other detail as saved/);
     expect(intake).toContain('"Roasted YYYY-MM-DD (n days ago; m days in the freezer not counted)"');
     expect(intake).toMatch(/null when the roast date is unknown/);

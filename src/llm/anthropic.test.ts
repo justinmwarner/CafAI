@@ -276,7 +276,7 @@ describe('createAnthropicProvider: streaming', () => {
     expect((turn.content[0] as { signature: string }).signature).toMatch(/^mock-sig-/);
     const save = turn.content[2] as ToolUseBlock;
     expect(save.name).toBe('save_bag_details');
-    expect(save.input).toEqual({ name: 'Kiambu AA', roaster: null, origin: null, roastLevel: 'light', process: 'washed', notes: null, roastDate: null });
+    expect(save.input).toEqual({ name: 'Kiambu AA', roaster: null, origin: null, roastLevel: 'light', process: 'washed', notes: null, roastDate: null, producer: null, variety: null, altitude: null, other: null });
   });
 
   it('sends the headers and body the API requires', async () => {

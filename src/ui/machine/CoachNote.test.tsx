@@ -80,6 +80,11 @@ describe('CoachNote', () => {
     expect(shown).not.toHaveTextContent('API key');
   });
 
+  it('says nothing once the pour is over when no bag with a starting profile takes the shot (D276)', () => {
+    renderWithServices(<CoachNote awaitingOutcome />, createFakeServices({ coach: { ...COACHING, activeVersion: null, versions: [] } }));
+    expect(screen.queryByTestId(TID.coachNote)).not.toBeInTheDocument();
+  });
+
   it('asks for the API key when there is none', () => {
     expect(noteDuringShot({ ...COACHING, hasApiKey: false }, reading())).toHaveTextContent(
       "Add your API key in Settings, and I'll read your shots.",

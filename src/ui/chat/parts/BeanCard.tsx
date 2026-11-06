@@ -6,6 +6,7 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import EditNoteRoundedIcon from '@mui/icons-material/EditNoteRounded';
 import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
 import type { BeanChoice, BeanPickerOption, SetAsideReason } from '../../../app/types.ts';
 import type { BagPhoto } from '../../../llm/extractBag.ts';
@@ -27,7 +28,8 @@ export interface BeanCardProps {
   expired?: boolean;
   setAsideReason?: SetAsideReason;
   onPick(batchId: string): void;
-  onSomethingElse(): void;
+  /** Type the details (D279): the bag's details card opens, blank. */
+  onTypeDetails(): void;
   /** The photo, ready to send; it goes no further than the coach's one reading of it. */
   onPhoto(photo: BagPhoto): void;
   /** Turns the chosen file into what is sent (tests stand in for the browser's decoding). */
@@ -60,14 +62,15 @@ function Chosen({ label }: { label: string }) {
 }
 
 /**
- * "Which coffee is it?" (6.1): the batches in Decaid's bean library to pick
- * from, a photo of the bag (6.8), or something else (the bag described in the
- * chat). The batches are plain rows inside the one card, so more of them fit
- * on a small screen. Picked, it stays in the chat, closed, as the starting
- * profiles do. The camera opens through a plain file input with `capture`
- * (D122): inside Decaid 0.8.8 the WebView's own file chooser handles it, the
- * next release confirms each capture on Android, and a phone's browser
- * offers its picker.
+ * "Which coffee is it?" (6.1), a new coffee first (D279): a photo of the bag
+ * (6.8), or its details typed on a card; the bag can be described in the
+ * chat too. Under them, headed apart, the batches in Decaid's bean library
+ * to pick from, for a coffee the library holds already. The batches are
+ * plain rows inside the one card, so more of them fit on a small screen.
+ * Answered, it stays in the chat, closed, as the starting profiles do. The
+ * camera opens through a plain file input with `capture` (D122): inside
+ * Decaid 0.8.8 the WebView's own file chooser handles it, the next release
+ * confirms each capture on Android, and a phone's browser offers its picker.
  */
 export function BeanCard({
   options,
@@ -77,12 +80,13 @@ export function BeanCard({
   expired = false,
   setAsideReason,
   onPick,
-  onSomethingElse,
+  onTypeDetails,
   onPhoto,
   preparePhoto = prepareBagPhoto,
 }: BeanCardProps) {
   const input = useRef<HTMLInputElement | null>(null);
   const titleId = useId();
+  const libraryId = useId();
   const [preparing, setPreparing] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const locked = choice !== null || expired;
@@ -125,70 +129,18 @@ export function BeanCard({
           {setAsideNote(setAsideReason, 'Set aside: you described the bag in the chat.')}
         </Typography>
       ) : null}
-      {loading && !locked ? (
-        <Stack direction="row" spacing={1.25} role="status" sx={{ alignItems: 'center', mt: 1 }}>
-          <CircularProgress size={16} thickness={5} aria-hidden />
-          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            Looking in Decaid's beans…
-          </Typography>
-        </Stack>
-      ) : null}
-      {options.length > 0 ? (
-        <Box role="list" aria-label="Coffees in Decaid's bean library" sx={{ mt: 0.5 }}>
-          {options.map((option, index) => {
-            const picked = choice?.kind === 'batch' && choice.batchId === option.batchId;
-            // Another answer, or set aside: the row stays, in the muted ink, never faded.
-            const setAside = locked && !picked;
-            return (
-              <Stack
-                key={option.batchId}
-                role="listitem"
-                direction="row"
-                spacing={1.5}
-                aria-current={picked ? 'true' : undefined}
-                sx={{
-                  alignItems: 'center',
-                  py: 0.75,
-                  borderTop: index === 0 ? 0 : 1,
-                  borderColor: 'divider',
-                  color: setAside ? 'text.secondary' : 'text.primary',
-                }}
-              >
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
-                    {option.name}
-                  </Typography>
-                  {details(option) ? (
-                    <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
-                      {details(option)}
-                    </Typography>
-                  ) : null}
-                </Box>
-                {picked ? (
-                  <Chosen label="Picked" />
-                ) : (
-                  <Button
-                    variant={locked ? 'text' : 'contained'}
-                    data-testid={TID.beanOption}
-                    aria-label={pickLabel(option)}
-                    disabled={blocked}
-                    onClick={() => onPick(option.batchId)}
-                    sx={{ minHeight: 48, flexShrink: 0, px: 2 }}
-                  >
-                    Use this
-                  </Button>
-                )}
-              </Stack>
-            );
-          })}
-        </Box>
-      ) : null}
-      <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+      {/* A new coffee first: the way to add one is never below a list of others (D279). */}
+      {locked ? null : (
+        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
+          A new coffee? Take a photo of the bag or type its details, or describe it in the chat.
+        </Typography>
+      )}
+      <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1.25, flexWrap: 'wrap', alignItems: 'center' }}>
         {choice?.kind === 'photo' ? (
           <Chosen label="Photo of the bag" />
         ) : (
           <Button
-            variant="tonal"
+            variant={locked ? 'text' : 'contained'}
             startIcon={<PhotoCameraRoundedIcon />}
             data-testid={TID.bagPhoto}
             disabled={blocked}
@@ -199,17 +151,90 @@ export function BeanCard({
             Photo of the bag
           </Button>
         )}
-        {choice?.kind === 'other' ? (
-          <Chosen label="Something else" />
+        {choice?.kind === 'typed' ? (
+          <Chosen label="Type the details" />
         ) : (
-          <Button variant="text" data-testid={TID.beanSomethingElse} disabled={blocked} onClick={onSomethingElse} sx={{ minHeight: 48 }}>
-            Something else
+          <Button
+            variant={locked ? 'text' : 'tonal'}
+            startIcon={<EditNoteRoundedIcon />}
+            data-testid={TID.beanTypeDetails}
+            disabled={blocked}
+            onClick={onTypeDetails}
+            sx={{ minHeight: 48 }}
+          >
+            Type the details
           </Button>
         )}
+        {/* An answer given before Type the details was offered (D279): it closed the card for the chat. */}
+        {choice?.kind === 'other' ? <Chosen label="Something else" /> : null}
       </Stack>
+      {/* Beside the photo's button, not under the library's rows. */}
       {problem && !locked ? (
         <Box sx={{ mt: 1 }}>
           <Notice tone="warning" text={problem} />
+        </Box>
+      ) : null}
+      {loading && !locked ? (
+        <Stack direction="row" spacing={1.25} role="status" sx={{ alignItems: 'center', mt: 1.5 }}>
+          <CircularProgress size={16} thickness={5} aria-hidden />
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            Looking in Decaid's beans…
+          </Typography>
+        </Stack>
+      ) : null}
+      {options.length > 0 ? (
+        <Box sx={{ mt: 1.5, pt: 1.25, borderTop: 1, borderColor: 'divider' }}>
+          <Typography id={libraryId} component="h4" variant="subtitle2" sx={{ fontWeight: 700 }}>
+            Already in Decaid&apos;s beans
+          </Typography>
+          <Box role="list" aria-labelledby={libraryId} sx={{ mt: 0.25 }}>
+            {options.map((option, index) => {
+              const picked = choice?.kind === 'batch' && choice.batchId === option.batchId;
+              // Another answer, or set aside: the row stays, in the muted ink, never faded.
+              const setAside = locked && !picked;
+              return (
+                <Stack
+                  key={option.batchId}
+                  role="listitem"
+                  direction="row"
+                  spacing={1.5}
+                  aria-current={picked ? 'true' : undefined}
+                  sx={{
+                    alignItems: 'center',
+                    py: 0.75,
+                    borderTop: index === 0 ? 0 : 1,
+                    borderColor: 'divider',
+                    color: setAside ? 'text.secondary' : 'text.primary',
+                  }}
+                >
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+                      {option.name}
+                    </Typography>
+                    {details(option) ? (
+                      <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
+                        {details(option)}
+                      </Typography>
+                    ) : null}
+                  </Box>
+                  {picked ? (
+                    <Chosen label="Picked" />
+                  ) : (
+                    <Button
+                      variant={locked ? 'text' : 'tonal'}
+                      data-testid={TID.beanOption}
+                      aria-label={pickLabel(option)}
+                      disabled={blocked}
+                      onClick={() => onPick(option.batchId)}
+                      sx={{ minHeight: 48, flexShrink: 0, px: 2 }}
+                    >
+                      Use this
+                    </Button>
+                  )}
+                </Stack>
+              );
+            })}
+          </Box>
         </Box>
       ) : null}
       <input

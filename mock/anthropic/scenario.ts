@@ -822,7 +822,7 @@ function intake(script: Script, description: string): Reply {
         type: 'tool_use',
         id: script.newToolId(),
         name: TOOL.saveBagDetails,
-        input: { name, roaster: null, origin, roastLevel, process, notes: null, roastDate: null },
+        input: { name, roaster: null, origin, roastLevel, process, notes: null, roastDate: null, producer: null, variety: null, altitude: null, other: null },
       },
       {
         type: 'tool_use',
@@ -866,6 +866,10 @@ export const BAG_PHOTO_ANSWER = {
   roastLevel: 'light',
   roastDate: '2026-09-28',
   notes: 'blackcurrant, grapefruit, brown sugar',
+  producer: 'Kiambu Farmers Cooperative',
+  variety: 'SL28, SL34',
+  altitude: '1,700-1,900 masl',
+  other: 'Lot 7; harvest 2026',
 } as const;
 
 /** Rule 0: a request with a photo in it is CafAI reading a bag (src/llm/extractBag.ts), never a turn of the coach's chat. */

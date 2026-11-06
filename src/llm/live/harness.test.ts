@@ -37,7 +37,19 @@ const KEY_PREFIX = ['sk', 'ant', ''].join('-');
 
 const S0 = { templateId: 'blooming-espresso', confidence: 'high', reason: 'A bloom suits a dense light roast.' };
 const S1 = { templateId: 'd-flow', confidence: 'low', reason: 'Forgiving for most roasts.' };
-const SAVE_INPUT = { name: 'Kiambu AA', roaster: null, origin: 'Kenya', roastLevel: 'light', process: 'washed', notes: null, roastDate: null };
+const SAVE_INPUT = {
+  name: 'Kiambu AA',
+  roaster: null,
+  origin: 'Kenya',
+  roastLevel: 'light',
+  process: 'washed',
+  notes: null,
+  roastDate: null,
+  producer: null,
+  variety: null,
+  altitude: null,
+  other: null,
+};
 const ASK_INPUT = { question: 'Milk or straight?', options: ['Straight', 'With milk'], multiSelect: false };
 
 const INTAKE = userMessage(

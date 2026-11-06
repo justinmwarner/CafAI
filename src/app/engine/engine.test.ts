@@ -4,7 +4,7 @@ import { createCoachEngine, type CoachEngine, type EngineDeps, type PageVisibili
 import type { OutboxTimers } from './outbox.ts';
 import type { ApiPort, ChangePlan, CoachPort, LlmPort, ProposalContext } from './ports.ts';
 import { FACT_NOT_DUE } from './protocol.ts';
-import { message, NEW_BAG_PROMPT, progressNoticePart } from './uiMessages.ts';
+import { BLANK_BAG, message, NEW_BAG_PROMPT, progressNoticePart } from './uiMessages.ts';
 import { EVENT, OTHER_OPTION, TOOL, type OfferGrinder, type ProposeAdjustment } from '../../coach/contract.ts';
 import { DOSE_RULES, knownDose, REFERENCE_DOSE_G } from '../../coach/dose.ts';
 import { roastLine } from '../../coach/prompt.ts';
@@ -2697,16 +2697,17 @@ describe('coach engine', () => {
       expect(await shotIsCredited('shot-1')).toBe(true);
     });
 
-    it('says nothing of it before a starting profile is picked either, where a shot is told to pick one first', async () => {
+    it('says nothing of it before a starting profile is picked either, nor of a shot then (D276)', async () => {
       await openBag();
-      const pickFirst = () => notices().filter((p) => p.text.startsWith('Pick a starting profile first'));
+      const chat = engine.getState().messages;
       machine.loaded = cleaningProfile();
       run('flush-1');
       await drain();
-      expect(pickFirst()).toEqual([]);
       machine.loaded = baseProfile;
       run('shot-1');
-      await vi.waitFor(() => expect(pickFirst()).toHaveLength(1));
+      await drain();
+      expect(engine.getState().messages).toEqual(chat);
+      expect(callsOf('getShot')).toEqual([]);
     });
 
     it('asks which profile ran as the run ends, not once a reply the engine is busy with is done', async () => {
@@ -2934,20 +2935,22 @@ describe('coach engine', () => {
       expect(engine.getState().messages).toEqual(chat);
     });
 
-    it('says the quiet line, not "Pick a starting profile first", for a run stopped in preheat before any version', async () => {
+    it('says nothing, not even the quiet line, for a run stopped in preheat while the bag is being set up (D276)', async () => {
       await openBag();
+      const chat = engine.getState().messages;
       stoppedInPreheat('stopped-1');
       await drain();
-      expect(notices().map((p) => p.text)).toEqual([NEVER_POURED]);
+      expect(engine.getState().messages).toEqual(chat);
     });
 
-    it('before any version, a run Decaid kept with under 2 s of pour is told to pick a starting profile first, as any run then', async () => {
+    it('says nothing of a run Decaid kept while the bag is being set up, and reads no record (D276)', async () => {
       await openBag();
+      const chat = engine.getState().messages;
       machine.samples.set('stopped-1', FIRST_FRAME_ONLY);
       ranAndEnded('stopped-1', 'apiStop');
       await drain();
-      // No version, no record read: what the run held is not looked at (D204 accepts it).
-      expect(notices().map((p) => p.text)).toEqual(['Pick a starting profile first; that shot is not part of this dial-in.']);
+      expect(engine.getState().messages).toEqual(chat);
+      expect(engine.getState().error).toBeNull();
       expect(callsOf('getShot')).toEqual([]);
     });
 
@@ -5114,7 +5117,18 @@ describe('coach engine', () => {
     notes: 'Chocolate, plum',
     archived: false,
   };
-  const CHELCHELE: Bean = { id: 'bean-chel', roaster: 'Heart Coffee Roasters', name: 'Ethiopia Chelchele', country: 'Ethiopia', region: 'Guji', processing: 'natural', archived: false };
+  const CHELCHELE: Bean = {
+    id: 'bean-chel',
+    roaster: 'Heart Coffee Roasters',
+    name: 'Ethiopia Chelchele',
+    country: 'Ethiopia',
+    region: 'Guji',
+    processing: 'natural',
+    producer: 'Chelchele washing station',
+    variety: ['74110', ' Heirloom '],
+    altitude: [2000, 2200],
+    archived: false,
+  };
   const libraryBatch = (id: string, beanId: string, fields: Partial<BeanBatch> = {}): BeanBatch => ({
     id,
     beanId,
@@ -5172,8 +5186,19 @@ describe('coach engine', () => {
         roastDate: '2026-09-24',
         freezeDate: null,
         unfreezeDate: null,
+        producer: null,
+        variety: null,
+        altitude: null,
       });
-      expect(part.options[1]).toMatchObject({ roastLevel: 'light', freezeDate: '2026-09-04', unfreezeDate: '2026-09-16' });
+      // The producer, the varieties and the altitude, as text (D278).
+      expect(part.options[1]).toMatchObject({
+        roastLevel: 'light',
+        freezeDate: '2026-09-04',
+        unfreezeDate: '2026-09-16',
+        producer: 'Chelchele washing station',
+        variety: '74110, Heirloom',
+        altitude: '2,000-2,200 m',
+      });
       expect(part.options[3]).toMatchObject({ roastDate: null, roastLevel: null });
       expect(engine.getState().phase).toBe('intake');
       // Two requests, whatever the size of the library: the beans, and every batch at once.
@@ -5225,11 +5250,11 @@ describe('coach engine', () => {
       stockLibrary();
       machine.holdBeanCalls = true;
       await engine.newBag();
-      await engine.skipBeanPick();
-      expect(beanCard()).toMatchObject({ choice: { kind: 'other' }, loading: true });
+      await engine.typeBagDetails();
+      expect(beanCard()).toMatchObject({ choice: { kind: 'typed' }, loading: true });
       releaseBeanCalls();
       await vi.waitFor(() => expect(beanCard()).not.toHaveProperty('loading'));
-      expect(beanCard()).toMatchObject({ choice: { kind: 'other' } });
+      expect(beanCard()).toMatchObject({ choice: { kind: 'typed' } });
       expect(beanCard()!.options).toHaveLength(4);
     });
 
@@ -5301,17 +5326,75 @@ describe('coach engine', () => {
       expect(roast).toMatch(/; 12 days in the freezer not counted\)$/);
     });
 
-    it("closes the card on Something else, and what is typed next is today's intake", async () => {
+    it("fills the bag with the bean's producer, varieties and altitude, and tells the coach them (D278)", async () => {
       stockLibrary();
       await openBag();
-      await engine.skipBeanPick();
-      expect(beanCard()!.choice).toEqual({ kind: 'other' });
+      scripts.push(() => [text('Lovely.'), proposeTemplates]);
+      await engine.pickBean('batch-chel');
+      expect(engine.getState().activeBag).toMatchObject({
+        producer: 'Chelchele washing station',
+        variety: '74110, Heirloom',
+        altitude: '2,000-2,200 m',
+        other: null,
+      });
+      expect(intakeContext().bag).toMatchObject({ producer: 'Chelchele washing station', variety: '74110, Heirloom', altitude: '2,000-2,200 m' });
+      expect((requests[0]![0]!.content[0] as { text: string }).text).toContain('produced by Chelchele washing station; variety: 74110, Heirloom; altitude: 2,000-2,200 m');
+    });
+
+    it('closes the card on Type the details and opens the details card, blank; nothing is saved or sent until Confirm (D279)', async () => {
+      stockLibrary();
+      await openBag();
+      await engine.typeBagDetails();
+      expect(beanCard()!.choice).toEqual({ kind: 'typed' });
+      expect(confirmCard()).toEqual({ kind: 'bagConfirm', details: BLANK_BAG, source: 'typed', confirmed: false });
       expect(requests).toEqual([]);
-      scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);
-      await engine.sendText('Kiambu AA, light, washed');
-      expect(requests[0]![0]!.content[0]).toEqual({ type: 'text', text: 'Kiambu AA, light, washed' });
-      expect(intakeContext()).toMatchObject({ bag: null, roast: null });
-      expect(engine.getState().activeBag).toMatchObject({ name: 'Kiambu AA' });
+      expect(engine.getState().activeBag).toMatchObject({ name: 'New bag' });
+      expect(engine.getState().activeBag?.producer).toBeUndefined();
+    });
+
+    it('saves the typed details, every one, and starts the intake told they were typed (D278, D279)', async () => {
+      machine.beanLibrary = true;
+      await openBag();
+      await engine.typeBagDetails();
+      const typed = {
+        ...BLANK_BAG,
+        name: 'Pink Bourbon',
+        roaster: 'Onyx',
+        origin: 'Colombia, Huila',
+        producer: 'El Paraíso',
+        variety: 'Pink Bourbon',
+        altitude: '1,950 masl',
+        process: 'thermal shock',
+        notes: 'rose, lychee',
+        other: 'Lot 23; double anaerobic',
+      };
+      scripts.push(() => [text('Lovely.'), proposeTemplates]);
+      await engine.confirmBag(typed);
+      expect(confirmCard()).toMatchObject({ confirmed: true, details: typed, source: 'typed' });
+      expect(engine.getState().activeBag).toMatchObject({
+        name: 'Pink Bourbon',
+        producer: 'El Paraíso',
+        variety: 'Pink Bourbon',
+        altitude: '1,950 masl',
+        other: 'Lot 23; double anaerobic',
+      });
+      expect(requests[0]![0]!.content[0]).toEqual({
+        type: 'text',
+        text: "The user typed the bag's details: Pink Bourbon by Onyx; Colombia, Huila; produced by El Paraíso; variety: Pink Bourbon; altitude: 1,950 masl; thermal shock; tasting notes: rose, lychee; other details: Lot 23; double anaerobic.",
+      });
+      expect(intakeContext()).toMatchObject({ bag: typed });
+      // Decaid's bean gets the producer, the varieties apart and the altitude in metres; the other details stay in CafAI.
+      await vi.waitFor(() => expect(callsOf('createBean')).toHaveLength(1));
+      expect(callsOf('createBean')[0]!.args[0]).toEqual({
+        roaster: 'Onyx',
+        name: 'Pink Bourbon',
+        country: 'Colombia, Huila',
+        producer: 'El Paraíso',
+        variety: ['Pink Bourbon'],
+        altitude: [1950, 1950],
+        processing: 'thermal shock',
+        notes: 'rose, lychee',
+      });
     });
 
     it('sets the card aside when the bag is described in the chat instead', async () => {
@@ -5345,10 +5428,11 @@ describe('coach engine', () => {
       await openBag();
       await engine.pickBean('batch-chel-gone');
       expect(beanCard()!.choice).toBeNull();
-      await engine.skipBeanPick();
-      await engine.skipBeanPick();
+      await engine.typeBagDetails();
+      await engine.typeBagDetails();
       await engine.pickBean('batch-red');
-      expect(beanCard()!.choice).toEqual({ kind: 'other' });
+      expect(beanCard()!.choice).toEqual({ kind: 'typed' });
+      expect(allParts().filter((part) => part.kind === 'bagConfirm')).toHaveLength(1);
       expect(requests).toEqual([]);
     });
   });
@@ -5372,6 +5456,10 @@ describe('coach engine', () => {
       roastLevel: 'light',
       roastDate: '2026-09-28',
       notes: 'blackcurrant, grapefruit',
+      producer: null,
+      variety: null,
+      altitude: null,
+      other: null,
     };
     const CONFIRMED = { ...READ, name: 'Kiambu AA' };
 
@@ -5381,7 +5469,7 @@ describe('coach engine', () => {
       await engine.readBagPhoto(PHOTO);
       expect(reader.asked).toEqual([{ model: 'claude-opus-5-5', photo: PHOTO }]);
       expect(beanCard()!.choice).toEqual({ kind: 'photo' });
-      expect(confirmCard()).toEqual({ kind: 'bagConfirm', details: READ, confirmed: false });
+      expect(confirmCard()).toEqual({ kind: 'bagConfirm', details: READ, source: 'photo', confirmed: false });
       expect(engine.getState().busy).toBe(false);
       expect(progressNotices()).toEqual([]);
       expect(requests).toEqual([]);
@@ -5487,12 +5575,13 @@ describe('coach engine', () => {
       expect(callsOf('createBatch')[0]!.args[1]).toEqual({ roastDate: '2026-09-28', roastLevel: 'medium' });
     });
 
-    it('reads a save_bag_details written before the roast date existed (a stored chat) as a date nobody knows', async () => {
+    it('reads a save_bag_details written before the roast date and the later details existed (a stored chat) as not knowing them', async () => {
       await engine.newBag();
       expect(saveBag).not.toHaveProperty('input.roastDate');
+      expect(saveBag).not.toHaveProperty('input.producer');
       scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);
       await engine.sendText('Kiambu AA, light, washed');
-      expect(engine.getState().activeBag).toMatchObject({ name: 'Kiambu AA', roastDate: null });
+      expect(engine.getState().activeBag).toMatchObject({ name: 'Kiambu AA', roastDate: null, producer: null, variety: null, altitude: null, other: null });
       scripts.push(() => [text('Loaded.')]);
       await engine.pickTemplate('t-tpl', 'd-flow');
       expect(parsed(lastUserTurn(requests)[0])).toEqual({ saved: true });
@@ -6427,7 +6516,7 @@ describe("the coach's spend in the engine (D237, D240, D243)", () => {
     it('reads no bag photo while paused: the bean card stays open beside the pause card', async () => {
       await setBudget({ monthlyUsd: 5, pauseAtBudget: true });
       spent = dollars(5);
-      reader.answer = { name: 'Kiambu AA', roaster: null, origin: null, process: null, roastLevel: null, roastDate: null, notes: null };
+      reader.answer = { ...BLANK_BAG, name: 'Kiambu AA' };
       await engine.newBag();
       await engine.readBagPhoto({ mediaType: 'image/jpeg', data: 'UEhPVE8=' });
       expect(reader.asked).toEqual([]);
@@ -6438,7 +6527,7 @@ describe("the coach's spend in the engine (D237, D240, D243)", () => {
     it('warns after a bag photo that got there too', async () => {
       await setBudget({ monthlyUsd: 5, pauseAtBudget: false });
       spent = dollars(4.5);
-      reader.answer = { name: 'Kiambu AA', roaster: null, origin: null, process: null, roastLevel: null, roastDate: null, notes: null };
+      reader.answer = { ...BLANK_BAG, name: 'Kiambu AA' };
       await engine.newBag();
       await engine.readBagPhoto({ mediaType: 'image/jpeg', data: 'UEhPVE8=' });
       expect(reader.asked).toHaveLength(1);

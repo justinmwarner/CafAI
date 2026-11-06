@@ -65,6 +65,7 @@
 import {
   AUTO_TOOLS,
   BAG_LIMITS,
+  LATER_BAG_DETAILS,
   TOOL,
   TOOL_INPUTS,
   toRoastLevel,
@@ -77,6 +78,7 @@ import {
   type ToolName,
 } from '../../coach/contract.ts';
 import { isTds, readingOf, roundTds, withTds } from '../../coach/extraction.ts';
+import { altitudeRange, altitudeText, varietyList, varietyText } from './beanDetails.ts';
 import { loadFacts } from '../../coach/facts/load.ts';
 import { ranLikeLast } from '../../coach/facts/likeLast.ts';
 import { pickFact, toldLabels } from '../../coach/facts/pick.ts';
@@ -157,6 +159,7 @@ import {
   grinderPayload,
   intakeBlocks,
   photoIntakeText,
+  typedIntakeText,
   pickedIntakeText,
   shotCompletedBlock,
   shotMeasuredBlock,
@@ -188,6 +191,7 @@ import {
   NEW_BAG_PROMPT,
   appendText,
   bagConfirmPart,
+  BLANK_BAG,
   byRequestId,
   diffPart,
   factPart,
@@ -481,6 +485,9 @@ function pickable(bean: Bean, batch: BeanBatch): Pickable[] {
         origin: clip(origin, BAG_LIMITS.origin),
         process: clip(bean.processing, BAG_LIMITS.process),
         notes: clip(bean.notes, BAG_LIMITS.notes),
+        producer: clip(bean.producer, BAG_LIMITS.producer),
+        variety: clip(varietyText(bean.variety), BAG_LIMITS.variety),
+        altitude: clip(altitudeText(bean.altitude), BAG_LIMITS.altitude),
         roastLevel: toRoastLevel(batch.roastLevel),
         roastDate: writtenDate(batch.roastDate),
         freezeDate: writtenDate(batch.freezeDate),
@@ -512,22 +519,35 @@ function bagDetails(bag: Bag): SaveBagDetails {
     process: bag.process,
     notes: bag.notes,
     roastDate: bag.roastDate ?? null,
+    producer: bag.producer ?? null,
+    variety: bag.variety ?? null,
+    altitude: bag.altitude ?? null,
+    other: bag.other ?? null,
   };
 }
 
 /**
- * A save_bag_details call written before roastDate existed (a stored chat
- * replayed after an update, a recorded one) reads as a roast date nobody
- * knows. The model itself always sends every key: its tools are strict.
+ * A save_bag_details call written before a detail existed (the roast date,
+ * D278's four; a stored chat replayed after an update, a recorded one, the
+ * mock's scripted coach) reads as that detail unknown. The model itself
+ * always sends every key: its tools are strict.
  */
-function withRoastDate(input: unknown): unknown {
-  return typeof input === 'object' && input !== null && !Array.isArray(input) && !('roastDate' in input) ? { ...input, roastDate: null } : input;
+function withLaterDetails(input: unknown): unknown {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) return input;
+  const missing = LATER_BAG_DETAILS.filter((key) => !(key in input));
+  return missing.length === 0 ? input : { ...input, ...Object.fromEntries(missing.map((key) => [key, null])) };
 }
 
 /** A new bean for Decaid's library from a bag's details (D102); a detail CafAI does not know is left out. */
 function beanRequest(bag: Bag, roaster: string, name: string): BeanCreateRequest {
   const request: BeanCreateRequest = { roaster, name };
   if (bag.origin) request.country = bag.origin;
+  if (bag.producer) request.producer = bag.producer;
+  const variety = varietyList(bag.variety);
+  if (variety) request.variety = variety;
+  // Only an altitude CafAI can read as metres; the bag's words stay with the bag (D278).
+  const altitude = altitudeRange(bag.altitude);
+  if (altitude) request.altitude = altitude;
   if (bag.process) request.processing = bag.process;
   if (bag.notes) request.notes = bag.notes;
   return request;
@@ -1287,6 +1307,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       process: withoutKey(details.process),
       notes: withoutKey(details.notes),
       roastDate: details.roastDate,
+      producer: withoutKey(details.producer),
+      variety: withoutKey(details.variety),
+      altitude: withoutKey(details.altitude),
+      other: withoutKey(details.other),
     });
     emit();
     linkBag(s.bag);
@@ -1440,6 +1464,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       process: withoutKey(option.process),
       notes: withoutKey(option.notes),
       roastDate: option.roastDate,
+      producer: withoutKey(option.producer ?? null),
+      variety: withoutKey(option.variety ?? null),
+      altitude: withoutKey(option.altitude ?? null),
+      other: null,
       decaidBeanId: option.beanId,
       decaidBatchId: option.batchId,
     });
@@ -1448,11 +1476,16 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     await startIntake(s, pickedIntakeText(bag), bag);
   }
 
-  /** "Something else": the card closes; the coach's question under it waits for the bag described in the chat. */
-  async function skipBeanPick(): Promise<void> {
+  /**
+   * "Type the details" (D279): the card closes on that answer and the bag's
+   * details card opens under it, blank, for the barista to fill in and
+   * confirm. Nothing is saved, and the coach hears nothing, until Confirm.
+   */
+  async function typeBagDetails(): Promise<void> {
     const s = session;
     if (!s || !openBeanCard()) return;
-    answerBeanCard({ kind: 'other' });
+    answerBeanCard({ kind: 'typed' });
+    addMessage('assistant', [bagConfirmPart(BLANK_BAG, 'typed')]);
     await persistConversation(s);
     emit();
   }
@@ -1499,6 +1532,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
           process: read.process,
           notes: read.notes,
           roastDate: read.roastDate,
+          producer: read.producer,
+          variety: read.variety,
+          altitude: read.altitude,
+          other: read.other,
         }),
       ]);
       // A photo read on the key costs as a reply does (D240).
@@ -1511,10 +1548,15 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     await warn(failure);
   }
 
-  /** The photo's details as the barista confirmed them: saved like save_bag_details, then the coach's intake (6.8). */
+  /**
+   * The details card as the barista confirmed it, read from a photo (6.8) or
+   * typed (D279): saved like save_bag_details, then the coach's intake, told
+   * which.
+   */
   async function confirmBag(details: SaveBagDetails): Promise<void> {
     const s = session;
-    if (!s || !state.messages.some((m) => m.parts.some(isOpenBagConfirm))) return;
+    const open = state.messages.flatMap((m) => m.parts).find(isOpenBagConfirm);
+    if (!s || open?.kind !== 'bagConfirm') return;
     // The card asks for a name before it offers Confirm; anything else invalid is refused the same way.
     const parsed = TOOL_INPUTS[TOOL.saveBagDetails].safeParse(details);
     if (!parsed.success) return;
@@ -1524,7 +1566,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     );
     await saveBagDetails(s, confirmed);
     const bag = bagDetails(s.bag);
-    await startIntake(s, photoIntakeText(bag), bag);
+    await startIntake(s, open.source === 'typed' ? typedIntakeText(bag) : photoIntakeText(bag), bag);
   }
 
   // -------------------------------------------------------------------------
@@ -1817,7 +1859,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     const zodValidate = llm.validator(schema);
     const auto = AUTO_TOOLS.includes(name);
     const check = (input: unknown, fresh: boolean): ToolValidation => {
-      const parsed = zodValidate(name === TOOL.saveBagDetails ? withRoastDate(input) : input);
+      const parsed = zodValidate(name === TOOL.saveBagDetails ? withLaterDetails(input) : input);
       if (!parsed.ok) return parsed;
       const error = domainError(name, parsed.value, fresh);
       return error ? { ok: false, error } : parsed;
@@ -2619,16 +2661,13 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     // A cleaning or calibration profile's run (the weekly clean's Forward Flush x5, say) is no shot: Decaid keeps no
     // record of it, so there is nothing to look for and nothing to say, and a problem on the banner stays (D193).
     if ((await run.saved) === false) return;
+    // A bag still being set up (no starting profile yet) has no dial-in for the run to be part of: a shot pulled
+    // then, or a tap on Espresso by mistake, is the machine's business, not the coach's, so the chat says nothing (D276).
+    const current = activeVersion(s);
+    if (!current) return;
     // Stopped before the pour began: Decaid aborted the run and keeps no record of it, so there is nothing to look
     // for, and a problem on the banner stays (D204).
     if (run.aborted) return sayNeverPoured(s);
-    const current = activeVersion(s);
-    if (!current) {
-      addMessage('system', [noticePart('info', 'Pick a starting profile first; that shot is not part of this dial-in.')]);
-      await persistConversation(s);
-      emit();
-      return;
-    }
     // Decaid just reported a shot: writes that wait go out now (D64).
     void outbox.flush();
     // A new shot (or Retry) replaces the hunt for the previous one; a run that turns out to hold no pour gives it back.
@@ -3635,7 +3674,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     rateShot: (shotId, verdict) => enqueue(() => rateShot(shotId, verdict)),
     setShotTds: (shotId, tdsPct) => enqueue(() => setShotTds(shotId, tdsPct)),
     pickBean: (batchId) => enqueue(() => pickBean(batchId)),
-    skipBeanPick: () => enqueue(() => skipBeanPick()),
+    typeBagDetails: () => enqueue(() => typeBagDetails()),
     readBagPhoto: (photo) => enqueue(() => readBagPhoto(photo)),
     confirmBag: (details) => enqueue(() => confirmBag(details)),
     addGrinder: (requestId) => enqueue(() => addGrinder(requestId)),

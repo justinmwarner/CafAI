@@ -161,15 +161,24 @@ no API key ([docs/DEMO.md](docs/DEMO.md)).
 
 ## How the coach works
 
-1. **New bag.** The chat opens on "Which coffee is it?": the coffees in
-   Decaid's bean library, newest roast first, then **Photo of the bag** and
-   **Something else**. Pick one and CafAI fills in the bag (name, roaster,
-   origin, process, notes, roast level and roast date) and links it to that
-   batch. Take a photo and the coach's model reads the label into a card
-   you correct and confirm. Or tap Something else, or just type, and
-   describe the coffee: origin, roast, process, tasting notes, the roast
-   date if the bag has one. A bag the coach saved or a photo you confirmed
-   is added to Decaid's bean library once it has a name and a roaster
+1. **New bag.** The chat opens on "Which coffee is it?". A new coffee
+   comes first: **Photo of the bag** and **Type the details**; under them,
+   headed "Already in Decaid's beans", the coffees in Decaid's bean library,
+   newest roast first. Take a photo and the coach's model reads the label
+   (the producer, the variety, the altitude and anything else worth keeping
+   too) into a card you correct and confirm; Type the details opens the
+   same card blank. Pick a coffee from the library and CafAI fills in the
+   bag (name, roaster, origin, producer, variety, altitude, process, notes,
+   roast level and roast date) and links it to that batch. Or just type,
+   and describe the coffee: origin, roast, process, tasting notes, the
+   roast date if the bag has one. Every bag has **Other details** too, for
+   whatever else is on the bag or in your head (a lot, the harvest, a
+   fermentation, a note to self); the coach reads them. While a bag has no
+   starting profile yet, the screen stays put if the machine starts a shot,
+   steam, a flush or hot water: a line at the top says what runs and offers
+   its view, and the coach says nothing of a shot then. A bag the coach
+   saved or details you confirmed are added to Decaid's bean library once
+   it has a name and a roaster
    (reusing a bean with the same roaster and name, and its unarchived batch
    with the same roast date), and every load names the bag's batch, name
    and roaster in Decaid, so its shots carry them.
@@ -331,15 +340,25 @@ machine by itself.
 - **Next step.** During a shot whose profile has another step, the Shot view
   has **Next step** under the graph: one tap moves the shot on one step.
 - **Which coffee is it?** A new bag's chat opens on this card, shown from
-  its top: up to 8 coffees from Decaid's bean library (newest roast first,
-  each with its roaster, its roast date and **Use this**), then **Photo of
-  the bag** and **Something else**. The card is there at once ("Looking in
-  Decaid's beans…") and the coffees fill in; the photo and Something else
+  its top: a new coffee first, **Photo of the bag** and **Type the
+  details**, then under "Already in Decaid's beans" up to 8 coffees from
+  Decaid's bean library (newest roast first, each with its roaster, its
+  roast date and **Use this**). The card is there at once ("Looking in
+  Decaid's beans…") and the coffees fill in; the photo and Type the details
   work meanwhile, and without Decaid. Typing in the chat instead closes it.
   The photo opens the camera or the device's picker (what a Decent tablet
   offers depends on the Decaid version: docs/HARDWARE_TEST_PLAN.md section
   12), and what the coach's model reads on the label lands in **Check the
-  bag's details**, every field editable, with **Confirm**.
+  bag's details**, every field editable, with **Confirm**; Type the details
+  opens **The bag's details**, blank. Both have the producer or farm, the
+  variety, the altitude and **Other details**, and the producer, the
+  varieties and the altitude (in metres) go to Decaid's bean library too.
+- **The new bag screen keeps its place.** While a bag has no starting
+  profile yet, a shot, steam, a flush or hot water started from the machine
+  row (or the machine) does not take the screen: a line at its top says
+  what runs, with **Open the shot** (or Open Steam, Open Flush, Open Hot
+  water) and a dismiss, and goes when the run ends. The coach says nothing
+  of a shot pulled then.
 - **On Visualizer.** With Decaid's Visualizer plugin loaded and set up, a
   shot's card links to the shot's page on visualizer.coffee once the plugin
   has uploaded it (CafAI looks for 30 s after the card lands), and
@@ -980,7 +999,7 @@ Chromium 91 through puppeteer 9), then `npm run build:mock`, and:
 - `npm run smoke:chrome91` loads the app and fails on any page or console
   error, a failed request, or no ready marker;
 - `npm run smoke:chrome91:loop` drives the whole coach loop (settings, new
-  bag with "Which coffee is it?" and Something else, templates, v1, scripted
+  bag with "Which coffee is it?" and Type the details, templates, v1, scripted
   shot, taste chip, confirmed v2) in that engine;
 - a screensaver runs there through the mock's Preview, from
   `tools/chrome91`: `node smoke.mjs --dist ../../dist-mock --wait

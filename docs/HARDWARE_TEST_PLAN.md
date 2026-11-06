@@ -106,9 +106,9 @@ ticks: they decide the next changes.
 
 ## 3. The first version, and the wait for the machine (QUESTIONS #1, D55, D57)
 
-1. Coach -> **New bag**. The chat opens on "Which coffee is it?": tap
-   **Something else** and describe the coffee (picking it from Decaid's
-   bean library is section 12, step 10) -> tap a template.
+1. Coach -> **New bag**. The chat opens on "Which coffee is it?": describe
+   the coffee in the chat (picking it from Decaid's bean library is section
+   12, step 10) -> tap a template.
 2. Expected: "Loading <Bean> v1 on the machine…", then "Loaded <Bean> v1 on
    the machine.". Record the time between the two (a stopwatch is fine) and,
    in the log watcher, the time from the first "encoding step" line to

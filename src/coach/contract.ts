@@ -73,8 +73,25 @@ export function toRoastLevel(value: unknown): RoastLevel | null {
   return (ROAST_LEVELS as readonly string[]).includes(words) ? (words as RoastLevel) : null;
 }
 
-/** The longest text each bag detail takes, in characters (the bag photo's confirm card shows the same). */
-export const BAG_LIMITS = { name: 40, roaster: 60, origin: 80, process: 40, notes: 300 } as const;
+/** The longest text each bag detail takes, in characters (the bag's details card shows the same). */
+export const BAG_LIMITS = {
+  name: 40,
+  roaster: 60,
+  origin: 80,
+  process: 40,
+  notes: 300,
+  producer: 80,
+  variety: 80,
+  altitude: 40,
+  other: 500,
+} as const;
+
+/**
+ * The bag's details added after the first ones (D278): a save_bag_details
+ * call written before them (a stored chat replayed after an update, the
+ * mock's scripted coach) reads as not knowing them.
+ */
+export const LATER_BAG_DETAILS = ['roastDate', 'producer', 'variety', 'altitude', 'other'] as const;
 
 export const SaveBagDetailsInput = z.object({
   /** Short name used in profile titles ("<name> v1"), e.g. "Kiambu AA". */
@@ -87,6 +104,14 @@ export const SaveBagDetailsInput = z.object({
   notes: z.string().max(BAG_LIMITS.notes).nullable(),
   /** The roast date printed on the bag (6.1). */
   roastDate: z.iso.date().nullable(),
+  /** The farm or the producer ("El Paraíso", "Diego Bermúdez"), D278. */
+  producer: z.string().max(BAG_LIMITS.producer).nullable(),
+  /** The varieties, comma separated ("Castillo, Caturra"). */
+  variety: z.string().max(BAG_LIMITS.variety).nullable(),
+  /** The altitude as the bag writes it ("1,900-2,100 masl"). */
+  altitude: z.string().max(BAG_LIMITS.altitude).nullable(),
+  /** Anything else on the bag or in the barista's own words: a lot, a harvest, a fermentation, a note to self. */
+  other: z.string().max(BAG_LIMITS.other).nullable(),
 });
 export type SaveBagDetails = z.infer<typeof SaveBagDetailsInput>;
 

@@ -63,6 +63,8 @@ import { useHeartbeatOnInteraction } from '../platform/useHeartbeatOnInteraction
 import { placeOf, type Route, type RouteName } from '../router.ts';
 import { SaverOverlay } from '../saver/SaverOverlay.tsx';
 import { TID } from '../testIds.ts';
+import type { RunKind } from './bagSetup.ts';
+import { HeldRunAlert } from './HeldRunAlert.tsx';
 import { layoutFor, useLayout, type Layout } from './layout.ts';
 import { LiveStrip } from './LiveStrip.tsx';
 import { ScreenModeContext } from './screenMode.ts';
@@ -593,8 +595,17 @@ function Shell({ route, onNavigate, children }: AppShellProps) {
   useShotViewComparison();
   // And its one recording of steam, hot water and flush, for the same reason (D148).
   drinkTraceFor(telemetry);
-  const { awaitingOutcome, guardUntil: shotGuard } = useShotFocus(route);
+  const { awaitingOutcome, guardUntil: shotGuard, heldShot } = useShotFocus(route);
   const drinkFocus = useDrinkFocus();
+  // A run the new bag screen kept off the screen (D277), the newest first: a drink cannot run beside a shot.
+  const held: { kind: RunKind; key: string } | null =
+    drinkFocus.held !== null
+      ? { kind: drinkFocus.held.kind, key: `drink-${drinkFocus.held.id}` }
+      : heldShot !== null
+        ? { kind: 'shot', key: `shot-${heldShot}` }
+        : null;
+  const [dismissedRun, setDismissedRun] = useState<string | null>(null);
+  const heldShown = route.name === 'coach' && held !== null && held.key !== dismissedRun ? held : null;
   const guardUntil = laterGuard(shotGuard, drinkFocus.guardUntil);
   const typing = useTextEntryFocus();
   const layout = useShellLayout(typing);
@@ -657,7 +668,17 @@ function Shell({ route, onNavigate, children }: AppShellProps) {
             mb: rail ? 'var(--safe-bottom, 0px)' : 0,
           }}
         >
-          {phone && route.name === 'coach' ? <LiveStrip awaitingOutcome={awaitingOutcome} onOpen={openShot} /> : null}
+          {heldShown ? (
+            <HeldRunAlert
+              kind={heldShown.kind}
+              onOpen={heldShown.kind === 'shot' ? openShot : drinkFocus.openHeld}
+              onDismiss={() => setDismissedRun(heldShown.key)}
+            />
+          ) : null}
+          {/* The held shot's line offers the shot already; dismissed, the strip is the way there. */}
+          {phone && route.name === 'coach' && heldShown?.kind !== 'shot' ? (
+            <LiveStrip awaitingOutcome={awaitingOutcome} onOpen={openShot} />
+          ) : null}
           <Box
             sx={{
               flex: '1 1 auto',

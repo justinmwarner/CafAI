@@ -15,9 +15,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useServices } from '../../app/services.tsx';
 import { isCareVideoOpen } from '../care/videoHold.ts';
 import { parseRoute, replaceRoute, routeHref, type Route } from '../router.ts';
+import { holdsRuns } from '../shell/bagSetup.ts';
 import { GUARD_MS, isTextEntry } from '../shell/useShotFocus.ts';
-import { drinkStarted, goBackRoute, NO_ORIGIN, type DrinkFocusState } from './drinkFocus.ts';
+import { drinkOpened, drinkStarted, goBackRoute, NO_ORIGIN, type DrinkFocusState } from './drinkFocus.ts';
 import { drinkTraceFor, type DrinkRun } from './drinkTrace.ts';
+import type { DrinkKind } from './kinds.ts';
+
+/** A run that started on the new bag screen and stayed off the screen (D277). */
+export interface HeldDrink {
+  kind: DrinkKind;
+  /** The run's id (drinkTrace.ts): the line offering it is dismissed for this run only. */
+  id: number;
+}
 
 export interface GoBackOptions {
   /** The view goes back by itself: the pane it returns to is guarded, as after a switch. */
@@ -30,12 +39,18 @@ export interface DrinkFocus {
   /** Where Go back goes. */
   back: Route;
   goBack(options?: GoBackOptions): void;
+  /** The run that started on the new bag screen and stayed off it, while it runs (D277); null otherwise. */
+  held: HeldDrink | null;
+  /** Open the held run's view, the barista's tap: Go back returns to the screen it leaves. */
+  openHeld(): void;
 }
 
 export function useDrinkFocus(): DrinkFocus {
-  const { telemetry } = useServices();
+  const { telemetry, coach } = useServices();
   const trace = useMemo(() => drinkTraceFor(telemetry), [telemetry]);
   const [guardUntil, setGuardUntil] = useState<number | null>(null);
+  const [held, setHeld] = useState<HeldDrink | null>(null);
+  const heldRef = useRef(held);
   const [focus, setFocus] = useState<DrinkFocusState>(NO_ORIGIN);
   const focusRef = useRef(focus);
   const switchRef = useRef<((target: Route) => void) | null>(null);
@@ -58,7 +73,12 @@ export function useDrinkFocus(): DrinkFocus {
     const started = (run: DrinkRun) => {
       // The screen on show from the hash, not the last render: the shot focus may have switched a moment ago, before React heard.
       const shown = parseRoute(window.location.hash);
-      const held = shown.name === 'care' && isCareVideoOpen();
+      // The new bag screen keeps its place, and offers the view instead (D277).
+      const setup = holdsRuns(shown, coach.getState());
+      const nowHeld = setup ? { kind: run.kind, id: run.id } : null;
+      heldRef.current = nowHeld;
+      setHeld(nowHeld);
+      const held = setup || (shown.name === 'care' && isCareVideoOpen());
       const step = drinkStarted(focusRef.current, { kind: run.kind, typing: isTextEntry(document.activeElement), held, shown });
       if (step.state !== focusRef.current) {
         focusRef.current = step.state;
@@ -72,13 +92,17 @@ export function useDrinkFocus(): DrinkFocus {
     if (under) started(under);
     const stop = trace.onRun((event) => {
       if (event.type === 'started') started(event.run);
+      else if (heldRef.current?.id === event.run.id) {
+        heldRef.current = null;
+        setHeld(null);
+      }
     });
     return () => {
       stop();
       switchRef.current = null;
       if (guardTimer !== null) clearTimeout(guardTimer);
     };
-  }, [trace]);
+  }, [trace, coach]);
 
   const goBack = useCallback((options?: GoBackOptions) => {
     const target = goBackRoute(focusRef.current);
@@ -86,5 +110,16 @@ export function useDrinkFocus(): DrinkFocus {
     if (options?.auto === true && switchRef.current !== null) switchRef.current(target);
     else replaceRoute(target);
   }, []);
-  return { guardUntil, back: goBackRoute(focus), goBack };
+  const openHeld = useCallback(() => {
+    const run = heldRef.current;
+    if (run === null) return;
+    const step = drinkOpened(focusRef.current, run.kind, parseRoute(window.location.hash));
+    if (step.state !== focusRef.current) {
+      focusRef.current = step.state;
+      setFocus(step.state);
+    }
+    // Tapped, it is the barista's own move: nothing to guard.
+    replaceRoute(step.go);
+  }, []);
+  return { guardUntil, back: goBackRoute(focus), goBack, held, openHeld };
 }

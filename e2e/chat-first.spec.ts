@@ -111,6 +111,11 @@ async function expectNewestInView(page: Page, target: Locator, what: string): Pr
   await expectInChatView(page, target, what);
 }
 
+/** A view tall enough for the bean card's new-coffee buttons and its first row together: every layout but a phone on its side. */
+function roomForRows(page: Page): boolean {
+  return (page.viewportSize()?.height ?? 0) >= 500;
+}
+
 /** `target` in the chat's view: all of it, or its start when it is taller than the view. */
 async function expectInChatView(page: Page, target: Locator, what: string): Promise<void> {
   const view = page.locator('.MuiChatMessageList-scroller');
@@ -268,14 +273,19 @@ test('a new bag opens on "Which coffee is it?" from its top, the newest roasts i
   await expect(beanCard.getByTestId(TID.beanOption).first()).toHaveAccessibleName(new RegExp(`^Use this: ${names[0]}, roasted \\d{1,2} [A-Z][a-z]{2} \\d{4}$`));
   // Shown from the card's top, while the stats card stays the newest row below (D91).
   await expectInChatView(page, beanCard.getByRole('heading', { name: 'Which coffee is it?' }), 'the bean card from its top');
-  await expectInChatView(page, beanCard.getByTestId(TID.beanOption).first(), 'the newest roast');
+  // A new coffee comes first (D279); under it the newest roast, where the view is tall enough for both (not a phone on its side).
+  if (roomForRows(page)) {
+    await expectInChatView(page, beanCard.getByTestId(TID.beanTypeDetails), 'Type the details');
+    await expectInChatView(page, beanCard.getByTestId(TID.beanOption).first(), 'the newest roast');
+  }
   await expect(rows(page).last().getByTestId(TID.statsCard)).toBeVisible();
 
-  // Something else: the chat follows its end again, where the barista describes the bag.
-  await beanCard.getByTestId(TID.beanSomethingElse).click();
+  // Type the details (D279): the chat follows again, to the details card it opens.
+  await beanCard.getByTestId(TID.beanTypeDetails).click();
   // Answered: the button gives way to the answer.
-  await expect(beanCard.getByTestId(TID.beanSomethingElse)).toHaveCount(0);
-  await expectNewestInView(page, statsCard(page), 'the stats card after Something else');
+  await expect(beanCard.getByTestId(TID.beanTypeDetails)).toHaveCount(0);
+  await expectNewestInView(page, page.getByTestId(TID.bagConfirm), 'the details card after Type the details');
+  // Described in the chat instead, the details card is set aside and the intake starts as before.
   await sendChat(page, 'Kiambu AA, light roast, washed');
   await expect(page.getByTestId(TID.templatePick('blooming-espresso'))).toBeVisible();
 
@@ -285,7 +295,7 @@ test('a new bag opens on "Which coffee is it?" from its top, the newest roasts i
   await expect(rows(page)).toHaveCount(2);
   await expect(next.getByTestId(TID.beanOption)).toHaveCount(8);
   await expectInChatView(page, next.getByRole('heading', { name: 'Which coffee is it?' }), "the next bag's card from its top");
-  await expectInChatView(page, next.getByTestId(TID.beanOption).first(), "the next bag's newest roast");
+  if (roomForRows(page)) await expectInChatView(page, next.getByTestId(TID.beanOption).first(), "the next bag's newest roast");
 });
 
 test("the card's numbers move with the machine, and the shot's card in the chat takes it away", async ({ page }) => {
