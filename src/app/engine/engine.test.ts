@@ -1024,18 +1024,20 @@ describe('coach engine', () => {
 
     const ENDED: RunResult = { pendingUiCalls: [], heldResults: [], stopReason: 'end_turn', finalText: 'Lovely.' };
 
-    it('keeps what the reply waits on as the provider says it, until its text streams, and none once the reply ends', async () => {
+    it('keeps what the reply waits on as the provider says it, until its turn begins, and none once the reply ends', async () => {
       const waited = gate();
       const begun = gate();
+      const writing = gate();
       const streaming = gate();
       await rebuildWith(async (request) => {
         request.onWaiting?.('Waiting for Claude on your computer.');
         request.onWaiting?.('Claude Code is starting on your computer.');
         await waited.passed;
-        // The turn began; Claude thinks before it writes: still waiting on it.
-        request.onTurnStart?.();
         request.onWaiting?.('Your computer is waiting for Claude to answer.');
         await begun.passed;
+        // The turn began: Claude thinks before it writes, which "Thinking…" says; what it waited on is over.
+        request.onTurnStart?.();
+        await writing.passed;
         request.onTextDelta?.('Lovely.');
         await streaming.passed;
         await request.onAppend({ role: 'assistant', content: [text('Lovely.')] });
@@ -1048,9 +1050,11 @@ describe('coach engine', () => {
       waited.open();
       await vi.waitFor(() => expect(engine.getState().waitNote).toBe('Your computer is waiting for Claude to answer.'));
       begun.open();
+      await vi.waitFor(() => expect(engine.getState().waitNote).toBeNull());
+      expect(engine.getState().busy).toBe(true);
+      writing.open();
       await vi.waitFor(() => expect(engine.getState().messages.at(-1)?.parts).toEqual([{ kind: 'text', text: 'Lovely.', streaming: true }]));
       expect(engine.getState().waitNote).toBeNull();
-      expect(engine.getState().busy).toBe(true);
       streaming.open();
       await sending;
       expect(engine.getState()).toMatchObject({ busy: false, waitNote: null, error: null });

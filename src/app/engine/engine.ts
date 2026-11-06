@@ -2037,7 +2037,8 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     emit();
     const reply = { controller: new AbortController(), stopped: false };
     asking = reply;
-    // What the reply waits on, for the thinking row (D281): gone once its text streams.
+    // What the reply waits on, for the thinking row (D281): gone once its turn begins, when "Thinking…" is the truth
+    // (a "Claude is busy" note kept through the thinking that follows would no longer be).
     const waitFor = (note: string | null) => {
       if (state.waitNote === note) return;
       state = { ...state, waitNote: note };
@@ -2064,6 +2065,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         onWaiting: waitFor,
         onTurnStart: () => {
           streamingId = null;
+          waitFor(null);
         },
         onTextDelta: (delta) => {
           if (!streamingId) {

@@ -439,8 +439,9 @@ export interface CoachState {
   /**
    * What the coach's reply waits on (D281), as the provider last said it
    * ("Waiting for Claude on your computer."), shown under "Thinking…": null
-   * when nothing is known, once the reply's text streams, and when the reply
-   * ends. Optional: a controller that does not say leaves it out.
+   * when nothing is known, once the reply's turn begins (Claude is thinking
+   * then, as "Thinking…" says), and when the reply ends. Optional: a
+   * controller that does not say leaves it out.
    */
   waitNote?: string | null;
 }
