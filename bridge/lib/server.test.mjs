@@ -8,7 +8,7 @@ import { REPLAY_NOTE } from './translate.mjs';
 
 const FAKE = fileURLToPath(new URL('../test/fake-claude.mjs', import.meta.url));
 const CODE = 'ABCD-EFGH';
-const TIMING = { firstEventMs: 6000, pingMs: 1000, keepaliveMs: 200, stallMs: 10_000, authCacheMs: 0 };
+const TIMING = { quietMs: 6000, maxWaitMs: 30_000, pingMs: 1000, keepaliveMs: 200, stallMs: 10_000, authCacheMs: 0 };
 
 async function start({ env = {}, timing = TIMING, ...options } = {}) {
   const lines = [];
@@ -431,14 +431,134 @@ describe('CafAI Bridge limits', () => {
     }
   });
 
-  it('gives up on a Claude Code that never answers', async () => {
-    const ctx = await start({ timing: { ...TIMING, firstEventMs: 700 } });
-    try {
-      const { reply } = await ask(ctx.url, { messages: [user('HANG')] });
-      expect(reply.error).toEqual({ type: 'api_error', message: expect.stringContaining('did not answer') });
-    } finally {
-      await ctx.bridge.close();
-    }
+  describe('the wait for a reply to begin (D280)', () => {
+    const waits = (events) =>
+      events.filter((e) => e.type === 'cafai_wait').map((e) => Object.fromEntries(Object.entries(e).filter(([key]) => key !== 'type')));
+
+    it('says what it waits on: Claude Code starting, then the request', async () => {
+      const ctx = await start();
+      try {
+        const { events, reply } = await ask(ctx.url, { messages: [user('hello waits')] });
+        expect(reply.stopReason).toBe('end_turn');
+        expect(waits(events)).toEqual([{ stage: 'starting' }, { stage: 'requesting' }]);
+        // Before the reply, never inside it.
+        const firstMessage = events.findIndex((e) => e.type === 'message_start');
+        expect(events.slice(firstMessage).some((e) => e.type === 'cafai_wait')).toBe(false);
+      } finally {
+        await ctx.bridge.close();
+      }
+    });
+
+    it('restarts a Claude Code that goes quiet, once, and the reply comes through', async () => {
+      const ctx = await start({ timing: { ...TIMING, quietMs: 600 } });
+      try {
+        const { events, reply } = await ask(ctx.url, { messages: [user('QUIET_ONCE hello')] });
+        expect(reply.error).toBeNull();
+        expect(reply.text).toMatch(/^pid \d+ turn 1: QUIET_ONCE hello$/);
+        expect(waits(events)).toEqual([{ stage: 'starting' }, { stage: 'restarting' }, { stage: 'starting' }, { stage: 'requesting' }]);
+        expect(ctx.lines.some((line) => /: Claude Code went quiet for 1 s \(waited \d+ s; last: started Claude Code, \d+ s ago\); starting it again$/.test(line))).toBe(true);
+        expect(ctx.lines.some((line) => /: closed: restarted$/.test(line))).toBe(true);
+        expect(ctx.lines.some((line) => /: started again for a new conversation, claude-opus-5-5, in place of run [0-9a-f]{6}$/.test(line))).toBe(true);
+        // The quiet run is gone, and the one that answered closed as any one-off request does: no slot held.
+        expect((await status(ctx.url)).body.runs.live).toBe(0);
+      } finally {
+        await ctx.bridge.close();
+      }
+    });
+
+    it('restarts a quiet Claude Code in a conversation that goes on, replaying it', async () => {
+      const ctx = await start({ timing: { ...TIMING, quietMs: 600 } });
+      try {
+        const tools = [TOOL('get_shot')];
+        const first = await ask(ctx.url, { tools, messages: [user('first turn')] });
+        expect(first.reply.stopReason).toBe('end_turn');
+        const second = await ask(ctx.url, { tools, messages: [user('first turn'), first.reply.message, user('QUIET_ONCE second turn')] });
+        expect(second.reply.error).toBeNull();
+        expect(second.reply.text).toContain('second turn');
+        // The run went on (no start), went quiet, and a new one took the request.
+        expect(waits(second.events).map((w) => w.stage)).toEqual(['restarting', 'starting', 'requesting']);
+        expect(ctx.lines.some((line) => /: started again for a conversation of 3 messages \(replayed\), claude-opus-5-5, in place of run [0-9a-f]{6}$/.test(line))).toBe(true);
+      } finally {
+        await ctx.bridge.close();
+      }
+    });
+
+    it('gives up when Claude Code goes quiet again after the restart', async () => {
+      const ctx = await start({ timing: { ...TIMING, quietMs: 500 } });
+      try {
+        const { events, reply } = await ask(ctx.url, { messages: [user('SILENT')] });
+        expect(reply.error).toEqual({
+          type: 'api_error',
+          message: 'Claude Code on your computer stopped answering, even after a restart. Try again; if it keeps happening, restart CafAI Bridge.',
+        });
+        expect(waits(events).map((w) => w.stage)).toEqual(['starting', 'restarting', 'starting']);
+        expect(ctx.lines.filter((line) => line.includes('starting it again'))).toHaveLength(1);
+        expect(ctx.lines.some((line) => /closed: no answer from Claude Code: Claude Code went quiet for 1 s \(.*\), after a restart$/.test(line))).toBe(true);
+        expect((await status(ctx.url)).body.runs.live).toBe(0);
+      } finally {
+        await ctx.bridge.close();
+      }
+    });
+
+    it('restarts a Claude Code that went quiet after sending the request (a hung connection)', async () => {
+      const ctx = await start({ timing: { ...TIMING, quietMs: 500 } });
+      try {
+        const { reply } = await ask(ctx.url, { messages: [user('HANG')] });
+        expect(reply.error).toEqual({ type: 'api_error', message: expect.stringContaining('even after a restart') });
+        expect(ctx.lines.some((line) => line.includes('last: status requesting'))).toBe(true);
+      } finally {
+        await ctx.bridge.close();
+      }
+    });
+
+    it('waits while Claude Code retries Anthropic, says so, and gives up at the cap as overloaded', async () => {
+      const ctx = await start({ timing: { ...TIMING, quietMs: 400, maxWaitMs: 1500 }, env: { FAKE_CLAUDE_RETRY_MS: '100' } });
+      try {
+        const began = Date.now();
+        const { events, reply } = await ask(ctx.url, { messages: [user('RETRYING')] });
+        expect(Date.now() - began).toBeGreaterThanOrEqual(1400);
+        expect(reply.error).toEqual({ type: 'overloaded_error', message: 'Claude is overloaded right now. Try again in a few minutes.' });
+        const reports = waits(events);
+        expect(reports.slice(0, 3)).toEqual([
+          { stage: 'starting' },
+          { stage: 'requesting' },
+          { stage: 'retrying', attempt: 1, of: 10, reason: 'overloaded' },
+        ]);
+        expect(reports.length).toBeGreaterThan(5);
+        expect(reports.some((r) => r.stage === 'restarting')).toBe(false);
+        expect(ctx.lines.some((line) => /closed: no answer from Claude Code in 2 s \(waited \d s; last: api_retry \d+ of 10 \(529 overloaded\)/.test(line))).toBe(true);
+      } finally {
+        await ctx.bridge.close();
+      }
+    });
+
+    it('says a computer that cannot reach Anthropic, from retries without a status', async () => {
+      const ctx = await start({ timing: { ...TIMING, quietMs: 400, maxWaitMs: 900 }, env: { FAKE_CLAUDE_RETRY_MS: '100', FAKE_CLAUDE_RETRY_STATUS: 'none' } });
+      try {
+        const { events, reply } = await ask(ctx.url, { messages: [user('RETRYING')] });
+        expect(reply.error).toEqual({ type: 'api_error', message: expect.stringContaining('could not reach Claude') });
+        expect(waits(events)).toContainEqual({ stage: 'retrying', attempt: 1, of: 10, reason: 'network' });
+      } finally {
+        await ctx.bridge.close();
+      }
+    });
+
+    it('sends no reports on a plain (not streamed) request', async () => {
+      const ctx = await start();
+      try {
+        const response = await fetch(`${ctx.url}/v1/messages`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-api-key': CODE },
+          body: JSON.stringify({ model: 'claude-opus-5-5', max_tokens: 1000, system: 'You coach espresso.', messages: [user('plain')] }),
+        });
+        expect(response.status).toBe(200);
+        const body = await response.json();
+        expect(body.type).toBe('message');
+        expect(JSON.stringify(body)).not.toContain('cafai_wait');
+      } finally {
+        await ctx.bridge.close();
+      }
+    });
   });
 
   it('closes an idle conversation for a new one, and says busy when none is idle', async () => {

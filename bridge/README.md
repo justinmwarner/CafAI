@@ -305,9 +305,18 @@ the schedule, and says what to do about each problem.
   says when. `status` shows how much of it is used.
 - **Claude Code is too old for the model.** Run `claude update`, or update
   the Claude desktop app.
-- **Claude Code never answers.** An old Claude Code can start and then never
-  answer. Run `claude update`. When `doctor` lists several, the bridge uses
-  the newest; `--claude <path>` picks one.
+- **Claude Code is slow to answer, or never does.** While a reply has not
+  begun, CafAI shows what the bridge waits on. A Claude Code that writes
+  nothing for 90 s (a hung connection, a start that never finished) is
+  started again once, on the same request; a second silence fails the
+  request. A Claude Code that is retrying Anthropic (overloaded, say) is
+  waited for, up to 5 minutes in all, and then CafAI says why. Each restart
+  and each give-up writes a line to the log with what Claude Code last said,
+  how long the request waited, and the end of Claude Code's error output.
+  If it keeps happening, restart the bridge (`stop`, then `start`). An old
+  Claude Code can start and then never answer: run `claude update`. When
+  `doctor` lists several, the bridge uses the newest; `--claude <path>`
+  picks one.
 - **Port in use.** Another program uses port 8877, or the bridge already runs
   (`status`). Pick another port with `--port 9000` and add it to the address
   in CafAI (`192.168.1.20:9000`).
