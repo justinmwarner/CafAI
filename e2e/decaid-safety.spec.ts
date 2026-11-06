@@ -157,7 +157,8 @@ test('a Decaid on the 0-100 rating scale gets ten times the running score, after
 test('About names the Decaid that runs and the one CafAI was verified with, and Data and privacy when CafAI last backed up to it', async ({ page }) => {
   await openApp(page, '#/settings/about');
   const about = page.getByTestId(TID.aboutDecaid);
-  await expect(page.getByText(/^CafAI \d+\.\d+\.\d+/)).toBeVisible();
+  // In the pane: on a tablet the list's About row says "CafAI 0.1.5" too until Decaid's version is read (D236).
+  await expect(settingsGroup(page, 'about').getByText(/^CafAI \d+\.\d+\.\d+/)).toBeVisible();
   // The mock's 0.8.6 is older than the Decaid CafAI was verified with, and About says so.
   await expect(about).toContainText(`Decaid ${MOCK_DECAID} (CafAI was verified with ${VERIFIED_DECAID.release})`);
   await expect(about).toContainText('Older than the Decaid CafAI was checked against; update Decaid if something does not work.');
