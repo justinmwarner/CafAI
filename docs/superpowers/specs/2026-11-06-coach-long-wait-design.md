@@ -109,8 +109,9 @@ of Claude Code's stderr; e.g. `run 02b728: Claude Code went quiet for 90 s
 
 A `waiting` event never counts as part of a turn (`state.yielded` stays
 false), so the provider's retry rules are unchanged. The runner passes it on
-(`onWaiting`); the engine keeps the latest as `state.waitNote` (null when a
-reply starts streaming, ends, or fails).
+(`onWaiting`); the engine keeps the latest as `state.waitNote` (null once the
+reply's turn begins, when Claude thinks and "Thinking…" says so, and when
+the reply ends or fails).
 
 **The row** (`ThinkingView`, src/ui/chat/ChatSurface.tsx):
 

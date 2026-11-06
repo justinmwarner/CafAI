@@ -6,6 +6,25 @@ workflow checks against it. Settings > About shows the version you run.
 
 ## Unreleased
 
+### The coach
+
+- **A slow reply says what it waits on.** After 10 seconds of "Thinking…"
+  a second line says what the coach's reply is waiting for: "Waiting for
+  Anthropic.", or, with Claude on your computer, "Claude Code is starting
+  on your computer.", "Claude is busy right now. Trying again (3 of 10).",
+  "Claude Code went quiet. Starting it again." After 45 seconds the row
+  reads "Taking longer than usual…" and offers **Stop**, which ends the
+  wait and keeps your message for **Retry**.
+- **Claude on your computer waits longer, and mends a stuck start.** CafAI
+  Bridge gave up on a reply after 90 seconds of silence and said to update
+  Claude Code, whatever the cause. Now it starts a Claude Code that stays
+  silent for 90 seconds again once, by itself; it waits up to 5 minutes
+  while Claude Code is retrying Claude's servers; and when it gives up it
+  says why: Claude overloaded, the computer offline, or Claude Code silent
+  even after a restart. Its log says what Claude Code last did. Restart the
+  bridge after updating CafAI's folder to get this (`npm run bridge -- stop`,
+  then `start`).
+
 ## 0.1.5 (2026-11-05)
 
 ### The coach
