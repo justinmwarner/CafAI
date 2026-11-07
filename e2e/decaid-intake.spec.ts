@@ -18,10 +18,11 @@ import {
 /**
  * A new bag starts on "Which coffee is it?" (D115), in every layout. A coffee
  * picked from Decaid's bean library fills the bag, and its loads name the
- * batch (D102). Something else leaves the bag to be described in the chat, as
- * before. A photo of the bag is read once by the coach's model into details
- * to check and confirm, and nothing keeps the image (D120); a photographed
- * coffee already in the library reuses its bean and its batch.
+ * batch (D102). Type the details opens the bag's details card, blank, to fill
+ * in and confirm (D279), and the bag can still be described in the chat. A
+ * photo of the bag is read once by the coach's model into details to check
+ * and confirm, and nothing keeps the image (D120); a photographed coffee
+ * already in the library reuses its bean and its batch.
  *
  * The mock's library holds Red Brick (roasted 9 days ago) and Ethiopia
  * Chelchele (30 days ago); the scripted coach reads any photo as Kiambu AA

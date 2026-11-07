@@ -81,6 +81,8 @@ export function useShotFocus(route: Route): ShotFocus {
     let guardTimer: ReturnType<typeof setTimeout> | null = null;
     // The chat's messages when the pour was reported over: only one added after that can be its outcome.
     let before: ReadonlySet<string> = new Set();
+    // And the runs the coach had let pass by then: one more is this run's, which no dial-in takes (D276).
+    let quietBefore = 0;
     let heldCount = 0;
 
     const switchTo = (target: Route) => {
@@ -133,12 +135,17 @@ export function useShotFocus(route: Route): ShotFocus {
         return;
       }
       setHeldShot(null);
-      before = new Set(coach.getState().messages.map((message) => message.id));
+      const now = coach.getState();
+      before = new Set(now.messages.map((message) => message.id));
+      quietBefore = now.quietRuns ?? 0;
       dispatch({ type: 'shotFinished', at: Date.now() });
     });
     const stopChat = coach.subscribe(() => {
       if (focus.current.kind !== 'over') return;
-      if (coach.getState().messages.some((message) => !before.has(message.id) && isOutcome(message))) {
+      const now = coach.getState();
+      // The coach let the run pass, so nothing more is coming: as good as its outcome.
+      const passed = (now.quietRuns ?? 0) !== quietBefore;
+      if (passed || now.messages.some((message) => !before.has(message.id) && isOutcome(message))) {
         dispatch({ type: 'outcomeAdded' });
       }
     });

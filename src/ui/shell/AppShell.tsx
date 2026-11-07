@@ -64,13 +64,13 @@ import { placeOf, type Route, type RouteName } from '../router.ts';
 import { SaverOverlay } from '../saver/SaverOverlay.tsx';
 import { TID } from '../testIds.ts';
 import type { RunKind } from './bagSetup.ts';
-import { HeldRunAlert } from './HeldRunAlert.tsx';
+import { HeldRunAlert, HeldRunStatus } from './HeldRunAlert.tsx';
 import { layoutFor, useLayout, type Layout } from './layout.ts';
 import { LiveStrip } from './LiveStrip.tsx';
 import { ScreenModeContext } from './screenMode.ts';
 import { LiveDot, ShotTime, useShotLive, useShotTimeName } from './ShotTime.tsx';
 import { TapGuard } from './TapGuard.tsx';
-import { isTextEntry, useShotFocus } from './useShotFocus.ts';
+import { GUARD_MS, isTextEntry, useShotFocus } from './useShotFocus.ts';
 
 export interface AppShellProps {
   /** The current route (from useRoute()). */
@@ -567,6 +567,26 @@ function laterGuard(a: number | null, b: number | null): number | null {
   return Math.max(a, b);
 }
 
+/**
+ * Until when taps wait after the held run's line came or went by itself
+ * (D277): it moves the screen under the barista's finger, as a switch of
+ * the app's own does, so a tap meant for one row cannot land on the next
+ * (TapGuard). Not when the barista moved it: dismissed it, or changed screens.
+ */
+function useHeldLineGuard(shownKey: string | null, dismissedKey: string | null, routeName: RouteName): number | null {
+  const [until, setUntil] = useState<number | null>(null);
+  const last = useRef({ key: shownKey, route: routeName });
+  // Before paint, so the line and the guard arrive in the same frame.
+  useLayoutEffect(() => {
+    const was = last.current;
+    last.current = { key: shownKey, route: routeName };
+    if (was.key === shownKey || was.route !== routeName) return;
+    if (shownKey === null && was.key === dismissedKey) return;
+    setUntil(Date.now() + GUARD_MS);
+  }, [shownKey, dismissedKey, routeName]);
+  return until;
+}
+
 /** Over the hidden coach: the Shot view, or a drink's. */
 const overlaySx = {
   position: 'absolute',
@@ -606,7 +626,8 @@ function Shell({ route, onNavigate, children }: AppShellProps) {
         : null;
   const [dismissedRun, setDismissedRun] = useState<string | null>(null);
   const heldShown = route.name === 'coach' && held !== null && held.key !== dismissedRun ? held : null;
-  const guardUntil = laterGuard(shotGuard, drinkFocus.guardUntil);
+  const heldGuard = useHeldLineGuard(heldShown?.key ?? null, dismissedRun, route.name);
+  const guardUntil = laterGuard(laterGuard(shotGuard, drinkFocus.guardUntil), heldGuard);
   const typing = useTextEntryFocus();
   const layout = useShellLayout(typing);
 
@@ -668,6 +689,7 @@ function Shell({ route, onNavigate, children }: AppShellProps) {
             mb: rail ? 'var(--safe-bottom, 0px)' : 0,
           }}
         >
+          <HeldRunStatus kind={heldShown?.kind ?? null} />
           {heldShown ? (
             <HeldRunAlert
               kind={heldShown.kind}

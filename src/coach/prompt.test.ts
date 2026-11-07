@@ -152,7 +152,11 @@ describe('buildSystemPrompt: content', () => {
     expect(intake).toMatch(
       /"bag" is set when the user picked the coffee from Decaid's bean library, confirmed the details read from a photo of the bag, or typed them on the details card/,
     );
-    expect(intake).toMatch(/already saved, so call save_bag_details only to correct one, with every other detail as saved/);
+    expect(intake).toMatch(/already saved, so call save_bag_details only to correct or add one: the name as saved and what changes, null for the rest/);
+    // A photo's "other" is label text the photo reader chose, never taken for the user's wish (D278).
+    expect(intake).toMatch(/"other" is anything else the bag's label or the user gave/);
+    expect(intake).toMatch(/a recipe printed on the bag is the roaster's suggestion, not what the user asked for/);
+    expect(intake).not.toMatch(/"other" is the user's own words/);
     expect(intake).toContain('"Roasted YYYY-MM-DD (n days ago; m days in the freezer not counted)"');
     expect(intake).toMatch(/null when the roast date is unknown/);
   });

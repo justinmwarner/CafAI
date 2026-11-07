@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '../testing/setup.ts';
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Box from '@mui/material/Box';
 import { TID } from '../../testIds.ts';
@@ -187,5 +187,47 @@ describe('BagConfirmCard: typed (D279)', () => {
     await userEvent.type(within(card).getByLabelText('Producer or farm'), 'El Paraíso');
     await userEvent.click(confirmButton());
     expect(onConfirm).toHaveBeenCalledWith({ ...BLANK_BAG, name: 'Pink Bourbon', producer: 'El Paraíso' });
+  });
+
+  it('keeps what is typed as a field is left, so it is kept before the barista turns to the chat or a tab', async () => {
+    const onDraft = vi.fn();
+    const { card } = renderCard({ details: BLANK_BAG, source: 'typed', onDraft });
+    await userEvent.type(within(card).getByLabelText('Name'), 'Pink Bourbon');
+    await userEvent.type(within(card).getByLabelText('Other details'), 'Thermal shock; a gift from Sam');
+    await userEvent.click(document.body);
+    expect(onDraft).toHaveBeenLastCalledWith({ ...BLANK_BAG, name: 'Pink Bourbon', other: 'Thermal shock; a gift from Sam' });
+  });
+
+  it('keeps what is typed half a second after the last change, a field still in hand', () => {
+    vi.useFakeTimers();
+    try {
+      const onDraft = vi.fn();
+      const { card } = renderCard({ details: BLANK_BAG, source: 'typed', onDraft });
+      fireEvent.change(within(card).getByLabelText('Name'), { target: { value: 'Pink Bourbon' } });
+      act(() => vi.advanceTimersByTime(499));
+      expect(onDraft).not.toHaveBeenCalled();
+      act(() => vi.advanceTimersByTime(1));
+      expect(onDraft).toHaveBeenCalledWith({ ...BLANK_BAG, name: 'Pink Bourbon' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps what was typed last as the card goes, and comes back with it', async () => {
+    const onDraft = vi.fn();
+    const view = renderThemed(<BagConfirmCard details={BLANK_BAG} source="typed" confirmed={false} onConfirm={vi.fn()} onDraft={onDraft} />);
+    await userEvent.type(screen.getByLabelText('Altitude'), '1,950 masl');
+    view.unmount();
+    const kept: unknown = onDraft.mock.lastCall?.[0];
+    expect(kept).toEqual({ ...BLANK_BAG, altitude: '1,950 masl' });
+    renderThemed(<BagConfirmCard details={kept as typeof BLANK_BAG} source="typed" confirmed={false} onConfirm={vi.fn()} />);
+    expect(screen.getByLabelText('Altitude')).toHaveValue('1,950 masl');
+  });
+
+  it('keeps nothing that was not changed', () => {
+    const onDraft = vi.fn();
+    const view = renderThemed(<BagConfirmCard details={BLANK_BAG} source="typed" confirmed={false} onConfirm={vi.fn()} onDraft={onDraft} />);
+    view.unmount();
+    expect(onDraft).not.toHaveBeenCalled();
   });
 });

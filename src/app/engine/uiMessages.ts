@@ -136,7 +136,7 @@ export function isOpenBeanCard(part: CoachUiPart): boolean {
   return part.kind === 'beanPicker' && part.choice === null && !part.expired;
 }
 
-/** The photo's details while they wait for Confirm. */
+/** The details card, read from a photo or typed (D279), while it waits for Confirm. */
 export function isOpenBagConfirm(part: CoachUiPart): boolean {
   return part.kind === 'bagConfirm' && !part.confirmed && !part.expired;
 }

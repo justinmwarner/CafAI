@@ -94,6 +94,8 @@ export interface ChatSurfaceProps {
   onBagPhoto?(photo: BagPhoto): void;
   /** The details card (read from the photo, or typed), as the barista confirmed it. */
   onConfirmBag?(details: SaveBagDetails): void;
+  /** The open details card's fields as typed so far, kept so the card comes back with them (D279). */
+  onDraftBag?(details: SaveBagDetails): void;
   /** Add on the coach's grinder card (D125). */
   onAddGrinder?(requestId: string): void;
   /** The grinder card's Not now. */
@@ -227,6 +229,7 @@ interface PartActions {
   typeBagDetails(): void;
   bagPhoto(photo: BagPhoto): void;
   confirmBag(details: SaveBagDetails): void;
+  draftBag(details: SaveBagDetails): void;
   addGrinder(requestId: string): void;
   declineGrinder(requestId: string): void;
 }
@@ -365,6 +368,7 @@ function BagConfirmView({ data }: { data: unknown }) {
       expired={part.expired ?? false}
       setAsideReason={part.setAsideReason}
       onConfirm={actions.confirmBag}
+      onDraft={actions.draftBag}
     />
   );
 }
@@ -705,6 +709,8 @@ export function ChatSurface(props: ChatSurfaceProps) {
       typeBagDetails: act(() => propsRef.current.onTypeBagDetails?.()),
       bagPhoto: act((photo: BagPhoto) => propsRef.current.onBagPhoto?.(photo)),
       confirmBag: act((details: SaveBagDetails) => propsRef.current.onConfirmBag?.(details)),
+      // Typing on the card adds nothing to the chat: the view stays where the barista is.
+      draftBag: (details: SaveBagDetails) => propsRef.current.onDraftBag?.(details),
       addGrinder: act((requestId: string) => propsRef.current.onAddGrinder?.(requestId)),
       declineGrinder: act((requestId: string) => propsRef.current.onDeclineGrinder?.(requestId)),
     };

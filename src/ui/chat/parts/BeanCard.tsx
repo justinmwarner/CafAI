@@ -18,7 +18,7 @@ import { Notice } from './Notice.tsx';
 export interface BeanCardProps {
   /** Decaid's batches, newest roast first; none when the library is empty or Decaid was out of reach. */
   options: readonly BeanPickerOption[];
-  /** True while Decaid's batches are being read: the card says so, and a photo or something else work already. */
+  /** True while Decaid's batches are being read: the card says so, and a photo or Type the details work already. */
   loading?: boolean;
   /** The answer, once given. */
   choice: BeanChoice | null;
@@ -35,6 +35,9 @@ export interface BeanCardProps {
   /** Turns the chosen file into what is sent (tests stand in for the browser's decoding). */
   preparePhoto?: (file: File) => Promise<BagPhoto>;
 }
+
+/** A view too short for the card's line and its buttons under the title: a phone on its side (D279). */
+const SHORT_VIEW = '@media (max-height: 499.98px)';
 
 function details(option: BeanPickerOption): string {
   return [option.roaster, option.roastDate ? `Roasted ${formatDate(option.roastDate)}` : null].filter(Boolean).join(' · ');
@@ -129,45 +132,51 @@ export function BeanCard({
           {setAsideNote(setAsideReason, 'Set aside: you described the bag in the chat.')}
         </Typography>
       ) : null}
-      {/* A new coffee first: the way to add one is never below a list of others (D279). */}
-      {locked ? null : (
-        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
-          A new coffee? Take a photo of the bag or type its details, or describe it in the chat.
-        </Typography>
-      )}
-      <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1.25, flexWrap: 'wrap', alignItems: 'center' }}>
-        {choice?.kind === 'photo' ? (
-          <Chosen label="Photo of the bag" />
-        ) : (
-          <Button
-            variant={locked ? 'text' : 'contained'}
-            startIcon={<PhotoCameraRoundedIcon />}
-            data-testid={TID.bagPhoto}
-            disabled={blocked}
-            loading={preparing}
-            onClick={takePhoto}
-            sx={{ minHeight: 48 }}
-          >
-            Photo of the bag
-          </Button>
+      {/*
+        A new coffee first: the way to add one is never below a list of others (D279). In a view too short for the
+        line and the buttons both under the title (a phone on its side), the buttons come first, so the chat holds
+        the card's title and both of them.
+      */}
+      <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+        {locked ? null : (
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25, [SHORT_VIEW]: { order: 1, mt: 1 } }}>
+            A new coffee? Take a photo of the bag or type its details, or describe it in the chat.
+          </Typography>
         )}
-        {choice?.kind === 'typed' ? (
-          <Chosen label="Type the details" />
-        ) : (
-          <Button
-            variant={locked ? 'text' : 'tonal'}
-            startIcon={<EditNoteRoundedIcon />}
-            data-testid={TID.beanTypeDetails}
-            disabled={blocked}
-            onClick={onTypeDetails}
-            sx={{ minHeight: 48 }}
-          >
-            Type the details
-          </Button>
-        )}
-        {/* An answer given before Type the details was offered (D279): it closed the card for the chat. */}
-        {choice?.kind === 'other' ? <Chosen label="Something else" /> : null}
-      </Stack>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1.25, flexWrap: 'wrap', alignItems: 'center', [SHORT_VIEW]: { mt: 0.75 } }}>
+          {choice?.kind === 'photo' ? (
+            <Chosen label="Photo of the bag" />
+          ) : (
+            <Button
+              variant={locked ? 'text' : 'contained'}
+              startIcon={<PhotoCameraRoundedIcon />}
+              data-testid={TID.bagPhoto}
+              disabled={blocked}
+              loading={preparing}
+              onClick={takePhoto}
+              sx={{ minHeight: 48 }}
+            >
+              Photo of the bag
+            </Button>
+          )}
+          {choice?.kind === 'typed' ? (
+            <Chosen label="Type the details" />
+          ) : (
+            <Button
+              variant={locked ? 'text' : 'tonal'}
+              startIcon={<EditNoteRoundedIcon />}
+              data-testid={TID.beanTypeDetails}
+              disabled={blocked}
+              onClick={onTypeDetails}
+              sx={{ minHeight: 48 }}
+            >
+              Type the details
+            </Button>
+          )}
+          {/* An answer given before Type the details was offered (D279): it closed the card for the chat. */}
+          {choice?.kind === 'other' ? <Chosen label="Something else" /> : null}
+        </Stack>
+      </Box>
       {/* Beside the photo's button, not under the library's rows. */}
       {problem && !locked ? (
         <Box sx={{ mt: 1 }}>

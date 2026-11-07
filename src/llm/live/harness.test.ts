@@ -245,7 +245,8 @@ describe('coachRunnerTools', () => {
       output_config: unknown;
     };
     expect(body.tools.map((t) => t.name)).toEqual(Object.values(TOOL));
-    expect(body.tools.every((t) => t.strict)).toBe(true);
+    // Strict, but for save_bag_details, kept out so the strict schemas stay within the API's limits (D278).
+    expect(body.tools.filter((t) => t.strict !== true).map((t) => t.name)).toEqual([TOOL.saveBagDetails]);
     expect(body.tool_choice).toEqual({ type: 'auto' });
     expect(body.stream).toBe(true);
     expect(body.system).toBe(buildSystemPrompt(TEMPLATES));

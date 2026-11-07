@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Paper from '@mui/material/Paper';
@@ -12,7 +12,7 @@ import { TID } from '../../testIds.ts';
 import { formatDate, setAsideNote } from '../format.ts';
 
 export interface BagConfirmCardProps {
-  /** As read from the photo of the bag (a name the bag did not show is empty), or blank to type into. */
+  /** As read from the photo of the bag (a name the bag did not show is empty), or blank to type into; as typed so far, once kept. */
   details: SaveBagDetails;
   /** A photo's reading to check, or details the barista types (D279). */
   source?: 'photo' | 'typed';
@@ -23,7 +23,12 @@ export interface BagConfirmCardProps {
   expired?: boolean;
   setAsideReason?: SetAsideReason;
   onConfirm(details: SaveBagDetails): void;
+  /** The fields as typed so far, kept on the card in the chat so it comes back with them (D279). */
+  onDraft?(details: SaveBagDetails): void;
 }
+
+/** How long after the last change what is typed is kept. */
+const KEEP_AFTER_MS = 500;
 
 /** The fields as typed: every one text, a blank one unknown. */
 type Draft = Record<
@@ -146,8 +151,30 @@ export function BagConfirmCard({
   expired = false,
   setAsideReason,
   onConfirm,
+  onDraft,
 }: BagConfirmCardProps) {
   const [draft, setDraft] = useState<Draft>(() => draftOf(details));
+  // What is typed is kept on the card in the chat (D279): the card comes back with it after another screen, another
+  // bag or a reload, and shows it if set aside. Kept half a second after the last change, as a field is left (for
+  // the composer, a tab, Confirm), and as the card goes.
+  const kept = useRef(draft);
+  const latest = useRef(draft);
+  const keepTo = useRef(onDraft);
+  useEffect(() => {
+    latest.current = draft;
+    keepTo.current = onDraft;
+  });
+  const keep = useCallback(() => {
+    if (latest.current === kept.current) return;
+    kept.current = latest.current;
+    keepTo.current?.(detailsOf(latest.current));
+  }, []);
+  useEffect(() => {
+    if (draft === kept.current) return;
+    const timer = setTimeout(keep, KEEP_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [draft, keep]);
+  useEffect(() => keep, [keep]);
   // A typed card starts blank: its name is asked for in red only once the barista has been to it.
   const [nameTouched, setNameTouched] = useState(false);
   const open = !confirmed && !expired;
@@ -200,7 +227,7 @@ export function BagConfirmCard({
               ? 'Type what the bag says. Only the name is needed; leave blank what it does not say.'
               : 'Read from your photo. Fix anything that is wrong, then confirm.'}
           </Typography>
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 1.5, mt: 1.5 }}>
+          <Box onBlur={keep} sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 1.5, mt: 1.5 }}>
             {TEXT_FIELDS.map(text)}
             <TextField
               select

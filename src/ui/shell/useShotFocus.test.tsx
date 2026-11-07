@@ -114,6 +114,9 @@ describe('useShotFocus', () => {
     await settle();
     expect(window.location.hash).toBe('#/');
     expect(text('held')).not.toBe('none');
+    // The barista opens it from the line: their own move, so the app takes them nowhere after it.
+    act(() => navigate({ name: 'shot' }));
+    await settle();
     finish(services);
     await settle();
     expect(text('held')).toBe('none');
@@ -121,6 +124,24 @@ describe('useShotFocus', () => {
     expect(text('awaiting')).toBe('false');
     addMessages(services, notice('m1'));
     await settle();
+    expect(window.location.hash).toBe('#/shot');
+  });
+
+  it('goes back to the coach at once when the coach lets a shot it took the screen for pass (D276)', async () => {
+    const services = renderHarness([], { activeBag: makeBag({ id: 'bag_1', name: 'New bag' }), activeVersion: null, phase: 'intake', quietRuns: 0 });
+    // Away from the new bag screen, the shot takes the screen.
+    act(() => navigate({ name: 'history' }));
+    await settle();
+    start(services);
+    expect(window.location.hash).toBe('#/shot');
+    await settle();
+    finish(services);
+    await settle();
+    expect(text('awaiting')).toBe('true');
+    // No card or notice comes for a shot no dial-in takes: the coach letting it pass is the outcome.
+    act(() => services.coach.setState({ quietRuns: 1 }));
+    await settle();
+    expect(text('awaiting')).toBe('false');
     expect(window.location.hash).toBe('#/');
   });
 

@@ -508,6 +508,7 @@ export function createFakeCoach(initial: Partial<CoachState> = {}): FakeCoach {
     typeBagDetails: record('typeBagDetails'),
     readBagPhoto: record('readBagPhoto'),
     confirmBag: record('confirmBag'),
+    draftBag: record('draftBag'),
     addGrinder: record('addGrinder'),
     declineGrinder: record('declineGrinder'),
     retry: record('retry'),

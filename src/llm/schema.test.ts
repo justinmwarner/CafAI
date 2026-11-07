@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { AskUserInput, ProposeTemplatesInput, SaveBagDetailsInput, TOOL_INPUTS } from '../coach/contract.ts';
+import {
+  AskUserInput,
+  LOOSE_TOOLS,
+  ProposeTemplatesInput,
+  SaveBagDetailsInput,
+  STRICT_UNION_LIMIT,
+  TOOL_INPUTS,
+  type ToolName,
+} from '../coach/contract.ts';
 import { toToolDefinition, zodValidator } from './schema.ts';
 
 /** Keywords strict tool use accepts. Anything else in a tool schema is a 400 or a silent no-op. */
@@ -163,6 +171,20 @@ describe('toToolDefinition', () => {
         expect(node.required ?? [], `${name} ${path}`).toEqual(Object.keys((node.properties ?? {}) as Node));
       });
     });
+  });
+
+  it("keeps the strict tools within the API's limit on parameters with union types, counted across them all (D278)", () => {
+    let unions = 0;
+    for (const [name, schema] of Object.entries(TOOL_INPUTS)) {
+      if (LOOSE_TOOLS.has(name as ToolName)) continue;
+      walk(toToolDefinition(name, 'd', schema).inputSchema, (node) => {
+        for (const property of Object.values((node.properties ?? {}) as Record<string, Node>)) {
+          if (Array.isArray(property.anyOf) || Array.isArray(property.type)) unions++;
+        }
+      });
+    }
+    expect(unions).toBeGreaterThan(0);
+    expect(unions).toBeLessThanOrEqual(STRICT_UNION_LIMIT);
   });
 });
 

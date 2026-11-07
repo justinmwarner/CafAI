@@ -6,6 +6,7 @@
  * dismisses the line for this run. It goes by itself when the run ends.
  */
 import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import Stack from '@mui/material/Stack';
@@ -22,7 +23,17 @@ const WORDS: Readonly<Record<RunKind, { running: string; open: string }>> = {
 };
 
 /** The line's sentence after what runs: why the screen stayed. */
-export const STAYED = 'You are setting up a bag, so CafAI stayed on this screen.';
+const STAYED = 'You are setting up a bag, so CafAI stayed on this screen.';
+
+const visuallyHidden = {
+  position: 'absolute',
+  // Strings: in sx a bare 1 is 100%, a box as wide and tall as the pane that the frame could be scrolled to.
+  width: '1px',
+  height: '1px',
+  overflow: 'hidden',
+  clipPath: 'inset(50%)',
+  whiteSpace: 'nowrap',
+} as const;
 
 export interface HeldRunAlertProps {
   kind: RunKind;
@@ -35,7 +46,8 @@ export function HeldRunAlert({ kind, onOpen, onDismiss }: HeldRunAlertProps) {
   return (
     <Alert
       severity="info"
-      role="status"
+      // No live region of its own: HeldRunStatus says its words, once.
+      role="none"
       data-testid={TID.heldRun}
       sx={{
         flex: 'none',
@@ -58,5 +70,18 @@ export function HeldRunAlert({ kind, onOpen, onDismiss }: HeldRunAlertProps) {
     >
       <strong>{words.running}</strong> {STAYED}
     </Alert>
+  );
+}
+
+/**
+ * The line's words for a screen reader: a status region that stays in the
+ * page and is filled while the line shows (`kind`), as a region that
+ * appears with its words already in it is often not read out at all.
+ */
+export function HeldRunStatus({ kind }: { kind: RunKind | null }) {
+  return (
+    <Box role="status" data-testid={TID.heldRunStatus} sx={visuallyHidden}>
+      {kind === null ? '' : `${WORDS[kind].running} ${STAYED}`}
+    </Box>
   );
 }

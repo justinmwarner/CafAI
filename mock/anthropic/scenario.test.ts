@@ -179,6 +179,22 @@ describe('request checks', () => {
     expect(errorOf(call([INTAKE], { over: { tools: loose } })).message).toContain('strict');
   });
 
+  it('takes save_bag_details without strict, and answers 400 past the limit on union types across the strict schemas (D278)', () => {
+    const loose = TOOLS.map((t) => (t.name === TOOL.saveBagDetails ? { ...t, strict: false } : t));
+    expect(ok(call([INTAKE], { over: { tools: loose } })).tools.map((t) => t.name)).toEqual([TOOL.saveBagDetails, TOOL.proposeTemplates]);
+    const nullable = { anyOf: [{ type: 'string' }, { type: 'null' }] };
+    const names = Array.from({ length: 17 }, (_, i) => `p${i}`);
+    const crowded = {
+      name: 'crowded',
+      description: 'crowded',
+      input_schema: { type: 'object', properties: Object.fromEntries(names.map((n) => [n, nullable])), required: names, additionalProperties: false },
+      strict: true,
+    };
+    expect(errorOf(call([INTAKE], { over: { tools: [...TOOLS, crowded] } })).message).toContain('17 parameters with union types');
+    // Kept out of strict, the same schema is no part of it.
+    expect(ok(call([INTAKE], { over: { tools: [...TOOLS, { ...crowded, name: TOOL.saveBagDetails, strict: false }] } })).tools).toHaveLength(2);
+  });
+
   it('takes the web search server tool beside the strict tools, with no strict of its own, and never searches (D203)', () => {
     const tools = [...TOOLS, { type: 'web_search_20250305', name: 'web_search', max_uses: 1 }];
     const reply = ok(call([INTAKE], { over: { tools } }));

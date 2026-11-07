@@ -253,6 +253,28 @@ export const TOOL_INPUTS = {
 } as const satisfies Record<ToolName, z.ZodType>;
 
 /**
+ * Anthropic compiles the schemas of a request's strict tools together and
+ * takes at most this many parameters with union types across them all (anyOf
+ * or a type array, as every nullable field is): structured outputs, "Schema
+ * complexity limits". The mock coach answers 400 past it, as the API may.
+ */
+export const STRICT_UNION_LIMIT = 16;
+
+/**
+ * Tools sent without strict mode, so the strict ones stay within
+ * STRICT_UNION_LIMIT (D278): save_bag_details alone has ten nullable details,
+ * and the API's own advice is to keep strict for the tools that need it. Zod
+ * checks its input when it comes back, as every tool's, and a detail it
+ * leaves out keeps what was saved.
+ */
+export const LOOSE_TOOLS: ReadonlySet<ToolName> = new Set([TOOL.saveBagDetails]);
+
+/** A tool's definition as CafAI sends it: strict, but for LOOSE_TOOLS. */
+export function withStrictness<T extends object>(name: string, definition: T): T & { strict?: boolean } {
+  return LOOSE_TOOLS.has(name as ToolName) ? { ...definition, strict: false } : definition;
+}
+
+/**
  * Markers that open engine-authored user turns, so the model (and the scripted
  * fake in mock/anthropic) can tell an app event from something the user typed.
  * Format: `${marker}\n${JSON payload}`.

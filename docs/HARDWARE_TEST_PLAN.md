@@ -419,8 +419,8 @@ this bag's, and the banner offers Retry to load the bag's version.
       (then pick a photo of a bag taken earlier with the tablet's camera
       app, if it has one).
    2. Cancel it (Back, or the chooser's cancel). Expected: back on the
-      card, nothing new in the chat, and the card still answers: Photo of
-      the bag, Something else and the coffees' **Use this** all work.
+      card, nothing new in the chat, and the card still answers: **Photo of
+      the bag**, **Type the details** and the coffees' **Use this** all work.
    3. Take or pick a photo of a real bag, label up, in good light.
       Expected: "Reading the bag…" with a moving bar, then **Check the
       bag's details** with what the label says, and the card shows "Photo

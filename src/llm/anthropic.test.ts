@@ -6,7 +6,7 @@ import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { anthropicHandlers, resetAnthropicMock } from '../../mock/anthropic/handlers.ts';
 import { sseFrame } from '../../mock/anthropic/sse.ts';
-import { TOOL_INPUTS } from '../coach/contract.ts';
+import { TOOL, TOOL_INPUTS, withStrictness } from '../coach/contract.ts';
 import { RAW_NOT_KEPT, trafficLog } from '../traffic/recorder.ts';
 import { KEY_MARKER } from '../traffic/redact.ts';
 import {
@@ -41,7 +41,14 @@ afterEach(() => {
 });
 afterAll(() => server.close());
 
-const TOOLS = Object.entries(TOOL_INPUTS).map(([name, schema]) => toToolDefinition(name, `The ${name} tool.`, schema));
+const TOOLS = Object.entries(TOOL_INPUTS).map(([name, schema]) => withStrictness(name, toToolDefinition(name, `The ${name} tool.`, schema)));
+/** The tools as they go over the wire: strict, but for save_bag_details (D278). */
+const WIRE_TOOLS = TOOLS.map((t) => ({
+  name: t.name,
+  description: t.description,
+  input_schema: t.inputSchema,
+  ...(t.name === TOOL.saveBagDetails ? {} : { strict: true }),
+}));
 
 const INTAKE: LlmMessage = {
   role: 'user',
@@ -126,7 +133,7 @@ describe('buildAnthropicRequest', () => {
       max_tokens: 16000,
       system: 'You are an espresso coach.',
       messages: [INTAKE],
-      tools: TOOLS.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema, strict: true })),
+      tools: WIRE_TOOLS,
       tool_choice: { type: 'auto' },
       stream: true,
       cache_control: { type: 'ephemeral' },
@@ -134,6 +141,14 @@ describe('buildAnthropicRequest', () => {
     });
     // Opus 5.5 always thinks and rejects sampling settings: none of these may be sent.
     for (const key of ['thinking', 'temperature', 'top_p', 'top_k', 'fallbacks']) expect(body).not.toHaveProperty(key);
+  });
+
+  it('sends a tool kept out of strict mode without strict, its schema the same (D278)', () => {
+    const [first, ...rest] = TOOLS;
+    const tools = [{ ...first!, strict: false }, ...rest];
+    const body = JSON.parse(buildAnthropicRequest({ ...request(), tools }, KEY).body) as { tools: Array<Record<string, unknown>> };
+    expect(body.tools[0]).toEqual({ name: first!.name, description: first!.description, input_schema: first!.inputSchema });
+    expect(body.tools.slice(1).every((tool) => tool.strict === true)).toBe(true);
   });
 
   it('leaves caching out of a request that will not repeat (a photo of the bag), so it is not written to the cache', () => {
@@ -194,7 +209,7 @@ describe('buildAnthropicRequest', () => {
   it('puts the server tools after the strict client tools, as given, with auto tool choice and the same caching (D203)', () => {
     const body = JSON.parse(buildAnthropicRequest(request({ serverTools: [WEB_SEARCH_TOOL] }), KEY).body);
     expect(body.tools).toEqual([
-      ...TOOLS.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema, strict: true })),
+      ...WIRE_TOOLS,
       { type: 'web_search_20250305', name: 'web_search', max_uses: 1 },
     ]);
     expect(body.tool_choice).toEqual({ type: 'auto' });

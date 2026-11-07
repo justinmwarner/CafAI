@@ -14,23 +14,38 @@ workflow checks against it. Settings > About shows the version you run.
   beans". Before, the library's coffees came first and the way to add a
   new one was a quiet "Something else" under them, so New bag read like
   "change bag". **Type the details** opens a card to fill in, so a bag no
-  longer has to be described in a chat message (you still can).
+  longer has to be described in a chat message (you still can). What you
+  type there stays if you go to another screen or bag, or the app reloads.
+  On a phone on its side, the card's two buttons come right under its title,
+  so both are in view.
 - **More of the label, and a place for your own notes.** A bag now keeps
   its **producer or farm** ("Produced by El Paraíso"), its **variety**,
   its **altitude** and **Other details**: anything else on the bag (a lot,
   the harvest, a fermentation) or in your head. A photo of the bag reads
   them too, the coach takes them into account, and the producer, the
   variety and the altitude go to Decaid's bean library with the rest (and
-  come from it when you pick a coffee there).
+  come from it when you pick a coffee there). A variety such as "Red &
+  Yellow Catuaí" or "SL28/34" stays one variety, and an altitude given in
+  feet, or in metres and feet, reaches Decaid in metres.
+- **A correction changes only what you correct.** When you tell the coach
+  a detail of the bag was wrong, it changes that detail alone. Before, each
+  correction rewrote every detail, so one the coach did not repeat (your
+  Other details, say) could be lost.
 - **The new bag screen keeps its place.** While a bag has no starting
   profile yet, Espresso, Steam, Flush or Hot water no longer switch the
   screen away from it. A line at the top says what is running, with a
   button to open it (Open the shot, Open Steam...) and one to dismiss it.
+  The screen ignores taps for a moment as the line comes and goes, so a tap
+  meant for one coffee cannot land on the next.
 - **The coach is quiet until the bag has a profile.** A shot pulled while
   a bag is being set up (a tap on Espresso by mistake) no longer gets
   "That shot stopped before it poured: nothing to taste." or "Pick a
   starting profile first" in the chat, and the Shot view no longer says
-  it is reading a shot that nobody reads.
+  it is reading a shot that nobody reads: it hands the screen back to the
+  coach at once. A profile picked while such a shot runs does not bring the
+  coach back to that shot.
+- With your own API key, the coach's requests stay within a limit Anthropic
+  sets on tool definitions, which the bag's new details would have passed.
 - A photo whose reading leaves out the roast level or the roast date is no
   longer refused as unreadable.
 

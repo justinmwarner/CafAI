@@ -261,6 +261,9 @@ const machine = {
   failShotUpdates: 0,
   /** How many more GET /workflow calls fail. */
   failWorkflowReads: 0,
+  /** GET /workflow calls wait until the test calls `releaseWorkflowReads()`, as a slow Decaid's do. */
+  holdWorkflowReads: false,
+  heldWorkflowReads: [] as Array<() => void>,
   /** Decaid's grinder library, by id (D62). */
   grinders: new Map<string, GrinderInfo>(),
   /** How many more grinder reads fail. */
@@ -329,6 +332,11 @@ function releaseGrinderReads(): void {
   for (const release of machine.heldGrinderReads.splice(0)) release();
 }
 
+function releaseWorkflowReads(): void {
+  machine.holdWorkflowReads = false;
+  for (const release of machine.heldWorkflowReads.splice(0)) release();
+}
+
 function releaseBeanCalls(): void {
   machine.holdBeanCalls = false;
   for (const release of machine.heldBeanCalls.splice(0)) release();
@@ -368,6 +376,8 @@ function makeApi(calls: ApiCall[]): ApiPort {
   machine.annotations.clear();
   machine.failShotUpdates = 0;
   machine.failWorkflowReads = 0;
+  machine.holdWorkflowReads = false;
+  machine.heldWorkflowReads = [];
   machine.grinders.clear();
   machine.failGrinderReads = 0;
   machine.holdGrinderReads = false;
@@ -413,6 +423,7 @@ function makeApi(calls: ApiCall[]): ApiPort {
   return {
     getWorkflow: async () => {
       calls.push({ method: 'getWorkflow', args: [] });
+      if (machine.holdWorkflowReads) await new Promise<void>((resolve) => machine.heldWorkflowReads.push(resolve));
       if (machine.failWorkflowReads > 0) {
         machine.failWorkflowReads -= 1;
         throw unreachable('/api/v1/workflow');
@@ -2954,6 +2965,49 @@ describe('coach engine', () => {
       expect(callsOf('getShot')).toEqual([]);
     });
 
+    it('says nothing of a run that started before the bag had a starting profile, though one was picked while it ran (D276)', async () => {
+      await throughTemplateCards();
+      telemetry.emitShot({ type: 'started', shotId: 'shot-1' });
+      scripts.push(() => [text('Loaded. Pull a shot.')]);
+      await engine.pickTemplate('t-tpl', 'd-flow');
+      expect(engine.getState().activeVersion).not.toBeNull();
+      const chat = engine.getState().messages;
+
+      telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: 'targetWeight' });
+      await drain();
+      expect(engine.getState().messages).toEqual(chat);
+      expect(engine.getState().error).toBeNull();
+      expect(callsOf('getShot')).toEqual([]);
+      expect(await storage.iterations.listAll()).toEqual([]);
+      // The next shot is the bag's.
+      expect(await shotIsCredited('shot-2')).toBe(true);
+    });
+
+    it('tells the screen when it lets a run pass, and only then (D276)', async () => {
+      await openBag();
+      expect(engine.getState().quietRuns).toBe(0);
+      ranAndEnded('stopped-1', 'apiStop');
+      await drain();
+      expect(engine.getState().quietRuns).toBe(1);
+
+      await throughTemplatePick();
+      expect(await shotIsCredited('shot-1')).toBe(true);
+      expect(engine.getState().quietRuns).toBe(1);
+    });
+
+    it('lets a run pass without waiting on Decaid, so what comes after it does not wait either (D276)', async () => {
+      await openBag();
+      machine.holdWorkflowReads = true;
+      ranAndEnded('stopped-1', 'apiStop');
+      let drained = false;
+      void drain().then(() => {
+        drained = true;
+      });
+      await vi.waitFor(() => expect(drained).toBe(true));
+      expect(engine.getState().quietRuns).toBe(1);
+      releaseWorkflowReads();
+    });
+
     it('an abort Decaid sent for another run leaves this one a shot', async () => {
       await throughTemplatePick();
       telemetry.setState({ shotState: shotFrame('old-run', 'preheating', decision('abort', 'apiStop')) });
@@ -5047,6 +5101,28 @@ describe('coach engine', () => {
       expect(notices().some((p) => p.text === ADDED)).toBe(false);
     });
 
+    it('a correction changes what it says: null keeps a detail, an empty text removes one, a left-out one stays (D278)', async () => {
+      const later = { roastDate: '2026-09-28', producer: 'Kiambu Farmers', variety: 'SL28, SL34', altitude: '1,700 masl', other: 'Thermal shock; a gift from Sam' };
+      await throughIntake(toolUse('t-save', TOOL.saveBagDetails, { ...KIAMBU, ...later }));
+      await savedAgain({
+        name: 'Kiambu AA',
+        roaster: null,
+        origin: null,
+        roastLevel: null,
+        process: '',
+        notes: null,
+        roastDate: '2026-10-03',
+        producer: null,
+        variety: null,
+        altitude: null,
+        other: null,
+      });
+      expect(bag()).toMatchObject({ ...KIAMBU, ...later, process: null, roastDate: '2026-10-03' });
+      // A call that leaves the later details out (the coach through CafAI Bridge, whose tools are not strict) keeps them.
+      await savedAgain({ name: 'Kiambu AA', roaster: null, origin: 'Kenya, Kiambu', roastLevel: null, process: null, notes: null });
+      expect(bag()).toMatchObject({ ...KIAMBU, ...later, origin: 'Kenya, Kiambu', process: null, roastDate: '2026-10-03' });
+    });
+
     it('leaves the bag unlinked while Decaid is away, says nothing, and tries again at the next save', async () => {
       await openBag();
       machine.failBeanCalls = 1;
@@ -5350,6 +5426,43 @@ describe('coach engine', () => {
       expect(requests).toEqual([]);
       expect(engine.getState().activeBag).toMatchObject({ name: 'New bag' });
       expect(engine.getState().activeBag?.producer).toBeUndefined();
+    });
+
+    it('keeps what is typed on the card, through a reload, saving nothing to the bag and sending nothing (D279)', async () => {
+      stockLibrary();
+      await openBag();
+      await engine.typeBagDetails();
+      const typed = { ...BLANK_BAG, name: 'Pink Bourbon', altitude: '1,950 masl', other: 'Thermal shock; a gift from Sam' };
+      await engine.draftBag(typed);
+      expect(confirmCard()).toMatchObject({ details: typed, confirmed: false });
+      expect(engine.getState().activeBag).toMatchObject({ name: 'New bag' });
+      expect(requests).toEqual([]);
+
+      engine.dispose();
+      engine = build();
+      await engine.start();
+      expect(confirmCard()).toMatchObject({ details: typed, confirmed: false });
+    });
+
+    it('a card set aside shows what was typed; a confirmed one keeps what was confirmed (D279)', async () => {
+      stockLibrary();
+      await openBag();
+      await engine.typeBagDetails();
+      const typed = { ...BLANK_BAG, name: 'Pink Bourbon' };
+      await engine.draftBag(typed);
+      scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);
+      await engine.sendText('Kiambu AA, light, washed');
+      expect(confirmCard()).toMatchObject({ details: typed, expired: true, setAsideReason: 'typed' });
+      await engine.draftBag({ ...typed, name: 'Something else' });
+      expect(confirmCard()).toMatchObject({ details: typed });
+
+      await engine.newBag();
+      await vi.waitFor(() => expect(beanCard()?.loading).not.toBe(true));
+      await engine.typeBagDetails();
+      scripts.push(() => [text('Lovely.'), proposeTemplates]);
+      await engine.confirmBag({ ...BLANK_BAG, name: 'Gesha' });
+      await engine.draftBag({ ...BLANK_BAG, name: 'Too late' });
+      expect(confirmCard()).toMatchObject({ details: { name: 'Gesha' }, confirmed: true });
     });
 
     it('saves the typed details, every one, and starts the intake told they were typed (D278, D279)', async () => {

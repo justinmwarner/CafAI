@@ -288,12 +288,12 @@ export type CoachUiPart =
       /**
        * "Which coffee is it?" (6.1): Decaid's unarchived batches, newest roast
        * first, at most 8; none when the library is empty or Decaid was out of
-       * reach, and the card offers a photo of the bag and something else.
+       * reach, and the card offers a photo of the bag and Type the details.
        */
       options: BeanPickerOption[];
       /**
        * True while CafAI reads Decaid's batches: the card is already up, and
-       * a photo of the bag and something else already work. Absent once read.
+       * a photo of the bag and Type the details already work. Absent once read.
        */
       loading?: boolean;
       /** Null while the card waits for an answer. */
@@ -449,6 +449,13 @@ export interface CoachState {
    * leaves it out.
    */
   restoredFromBackup?: boolean;
+  /**
+   * Counts the runs the coach let pass without a word, as no dial-in takes
+   * them: no bag, or a bag with no starting profile when the run started
+   * (D276). Each one tells a screen waiting for that run's outcome that none
+   * is coming (useShotFocus.ts). Optional: without it the wait runs out.
+   */
+  quietRuns?: number;
 }
 
 export interface CoachController {
@@ -491,6 +498,14 @@ export interface CoachController {
   readBagPhoto(photo: BagPhoto): Promise<void>;
   /** The details card as the barista confirmed it (read from a photo, or typed): saved like save_bag_details, then the coach's intake. */
   confirmBag(details: SaveBagDetails): Promise<void>;
+  /**
+   * The open details card's fields as the barista has them so far, before
+   * Confirm (D279): kept on the card in the stored chat, so the card comes
+   * back with them however it left the screen (another screen, another bag,
+   * a reload), and shows them if it is set aside. Nothing is saved to the
+   * bag, and the coach hears nothing.
+   */
+  draftBag(details: SaveBagDetails): Promise<void>;
   /**
    * The coach's grinder card (D125): add the grinder to Decaid's grinder
    * library, or take the one Decaid already has, link it as Settings does,

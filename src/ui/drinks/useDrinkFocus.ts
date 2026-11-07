@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useServices } from '../../app/services.tsx';
 import { isCareVideoOpen } from '../care/videoHold.ts';
-import { parseRoute, replaceRoute, routeHref, type Route } from '../router.ts';
+import { navigate, parseRoute, replaceRoute, routeHref, type Route } from '../router.ts';
 import { holdsRuns } from '../shell/bagSetup.ts';
 import { GUARD_MS, isTextEntry } from '../shell/useShotFocus.ts';
 import { drinkOpened, drinkStarted, goBackRoute, NO_ORIGIN, type DrinkFocusState } from './drinkFocus.ts';
@@ -118,8 +118,9 @@ export function useDrinkFocus(): DrinkFocus {
       focusRef.current = step.state;
       setFocus(step.state);
     }
-    // Tapped, it is the barista's own move: nothing to guard.
-    replaceRoute(step.go);
+    // Tapped, it is the barista's own move: nothing to guard, and a new entry, as Open the shot makes, so Back in a
+    // browser returns to the bag being set up.
+    navigate(step.go);
   }, []);
   return { guardUntil, back: goBackRoute(focus), goBack, held, openHeld };
 }

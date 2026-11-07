@@ -24,10 +24,11 @@ export const TID = {
   tabHistory: 'tab-history',
   tabSettings: 'tab-settings',
   liveStrip: 'live-strip',
-  /** The new bag screen's line about a run that stayed off the screen (D277), its Open and its dismiss. */
+  /** The new bag screen's line about a run that stayed off the screen (D277), its Open, its dismiss, and its words for a screen reader. */
   heldRun: 'held-run',
   heldRunOpen: 'held-run-open',
   heldRunDismiss: 'held-run-dismiss',
+  heldRunStatus: 'held-run-status',
   shotView: 'shot-view',
   coachNote: 'coach-note',
   tapGuard: 'tap-guard',

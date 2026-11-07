@@ -15,7 +15,7 @@ export type FocusState =
    * coach reads it, so its end waits for no outcome.
    */
   | { kind: 'live'; auto: boolean; held?: boolean }
-  /** The pour is over; waiting for the chat to get the shot's card or notice. */
+  /** The pour is over; waiting for the chat to get the shot's card or notice, or for the coach to let it pass (D276). */
   | { kind: 'over'; auto: boolean; at: number };
 
 export type FocusEvent =
@@ -23,6 +23,7 @@ export type FocusEvent =
   | { type: 'shotStarted'; typing: boolean; onShotRoute: boolean; held?: boolean }
   | { type: 'userNavigated' }
   | { type: 'shotFinished'; at: number }
+  /** The shot's card or notice is in the chat, or the coach let the shot pass: nothing more is coming. */
   | { type: 'outcomeAdded' }
   | { type: 'tick'; now: number };
 

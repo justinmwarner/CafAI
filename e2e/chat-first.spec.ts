@@ -273,11 +273,11 @@ test('a new bag opens on "Which coffee is it?" from its top, the newest roasts i
   await expect(beanCard.getByTestId(TID.beanOption).first()).toHaveAccessibleName(new RegExp(`^Use this: ${names[0]}, roasted \\d{1,2} [A-Z][a-z]{2} \\d{4}$`));
   // Shown from the card's top, while the stats card stays the newest row below (D91).
   await expectInChatView(page, beanCard.getByRole('heading', { name: 'Which coffee is it?' }), 'the bean card from its top');
-  // A new coffee comes first (D279); under it the newest roast, where the view is tall enough for both (not a phone on its side).
-  if (roomForRows(page)) {
-    await expectInChatView(page, beanCard.getByTestId(TID.beanTypeDetails), 'Type the details');
-    await expectInChatView(page, beanCard.getByTestId(TID.beanOption).first(), 'the newest roast');
-  }
+  // A new coffee comes first (D279): its two buttons in view in every layout, a phone on its side too; under them the
+  // newest roast, where the view is tall enough for both.
+  await expectInChatView(page, beanCard.getByTestId(TID.bagPhoto), 'Photo of the bag');
+  await expectInChatView(page, beanCard.getByTestId(TID.beanTypeDetails), 'Type the details');
+  if (roomForRows(page)) await expectInChatView(page, beanCard.getByTestId(TID.beanOption).first(), 'the newest roast');
   await expect(rows(page).last().getByTestId(TID.statsCard)).toBeVisible();
 
   // Type the details (D279): the chat follows again, to the details card it opens.

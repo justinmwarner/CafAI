@@ -125,14 +125,27 @@ describe('useDrinkFocus', () => {
       expect(window.location.hash).toBe('#/');
     });
 
-    it("opens the held run's view on a tap, and Go back returns to the coach", async () => {
-      window.location.hash = '#/';
+    it("opens the held run's view on a tap, as the barista's own move, and Go back returns to the coach", async () => {
+      // An earlier run took the screen from Settings: Go back went there until now.
+      window.location.hash = '#/settings';
       await settle();
       const services = renderHarness(SETTING_UP);
+      send(services, frame('flush'));
+      expect(window.location.hash).toBe('#/flush');
+      send(services, frame('idle', 'idle'));
+      await settle();
+      expect(text('back')).toBe('settings');
+      act(() => navigate({ name: 'coach' }));
+      await settle();
+
       send(services, frame('hotWater'));
       await settle();
+      expect(text('held')).toBe('hotWater');
+      const entries = window.history.length;
       act(() => screen.getByRole('button', { name: 'Open it' }).click());
       expect(window.location.hash).toBe('#/hot-water');
+      // A new entry, as a tap to any screen makes: Back in a browser returns to the bag being set up.
+      expect(window.history.length).toBe(entries + 1);
       await settle();
       expect(text('back')).toBe('coach');
     });

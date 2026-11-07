@@ -1,6 +1,6 @@
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { TOOL_INPUTS } from '../../src/coach/contract.ts';
+import { TOOL_INPUTS, withStrictness } from '../../src/coach/contract.ts';
 import { createAnthropicProvider } from '../../src/llm/anthropic.ts';
 import { bridgeStatusLine, findBridge, getBridgeStatus } from '../../src/llm/bridgeClient.ts';
 import { computerWording } from '../../src/llm/errors.ts';
@@ -22,7 +22,7 @@ const INTAKE: LlmRequest = {
   model: 'claude-opus-5-5',
   system: 'You are an espresso coach.',
   messages: [{ role: 'user', content: [{ type: 'text', text: 'Kiambu AA, light roast, washed' }] }],
-  tools: Object.entries(TOOL_INPUTS).map(([name, schema]) => toToolDefinition(name, `The ${name} tool.`, schema)),
+  tools: Object.entries(TOOL_INPUTS).map(([name, schema]) => withStrictness(name, toToolDefinition(name, `The ${name} tool.`, schema))),
 };
 
 const coachOn = (code: string) =>

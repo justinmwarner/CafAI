@@ -73,11 +73,20 @@ test("the line opens the shot on a tap, and dismissed it stays dismissed for tha
 
 test('Steam on the new bag screen stays off it too; Open Steam shows it, and Go back returns to the bag', async ({ page }) => {
   await openNewBag(page);
+  const view = page.getByTestId(TID.drinkView);
+  // An earlier flush took the screen from Settings, so that is where its view went back to.
+  await goTo(page, 'settings');
+  await machineRow(page).getByTestId(TID.flushButton).click();
+  await expect(view).toHaveAttribute('data-drink', 'flush');
+  await expect(view.getByRole('button', { name: 'Go back to Settings' })).toBeVisible();
+  await expect(view.getByTestId(TID.drinkPhase)).toContainText('Done');
+  await goTo(page, 'coach');
+  await expect(page.getByTestId(TID.beanCard)).toBeVisible();
+
   await machineRow(page).getByTestId(TID.steamButton).click();
   await expect(heldRun(page)).toContainText('Steam is running.');
   expect(hash(page)).toBe('#/');
   await heldRun(page).getByRole('button', { name: 'Open Steam' }).click();
-  const view = page.getByTestId(TID.drinkView);
   await expect(view).toHaveAttribute('data-drink', 'steam');
   expect(hash(page)).toBe('#/steam');
   await expect(view.getByTestId(TID.drinkPhase)).toContainText('Done');
