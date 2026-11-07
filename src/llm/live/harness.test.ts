@@ -37,7 +37,19 @@ const KEY_PREFIX = ['sk', 'ant', ''].join('-');
 
 const S0 = { templateId: 'blooming-espresso', confidence: 'high', reason: 'A bloom suits a dense light roast.' };
 const S1 = { templateId: 'd-flow', confidence: 'low', reason: 'Forgiving for most roasts.' };
-const SAVE_INPUT = { name: 'Kiambu AA', roaster: null, origin: 'Kenya', roastLevel: 'light', process: 'washed', notes: null, roastDate: null };
+const SAVE_INPUT = {
+  name: 'Kiambu AA',
+  roaster: null,
+  origin: 'Kenya',
+  roastLevel: 'light',
+  process: 'washed',
+  notes: null,
+  roastDate: null,
+  producer: null,
+  variety: null,
+  altitude: null,
+  other: null,
+};
 const ASK_INPUT = { question: 'Milk or straight?', options: ['Straight', 'With milk'], multiSelect: false };
 
 const INTAKE = userMessage(
@@ -233,7 +245,8 @@ describe('coachRunnerTools', () => {
       output_config: unknown;
     };
     expect(body.tools.map((t) => t.name)).toEqual(Object.values(TOOL));
-    expect(body.tools.every((t) => t.strict)).toBe(true);
+    // Strict, but for save_bag_details, kept out so the strict schemas stay within the API's limits (D278).
+    expect(body.tools.filter((t) => t.strict !== true).map((t) => t.name)).toEqual([TOOL.saveBagDetails]);
     expect(body.tool_choice).toEqual({ type: 'auto' });
     expect(body.stream).toBe(true);
     expect(body.system).toBe(buildSystemPrompt(TEMPLATES));

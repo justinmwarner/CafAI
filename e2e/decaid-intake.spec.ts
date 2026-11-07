@@ -18,10 +18,11 @@ import {
 /**
  * A new bag starts on "Which coffee is it?" (D115), in every layout. A coffee
  * picked from Decaid's bean library fills the bag, and its loads name the
- * batch (D102). Something else leaves the bag to be described in the chat, as
- * before. A photo of the bag is read once by the coach's model into details
- * to check and confirm, and nothing keeps the image (D120); a photographed
- * coffee already in the library reuses its bean and its batch.
+ * batch (D102). Type the details opens the bag's details card, blank, to fill
+ * in and confirm (D279), and the bag can still be described in the chat. A
+ * photo of the bag is read once by the coach's model into details to check
+ * and confirm, and nothing keeps the image (D120); a photographed coffee
+ * already in the library reuses its bean and its batch.
  *
  * The mock's library holds Red Brick (roasted 9 days ago) and Ethiopia
  * Chelchele (30 days ago); the scripted coach reads any photo as Kiambu AA
@@ -145,22 +146,57 @@ test("a coffee picked from Decaid's library fills the bag, and its loads name th
   expect(await libraryAdds(page)).toEqual([]);
 });
 
-test('Something else closes the card, and the bag described in the chat starts the intake as before', async ({ page }) => {
+test('the bag described in the chat sets the card aside and starts the intake as before', async ({ page }) => {
   await openApp(page);
   const card = await openNewBag(page);
   await expect(card.getByTestId(TID.beanOption)).toHaveCount(2);
-  await card.getByTestId(TID.beanSomethingElse).click();
-
-  // Answered: the button gives way to the answer, and the card takes no other.
-  await expect(card.getByTestId(TID.beanSomethingElse)).toHaveCount(0);
-  await expect(card).toContainText('Something else');
-  await expect(card.getByTestId(TID.bagPhoto)).toBeDisabled();
-  for (const option of await card.getByTestId(TID.beanOption).all()) await expect(option).toBeDisabled();
 
   // Today's intake: the description, the details saved from it, and the starting profiles.
   await sendChat(page, 'Kiambu AA, light roast, washed');
+  await expect(card).toContainText('Set aside: you described the bag in the chat.');
+  for (const option of await card.getByTestId(TID.beanOption).all()) await expect(option).toBeDisabled();
   await expect(page.getByTestId(TID.templatePick('blooming-espresso'))).toBeVisible();
   await expect(bagName(page)).toHaveText('Kiambu AA');
+});
+
+test('a new coffee comes first: Type the details opens a blank card, and what is typed, El Paraíso and all, starts the intake and goes to Decaid (D278, D279)', async ({
+  page,
+}) => {
+  await openApp(page);
+  const card = await openNewBag(page);
+  // The ways to add a new coffee sit above Decaid's own, under a heading of their own.
+  const photoBox = await card.getByTestId(TID.bagPhoto).boundingBox();
+  const libraryBox = await card.getByRole('list', { name: "Already in Decaid's beans" }).boundingBox();
+  expect(photoBox!.y).toBeLessThan(libraryBox!.y);
+  await card.getByTestId(TID.beanTypeDetails).click();
+
+  // Answered: the button gives way to the answer, and the card takes no other.
+  await expect(card.getByTestId(TID.beanTypeDetails)).toHaveCount(0);
+  await expect(card).toContainText('Type the details');
+  await expect(card.getByTestId(TID.bagPhoto)).toBeDisabled();
+  for (const option of await card.getByTestId(TID.beanOption).all()) await expect(option).toBeDisabled();
+
+  const details = page.getByTestId(TID.bagConfirm);
+  await expect(details.getByRole('heading', { name: "The bag's details" })).toBeVisible();
+  const confirm = details.getByRole('button', { name: 'Confirm' });
+  await expect(confirm).toBeDisabled();
+  await details.getByLabel('Name').fill('Pink Bourbon');
+  await details.getByLabel('Roaster').fill('Onyx Coffee Lab');
+  await details.getByLabel('Producer or farm').fill('El Paraíso');
+  await details.getByLabel('Variety').fill('Pink Bourbon');
+  await details.getByLabel('Altitude').fill('1,950 masl');
+  await details.getByLabel('Other details').fill('Thermal shock; a gift from Sam');
+  await confirm.click();
+
+  await expect(details).toContainText('Produced by El Paraíso');
+  await expect(details).toContainText('Other details: Thermal shock; a gift from Sam');
+  await expect(page.getByTestId(TID.templatePick('blooming-espresso'))).toBeVisible();
+  await expect(bagName(page)).toHaveText('Pink Bourbon');
+  // Decaid's library gets the producer, the variety and the altitude in metres; the other details stay in CafAI.
+  await expect.poll(async () => libraryAdds(page)).toEqual(['/api/v1/beans', expect.stringMatching(/^\/api\/v1\/beans\/[^/]+\/batches$/)]);
+  const bean = (await decaidRequests(page)).find((request) => request.method === 'POST' && request.path === '/api/v1/beans');
+  expect(bean?.body).toMatchObject({ name: 'Pink Bourbon', producer: 'El Paraíso', variety: ['Pink Bourbon'], altitude: [1950, 1950] });
+  expect(JSON.stringify(bean?.body)).not.toContain('Thermal shock');
 });
 
 test('a photo of the bag is read once into details to check, the edited details start the intake, and no copy of the image is kept', async ({

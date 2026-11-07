@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GatewayError, type TelemetryState } from '../../api/types.ts';
+import { makeBag, makeVersion } from '../../storage/testing/fixtures.ts';
 import { TID } from '../testIds.ts';
 import { createFakeServices, IDLE_TELEMETRY, type FakeServices } from '../testing/fakeServices.ts';
 import { renderWithServices } from '../testing/renderWithServices.tsx';
@@ -62,9 +63,16 @@ describe('ShotView', () => {
     expect(view.lastElementChild).not.toContainElement(within(view).getByTestId(TID.liveGraph));
   });
 
-  it('shows the note while the chat waits for the outcome', () => {
-    renderWithServices(<ShotView awaitingOutcome />);
+  it('shows the note while the chat waits for the outcome of a shot the coach reads', () => {
+    const version = makeVersion({ id: 'ver_1', bagId: 'bag_1' });
+    const coach = { activeBag: makeBag({ id: 'bag_1', activeVersionId: 'ver_1' }), activeVersion: version, versions: [version] };
+    renderWithServices(<ShotView awaitingOutcome />, createFakeServices({ coach }));
     expect(screen.getByTestId(TID.coachNote)).toHaveTextContent('Done. Reading the shot');
+  });
+
+  it('waits for no outcome of a shot no bag takes (D276)', () => {
+    renderWithServices(<ShotView awaitingOutcome />);
+    expect(screen.queryByTestId(TID.coachNote)).not.toBeInTheDocument();
   });
 
   it("on a tablet, spans the pane up to a width still read at a glance: the step beside the caption, four readouts in a row", () => {

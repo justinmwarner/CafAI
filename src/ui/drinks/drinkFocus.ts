@@ -27,7 +27,11 @@ export interface DrinkStarted {
   kind: DrinkKind;
   /** A field that takes typed text has focus (useShotFocus.ts's isTextEntry). */
   typing: boolean;
-  /** Decent's video is open on the Care screen (videoHold.ts, D156): the barista is following it. */
+  /**
+   * The run stays off the screen: Decent's video is open on the Care screen
+   * (videoHold.ts, D156) and the barista is following it, or the new bag
+   * screen is up (bagSetup.ts, D277) and a line there offers the view instead.
+   */
   held?: boolean;
   /** The route on screen as the run started. */
   shown: Route;
@@ -44,6 +48,16 @@ export function drinkStarted(state: DrinkFocusState, event: DrinkStarted): Drink
   if (event.typing || event.held === true || there) return { state, go: null };
   const origin = event.shown.name === 'drink' ? state.origin : event.shown;
   return { state: origin === state.origin ? state : { origin }, go: { name: 'drink', drink: event.kind } };
+}
+
+/**
+ * The barista opens a held run's view (the new bag screen's line, D277): as
+ * a switch would, it remembers the screen it leaves, so Go back (and going
+ * back by itself, D221) returns there.
+ */
+export function drinkOpened(state: DrinkFocusState, kind: DrinkKind, shown: Route): { state: DrinkFocusState; go: Route } {
+  const origin = shown.name === 'drink' ? state.origin : shown;
+  return { state: origin === state.origin ? state : { origin }, go: { name: 'drink', drink: kind } };
 }
 
 /** Where Go back goes: the screen the view took over, or the coach. */

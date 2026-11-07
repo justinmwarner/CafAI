@@ -125,6 +125,10 @@ export interface BeanPickerOption {
   origin: string | null;
   process: string | null;
   notes: string | null;
+  /** The bean's farm or producer, varieties ("Castillo, Caturra") and altitude ("1,900-2,100 m"); absent on cards stored before them (D278). */
+  producer?: string | null;
+  variety?: string | null;
+  altitude?: string | null;
   /** The batch's roast level when it is one of CafAI's five, else null. */
   roastLevel: RoastLevel | null;
   /** YYYY-MM-DD, or null when the batch has none. */
@@ -134,8 +138,12 @@ export interface BeanPickerOption {
   unfreezeDate: string | null;
 }
 
-/** The answer on the bean card: a batch, a photo of the bag, or something else (the bag described in the chat). */
-export type BeanChoice = { kind: 'batch'; batchId: string } | { kind: 'photo' } | { kind: 'other' };
+/**
+ * The answer on the bean card: a batch, a photo of the bag, its details
+ * typed on the details card (D279), or, on cards answered before that card,
+ * something else (the bag described in the chat).
+ */
+export type BeanChoice = { kind: 'batch'; batchId: string } | { kind: 'photo' } | { kind: 'typed' } | { kind: 'other' };
 
 /**
  * How a shot compared with the one it is set against (D126), in the
@@ -280,12 +288,12 @@ export type CoachUiPart =
       /**
        * "Which coffee is it?" (6.1): Decaid's unarchived batches, newest roast
        * first, at most 8; none when the library is empty or Decaid was out of
-       * reach, and the card offers a photo of the bag and something else.
+       * reach, and the card offers a photo of the bag and Type the details.
        */
       options: BeanPickerOption[];
       /**
        * True while CafAI reads Decaid's batches: the card is already up, and
-       * a photo of the bag and something else already work. Absent once read.
+       * a photo of the bag and Type the details already work. Absent once read.
        */
       loading?: boolean;
       /** Null while the card waits for an answer. */
@@ -296,8 +304,13 @@ export type CoachUiPart =
     }
   | {
       kind: 'bagConfirm';
-      /** The bag's details as read from its photo (a name not on the bag is empty), then as confirmed (6.8). */
+      /**
+       * The bag's details as read from its photo (a name not on the bag is
+       * empty), then as confirmed (6.8); or, typed (D279), blank until confirmed.
+       */
       details: SaveBagDetails;
+      /** Where the details come from: a photo (absent on cards stored before typing them), or typed by the barista. */
+      source?: 'photo' | 'typed';
       confirmed: boolean;
       /** The user typed in the chat instead: the details were not saved. */
       expired?: boolean;
@@ -437,6 +450,13 @@ export interface CoachState {
    */
   restoredFromBackup?: boolean;
   /**
+   * Counts the runs the coach let pass without a word, as no dial-in takes
+   * them: no bag, or a bag with no starting profile when the run started
+   * (D276). Each one tells a screen waiting for that run's outcome that none
+   * is coming (useShotFocus.ts). Optional: without it the wait runs out.
+   */
+  quietRuns?: number;
+  /**
    * What the coach's reply waits on (D281), as the provider last said it
    * ("Waiting for Claude on your computer."), shown under "Thinking…": null
    * when nothing is known, once the reply's turn begins (Claude is thinking
@@ -480,12 +500,20 @@ export interface CoachController {
    * link it, and start the coach's intake with it.
    */
   pickBean(batchId: string): Promise<void>;
-  /** The bean card's "Something else": close it; the barista describes the bag in the chat. */
-  skipBeanPick(): Promise<void>;
+  /** The bean card's "Type the details" (D279): close it and open the bag's details card, blank, to fill in. */
+  typeBagDetails(): Promise<void>;
   /** Read a photo of the bag (6.8) into a confirm card. The photo is sent once and never kept. */
   readBagPhoto(photo: BagPhoto): Promise<void>;
-  /** The photo's details as the barista confirmed them: saved like save_bag_details, then the coach's intake. */
+  /** The details card as the barista confirmed it (read from a photo, or typed): saved like save_bag_details, then the coach's intake. */
   confirmBag(details: SaveBagDetails): Promise<void>;
+  /**
+   * The open details card's fields as the barista has them so far, before
+   * Confirm (D279): kept on the card in the stored chat, so the card comes
+   * back with them however it left the screen (another screen, another bag,
+   * a reload), and shows them if it is set aside. Nothing is saved to the
+   * bag, and the coach hears nothing.
+   */
+  draftBag(details: SaveBagDetails): Promise<void>;
   /**
    * The coach's grinder card (D125): add the grinder to Decaid's grinder
    * library, or take the one Decaid already has, link it as Settings does,

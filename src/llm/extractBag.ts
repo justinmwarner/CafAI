@@ -31,12 +31,18 @@ export interface ExtractedBag {
   /** YYYY-MM-DD. */
   roastDate: string | null;
   notes: string | null;
+  /** The farm or producer, the varieties and the altitude as printed (D278). */
+  producer: string | null;
+  variety: string | null;
+  altitude: string | null;
+  /** Anything else of note printed on the bag that none of the fields hold. */
+  other: string | null;
 }
 
 export const EXTRACT_BAG_PROMPT = [
   'This photo should show a bag of coffee beans. Read what is printed on it and answer with only this JSON object, no other text:',
-  '{"name":string|null,"roaster":string|null,"origin":string|null,"process":string|null,"roastLevel":"light"|"medium-light"|"medium"|"medium-dark"|"dark"|null,"roastDate":"YYYY-MM-DD"|null,"notes":string|null}',
-  `name is the coffee's short name as printed (at most ${BAG_LIMITS.name} characters, e.g. "Kiambu AA"); origin the country and region; process e.g. "washed"; notes the tasting notes, comma separated. roastDate is the day the coffee was roasted, not a best-before, packed or sell-by date, and null when its day, month or year is not clear. Use null for anything the bag does not show; never guess. If the photo is not of a coffee bag, answer with every field null.`,
+  '{"name":string|null,"roaster":string|null,"origin":string|null,"process":string|null,"roastLevel":"light"|"medium-light"|"medium"|"medium-dark"|"dark"|null,"roastDate":"YYYY-MM-DD"|null,"notes":string|null,"producer":string|null,"variety":string|null,"altitude":string|null,"other":string|null}',
+  `name is the coffee's short name as printed (at most ${BAG_LIMITS.name} characters, e.g. "Kiambu AA"); origin the country and region; process e.g. "washed"; notes the tasting notes, comma separated. producer is the farm, estate, cooperative or producer (for "Produced by El Paraíso", "El Paraíso"); variety the varieties, comma separated (e.g. "Castillo, Caturra"); altitude as printed, with its unit (e.g. "1,950 masl"). other holds anything else printed that a barista would want and none of the fields hold, in a few words each, separated by "; " (e.g. a lot number, the harvest, the importer, a fermentation, decaf, a recommended recipe), at most ${BAG_LIMITS.other} characters; never the roaster's address, a website, a story or a slogan. roastDate is the day the coffee was roasted, not a best-before, packed or sell-by date, and null when its day, month or year is not clear. Use null for anything the bag does not show; never guess. If the photo is not of a coffee bag, answer with every field null.`,
 ].join('\n');
 
 /** Room for the JSON and the model's own thinking. */
@@ -56,9 +62,18 @@ const AnswerSchema = z.object({
   roaster: detail(BAG_LIMITS.roaster),
   origin: detail(BAG_LIMITS.origin),
   process: detail(BAG_LIMITS.process),
-  roastLevel: z.unknown().transform(toRoastLevel),
-  roastDate: z.unknown().transform((value) => (typeof value === 'string' ? writtenDate(value) : null)),
+  // Caught too: zod refuses a key left out of the answer even where any value would do, and that sank the whole card.
+  roastLevel: z.unknown().transform(toRoastLevel).catch(null),
+  roastDate: z
+    .unknown()
+    .transform((value) => (typeof value === 'string' ? writtenDate(value) : null))
+    .catch(null),
   notes: detail(BAG_LIMITS.notes),
+  // Like every field, one left out of the answer is unknown (detail's catch): the rest still fill the card (D278).
+  producer: detail(BAG_LIMITS.producer),
+  variety: detail(BAG_LIMITS.variety),
+  altitude: detail(BAG_LIMITS.altitude),
+  other: detail(BAG_LIMITS.other),
 });
 
 /** The model's answer as CafAI keeps it. Throws an LlmError with a sentence when it holds no details at all. */

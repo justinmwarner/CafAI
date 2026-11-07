@@ -186,15 +186,15 @@ describe('ChatSurface', () => {
       createdAt: '2026-10-03T08:01:00.000Z',
     };
 
-    it('shows "Which coffee is it?" and passes a pick and Something else on', async () => {
+    it('shows "Which coffee is it?" and passes a pick and Type the details on', async () => {
       const onPickBean = vi.fn();
-      const onSkipBeanPick = vi.fn();
-      renderSurface({ messages: [beanCard, textMessage('m-q', 'assistant', 'New bag!')], onPickBean, onSkipBeanPick });
+      const onTypeBagDetails = vi.fn();
+      renderSurface({ messages: [beanCard, textMessage('m-q', 'assistant', 'New bag!')], onPickBean, onTypeBagDetails });
       const card = screen.getByTestId(TID.beanCard);
       await userEvent.click(within(card).getAllByTestId(TID.beanOption)[0]!);
       expect(onPickBean).toHaveBeenCalledWith('batch-red');
-      await userEvent.click(within(card).getByTestId(TID.beanSomethingElse));
-      expect(onSkipBeanPick).toHaveBeenCalledTimes(1);
+      await userEvent.click(within(card).getByTestId(TID.beanTypeDetails));
+      expect(onTypeBagDetails).toHaveBeenCalledTimes(1);
     });
 
     it('blocks the bean card while the coach works', () => {
@@ -203,25 +203,25 @@ describe('ChatSurface', () => {
     });
 
     it("opens a new bag's chat at the top of the card, keeps it there while its rows arrive, and follows once it is answered", async () => {
-      const onSkipBeanPick = vi.fn();
+      const onTypeBagDetails = vi.fn();
       const question = textMessage('m-q', 'assistant', 'New bag! Tell me about it.');
       const looking: CoachUiMessage = { ...beanCard, parts: [{ kind: 'beanPicker', options: [], choice: null, loading: true }] };
-      const { rerender } = renderSurface({ messages: conversation('options'), onSkipBeanPick, statsCard: true });
+      const { rerender } = renderSurface({ messages: conversation('options'), onTypeBagDetails, statsCard: true });
       const scroller = screen.getByTestId(TID.chat).querySelector<HTMLElement>('.MuiChatMessageList-scroller')!;
       // jsdom lays nothing out: a 300 px view over 1000 px of thread, read to its end.
       Object.defineProperty(scroller, 'scrollHeight', { configurable: true, get: () => 1000 });
       Object.defineProperty(scroller, 'clientHeight', { configurable: true, get: () => 300 });
       Object.defineProperty(scroller, 'scrollTop', { configurable: true, writable: true, value: 700 });
 
-      rerender({ messages: [looking, question], onSkipBeanPick, statsCard: true });
+      rerender({ messages: [looking, question], onTypeBagDetails, statsCard: true });
       expect(scroller.scrollTop).toBe(0);
-      rerender({ messages: [beanCard, question], onSkipBeanPick, statsCard: true });
+      rerender({ messages: [beanCard, question], onTypeBagDetails, statsCard: true });
       expect(scroller.scrollTop).toBe(0);
 
-      await userEvent.click(screen.getByTestId(TID.beanSomethingElse));
-      expect(onSkipBeanPick).toHaveBeenCalledTimes(1);
-      const skipped: CoachUiMessage = { ...beanCard, parts: [{ kind: 'beanPicker', options: BEAN_OPTIONS, choice: { kind: 'other' } }] };
-      rerender({ messages: [skipped, question], onSkipBeanPick, statsCard: true });
+      await userEvent.click(screen.getByTestId(TID.beanTypeDetails));
+      expect(onTypeBagDetails).toHaveBeenCalledTimes(1);
+      const skipped: CoachUiMessage = { ...beanCard, parts: [{ kind: 'beanPicker', options: BEAN_OPTIONS, choice: { kind: 'typed' } }] };
+      rerender({ messages: [skipped, question], onTypeBagDetails, statsCard: true });
       expect(scroller.scrollTop).toBe(700);
     });
 

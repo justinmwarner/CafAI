@@ -12,7 +12,17 @@
  * default; the demo voice (demoVoice.ts) writes fuller prose around the same
  * tool calls.
  */
-import { EVENT, TEMPLATE_IDS, TOOL, toRoastLevel, type ProposeAdjustment, type RoastLevel, type ShareFunFact } from '../../src/coach/contract.ts';
+import {
+  EVENT,
+  LOOSE_TOOLS,
+  STRICT_UNION_LIMIT,
+  TEMPLATE_IDS,
+  TOOL,
+  toRoastLevel,
+  type ProposeAdjustment,
+  type RoastLevel,
+  type ShareFunFact,
+} from '../../src/coach/contract.ts';
 import { FAHRENHEIT_HEADING } from '../../src/coach/fahrenheitPrompt.ts';
 import FACT_LIST from '../../src/coach/facts/facts.json';
 import { factFits, matchedKeys, type BagFacts } from '../../src/coach/facts/match.ts';
@@ -210,6 +220,15 @@ function isWebSearch(tool: unknown): boolean {
   return isRecord(tool) && typeof tool.type === 'string' && tool.type.startsWith('web_search_') && typeof tool.name === 'string' && !('input_schema' in tool);
 }
 
+/** The parameters of a schema, nested ones too, that take a union type: anyOf, or a type array. */
+function unionParameters(schema: unknown): number {
+  if (Array.isArray(schema)) return schema.reduce<number>((sum, item) => sum + unionParameters(item), 0);
+  if (!isRecord(schema)) return 0;
+  const properties = isRecord(schema.properties) ? Object.values(schema.properties) : [];
+  const own = properties.filter((property) => isRecord(property) && (Array.isArray(property.anyOf) || Array.isArray(property.type))).length;
+  return own + Object.values(schema).reduce<number>((sum, value) => sum + unionParameters(value), 0);
+}
+
 function checkHeaders(headers: HeaderSource): ScenarioResponse | null {
   if (!(headers.get('content-type') ?? '').includes('application/json')) {
     return invalid('content-type: expected application/json.');
@@ -234,10 +253,18 @@ function checkBody(body: Raw, messages: Message[], memory: ScenarioMemory): Scen
 
   const tools = body.tools ?? [];
   if (!Array.isArray(tools)) return invalid('tools: expected a list.');
+  let unions = 0;
   for (const [i, tool] of tools.entries()) {
     // Anthropic runs its web search itself (D203): no schema, nothing to be strict about. This fake never searches.
     if (isWebSearch(tool)) continue;
-    if (!isRecord(tool) || tool.strict !== true) return invalid(`tools.${i}.strict: every CafAI tool must be strict.`);
+    // Every CafAI tool is strict but the ones kept out of it for the limits below (LOOSE_TOOLS, D278).
+    const loose = isRecord(tool) && typeof tool.name === 'string' && (LOOSE_TOOLS as ReadonlySet<string>).has(tool.name);
+    if (!isRecord(tool) || (tool.strict !== true && !loose)) return invalid(`tools.${i}.strict: every CafAI tool must be strict.`);
+    if (tool.strict === true) unions += unionParameters(tool.input_schema);
+  }
+  // The API compiles every strict schema of a request together, within limits of its own (structured outputs).
+  if (unions > STRICT_UNION_LIMIT) {
+    return invalid(`tools: ${unions} parameters with union types across the strict tools, more than ${STRICT_UNION_LIMIT}.`);
   }
   if (tools.length > 0 || body.tool_choice !== undefined) {
     const choice = body.tool_choice;
@@ -822,7 +849,7 @@ function intake(script: Script, description: string): Reply {
         type: 'tool_use',
         id: script.newToolId(),
         name: TOOL.saveBagDetails,
-        input: { name, roaster: null, origin, roastLevel, process, notes: null, roastDate: null },
+        input: { name, roaster: null, origin, roastLevel, process, notes: null, roastDate: null, producer: null, variety: null, altitude: null, other: null },
       },
       {
         type: 'tool_use',
@@ -866,6 +893,10 @@ export const BAG_PHOTO_ANSWER = {
   roastLevel: 'light',
   roastDate: '2026-09-28',
   notes: 'blackcurrant, grapefruit, brown sugar',
+  producer: 'Kiambu Farmers Cooperative',
+  variety: 'SL28, SL34',
+  altitude: '1,700-1,900 masl',
+  other: 'Lot 7; harvest 2026',
 } as const;
 
 /** Rule 0: a request with a photo in it is CafAI reading a bag (src/llm/extractBag.ts), never a turn of the coach's chat. */

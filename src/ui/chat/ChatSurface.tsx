@@ -89,12 +89,14 @@ export interface ChatSurfaceProps {
   onShotTds?(shotId: string, tdsPct: number | null): void;
   /** A batch of Decaid's bean library picked on "Which coffee is it?" (6.1). */
   onPickBean?(batchId: string): void;
-  /** The bean card's Something else. */
-  onSkipBeanPick?(): void;
+  /** The bean card's Type the details (D279): the details card opens, blank. */
+  onTypeBagDetails?(): void;
   /** A photo of the bag, ready to send (6.8). */
   onBagPhoto?(photo: BagPhoto): void;
-  /** The details read from the photo, as the barista confirmed them. */
+  /** The details card (read from the photo, or typed), as the barista confirmed it. */
   onConfirmBag?(details: SaveBagDetails): void;
+  /** The open details card's fields as typed so far, kept so the card comes back with them (D279). */
+  onDraftBag?(details: SaveBagDetails): void;
   /** Add on the coach's grinder card (D125). */
   onAddGrinder?(requestId: string): void;
   /** The grinder card's Not now. */
@@ -229,9 +231,10 @@ interface PartActions {
   /** The Stats prompt (it lives in x-chat's slot above the composer, so it reaches ChatSurface through here too). */
   askStats(): void;
   pickBean(batchId: string): void;
-  skipBeanPick(): void;
+  typeBagDetails(): void;
   bagPhoto(photo: BagPhoto): void;
   confirmBag(details: SaveBagDetails): void;
+  draftBag(details: SaveBagDetails): void;
   addGrinder(requestId: string): void;
   declineGrinder(requestId: string): void;
   /** Stop on the thinking row (D282). */
@@ -357,7 +360,7 @@ function BeanPickerView({ data }: { data: unknown }) {
       setAsideReason={part.setAsideReason}
       loading={part.loading ?? false}
       onPick={actions.pickBean}
-      onSomethingElse={actions.skipBeanPick}
+      onTypeDetails={actions.typeBagDetails}
       onPhoto={actions.bagPhoto}
     />
   );
@@ -370,11 +373,13 @@ function BagConfirmView({ data }: { data: unknown }) {
   return (
     <BagConfirmCard
       details={part.details}
+      source={part.source ?? 'photo'}
       confirmed={part.confirmed}
       disabled={busy}
       expired={part.expired ?? false}
       setAsideReason={part.setAsideReason}
       onConfirm={actions.confirmBag}
+      onDraft={actions.draftBag}
     />
   );
 }
@@ -748,9 +753,11 @@ export function ChatSurface(props: ChatSurfaceProps) {
         propsRef.current.onStats?.();
       },
       pickBean: act((batchId: string) => propsRef.current.onPickBean?.(batchId)),
-      skipBeanPick: act(() => propsRef.current.onSkipBeanPick?.()),
+      typeBagDetails: act(() => propsRef.current.onTypeBagDetails?.()),
       bagPhoto: act((photo: BagPhoto) => propsRef.current.onBagPhoto?.(photo)),
       confirmBag: act((details: SaveBagDetails) => propsRef.current.onConfirmBag?.(details)),
+      // Typing on the card adds nothing to the chat: the view stays where the barista is.
+      draftBag: (details: SaveBagDetails) => propsRef.current.onDraftBag?.(details),
       addGrinder: act((requestId: string) => propsRef.current.onAddGrinder?.(requestId)),
       declineGrinder: act((requestId: string) => propsRef.current.onDeclineGrinder?.(requestId)),
       // The banner says what became of it; the thread stays where it is.
@@ -804,6 +811,8 @@ export function ChatSurface(props: ChatSurfaceProps) {
       followerRef.current?.resume();
     }
     followerRef.current?.update();
+    // x-chat may put a row back where it was in its own commit, after this one (followNewest.ts's settle).
+    queueMicrotask(() => followerRef.current?.settle());
   }, [chatMessages, followerRef]);
   // Stats: the card is (or has just become) the newest row. Shown afresh, as
   // a new thread is, so a card taller than the view shows from its start

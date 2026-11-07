@@ -38,12 +38,12 @@ Bounds, granularity and max change per iteration:
 All JSON payloads are compact `JSON.stringify` output.
 
 1. **Bag intake** (first user turn of a bag). A new bag's chat opens with the
-   card "Which coffee is it?" (6.1: the batches of Decaid's bean library, a
-   photo of the bag, Something else), then a local placeholder message asking
-   for origin, roast, process and notes; neither is sent. The card is up at
-   once, saying it is looking in Decaid's beans; its rows fill in when
-   `GET /api/v1/beans` and `GET /api/v1/bean-batches` (every batch in one
-   request) answer. The first user turn is sent as:
+   card "Which coffee is it?" (6.1: a photo of the bag, Type the details, then
+   the batches of Decaid's bean library, D279), then a local placeholder
+   message asking for origin, roast, process and notes; neither is sent. The
+   card is up at once, saying it is looking in Decaid's beans; its rows fill
+   in when `GET /api/v1/beans` and `GET /api/v1/bean-batches` (every batch in
+   one request) answer. The first user turn is sent as:
    `[{type:"text", text:<words>}, {type:"text", text:"[context]\n" + JSON}]`
    where JSON = `{"grinder":<grinder>,"scaleConnected":boolean,"doseG":number|null,"bag":<bag>|null,"roast":string|null,"today":"YYYY-MM-DD"}`.
    `<words>` is what the user typed; or, for a batch picked on the card,
@@ -225,9 +225,14 @@ Auto tools (`save_bag_details`, `get_shot_summary`, `get_shot_series`,
 `share_fun_fact`) are executed by the runner immediately; their results are
 JSON objects.
 `save_bag_details` takes `roastDate` (`"YYYY-MM-DD"` or null) with the other
-details and answers `{"saved":true}`; a call stored before `roastDate` existed
-reads as null. Each call replaces every detail, so a correction resends the
-others as saved (the tool description says so). `get_recent_setups` (no
+details and answers `{"saved":true}`; a call stored before `roastDate` (or
+D278's details) existed, or one that leaves a detail out, reads as null for
+it. A call changes only what it says (D278): null keeps a detail as saved and
+an empty text removes one, so a correction sends the name and what changes
+(the tool description says so); the details card the barista confirms
+replaces every detail. It is the one tool sent without `strict`
+(`LOOSE_TOOLS`), so the strict ones stay within the API's 16 parameters with
+union types per request. `get_recent_setups` (no
 input, read-only, 6.5) answers
 `{"available":true,"setups":[{"kind","sameBatch","profileTitle","grindSetting","doseG","yieldG","rpm","basket","date"}],"equipment":[string],"baskets":[string]}`
 from DYE2 (its `recent-favs` endpoint while it is loaded, else its KV keys),

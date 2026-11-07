@@ -5,6 +5,7 @@ import {
   intakeBlocks,
   photoIntakeText,
   pickedIntakeText,
+  typedIntakeText,
   shotCompletedBlock,
   shotRatedBlock,
   summaryForModel,
@@ -94,6 +95,10 @@ describe('engine protocol', () => {
       process: 'washed',
       notes: 'chocolate, plum',
       roastDate: '2026-09-24',
+      producer: null,
+      variety: null,
+      altitude: null,
+      other: null,
     };
 
     it('says what the user picked, by whom, with its details', () => {
@@ -108,6 +113,13 @@ describe('engine protocol', () => {
     it('says the user confirmed the details read from a photo of the bag', () => {
       expect(photoIntakeText(bag)).toBe(
         'The user confirmed these details read from a photo of the bag: Red Brick by Square Mile; Brazil, Mogiana; washed; medium roast; roasted 2026-09-24; tasting notes: chocolate, plum.',
+      );
+    });
+
+    it('says what the user typed on the details card, the later details too (D278, D279)', () => {
+      const typed = { ...bag, name: 'Pink Bourbon', producer: 'El Paraíso', variety: 'Pink Bourbon', altitude: '1,950 masl', other: 'Thermal shock' };
+      expect(typedIntakeText(typed)).toBe(
+        "The user typed the bag's details: Pink Bourbon by Square Mile; Brazil, Mogiana; produced by El Paraíso; variety: Pink Bourbon; altitude: 1,950 masl; washed; medium roast; roasted 2026-09-24; tasting notes: chocolate, plum; other details: Thermal shock.",
       );
     });
 

@@ -16,6 +16,8 @@ export interface BagFacts {
   process: string | null;
   notes: string | null;
   roastLevel: RoastLevel | null;
+  /** The varieties the bag names (D278); absent on bags made before them. */
+  variety?: string | null;
 }
 
 /** A match's keys, in the order a bag's own facts are told (D200): a roaster fact first, a roast-level one last. */
@@ -47,7 +49,7 @@ function fieldsOf(key: Exclude<MatchKey, 'roastLevels'>, bag: BagFacts): Array<s
     case 'processes':
       return [bag.process, bag.name];
     case 'varieties':
-      return [bag.name, bag.origin, bag.notes];
+      return [bag.variety ?? null, bag.name, bag.origin, bag.notes];
     case 'notes':
       return [bag.notes];
   }

@@ -473,6 +473,12 @@ export interface BeanCreateRequest {
   roaster: string;
   name: string;
   country?: string;
+  /** The farm or producer (D278). */
+  producer?: string;
+  /** The varieties, one name each. */
+  variety?: string[];
+  /** The altitude range [min, max] in metres. */
+  altitude?: number[];
   processing?: string;
   notes?: string;
 }

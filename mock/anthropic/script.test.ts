@@ -2,7 +2,7 @@
 // handler, with this test playing the engine (docs/briefs/ENGINE_PROTOCOL.md).
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { TOOL, TOOL_INPUTS, UI_TOOLS, type ToolName } from '../../src/coach/contract.ts';
+import { TOOL, TOOL_INPUTS, UI_TOOLS, withStrictness, type ToolName } from '../../src/coach/contract.ts';
 import { createAnthropicProvider } from '../../src/llm/anthropic.ts';
 import { extractBag } from '../../src/llm/extractBag.ts';
 import { runConversation } from '../../src/llm/runner.ts';
@@ -25,7 +25,7 @@ function coachTools(executed: Array<{ name: string; input: unknown }>): RunnerTo
   return (Object.keys(TOOL_INPUTS) as ToolName[]).map((name) => {
     const schema = TOOL_INPUTS[name];
     const tool: RunnerTool = {
-      definition: toToolDefinition(name, `The ${name} tool.`, schema),
+      definition: withStrictness(name, toToolDefinition(name, `The ${name} tool.`, schema)),
       kind: UI_TOOLS.includes(name) ? 'ui' : 'auto',
       validate: zodValidator(schema),
     };
@@ -89,7 +89,19 @@ describe('the scripted coach, end to end', () => {
     expect(coach.executed).toEqual([
       {
         name: TOOL.saveBagDetails,
-        input: { name: 'Kiambu AA', roaster: null, origin: 'Kenya', roastLevel: 'light', process: 'washed', notes: null, roastDate: null },
+        input: {
+          name: 'Kiambu AA',
+          roaster: null,
+          origin: 'Kenya',
+          roastLevel: 'light',
+          process: 'washed',
+          notes: null,
+          roastDate: null,
+          producer: null,
+          variety: null,
+          altitude: null,
+          other: null,
+        },
       },
     ]);
     const templates = intake.pendingUiCalls[0]!;

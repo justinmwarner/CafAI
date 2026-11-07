@@ -49,6 +49,13 @@ export interface FollowNewest {
   update(): void;
   /** The reader acted (sent, tapped a card): follow again. */
   resume(): void;
+  /**
+   * Call once the chat's own commit is done: x-chat keeps a row in place
+   * when the rows change other than by an append (the stats card was the
+   * last row), and that can undo the scroll just made before its scroll
+   * event arrives. Then the scroll is made again; otherwise nothing.
+   */
+  settle(): void;
   /** A new thread replaced the old one: follow it from scratch. */
   reset(): void;
   /**
@@ -77,9 +84,12 @@ export function createFollowNewest(
   /** While a new thread is shown from its start (showStart): its newest row then, whose successor ends the hold. */
   let held: { row: unknown } | null = null;
   let expectedTop: number | null = null;
+  /** Where the last scroll of ours was asked to go, before the browser clamped it. */
+  let requestedTop = 0;
   let lastTop = scroller.scrollTop;
 
   function scrollTo(top: number): void {
+    requestedTop = top;
     scroller.scrollTop = Math.max(0, top);
     // Read back: the browser clamps to the scrollable range.
     expectedTop = scroller.scrollTop;
@@ -118,6 +128,12 @@ export function createFollowNewest(
     resume() {
       following = true;
       held = null;
+    },
+    settle() {
+      // Our scroll's event has arrived (or none was made): whatever moved the view since was the reader.
+      if (!following || expectedTop === null) return;
+      if (Math.abs(scroller.scrollTop - expectedTop) <= 1) return;
+      scrollTo(requestedTop);
     },
     reset() {
       following = true;

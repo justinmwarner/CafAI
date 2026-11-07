@@ -65,9 +65,11 @@
 import {
   AUTO_TOOLS,
   BAG_LIMITS,
+  LATER_BAG_DETAILS,
   TOOL,
   TOOL_INPUTS,
   toRoastLevel,
+  withStrictness,
   type AskUser,
   type OfferGrinder,
   type ProposeAdjustment,
@@ -77,6 +79,7 @@ import {
   type ToolName,
 } from '../../coach/contract.ts';
 import { isTds, readingOf, roundTds, withTds } from '../../coach/extraction.ts';
+import { altitudeRange, altitudeText, varietyList, varietyText } from './beanDetails.ts';
 import { loadFacts } from '../../coach/facts/load.ts';
 import { ranLikeLast } from '../../coach/facts/likeLast.ts';
 import { pickFact, toldLabels } from '../../coach/facts/pick.ts';
@@ -157,6 +160,7 @@ import {
   grinderPayload,
   intakeBlocks,
   photoIntakeText,
+  typedIntakeText,
   pickedIntakeText,
   shotCompletedBlock,
   shotMeasuredBlock,
@@ -188,6 +192,7 @@ import {
   NEW_BAG_PROMPT,
   appendText,
   bagConfirmPart,
+  BLANK_BAG,
   byRequestId,
   diffPart,
   factPart,
@@ -326,6 +331,13 @@ interface ShotStart {
   shotId: string | null;
   /** The active version had not reached the machine when the shot started. */
   early: { versionId: string; status: LoadStatus; at: number } | null;
+  /**
+   * No dial-in takes the run: there was no bag, or the bag had no starting
+   * profile, when it started (D276). Settled then, as the new bag screen
+   * decides then to stay put (D277), so a profile picked while it runs does
+   * not bring the coach back to it.
+   */
+  unread: boolean;
 }
 
 /**
@@ -483,6 +495,9 @@ function pickable(bean: Bean, batch: BeanBatch): Pickable[] {
         origin: clip(origin, BAG_LIMITS.origin),
         process: clip(bean.processing, BAG_LIMITS.process),
         notes: clip(bean.notes, BAG_LIMITS.notes),
+        producer: clip(bean.producer, BAG_LIMITS.producer),
+        variety: varietyText(bean.variety, BAG_LIMITS.variety),
+        altitude: clip(altitudeText(bean.altitude), BAG_LIMITS.altitude),
         roastLevel: toRoastLevel(batch.roastLevel),
         roastDate: writtenDate(batch.roastDate),
         freezeDate: writtenDate(batch.freezeDate),
@@ -514,22 +529,36 @@ function bagDetails(bag: Bag): SaveBagDetails {
     process: bag.process,
     notes: bag.notes,
     roastDate: bag.roastDate ?? null,
+    producer: bag.producer ?? null,
+    variety: bag.variety ?? null,
+    altitude: bag.altitude ?? null,
+    other: bag.other ?? null,
   };
 }
 
 /**
- * A save_bag_details call written before roastDate existed (a stored chat
- * replayed after an update, a recorded one) reads as a roast date nobody
- * knows. The model itself always sends every key: its tools are strict.
+ * A save_bag_details call written before a detail existed (the roast date,
+ * D278's four; a stored chat replayed after an update, a recorded one, the
+ * mock's scripted coach), or one that leaves a detail out (the coach through
+ * CafAI Bridge, whose tools are not strict), reads as not touching that
+ * detail: null keeps it as saved (D278).
  */
-function withRoastDate(input: unknown): unknown {
-  return typeof input === 'object' && input !== null && !Array.isArray(input) && !('roastDate' in input) ? { ...input, roastDate: null } : input;
+function withLaterDetails(input: unknown): unknown {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) return input;
+  const missing = LATER_BAG_DETAILS.filter((key) => !(key in input));
+  return missing.length === 0 ? input : { ...input, ...Object.fromEntries(missing.map((key) => [key, null])) };
 }
 
 /** A new bean for Decaid's library from a bag's details (D102); a detail CafAI does not know is left out. */
 function beanRequest(bag: Bag, roaster: string, name: string): BeanCreateRequest {
   const request: BeanCreateRequest = { roaster, name };
   if (bag.origin) request.country = bag.origin;
+  if (bag.producer) request.producer = bag.producer;
+  const variety = varietyList(bag.variety);
+  if (variety) request.variety = variety;
+  // Only an altitude CafAI can read as metres; the bag's words stay with the bag (D278).
+  const altitude = altitudeRange(bag.altitude);
+  if (altitude) request.altitude = altitude;
   if (bag.process) request.processing = bag.process;
   if (bag.notes) request.notes = bag.notes;
   return request;
@@ -635,6 +664,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     activeLoad: null,
     machineTick: 0,
     restoredFromBackup: deps.restoredFromBackup ?? false,
+    quietRuns: 0,
     waitNote: null,
   };
   let settings: Settings = { model: 'claude-opus-5-5', grinderName: null, grinderSetting: null, activeBagId: null };
@@ -1275,21 +1305,33 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
   }
 
   /**
-   * The bag's details as the coach (save_bag_details) or the photo's confirm
-   * card gave them, roast date included, then its place in Decaid's bean
-   * library: saved first, as the batch Decaid gets is read from the bag.
+   * The bag's details as the coach (save_bag_details) or the details card
+   * gave them, roast date included, then its place in Decaid's bean library:
+   * saved first, as the batch Decaid gets is read from the bag. The card the
+   * barista confirmed replaces every detail (a field left blank is unknown).
+   * A call of the coach's changes only what it says (D278): null keeps a
+   * detail as saved and an empty text removes it, so a correction never drops
+   * a detail it did not copy back, nor rewords a note it did.
    */
-  async function saveBagDetails(s: Session, details: SaveBagDetails): Promise<void> {
-    // The first details a bag gets, by the coach's tool or a confirmed photo: a dial-in has begun.
+  async function saveBagDetails(s: Session, details: SaveBagDetails, replace = false): Promise<void> {
+    // The first details a bag gets, by the coach's tool or a confirmed card: a dial-in has begun.
     if (s.bag.name === NEW_BAG_NAME) usage.track('bag_started');
+    const saved = s.bag;
+    const kept = <T>(value: T | null, was: T | null | undefined): T | null => (value === null && !replace ? (was ?? null) : value);
+    const text = (value: string | null, was: string | null | undefined): string | null =>
+      withoutKey(value !== null && value.trim() === '' ? null : kept(value, was));
     await persistBag(s, {
       name: withoutKey(details.name.trim()) || NEW_BAG_NAME,
-      roaster: withoutKey(details.roaster),
-      origin: withoutKey(details.origin),
-      roastLevel: details.roastLevel,
-      process: withoutKey(details.process),
-      notes: withoutKey(details.notes),
-      roastDate: details.roastDate,
+      roaster: text(details.roaster, saved.roaster),
+      origin: text(details.origin, saved.origin),
+      roastLevel: kept(details.roastLevel, saved.roastLevel),
+      process: text(details.process, saved.process),
+      notes: text(details.notes, saved.notes),
+      roastDate: kept(details.roastDate, saved.roastDate),
+      producer: text(details.producer, saved.producer),
+      variety: text(details.variety, saved.variety),
+      altitude: text(details.altitude, saved.altitude),
+      other: text(details.other, saved.other),
     });
     emit();
     linkBag(s.bag);
@@ -1311,7 +1353,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     try {
       [beans, batches] = await Promise.all([api.listBeans(), api.listAllBatches()]);
     } catch {
-      return []; // Decaid away, or a Decaid without the bean library: a photo or something else.
+      return []; // Decaid away, or a Decaid without the bean library: a photo, or the details typed.
     }
     const byId = new Map(beans.filter((bean) => bean.archived !== true).map((bean) => [bean.id, bean]));
     return batches
@@ -1326,10 +1368,11 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
 
   /**
    * The bean card's rows, read in the background once the card is up: the
-   * barista can take a photo or say something else meanwhile, and nothing
-   * waits for Decaid. The rows land in turn with the engine's actions, on the
-   * card still loading, answered or not; a bag no longer on screen keeps its
-   * loading card, read again when the bag is opened.
+   * barista can take a photo, type the details or describe the bag in the
+   * chat meanwhile, and nothing waits for Decaid. The rows land in turn with
+   * the engine's actions, on the card still loading, answered or not; a bag
+   * no longer on screen keeps its loading card, read again when the bag is
+   * opened.
    */
   function fillBeanCard(bagId: string): void {
     if (filling.has(bagId)) return;
@@ -1443,6 +1486,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       process: withoutKey(option.process),
       notes: withoutKey(option.notes),
       roastDate: option.roastDate,
+      producer: withoutKey(option.producer ?? null),
+      variety: withoutKey(option.variety ?? null),
+      altitude: withoutKey(option.altitude ?? null),
+      other: null,
       decaidBeanId: option.beanId,
       decaidBatchId: option.batchId,
     });
@@ -1451,11 +1498,16 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     await startIntake(s, pickedIntakeText(bag), bag);
   }
 
-  /** "Something else": the card closes; the coach's question under it waits for the bag described in the chat. */
-  async function skipBeanPick(): Promise<void> {
+  /**
+   * "Type the details" (D279): the card closes on that answer and the bag's
+   * details card opens under it, blank, for the barista to fill in and
+   * confirm. Nothing is saved, and the coach hears nothing, until Confirm.
+   */
+  async function typeBagDetails(): Promise<void> {
     const s = session;
     if (!s || !openBeanCard()) return;
-    answerBeanCard({ kind: 'other' });
+    answerBeanCard({ kind: 'typed' });
+    addMessage('assistant', [bagConfirmPart(BLANK_BAG, 'typed')]);
     await persistConversation(s);
     emit();
   }
@@ -1502,6 +1554,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
           process: read.process,
           notes: read.notes,
           roastDate: read.roastDate,
+          producer: read.producer,
+          variety: read.variety,
+          altitude: read.altitude,
+          other: read.other,
         }),
       ]);
       // A photo read on the key costs as a reply does (D240).
@@ -1514,10 +1570,15 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     await warn(failure);
   }
 
-  /** The photo's details as the barista confirmed them: saved like save_bag_details, then the coach's intake (6.8). */
+  /**
+   * The details card as the barista confirmed it, read from a photo (6.8) or
+   * typed (D279): saved like save_bag_details, then the coach's intake, told
+   * which.
+   */
   async function confirmBag(details: SaveBagDetails): Promise<void> {
     const s = session;
-    if (!s || !state.messages.some((m) => m.parts.some(isOpenBagConfirm))) return;
+    const open = state.messages.flatMap((m) => m.parts).find(isOpenBagConfirm);
+    if (!s || open?.kind !== 'bagConfirm') return;
     // The card asks for a name before it offers Confirm; anything else invalid is refused the same way.
     const parsed = TOOL_INPUTS[TOOL.saveBagDetails].safeParse(details);
     if (!parsed.success) return;
@@ -1525,9 +1586,23 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     setMessages(
       updatePart(state.messages, isOpenBagConfirm, (part) => (part.kind === 'bagConfirm' ? { ...part, details: confirmed, confirmed: true } : part)),
     );
-    await saveBagDetails(s, confirmed);
+    await saveBagDetails(s, confirmed, true);
     const bag = bagDetails(s.bag);
-    await startIntake(s, photoIntakeText(bag), bag);
+    await startIntake(s, open.source === 'typed' ? typedIntakeText(bag) : photoIntakeText(bag), bag);
+  }
+
+  /**
+   * The open details card's fields as typed so far (D279): kept on the card,
+   * in the stored chat too, so the card comes back with them, and a card set
+   * aside shows them. Only an open card's: a confirmed one keeps what was
+   * confirmed.
+   */
+  async function draftBag(details: SaveBagDetails): Promise<void> {
+    const s = session;
+    if (!s || !state.messages.some((m) => m.parts.some(isOpenBagConfirm))) return;
+    setMessages(updatePart(state.messages, isOpenBagConfirm, (part) => (part.kind === 'bagConfirm' ? { ...part, details } : part)));
+    await persistConversation(s);
+    emit();
   }
 
   // -------------------------------------------------------------------------
@@ -1820,13 +1895,13 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     const zodValidate = llm.validator(schema);
     const auto = AUTO_TOOLS.includes(name);
     const check = (input: unknown, fresh: boolean): ToolValidation => {
-      const parsed = zodValidate(name === TOOL.saveBagDetails ? withRoastDate(input) : input);
+      const parsed = zodValidate(name === TOOL.saveBagDetails ? withLaterDetails(input) : input);
       if (!parsed.ok) return parsed;
       const error = domainError(name, parsed.value, fresh);
       return error ? { ok: false, error } : parsed;
     };
     const tool: EngineTool = {
-      definition: llm.toolDefinition(name, coach.toolDescription(name), schema),
+      definition: withStrictness(name, llm.toolDefinition(name, coach.toolDescription(name), schema)),
       kind: auto ? 'auto' : 'ui',
       validate: (input) => check(input, true),
       validateStored: (input) => check(input, false),
@@ -2626,6 +2701,16 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     }
   }
 
+  /**
+   * A run no dial-in takes (D276): nothing in the chat, but a screen waiting
+   * for the run's outcome hears that none is coming (`quietRuns`), as the
+   * chat's notice used to tell it (D204).
+   */
+  function letPass(): void {
+    state = { ...state, quietRuns: (state.quietRuns ?? 0) + 1 };
+    emit();
+  }
+
   /** The one quiet line for a run that never poured (D204). */
   async function sayNeverPoured(s: Session): Promise<void> {
     addMessage('system', [noticePart('info', NEVER_POURED)]);
@@ -2640,20 +2725,17 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
    */
   async function handleShotFinished(run: ShotRun): Promise<void> {
     const s = session;
-    if (!s) return;
+    const current = activeVersion(s);
+    // No bag, or a bag still being set up (no starting profile yet) when the run started: no dial-in for the run to be
+    // part of. A shot pulled then, or a tap on Espresso by mistake, is the machine's business, not the coach's, so the
+    // chat says nothing (D276), and Decaid is asked nothing first, so nothing behind it in the queue waits on Decaid.
+    if (!s || !current || run.started?.unread === true) return letPass();
     // A cleaning or calibration profile's run (the weekly clean's Forward Flush x5, say) is no shot: Decaid keeps no
     // record of it, so there is nothing to look for and nothing to say, and a problem on the banner stays (D193).
     if ((await run.saved) === false) return;
     // Stopped before the pour began: Decaid aborted the run and keeps no record of it, so there is nothing to look
     // for, and a problem on the banner stays (D204).
     if (run.aborted) return sayNeverPoured(s);
-    const current = activeVersion(s);
-    if (!current) {
-      addMessage('system', [noticePart('info', 'Pick a starting profile first; that shot is not part of this dial-in.')]);
-      await persistConversation(s);
-      emit();
-      return;
-    }
     // Decaid just reported a shot: writes that wait go out now (D64).
     void outbox.flush();
     // A new shot (or Retry) replaces the hunt for the previous one; a run that turns out to hold no pour gives it back.
@@ -3581,7 +3663,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         loadGrinder();
         // How far the version had got matters at the start, not when the shot is handled.
         if (event.type === 'started') {
-          shotStart = { shotId: event.shotId, early: earlyLoad() };
+          shotStart = { shotId: event.shotId, early: earlyLoad(), unread: activeVersion(session) === null };
           return;
         }
         const started = takeShotStart(event.shotId);
@@ -3660,9 +3742,10 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     rateShot: (shotId, verdict) => enqueue(() => rateShot(shotId, verdict)),
     setShotTds: (shotId, tdsPct) => enqueue(() => setShotTds(shotId, tdsPct)),
     pickBean: (batchId) => enqueue(() => pickBean(batchId)),
-    skipBeanPick: () => enqueue(() => skipBeanPick()),
+    typeBagDetails: () => enqueue(() => typeBagDetails()),
     readBagPhoto: (photo) => enqueue(() => readBagPhoto(photo)),
     confirmBag: (details) => enqueue(() => confirmBag(details)),
+    draftBag: (details) => enqueue(() => draftBag(details)),
     addGrinder: (requestId) => enqueue(() => addGrinder(requestId)),
     declineGrinder: (requestId) => enqueue(() => declineGrinder(requestId)),
     retry: () =>

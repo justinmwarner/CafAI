@@ -110,10 +110,14 @@ export function intakeBlocks(text: string, context: IntakeContext): ContentBlock
 function bagFacts(bag: SaveBagDetails): string[] {
   return [
     bag.origin,
+    bag.producer ? `produced by ${bag.producer}` : null,
+    bag.variety ? `variety: ${bag.variety}` : null,
+    bag.altitude ? `altitude: ${bag.altitude}` : null,
     bag.process,
     bag.roastLevel ? `${bag.roastLevel} roast` : null,
     bag.roastDate ? `roasted ${bag.roastDate}` : null,
     bag.notes ? `tasting notes: ${bag.notes}` : null,
+    bag.other ? `other details: ${bag.other}` : null,
   ].filter((fact): fact is string => fact !== null && fact !== '');
 }
 
@@ -128,6 +132,12 @@ export function pickedIntakeText(bag: SaveBagDetails): string {
 export function photoIntakeText(bag: SaveBagDetails): string {
   const coffee = bag.roaster ? `${bag.name} by ${bag.roaster}` : bag.name;
   return `The user confirmed these details read from a photo of the bag: ${[coffee, ...bagFacts(bag)].join('; ')}.`;
+}
+
+/** The first words of a bag whose details the user typed into the details card (D279). */
+export function typedIntakeText(bag: SaveBagDetails): string {
+  const coffee = bag.roaster ? `${bag.name} by ${bag.roaster}` : bag.name;
+  return `The user typed the bag's details: ${[coffee, ...bagFacts(bag)].join('; ')}.`;
 }
 
 export const UNANSWERED_TEXT = { answered: false, note: 'The user typed a message instead.' } as const;

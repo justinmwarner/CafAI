@@ -53,6 +53,8 @@ describe('factFits (D200)', () => {
     expect(fits({ processes: ['natural'] }, { process: 'washed' })).toBe(false);
     // Varieties in the name, the origin and the notes.
     expect(fits({ varieties: ['sl28'] }, { notes: 'SL28 and SL34; blackcurrant' })).toBe(true);
+    // The bag's own variety field (D278).
+    expect(fits({ varieties: ['pink bourbon'] }, { name: 'El Paraíso', origin: 'Colombia', notes: null, variety: 'Pink Bourbon' })).toBe(true);
     expect(fits({ varieties: ['sl28'] }, { origin: 'Kenya, Nyeri, SL28' })).toBe(true);
     expect(fits({ varieties: ['sl28'] }, { name: 'Nyeri SL28', origin: null, notes: null })).toBe(true);
     expect(fits({ varieties: ['sl28'] }, { process: 'SL28 washed', name: 'Nyeri', origin: null, notes: null })).toBe(false);

@@ -11,6 +11,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useServices } from '../../app/services.tsx';
 import type { CoachUiMessage } from '../../app/types.ts';
 import { parseRoute, replaceRoute, routeHref, sameRoute, type Route, type RouteName } from '../router.ts';
+import { holdsRuns } from './bagSetup.ts';
 import { IDLE, shotFocus, type FocusCommand, type FocusEvent, type FocusState } from './shotFocus.ts';
 
 /** How long the screen the app just switched to ignores taps, in ms. */
@@ -50,6 +51,12 @@ export interface ShotFocus {
   awaitingOutcome: boolean;
   /** Until when (epoch ms) the screen the app just switched to ignores taps; null when it takes them. */
   guardUntil: number | null;
+  /**
+   * The shot running now started on the new bag screen and stayed off the
+   * screen (D277): a number for each such shot, so the line offering it can
+   * be dismissed for one shot only; null otherwise, and once it ends.
+   */
+  heldShot: number | null;
 }
 
 /**
@@ -63,6 +70,7 @@ export function useShotFocus(route: Route): ShotFocus {
   const { telemetry, coach } = useServices();
   const [awaitingOutcome, setAwaitingOutcome] = useState(false);
   const [guardUntil, setGuardUntil] = useState<number | null>(null);
+  const [heldShot, setHeldShot] = useState<number | null>(null);
   const focus = useRef<FocusState>(IDLE);
   /** The route of the app's own switch on its way, so its arrival is not taken for the barista's move. */
   const ownSwitch = useRef<RouteName | null>(null);
@@ -73,6 +81,9 @@ export function useShotFocus(route: Route): ShotFocus {
     let guardTimer: ReturnType<typeof setTimeout> | null = null;
     // The chat's messages when the pour was reported over: only one added after that can be its outcome.
     let before: ReadonlySet<string> = new Set();
+    // And the runs the coach had let pass by then: one more is this run's, which no dial-in takes (D276).
+    let quietBefore = 0;
+    let heldCount = 0;
 
     const switchTo = (target: Route) => {
       // A hash the screen has not caught up with yet: nothing to switch, nothing to guard.
@@ -112,19 +123,29 @@ export function useShotFocus(route: Route): ShotFocus {
 
     const stopShots = telemetry.onShot((event) => {
       if (event.type === 'started') {
+        const shown = onScreen();
+        const held = holdsRuns(shown, coach.getState());
+        setHeldShot(held ? ++heldCount : null);
         dispatch({
           type: 'shotStarted',
           typing: isTextEntry(document.activeElement),
-          onShotRoute: onScreen().name === 'shot',
+          onShotRoute: shown.name === 'shot',
+          held,
         });
         return;
       }
-      before = new Set(coach.getState().messages.map((message) => message.id));
+      setHeldShot(null);
+      const now = coach.getState();
+      before = new Set(now.messages.map((message) => message.id));
+      quietBefore = now.quietRuns ?? 0;
       dispatch({ type: 'shotFinished', at: Date.now() });
     });
     const stopChat = coach.subscribe(() => {
       if (focus.current.kind !== 'over') return;
-      if (coach.getState().messages.some((message) => !before.has(message.id) && isOutcome(message))) {
+      const now = coach.getState();
+      // The coach let the run pass, so nothing more is coming: as good as its outcome.
+      const passed = (now.quietRuns ?? 0) !== quietBefore;
+      if (passed || now.messages.some((message) => !before.has(message.id) && isOutcome(message))) {
         dispatch({ type: 'outcomeAdded' });
       }
     });
@@ -150,5 +171,5 @@ export function useShotFocus(route: Route): ShotFocus {
     if (!own) dispatchRef.current?.({ type: 'userNavigated' });
   }, [route]);
 
-  return { awaitingOutcome, guardUntil };
+  return { awaitingOutcome, guardUntil, heldShot };
 }

@@ -3,7 +3,7 @@ import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { anthropicHandlers, resetAnthropicMock } from '../../mock/anthropic/handlers.ts';
 import { sseFrame } from '../../mock/anthropic/sse.ts';
-import { TOOL_INPUTS } from '../coach/contract.ts';
+import { TOOL_INPUTS, withStrictness } from '../coach/contract.ts';
 import { toToolDefinition } from '../llm/schema.ts';
 import { LlmError, type LlmMessage, type LlmRequest, type LlmStreamEvent } from '../llm/types.ts';
 import { createMemoryCoachSourceStore, type CoachSource } from '../storage/coachSource.ts';
@@ -25,7 +25,7 @@ afterEach(() => {
 });
 afterAll(() => server.close());
 
-const TOOLS = Object.entries(TOOL_INPUTS).map(([name, schema]) => toToolDefinition(name, `The ${name} tool.`, schema));
+const TOOLS = Object.entries(TOOL_INPUTS).map(([name, schema]) => withStrictness(name, toToolDefinition(name, `The ${name} tool.`, schema)));
 const INTAKE: LlmMessage = { role: 'user', content: [{ type: 'text', text: 'Kiambu AA, light roast, washed' }] };
 const REQUEST: LlmRequest = { model: 'claude-opus-5-5', system: 'You are an espresso coach.', messages: [INTAKE], tools: TOOLS };
 

@@ -12,6 +12,10 @@ const GOOD = {
   roastLevel: 'Light',
   roastDate: '2026-09-30',
   notes: 'blackcurrant, grapefruit, brown sugar',
+  producer: 'Kiambu Farmers Cooperative',
+  variety: 'SL28, SL34',
+  altitude: '1,700-1,900 masl',
+  other: 'Lot 42; harvest 2026',
 };
 
 /** A provider that answers one streamed turn with `text`, and keeps every request it got. */
@@ -61,8 +65,21 @@ describe('parseExtractedBag', () => {
       roastLevel: null,
       roastDate: null,
       notes: 'x'.repeat(300),
+      producer: null,
+      variety: null,
+      altitude: null,
+      other: null,
     });
     expect(parseExtractedBag(JSON.stringify({ ...GOOD, roastLevel: 'medium dark' })).roastLevel).toBe('medium-dark');
+  });
+
+  it('reads the later details too, and an answer without them as not knowing them (D278)', () => {
+    expect(
+      parseExtractedBag(JSON.stringify({ name: 'Pink Bourbon', producer: '  El Paraíso ', variety: 'Pink Bourbon', altitude: '1,950 masl', other: 'Thermal shock' })),
+    ).toMatchObject({ producer: 'El Paraíso', variety: 'Pink Bourbon', altitude: '1,950 masl', other: 'Thermal shock' });
+    const { producer: _p, variety: _v, altitude: _a, other: _o, ...older } = GOOD;
+    expect(parseExtractedBag(JSON.stringify(older))).toEqual({ ...older, roastLevel: 'light', producer: null, variety: null, altitude: null, other: null });
+    expect(parseExtractedBag(JSON.stringify({ name: 'X', other: 'y'.repeat(600) })).other).toBe('y'.repeat(500));
   });
 
   it('refuses an answer with no details in it, with a sentence for the barista', () => {
@@ -94,11 +111,30 @@ describe('extractBag (6.8)', () => {
   });
 
   it('asks for every field the confirm card shows, each null when the bag does not say', () => {
-    for (const field of ['"name"', '"roaster"', '"origin"', '"process"', '"roastLevel"', '"roastDate"', '"notes"', 'YYYY-MM-DD']) {
+    for (const field of [
+      '"name"',
+      '"roaster"',
+      '"origin"',
+      '"process"',
+      '"roastLevel"',
+      '"roastDate"',
+      '"notes"',
+      '"producer"',
+      '"variety"',
+      '"altitude"',
+      '"other"',
+      'YYYY-MM-DD',
+    ]) {
       expect(EXTRACT_BAG_PROMPT).toContain(field);
     }
     expect(EXTRACT_BAG_PROMPT).toMatch(/null for anything the bag does not show/);
     expect(EXTRACT_BAG_PROMPT).toMatch(/never guess/);
+  });
+
+  it('reads "Produced by" as the producer, and keeps the rest of what a barista would want in other (D278)', () => {
+    expect(EXTRACT_BAG_PROMPT).toContain('for "Produced by El Paraíso", "El Paraíso"');
+    expect(EXTRACT_BAG_PROMPT).toMatch(/other holds anything else printed that a barista would want/);
+    expect(EXTRACT_BAG_PROMPT).toMatch(/never the roaster's address, a website, a story or a slogan/);
   });
 
   it('tells a roast date from the other dates on a bag, and leaves an unclear one out', () => {

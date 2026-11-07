@@ -1,8 +1,9 @@
 // The whole coach loop in a real Chromium 91 (puppeteer 9), against the
 // mock-mode build: settings -> new bag (the chat opens with "Which coffee is
 // it?", its rows from the mock's bean library, and the live stats card) ->
-// Something else (the bag is described in the chat; the first message takes
-// the stats card away) -> templates -> v1 -> Stats brings the card back ->
+// Type the details (the card takes the answer and the bag's details card
+// opens, which takes the stats card away; the bag is then described in the
+// chat instead, which sets the details card aside) -> templates -> v1 -> Stats brings the card back ->
 // scripted shot from Espresso in the top bar's machine row (it turns into
 // Stop, the Shot view takes the screen, the coach comes back with the card)
 // -> Better under "Compared with ...?" (D126) -> taste chip -> confirmed v2.
@@ -127,14 +128,15 @@ try {
     await page.waitForSelector(`${tid('chat')} ${tid('stats-card')}`, { timeout: 15000, visible: true });
     await waitText('machine-state', 'Ready');
   });
-  await step('Something else: the card takes the answer', async () => {
-    await tap('bean-something-else');
-    await page.waitForSelector(tid('bean-something-else'), { timeout: 15000, hidden: true });
+  await step("Type the details: the card takes the answer, the bag's details card opens and the stats card goes", async () => {
+    await tap('bean-type-details');
+    await page.waitForSelector(tid('bean-type-details'), { timeout: 15000, hidden: true });
+    await page.waitForSelector(`${tid('chat')} ${tid('bag-confirm')}`, { timeout: 15000, visible: true });
+    await page.waitForSelector(tid('stats-card'), { timeout: 15000, hidden: true });
   });
-  await step('describe the bag: the stats card goes', async () => {
+  await step('describe the bag in the chat instead', async () => {
     await fill('composer-input', 'Kiambu AA, light roast, washed, blackcurrant');
     await tap('composer-send');
-    await page.waitForSelector(tid('stats-card'), { timeout: 15000, hidden: true });
   });
   await step('pick a template', async () => tap('template-pick-blooming-espresso', 30000));
   await step('v1 loaded', async () => waitText('active-version', 'v1'));

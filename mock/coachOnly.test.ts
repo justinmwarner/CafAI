@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { TOOL_INPUTS } from '../src/coach/contract.ts';
+import { TOOL_INPUTS, withStrictness } from '../src/coach/contract.ts';
 import { buildAnthropicRequest, createAnthropicProvider } from '../src/llm/anthropic.ts';
 import { toToolDefinition } from '../src/llm/schema.ts';
 import type { LlmRequest, LlmStreamEvent } from '../src/llm/types.ts';
@@ -21,7 +21,7 @@ const INTAKE: LlmRequest = {
       ],
     },
   ],
-  tools: Object.entries(TOOL_INPUTS).map(([name, schema]) => toToolDefinition(name, `The ${name} tool.`, schema)),
+  tools: Object.entries(TOOL_INPUTS).map(([name, schema]) => withStrictness(name, toToolDefinition(name, `The ${name} tool.`, schema))),
 };
 
 /** A stand-in for `window`, whose own fetch is the network: the real Decaid, or the real API. */

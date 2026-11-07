@@ -14,7 +14,7 @@ import {
   userMessage,
   type TemplatePickedPayload,
 } from '../../app/engine/protocol.ts';
-import { AUTO_TOOLS, TEMPLATE_IDS, TOOL, TOOL_INPUTS, type ProposeTemplates, type ToolName } from '../../coach/contract.ts';
+import { AUTO_TOOLS, TEMPLATE_IDS, TOOL, TOOL_INPUTS, withStrictness, type ProposeTemplates, type ToolName } from '../../coach/contract.ts';
 import { COACH_TOOL_SPECS, getTemplate, startingYield, versionTitle } from '../../coach/index.ts';
 import { redactKeyLike } from '../../storage/redact.ts';
 import { describeIssues, toToolDefinition, zodValidator } from '../schema.ts';
@@ -144,7 +144,7 @@ export function coachRunnerTools(): RunnerTool[] {
     const parse = zodValidator(schema);
     const auto = AUTO_TOOLS.includes(name);
     const tool: RunnerTool = {
-      definition: toToolDefinition(name, COACH_TOOL_SPECS[name].description, schema),
+      definition: withStrictness(name, toToolDefinition(name, COACH_TOOL_SPECS[name].description, schema)),
       kind: auto ? 'auto' : 'ui',
       validate(input) {
         const parsed = parse(input);

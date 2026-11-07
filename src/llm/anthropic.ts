@@ -141,7 +141,9 @@ export function anthropicEndpoint(baseUrl: string = ANTHROPIC_BASE_URL): string 
 }
 
 function toWireTool(tool: ToolDefinition) {
-  return { name: tool.name, description: tool.description, input_schema: tool.inputSchema, strict: true };
+  const wire = { name: tool.name, description: tool.description, input_schema: tool.inputSchema };
+  // Strict unless the tool is kept out of it, for the strict schemas' limits (LOOSE_TOOLS in contract.ts).
+  return tool.strict === false ? wire : { ...wire, strict: true };
 }
 
 /** Build the HTTP request for one streamed turn. Pure. */

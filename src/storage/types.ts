@@ -35,6 +35,14 @@ export interface Bag {
   decaidBatchId?: string | null;
   /** Roast date, YYYY-MM-DD. */
   roastDate?: string | null;
+  /** The farm or the producer (D278); absent on bags made before 2026-11-06, like the three after it. */
+  producer?: string | null;
+  /** The varieties, comma separated. */
+  variety?: string | null;
+  /** The altitude as the bag writes it. */
+  altitude?: string | null;
+  /** Anything else about the coffee: on the bag, or the barista's own note. */
+  other?: string | null;
   /** The template picked for v1, once picked. */
   templateId: string | null;
   /** The ProfileVersion currently on the machine for this bag. */

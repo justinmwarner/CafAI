@@ -71,7 +71,7 @@ function useCoachCommits() {
 // ---------------------------------------------------------------------------
 
 function bagDetails(bag: Bag): string {
-  return [bag.roaster, bag.origin, bag.roastLevel, bag.process].filter(Boolean).join(' · ');
+  return [bag.roaster, bag.origin, bag.producer, bag.roastLevel, bag.process].filter(Boolean).join(' · ');
 }
 
 function BagList({ bags, shotCounts, onSelect }: { bags: Bag[]; shotCounts: Map<string, number>; onSelect(id: string): void }) {

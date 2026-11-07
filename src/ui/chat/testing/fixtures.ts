@@ -269,6 +269,10 @@ export const BAG_FROM_PHOTO: SaveBagDetails = {
   process: 'washed',
   notes: 'blackcurrant, grapefruit, brown sugar',
   roastDate: '2026-09-28',
+  producer: 'Kiambu Farmers Cooperative',
+  variety: 'SL28, SL34',
+  altitude: '1,700 masl',
+  other: null,
 };
 
 export const TEMPLATE_ITEMS = [

@@ -30,7 +30,7 @@ const passThrough: PhotoTools = {
 };
 
 function renderCard(props: Partial<BeanCardProps> = {}) {
-  const handlers = { onPick: vi.fn(), onSomethingElse: vi.fn(), onPhoto: vi.fn() };
+  const handlers = { onPick: vi.fn(), onTypeDetails: vi.fn(), onPhoto: vi.fn() };
   renderThemed(<BeanCard options={BEAN_OPTIONS} choice={null} {...handlers} {...props} />);
   return handlers;
 }
@@ -38,17 +38,24 @@ function renderCard(props: Partial<BeanCardProps> = {}) {
 const rows = () => within(screen.getByTestId(TID.beanCard)).queryAllByRole('listitem');
 
 describe('BeanCard (6.1)', () => {
-  it("asks which coffee it is: a row per batch with its name, roaster and roast date, then a photo or something else", () => {
+  it("asks which coffee it is: a new one first (a photo, or typed), then a row per batch of Decaid's beans under a heading of their own (D279)", () => {
     renderCard();
     const card = screen.getByTestId(TID.beanCard);
     expect(within(card).getByRole('heading', { name: 'Which coffee is it?' })).toBeInTheDocument();
+    expect(within(card).getByText('A new coffee? Take a photo of the bag or type its details, or describe it in the chat.')).toBeInTheDocument();
+    const library = within(card).getByRole('list', { name: "Already in Decaid's beans" });
+    expect(within(card).getByRole('heading', { name: "Already in Decaid's beans" })).toBeInTheDocument();
+    // The ways to add a new coffee come before the library's rows.
+    const before = (a: Element, b: Element) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    expect(before(screen.getByTestId(TID.bagPhoto), library)).toBe(true);
+    expect(before(screen.getByTestId(TID.beanTypeDetails), library)).toBe(true);
     expect(rows()).toHaveLength(2);
     expect(within(rows()[0]!).getByText('Red Brick')).toBeInTheDocument();
     expect(within(rows()[0]!).getByText('Square Mile Coffee Roasters · Roasted 24 Sep 2026')).toBeInTheDocument();
     expect(within(rows()[1]!).getByText('Heart Coffee Roasters · Roasted 3 Sep 2026')).toBeInTheDocument();
     expect(screen.getAllByTestId(TID.beanOption).map((button) => button.textContent)).toEqual(['Use this', 'Use this']);
     expect(screen.getByTestId(TID.bagPhoto)).toHaveTextContent('Photo of the bag');
-    expect(screen.getByTestId(TID.beanSomethingElse)).toHaveTextContent('Something else');
+    expect(screen.getByTestId(TID.beanTypeDetails)).toHaveTextContent('Type the details');
   });
 
   it('names the coffee and its roast in each Use this, for a screen reader that lists the buttons alone', () => {
@@ -81,33 +88,34 @@ describe('BeanCard (6.1)', () => {
     for (const row of rows()) expect(row).not.toHaveClass('MuiPaper-outlined');
   });
 
-  it("says it is looking in Decaid's beans while they are read, with a photo and something else already there", () => {
+  it("says it is looking in Decaid's beans while they are read, with a photo and Type the details already there", () => {
     renderCard({ options: [], loading: true });
     expect(within(screen.getByTestId(TID.beanCard)).getByRole('status')).toHaveTextContent("Looking in Decaid's beans…");
     expect(rows()).toEqual([]);
     expect(screen.getByTestId(TID.bagPhoto)).toBeEnabled();
-    expect(screen.getByTestId(TID.beanSomethingElse)).toBeEnabled();
+    expect(screen.getByTestId(TID.beanTypeDetails)).toBeEnabled();
   });
 
   it('says nothing of looking once answered', () => {
-    renderCard({ options: [], loading: true, choice: { kind: 'other' } });
+    renderCard({ options: [], loading: true, choice: { kind: 'typed' } });
     expect(screen.queryByText("Looking in Decaid's beans…")).toBeNull();
   });
 
-  it('reports the batch tapped, and Something else', async () => {
+  it('reports the batch tapped, and Type the details', async () => {
     const handlers = renderCard();
     await userEvent.click(within(rows()[1]!).getByTestId(TID.beanOption));
     expect(handlers.onPick).toHaveBeenCalledWith('batch-chel');
-    await userEvent.click(screen.getByTestId(TID.beanSomethingElse));
-    expect(handlers.onSomethingElse).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByTestId(TID.beanTypeDetails));
+    expect(handlers.onTypeDetails).toHaveBeenCalledTimes(1);
   });
 
-  it('offers only a photo and something else without a batch to pick', () => {
+  it("offers only a photo and Type the details without a batch to pick, and no library heading", () => {
     renderCard({ options: [] });
     expect(rows()).toEqual([]);
+    expect(screen.queryByRole('heading', { name: "Already in Decaid's beans" })).toBeNull();
     expect(screen.queryByTestId(TID.beanOption)).toBeNull();
     expect(screen.getByTestId(TID.bagPhoto)).toBeEnabled();
-    expect(screen.getByTestId(TID.beanSomethingElse)).toBeEnabled();
+    expect(screen.getByTestId(TID.beanTypeDetails)).toBeEnabled();
   });
 
   it('keeps the card once answered: the pick marked, the rest set aside in the muted ink, never faded', () => {
@@ -120,15 +128,28 @@ describe('BeanCard (6.1)', () => {
     expect(other).toHaveStyle({ color: palette.text.secondary });
     expect(fadedElements(other!)).toEqual([]);
     expect(screen.getByTestId(TID.bagPhoto)).toBeDisabled();
-    expect(screen.getByTestId(TID.beanSomethingElse)).toBeDisabled();
+    expect(screen.getByTestId(TID.beanTypeDetails)).toBeDisabled();
   });
 
-  it('marks a photo or something else as the answer', () => {
+  it('marks a photo or typed details as the answer', () => {
     renderCard({ choice: { kind: 'photo' } });
     expect(screen.queryByTestId(TID.bagPhoto)).toBeNull();
     expect(within(screen.getByTestId(TID.beanCard)).getByText('Photo of the bag')).toBeInTheDocument();
-    expect(screen.getByTestId(TID.beanSomethingElse)).toBeDisabled();
+    expect(screen.getByTestId(TID.beanTypeDetails)).toBeDisabled();
     for (const button of screen.getAllByTestId(TID.beanOption)) expect(button).toBeDisabled();
+  });
+
+  it('marks Type the details as the answer', () => {
+    renderCard({ choice: { kind: 'typed' } });
+    expect(screen.queryByTestId(TID.beanTypeDetails)).toBeNull();
+    expect(within(screen.getByTestId(TID.beanCard)).getByText('Type the details')).toBeInTheDocument();
+    expect(screen.getByTestId(TID.bagPhoto)).toBeDisabled();
+  });
+
+  it('still shows Something else on a card answered that way before Type the details was offered (D279)', () => {
+    renderCard({ choice: { kind: 'other' } });
+    expect(within(screen.getByTestId(TID.beanCard)).getByText('Something else')).toBeInTheDocument();
+    expect(screen.getByTestId(TID.beanTypeDetails)).toBeDisabled();
   });
 
   it('says why it was set aside when the bag was described in the chat', () => {
@@ -140,7 +161,7 @@ describe('BeanCard (6.1)', () => {
 
   it('blocks taps while the coach is busy', () => {
     renderCard({ disabled: true });
-    for (const button of [...screen.getAllByTestId(TID.beanOption), screen.getByTestId(TID.bagPhoto), screen.getByTestId(TID.beanSomethingElse)]) {
+    for (const button of [...screen.getAllByTestId(TID.beanOption), screen.getByTestId(TID.bagPhoto), screen.getByTestId(TID.beanTypeDetails)]) {
       expect(button).toBeDisabled();
     }
   });

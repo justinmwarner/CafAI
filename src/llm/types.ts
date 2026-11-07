@@ -106,6 +106,12 @@ export interface ToolDefinition {
    * coach enforces those client-side with zod after parsing.
    */
   inputSchema: JsonSchema;
+  /**
+   * False for a tool sent without strict mode (contract.ts's LOOSE_TOOLS), so
+   * the request's strict schemas stay within the API's limits; the same
+   * schema, and zod still checks what comes back. Strict when left out.
+   */
+  strict?: boolean;
 }
 
 /**
