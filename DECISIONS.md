@@ -1568,6 +1568,8 @@ workflows has run.
   correction that sent only the corrected detail would blank the rest: the
   roaster, the origin and the notes would go from the bag and from the
   coach's later turns.
+  *A correction resending every detail: superseded by D278 (a call changes
+  only what it says: null keeps a detail, an empty text removes one).*
 - **D119. The coach reads DYE2's setups and never writes them.**
   `get_recent_setups` is an auto tool with no input
   (`src/coach/queries.ts`, `src/api/pluginData.ts`): the setups DYE2
@@ -5135,3 +5137,140 @@ section 8).
   bring the same question back; the heuristic errs towards the taste, as a
   question misread as the taste is one tap on the card from being right,
   while a taste misread as a question leaves the card open to tap.
+
+### The new bag screen (2026-11-06)
+
+The owner's report after a real bag: **New bag** opened a screen that read
+like "change bag" (Decaid's coffees, each with Use this, and a quiet
+Something else under them), so how to add a coffee that is not in the
+library took a while to find; a bag's label says more than CafAI kept
+("Produced by El Paraíso"), with nowhere for the rest; and on that screen a
+tap on Espresso by mistake took the screen to the shot and the chat said
+"That shot stopped before it poured: nothing to taste." The new bag screen is
+the coach's screen while a bag has no starting profile yet: "Which coffee is
+it?", its details, the starting profiles (`settingUpBag` in
+`src/ui/shell/bagSetup.ts`).
+
+- **D276. The coach says nothing of a run while the bag has no starting
+  profile.** `handleShotFinished` in `src/app/engine/engine.ts` returns
+  first, before it asks Decaid anything (D193's cleaning run included),
+  when no bag is on screen or the bag had no active version when the run
+  started (`ShotStart.unread`, settled at the start as the new bag
+  screen's hold is, D277, so a starting profile picked while the run goes
+  on does not bring the coach back to it): no "That shot stopped before it
+  poured: nothing to taste." (D204's line, kept for a bag with a version),
+  no "Pick a starting profile first; that shot is not part of this
+  dial-in.", no record read, no banner. It counts the run in the state's
+  `quietRuns` instead, and a screen waiting for the run's outcome takes
+  that for it (`useShotFocus.ts`): the Shot view a run took goes back to
+  the coach at once, as D204's notice had it. The Shot view's coach note
+  no longer says "Done. Reading the shot" for a shot no bag takes (no bag,
+  or a bag without a starting profile, `CoachNote.tsx`): nothing reads it,
+  so nothing is waited for. Why: a shot pulled while the barista is
+  describing a coffee is never part of a dial-in, almost always a mistake,
+  and the coach speaking of it reads as the coach being on duty when it is
+  not; the old line only told the barista what they knew.
+- **D277. The new bag screen keeps its place; a line offers the run's
+  view.** A shot, steam, a flush or hot water that starts while the new bag
+  screen is up (the coach's route, a bag with no starting profile,
+  `holdsRuns`) does not switch the screen (`shotFocus.ts`'s `held`, as
+  typing holds it; `drinkFocus.ts`'s `held`, as Care's video does, D156),
+  wherever it was started (CafAI's machine row, the group head, Decaid).
+  The shell shows `HeldRunAlert.tsx` at the top of the main pane on the
+  coach's route: "A shot is running." ("Steam is running.", "A flush is
+  running.", "Hot water is running.") "You are setting up a bag, so CafAI
+  stayed on this screen.", with **Open the shot** (or Open Steam, Open
+  Flush, Open Hot water) and a dismiss. Open goes to the run's view as the
+  barista's own move: the Shot route by the navigation, a drink's view with
+  the coach remembered as where Go back (and going back by itself, D221)
+  returns (`drinkOpened`), each with a history entry of its own, so a
+  browser's Back returns to the bag. The line goes when the run ends;
+  dismissed, it stays gone for that run only (each held run has its own
+  number). Coming or going by itself, it moves the screen under the
+  barista's finger, so the main pane takes no tap for 350 ms then
+  (`TapGuard`, as after the app's own switch); dismissed, or gone with a
+  screen the barista changed, it does not. A screen reader hears its words
+  from a status region always in the page (`HeldRunStatus`), filled while
+  the line shows, as a region that appears with its words already in it
+  is often not read; the line itself is no live region. On a
+  phone it takes the live strip's place while it shows, and the strip is
+  back once it is dismissed. A held shot's end waits for no outcome (no
+  coach reads it), so no "Last shot" strip or "Reading the shot" note is
+  left behind. Elsewhere (History, Settings, a bag with a profile) nothing
+  changes. Why: the owner's words, "any kind of actions
+  done there are kind of accidental", and a screen swapped under a
+  half-typed coffee costs the barista their place; the line still lets
+  them follow a run they meant.
+- **D278. A bag keeps its producer, its varieties, its altitude and other
+  details.** `Bag` and `save_bag_details` gain `producer` (the farm or the
+  producer: "Produced by El Paraíso" is "El Paraíso"), `variety` (comma
+  separated), `altitude` (as the bag writes it, "1,950 masl") and `other`
+  (anything else: a lot, a harvest, a fermentation, the barista's own note),
+  at most 80, 80, 40 and 500 characters (`BAG_LIMITS`). They are text,
+  nullable, and every key is required in the schema; a call written before
+  them (a stored chat, the mock's scripted coach), or one that leaves them
+  out, reads as not touching them (`withLaterDetails`, which took over
+  D117's `withRoastDate`), and a stored bag without them is read as before
+  (`optionalNullableText`). A call of the coach's changes only what it
+  says, where D118 had it resend every detail: null keeps a detail as
+  saved and an empty text removes one, so a correction can neither drop
+  the barista's other details nor reword them; the details card the
+  barista confirms replaces every detail. `save_bag_details` goes without
+  strict mode (`LOOSE_TOOLS` in `src/coach/contract.ts`): Anthropic takes
+  at most 16 parameters with union types across a request's strict tools
+  (`STRICT_UNION_LIMIT`, structured outputs' schema complexity limits),
+  each nullable detail is one, and the bag's ten took the coach's twelve
+  tools to 23; zod checks its input as before, and the mock coach answers
+  400 past the limit. The photo's reading (`extractBag.ts`) asks for
+  the four too, `other` for what a barista would want and no field holds,
+  never an address, a website, a story or a slogan; a key the model leaves
+  out is unknown rather than the whole card refused (which was true of
+  `roastLevel` and `roastDate` too, and is fixed). Both details cards have
+  the four fields (Producer or farm, Variety, Altitude; Other details
+  across the width). The coach hears them at intake (the first words and
+  the context block's `bag`), is told to weigh them (`other` as what the
+  label or the barista gave: a recipe printed on the bag is the roaster's
+  suggestion, not the barista's wish), and a variety fun fact matches the
+  bag's own variety. Decaid's bean library has `producer`,
+  `variety` (a list) and `altitude` (`[min, max]` in metres): a pick fills
+  the bag from them (`varietyText`, whole names only within the 80
+  characters; `altitudeText`; both in `src/app/engine/beanDetails.ts`), and
+  a bean CafAI adds gets them (`varietyList`, which parts the names at
+  commas and semicolons outside brackets only, so "Red & Yellow Catuaí"
+  and "SL28/34" stay whole; `altitudeRange`, which reads "1,800-2,000 m",
+  "1.900 msnm", "2,500ft" and "3,000’", each number in the unit written
+  after it or after its range, metres over feet when the bag gives both,
+  and leaves out an altitude it cannot read as metres, "lot 7, 1,900 m"
+  included).
+  `other` stays in CafAI: Decaid's `notes` hold the tasting notes, which a
+  pick reads back as such. Why: the label is the best description of the
+  coffee there is, variety and altitude change how a coffee extracts, and
+  the barista wanted a place for the rest in their own words.
+- **D279. "Which coffee is it?" puts a new coffee first; Type the details
+  replaces Something else.** The card's first choices are **Photo of the
+  bag** (contained) and **Type the details** (tonal), under a line saying
+  a new coffee can also be described in the chat; Decaid's coffees follow
+  under a heading of their own, "Already in Decaid's beans", their Use this
+  now tonal. Type the details answers the card (`{kind:'typed'}`) and adds
+  the details card blank (`bagConfirm` with `source: 'typed'`, "The bag's
+  details"): nothing is saved and the coach hears nothing until Confirm,
+  which saves the details as the photo's confirm does and starts the intake
+  with "The user typed the bag's details: …" (`typedIntakeText`). What is
+  typed on a details card is kept on the card in the chat (`draftBag`:
+  half a second after a change, as a field is left, and as the card goes),
+  so the card comes back with it after another screen, another bag or a
+  reload, and a card set aside shows it. A card
+  answered Something else before this keeps saying so. **New bag** keeps
+  its name: it does start a new bag, and the bag picker beside it changes
+  bags. The chat now shows a card a tap opened from its start: x-chat keeps
+  the row that was in view in place when the rows change other than by an
+  append (the stats card was the last row), which undid the follower's
+  scroll before its event arrived and left the details card below the
+  fold; `settle` in `followNewest.ts`, run once x-chat's commit is done,
+  makes the scroll again (D48, D116). On a phone on its side the view holds
+  the card's title and the two buttons: in a view under 500 px tall the
+  buttons come right under the title and the line after them
+  (`SHORT_VIEW` in `BeanCard.tsx`); the library's rows are a scroll
+  below. Why: a screen headed New bag whose first and loudest choices were
+  coffees already known read as "change bag"; the way to add a new one has
+  to be the first thing on it.

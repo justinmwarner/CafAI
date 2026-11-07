@@ -75,10 +75,25 @@ export function filledBeanCard(part: CoachUiPart, options: BeanPickerOption[]): 
   return { ...rest, options };
 }
 
-/** The details read from a photo of the bag, for the barista to check and confirm (6.8). */
-export function bagConfirmPart(details: SaveBagDetails): CoachUiPart {
-  return { kind: 'bagConfirm', details, confirmed: false };
+/** The details read from a photo of the bag, for the barista to check and confirm (6.8); or a blank card to type them into (D279). */
+export function bagConfirmPart(details: SaveBagDetails, source: 'photo' | 'typed' = 'photo'): CoachUiPart {
+  return { kind: 'bagConfirm', details, source, confirmed: false };
 }
+
+/** Every detail of a bag unknown, its name blank: the details card the barista types into (D279). */
+export const BLANK_BAG: SaveBagDetails = {
+  name: '',
+  roaster: null,
+  origin: null,
+  roastLevel: null,
+  process: null,
+  notes: null,
+  roastDate: null,
+  producer: null,
+  variety: null,
+  altitude: null,
+  other: null,
+};
 
 /** The coach's offer to add a grinder to Decaid's library (D125), waiting for Add or Not now. */
 export function grinderOfferPart(requestId: string, grinder: OfferGrinder): CoachUiPart {
@@ -121,7 +136,7 @@ export function isOpenBeanCard(part: CoachUiPart): boolean {
   return part.kind === 'beanPicker' && part.choice === null && !part.expired;
 }
 
-/** The photo's details while they wait for Confirm. */
+/** The details card, read from a photo or typed (D279), while it waits for Confirm. */
 export function isOpenBagConfirm(part: CoachUiPart): boolean {
   return part.kind === 'bagConfirm' && !part.confirmed && !part.expired;
 }

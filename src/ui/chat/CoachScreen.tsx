@@ -375,9 +375,10 @@ export function CoachScreen({ settingsHref = '#/settings/coach' }: CoachScreenPr
           onRateShot={(shotId, verdict) => fire(coach.rateShot(shotId, verdict))}
           onShotTds={(shotId, tdsPct) => fire(coach.setShotTds(shotId, tdsPct))}
           onPickBean={(batchId) => fire(coach.pickBean(batchId))}
-          onSkipBeanPick={() => fire(coach.skipBeanPick())}
+          onTypeBagDetails={() => fire(coach.typeBagDetails())}
           onBagPhoto={(photo) => fire(coach.readBagPhoto(photo))}
           onConfirmBag={(details) => fire(coach.confirmBag(details))}
+          onDraftBag={(details) => fire(coach.draftBag(details))}
           onAddGrinder={(requestId) => fire(coach.addGrinder(requestId))}
           onDeclineGrinder={(requestId) => fire(coach.declineGrinder(requestId))}
           onOpenGraph={() => navigate({ name: 'shot' })}

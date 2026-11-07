@@ -107,7 +107,10 @@ export function CoachNote({ awaitingOutcome }: CoachNoteProps) {
   const coaching = useCoach((s) => s.activeBag !== null && s.activeVersion !== null);
   const versionTitle = useCoach((s) => s.activeVersion?.title ?? null);
   const loaded = useSharedLoadedProfile();
-  if (!live && !awaitingOutcome) return null;
+  // A shot no bag's dial-in takes (no bag, or a bag without a starting profile) is read by nobody: once it is over,
+  // the note has nothing to wait for (D276).
+  const waiting = awaitingOutcome && coaching;
+  if (!live && !waiting) return null;
 
   return (
     <Box
@@ -151,7 +154,7 @@ export function CoachNote({ awaitingOutcome }: CoachNoteProps) {
           borderRadius: '16px 16px 16px 6px',
         }}
       >
-        {awaitingOutcome ? (
+        {waiting ? (
           <>
             {/* The dots stand for the sentence's full stop, so a screen reader hears the sentence instead. */}
             <span aria-hidden>

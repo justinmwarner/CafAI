@@ -288,3 +288,44 @@ describe('following the newest message', () => {
     expect(t.follower.following).toBe(true);
   });
 });
+
+describe('settle: a scroll undone before its event arrived (D279)', () => {
+  it("makes the scroll again when x-chat put a row back after it, so a card a tap opened shows from its start", () => {
+    const t = thread(400);
+    for (let i = 0; i < 4; i += 1) t.add(200);
+    t.follower.showStart();
+    expect(t.box.scrollTop).toBe(0);
+    // A tap (Type the details) and the tall card it opens.
+    t.follower.resume();
+    t.add(600);
+    t.follower.update();
+    const target = t.topOf(4) - REVEAL_MARGIN_PX;
+    expect(t.box.scrollTop).toBe(target);
+    // x-chat's own commit keeps the card that was in view where it was: back to the top, no scroll event yet.
+    t.box.scrollTop = 0;
+    t.follower.settle();
+    expect(t.box.scrollTop).toBe(target);
+    // The scroll event, when it comes, is ours.
+    t.follower.onScroll();
+    expect(t.follower.following).toBe(true);
+  });
+
+  it('leaves alone a view whose scroll event has arrived: what moved it after was the reader', () => {
+    const t = thread(400);
+    for (let i = 0; i < 4; i += 1) t.add(200);
+    t.follower.update();
+    t.follower.onScroll();
+    t.readerScrollsTo(100);
+    t.follower.settle();
+    expect(t.box.scrollTop).toBe(100);
+  });
+
+  it('does nothing when the scroll stands', () => {
+    const t = thread(400);
+    for (let i = 0; i < 4; i += 1) t.add(200);
+    t.follower.update();
+    const top = t.box.scrollTop;
+    t.follower.settle();
+    expect(t.box.scrollTop).toBe(top);
+  });
+});

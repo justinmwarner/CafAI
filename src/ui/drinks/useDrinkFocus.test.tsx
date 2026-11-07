@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen } from '@testing-library/react';
 import { formatLocalTimestamp } from '../../../mock/decaid/clock.ts';
 import type { MachineFrame } from '../../api/types.ts';
+import type { CoachState } from '../../app/types.ts';
+import { makeBag, makeVersion } from '../../storage/testing/fixtures.ts';
 import { setCareVideoOpen } from '../care/videoHold.ts';
 import { navigate, useRoute } from '../router.ts';
 import { GUARD_MS } from '../shell/useShotFocus.ts';
@@ -19,12 +21,16 @@ const frame = (state: string, substate = 'pouring'): MachineFrame => ({
 
 function Harness() {
   const route = useRoute();
-  const { guardUntil, back, goBack } = useDrinkFocus();
+  const { guardUntil, back, goBack, held, openHeld } = useDrinkFocus();
   return (
     <div>
       <output data-testid="route">{route.name === 'drink' ? `drink:${route.drink}` : route.name}</output>
       <output data-testid="guard">{guardUntil === null ? 'none' : String(guardUntil)}</output>
       <output data-testid="back">{back.name}</output>
+      <output data-testid="held">{held === null ? 'none' : held.kind}</output>
+      <button type="button" onClick={openHeld}>
+        Open it
+      </button>
       <button type="button" onClick={() => goBack()}>
         Go back
       </button>
@@ -44,8 +50,11 @@ const settle = () =>
 const text = (id: string) => screen.getByTestId(id).textContent;
 const send = (services: FakeServices, f: MachineFrame) => act(() => services.telemetry.setState({ machine: f }));
 
-function renderHarness(): FakeServices {
-  const services = createFakeServices();
+/** A bag on the coach without a starting profile: the new bag screen (D277). */
+const SETTING_UP = { activeBag: makeBag({ id: 'bag_1', name: 'New bag' }), activeVersion: null, phase: 'intake' as const };
+
+function renderHarness(coach: Partial<CoachState> = {}): FakeServices {
+  const services = createFakeServices({ coach });
   renderWithServices(<Harness />, services);
   return services;
 }
@@ -99,6 +108,66 @@ describe('useDrinkFocus', () => {
     expect(window.location.hash).toBe('#/flush');
     await settle();
     expect(text('back')).toBe('care');
+  });
+
+  describe('on the new bag screen (D277)', () => {
+    it('a run stays off the screen and is offered instead, until it ends', async () => {
+      window.location.hash = '#/';
+      await settle();
+      const services = renderHarness(SETTING_UP);
+      send(services, frame('steam'));
+      expect(window.location.hash).toBe('#/');
+      await settle();
+      expect(text('held')).toBe('steam');
+      send(services, frame('idle', 'idle'));
+      await settle();
+      expect(text('held')).toBe('none');
+      expect(window.location.hash).toBe('#/');
+    });
+
+    it("opens the held run's view on a tap, as the barista's own move, and Go back returns to the coach", async () => {
+      // An earlier run took the screen from Settings: Go back went there until now.
+      window.location.hash = '#/settings';
+      await settle();
+      const services = renderHarness(SETTING_UP);
+      send(services, frame('flush'));
+      expect(window.location.hash).toBe('#/flush');
+      send(services, frame('idle', 'idle'));
+      await settle();
+      expect(text('back')).toBe('settings');
+      act(() => navigate({ name: 'coach' }));
+      await settle();
+
+      send(services, frame('hotWater'));
+      await settle();
+      expect(text('held')).toBe('hotWater');
+      const entries = window.history.length;
+      act(() => screen.getByRole('button', { name: 'Open it' }).click());
+      expect(window.location.hash).toBe('#/hot-water');
+      // A new entry, as a tap to any screen makes: Back in a browser returns to the bag being set up.
+      expect(window.history.length).toBe(entries + 1);
+      await settle();
+      expect(text('back')).toBe('coach');
+    });
+
+    it('holds nothing once the bag has a starting profile, or on another screen', async () => {
+      const bag = makeBag({ id: 'bag_1', name: 'Kiambu AA', activeVersionId: 'ver_1' });
+      window.location.hash = '#/';
+      await settle();
+      const services = renderHarness({ activeBag: bag, activeVersion: makeVersion({ id: 'ver_1', bagId: 'bag_1' }) });
+      send(services, frame('flush'));
+      expect(window.location.hash).toBe('#/flush');
+      await settle();
+      expect(text('held')).toBe('none');
+    });
+
+    it('holds nothing on History while a bag is being set up', async () => {
+      window.location.hash = '#/history';
+      await settle();
+      const services = renderHarness(SETTING_UP);
+      send(services, frame('steam'));
+      expect(window.location.hash).toBe('#/steam');
+    });
   });
 
   it('a video left open on Care holds nothing anywhere else', () => {

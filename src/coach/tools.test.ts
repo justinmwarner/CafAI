@@ -60,10 +60,12 @@ describe('COACH_TOOL_SPECS', () => {
     expect(description).toMatch(/Use null for anything the user has not told you; never guess/);
   });
 
-  it('asks a correction to send every detail again as saved, since each call replaces them all', () => {
+  it('asks a correction for the name and only what changes: null keeps a detail, an empty text removes one (D278)', () => {
     const { description } = COACH_TOOL_SPECS.save_bag_details;
-    expect(description).toMatch(/again only when the user corrects a detail: then send every detail as it was saved/);
-    expect(description).toMatch(/each call replaces all of them/);
+    expect(description).toMatch(/again only when the user corrects or adds a detail: then send the name as saved and only what changes/);
+    expect(description).toMatch(/null keeps a detail as it was saved/);
+    expect(description).toMatch(/an empty text removes a wrong one/);
+    expect(description).not.toMatch(/replaces all/);
   });
 
   it("describes DYE2's recent setups, what each holds, when there is no DYE2, and that it is for intake (6.5)", () => {

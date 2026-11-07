@@ -106,9 +106,9 @@ ticks: they decide the next changes.
 
 ## 3. The first version, and the wait for the machine (QUESTIONS #1, D55, D57)
 
-1. Coach -> **New bag**. The chat opens on "Which coffee is it?": tap
-   **Something else** and describe the coffee (picking it from Decaid's
-   bean library is section 12, step 10) -> tap a template.
+1. Coach -> **New bag**. The chat opens on "Which coffee is it?": describe
+   the coffee in the chat (picking it from Decaid's bean library is section
+   12, step 10) -> tap a template.
 2. Expected: "Loading <Bean> v1 on the machine…", then "Loaded <Bean> v1 on
    the machine.". Record the time between the two (a stopwatch is fine) and,
    in the log watcher, the time from the first "encoding step" line to
@@ -419,8 +419,8 @@ this bag's, and the banner offers Retry to load the bag's version.
       (then pick a photo of a bag taken earlier with the tablet's camera
       app, if it has one).
    2. Cancel it (Back, or the chooser's cancel). Expected: back on the
-      card, nothing new in the chat, and the card still answers: Photo of
-      the bag, Something else and the coffees' **Use this** all work.
+      card, nothing new in the chat, and the card still answers: **Photo of
+      the bag**, **Type the details** and the coffees' **Use this** all work.
    3. Take or pick a photo of a real bag, label up, in good light.
       Expected: "Reading the bag…" with a moving bar, then **Check the
       bag's details** with what the label says, and the card shows "Photo

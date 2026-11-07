@@ -4,6 +4,8 @@ import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { PLUGIN } from '../../api/plugins.ts';
 import type { LiveSample, MachineFrame } from '../../api/types.ts';
+import type { CoachState } from '../../app/types.ts';
+import { makeBag } from '../../storage/testing/fixtures.ts';
 import { REVIVE_DELAY_MS } from '../machine/useScaleRevive.ts';
 import type { Route } from '../router.ts';
 import { TID } from '../testIds.ts';
@@ -28,9 +30,9 @@ vi.mock('../machine/MachineAlerts.tsx', async (importOriginal) => {
   };
 });
 
-function renderShell(route: Route = { name: 'coach' }, options: { insideDecaid?: boolean } = {}) {
+function renderShell(route: Route = { name: 'coach' }, options: { insideDecaid?: boolean; coach?: Partial<CoachState> } = {}) {
   const onNavigate = vi.fn();
-  const services = createFakeServices({ insideDecaid: options.insideDecaid });
+  const services = createFakeServices({ insideDecaid: options.insideDecaid, coach: options.coach });
   const view = renderWithServices(
     <AppShell route={route} onNavigate={onNavigate}>
       <p>routed screen</p>
@@ -703,6 +705,97 @@ describe('AppShell on a phone', () => {
     act(() => services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: null }));
     expect(shotTab).toHaveTextContent(/^Shot$/);
     expect(shotTab).toHaveAccessibleName('Shot');
+  });
+
+  describe('on the new bag screen (D277)', () => {
+    const SETTING_UP: Partial<CoachState> = { activeBag: makeBag({ id: 'bag_1', name: 'New bag' }), activeVersion: null, phase: 'intake' };
+
+    it('a shot stays off the screen; a line says so and opens the shot on a tap', async () => {
+      const { services, onNavigate } = renderShell({ name: 'coach' }, { coach: SETTING_UP });
+      pull(services);
+      expect(window.location.hash).toBe('#/');
+      const line = screen.getByTestId(TID.heldRun);
+      expect(line).toHaveTextContent('A shot is running.');
+      expect(line).toHaveTextContent('You are setting up a bag, so CafAI stayed on this screen.');
+      expect(screen.getByRole('main')).toContainElement(line);
+      await userEvent.click(within(line).getByRole('button', { name: 'Open the shot' }));
+      expect(onNavigate).toHaveBeenCalledWith({ name: 'shot' });
+    });
+
+    it('the line goes when dismissed, and when the shot ends', () => {
+      const { services } = renderShell({ name: 'coach' }, { coach: SETTING_UP });
+      pull(services);
+      act(() => screen.getByTestId(TID.heldRunDismiss).click());
+      expect(screen.queryByTestId(TID.heldRun)).not.toBeInTheDocument();
+      act(() => services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: null }));
+      // The next shot is offered again.
+      pull(services);
+      expect(screen.getByTestId(TID.heldRun)).toBeInTheDocument();
+      act(() => services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: null }));
+      expect(screen.queryByTestId(TID.heldRun)).not.toBeInTheDocument();
+    });
+
+    it('steam stays off the screen too, and its line opens Steam', async () => {
+      const { services } = renderShell({ name: 'coach' }, { coach: SETTING_UP });
+      act(() => services.telemetry.setState({ machine: { ...IDLE_TELEMETRY.machine!, state: { state: 'steam', substate: 'pouring' } } }));
+      expect(window.location.hash).toBe('#/');
+      const line = screen.getByTestId(TID.heldRun);
+      expect(line).toHaveTextContent('Steam is running.');
+      await userEvent.click(within(line).getByRole('button', { name: 'Open Steam' }));
+      expect(window.location.hash).toBe('#/steam');
+    });
+
+    it("on a phone the line takes the live strip's place while it shows", () => {
+      setViewport(390, 844);
+      const { services } = renderShell({ name: 'coach' }, { coach: SETTING_UP });
+      pull(services);
+      expect(screen.getByTestId(TID.heldRun)).toBeInTheDocument();
+      expect(screen.queryByTestId(TID.liveStrip)).not.toBeInTheDocument();
+      act(() => screen.getByTestId(TID.heldRunDismiss).click());
+      expect(screen.getByTestId(TID.liveStrip)).toBeInTheDocument();
+      // Over, it leaves no "Last shot" behind: no coach reads it, so nothing waits for its outcome.
+      act(() => services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: null }));
+      expect(screen.queryByTestId(TID.liveStrip)).not.toBeInTheDocument();
+    });
+
+    it('the line coming and going by itself guards the screen a moment, so a tap meant for a row cannot land on the next', () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+      try {
+        const { services } = renderShell({ name: 'coach' }, { coach: SETTING_UP });
+        pull(services);
+        expect(screen.getByTestId(TID.heldRun)).toBeInTheDocument();
+        expect(screen.getByTestId(TID.tapGuard)).toBeInTheDocument();
+        act(() => vi.advanceTimersByTime(350));
+        expect(screen.queryByTestId(TID.tapGuard)).not.toBeInTheDocument();
+
+        act(() => services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: null }));
+        expect(screen.queryByTestId(TID.heldRun)).not.toBeInTheDocument();
+        expect(screen.getByTestId(TID.tapGuard)).toBeInTheDocument();
+        act(() => vi.advanceTimersByTime(350));
+
+        // Dismissed, it went with the barista's own tap: nothing to guard.
+        pull(services);
+        act(() => vi.advanceTimersByTime(350));
+        act(() => screen.getByTestId(TID.heldRunDismiss).click());
+        expect(screen.queryByTestId(TID.heldRun)).not.toBeInTheDocument();
+        expect(screen.queryByTestId(TID.tapGuard)).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("says the line's words in a status region that was in the page before them, and only there", () => {
+      const { services } = renderShell({ name: 'coach' }, { coach: SETTING_UP });
+      const status = screen.getByTestId(TID.heldRunStatus);
+      expect(status).toHaveAttribute('role', 'status');
+      expect(status).toBeEmptyDOMElement();
+      pull(services);
+      expect(screen.getByTestId(TID.heldRunStatus)).toBe(status);
+      expect(status).toHaveTextContent('A shot is running. You are setting up a bag, so CafAI stayed on this screen.');
+      expect(screen.getByTestId(TID.heldRun)).toHaveAttribute('role', 'none');
+      act(() => services.telemetry.emitShot({ type: 'finished', shotId: 'shot-1', stopReason: null }));
+      expect(status).toBeEmptyDOMElement();
+    });
   });
 
   it('the live strip is only on the Coach tab', () => {

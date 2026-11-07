@@ -3,6 +3,7 @@ import type { BeanPickerOption, CoachUiMessage, CoachUiPart } from '../types.ts'
 import type { ShotSummary } from '../../coach/types.ts';
 import {
   bagConfirmPart,
+  BLANK_BAG,
   beanPickerPart,
   diffPart,
   factPart,
@@ -88,9 +89,10 @@ describe('cards', () => {
     expect(isOpenBeanCard(picked)).toBe(false);
     expect(setAside(picked, 'typed')).toBe(picked);
 
-    const details = { name: '', roaster: 'Square Mile', origin: null, roastLevel: null, process: null, notes: null, roastDate: null };
+    const details = { ...BLANK_BAG, roaster: 'Square Mile' };
     const confirm = bagConfirmPart(details);
-    expect(confirm).toEqual({ kind: 'bagConfirm', details, confirmed: false });
+    expect(confirm).toEqual({ kind: 'bagConfirm', details, source: 'photo', confirmed: false });
+    expect(bagConfirmPart(BLANK_BAG, 'typed')).toEqual({ kind: 'bagConfirm', details: BLANK_BAG, source: 'typed', confirmed: false });
     expect(isOpenBagConfirm(confirm)).toBe(true);
     expect(setAside(confirm, 'typed')).toEqual({ ...confirm, expired: true, setAsideReason: 'typed' });
     const confirmed = { ...confirm, confirmed: true };

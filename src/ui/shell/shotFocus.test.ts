@@ -16,6 +16,19 @@ describe('shotFocus', () => {
     });
   });
 
+  it('a shot starting on the new bag screen does not switch (D277)', () => {
+    expect(shotFocus(IDLE, { type: 'shotStarted', typing: false, onShotRoute: false, held: true })).toEqual({
+      state: { kind: 'live', auto: false, held: true },
+      command: null,
+    });
+    // No coach reads it: its end waits for no outcome.
+    expect(shotFocus({ kind: 'live', auto: false, held: true }, { type: 'shotFinished', at: 5000 })).toEqual({ state: IDLE, command: null });
+    expect(shotFocus(IDLE, { type: 'shotStarted', typing: false, onShotRoute: false, held: false })).toEqual({
+      state: { kind: 'live', auto: true },
+      command: 'goShot',
+    });
+  });
+
   it('a shot starting while already on the shot route does not switch', () => {
     expect(shotFocus(IDLE, { type: 'shotStarted', typing: false, onShotRoute: true })).toEqual({
       state: { kind: 'live', auto: false },
