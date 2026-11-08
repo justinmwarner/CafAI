@@ -6,6 +6,8 @@ workflow checks against it. Settings > About shows the version you run.
 
 ## Unreleased
 
+## 0.1.6 (2026-11-07)
+
 ### The new bag screen
 
 - **Adding a new coffee comes first.** "Which coffee is it?" now leads
