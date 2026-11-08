@@ -177,8 +177,13 @@ export interface LlmAssistantTurn {
   usage: LlmUsage;
 }
 
-/** Incremental events while a turn streams. `index` is the content block index. */
+/**
+ * Incremental events while a turn streams. `index` is the content block index.
+ * `waiting` is no part of the turn: what the request waits on before its
+ * turn begins (D281), a sentence to show under "Thinking…".
+ */
 export type LlmStreamEvent =
+  | { type: 'waiting'; note: string }
   | { type: 'message_start'; id: string; model: string }
   | { type: 'text_delta'; index: number; text: string }
   | { type: 'tool_use_start'; index: number; id: string; name: string }
@@ -279,6 +284,8 @@ export interface RunRequest {
   onTextDelta?(delta: string): void;
   /** Called when a new assistant turn starts streaming. */
   onTurnStart?(): void;
+  /** What a model call waits on before its turn begins (D281): a sentence for the thinking row, each time it changes. */
+  onWaiting?(note: string): void;
   /** Hard cap on model calls per run (default 6); going on after a `pause_turn` is one. */
   maxModelCalls?: number;
 }

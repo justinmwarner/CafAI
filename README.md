@@ -768,6 +768,12 @@ troubleshooting.
     Retry.
   - "Could not reach Anthropic. Check this device's internet connection.":
     the tablet needs the internet for the coach (not for the machine).
+
+  A reply that is slow to begin says so: after 10 seconds a line under
+  "Thinking…" says what it waits on ("Waiting for Anthropic.", "Anthropic is
+  busy right now. Trying again."), and after 45 seconds the row reads
+  "Taking longer than usual…" with **Stop**. Stop leaves "You stopped
+  waiting for the coach. Tap Retry to ask again."; your message is kept.
 - **"This device's browser engine (Chromium N) is older than CafAI is
   built for (Chromium 91 or newer), so some parts may not work."** The
   device's WebView is older than CafAI supports: on Android, update the
@@ -802,6 +808,15 @@ troubleshooting.
     there, or update the Claude desktop app.
   - "Claude Code on your computer is not signed in.": run `claude` there
     and sign in with `/login`.
+  - **A slow reply.** After 10 seconds "Thinking…" says what it waits on
+    ("Claude is busy right now. Trying again (3 of 10).", "Claude Code went
+    quiet. Starting it again."), and after 45 seconds **Stop** ends the
+    wait. The bridge starts a Claude Code that stays silent for 90 seconds
+    again once, by itself, and waits up to 5 minutes while Claude is busy;
+    then the banner says why ("Claude is overloaded right now.", "Claude
+    Code on your computer stopped answering, even after a restart."). Tap
+    **Retry**; if it keeps happening, restart the bridge (`stop`, then
+    `start`). Its log says what Claude Code last did.
 
   `npm run bridge -- doctor` checks Node, Claude Code, its sign-in, one real
   turn, the port, the network, the firewall and the schedule, and says what

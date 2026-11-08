@@ -992,6 +992,140 @@ describe('coach engine', () => {
     });
   });
 
+  describe('a long wait for the reply (D281, D282)', () => {
+    let events: string[];
+    /** Every run's signal, in order. */
+    let signals: AbortSignal[];
+
+    /** A point the fake reply waits at until the test opens it. */
+    function gate() {
+      let open = () => {};
+      const passed = new Promise<void>((resolve) => {
+        open = resolve;
+      });
+      return { passed, open: () => open() };
+    }
+
+    /** The engine with `first` as its first model run; later runs play the scripts as ever. */
+    async function rebuildWith(first: (request: RunRequest) => Promise<RunResult>) {
+      engine.dispose();
+      events = [];
+      signals = [];
+      const scripted = makeLlm(scripts, requests, runs);
+      let ran = false;
+      const llm: LlmPort = {
+        ...scripted,
+        run(request) {
+          signals.push(request.signal!);
+          if (ran) return scripted.run(request);
+          ran = true;
+          return first(request);
+        },
+      };
+      engine = build({ llm, usage: { track: (event) => void events.push(event) } });
+      await engine.start();
+      await engine.newBag();
+    }
+
+    /** As the provider fails once its signal aborts: an aborted LlmError. */
+    const stopsOnAbort = (request: RunRequest) =>
+      new Promise<RunResult>((_resolve, reject) => {
+        request.signal!.addEventListener('abort', () => reject(new LlmError('aborted', 'The request was stopped.')), { once: true });
+      });
+
+    const ENDED: RunResult = { pendingUiCalls: [], heldResults: [], stopReason: 'end_turn', finalText: 'Lovely.' };
+
+    it('keeps what the reply waits on as the provider says it, until its turn begins, and none once the reply ends', async () => {
+      const waited = gate();
+      const begun = gate();
+      const writing = gate();
+      const streaming = gate();
+      await rebuildWith(async (request) => {
+        request.onWaiting?.('Waiting for Claude on your computer.');
+        request.onWaiting?.('Claude Code is starting on your computer.');
+        await waited.passed;
+        request.onWaiting?.('Your computer is waiting for Claude to answer.');
+        await begun.passed;
+        // The turn began: Claude thinks before it writes, which "Thinking…" says; what it waited on is over.
+        request.onTurnStart?.();
+        await writing.passed;
+        request.onTextDelta?.('Lovely.');
+        await streaming.passed;
+        await request.onAppend({ role: 'assistant', content: [text('Lovely.')] });
+        return ENDED;
+      });
+      expect(engine.getState().waitNote).toBeNull();
+      const sending = engine.sendText('Kiambu AA, light, washed');
+      await vi.waitFor(() => expect(engine.getState().waitNote).toBe('Claude Code is starting on your computer.'));
+      expect(engine.getState().busy).toBe(true);
+      waited.open();
+      await vi.waitFor(() => expect(engine.getState().waitNote).toBe('Your computer is waiting for Claude to answer.'));
+      begun.open();
+      await vi.waitFor(() => expect(engine.getState().waitNote).toBeNull());
+      expect(engine.getState().busy).toBe(true);
+      writing.open();
+      await vi.waitFor(() => expect(engine.getState().messages.at(-1)?.parts).toEqual([{ kind: 'text', text: 'Lovely.', streaming: true }]));
+      expect(engine.getState().waitNote).toBeNull();
+      streaming.open();
+      await sending;
+      expect(engine.getState()).toMatchObject({ busy: false, waitNote: null, error: null });
+    });
+
+    it('lets the note go when the reply fails too', async () => {
+      await rebuildWith(async (request) => {
+        request.onWaiting?.('Could not reach your computer. Trying again.');
+        throw new LlmError('network', 'Could not reach CafAI Bridge at 192.168.1.20:8877.', 0, true);
+      });
+      await engine.sendText('Kiambu AA, light, washed');
+      expect(engine.getState()).toMatchObject({ busy: false, waitNote: null, error: 'Could not reach CafAI Bridge at 192.168.1.20:8877.' });
+      expect(events.filter((event) => event === 'coach_error')).toHaveLength(1);
+    });
+
+    it("stops waiting on Stop: the reply's request is aborted, the message stays, the banner offers Retry, and no coach error is counted", async () => {
+      await rebuildWith((request) => {
+        request.onWaiting?.('Claude is busy right now. Trying again (3 of 10).');
+        return stopsOnAbort(request);
+      });
+      const sending = engine.sendText('Kiambu AA, light, washed');
+      await vi.waitFor(() => expect(engine.getState().waitNote).toBe('Claude is busy right now. Trying again (3 of 10).'));
+      expect(signals).toHaveLength(1);
+      expect(signals[0]!.aborted).toBe(false);
+
+      engine.stopReply();
+      expect(signals[0]!.aborted).toBe(true);
+      await sending;
+      const stopped = engine.getState();
+      expect(stopped).toMatchObject({ busy: false, waitNote: null, error: 'You stopped waiting for the coach. Tap Retry to ask again.' });
+      expect(stopped.messages.filter((m) => m.role === 'user').flatMap((m) => m.parts)).toEqual([{ kind: 'text', text: 'Kiambu AA, light, washed' }]);
+      expect(events).toContain('coach_message');
+      expect(events).not.toContain('coach_error');
+
+      // Retry asks again, with a request of its own.
+      scripts.push(() => [text('Lovely.'), saveBag, proposeTemplates]);
+      await engine.retry();
+      expect(signals).toHaveLength(2);
+      expect(signals[1]).not.toBe(signals[0]);
+      expect(signals[1]!.aborted).toBe(false);
+      expect(engine.getState()).toMatchObject({ error: null, phase: 'choosing_template' });
+      expect(events).not.toContain('coach_error');
+    });
+
+    it('does nothing on Stop while no reply is being asked for, or once it came', async () => {
+      await rebuildWith(async (request) => {
+        request.onTextDelta?.('Lovely.');
+        await request.onAppend({ role: 'assistant', content: [text('Lovely.')] });
+        return ENDED;
+      });
+      engine.stopReply();
+      expect(engine.getState().error).toBeNull();
+      await engine.sendText('Kiambu AA, light, washed');
+      engine.stopReply();
+      expect(signals[0]!.aborted).toBe(false);
+      expect(engine.getState()).toMatchObject({ busy: false, error: null });
+      expect(events).not.toContain('coach_error');
+    });
+  });
+
   it('starts a bag with the bean card, then the placeholder question, and sends the intake turn with context', async () => {
     await engine.newBag();
     const [card, question] = engine.getState().messages;

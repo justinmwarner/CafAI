@@ -26,6 +26,7 @@ import {
   type FormEvent,
 } from 'react';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Stack from '@mui/material/Stack';
@@ -106,6 +107,10 @@ export interface ChatSurfaceProps {
   statsCard?: boolean;
   /** The Stats prompt above the composer was tapped: post the card. Without it there is no prompt. */
   onStats?(): void;
+  /** What the coach's reply waits on (D281), under "Thinking…" from 10 s; null or absent when nothing is known. */
+  waitNote?: string | null;
+  /** Stop on the thinking row from 45 s (D282): give up waiting for the reply. Without it the row offers no Stop. */
+  onStopReply?(): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -232,6 +237,8 @@ interface PartActions {
   draftBag(details: SaveBagDetails): void;
   addGrinder(requestId: string): void;
   declineGrinder(requestId: string): void;
+  /** Stop on the thinking row (D282). */
+  stopReply(): void;
 }
 
 interface PartsContextValue {
@@ -248,6 +255,10 @@ interface PartsContextValue {
   hasShotTds: boolean;
   /** The taste question waits for its answer: the prompt row offers Taste words and Need help? (D127). */
   tasteOpen: boolean;
+  /** What the coach's reply waits on, for the thinking row (D281). */
+  waitNote: string | null;
+  /** Whether a Stop handler was given: without one the thinking row offers no Stop (D282). */
+  hasStopReply: boolean;
   actions: PartActions;
 }
 
@@ -410,21 +421,55 @@ function BudgetPausedView({ data }: { data: unknown }) {
   return part ? <BudgetPausedCard budgetUsd={part.budgetUsd} resumesOn={part.resumesOn} /> : null;
 }
 
-/** "Thinking… 12 s": the elapsed counter updates in place, so a slow reply never looks frozen. */
+/** From this many seconds the thinking row says what the coach waits on, when CafAI knows (D281). */
+export const THINKING_NOTE_AFTER_S = 10;
+/** From this many seconds the row says the reply takes longer than usual, and offers Stop (D281, D282). */
+export const THINKING_SLOW_AFTER_S = 45;
+
+/**
+ * "Thinking… 12 s": the elapsed counter updates in place, so a slow reply
+ * never looks frozen. From 10 s a second, muted line says what the coach
+ * waits on, when CafAI knows (D281); from 45 s the first reads "Taking longer
+ * than usual… 52 s" and Stop gives up the wait (D282). Nothing moves or
+ * animates but the spinner: the note and Stop come in under the words. The
+ * note is a status of its own, there from the start, so a screen reader
+ * hears it as it comes and changes, not again with every second.
+ */
 function ThinkingView() {
+  const { waitNote, hasStopReply, actions } = usePartsContext();
   const [startedAt] = useState(() => Date.now());
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
     const timer = window.setInterval(() => setSeconds(Math.floor((Date.now() - startedAt) / 1000)), 1000);
     return () => window.clearInterval(timer);
   }, [startedAt]);
+  const slow = seconds >= THINKING_SLOW_AFTER_S;
   return (
-    <Stack direction="row" spacing={1.25} role="status" sx={{ alignItems: 'center', py: 0.25 }}>
-      <CircularProgress size={16} thickness={5} aria-hidden />
-      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-        Thinking…{seconds >= 3 ? ` ${seconds} s` : ''}
+    <Box sx={{ py: 0.25 }}>
+      <Stack direction="row" spacing={1.25} role="status" sx={{ alignItems: 'center' }}>
+        <CircularProgress size={16} thickness={5} aria-hidden />
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+          {slow ? 'Taking longer than usual…' : 'Thinking…'}
+          {seconds >= 3 ? ` ${seconds} s` : ''}
+        </Typography>
+      </Stack>
+      {/* Under the words: past the 16 px spinner and its 10 px gap. */}
+      <Typography variant="body2" role="status" data-testid={TID.thinkingNote} sx={{ pl: '26px', color: 'text.secondary' }}>
+        {seconds >= THINKING_NOTE_AFTER_S ? waitNote : null}
       </Typography>
-    </Stack>
+      {slow && hasStopReply ? (
+        // A quiet text button hugging its label, which starts under the words (after the text button's 8 px
+        // padding); still 48 px each way to touch. Named for what it stops: the machine's Stop is another.
+        <Button
+          data-testid={TID.stopReply}
+          aria-label="Stop waiting for the coach"
+          onClick={actions.stopReply}
+          sx={{ ml: '18px', minWidth: 48 }}
+        >
+          Stop
+        </Button>
+      ) : null}
+    </Box>
   );
 }
 
@@ -643,6 +688,7 @@ export function ChatSurface(props: ChatSurfaceProps) {
     onOpenGraph,
     statsCard = false,
     onStats,
+    waitNote = null,
   } = props;
   const sendBlocked = busy || inputDisabled;
   // A boolean, not the raw (often inline, identity-changing) callback: keeps
@@ -650,6 +696,7 @@ export function ChatSurface(props: ChatSurfaceProps) {
   const hasOpenGraph = onOpenGraph !== undefined;
   const hasStats = onStats !== undefined;
   const hasShotTds = props.onShotTds !== undefined;
+  const hasStopReply = props.onStopReply !== undefined;
 
   // Latest-ref: the adapter and part actions stay stable while the parent
   // passes fresh callbacks on every render (every streamed token).
@@ -713,14 +760,16 @@ export function ChatSurface(props: ChatSurfaceProps) {
       draftBag: (details: SaveBagDetails) => propsRef.current.onDraftBag?.(details),
       addGrinder: act((requestId: string) => propsRef.current.onAddGrinder?.(requestId)),
       declineGrinder: act((requestId: string) => propsRef.current.onDeclineGrinder?.(requestId)),
+      // The banner says what became of it; the thread stays where it is.
+      stopReply: () => propsRef.current.onStopReply?.(),
     };
   }, []);
 
   const latestAppliedDiff = useMemo(() => latestAppliedDiffId(messages), [messages]);
   const tasteOpen = useMemo(() => tasteQuestionOpen(messages), [messages]);
   const partsContext = useMemo<PartsContextValue>(
-    () => ({ busy, canUndo, latestAppliedDiff, graphShotId, hasOpenGraph, hasStats, hasShotTds, tasteOpen, actions }),
-    [busy, canUndo, latestAppliedDiff, graphShotId, hasOpenGraph, hasStats, hasShotTds, tasteOpen, actions],
+    () => ({ busy, canUndo, latestAppliedDiff, graphShotId, hasOpenGraph, hasStats, hasShotTds, tasteOpen, waitNote, hasStopReply, actions }),
+    [busy, canUndo, latestAppliedDiff, graphShotId, hasOpenGraph, hasStats, hasShotTds, tasteOpen, waitNote, hasStopReply, actions],
   );
 
   const chatMessages = useMemo(() => toChatMessages(messages, busy, statsCard), [messages, busy, statsCard]);

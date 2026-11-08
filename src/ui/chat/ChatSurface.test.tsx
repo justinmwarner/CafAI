@@ -1,11 +1,18 @@
 // @vitest-environment jsdom
 import './testing/setup.ts';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { CoachUiMessage } from '../../app/types.ts';
 import { TID } from '../testIds.ts';
-import { ChatSurface, latestAppliedDiffId, toChatMessages, type ChatSurfaceProps } from './ChatSurface.tsx';
+import {
+  ChatSurface,
+  latestAppliedDiffId,
+  THINKING_NOTE_AFTER_S,
+  THINKING_SLOW_AFTER_S,
+  toChatMessages,
+  type ChatSurfaceProps,
+} from './ChatSurface.tsx';
 import { BAG_FROM_PHOTO, BEAN_OPTIONS, conversation, sampleSummary } from './testing/fixtures.ts';
 import { previewTheme } from './testing/previewTheme.ts';
 import { renderWithServices } from './testing/render.tsx';
@@ -669,6 +676,104 @@ describe('ChatSurface: the stats card and the Stats prompt', () => {
     await userEvent.click(screen.getByTestId(TID.statsPrompt));
     rerender({ messages, onStats: vi.fn(), statsCard: true });
     expect(scroller.scrollTop).toBe(700);
+  });
+});
+
+describe('ChatSurface: a long wait for the coach (D281, D282)', () => {
+  /** The row's clock: its counter's ticks and the time; x-chat's own timers run as ever. Set before the row mounts. */
+  const fakeClock = () => vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+  const wait = (ms: number) => act(() => vi.advanceTimersByTime(ms));
+  const asked = [textMessage('a', 'user', 'Kenya, washed')];
+  const NOTE = 'Claude is busy right now. Trying again (3 of 10).';
+  /** The row's first line: the spinner and the words, a status of its own. */
+  const firstLine = () => within(lastRow()).getAllByRole('status')[0]!;
+  const note = () => screen.getByTestId(TID.thinkingNote);
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('says Thinking… with the seconds from 3 s, what it waits on from 10 s, and from 45 s that it takes longer, with Stop', () => {
+    fakeClock();
+    const onStopReply = vi.fn();
+    renderSurface({ messages: asked, busy: true, waitNote: NOTE, onStopReply });
+    expect(firstLine()).toHaveTextContent(/^Thinking…$/);
+    expect(note()).toBeEmptyDOMElement();
+    expect(screen.queryByTestId(TID.stopReply)).toBeNull();
+
+    wait(2999);
+    expect(firstLine()).toHaveTextContent(/^Thinking…$/);
+    wait(1);
+    expect(firstLine()).toHaveTextContent(/^Thinking… 3 s$/);
+
+    wait((THINKING_NOTE_AFTER_S - 3) * 1000 - 1);
+    expect(firstLine()).toHaveTextContent(/^Thinking… 9 s$/);
+    expect(note()).toBeEmptyDOMElement();
+    wait(1);
+    expect(firstLine()).toHaveTextContent(/^Thinking… 10 s$/);
+    expect(note()).toHaveTextContent(NOTE);
+    // The note is a status of its own, under the words: the counter's every second never reads it out again.
+    expect(note()).toHaveAttribute('role', 'status');
+    expect(firstLine()).not.toContainElement(note());
+    expect(screen.queryByTestId(TID.stopReply)).toBeNull();
+
+    wait((THINKING_SLOW_AFTER_S - THINKING_NOTE_AFTER_S) * 1000 - 1);
+    expect(firstLine()).toHaveTextContent(/^Thinking… 44 s$/);
+    expect(screen.queryByTestId(TID.stopReply)).toBeNull();
+    wait(1);
+    expect(firstLine()).toHaveTextContent(/^Taking longer than usual… 45 s$/);
+    expect(note()).toHaveTextContent(NOTE);
+    wait(7000);
+    expect(firstLine()).toHaveTextContent(/^Taking longer than usual… 52 s$/);
+    expect(screen.queryByText(/Thinking/)).toBeNull();
+
+    const stop = screen.getByRole('button', { name: 'Stop waiting for the coach' });
+    expect(stop).toBe(screen.getByTestId(TID.stopReply));
+    expect(stop).toHaveTextContent(/^Stop$/);
+    // A quiet text button, outside the status, so the counter never reads it out.
+    expect(stop).toHaveClass('MuiButton-text');
+    expect(firstLine()).not.toContainElement(stop);
+    fireEvent.click(stop);
+    expect(onStopReply).toHaveBeenCalledTimes(1);
+  });
+
+  it('follows the note as it changes, and leaves the line empty while nothing is known', () => {
+    fakeClock();
+    const { rerender } = renderSurface({ messages: asked, busy: true, waitNote: 'Waiting for Claude on your computer.' });
+    wait(THINKING_NOTE_AFTER_S * 1000);
+    expect(note()).toHaveTextContent(/^Waiting for Claude on your computer\.$/);
+    rerender({ waitNote: 'Claude Code is starting on your computer.' });
+    expect(note()).toHaveTextContent(/^Claude Code is starting on your computer\.$/);
+    rerender({ waitNote: null });
+    expect(note()).toBeEmptyDOMElement();
+    rerender({ waitNote: undefined });
+    expect(note()).toBeEmptyDOMElement();
+    expect(firstLine()).toHaveTextContent(/^Thinking… 10 s$/);
+  });
+
+  it('offers no Stop without a way to stop', () => {
+    fakeClock();
+    renderSurface({ messages: asked, busy: true, waitNote: NOTE });
+    wait(THINKING_SLOW_AFTER_S * 1000);
+    expect(firstLine()).toHaveTextContent(/^Taking longer than usual… 45 s$/);
+    expect(screen.queryByTestId(TID.stopReply)).toBeNull();
+    expect(screen.queryByRole('button', { name: /Stop/ })).toBeNull();
+  });
+
+  it('counts afresh for the next reply: no note, no Stop, Thinking… again', () => {
+    fakeClock();
+    const onStopReply = vi.fn();
+    const { rerender } = renderSurface({ messages: asked, busy: true, waitNote: NOTE, onStopReply });
+    wait(50_000);
+    expect(screen.getByTestId(TID.stopReply)).toBeInTheDocument();
+    // The reply came; then the barista asks again.
+    const replied = [...asked, textMessage('b', 'assistant', 'Grind finer.')];
+    rerender({ messages: replied, busy: false, waitNote: null });
+    expect(screen.queryByTestId(TID.thinkingNote)).toBeNull();
+    rerender({ messages: [...replied, textMessage('c', 'user', 'Why finer?')], busy: true, waitNote: 'Waiting for Claude on your computer.' });
+    expect(firstLine()).toHaveTextContent(/^Thinking…$/);
+    expect(note()).toBeEmptyDOMElement();
+    expect(screen.queryByTestId(TID.stopReply)).toBeNull();
   });
 });
 

@@ -25,6 +25,11 @@
  * header by name only), then the reply: for a stream, the turn as assembled,
  * with its stop reason and usage, and the stream's events as they came,
  * capped; otherwise the error body, or what became of the request.
+ *
+ * Until a turn begins, the provider says what it waits on (D281), as
+ * `waiting` events that are no part of the turn: at the start of each
+ * request, for each `cafai_wait` report CafAI Bridge sends (what Claude Code
+ * on the computer is doing), and before each of its own retries.
  */
 import { createStreamCapture, recordExchange, rememberSecret, trafficName } from '../traffic/recorder.ts';
 import { createTurnAssembler } from './assemble.ts';
@@ -40,6 +45,9 @@ import {
   timeoutError,
   unreadableReplyError,
   type ProviderWording,
+  type WaitReason,
+  type WaitReport,
+  type WaitStage,
 } from './errors.ts';
 import { modelInfo, supportsRefusalFallbacks } from './models.ts';
 import { createSseParser, type SseEvent } from './sse.ts';
@@ -55,7 +63,11 @@ const DEFAULT_IDLE_MS = 90_000;
 const DEFAULT_RETRY_BASE_MS = 1000;
 const MAX_RETRY_AFTER_MS = 60_000;
 
-/** Events we act on: unreadable data in one of them means a broken stream, not a new feature. */
+/**
+ * Events we act on: unreadable data in one of them means a broken stream, not
+ * a new feature. Not CafAI Bridge's `cafai_wait`: a report it cannot read is
+ * passed over, as an event this build does not know is.
+ */
 const KNOWN_EVENTS: readonly string[] = [
   'message_start',
   'content_block_start',
@@ -65,6 +77,36 @@ const KNOWN_EVENTS: readonly string[] = [
   'message_stop',
   'error',
 ];
+
+const WAIT_STAGES: readonly string[] = ['starting', 'requesting', 'retrying', 'restarting'] satisfies readonly WaitStage[];
+const WAIT_REASONS: readonly string[] = ['overloaded', 'rate_limited', 'server', 'network', 'other'] satisfies readonly WaitReason[];
+
+/** A try, or a number of tries: a whole number from 1. */
+function isCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1;
+}
+
+/**
+ * CafAI Bridge's report of what it waits on (D281), a `cafai_wait` event's
+ * data, read, not trusted: `{"type":"cafai_wait","stage":"retrying",
+ * "attempt":3,"of":10,"reason":"overloaded"}`. Null for anything else, a stage
+ * this build does not know included, so such an event is passed over. Only
+ * `retrying` keeps the try (with how many, both whole, the try no more than
+ * the tries) and the reason, each left out when it is not one of those.
+ */
+export function readWaitReport(data: unknown): WaitReport | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const { type, stage, attempt, of, reason } = data as Record<string, unknown>;
+  if (type !== 'cafai_wait' || typeof stage !== 'string' || !WAIT_STAGES.includes(stage)) return null;
+  const report: WaitReport = { stage: stage as WaitStage };
+  if (report.stage !== 'retrying') return report;
+  if (isCount(attempt) && isCount(of) && attempt <= of) {
+    report.attempt = attempt;
+    report.of = of;
+  }
+  if (typeof reason === 'string' && WAIT_REASONS.includes(reason)) report.reason = reason as WaitReason;
+  return report;
+}
 
 export interface AnthropicProviderOptions {
   /** Read at every call, so a key saved in Settings applies at once. */
@@ -299,6 +341,14 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): LlmP
           events.event(sse.event, sse.data);
           const parsed = parseEventData(sse, wording);
           events.join(parsed);
+          // What CafAI Bridge waits on (D281): a note for the caller, no part of the turn, so never `yielded`.
+          const report = readWaitReport(parsed);
+          if (report !== null) {
+            const note = wording.reported?.(report) ?? null;
+            if (controller.signal.aborted) throw new Error('aborted');
+            if (note !== null) yield { type: 'waiting', note };
+            continue;
+          }
           for (const event of assembler.push(parsed)) {
             // One chunk can hold the rest of the reply: honour an abort between events.
             if (controller.signal.aborted) throw new Error('aborted');
@@ -355,8 +405,12 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): LlmP
     // The key (or the bridge's code) is looked for wherever it shows in the traffic log, the chat included.
     rememberSecret(apiKey);
     const http = buildAnthropicRequest(request, apiKey, options.baseUrl);
+    // What the request waits on until its turn begins (D281).
+    yield { type: 'waiting', note: wording.waiting };
 
     for (let retry = 0; ; retry++) {
+      // The caller may have stopped while it was told what the request waits on: then nothing is sent.
+      if (signal?.aborted) throw abortedError();
       const state: AttemptState = { yielded: false, retryAfterMs: null, streamOpened: false, timedOut: false };
       try {
         yield* attempt(http, signal, state);
@@ -367,6 +421,8 @@ export function createAnthropicProvider(options: AnthropicProviderOptions): LlmP
         // Never retry once the caller has seen part of a turn: it would show twice.
         if (state.yielded || !error.retryable || retry >= maxRetries || signal?.aborted) throw error;
         if (options.shouldRetry && !options.shouldRetry(error, { streamOpened: state.streamOpened, timedOut: state.timedOut })) throw error;
+        // The wait goes on, and why (D281).
+        yield { type: 'waiting', note: wording.retrying(error.kind) };
         await sleep(backoffMs(retry, retryBaseMs, state.retryAfterMs), signal);
       }
     }

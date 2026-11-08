@@ -461,6 +461,8 @@ const VISUALIZER_LOOK_MS = 3_000;
 const VISUALIZER_WATCH_MS = 30_000;
 /** While a reply waits on the month's budget, it is looked at again at least this often, so a new month is not missed (D240). */
 const BUDGET_LOOK_MAX_MS = 60 * 60 * 1000;
+/** The banner once the barista stopped waiting for a reply (D282): no failure, so no coach error. */
+const STOPPED_WAITING = 'You stopped waiting for the coach. Tap Retry to ask again.';
 
 /** Text from Decaid or a photo that travels on to the coach and Decaid: never a key (D37). */
 function withoutKey(text: string | null): string | null {
@@ -663,6 +665,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     machineTick: 0,
     restoredFromBackup: deps.restoredFromBackup ?? false,
     quietRuns: 0,
+    waitNote: null,
   };
   let settings: Settings = { model: 'claude-opus-5-5', grinderName: null, grinderSetting: null, activeBagId: null };
   let session: Session | null = null;
@@ -2082,6 +2085,9 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     }
   }
 
+  /** The reply being asked for, with its own controller, which Stop aborts (D282); null between replies. */
+  let asking: { controller: AbortController; stopped: boolean } | null = null;
+
   /**
    * `purpose`: what the coach's usage counts the reply as (D237): the reply
    * after a credited shot, or a reply to the barista, as a Retry and a reply
@@ -2101,9 +2107,18 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
     if (paused) return waitOnBudget(s, paused, purpose);
     budgetWait = null;
     stopBudgetLook();
-    state = { ...state, busy: true, error: null };
+    state = { ...state, busy: true, error: null, waitNote: null };
     lastFailed = null;
     emit();
+    const reply = { controller: new AbortController(), stopped: false };
+    asking = reply;
+    // What the reply waits on, for the thinking row (D281): gone once its turn begins, when "Thinking…" is the truth
+    // (a "Claude is busy" note kept through the thinking that follows would no longer be).
+    const waitFor = (note: string | null) => {
+      if (state.waitNote === note) return;
+      state = { ...state, waitNote: note };
+      scheduleEmit();
+    };
     let streamingId: string | null = null;
     factShown = false;
     // How hard the coach thinks, as Settings has it now (D243): medium until chosen (D30). A model without effort is sent none.
@@ -2121,8 +2136,11 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
         tools: toolsFor(source),
         // A stored search still waiting resumes with its tool whatever the mode, or the API refuses it (D203).
         ...(source === 'web' || resumesSearch(s.conversation.apiMessages) ? { serverTools: [WEB_SEARCH_TOOL] } : {}),
+        signal: reply.controller.signal,
+        onWaiting: waitFor,
         onTurnStart: () => {
           streamingId = null;
+          waitFor(null);
         },
         onTextDelta: (delta) => {
           if (!streamingId) {
@@ -2130,6 +2148,7 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
             setMessages([...state.messages, message(streamingId, 'assistant', [], nowIso())]);
           }
           setMessages(appendText(state.messages, streamingId, delta));
+          waitFor(null);
           scheduleEmit();
         },
         onAppend: async (appended) => {
@@ -2164,10 +2183,16 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       for (const call of result.pendingUiCalls) if (!unshown.has(call.id)) await presentUiCall(s, call);
     } catch (error) {
       setMessages(finishStreaming(state.messages));
-      setError(describe(error), runModel);
-      usage.track('coach_error');
+      if (reply.stopped) {
+        // The barista stopped waiting (D282): no failure of the coach's.
+        setError(STOPPED_WAITING, runModel);
+      } else {
+        setError(describe(error), runModel);
+        usage.track('coach_error');
+      }
     } finally {
-      state = { ...state, busy: false };
+      if (asking === reply) asking = null;
+      state = { ...state, busy: false, waitNote: null };
       // What the reply cost may have brought the month near its budget, or to it (D240).
       await noticeBudget();
       await persistConversation(s);
@@ -3737,6 +3762,12 @@ export function createCoachEngine(deps: EngineDeps): CoachEngine {
       standing = null;
       setError(null);
       emit();
+    },
+    stopReply() {
+      // At once, not queued: the queue waits on the very reply (D282). runModel says so on the banner.
+      if (!asking || asking.stopped) return;
+      asking.stopped = true;
+      asking.controller.abort();
     },
     refresh: () =>
       enqueue(async () => {
