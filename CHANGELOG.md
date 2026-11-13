@@ -6,6 +6,27 @@ workflow checks against it. Settings > About shows the version you run.
 
 ## Unreleased
 
+## 0.1.7 (2026-11-13)
+
+### A start that hangs after the iPad slept
+
+- **CafAI starts after the iPad wakes.** On an iPad, CafAI could stay on
+  "Starting CafAI…" ("still opening the coach's chat") after the iPad had
+  slept, and Try again did not help. When Decaid comes back after ten
+  minutes away, it loads CafAI again in the same view. The page from before
+  could keep a read of CafAI's storage open there, and the new page waited
+  behind it to save which bag is open. A page that is put away now ends what
+  it has open first. The first time the iPad wakes after this update, the
+  page from before it can still hold the storage once. If CafAI stops there,
+  tap **Exit to Decaid** and open CafAI again.
+- **A DEBUG flag to see such a problem on the tablet itself.** It is off
+  unless someone turns it on from a computer on the same network
+  (docs/DEBUG.md). While it is on, CafAI sends what its start waits on to
+  CafAI Bridge on that computer, and the start screen shows a **Send debug
+  report** button. Nothing changes while it is off.
+- **CafAI Bridge keeps those reports** in `debug-reports.jsonl`, next to its
+  log.
+
 ## 0.1.6 (2026-11-07)
 
 ### The new bag screen
