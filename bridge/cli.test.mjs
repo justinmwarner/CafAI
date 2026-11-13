@@ -389,6 +389,7 @@ describe('serve', () => {
       allowApiKey: false,
       workDir: paths(dir).workDir,
       version: '0.1.0',
+      debugFile: paths(dir).debugFile,
     });
     expect(readPidFile(paths(dir).pidFile)).toEqual({ pid: 4321, port: 8877, host: '0.0.0.0' });
     expect(deps.claudeAuthStatus).toHaveBeenCalledWith(INSTALL, { env: deps.env, allowApiKey: false });

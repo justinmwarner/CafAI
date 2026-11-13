@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -363,6 +363,64 @@ describe('CafAI Bridge', () => {
     expect(log).toMatch(/POST \/v1\/messages claude-opus-5-5 with web search, 1 messages, new, /);
     expect(log).not.toContain('hello one');
     expect(log).not.toContain('Read the bag');
+  });
+});
+
+describe('CafAI Bridge debug reports', () => {
+  let ctx;
+  let debugFile;
+  beforeAll(async () => {
+    debugFile = path.join(mkdtempSync(path.join(tmpdir(), 'cafai-bridge-debug-')), 'debug-reports.jsonl');
+    ctx = await start({ debugFile });
+  });
+  afterAll(async () => {
+    await ctx.bridge.close();
+  });
+
+  const saved = () =>
+    readFileSync(debugFile, 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+
+  it('keeps each report as one line, with when it came and from where', async () => {
+    const report = { kind: 'slow-start', stage: "opening the coach's chat", inFlight: [{ db: 'cafai', mode: 'readwrite' }] };
+    const response = await fetch(`${ctx.url}/v1/debug/report`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': CODE },
+      body: JSON.stringify(report),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+    const [line] = saved();
+    expect(line).toEqual({ receivedAt: expect.any(String), from: expect.stringContaining('127.0.0.1'), report });
+    expect(ctx.lines.join('\n')).toMatch(/debug report from \S+: slow-start, \d+ bytes/);
+  });
+
+  it("takes a beacon's code from the query, and its text as it came", async () => {
+    const response = await fetch(`${ctx.url}/v1/debug/report?code=${CODE}`, { method: 'POST', body: 'not json' });
+    expect(response.status).toBe(200);
+    expect(saved().at(-1).report).toBe('not json');
+    expect(ctx.lines.at(-1)).toMatch(/: report, 8 bytes$/);
+  });
+
+  it('refuses a report without the code', async () => {
+    const before = saved().length;
+    const response = await fetch(`${ctx.url}/v1/debug/report`, { method: 'POST', body: '{}' });
+    expect(response.status).toBe(401);
+    expect(saved()).toHaveLength(before);
+  });
+
+  it('has no such route without a file to keep them in', async () => {
+    const plain = await start();
+    try {
+      const response = await fetch(`${plain.url}/v1/debug/report`, { method: 'POST', headers: { 'x-api-key': CODE }, body: '{}' });
+      expect(response.status).toBe(404);
+      const beacon = await fetch(`${plain.url}/v1/debug/report?code=${CODE}`, { method: 'POST', body: '{}' });
+      expect(beacon.status).toBe(401);
+    } finally {
+      await plain.bridge.close();
+    }
   });
 });
 

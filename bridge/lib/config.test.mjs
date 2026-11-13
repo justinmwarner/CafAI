@@ -66,6 +66,7 @@ describe('loadConfig', () => {
       workDir: path.join(path.resolve(dir), 'work'),
       logFile: path.join(path.resolve(dir), 'bridge.log'),
       pidFile: path.join(path.resolve(dir), 'bridge.pid'),
+      debugFile: path.join(path.resolve(dir), 'debug-reports.jsonl'),
     });
   });
 

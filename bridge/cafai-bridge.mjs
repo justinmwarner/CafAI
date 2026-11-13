@@ -795,6 +795,7 @@ export async function cmdServe(options, deps) {
       allowApiKey,
       workDir: files.workDir,
       version: VERSION,
+      debugFile: files.debugFile,
       env: deps.env,
       log,
       onShutdownRequest: () => shutdown(true),

@@ -36,7 +36,7 @@ export function configDir({ explicit = null, platform = process.platform, env = 
 /**
  * The bridge's files inside its folder, as absolute paths.
  * @param {string} dir
- * @returns {{ dir: string, configFile: string, workDir: string, logFile: string, pidFile: string }}
+ * @returns {{ dir: string, configFile: string, workDir: string, logFile: string, pidFile: string, debugFile: string }}
  */
 export function paths(dir) {
   const root = path.resolve(dir);
@@ -46,6 +46,8 @@ export function paths(dir) {
     workDir: path.join(root, 'work'),
     logFile: path.join(root, 'bridge.log'),
     pidFile: path.join(root, 'bridge.pid'),
+    // What CafAI sends while its DEBUG flag is on (POST /v1/debug/report), one JSON line per report.
+    debugFile: path.join(root, 'debug-reports.jsonl'),
   };
 }
 

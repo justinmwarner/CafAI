@@ -1,7 +1,7 @@
 // CafAI Bridge's HTTP server: the Anthropic Messages API on the LAN, answered
 // by the user's own Claude Code (protocol 1, docs/superpowers/specs/2026-10-11-local-claude-design.md).
 import { timingSafeEqual } from 'node:crypto';
-import { mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { claudeAuthStatus, EFFORTS, findClaude, probeClaude } from './claude.mjs';
@@ -13,6 +13,12 @@ import { mapCliFailure } from './translate.mjs';
 export const PROTOCOL = 1;
 const MAX_BODY_BYTES = 32 * 1024 * 1024;
 const MAX_MCP_BODY_BYTES = 4 * 1024 * 1024;
+const MAX_DEBUG_BODY_BYTES = 2 * 1024 * 1024;
+/** A debug log this long is moved aside, one older copy kept, before the next report goes in. */
+const MAX_DEBUG_FILE_BYTES = 20 * 1024 * 1024;
+const DEBUG_PATH = '/v1/debug/report';
+/** What a report may call itself in the bridge's log; anything else is logged as "report". */
+const DEBUG_KIND = /^[a-z][a-z-]{0,39}$/;
 const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:[\]-]{0,99}$/;
 // The API caps a tool name at 64 characters; Claude Code prefixes ours with mcp__cafai__ (12).
 const TOOL_NAME = /^[A-Za-z0-9_-]{1,52}$/;
@@ -45,6 +51,14 @@ function safeEqual(a, b) {
   const left = Buffer.from(String(a));
   const right = Buffer.from(String(b));
   return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function fileSize(file) {
+  try {
+    return statSync(file).size;
+  } catch {
+    return 0;
+  }
 }
 
 function readBody(req, limit) {
@@ -300,6 +314,7 @@ export function parseMessagesBody(body) {
  * @param {boolean} [options.allowApiKey]
  * @param {string} options.workDir
  * @param {string} options.version
+ * @param {string} [options.debugFile]  Where POST /v1/debug/report appends what CafAI sends while its DEBUG flag is on; without it there is no such route.
  * @param {(line: string) => void} [options.log]
  * @param {() => void} [options.onShutdownRequest]
  * @param {NodeJS.ProcessEnv} [options.env]
@@ -316,6 +331,7 @@ export async function startBridgeServer(options) {
     allowApiKey = false,
     workDir,
     version,
+    debugFile,
     log = () => {},
     onShutdownRequest = () => {},
     env = process.env,
@@ -325,6 +341,7 @@ export async function startBridgeServer(options) {
   const expectedCode = normalizeCode(code ?? '');
   if (expectedCode.length < 8) throw new Error('startBridgeServer: the pairing code needs 8 letters or digits.');
   mkdirSync(workDir, { recursive: true });
+  if (debugFile) mkdirSync(path.dirname(debugFile), { recursive: true });
   // A bridge that did not stop cleanly leaves its runs' prompt and MCP files behind.
   for (const name of readdirSync(workDir)) {
     if (/^run-[0-9a-f]+-(?:system\.txt|mcp\.json)$/.test(name)) rmSync(path.join(workDir, name), { force: true });
@@ -470,11 +487,44 @@ export async function startBridgeServer(options) {
     handleMcpPost(req, res, rpc, target, { keepaliveMs: timing.keepaliveMs });
   }
 
-  function codeOf(req) {
+  /**
+   * What CafAI sends while its DEBUG flag is on (src/debug/): one JSON line per report in `debugFile`, with when it
+   * came and from where. A body that is not JSON is kept as its text.
+   */
+  async function debugReport(req, res, remote) {
+    let raw;
+    try {
+      raw = await readBody(req, MAX_DEBUG_BODY_BYTES);
+    } catch (error) {
+      if (error?.tooLarge) sendError(res, 413, 'request_too_large', 'That debug report is too large for CafAI Bridge.');
+      return;
+    }
+    let report;
+    try {
+      report = JSON.parse(raw);
+    } catch {
+      report = raw;
+    }
+    try {
+      if (fileSize(debugFile) > MAX_DEBUG_FILE_BYTES) renameSync(debugFile, `${debugFile}.1`);
+      appendFileSync(debugFile, `${JSON.stringify({ receivedAt: new Date().toISOString(), from: remote, report })}\n`);
+    } catch (error) {
+      log(`debug report from ${remote} not saved: ${error?.message ?? error}`);
+      sendError(res, 500, 'api_error', 'CafAI Bridge could not save the debug report.');
+      return;
+    }
+    const kind = typeof report?.kind === 'string' && DEBUG_KIND.test(report.kind) ? report.kind : 'report';
+    log(`debug report from ${remote}: ${kind}, ${Buffer.byteLength(raw)} bytes`);
+    sendJson(res, 200, { ok: true });
+  }
+
+  function codeOf(req, url) {
     const header = req.headers['x-api-key'];
     if (typeof header === 'string' && header !== '') return header;
     const auth = req.headers.authorization;
-    return typeof auth === 'string' && /^bearer\s+/i.test(auth) ? auth.replace(/^bearer\s+/i, '') : '';
+    if (typeof auth === 'string' && /^bearer\s+/i.test(auth)) return auth.replace(/^bearer\s+/i, '');
+    // A page's report as it is put away goes by navigator.sendBeacon, which can set no header.
+    return debugFile && url.pathname === DEBUG_PATH ? (url.searchParams.get('code') ?? '') : '';
   }
 
   let closing = null;
@@ -524,7 +574,7 @@ export async function startBridgeServer(options) {
       sendError(res, 429, 'rate_limit_error', `Too many wrong codes from this device. Try again in ${seconds} s.`, { 'retry-after': String(seconds) });
       return;
     }
-    if (!safeEqual(normalizeCode(codeOf(req)), expectedCode)) {
+    if (!safeEqual(normalizeCode(codeOf(req, url)), expectedCode)) {
       limiter.fail(remote);
       log(`wrong code from ${remote}`);
       sendError(res, 401, 'authentication_error', BAD_CODE);
@@ -539,6 +589,10 @@ export async function startBridgeServer(options) {
     }
     if (req.method === 'POST' && url.pathname === '/v1/messages') {
       await messages(req, res);
+      return;
+    }
+    if (req.method === 'POST' && debugFile && url.pathname === DEBUG_PATH) {
+      await debugReport(req, res, remote);
       return;
     }
     if (req.method === 'POST' && url.pathname === '/v1/shutdown') {

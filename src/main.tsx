@@ -1,12 +1,47 @@
 import './ui/fonts.ts';
 import { createRoot } from 'react-dom/client';
 import { App, restoreRoute } from './app/App.tsx';
-import { createServices } from './app/createServices.ts';
+import { APP_VERSION, createServices } from './app/createServices.ts';
 import { watchStart } from './app/startWatch.ts';
-import { detectHost } from './api/host.ts';
+import { defaultGatewayOrigin, detectHost } from './api/host.ts';
+import { createKvClient } from './api/kv.ts';
+import { DebugReportButton } from './debug/DebugReportButton.tsx';
+import { startDebug } from './debug/session.ts';
+import { openCoachSourceStore } from './storage/coachSource.ts';
 import { bootColors, loadBootColors } from './ui/appearance.ts';
 import { buildPalette, DEFAULT_TINT_ID, namedTint } from './ui/palette.ts';
 import { FONT_FAMILY } from './ui/theme.ts';
+
+/** localStorage, where the DEBUG flag's last answer is kept; null where storage is blocked. */
+function deviceStorage(): globalThis.Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/** Where the coach runs, read once: a debug report goes to CafAI Bridge when it runs on a computer. */
+async function readCoachSource() {
+  const store = await openCoachSourceStore();
+  try {
+    return await store.get();
+  } finally {
+    store.close();
+  }
+}
+
+// Before anything opens a database: with the DEBUG flag on, its watch sees every transaction (docs/DEBUG.md).
+const debug = startDebug({
+  win: window,
+  appVersion: APP_VERSION,
+  kv: createKvClient(defaultGatewayOrigin(window)),
+  deviceStorage: deviceStorage(),
+  coachSource: readCoachSource,
+  forced: import.meta.env.VITE_CAFAI_DEBUG === '1',
+});
+/** What the start waits on now, for a debug report sent from the start screen. */
+let startStage: () => string | null = () => null;
 
 /** The colours of the last look the app showed (AppTheme keeps them), or null. */
 function readBootColors() {
@@ -80,6 +115,13 @@ function Message({ title, detail, retry = false }: { title: string; detail?: str
           Decaid settings
         </a>
       </div>
+      {/* Only while the DEBUG flag is on. */}
+      <DebugReportButton
+        debug={debug}
+        stage={() => startStage()}
+        buttonStyle={buttonStyle}
+        noteStyle={{ fontSize: 14, maxWidth: 520, color: BOOT.inkMuted }}
+      />
     </div>
   );
 }
@@ -147,8 +189,13 @@ async function boot(): Promise<void> {
   const watch = watchStart({
     storage: startStorage(),
     reload: () => window.location.reload(),
-    onSlow: (stage) => root.render(<Message title={STARTING} detail={slowDetail(stage)} retry />),
+    onSlow: (stage) => {
+      root.render(<Message title={STARTING} detail={slowDetail(stage)} retry />);
+      // With the DEBUG flag on, a slow start reports what it waits on by itself, before the one automatic retry.
+      if (debug.enabled()) void debug.report('slow-start', { stage, probe: true });
+    },
   });
+  startStage = watch.current;
   try {
     if (import.meta.env.MODE === 'mock') {
       watch.stage('starting the mocks');
