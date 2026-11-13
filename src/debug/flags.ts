@@ -16,21 +16,14 @@ export const DEBUG_CACHE_KEY = 'cafai.debug';
 
 export interface DebugFlags {
   enabled: boolean;
-  /**
-   * An experiment, off unless set: when the page is put away (pagehide), abort
-   * every IndexedDB transaction it still has open, so none outlives it.
-   */
-  releaseOnPagehide: boolean;
 }
 
-export const DEBUG_OFF: Readonly<DebugFlags> = Object.freeze({ enabled: false, releaseOnPagehide: false });
+export const DEBUG_OFF: Readonly<DebugFlags> = Object.freeze({ enabled: false });
 
 /** The flags in a stored value: anything but {"enabled": true} is off. */
 export function parseDebugFlags(value: unknown): DebugFlags {
   if (typeof value !== 'object' || value === null) return { ...DEBUG_OFF };
-  const record = value as Record<string, unknown>;
-  const enabled = record['enabled'] === true;
-  return { enabled, releaseOnPagehide: enabled && record['releaseOnPagehide'] === true };
+  return { enabled: (value as Record<string, unknown>)['enabled'] === true };
 }
 
 type DeviceStorage = Pick<globalThis.Storage, 'getItem' | 'setItem' | 'removeItem'>;

@@ -1,31 +1,24 @@
 /**
  * CafAI's debug session (docs/DEBUG.md): nothing at all unless the DEBUG flag
- * is on (flags.ts). Then, from the page's first line, it watches the
- * IndexedDB transactions and requests in flight (watch.ts), the page's own
- * lifecycle (lifecycle.ts) and the console's last lines. Each time the page
- * is hidden, shown or put away, it says in the console what the page has
- * open, and it sends a report to CafAI Bridge when the coach runs on a
- * computer (POST /v1/debug/report, kept in the bridge's debug-reports.jsonl),
- * with a copy in Decaid's key-value store (cafai-debug/last-<kind>). The start
- * screen's "Send debug report" sends one by hand, after the IndexedDB probe
- * (probe.ts), and so does a start that is slow.
+ * is on (flags.ts). Then it notes the stack that opens each IndexedDB
+ * transaction in the page's watch (storage/openTransactions.ts), and watches
+ * the requests in flight (watch.ts), the page's own lifecycle (lifecycle.ts)
+ * and the console's last lines. Each time the page is hidden, shown or put
+ * away, it says in the console what the page has open. It also sends a report
+ * to CafAI Bridge when the coach runs on a computer (POST /v1/debug/report,
+ * kept in the bridge's debug-reports.jsonl), with a copy in Decaid's
+ * key-value store (cafai-debug/last-<kind>). The start screen's "Send debug
+ * report" sends one by hand, after the IndexedDB probe (probe.ts), and so
+ * does a start that is slow.
  */
 import type { KvClient } from '../api/types.ts';
 import { normalizeAddress, normalizeCode, type CoachSource } from '../storage/coachSource.ts';
+import { describeTransactions, type InFlightTransaction, type TransactionWatch } from '../storage/openTransactions.ts';
 import { captureConsole, type ConsoleTail } from './consoleTail.ts';
 import { cachedDebugFlags, DEBUG_NAMESPACE, debugInQuery, fetchDebugFlags, rememberDebugFlags, type DebugFlags } from './flags.ts';
 import { pageFacts, watchLifecycle, type LifeEvent, type LifecycleWatch, type PageFacts } from './lifecycle.ts';
 import { describeProbes, probeIndexedDb, type ProbeResult } from './probe.ts';
-import {
-  describeFetches,
-  describeTransactions,
-  watchFetch,
-  watchIndexedDb,
-  type FetchWatch,
-  type InFlightFetch,
-  type InFlightTransaction,
-  type IndexedDbWatch,
-} from './watch.ts';
+import { describeFetches, watchFetch, type FetchWatch, type InFlightFetch } from './watch.ts';
 
 export interface DebugReport {
   kind: string;
@@ -39,8 +32,8 @@ export interface DebugReport {
   flags: DebugFlags;
   inFlight: { transactions: InFlightTransaction[]; requests: InFlightFetch[] };
   probes?: ProbeResult[];
-  /** Transactions aborted as the page was put away (the releaseOnPagehide experiment). */
-  aborted?: number;
+  /** As the page is put away: the transactions it had open, aborted then (storage/pageExit.ts, D284). */
+  aborted?: InFlightTransaction[];
   lifecycle: LifeEvent[];
   console: string[];
 }
@@ -76,6 +69,8 @@ export interface StartDebugOptions {
   deviceStorage: DeviceStorage | null;
   /** Where the coach runs: reports go to CafAI Bridge when it runs on a computer. */
   coachSource(): Promise<CoachSource | null>;
+  /** The page's own watch of its open IndexedDB transactions, on from its first line. */
+  transactions: TransactionWatch;
   /** On by the build (VITE_CAFAI_DEBUG=1), whatever Decaid says. */
   forced?: boolean;
   /** The console whose last lines a report carries; the page's own by default. */
@@ -132,7 +127,6 @@ function messageOf(error: unknown): string {
 
 interface Tools {
   tail: ConsoleTail;
-  idb: IndexedDbWatch;
   net: FetchWatch;
   life: LifecycleWatch;
   target: Promise<ReportTarget | null>;
@@ -141,7 +135,7 @@ interface Tools {
 }
 
 export function startDebug(options: StartDebugOptions): DebugSession {
-  const { win, appVersion, kv, deviceStorage } = options;
+  const { win, appVersion, kv, deviceStorage, transactions } = options;
   const clock = options.clock ?? Date;
   const log = options.log ?? ((line: string) => console.info(line));
   const byQuery = debugInQuery(win.location.search);
@@ -151,7 +145,7 @@ export function startDebug(options: StartDebugOptions): DebugSession {
   let tools: Tools | null = null;
   const listeners = new Set<() => void>();
 
-  const build = (kind: string, stage: string | null, probes?: ProbeResult[], aborted?: number): DebugReport => ({
+  const build = (kind: string, stage: string | null, probes?: ProbeResult[], aborted?: InFlightTransaction[]): DebugReport => ({
     kind,
     app: appVersion,
     at: new Date(clock.now()).toISOString(),
@@ -160,9 +154,9 @@ export function startDebug(options: StartDebugOptions): DebugSession {
     page: pageFacts(win),
     stage,
     flags,
-    inFlight: { transactions: tools?.idb.inFlight() ?? [], requests: tools?.net.inFlight() ?? [] },
+    inFlight: { transactions: transactions.inFlight(), requests: tools?.net.inFlight() ?? [] },
     ...(probes ? { probes } : {}),
-    ...(aborted !== undefined ? { aborted } : {}),
+    ...(aborted ? { aborted } : {}),
     lifecycle: tools?.life.events() ?? [],
     console: tools?.tail.lines() ?? [],
   });
@@ -227,17 +221,12 @@ export function startDebug(options: StartDebugOptions): DebugSession {
   function onEvent(event: LifeEvent): void {
     if (!tools) return;
     const persisted = event.detail?.['persisted'];
-    const open = tools.idb.inFlight();
     log(
       `[CafAI] debug: ${event.type}${persisted === undefined ? '' : ` (persisted ${String(persisted)})`} at ${event.at}; ` +
-        `${describeTransactions(open)}; ${describeFetches(tools.net.inFlight())}`,
+        `${describeTransactions(transactions.inFlight())}; ${describeFetches(tools.net.inFlight())}`,
     );
-    let aborted: number | undefined;
-    if (event.type === 'pagehide' && flags.releaseOnPagehide) {
-      aborted = tools.idb.abortAll();
-      log(`[CafAI] debug: aborted ${aborted} of ${open.length} open IndexedDB transactions as the page was put away`);
-    }
-    const report = build(event.type, null, undefined, aborted);
+    // Put away, the page aborts what it had open (storage/pageExit.ts): before this, or just after.
+    const report = build(event.type, null, undefined, event.type === 'pagehide' ? transactions.lastAborted() : undefined);
     if (event.type === 'hidden' || event.type === 'pagehide') beacon(report);
     else void send(report);
   }
@@ -249,9 +238,9 @@ export function startDebug(options: StartDebugOptions): DebugSession {
       SOURCE_TIMEOUT_MS,
       null,
     );
+    transactions.setStacks(true);
     tools = {
       tail: captureConsole(options.console ?? console),
-      idb: watchIndexedDb(win as unknown as { IDBDatabase?: typeof IDBDatabase }, clock),
       net: watchFetch(win as unknown as { fetch?: typeof globalThis.fetch }, clock),
       life: watchLifecycle(win, onEvent, clock),
       target,
@@ -272,8 +261,8 @@ export function startDebug(options: StartDebugOptions): DebugSession {
     if (!tools) return;
     tools.life.stop();
     tools.net.stop();
-    tools.idb.stop();
     tools.tail.stop();
+    transactions.setStacks(false);
     tools = null;
   }
 

@@ -5362,3 +5362,105 @@ request 529. The design is
   (D280) needs a way out that keeps what the barista typed; and a stop is
   the barista's choice, not the coach's failure, so it is neither counted
   nor worded as one. Owner's ask (2026-11-06).
+
+### A start that hangs after the iPad slept (2026-11-13)
+
+The owner's report of 2026-11-13: after the iPad sleeps, CafAI still stays
+on "Starting CafAI…" with "This is taking longer than usual: still opening
+the coach's chat. Try again starts CafAI over." (D274 made the start say so
+and retry once; it did not end the hang). The owner asked: "If we need help
+debugging, setup my local running server to log things and we can read from
+there and I can push a button on this screen (only shows up when the special
+DEBUG flag is set) that will report it here." Decaid's two logs on the iPad,
+read over the LAN, gave the pattern over eight mornings. Every start that hung
+was in the WebView Decaid kept from the night before. Decaid 0.9.0 on iOS
+pauses a backgrounded page by holding a JavaScript alert() open in it
+(flutter_inappwebview's `pauseTimers`). After ten minutes away, it loads
+CafAI again in that same WebView when it comes back (`skin_view.dart` at
+b9f9d05). Every start that worked, in 74-123 ms, was in a new WebView. That
+came after Exit to Decaid, after Decaid's settings and back, or when the
+machine waking made Decaid open CafAI again. The starts that hung passed
+every stage that only reads CafAI's storage. They stopped at the first write
+(the open bag, in "opening the coach's chat"). In Chromium, a read-only
+transaction that another page keeps open on CafAI's database gives the same
+screen, word for word. WebKit's own source says why the old page can keep
+one open (D284). Which transaction it holds on the iPad, and that WebKit
+keeps the page there (`pagehide` with `persisted`), is what D283 reports.
+
+- **D283. A DEBUG flag, off unless set from the LAN, sends what the page
+  waits on to CafAI Bridge.** These turn it on:
+  - `cafai-debug/flags` = `{"enabled": true}` in Decaid's key-value store,
+    read a moment after each page starts. The device keeps the answer
+    (localStorage `cafai.debug`), so the next page has it from its first
+    line.
+  - A build made with `VITE_CAFAI_DEBUG=1`, from the first page on.
+  - `?debug=1`, for one page.
+
+  While it is on, CafAI notes three things:
+  - every IndexedDB transaction and request in flight, with its age and the
+    stack that opened it (the transactions from the page's own watch,
+    D284);
+  - the page's lifecycle: hidden, shown, and `pagehide` and `pageshow` with
+    `persisted`;
+  - the console's last 300 lines.
+
+  Each time the page is hidden, shown or put away, a `[CafAI] debug:` line
+  says what the page has open. A report then goes to CafAI Bridge: `POST
+  /v1/debug/report` with the pairing code, which navigator.sendBeacon gives
+  as `?code=`. The bridge keeps one JSON line per report in
+  `debug-reports.jsonl` beside `bridge.log`. A copy goes to Decaid's store as
+  `cafai-debug/last-<kind>`. A slow start (8 s) reports by itself, after a
+  probe of which databases still take a read and a write, 3 s each. The
+  write probes only read, and a missing database is not made. The start
+  screen's **Send debug report** does the same by hand. A report as the page
+  is put away also lists what D284 aborted.
+
+  Why:
+  - The hang needs the iPad's WebKit after a night, or after ten minutes
+    away. The WebView log alone cannot say which transaction waits, or which
+    page holds it.
+  - A flag in Decaid's store is set from the PC without touching the iPad.
+    It ships in an ordinary release, so the iPad keeps updating from GitHub.
+    That was the owner's choice: "We can trigger a new version to get it on
+    the real iPad and then test it that way".
+  - While off, it costs one local KV read per start. Reports stay on the
+    LAN. See docs/DEBUG.md.
+
+- **D284. A page put away aborts the IndexedDB transactions it still has
+  open.** On coming back after ten minutes away, Decaid loads CafAI in the
+  same WebView (`loadUrl` of `http://localhost:<port>/?_=<ts>`). That is a
+  navigation, so WebKit keeps the old page in its back/forward cache.
+  Nothing in CafAI's pages keeps them out: WebKit has no rule for unload
+  handlers, and `no-store` counts only over https (`BackForwardCache.cpp`).
+  WebKit's IndexedDB objects do nothing when their page goes there: there is
+  no `suspend()` in `IDBDatabase`, `IDBTransaction` or `IDBRequest` (WebKit
+  main, 2026-11-13). A transaction commits only once the results of its
+  requests have been handed to its page (`IDBTransaction::autoCommit()` waits
+  on `m_openRequests`). A cached page runs no tasks, so a transaction open as
+  the page is put away stays open as long as the WebView lives.
+
+  The old page is not idle at that moment. Shown again, it reads the
+  settings and the key's and the source's copies (`syncCopies()`), and
+  machine care writes its counts. IndexedDB queues a write behind any open
+  transaction on the same stores, a read-only one too, and lets reads run
+  beside reads. So the new page reads its storage, then waits on its first
+  write: the open bag, in "opening the coach's chat". Try again reloads the
+  same WebView. Exit to Decaid destroys it, which is why that worked.
+
+  The fix: `src/storage/openTransactions.ts` watches every transaction from
+  the page's first line. `src/storage/pageExit.ts` aborts what is still open
+  at `pagehide` and says so in the console. A page that comes back from that
+  cache after an abort (`pageshow` with `persisted`) loads again.
+
+  Why abort rather than wait:
+  - A cached page can never finish them, and an unloaded page aborts them
+    too (`IDBTransaction::stop()`). Nothing is lost that the page would have
+    kept.
+  - Only the page that holds a transaction can end it.
+
+  In Chromium, the same kind of transaction, held open by another page,
+  gives the iPad's screen word for word (a `.verify` reproduction,
+  2026-11-13). Playwright's WebKit keeps no page in that cache, so the cache
+  itself is for the iPad to show (D283). The first morning after updating
+  can still stop once: the page from before the update, without this, may
+  hold the database. Exit to Decaid then.

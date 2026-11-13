@@ -23,16 +23,15 @@ Clarity.
 - **One page.** `?debug=1` in the address turns it on for that page only, for a desktop
   browser or the mocks.
 
-`{"enabled": true, "releaseOnPagehide": true}` also turns on an experiment. When the page
-is put away (`pagehide`), it aborts every IndexedDB transaction the page still has open.
-
 ## What it does while on
 
 From the page's first line:
 
-- It notes every IndexedDB transaction in flight: the database, mode and stores, how long
-  it has been open, and the stack that opened it. It also notes every request waiting on
-  an answer (`src/debug/watch.ts`).
+- It lists every IndexedDB transaction in flight: the database, mode and stores, and how
+  long it has been open. Every page keeps that list (`src/storage/openTransactions.ts`)
+  and aborts what is on it as it is put away (`src/storage/pageExit.ts`, D284). With the
+  flag on, the list also has the stack that opened each transaction. It also notes every
+  request waiting on an answer (`src/debug/watch.ts`).
 - It notes the page's lifecycle: hidden, visible, `pagehide` and `pageshow` with
   `persisted`, plus `freeze`, `resume`, online and offline. It also notes how the page
   came: navigation type, history length (`src/debug/lifecycle.ts`).

@@ -8,6 +8,8 @@ import { createKvClient } from './api/kv.ts';
 import { DebugReportButton } from './debug/DebugReportButton.tsx';
 import { startDebug } from './debug/session.ts';
 import { openCoachSourceStore } from './storage/coachSource.ts';
+import { watchTransactions } from './storage/openTransactions.ts';
+import { releaseOnPageExit } from './storage/pageExit.ts';
 import { bootColors, loadBootColors } from './ui/appearance.ts';
 import { buildPalette, DEFAULT_TINT_ID, namedTint } from './ui/palette.ts';
 import { FONT_FAMILY } from './ui/theme.ts';
@@ -31,15 +33,20 @@ async function readCoachSource() {
   }
 }
 
-// Before anything opens a database: with the DEBUG flag on, its watch sees every transaction (docs/DEBUG.md).
+// Before anything opens a database: the page's open IndexedDB transactions, every one seen.
+const transactions = watchTransactions(window, Date, { stacks: false });
+// With the DEBUG flag on, what the page has open is reported (docs/DEBUG.md); its listeners go first, to see it all.
 const debug = startDebug({
   win: window,
   appVersion: APP_VERSION,
   kv: createKvClient(defaultGatewayOrigin(window)),
   deviceStorage: deviceStorage(),
   coachSource: readCoachSource,
+  transactions,
   forced: import.meta.env.VITE_CAFAI_DEBUG === '1',
 });
+// Put away, the page aborts what it has open, so the next one can write (D284).
+releaseOnPageExit(window, transactions);
 /** What the start waits on now, for a debug report sent from the start screen. */
 let startStage: () => string | null = () => null;
 

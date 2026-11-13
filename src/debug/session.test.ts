@@ -1,6 +1,8 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CoachSource } from '../storage/coachSource.ts';
+import { watchTransactions, type TransactionWatch } from '../storage/openTransactions.ts';
+import { releaseOnPageExit } from '../storage/pageExit.ts';
 import { DEBUG_CACHE_KEY } from './flags.ts';
 import { bridgeTarget, compactReport, startDebug, type DebugReport, type DebugSession, type StartDebugOptions } from './session.ts';
 
@@ -42,9 +44,12 @@ function silentConsole() {
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 let session: DebugSession | null = null;
+let watch: TransactionWatch | null = null;
 afterEach(() => {
   session?.stop();
   session = null;
+  watch?.stop();
+  watch = null;
 });
 
 /** Decaid's store, answering `flags` for cafai-debug/flags (null: no such key) and keeping what is set. */
@@ -64,12 +69,14 @@ function start(overrides: Partial<StartDebugOptions> & { page?: ReturnType<typeo
   const lines: string[] = [];
   const kept: Array<{ key: string; value: DebugReport }> = [];
   const on = typeof flags === 'object' && flags !== null && (flags as { enabled?: unknown }).enabled === true;
+  watch ??= watchTransactions(globalThis, Date, { stacks: false });
   const options: StartDebugOptions = {
     win: page.win as unknown as Window,
     appVersion: '0.1.6',
     kv: fakeKv(flags, kept),
     deviceStorage: memoryStorage(on ? { [DEBUG_CACHE_KEY]: JSON.stringify(flags) } : {}),
     coachSource: async () => BRIDGE,
+    transactions: watch,
     console: silentConsole(),
     log: (line) => lines.push(line),
     ...rest,
@@ -85,7 +92,8 @@ function openTransaction(page: ReturnType<typeof fakePage>): Promise<{ db: IDBDa
     request.onsuccess = () => {
       const db = request.result;
       const tx = db.transaction(['settings'], 'readwrite');
-      tx.objectStore('settings').put('x', 'current');
+      // Aborted as the page is put away, the write fails: that is the point.
+      tx.objectStore('settings').put('x', 'current').onerror = (event) => event.preventDefault();
       resolve({ db, tx });
     };
     request.onerror = () => reject(request.error);
@@ -94,11 +102,10 @@ function openTransaction(page: ReturnType<typeof fakePage>): Promise<{ db: IDBDa
 
 describe('startDebug', () => {
   it('does nothing at all while the flag is off', async () => {
-    const original = IDBDatabase.prototype.transaction;
     const { page, lines, kept } = start({ flags: null });
     await flush();
     expect(session!.enabled()).toBe(false);
-    expect(IDBDatabase.prototype.transaction).toBe(original);
+    expect(page.win.fetch).toBe(page.fetchMock);
     expect(await session!.report('manual')).toBe('The DEBUG flag is off.');
     page.win.dispatchEvent(new Event('pagehide'));
     expect(lines).toEqual([]);
@@ -134,18 +141,18 @@ describe('startDebug', () => {
     await flush();
     expect(session!.enabled()).toBe(true);
     expect(heard).toHaveBeenCalledTimes(1);
-    expect(deviceStorage.items.get(DEBUG_CACHE_KEY)).toBe(JSON.stringify({ enabled: true, releaseOnPagehide: false }));
+    expect(deviceStorage.items.get(DEBUG_CACHE_KEY)).toBe(JSON.stringify({ enabled: true }));
     expect(lines[0]).toMatch(/^\[CafAI\] debug: on; /);
   });
 
   it('turns off when Decaid says so, and forgets it here', async () => {
-    const original = IDBDatabase.prototype.transaction;
     const deviceStorage = memoryStorage(ON);
-    start({ deviceStorage, flags: { enabled: false } });
+    const { page } = start({ deviceStorage, flags: { enabled: false } });
     expect(session!.enabled()).toBe(true);
+    expect(page.win.fetch).not.toBe(page.fetchMock);
     await flush();
     expect(session!.enabled()).toBe(false);
-    expect(IDBDatabase.prototype.transaction).toBe(original);
+    expect(page.win.fetch).toBe(page.fetchMock);
     expect(deviceStorage.items.has(DEBUG_CACHE_KEY)).toBe(false);
   });
 
@@ -184,15 +191,34 @@ describe('startDebug', () => {
     expect(await session!.report('manual')).toBe('The coach does not run on a computer, so the report is kept in Decaid only.');
   });
 
-  it('aborts what the page leaves open as it is put away, with releaseOnPagehide', async () => {
-    const { page, lines } = start({ flags: { enabled: true, releaseOnPagehide: true } });
+  it('says what the page had open as it was put away, which the page exit then aborted', async () => {
+    const { page, lines } = start();
+    releaseOnPageExit(page.win as unknown as Window, watch!, (line) => lines.push(line));
     await flush();
     const { db, tx } = await openTransaction(page);
     const ended = new Promise((resolve) => (tx.onabort = () => resolve('abort')));
-    page.win.dispatchEvent(new Event('pagehide'));
-    expect(lines.at(-1)).toBe('[CafAI] debug: aborted 1 of 1 open IndexedDB transactions as the page was put away');
-    expect(JSON.parse(page.sendBeacon.mock.calls[0]![1]).aborted).toBe(1);
+    page.win.dispatchEvent(Object.assign(new Event('pagehide'), { persisted: true }));
+    expect(lines.at(-2)).toMatch(/^\[CafAI\] debug: pagehide \(persisted true\) at \S+; cafai readwrite \[settings\] \d+ ms; no request waiting$/);
+    expect(lines.at(-1)).toMatch(/^\[CafAI\] put away, the browser keeping the page, with cafai readwrite \[settings\] \d+ ms open: aborted/);
     expect(await ended).toBe('abort');
+    // The page watch notes the stack while the flag is on.
+    expect(JSON.parse(page.sendBeacon.mock.calls[0]![1]).inFlight.transactions[0].stack.length).toBeGreaterThan(0);
+    db.close();
+  });
+
+  it('takes what the page exit aborted into the report when it went first', async () => {
+    const { page } = start({ flags: null });
+    releaseOnPageExit(page.win as unknown as Window, watch!, () => undefined);
+    await flush();
+    // On a moment later, as Decaid's answer turns it on: its listener comes after the page exit's.
+    session!.stop();
+    start({ page });
+    await flush();
+    const { db } = await openTransaction(page);
+    page.win.dispatchEvent(new Event('pagehide'));
+    const sent = JSON.parse(page.sendBeacon.mock.calls[0]![1]) as DebugReport;
+    expect(sent.inFlight.transactions).toEqual([]);
+    expect(sent.aborted).toEqual([expect.objectContaining({ db: 'cafai', mode: 'readwrite', stores: ['settings'] })]);
     db.close();
   });
 });
