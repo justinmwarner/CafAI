@@ -121,7 +121,7 @@ describe('Settings groups and what moved where (D233)', () => {
     renderWithServices(<GroupPage id="about" layout="pane" />, servicesWithAll());
     expect(cards('about')).toEqual(['CafAI and Decaid']);
     expect(screen.getByText('CafAI 0.1.0-test')).toBeInTheDocument();
-    expect(await screen.findByText('Decaid 0.9.0+1 (CafAI was verified with 0.8.8)')).toBeInTheDocument();
+    expect(await screen.findByText('Decaid 0.9.3+1 (CafAI was verified with 0.9.2)')).toBeInTheDocument();
     expect(screen.getByTestId(TID.aboutDecaid)).toBeInTheDocument();
     expect(screen.getByTestId(TID.reportProblem)).toBeInTheDocument();
     // The test build's version has no CHANGELOG section, so What's new stays out.
@@ -132,7 +132,7 @@ describe('Settings groups and what moved where (D233)', () => {
   it("About prefers the version Decaid reports to the skin", () => {
     const services = createFakeServices({ insideDecaid: true });
     renderWithServices(<GroupPage id="about" layout="pane" />, services);
-    expect(screen.getByText('Decaid 0.9.0 (CafAI was verified with 0.8.8)')).toBeInTheDocument();
+    expect(screen.getByText('Decaid 0.9.3 (CafAI was verified with 0.9.2)')).toBeInTheDocument();
     expect(services.decaid.calls.map((c) => c.method)).not.toContain('getInfo');
   });
 });

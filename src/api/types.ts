@@ -57,6 +57,8 @@ export type MachineSubstate =
   | 'cleaningSteam'
   | 'pausedSteam'
   | 'puffing'
+  /** Decaid 0.9.2: the DE1 stopped refilling its water. */
+  | 'refillStopped'
   | (string & {});
 
 /** States a skin may command with PUT /api/v1/machine/state/{state}. `idle` stops anything and wakes. */

@@ -257,10 +257,10 @@ export function createFakeDecaid(): FakeDecaid {
         commitShort: 'a45961b',
         branch: 'main',
         buildTime: '',
-        version: '0.9.0',
+        version: '0.9.3',
         buildNumber: '1',
         appStore: false,
-        fullVersion: '0.9.0+1',
+        fullVersion: '0.9.3+1',
       }),
     getSettings: () => call('getSettings', [], settingsState),
     updateSettings: (patch) => call('updateSettings', [patch], Object.assign(settingsState, patch)),
@@ -612,7 +612,7 @@ export function createFakeServices(options: {
   };
   const host = {
     insideDecaid: options.insideDecaid ?? false,
-    hostVersion: options.insideDecaid ? '0.9.0' : null,
+    hostVersion: options.insideDecaid ? '0.9.3' : null,
     platform: options.platform !== undefined ? options.platform : options.insideDecaid ? 'android' : null,
     settingsUrl: 'http://localhost:8080/api/v1/plugins/settings.reaplugin/ui?backName=CafAI',
     exits: 0,

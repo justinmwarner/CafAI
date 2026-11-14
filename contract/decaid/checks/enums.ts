@@ -18,7 +18,7 @@ export type _commandable = Assert<Exactly<Exclude<C.CommandableState, Rest['Mach
 
 export type _device_state_ws = Assert<Exactly<EnumDrift<Ws['DeviceInfo']['state'], C.DeviceEntry['state']>, never>>;
 export type _device_state_rest = Assert<Exactly<EnumDrift<NonNullable<Rest['DeviceInventory']['state']>, C.DeviceEntry['state']>, never>>;
-export type _device_type_ws = Assert<Exactly<EnumDrift<Ws['DeviceInfo']['type'], C.DeviceEntry['type']>, X.DeviceTypeWsEnum>>;
+export type _device_type_ws = Assert<Exactly<EnumDrift<Ws['DeviceInfo']['type'], C.DeviceEntry['type']>, never>>;
 export type _device_type_rest = Assert<Exactly<EnumDrift<NonNullable<Rest['DeviceInventory']['type']>, C.DeviceEntry['type']>, never>>;
 export type _connection_role = Assert<
   Exactly<EnumDrift<NonNullable<Ws['DeviceInfo']['connectionRole']>, Exclude<C.DeviceEntry['connectionRole'], undefined>>, never>

@@ -5464,3 +5464,30 @@ keeps the page there (`pagehide` with `persisted`), is what D283 reports.
   itself is for the iPad to show (D283). The first morning after updating
   can still stop once: the page from before the update, without this, may
   hold the database. Exit to Decaid then.
+
+- **D285. CafAI is checked against Decaid v0.9.2 (875b7a6), the pin moving
+  from v0.8.8.** v0.1.7's first release run (43471848287) stopped at
+  decaid-live, which checks a release against the latest Decaid (spec 4.7).
+  Decaid v0.9.2 (2026-11-12) lists a plugin with the `notifications`
+  permission, which the v0.8.8 spec's PluginManifest lacks. The drift watch
+  had reported v0.9.1 and v0.9.2 since 2026-11-06 (issue #5). Offered a
+  release with a runtime exception for that one value, the owner answered
+  "Fix the gate". So the pin moved, by contract/decaid/README.md's steps:
+  - `npm run decaid:update -- v0.9.2`;
+  - `refillStopped` added to CafAI's `MachineSubstate` (a DE1 substate
+    v0.9.2 sends, de1.utils.dart:73-74; nothing in CafAI branches on it);
+  - the exceptions Decaid fixed deleted: `grinderBurrs`, now in
+    WorkflowContext, and `grinder`, now a WebSocket DeviceInfo.type, as a
+    type fragment and a runtime exception;
+  - drift.ts's Dart citations moved to the new commit where the cited files
+    changed, each cited block found again by its text;
+  - the drift watch's tests made to take their additive changes and their
+    pin from PIN.json rather than v0.8.8's.
+
+  About now says CafAI was verified with 0.9.2. So a Decaid older than that,
+  the App Store's 0.9.0 included, gets the note to update it if something
+  does not work. The test fakes run a newer Decaid (0.9.3), as they ran one
+  newer than the old pin. Why: the release checks against the latest Decaid
+  on purpose, and every release waits until the pin covers it. A runtime
+  exception for a later Decaid's value would have set a precedent for
+  passing that check without moving the pin.

@@ -106,13 +106,13 @@ describe('LogSection', () => {
     const { writeText } = stubNavigator();
     seed();
     const { services } = renderWithServices(<WithAbout />);
-    await waitFor(() => expect(knownDecaidVersion(services.decaid)).toBe('0.9.0+1'));
+    await waitFor(() => expect(knownDecaidVersion(services.decaid)).toBe('0.9.3+1'));
     await userEvent.click(screen.getByTestId(TID.logCopy));
     expect(writeText).toHaveBeenCalledTimes(1);
     const text = writeText.mock.calls[0]![0];
     expect(text.split('\n').slice(0, 4)).toEqual([
       expect.stringMatching(/^CafAI log, \d{4}-\d\d-\d\d \d\d:\d\d$/),
-      'CafAI 0.1.0-test, Decaid 0.9.0+1 at http://localhost:8080',
+      'CafAI 0.1.0-test, Decaid 0.9.3+1 at http://localhost:8080',
       'Browser: Mozilla/5.0 (test)',
       expect.stringMatching(/^Screen: \d+ x \d+, pixel ratio [\d.]+ \(screen \d+ x \d+\)$/),
     ]);

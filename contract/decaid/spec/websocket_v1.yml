@@ -512,6 +512,7 @@ components:
         error:
           type: string
           nullable: true
+          description: Plain-language failure guidance; connection, timeout, and secure-connection failures do not expose transport exceptions or internal URLs.
     UpdateCommand:
       type: object
       required: [command]
@@ -635,6 +636,13 @@ components:
           type: integer
           minimum: 0
           description: Present only when rpmControl is declared and published.
+        observedSetting:
+          type: string
+          description: Explicit setting observation, independent of grindSetting command support. Omitted when unavailable in this snapshot; never reuse a previous value.
+        observedRpm:
+          type: integer
+          minimum: 0
+          description: Explicit RPM observation, independent of rpmControl command support. Omitted when unavailable in this snapshot; never reuse a previous value.
     ShotStateEvent:
       type: object
       description: >
@@ -792,6 +800,7 @@ components:
         - cleaningSteam
         - pausedSteam
         - puffing
+        - refillStopped
       example: preparingForShot
     ShotSettings:
       type: object
@@ -838,7 +847,15 @@ components:
           description: UUID of the characteristic (len = 4).
         payload:
           type: string
-          description: The data payload as a hex string.
+          description: >-
+            The data payload as a hex string. A write response echoes the
+            payload the client submitted, as uppercase hex — the same encoding
+            a read response uses, so a client can correlate the payload that
+            completed. It does not identify an individual write: two writes
+            carrying the same payload are indistinguishable, and the stream is
+            machine-level, so another raw client sending the same payload is
+            equally indistinguishable. Clients that ignore payload are
+            unaffected.
     De1RawMessageType:
       type: string
       enum:
@@ -968,6 +985,7 @@ components:
             - machine
             - scale
             - sensor
+            - grinder
           example: machine
         available:
           type: boolean
@@ -1050,6 +1068,23 @@ components:
             machine disconnects, the preferred scale is cleared, or Decaid
             shuts down.
           default: true
+        connectPreferredScaleEarly:
+          type: boolean
+          default: false
+          description: >
+            Opt-in preferred primary scale reconnect (scan with connect=true
+            only). Requires a connected non-Bengle machine with resolved
+            ownership, an empty primary scale slot, a configured preferred scale,
+            and no pending machine/selection work, auxiliary claim, or sleeping
+            restriction. A preferred scale sighting requests scan termination;
+            connection begins only after successful teardown, without restarting
+            exhaustive discovery. Ineligible requests retain full explicit scans.
+            Failed or uncertain BLE teardown never starts an early connection.
+            If an early-stop request fails but the scan later completes normally
+            with BLE ownership released, normal post-scan connection policy applies.
+            Unrelated discovery failures do not block a confirmed BLE handoff.
+            Independent of quick and automatic startup. Opt-in is retained when
+            connect requests coalesce.
         quick:
           type: boolean
           description: >

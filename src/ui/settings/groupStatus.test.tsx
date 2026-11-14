@@ -181,7 +181,7 @@ describe('Data and privacy', () => {
 
 describe('About', () => {
   it("names CafAI's version and Decaid's, without the build", () => {
-    expect(aboutStatus({ appVersion: '0.1.3', decaidVersion: '0.9.0+1', drift: 0 })).toEqual({ line: 'CafAI 0.1.3 · Decaid 0.9.0', attention: false });
+    expect(aboutStatus({ appVersion: '0.1.3', decaidVersion: '0.9.3+1', drift: 0 })).toEqual({ line: 'CafAI 0.1.3 · Decaid 0.9.3', attention: false });
     expect(aboutStatus({ appVersion: '0.1.3', decaidVersion: null, drift: 0 })).toEqual({ line: 'CafAI 0.1.3', attention: false });
   });
 
@@ -190,7 +190,7 @@ describe('About', () => {
   });
 
   it('says Decaid sent something unexpected, with a dot', () => {
-    expect(aboutStatus({ appVersion: '0.1.3', decaidVersion: '0.9.0', drift: 2 })).toEqual({ line: 'Decaid sent something unexpected', attention: true });
+    expect(aboutStatus({ appVersion: '0.1.3', decaidVersion: '0.9.3', drift: 2 })).toEqual({ line: 'Decaid sent something unexpected', attention: true });
   });
 });
 
@@ -249,7 +249,7 @@ describe('the list, live (D236)', () => {
     expect(row('machine')).toHaveAccessibleDescription(settingsGroup('machine').contents);
     expect(row('display')).toHaveAccessibleDescription('Dark · Crema · °C');
     expect(row('data')).toHaveAccessibleDescription('Backed up 5 min ago');
-    await waitFor(() => expect(row('about')).toHaveAccessibleDescription('CafAI 0.1.0-test · Decaid 0.9.0'));
+    await waitFor(() => expect(row('about')).toHaveAccessibleDescription('CafAI 0.1.0-test · Decaid 0.9.3'));
     for (const id of ['coach', 'grinder', 'drinks', 'machine', 'display', 'data', 'about']) expect(hasDot(id), id).toBe(false);
   });
 

@@ -165,7 +165,7 @@ describe("Settings and Decaid's version", () => {
     setViewport(1280, 800);
     const services = createFakeServices();
     renderWithServices(<SettingsScreen group="data" />, services);
-    await waitFor(() => expect(knownDecaidVersion(services.decaid)).toBe('0.9.0+1'));
+    await waitFor(() => expect(knownDecaidVersion(services.decaid)).toBe('0.9.3+1'));
     expect(services.decaid.calls.filter((call) => call.method === 'getInfo')).toHaveLength(1);
   });
 
@@ -173,7 +173,7 @@ describe("Settings and Decaid's version", () => {
     setViewport(390, 844);
     const services = createFakeServices();
     renderWithServices(<SettingsScreen group={null} />, services);
-    await waitFor(() => expect(knownDecaidVersion(services.decaid)).toBe('0.9.0+1'));
+    await waitFor(() => expect(knownDecaidVersion(services.decaid)).toBe('0.9.3+1'));
   });
 });
 

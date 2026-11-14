@@ -35,7 +35,7 @@ describe('SettingsList (D232)', () => {
       machine: settingsGroup('machine').contents,
       display: 'Dark · Crema · °C',
       data: 'Not backed up yet',
-      about: 'CafAI 0.1.0-test · Decaid 0.9.0',
+      about: 'CafAI 0.1.0-test · Decaid 0.9.3',
     } as const;
     for (const group of SETTINGS_GROUPS) {
       const row = screen.getByTestId(TID.settingsGroupRow(group.id));

@@ -27,6 +27,13 @@ workflow checks against it. Settings > About shows the version you run.
 - **CafAI Bridge keeps those reports** in `debug-reports.jsonl`, next to its
   log.
 
+### Decaid
+
+- **Checked against Decaid 0.9.2.** CafAI now knows what Decaid 0.9.2
+  sends, and About says it was verified with 0.9.2. On an older Decaid,
+  such as the App Store's 0.9.0, About adds a note to update Decaid if
+  something does not work.
+
 ## 0.1.6 (2026-11-07)
 
 ### The new bag screen

@@ -81,7 +81,7 @@ describe('ReportProblem (D248)', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     const expected = issueUrl({
       appVersion: '0.1.0-test',
-      decaidVersion: '0.9.0+1',
+      decaidVersion: '0.9.3+1',
       host: { insideDecaid: false, platform: null },
       userAgent: navigator.userAgent,
       logShares: false,
@@ -108,7 +108,7 @@ describe('ReportProblem (D248)', () => {
     expect(link).not.toHaveAttribute('target');
     const expected = issueUrl({
       appVersion: '0.1.0-test',
-      decaidVersion: '0.9.0',
+      decaidVersion: '0.9.3',
       host: { insideDecaid: true, platform: 'android' },
       userAgent: navigator.userAgent,
       logShares: false,

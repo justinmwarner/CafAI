@@ -259,16 +259,22 @@ describe('the channel map', () => {
 describe('decaid-watch', () => {
   const pinnedRest = () => parse(readFileSync(path.join(ROOT, FILES.restSpec), 'utf8'));
   const pinnedWs = () => parse(readFileSync(path.join(ROOT, FILES.wsSpec), 'utf8'));
-  /** What main had over v0.8.8 on 2026-10-09: grinderBurrs in the context, grinder as a WebSocket device type. */
+  /**
+   * An additive Decaid after the pin: a context field CafAI does not read yet, a field on a frame it does, and the
+   * REST MachineState taking schedIdle, which the pin's spec lacks (an exception CafAI keeps: it turns stale).
+   */
   function additive() {
     const rest = pinnedRest();
     const ws = pinnedWs();
     for (const name of ['WorkflowContext', 'WorkflowContextPatch']) {
-      rest.components.schemas[name].properties.grinderBurrs = { type: 'string', nullable: true };
+      rest.components.schemas[name].properties.grinderNote = { type: 'string', nullable: true };
     }
-    ws.components.schemas.DeviceInfo.properties.type.enum.push('grinder');
+    rest.components.schemas.MachineState.enum.push('schedIdle');
+    ws.components.schemas.DeviceInfo.properties.firmware = { type: 'string' };
     return { rest, ws };
   }
+  /** A scan parameter by name: Decaid adds parameters, so their places move. */
+  const scanParameter = (operation, name) => operation.parameters.find((parameter) => parameter.name === name);
 
   it('sorts the contract typecheck into unexpected, stale and other errors', () => {
     const output = [
@@ -315,8 +321,9 @@ describe('decaid-watch', () => {
     expect(diff.operations.removedUsed).toEqual([]);
     expect(diff.schemas).toEqual(
       expect.arrayContaining([
-        expect.stringMatching(/^\+ rest WorkflowContext\.properties\.grinderBurrs/),
-        expect.stringMatching(/^~ websocket DeviceInfo\.properties\.type\.enum/),
+        expect.stringMatching(/^\+ rest WorkflowContext\.properties\.grinderNote/),
+        expect.stringMatching(/^~ rest MachineState\.enum/),
+        expect.stringMatching(/^\+ websocket DeviceInfo\.properties\.firmware/),
       ]),
     );
     // A field added, an enum value added and an operation CafAI does not call removed break nothing.
@@ -344,8 +351,8 @@ describe('decaid-watch', () => {
     const before = { rest: pinnedRest(), ws: pinnedWs() };
     const after = { rest: pinnedRest(), ws: pinnedWs() };
     const scan = after.rest.paths['/api/v1/devices/scan'].get;
-    scan.parameters[0].name = 'autoConnect';
-    scan.parameters[1].schema = { type: 'string' };
+    scanParameter(scan, 'connect').name = 'autoConnect';
+    scanParameter(scan, 'quick').schema = { type: 'string' };
     scan.parameters.push({ name: 'timeoutMs', in: 'query', required: true, schema: { type: 'integer' } });
     scan.parameters.push({ name: 'verbose', in: 'query', schema: { type: 'boolean' } });
     expect(diffSpecs(before, after, usedByCafai()).breaking).toEqual([
@@ -359,11 +366,12 @@ describe('decaid-watch', () => {
     const before = { rest: pinnedRest(), ws: pinnedWs() };
     const after = { rest: pinnedRest(), ws: pinnedWs() };
     const item = after.rest.paths['/api/v1/devices/scan'];
-    const [connect, quick] = item.get.parameters;
+    const connect = scanParameter(item.get, 'connect');
+    const quick = scanParameter(item.get, 'quick');
     after.rest.components.parameters = { Connect: connect };
     // The path item's quick is a string, but the operation's own boolean one wins.
     item.parameters = [{ $ref: '#/components/parameters/Connect' }, { ...quick, schema: { type: 'string' } }];
-    item.get.parameters = [quick];
+    item.get.parameters = item.get.parameters.filter((parameter) => parameter !== connect);
     expect(diffSpecs(before, after, usedByCafai()).breaking).toEqual([]);
   });
 
@@ -413,7 +421,7 @@ describe('decaid-watch', () => {
     };
     const { code, report } = await runWatch({
       targets: async () => [
-        { name: 'latest release v0.8.8', sha: pin.commit },
+        { name: `latest release ${pin.release}`, sha: pin.commit },
         { name: 'main', sha: 'f'.repeat(40) },
       ],
       fetchSpecs: async (sha) => specs[sha],
@@ -421,15 +429,15 @@ describe('decaid-watch', () => {
       now: () => new Date('2026-10-09T07:17:00Z'),
     });
     expect(code).toBe(4);
-    expect(report).toMatch(/## latest release v0\.8\.8/);
+    expect(report).toContain(`## latest release ${pin.release}`);
     expect(report).toMatch(/same commit as the pin/i);
     expect(report).toMatch(/## main/);
     expect(report).toMatch(/\| main \| fffffff \| files CafAI depends on changed \(specs changed: additive, every check passes\) \|/);
     expect(report).toMatch(/\*\*Additive: every check passes\.\*\*/);
     expect(report).toMatch(/Mock contract test against this spec: passes/);
     expect(report).not.toMatch(/### Breaking/);
-    expect(report).toMatch(/CafAI only: grinder/);
-    expect(report).toMatch(/grinderBurrs/);
+    expect(report).toMatch(/CafAI only: schedIdle/);
+    expect(report).toMatch(/grinderNote/);
     expect(report).toMatch(/lib\/src\/models\/data\/workflow_context\.dart/);
   }, 180_000);
 
@@ -531,9 +539,10 @@ describe('decaid-watch', () => {
   });
 
   it('reports the targets that worked when GitHub fails on another, with a warning (exit 2)', async () => {
+    const pin = pinned();
     const { code, report } = await runWatch({
       targets: async () => [
-        { name: 'latest release v0.8.8', sha: pinned().commit },
+        { name: `latest release ${pin.release}`, sha: pin.commit },
         { name: 'main', sha: MAIN },
       ],
       fetchSpecs: async () => {
@@ -542,7 +551,7 @@ describe('decaid-watch', () => {
       compare: async () => [],
     });
     expect(code).toBe(2);
-    expect(report).toMatch(/\| latest release v0\.8\.8 \| aab5f93 \| same commit as the pin \|/);
+    expect(report).toContain(`| latest release ${pin.release} | ${pin.commit.slice(0, 7)} | same commit as the pin |`);
     expect(report).toMatch(/\*\*Warning:\*\* 1 of 2 Decaid versions could not be checked/);
     expect(report).toMatch(/\| main \| fffffff \| could not be checked \|/);
     expect(report).toMatch(/GitHub answered 502/);
@@ -572,7 +581,7 @@ describe('decaid-watch', () => {
     const { code, report } = await runWatch({ targets: () => latestTargets(lookup), fetchSpecs: pinnedSpecs, compare: async () => [] });
     expect(code).toBe(2);
     expect(report).toMatch(/\| latest release \| - \| could not be checked \|/);
-    expect(report).toMatch(/\| main \| aab5f93 \| same commit as the pin \|/);
+    expect(report).toContain(`| main | ${pinned().commit.slice(0, 7)} | same commit as the pin |`);
   });
 
   it('answers 2 when no target could be checked', async () => {

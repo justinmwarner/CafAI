@@ -1,7 +1,7 @@
 /**
  * The exception registry (D94): every known disagreement between Decaid's
  * pinned spec, Decaid's Dart code and CafAI's types, each with its kind, the
- * reason and the Dart file:line at the pin (aab5f93) that proves it.
+ * reason and the Dart file:line at the pin (875b7a6, v0.9.2) that proves it.
  *
  *   SPEC GAP        the spec omits `required` (or a value); Dart always sends it
  *   SPEC DRIFT      the spec contradicts Dart
@@ -46,7 +46,7 @@ export type WeightSnapshotGap<P extends string = ''> = Opt<P, 'timestamp' | 'wei
 /**
  * SPEC GAP: Profile requires only title, steps and the two numbers, but its
  * toJson sends all ten keys, and each step sends exit, limiter and weight,
- * null when absent (lib/src/models/data/profile.dart:93-106, 265-280, 352-367).
+ * null when absent (lib/src/models/data/profile.dart:94-107, 266-281, 353-368).
  */
 export type ProfileGap<P extends string = ''> =
   | Opt<P, 'author' | 'beverage_type' | 'notes' | 'target_volume' | 'target_weight' | 'version'>
@@ -54,16 +54,15 @@ export type ProfileGap<P extends string = ''> =
 
 /**
  * CAFAI NARROWER: the spec allows null; WorkflowContext.toJson leaves a null
- * key out (lib/src/models/data/workflow_context.dart:62-77), so CafAI's
+ * key out (lib/src/models/data/workflow_context.dart:69-86), so CafAI's
  * optional non-null fields are what Decaid sends.
- * CAFAI LOOSER: CafAI reads grinderBurrs, which Decaid sends from after v0.8.8
- * (absent from workflow_context.dart at the pin; added by 2b8b492).
  */
-export type ContextRead<P extends string = ''> =
-  | NullIn<`${P}context.`, 'baristaName' | 'drinkerName' | 'extras' | 'finalBeverageType' | 'targetDoseWeight' | 'targetWaterVolume' | 'targetYield'>
-  | AbsentOpt<`${P}context.`, 'grinderBurrs'>;
+export type ContextRead<P extends string = ''> = NullIn<
+  `${P}context.`,
+  'baristaName' | 'drinkerName' | 'extras' | 'finalBeverageType' | 'targetDoseWeight' | 'targetWaterVolume' | 'targetYield'
+>;
 
-/** SPEC GAP: WorkflowRequest has no `required`; Workflow.toJson always sends these (lib/src/models/data/workflow.dart:93-105). */
+/** SPEC GAP: WorkflowRequest has no `required`; Workflow.toJson always sends these (lib/src/models/data/workflow.dart:95-107). */
 export type WorkflowRead<P extends string = ''> =
   | Opt<P, 'profile' | 'steamSettings' | 'hotWaterData' | 'rinseData'>
   | ProfileGap<`${P}profile.`>
@@ -98,7 +97,7 @@ export type SteamSummaryRead<P extends string = ''> = Opt<P, 'id' | 'timestamp'>
 /** The record's profile, as everywhere (CafAI reads a parentId it cannot read as unknown, so its type has it optional). */
 export type ProfileRecordRead<P extends string = ''> = ProfileGap<`${P}profile.`>;
 
-/** SPEC DRIFT: ProfileStep.exit and limiter are non-nullable $refs, but Dart sends and reads null (lib/src/models/data/profile.dart:249-259, 336-346). */
+/** SPEC DRIFT: ProfileStep.exit and limiter are non-nullable $refs, but Dart sends and reads null (lib/src/models/data/profile.dart:250-260, 337-347). */
 export type StepsWrite<P extends string = ''> = NullIn<`${P}steps[].`, 'exit' | 'limiter'>;
 
 // ---- REST reads -------------------------------------------------------------------------------
@@ -106,16 +105,16 @@ export type StepsWrite<P extends string = ''> = NullIn<`${P}steps[].`, 'exit' | 
 /** SPEC GAP: MachineInfo has no `required`; its toJson always sends the four (lib/src/models/device/machine.dart:26-34). */
 export type MachineInfoRead = Opt<'', 'GHC' | 'model' | 'serialNumber' | 'version'>;
 
-/** SPEC GAP: the heartbeat reply has no `required`; Decaid always sends timeout (lib/src/services/webserver/presence_handler.dart:24-32). */
+/** SPEC GAP: the heartbeat reply has no `required`; Decaid always sends timeout (lib/src/services/webserver/presence_handler.dart:23-31). */
 export type HeartbeatRead = Opt<'', 'timeout'>;
 
 /**
- * SPEC GAP: DeviceInventory has no `required`; the device list always sends the five (lib/src/services/webserver/devices_handler.dart:858-864).
+ * SPEC GAP: DeviceInventory has no `required`; the device list always sends the five (lib/src/services/webserver/devices_handler.dart:861-867).
  * CafAI reads an `available` it cannot read as unknown, so its type has it optional.
  */
 export type DeviceListRead = Opt<'list[].', 'id' | 'name' | 'state' | 'type'>;
 
-/** SPEC GAP: PluginManifest has no `required`; its toJson always sends id (lib/src/plugins/plugin_manifest.dart:314-327). */
+/** SPEC GAP: PluginManifest has no `required`; its toJson always sends id (lib/src/plugins/plugin_manifest.dart:339-352). */
 export type PluginListRead = Opt<'list[].', 'id'>;
 
 /** CAFAI NARROWER: the spec allows null; Grinder.toJson leaves a null field out (lib/src/models/data/grinder.dart:113-131). */
@@ -136,34 +135,34 @@ export type WakeScheduleRead<P extends string = ''> = NullIn<P, 'keepAwakeFor'>;
 /**
  * SPEC GAP: the settings reply has no `required`; Decaid always sends the
  * four keys, keepAwakeUntil null when no keep-awake window runs
- * (lib/src/services/webserver/presence_handler.dart:44-49). CafAI needs three
+ * (lib/src/services/webserver/presence_handler.dart:43-48). CafAI needs three
  * of them; a keepAwakeUntil it cannot read is left out.
  * CAFAI NARROWER: each schedule as WakeScheduleRead.
  */
 export type PresenceRead = Opt<'', 'userPresenceEnabled' | 'sleepTimeoutMinutes' | 'schedules'> | WakeScheduleRead<'schedules[].'>;
 
-/** SPEC GAP: the reply to a settings change has no `required`; Decaid always answers the two as saved (lib/src/services/webserver/presence_handler.dart:98-101). */
+/** SPEC GAP: the reply to a settings change has no `required`; Decaid always answers the two as saved (lib/src/services/webserver/presence_handler.dart:97-100). */
 export type PresenceSavedRead = Opt<'', 'userPresenceEnabled' | 'sleepTimeoutMinutes'>;
 
 /**
  * SPEC DRIFT: no handler sends the spec's Error {e, st}; they send {error},
  * {error, message}, {error, st} or {details, type}
- * (e.g. lib/src/services/webserver/de1handler.dart:694-716, scale_handler.dart:48-57).
+ * (e.g. lib/src/services/webserver/de1handler.dart:763-785, scale_handler.dart:45-54).
  */
 export type ErrorBodyRead = AbsentOpt<'', 'details' | 'error' | 'message' | 'type'>;
 
 // ---- WebSocket frames -------------------------------------------------------------------------
 
-/** SPEC GAP: De1ShotSettings.toJson always sends the eight (lib/src/models/device/de1_interface.dart:147-158). */
+/** SPEC GAP: De1ShotSettings.toJson always sends the eight (lib/src/models/device/de1_interface.dart:208-219). */
 export type ShotSettingsRead = Opt<
   '',
   'groupTemp' | 'steamSetting' | 'targetHotWaterDuration' | 'targetHotWaterTemp' | 'targetHotWaterVolume' | 'targetShotVolume' | 'targetSteamDuration' | 'targetSteamTemp'
 >;
 
-/** SPEC GAP: De1WaterLevels.toJson always sends both (lib/src/models/device/de1_interface.dart:228-229). */
+/** SPEC GAP: De1WaterLevels.toJson always sends both (lib/src/models/device/de1_interface.dart:289-290). */
 export type WaterLevelsRead = Opt<'', 'currentLevel' | 'refillLevel'>;
 
-/** SPEC GAP: a status frame always carries status (lib/src/services/webserver/scale_handler.dart:244-275). */
+/** SPEC GAP: a status frame always carries status (lib/src/services/webserver/scale_handler.dart:241-272). */
 export type ScaleStatusRead = Opt<'', 'status'>;
 
 /** SPEC GAP: ShotStateEvent and ShotDecision send every key, null when absent (lib/src/models/data/shot_state_event.dart:45-50, 89-101). */
@@ -173,7 +172,7 @@ export type ShotStateRead =
 
 /**
  * SPEC GAP: the devices frame always sends connectionStatus and its five keys
- * (lib/src/services/webserver/devices_handler.dart:139-184).
+ * (lib/src/services/webserver/devices_handler.dart:134-179).
  * PARSED SHAPE: ConnectionError.toJson leaves out a null deviceId, deviceName,
  * suggestion and details (lib/src/controllers/connection_error.dart:53-63);
  * src/api/frames.ts reads absent as null, so CafAI's type is the parsed shape.
@@ -190,23 +189,19 @@ export type DevicesRead =
  * schemas, all required, but the PUT deep-merges before parsing
  * (lib/src/models/data/json_utils.dart:3-29), so a partial object is valid;
  * CafAI's Partial<> is deliberate (CAFAI LOOSER).
- * CAFAI LOOSER: CafAI clears grinderBurrs (spec 5.2), which v0.8.8 does not
- * know and ignores (WorkflowContext.fromJson reads named keys only,
- * workflow_context.dart:44-60).
  */
 export type WorkflowWrite =
   | StepsWrite<'profile.'>
   | Opt<'hotWaterData.', 'duration' | 'flow' | 'targetTemperature' | 'volume'>
-  | Opt<'rinseData.', 'duration' | 'flow' | 'targetTemperature'>
-  | Undeclared<'context.', 'grinderBurrs'>;
+  | Opt<'rinseData.', 'duration' | 'flow' | 'targetTemperature'>;
 
-/** SPEC DRIFT: Profile.version is a non-nullable string, but Dart sends null and reads it with parseOptionalString (lib/src/models/data/profile.dart:74, 95). */
+/** SPEC DRIFT: Profile.version is a non-nullable string, but Dart sends null and reads it with parseOptionalString (lib/src/models/data/profile.dart:75, 96). */
 export type MachineProfileWrite = StepsWrite<'v.'> | NullIn<'v.', 'version'>;
 
 /**
  * CAFAI LOOSER: DecaidSettings.gatewayMode is an open union because CafAI
  * reads whatever Decaid sends; it only ever writes 'tracking' (spec 5.1), and
- * Decaid answers 400 to a mode it does not know (lib/src/services/webserver/settings_handler.dart:76-84).
+ * Decaid answers 400 to a mode it does not know (lib/src/services/webserver/settings_handler.dart:88-96).
  */
 export type SettingsWrite = 'gatewayMode: string not accepted';
 
@@ -222,7 +217,7 @@ export type MachineStateWsEnum =
 
 /**
  * SPEC DRIFT: both specs spell cleaingGroup; Dart sends cleaningGroup (lib/src/models/device/machine.dart:170).
- * CAFAI NARROWER: CafAI's open union leaves out the 18 error substates (machine.dart:180-197).
+ * CAFAI NARROWER: CafAI's open union leaves out the 18 error substates (machine.dart:181-198).
  */
 export type SubstateRestEnum =
   | CafaiOnly<'cleaningGroup'>
@@ -235,9 +230,6 @@ export type SubstateRestEnum =
 /** SPEC DRIFT: as in REST, cleaingGroup for cleaningGroup (lib/src/models/device/machine.dart:170). */
 export type SubstateWsEnum = CafaiOnly<'cleaningGroup'> | SpecOnly<'cleaingGroup'>;
 
-/** SPEC GAP: the WebSocket DeviceInfo.type lacks grinder, a DeviceType since before the pin (lib/src/models/device/device.dart:6); added to the spec after v0.8.8 (a34615f). */
-export type DeviceTypeWsEnum = CafaiOnly<'grinder'>;
-
 // ---- Status codes -----------------------------------------------------------------------------
 
 /** SPEC DRIFT: the KV store answers a missing key 200 null, a write and a delete 200 {} (lib/src/services/webserver/kv_store_handler.dart:24, 34, 54). */
@@ -246,10 +238,10 @@ export type KvStatus =
   | 'POST /api/v1/store/{namespace}/{key}: no 200 in the spec (a stored value)'
   | 'DELETE /api/v1/store/{namespace}/{key}: the spec answers {deleted} (Dart: {})';
 
-/** SPEC DRIFT: tare without a scale answers 500 {error: "DeviceNotConnectedException: ..."}, not 404 (lib/src/services/webserver/scale_handler.dart:52-57). */
+/** SPEC DRIFT: tare without a scale answers 500 {error: "DeviceNotConnectedException: ..."}, not 404 (lib/src/services/webserver/scale_handler.dart:49-54). */
 export type TareStatus = 'PUT /api/v1/scale/tare: the spec documents 404 (Dart: 500 {error} without a scale)';
 
-/** SPEC GAP: the barrier also answers 409 (a superseded write) and 504 (Bluetooth timed out) (lib/src/services/webserver/de1handler.dart:699-712). */
+/** SPEC GAP: the barrier also answers 409 (a superseded write) and 504 (Bluetooth timed out) (lib/src/services/webserver/de1handler.dart:768-781). */
 export type MachineProfileStatus =
   | 'POST /api/v1/machine/profile: no 409 in the spec (another write came first)'
   | 'POST /api/v1/machine/profile: no 504 in the spec (Bluetooth timed out)';
@@ -297,8 +289,8 @@ export const SPEC_EXCEPTIONS: readonly SpecException[] = [
       'lib/src/models/device/machine.dart:99, lib/src/controllers/scale_controller.dart:318, ' +
       'lib/src/models/data/profile_record.dart:145-146, lib/src/models/data/shot_record.dart:53, ' +
       'lib/src/models/data/bean.dart:117-118, 296, 313-314, lib/src/models/data/grinder.dart:128-129, ' +
-      'lib/src/services/webserver/presence_handler.dart:47) and reads ' +
-      'dates with DateTime.parse, which takes them and date-only strings (lib/src/services/webserver/beans_handler.dart:184-186); ' +
+      'lib/src/services/webserver/presence_handler.dart:46) and reads ' +
+      'dates with DateTime.parse, which takes them and date-only strings (lib/src/services/webserver/beans_handler.dart:185-187); ' +
       '`format: date-time` wants RFC 3339 with a zone.',
   },
   {
@@ -308,7 +300,7 @@ export const SPEC_EXCEPTIONS: readonly SpecException[] = [
     values: [null],
     why:
       'SPEC DRIFT: ProfileStep.exit and limiter are non-nullable $refs, but Dart sends null for a step without one ' +
-      'and reads null back (lib/src/models/data/profile.dart:249-259, 270, 277, 336-346, 357, 364).',
+      'and reads null back (lib/src/models/data/profile.dart:250-260, 271, 278, 337-347, 358, 365).',
   },
   {
     where: 'any',
@@ -317,7 +309,7 @@ export const SPEC_EXCEPTIONS: readonly SpecException[] = [
     values: [null],
     why:
       'SPEC DRIFT: Profile.version is a non-nullable string, but Dart keeps a missing version as null, sends it ' +
-      'and reads it back with parseOptionalString (lib/src/models/data/profile.dart:74, 95); CafAI posts the ' +
+      'and reads it back with parseOptionalString (lib/src/models/data/profile.dart:75, 96); CafAI posts the ' +
       'profile to /machine/profile exactly as Decaid returned it.',
   },
   {
@@ -337,7 +329,7 @@ export const SPEC_EXCEPTIONS: readonly SpecException[] = [
     values: [null],
     why:
       'SPEC DRIFT: the reply is a ShotRecordSummary, but Dart answers 200 null when there is no shot ' +
-      '(lib/src/services/webserver/shots_handler.dart:171).',
+      '(lib/src/services/webserver/shots_handler.dart:190).',
   },
   {
     where: 'GET /api/v1/steams/latest',
@@ -346,7 +338,7 @@ export const SPEC_EXCEPTIONS: readonly SpecException[] = [
     values: [null],
     why:
       'SPEC DRIFT: the reply is a SteamRecord, but Dart answers 200 null when there is no steam record ' +
-      '(lib/src/services/webserver/steams_handler.dart:49-50).',
+      '(lib/src/services/webserver/steams_handler.dart:48-49).',
   },
   {
     where: 'PUT /api/v1/workflow',
@@ -391,16 +383,7 @@ export const SPEC_EXCEPTIONS: readonly SpecException[] = [
     valueMatches: /^error[A-Z][A-Za-z]*$/,
     why:
       'SPEC GAP: the WebSocket MachineSubstate lacks the 18 error substates Dart sends and the REST spec lists ' +
-      '(lib/src/models/device/machine.dart:180-197).',
-  },
-  {
-    where: 'any',
-    keyword: 'enum',
-    schemaPath: /^websocket_v1\.yml#\/components\/schemas\/DeviceInfo\/properties\/type\/enum$/,
-    values: ['grinder'],
-    why:
-      'SPEC GAP: the WebSocket DeviceInfo.type lacks grinder, a DeviceType since before the pin ' +
-      '(lib/src/models/device/device.dart:6); Decaid added it to the spec after v0.8.8 (a34615f).',
+      '(lib/src/models/device/machine.dart:181-198).',
   },
   {
     where: 'POST /api/v1/store/{namespace}/{key}',
@@ -415,7 +398,7 @@ export const SPEC_EXCEPTIONS: readonly SpecException[] = [
       status: 500,
       why:
         'SPEC GAP: without a machine these routes answer 500 {"error": "DeviceNotConnectedException: machine not connected"} ' +
-        '(lib/src/services/webserver/de1handler.dart:682-687, 713-714); the spec documents their success only. ' +
+        '(lib/src/services/webserver/de1handler.dart:751-756, 782-783); the spec documents their success only. ' +
         'CafAI reads it as "not connected" (src/api/http.ts).',
     }),
   ),

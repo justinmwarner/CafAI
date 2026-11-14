@@ -26,26 +26,26 @@ function renderAbout(decaidVersion: string | null) {
 
 describe('AboutDecaid version line (4.6)', () => {
   it('shows the running version against the one CafAI was verified with', () => {
-    renderAbout('0.9.0');
-    expect(screen.getByTestId(TID.aboutDecaid)).toHaveTextContent('Decaid 0.9.0 (CafAI was verified with 0.8.8)');
+    renderAbout('0.9.3');
+    expect(screen.getByTestId(TID.aboutDecaid)).toHaveTextContent('Decaid 0.9.3 (CafAI was verified with 0.9.2)');
     expect(screen.queryByText(/Older than the Decaid/)).toBeNull();
   });
 
   it('adds the older note when the running version is behind the pin', () => {
     renderAbout('0.8.7');
-    expect(screen.getByText('Decaid 0.8.7 (CafAI was verified with 0.8.8)')).toBeInTheDocument();
+    expect(screen.getByText('Decaid 0.8.7 (CafAI was verified with 0.9.2)')).toBeInTheDocument();
     expect(screen.getByText('Older than the Decaid CafAI was checked against; update Decaid if something does not work.')).toBeInTheDocument();
   });
 
   it('compares only the numeric part, so a build suffix does not count as older', () => {
-    renderAbout('0.8.8+2850');
-    expect(screen.getByText('Decaid 0.8.8+2850 (CafAI was verified with 0.8.8)')).toBeInTheDocument();
+    renderAbout('0.9.2+3191');
+    expect(screen.getByText('Decaid 0.9.2+3191 (CafAI was verified with 0.9.2)')).toBeInTheDocument();
     expect(screen.queryByText(/Older than the Decaid/)).toBeNull();
   });
 
   it('shows a version it cannot parse without comparing it', () => {
     renderAbout('nightly');
-    expect(screen.getByText('Decaid nightly (CafAI was verified with 0.8.8)')).toBeInTheDocument();
+    expect(screen.getByText('Decaid nightly (CafAI was verified with 0.9.2)')).toBeInTheDocument();
     expect(screen.queryByText(/Older than the Decaid/)).toBeNull();
   });
 
@@ -57,7 +57,7 @@ describe('AboutDecaid version line (4.6)', () => {
   });
 
   it("leaves the backup's line to Data and privacy (BackupCard.tsx)", () => {
-    renderAbout('0.9.0');
+    renderAbout('0.9.3');
     expect(screen.queryByTestId(TID.backupHealth)).toBeNull();
   });
 });
@@ -69,7 +69,7 @@ describe('AboutDecaid recorded drift (D96, 4.6)', () => {
     const writeText = vi.fn(async () => {});
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
 
-    renderAbout('0.9.0');
+    renderAbout('0.9.3');
 
     expect(screen.getByText('Decaid sent 2 things CafAI did not expect')).toBeInTheDocument();
     const report = screen.getByTestId(TID.driftReport);
@@ -77,19 +77,19 @@ describe('AboutDecaid recorded drift (D96, 4.6)', () => {
     expect(within(report).getByText('ws/v1/machine/shotState: state: unknown value "brewing"')).toBeInTheDocument();
 
     await userEvent.click(screen.getByTestId(TID.copyDriftReport));
-    const expected = formatDriftReport(driftLog.list(), { appVersion: '0.1.0-test', decaidVersion: '0.9.0', verifiedWith: '0.8.8' });
+    const expected = formatDriftReport(driftLog.list(), { appVersion: '0.1.0-test', decaidVersion: '0.9.3', verifiedWith: '0.9.2' });
     expect(writeText).toHaveBeenCalledWith(expected);
     expect(await screen.findByText('Copied.')).toBeInTheDocument();
   });
 
   it('says "1 thing", not "1 things", for a single kind of drift', () => {
     driftLog.report({ source: 'GET /api/v1/workflow', problem: 'profile: missing' });
-    renderAbout('0.9.0');
+    renderAbout('0.9.3');
     expect(screen.getByText('Decaid sent 1 thing CafAI did not expect')).toBeInTheDocument();
   });
 
   it('shows nothing about drift when none is recorded', () => {
-    renderAbout('0.9.0');
+    renderAbout('0.9.3');
     expect(screen.queryByTestId(TID.driftReport)).toBeNull();
     expect(screen.queryByTestId(TID.copyDriftReport)).toBeNull();
     expect(screen.queryByText(/Decaid sent/)).toBeNull();
