@@ -1,27 +1,54 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { board, bucketLabel } from '../domain/buckets.ts';
 import { cpaLabel } from '../domain/cpa.ts';
+import { directionFor } from '../domain/direction.ts';
 import { readPayload, type OverheadPayload } from '../shared/payload.ts';
 import { createFakeHost, fakeResponse } from './fakeHost.ts';
 import type { PluginDeps, PluginFetch } from './host.ts';
+import { mockSnapshot } from './mock.ts';
 import { ACTIVE_LEASE_MS, createOverheadPlugin, NOTABLE_CHECK_MS } from './plugin.ts';
 
 const fixture = (name: string) => readFileSync(new URL(`../../../fixtures/overhead/${name}`, import.meta.url), 'utf8');
 
 const HOME = { HomeLat: 41.9786, HomeLon: -87.9048 };
 
+/** The recording around the mock home, as adsb.fi would send it. */
+const placedMock = () => ({ now: Date.now() / 1000, aircraft: mockSnapshot({ lat: 41.988, lon: -87.73 }, 0).aircraft });
+
+const BATCH = JSON.parse(fixture('hexdb-batch-ord.json')) as Record<'routes' | 'aircraft' | 'airports', Record<string, { status: number; body: unknown }>>;
+
+/** hexdb and plane-alert-db as recorded (fixtures/overhead/). */
+function recordedLookup(url: string) {
+  const { pathname, host } = new URL(url);
+  if (host === 'raw.githubusercontent.com') {
+    const file = pathname.endsWith('plane-alert-gov.csv') ? 'plane-alert-gov.sample.csv' : 'plane-alert-civ.sample.csv';
+    return fakeResponse(200, fixture(file), { etag: `"${file}"` });
+  }
+  const [, , , kind, ...rest] = pathname.split('/');
+  const key = rest[rest.length - 1] ?? '';
+  const table = kind === 'route' ? BATCH.routes : kind === 'aircraft' ? BATCH.aircraft : BATCH.airports;
+  const file = new URL(`../../../fixtures/overhead/hexdb-airport-${key}.json`, import.meta.url);
+  const recorded = table[key] ?? (kind === 'airport' && existsSync(file) ? { status: 200, body: JSON.parse(readFileSync(file, 'utf8')) } : undefined);
+  return recorded && recorded.status === 200 ? fakeResponse(200, JSON.stringify(recorded.body)) : fakeResponse(404, '{"status":"404","error":"Not found."}');
+}
+
 function setup(store: Record<string, unknown> = {}, answer?: PluginFetch) {
   const fake = createFakeHost(store);
+  /** Position requests only; lookups go to `looked`. */
   const asked: string[] = [];
-  const fetch: PluginFetch =
-    answer ??
-    (async (url) => {
-      asked.push(url);
-      if (url.includes('airplanes.live')) return fakeResponse(403, fixture('airplaneslive-point-ord-403.json'));
-      if (url.includes('adsb.fi')) return fakeResponse(200, fixture('adsbfi-point-ord.json'));
-      throw new Error(`unexpected ${url}`);
-    });
+  const looked: string[] = [];
+  const fetch: PluginFetch = async (url, init) => {
+    if (url.includes('hexdb.io') || url.includes('raw.githubusercontent.com')) {
+      looked.push(url);
+      return recordedLookup(url);
+    }
+    if (answer) return answer(url, init);
+    asked.push(url);
+    if (url.includes('airplanes.live')) return fakeResponse(403, fixture('airplaneslive-point-ord-403.json'));
+    if (url.includes('adsb.fi')) return fakeResponse(200, fixture('adsbfi-point-ord.json'));
+    throw new Error(`unexpected ${url}`);
+  };
   const deps: PluginDeps = {
     fetch,
     now: () => Date.now(),
@@ -39,7 +66,7 @@ function setup(store: Record<string, unknown> = {}, answer?: PluginFetch) {
     return payload as OverheadPayload;
   };
   const post = async (values: Record<string, unknown>) => plugin.__httpRequestHandler({ endpoint: 'config', method: 'POST', body: { values }, query: {} });
-  return { fake, plugin, asked, get, post };
+  return { fake, plugin, asked, looked, get, post };
 }
 
 const hosts = (urls: string[]) => urls.map((url) => new URL(url).host);
@@ -206,6 +233,67 @@ describe('the Overhead plugin', () => {
     ]);
     expect(list[0]?.aircraft).toMatchObject({ airline: 'SkyWest', typeName: 'Embraer ERJ-170-200 (long wing)', altitudeFt: 2950 });
     expect(cpaLabel(list[0]?.aircraft.cpa as NonNullable<OverheadPayload['aircraft'][number]['cpa']>)).toBe('directly over');
+  });
+
+  it('announces a notable aircraft once as it comes within the notable area, and lists it', async () => {
+    const { plugin, fake, looked, get } = setup({ config: HOME });
+    plugin.onLoad({});
+    await plugin.ready();
+    await vi.advanceTimersByTimeAsync(0);
+    // The lists were fetched on the first tick; A046E7 (ABC7's helicopter) is 5.9 nm from O'Hare in the recording.
+    expect(looked.filter((url) => url.includes('raw.githubusercontent.com'))).toHaveLength(2);
+    expect(fake.emits).toEqual([
+      { event: 'notable', payload: { hex: 'a046e7', operator: 'US Helicopters (ABC7 Chicago)', category: 'As Seen on TV', registration: 'N117HD', type: 'AS-350 Ecureuil', distanceNm: 5.9, at: Date.now() } },
+    ]);
+    const payload = await get();
+    expect(payload.notable).toEqual([{ hex: 'a046e7', info: expect.objectContaining({ operator: 'US Helicopters (ABC7 Chicago)', tags: ['As Seen on TV', 'News', 'Chicago'] }), since: Date.now() }]);
+    expect(payload.aircraft.find((plane) => plane.hex === 'a046e7')?.notable?.category).toBe('As Seen on TV');
+    // Still there a minute later: no second announcement.
+    await vi.advanceTimersByTimeAsync(2 * NOTABLE_CHECK_MS);
+    expect(fake.emits).toHaveLength(1);
+  });
+
+  it('lists a notable aircraft beyond the map’s area but inside the notable area', async () => {
+    const { plugin, get } = setup({ config: { ...HOME, RadiusNm: 3, NotableRadiusNm: 10 } });
+    plugin.onLoad({});
+    await plugin.ready();
+    await vi.advanceTimersByTimeAsync(0);
+    const payload = await get();
+    expect(payload.aircraft.every((plane) => plane.distanceNm <= 3 || plane.hex === 'a046e7')).toBe(true);
+    expect(payload.aircraft.some((plane) => plane.hex === 'a046e7')).toBe(true);
+  });
+
+  it('looks up the board’s routes on hexdb, one a second, and tells arrivals from the home airport', async () => {
+    const { plugin, looked, get } = setup({ config: { HomeLat: 41.988, HomeLon: -87.73, PollIntervalSeconds: 2 } }, async (url) =>
+      url.includes('adsb.fi') ? fakeResponse(200, JSON.stringify(placedMock())) : fakeResponse(403, '{}'),
+    );
+    plugin.onLoad({});
+    await plugin.ready();
+    await vi.advanceTimersByTimeAsync(0);
+    for (let i = 0; i < 30; i += 1) {
+      await get();
+      await vi.advanceTimersByTimeAsync(1000);
+    }
+    const hexdb = looked.filter((url) => url.includes('hexdb.io'));
+    expect(hexdb.length).toBeGreaterThan(10);
+    expect(hexdb.length).toBeLessThanOrEqual(31);
+    expect(hexdb).toContain('https://hexdb.io/api/v1/route/icao/ETD93C');
+    const etihad = (await get()).aircraft.find((plane) => plane.callsign === 'ETD93C');
+    expect(etihad?.route).toMatchObject({ raw: 'OMAA-KORD', origin: { iata: 'AUH', name: 'Abu Dhabi International Airport' }, destination: { iata: 'ORD' } });
+    expect(directionFor(etihad?.route ?? null, 'KORD').text).toBe('From Abu Dhabi (AUH)');
+  });
+
+  it('enriches mock mode from the recordings, announcing nothing', async () => {
+    const { plugin, fake, looked, get } = setup({ config: { HomeLat: 41.988, HomeLon: -87.73, MockMode: true } });
+    plugin.onLoad({});
+    await plugin.ready();
+    const payload = await get();
+    const etihad = payload.aircraft.find((plane) => plane.callsign === 'ETD93C');
+    expect(etihad).toMatchObject({ airline: 'Etihad', typeName: 'Boeing 787-9 Dreamliner', route: { origin: { iata: 'AUH' }, destination: { iata: 'ORD' } } });
+    expect(payload.notable.map((sighting) => sighting.info.operator)).toEqual(['US Helicopters (ABC7 Chicago)']);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fake.emits).toEqual([]);
+    expect(looked).toEqual([]);
   });
 
   it('replays on ?mock=1 without turning mock mode on', async () => {

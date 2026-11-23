@@ -96,3 +96,26 @@ open, with the reason. Evidence is in [DISCOVERY.md](DISCOVERY.md). The root
   airport.** hexdb lists round trips such as `KORD-KDCA-KORD`; the leg is the
   inbound one when the aircraft's track points within 90° of the home
   airport, the outbound one otherwise.
+
+- **O14. hexdb is asked for what the board shows first.** At one request a
+  second, a cold start cannot look up fifty aircraft at once. Each time the
+  skin asks, the plugin queues, newest need first: the airports of known
+  routes and the home airport, then routes for the board's aircraft and the
+  15 nearest others with an airline callsign, then aircraft details for the
+  board's aircraft only (the provider's `desc` already names most types).
+  N-number callsigns are never looked up as routes. Nothing is looked up
+  while the screensaver is away.
+
+- **O15. The notable event.** `ws/v1/plugins/overhead.reaplugin/notable`
+  carries `{hex, operator, category, registration, type, distanceNm, at}`
+  the first time a notable aircraft is seen inside the notable area, from
+  the plugin's own polls (the once-a-minute check included). It is not sent
+  again until that aircraft has been away for 10 minutes. Mock mode lists
+  notable aircraft but sends no event, so a demo never reaches another
+  surface.
+
+- **O16. plane-alert-db is downloaded with If-None-Match.** GitHub answers
+  with an ETag; the daily refresh sends it back, so an unchanged list costs a
+  304 and no parsing. A download that fails, or a file that no longer has
+  `$ICAO` and `$Operator` columns, keeps the last good copy and is tried
+  again an hour later.

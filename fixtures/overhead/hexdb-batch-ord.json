@@ -1,6 +1,6 @@
 {
  "capturedAt": "2026-11-23",
- "source": "https://hexdb.io/api/v1/route/icao/{callsign} and /api/v1/aircraft/{hex}, one request a second",
+ "source": "https://hexdb.io/api/v1/route/icao/{callsign} and /api/v1/aircraft/{hex}, one request a second, and /api/v1/airport/icao/{icao} for the routes' other airports",
  "routes": {
   "AAL1002": {
    "status": 200,
@@ -443,6 +443,344 @@
     "Type": "CRJ 700",
     "RegisteredOwners": "United Express",
     "OperatorFlagCode": "GJS"
+   }
+  }
+ },
+ "airports": {
+  "KASE": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Colorado",
+    "iata": "ASE",
+    "icao": "KASE",
+    "airport": "Aspen-Pitkin County Airport (Sardy Field)",
+    "latitude": 39.2232,
+    "longitude": -106.869
+   }
+  },
+  "KATL": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Georgia",
+    "iata": "ATL",
+    "icao": "KATL",
+    "airport": "Hartsfield-Jackson Atlanta International Airport",
+    "latitude": 33.6367,
+    "longitude": -84.4281
+   }
+  },
+  "KBDL": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Connecticut",
+    "iata": "BDL",
+    "icao": "KBDL",
+    "airport": "Bradley International Airport",
+    "latitude": 41.9392,
+    "longitude": -72.6833
+   }
+  },
+  "KBOI": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Idaho",
+    "iata": "BOI",
+    "icao": "KBOI",
+    "airport": "Boise Air Terminal (Gowen Field)",
+    "latitude": 43.5644,
+    "longitude": -116.223
+   }
+  },
+  "KCLT": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "North Carolina",
+    "iata": "CLT",
+    "icao": "KCLT",
+    "airport": "Charlotte Douglas International Airport",
+    "latitude": 35.214,
+    "longitude": -80.9431
+   }
+  },
+  "KDCA": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Virginia",
+    "iata": "DCA",
+    "icao": "KDCA",
+    "airport": "Ronald Reagan Washington National Airport",
+    "latitude": 38.8522,
+    "longitude": -77.0378
+   }
+  },
+  "KDFW": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Texas",
+    "iata": "DFW",
+    "icao": "KDFW",
+    "airport": "Dallas/Fort Worth International Airport",
+    "latitude": 32.8968,
+    "longitude": -97.038
+   }
+  },
+  "KDTW": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Michigan",
+    "iata": "DTW",
+    "icao": "KDTW",
+    "airport": "Detroit Metro Wayne County Airport",
+    "latitude": 42.2125,
+    "longitude": -83.3533
+   }
+  },
+  "KEWR": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "New Jersey",
+    "iata": "EWR",
+    "icao": "KEWR",
+    "airport": "Newark Liberty International Airport",
+    "latitude": 40.6925,
+    "longitude": -74.1686
+   }
+  },
+  "KFAT": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "California",
+    "iata": "FAT",
+    "icao": "KFAT",
+    "airport": "Fresno Yosemite International Airport",
+    "latitude": 36.7762,
+    "longitude": -119.718
+   }
+  },
+  "KFLL": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Florida",
+    "iata": "FLL",
+    "icao": "KFLL",
+    "airport": "Fort Lauderdale-Hollywood International Airport",
+    "latitude": 26.0726,
+    "longitude": -80.1527
+   }
+  },
+  "KGTR": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Mississippi",
+    "iata": "GTR",
+    "icao": "KGTR",
+    "airport": "Golden Triangle Regional Airport",
+    "latitude": 33.4503,
+    "longitude": -88.5914
+   }
+  },
+  "KIAD": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Virginia",
+    "iata": "IAD",
+    "icao": "KIAD",
+    "airport": "Washington Dulles International Airport",
+    "latitude": 38.9445,
+    "longitude": -77.4558
+   }
+  },
+  "KJAX": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Florida",
+    "iata": "JAX",
+    "icao": "KJAX",
+    "airport": "Jacksonville International Airport",
+    "latitude": 30.4941,
+    "longitude": -81.6879
+   }
+  },
+  "KLCH": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Louisiana",
+    "iata": "LCH",
+    "icao": "KLCH",
+    "airport": "Lake Charles Regional Airport",
+    "latitude": 30.1261,
+    "longitude": -93.2233
+   }
+  },
+  "KLGA": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "New York",
+    "iata": "LGA",
+    "icao": "KLGA",
+    "airport": "LaGuardia Airport",
+    "latitude": 40.775,
+    "longitude": -73.875
+   }
+  },
+  "KMCO": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Florida",
+    "iata": "MCO",
+    "icao": "KMCO",
+    "airport": "Orlando International Airport",
+    "latitude": 28.4294,
+    "longitude": -81.309
+   }
+  },
+  "KMDT": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Pennsylvania",
+    "iata": "MDT",
+    "icao": "KMDT",
+    "airport": "Harrisburg International Airport",
+    "latitude": 40.1935,
+    "longitude": -76.7634
+   }
+  },
+  "KMFE": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Texas",
+    "iata": "MFE",
+    "icao": "KMFE",
+    "airport": "McAllen Miller International Airport",
+    "latitude": 26.1758,
+    "longitude": -98.2386
+   }
+  },
+  "KMIA": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Florida",
+    "iata": "MIA",
+    "icao": "KMIA",
+    "airport": "Miami International Airport",
+    "latitude": 25.7932,
+    "longitude": -80.2906
+   }
+  },
+  "KMSP": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Minnesota",
+    "iata": "MSP",
+    "icao": "KMSP",
+    "airport": "Minneapolis-Saint Paul International Airport (Wold-Chamberlain Field)",
+    "latitude": 44.882,
+    "longitude": -93.2218
+   }
+  },
+  "KPHL": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Pennsylvania",
+    "iata": "PHL",
+    "icao": "KPHL",
+    "airport": "Philadelphia International Airport",
+    "latitude": 39.8719,
+    "longitude": -75.2411
+   }
+  },
+  "KPSC": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Washington",
+    "iata": "PSC",
+    "icao": "KPSC",
+    "airport": "Tri-Cities Airport",
+    "latitude": 46.2647,
+    "longitude": -119.119
+   }
+  },
+  "KRNO": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Nevada",
+    "iata": "RNO",
+    "icao": "KRNO",
+    "airport": "Reno-Tahoe International Airport",
+    "latitude": 39.4991,
+    "longitude": -119.768
+   }
+  },
+  "KSAT": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Texas",
+    "iata": "SAT",
+    "icao": "KSAT",
+    "airport": "San Antonio International Airport",
+    "latitude": 29.5337,
+    "longitude": -98.4698
+   }
+  },
+  "KSBN": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Indiana",
+    "iata": "SBN",
+    "icao": "KSBN",
+    "airport": "South Bend International Airport",
+    "latitude": 41.7087,
+    "longitude": -86.3173
+   }
+  },
+  "MDPP": {
+   "status": 200,
+   "body": {
+    "country_code": "DO",
+    "region_name": "Puerto Plata",
+    "iata": "POP",
+    "icao": "MDPP",
+    "airport": "Gregorio Luperon International Airport",
+    "latitude": 19.7579,
+    "longitude": -70.57
+   }
+  },
+  "PHOG": {
+   "status": 200,
+   "body": {
+    "country_code": "US",
+    "region_name": "Hawaii",
+    "iata": "OGG",
+    "icao": "PHOG",
+    "airport": "Kahului Airport",
+    "latitude": 20.8986,
+    "longitude": -156.43
    }
   }
  }

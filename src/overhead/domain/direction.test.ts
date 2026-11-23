@@ -70,6 +70,8 @@ describe('hexdb routes', () => {
     expect(placeName('Dublin Airport')).toBe('Dublin');
     expect(placeName('Los Cabos International Airport')).toBe('Los Cabos');
     expect(placeName('Airport')).toBe('Airport');
+    expect(placeName('Minneapolis-Saint Paul International Airport (Wold-Chamberlain Field)')).toBe('Minneapolis-Saint Paul');
+    expect(placeName('Aspen-Pitkin County Airport (Sardy Field)')).toBe('Aspen-Pitkin');
   });
 });
 

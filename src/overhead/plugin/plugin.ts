@@ -16,15 +16,18 @@
  * skin posted to `config` (DECISIONS O3), except a value changed in Decaid's
  * own Plugins screen since, which wins.
  */
+import { board } from '../domain/buckets.ts';
 import { closestApproach } from '../domain/cpa.ts';
 import { bearingDeg, distanceNm, type LatLon } from '../domain/geo.ts';
-import { airlineFor, typeNameFor } from '../domain/words.ts';
-import { PAYLOAD_VERSION, STALE_AFTER_MS, type OverheadAircraft, type OverheadPayload, type PayloadSource } from '../shared/payload.ts';
+import { airlineFor, splitCallsign, typeNameFor } from '../domain/words.ts';
+import { PAYLOAD_VERSION, STALE_AFTER_MS, type NotableSighting, type OverheadAircraft, type OverheadPayload, type PayloadSource } from '../shared/payload.ts';
 import { finite, text } from '../shared/readsb.ts';
-import { CONFIG_ENDPOINT, OVERHEAD_ENDPOINT, OVERHEAD_PLUGIN_ID, readSettings, settingsValues, validValues, type OverheadSettings } from '../shared/settings.ts';
+import { CONFIG_ENDPOINT, NOTABLE_EVENT, OVERHEAD_ENDPOINT, OVERHEAD_PLUGIN_ID, readSettings, settingsValues, validValues, type OverheadSettings } from '../shared/settings.ts';
+import { createEnricher, type Enricher } from './enrich.ts';
 import type { PluginDeps, PluginEvent, PluginHost, PluginReply, PluginRequest } from './host.ts';
 import { createPluginKv } from './kv.ts';
-import { mockSnapshot } from './mock.ts';
+import { MOCK_PLANE_ALERT, mockEnrichmentSeed, mockSnapshot } from './mock.ts';
+import { createPlaneAlert, type PlaneAlert } from './planeAlert.ts';
 import { createProviderChain, type ProviderSpec } from './providers.ts';
 import { createTracker, type TrackedAircraft } from './tracker.ts';
 
@@ -34,6 +37,11 @@ export const ACTIVE_LEASE_MS = 20_000;
 export const NOTABLE_CHECK_MS = 60_000;
 /** How often the plugin looks at whether to poll, when it is not polling faster. */
 export const IDLE_TICK_MS = 5_000;
+
+/** A notable aircraft gone from the notable area this long can raise the event again when it comes back. */
+export const NOTABLE_FORGET_MS = 10 * 60_000;
+/** Routes are asked for the board's aircraft and this many more, nearest first. */
+export const ROUTES_BEYOND_BOARD = 15;
 
 /** Storage keys. */
 const KEY_CONFIG = 'config';
@@ -100,6 +108,22 @@ export function baseAircraft(tracked: TrackedAircraft, home: LatLon): OverheadAi
   };
 }
 
+/** What hexdb and plane-alert-db add to an aircraft: its route, the type and owner hexdb knows, whether it is notable. */
+export function decorate(plane: OverheadAircraft, enricher: Pick<Enricher, 'aircraft' | 'route'>, planeAlert: Pick<PlaneAlert, 'match'>, homeAirport: string): OverheadAircraft {
+  const details = enricher.aircraft(plane.hex);
+  const operator = plane.operator ?? details?.owner ?? null;
+  return {
+    ...plane,
+    registration: plane.registration ?? details?.registration ?? null,
+    typeCode: plane.typeCode ?? details?.icaoType ?? null,
+    typeName: plane.typeName ?? typeNameFor({ desc: null, manufacturer: details?.manufacturer ?? null, model: details?.model ?? null }),
+    operator,
+    airline: airlineFor(plane.callsign, operator),
+    route: enricher.route(plane.callsign, { lat: plane.lat, lon: plane.lon }, plane.trackDeg, homeAirport),
+    notable: planeAlert.match(plane.hex),
+  };
+}
+
 export function createOverheadPlugin(host: PluginHost, deps: PluginDeps, version: string, options: OverheadPluginOptions = {}): OverheadPlugin {
   const log = (message: string) => {
     try {
@@ -112,6 +136,15 @@ export function createOverheadPlugin(host: PluginHost, deps: PluginDeps, version
   const chain = createProviderChain(deps, log, options.providers);
   const tracker = createTracker();
   const mockTracker = createTracker();
+  const enricher = createEnricher(deps, kv, { log });
+  const planeAlert = createPlaneAlert(deps, kv, { log });
+  // Mock mode's own: the recorded answers, asking nobody (a lookup the recording lacks reads as not found).
+  const mockDeps = { ...deps, fetch: async () => ({ status: 404, ok: false, headers: { get: () => null }, text: async () => '', json: async () => null }) };
+  const mockEnricher = createEnricher(mockDeps, null, { seed: mockEnrichmentSeed() });
+  const mockPlaneAlert = createPlaneAlert(mockDeps, null, { seed: MOCK_PLANE_ALERT });
+  /** Notable aircraft within the notable area: when each came in, and when it was last seen there. */
+  const notableSeen = new Map<string, { since: number; lastInside: number }>();
+  const mockNotableSeen = new Map<string, { since: number; lastInside: number }>();
 
   let native: Values = {};
   let stored: Values = {};
@@ -137,6 +170,7 @@ export function createOverheadPlugin(host: PluginHost, deps: PluginDeps, version
     if (before?.lat !== after?.lat || before?.lon !== after?.lon) {
       // A new home: what was seen around the old one is no news here.
       tracker.clear();
+      notableSeen.clear();
       dataAt = null;
       source = null;
     }
@@ -195,6 +229,8 @@ export function createOverheadPlugin(host: PluginHost, deps: PluginDeps, version
       tracker.ingest(result.snapshot, result.at);
       dataAt = result.at;
       source = result.provider;
+      const planes = tracker.current(result.at).map((plane) => baseAircraft(plane, home));
+      noteNotable(planes.map((plane) => ({ ...plane, notable: planeAlert.match(plane.hex) })), result.at, notableSeen, true);
     } catch (error) {
       log(`[overhead] poll failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
@@ -204,12 +240,65 @@ export function createOverheadPlugin(host: PluginHost, deps: PluginDeps, version
 
   async function tick(): Promise<void> {
     if (unloaded) return;
+    if (!settings.mockMode && homeOf(settings) !== null) void planeAlert.refreshIfDue();
     if (wantsPoll(deps.now())) await poll();
     const active = deps.now() < activeUntil;
     schedule(active ? Math.min(pollEveryMs(), IDLE_TICK_MS) : IDLE_TICK_MS);
   }
 
-  function build(now: number, mock: boolean): OverheadPayload {
+  /**
+   * Notes which notable aircraft are within the notable area, and raises the
+   * event for one that has just come in (once, until it has been away for
+   * NOTABLE_FORGET_MS).
+   */
+  function noteNotable(planes: readonly OverheadAircraft[], now: number, seen: Map<string, { since: number; lastInside: number }>, announce: boolean): void {
+    for (const plane of planes) {
+      if (plane.notable === null || plane.distanceNm > settings.notableRadiusNm) continue;
+      const known = seen.get(plane.hex);
+      if (known) {
+        known.lastInside = now;
+        continue;
+      }
+      seen.set(plane.hex, { since: now, lastInside: now });
+      if (!announce) continue;
+      try {
+        host.emit(NOTABLE_EVENT, {
+          hex: plane.hex,
+          operator: plane.notable.operator,
+          category: plane.notable.category,
+          registration: plane.notable.registration ?? plane.registration,
+          type: plane.notable.type ?? plane.typeName,
+          distanceNm: Math.round(plane.distanceNm * 10) / 10,
+          at: now,
+        });
+      } catch (error) {
+        log(`[overhead] could not announce ${plane.hex}: ${String(error)}`);
+      }
+      log(`[overhead] notable: ${plane.notable.operator} (${plane.hex}) ${plane.distanceNm.toFixed(1)} nm away`);
+    }
+    for (const [hex, entry] of seen) if (now - entry.lastInside > NOTABLE_FORGET_MS) seen.delete(hex);
+  }
+
+  /** Asks hexdb for what the board needs first: its aircraft's routes, then their airports, then the nearest others' routes. */
+  function wantEnrichment(planes: readonly OverheadAircraft[], now: number, into: Enricher): void {
+    const flying = planes.filter((plane) => !plane.onGround);
+    const onBoard = board(flying, settings, now).map((entry) => entry.aircraft);
+    const boardHexes = new Set(onBoard.map((plane) => plane.hex));
+    const others = flying.filter((plane) => !boardHexes.has(plane.hex)).sort((a, b) => a.distanceNm - b.distanceNm).slice(0, ROUTES_BEYOND_BOARD);
+    const routeKeys = [...onBoard, ...others].map((plane) => (splitCallsign(plane.callsign) ? (plane.callsign as string) : '')).filter((key) => key !== '');
+    into.want('aircraft', onBoard.map((plane) => plane.hex));
+    into.want('route', routeKeys);
+    const airports = new Set<string>([settings.homeAirport]);
+    for (const plane of planes) {
+      if (plane.route) {
+        airports.add(plane.route.origin.icao);
+        airports.add(plane.route.destination.icao);
+      }
+    }
+    into.want('airport', [...airports]);
+  }
+
+  function build(now: number, mock: boolean, active: boolean): OverheadPayload {
     const home = homeOf(settings);
     let tracked: TrackedAircraft[] = [];
     let payloadSource = source;
@@ -222,7 +311,20 @@ export function createOverheadPlugin(host: PluginHost, deps: PluginDeps, version
     } else if (home !== null) {
       tracked = tracker.current(now);
     }
-    const aircraft = home === null ? [] : tracked.map((plane) => baseAircraft(plane, home)).filter((plane) => plane.distanceNm <= settings.radiusNm);
+    const lookups = mock ? mockEnricher : enricher;
+    const lists = mock ? mockPlaneAlert : planeAlert;
+    const seen = mock ? mockNotableSeen : notableSeen;
+    const all = home === null ? [] : tracked.map((plane) => decorate(baseAircraft(plane, home), lookups, lists, settings.homeAirport));
+    if (mock) noteNotable(all, now, seen, false);
+    const aircraft = all.filter((plane) => plane.distanceNm <= settings.radiusNm || (plane.notable !== null && plane.distanceNm <= settings.notableRadiusNm));
+    if (active && home !== null) wantEnrichment(aircraft, now, lookups);
+    const byHex = new Map(aircraft.map((plane) => [plane.hex, plane]));
+    const notable: NotableSighting[] = [];
+    for (const [hex, entry] of seen) {
+      const plane = byHex.get(hex);
+      if (plane?.notable && plane.distanceNm <= settings.notableRadiusNm) notable.push({ hex, info: plane.notable, since: entry.since });
+    }
+    notable.sort((a, b) => (byHex.get(a.hex)?.distanceNm ?? 0) - (byHex.get(b.hex)?.distanceNm ?? 0));
     return {
       version: PAYLOAD_VERSION,
       generatedAt: now,
@@ -232,7 +334,7 @@ export function createOverheadPlugin(host: PluginHost, deps: PluginDeps, version
       home,
       settings,
       aircraft,
-      notable: [],
+      notable,
       providers: chain.status(),
     };
   }
@@ -240,7 +342,8 @@ export function createOverheadPlugin(host: PluginHost, deps: PluginDeps, version
   function handleOverhead(request: PluginRequest): PluginReply {
     const now = deps.now();
     const mock = settings.mockMode || request.query['mock'] === '1';
-    if (request.query['active'] !== '0') {
+    const active = request.query['active'] !== '0';
+    if (active) {
       const wasActive = now < activeUntil;
       activeUntil = now + ACTIVE_LEASE_MS;
       // The screensaver just came up: ask now rather than at the next tick.
@@ -248,7 +351,7 @@ export function createOverheadPlugin(host: PluginHost, deps: PluginDeps, version
         void tick();
       }
     }
-    return reply(200, build(now, mock));
+    return reply(200, build(now, mock, active));
   }
 
   function handleConfig(request: PluginRequest): PluginReply {
@@ -274,8 +377,8 @@ export function createOverheadPlugin(host: PluginHost, deps: PluginDeps, version
     onLoad(values) {
       native = isRecord(values) ? { ...values } : {};
       apply();
-      reconcile()
-        .catch((error: unknown) => log(`[overhead] reading saved settings failed: ${String(error)}`))
+      Promise.all([reconcile(), enricher.load(), planeAlert.load()])
+        .catch((error: unknown) => log(`[overhead] reading what was saved failed: ${String(error)}`))
         .finally(() => {
           resolveReady();
           schedule(0);
@@ -286,6 +389,8 @@ export function createOverheadPlugin(host: PluginHost, deps: PluginDeps, version
       unloaded = true;
       if (timer !== null) deps.clearTimeout(timer);
       timer = null;
+      enricher.close();
+      mockEnricher.close();
       kv.close();
     },
     onEvent(event) {

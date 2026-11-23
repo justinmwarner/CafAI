@@ -48,6 +48,8 @@ export function chooseLeg(codes: readonly string[], homeAirport: string, heading
 /** The place an airport's name stands for: "Denver" for "Denver International Airport". */
 export function placeName(airportName: string): string {
   const stripped = airportName
+    // "Minneapolis-Saint Paul International Airport (Wold-Chamberlain Field)": the field's own name goes first.
+    .replace(/\s*\([^)]*\)\s*$/, '')
     .replace(/\s+(international\s+|regional\s+|municipal\s+|county\s+)*(airport|airfield|aerodrome|air\s+base|airpark|airstrip)$/i, '')
     .trim();
   return stripped === '' ? airportName : stripped;
