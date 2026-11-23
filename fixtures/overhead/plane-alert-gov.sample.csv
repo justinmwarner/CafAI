@@ -1,0 +1,13 @@
+$ICAO,$Registration,$Operator,$Type,$ICAO Type,#CMPG,$Tag 1,$#Tag 2,$#Tag 3,Category,$#Link
+A001DE,N1VA,Virginia Department of Aviation,Beechcraft Super King Air 350,B350,Gov,Bizjet,Must Be Nice,Sic Semper Tyrannis,Governments,https://doav.virginia.gov/
+A006AF,N100WG,Total Helicopters Unlimited (DOJ),Bell 429 GlobalRanger,B429,Gov,US Dept Of Justice,Eye In The Sky,Surveillance,Oxcart,https://www.justice.gov
+A00D57,N102NJ,New Jersey Forest Fire Service,Bell 206B Jet Ranger,B06,Gov,Firebird,Air Attack,Wildfire,Aerial Firefighter,https://www.nj.gov/dep/parksandforests/fire
+A0110E,N103NJ,New Jersey Forest Fire Service,Bell 206B Jet Ranger,B06,Gov,Firebird,Air Attack,Wildfire,Aerial Firefighter,https://www.nj.gov/dep/parksandforests/fire
+A0187C,N105NJ,New Jersey Forest Fire Service,Bell UH-1H Iroquois,UH1,Gov,Firebird,Air Attack,Wildfire,Aerial Firefighter,https://www.nj.gov/dep/parksandforests/fire
+A01C33,N106NJ,New Jersey Forest Fire Service,Bell UH-1H Iroquois,UH1,Gov,Firebird,Air Attack,Wildfire,Aerial Firefighter,https://www.nj.gov/dep/parksandforests/fire
+A022E9,N108F,Department of Homeland Security,King Air 350CER,B350,Gov,Eye In The Sky,Surveillance,Spyplane,Oxcart,https://w.wiki/3fTM
+A03F47,N115FD,Sacramento Metropolitan Fire District,Bell UH-1H Iroquois,UH1,Gov,Flying Fire Extinguisher,Air Attack,Wildfire,Aerial Firefighter,https://metrofire.ca.gov
+A03F75,N115H,Department of Homeland Security,King Air 350CER,B350,Gov,Eye In The Sky,Surveillance,Spyplane,Oxcart,https://w.wiki/3fTM
+A042FE,N116FD,Sacramento Metropolitan Fire District,Bell UH-1H Iroquois,UH1,Gov,Flying Fire Extinguisher,Air Attack,Wildfire,Aerial Firefighter,https://metrofire.ca.gov
+A0441D,N116SR,US Department of Energy,Eurocopter EC145,EC45,Gov,mmm Neutrons,Nuclear,Geiger,Nuclear,https://www.energy.gov/national-security-safety/emergency-response
+A047D4,N117SR,US Department of Energy,Eurocopter EC145,EC45,Gov,mmm Neutrons,Nuclear,Geiger,Nuclear,https://www.energy.gov/national-security-safety/emergency-response
