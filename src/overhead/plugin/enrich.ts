@@ -246,13 +246,14 @@ export function createEnricher(deps: Pick<PluginDeps, 'fetch' | 'now' | 'setTime
       const record = cached<RouteRecord>('route', callsign);
       const codes = record ? parseRoute(record.raw) : null;
       if (record === null || codes === null) return null;
-      const home = end(homeAirport);
-      let headingHome: boolean | null = null;
-      if (trackDeg !== null && home.lat !== null && home.lon !== null) {
-        const off = Math.abs(((bearingDeg(position, { lat: home.lat, lon: home.lon }) - trackDeg + 540) % 360) - 180);
-        headingHome = off < 90;
-      }
-      const [from, to] = chooseLeg(codes, homeAirport, headingHome);
+      /** Degrees between the aircraft's track and the way to an airport; null when either is unknown. */
+      const offTrack = (icao: string): number | null => {
+        const airport = end(icao);
+        if (trackDeg === null || airport.lat === null || airport.lon === null) return null;
+        return Math.abs(((bearingDeg(position, { lat: airport.lat, lon: airport.lon }) - trackDeg + 540) % 360) - 180);
+      };
+      const offHome = offTrack(homeAirport);
+      const [from, to] = chooseLeg(codes, homeAirport, offHome === null ? null : offHome < 90, offTrack);
       return { raw: record.raw, origin: end(from), destination: end(to), updatedAt: record.updatedAt };
     },
     aircraft: (hex) => cached<AircraftRecord>('aircraft', hex),

@@ -54,7 +54,10 @@ describe('hexdb routes', () => {
     expect(chooseLeg(codes, 'KORD', true)).toEqual(['KDCA', 'KORD']);
     expect(chooseLeg(codes, 'KORD', false)).toEqual(['KORD', 'KDCA']);
     expect(chooseLeg(codes, 'KORD', null)).toEqual(['KORD', 'KDCA']);
-    expect(chooseLeg(['KPHL', 'KBDL', 'KPHL'], 'KORD', true)).toEqual(['KPHL', 'KPHL']);
+    // Away from home (AAL874's KCLT-KMDT-KCLT): the leg it points at, else the first; never an airport to itself.
+    expect(chooseLeg(['KCLT', 'KMDT', 'KCLT'], 'KORD', null)).toEqual(['KCLT', 'KMDT']);
+    expect(chooseLeg(['KCLT', 'KMDT', 'KCLT'], 'KORD', null, (icao) => (icao === 'KCLT' ? 10 : 150))).toEqual(['KMDT', 'KCLT']);
+    expect(chooseLeg(['KCLT', 'KMDT', 'KCLT'], 'KORD', null, (icao) => (icao === 'KMDT' ? 5 : 170))).toEqual(['KCLT', 'KMDT']);
     expect(chooseLeg(['KSFO', 'KORD'], 'KORD', false)).toEqual(['KSFO', 'KORD']);
   });
 

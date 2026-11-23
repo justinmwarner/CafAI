@@ -2,9 +2,12 @@
  * Settings > Display (D233): how CafAI looks (AppearanceSection.tsx: Mode,
  * Tint, Custom hue), its units (UnitsCard.tsx: the temperatures and the
  * clock), what shot cards show (ShotCardsCard.tsx: the TDS cell, D246) and
- * the screensaver (ScreensaverSection.tsx, D225, D247). Appearance has the
- * first column of a wide pane to itself; the rest share the second.
+ * the screensaver (ScreensaverSection.tsx, D225, D247), then Overhead, the
+ * plane-spotting screensaver (src/overhead/ui/OverheadSection.tsx, docs/overhead/).
+ * Appearance has the first column of a wide pane to itself; the rest share
+ * the second.
  */
+import { OverheadSection } from '../../../overhead/ui/OverheadSection.tsx';
 import { AppearanceSection } from '../AppearanceSection.tsx';
 import { CardColumn, CardColumns } from '../groupLayout.tsx';
 import { ScreensaverSection } from '../ScreensaverSection.tsx';
@@ -21,6 +24,7 @@ export function DisplayGroup() {
         <UnitsCard />
         <ShotCardsCard />
         <ScreensaverSection />
+        <OverheadSection />
       </CardColumn>
     </CardColumns>
   );

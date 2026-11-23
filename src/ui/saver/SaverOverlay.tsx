@@ -29,6 +29,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import Box from '@mui/material/Box';
 import Portal from '@mui/material/Portal';
 import { useAppearance, useCoach, useScreensaverSetting, useServices, useTelemetry } from '../../app/services.tsx';
+import { useOverheadTakesOver } from '../../overhead/ui/availability.ts';
 import { paletteFor } from '../appearance.ts';
 import { useMachineCommands } from '../machine/useMachineCommands.ts';
 import type { Palette } from '../palette.ts';
@@ -113,7 +114,9 @@ export function SaverOverlay({ preview = saverPreview, saverFor = canvasSaver }:
   const asleep = useTelemetry(confirmedAsleep);
   const previewed = usePreviewedSaver(preview);
   const appearance = useAppearance();
-  const eligible = setting.on && host.insideDecaid && asleep;
+  // Overhead, when on, takes the screensaver's place (docs/overhead/DECISIONS.md, O17).
+  const overheadTakesOver = useOverheadTakesOver();
+  const eligible = setting.on && host.insideDecaid && asleep && !overheadTakesOver;
   // Settings' wait and brightness (D247): the wait is read whenever it changes; the brightness as each showing begins.
   const idleMs = saverIdleMs(setting);
   const brightness = useRef(saverBrightness(setting));

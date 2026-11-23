@@ -26,23 +26,35 @@ export function parseRoute(raw: string): string[] | null {
 }
 
 /**
- * The leg this flight is on: the only leg, else the one touching the home
+ * The leg this flight is on. The only leg; else the one touching the home
  * airport (inbound when `headingHome`, outbound when not, the first when
- * unknown), else the whole route's ends.
+ * unknown); else, for a multi-leg route elsewhere ("KCLT-KMDT-KCLT"), the
+ * leg whose destination the aircraft points at most nearly (`offTrack`
+ * answers how many degrees off its track an airport lies, or null when it
+ * cannot tell); else the first leg. Never an airport to itself.
  */
-export function chooseLeg(codes: readonly string[], homeAirport: string, headingHome: boolean | null): [string, string] {
-  const first = codes[0] as string;
-  const last = codes[codes.length - 1] as string;
-  if (codes.length === 2) return [first, last];
+export function chooseLeg(codes: readonly string[], homeAirport: string, headingHome: boolean | null, offTrack: (icao: string) => number | null = () => null): [string, string] {
   const legs: Array<[string, string]> = [];
   for (let i = 0; i + 1 < codes.length; i += 1) legs.push([codes[i] as string, codes[i + 1] as string]);
+  if (legs.length === 1) return legs[0] as [string, string];
   const touching = legs.filter(([from, to]) => from === homeAirport || to === homeAirport);
-  if (touching.length === 0) return [first, last];
-  if (headingHome !== null) {
-    const match = touching.find(([from, to]) => (headingHome ? to === homeAirport : from === homeAirport));
-    if (match) return match;
+  if (touching.length > 0) {
+    if (headingHome !== null) {
+      const match = touching.find(([from, to]) => (headingHome ? to === homeAirport : from === homeAirport));
+      if (match) return match;
+    }
+    return touching[0] as [string, string];
   }
-  return touching[0] as [string, string];
+  let best: [string, string] | null = null;
+  let bestOff = Number.POSITIVE_INFINITY;
+  for (const leg of legs) {
+    const off = offTrack(leg[1]);
+    if (off !== null && off < bestOff) {
+      best = leg;
+      bestOff = off;
+    }
+  }
+  return best ?? (legs[0] as [string, string]);
 }
 
 /** The place an airport's name stands for: "Denver" for "Denver International Airport". */

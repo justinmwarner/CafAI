@@ -4,6 +4,8 @@ import { DEFAULT_SETTINGS, inNightWindow, readSettings, SETTING_SPECS, settingsV
 describe('the plugin’s settings', () => {
   it('has the brief’s defaults, and no home', () => {
     expect(DEFAULT_SETTINGS).toMatchObject({
+      screensaverOn: true,
+      idleMinutes: 3,
       homeLat: null,
       homeLon: null,
       radiusNm: 25,

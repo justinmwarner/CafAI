@@ -21,6 +21,7 @@ import type { SpendService } from '../spend/types.ts';
 import type { AppearanceStore } from './appearance.ts';
 import type { DisplayPrefsStore } from './displayPrefs.ts';
 import type { DrinkScreensStore } from './drinkScreens.ts';
+import type { OverheadClient } from '../overhead/ui/client.ts';
 import type { SaverScreen } from './saverScreen.ts';
 import type { ScreensaverSettingStore } from './screensaverSetting.ts';
 import type { TemperatureUnitStore } from './temperatureUnit.ts';
@@ -56,6 +57,12 @@ export interface Services {
    * display it is; absent elsewhere, and in fakes and previews.
    */
   saverScreen?: SaverScreen;
+  /**
+   * The Overhead plugin's endpoints on Decaid (docs/overhead/): the
+   * plane-spotting screensaver's only door to its data. Absent in fakes and
+   * previews, and then Overhead is off.
+   */
+  overhead?: OverheadClient;
   /**
    * Each drink's scene and whether its view goes back by itself (D217,
    * D221), as live state. Optional: previews leave it out, and then every

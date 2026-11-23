@@ -35,6 +35,10 @@
  *   ?mockSlowWorkflow=N     the workflow PUT answers after N ms; =503 answers
  *                           503 after 30 s without applying the change, as a
  *                           request that timed out in Decaid's queue does
+ *   ?mockOverhead=live      the Overhead plugin (src/overhead/plugin) runs in
+ *                           the page on its recorded data, so Overhead is on
+ *                           (scenarios in mock/overhead.ts: live, notable,
+ *                           setup, stale, empty, loading). Off by default.
  *   ?mockDrift=1            machine frames (the socket and GET /machine/state)
  *                           carry groupTemperature as groupTemp, as from a
  *                           Decaid that renamed it, so CafAI's drift log and
@@ -54,6 +58,7 @@ import { createDecaidMock, DECAID_ORIGIN_PATTERN, type MockHandler, type CreateD
 import type { MockDecaid } from './decaid/state.ts';
 import type { ShotPlayer } from './decaid/shotPlayer.ts';
 import { mockOptionsFromUrl } from './decaid/urlOptions.ts';
+import { createOverheadMockHandlers, overheadScenarioFromUrl } from './overhead.ts';
 
 export interface CafaiMockHandle {
   state: MockDecaid;
@@ -116,7 +121,9 @@ export async function startMockWorker(options: StartMockWorkerOptions = {}): Pro
   const fromUrl = mockOptionsFromUrl(window.location.search);
   const mock = createDecaidMock({ ...fromUrl, ...options.mock, speed: options.speed ?? options.mock?.speed ?? fromUrl.speed ?? 1 });
   let away = false;
-  const worker = setupWorker(...absenceHandlers(() => away), ...mock.handlers, ...(options.extraHandlers ?? []), ...mock.fallback);
+  const overheadScenario = overheadScenarioFromUrl(window.location.search);
+  const overhead = overheadScenario ? createOverheadMockHandlers(overheadScenario) : [];
+  const worker = setupWorker(...absenceHandlers(() => away), ...overhead, ...mock.handlers, ...(options.extraHandlers ?? []), ...mock.fallback);
   await worker.start({
     serviceWorker: { url: './mockServiceWorker.js' },
     onUnhandledRequest: 'bypass',

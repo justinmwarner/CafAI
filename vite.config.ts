@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { defineConfig, type Plugin } from 'vite';
+import { build, defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import legacy from '@vitejs/plugin-legacy';
 
@@ -43,6 +43,49 @@ function mswWorkerInMockMode(mode: string): Plugin {
     },
     generateBundle() {
       this.emitFile({ type: 'asset', fileName, source: source() });
+    },
+  };
+}
+
+// MapLibre 6 loads its worker from a second file, written for ES2022
+// (docs/overhead/DECISIONS.md, O7). The skin is one bundle for Chromium 91,
+// so the worker is compiled here for chrome91 with the core-js polyfills it
+// needs (src/overhead/ui/maplibreWorkerEntry.ts) and inlined as a string,
+// which src/overhead/ui/maplibreSetup.ts hands MapLibre as a blob: URL.
+function maplibreWorkerInline(): Plugin {
+  const id = 'virtual:maplibre-worker-source';
+  const resolved = `\0${id}`;
+  let compiled: Promise<string> | null = null;
+  const compile = async () => {
+    const result = await build({
+      configFile: false,
+      logLevel: 'warn',
+      publicDir: false,
+      build: {
+        write: false,
+        target: 'chrome91',
+        minify: true,
+        sourcemap: false,
+        lib: {
+          entry: fileURLToPath(new URL('./src/overhead/ui/maplibreWorkerEntry.ts', import.meta.url)),
+          formats: ['iife'],
+          name: 'MaplibreWorker',
+          fileName: () => 'maplibre-worker.js',
+        },
+      },
+    });
+    const outputs = (Array.isArray(result) ? result : [result]) as Array<{ output: Array<{ type: string; code?: string }> }>;
+    const chunk = outputs.flatMap((output) => output.output).find((file) => file.type === 'chunk');
+    if (!chunk?.code) throw new Error('The MapLibre worker did not build.');
+    return chunk.code;
+  };
+  return {
+    name: 'cafai:maplibre-worker-inline',
+    resolveId: (source) => (source === id ? resolved : null),
+    async load(loadId) {
+      if (loadId !== resolved) return null;
+      compiled ??= compile();
+      return `export default ${JSON.stringify(await compiled)};`;
     },
   };
 }
@@ -91,6 +134,7 @@ export default defineConfig(({ mode }) => ({
       modernTargets: ['chrome >= 91'],
     }),
     mswWorkerInMockMode(mode),
+    maplibreWorkerInline(),
     assertChrome91Target(),
   ],
   define: {

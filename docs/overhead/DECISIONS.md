@@ -119,3 +119,36 @@ open, with the reason. Evidence is in [DISCOVERY.md](DISCOVERY.md). The root
   304 and no parsing. A download that fails, or a file that no longer has
   `$ICAO` and `$Operator` columns, keeps the last good copy and is tried
   again an hour later.
+
+- **O17. Overhead takes the classic screensaver's place while it is on.**
+  CafAI already has a screensaver (D223-D227) that shows only while the
+  machine sleeps and wakes the machine on a tap. Overhead follows the brief
+  instead: it comes after 3 idle minutes (its own setting) whenever the
+  machine is idle, asleep or not connected, and a tap only closes it. Two
+  screensavers that could both want the screen would fight over it, so while
+  Overhead is on (its plugin answers and its `ScreensaverOn` setting is on)
+  the classic one stands down: one line in `SaverOverlay.tsx`
+  (`useOverheadTakesOver`). Without the plugin, CafAI behaves exactly as
+  before. Like the classic one, with the machine asleep it holds the screen
+  on for 30 minutes and then lets it go (black), after which the plugin stops
+  asking anyone; awake, Decaid keeps the screen on and so does Overhead.
+  "Busy" is an allow-list: only `idle` and `sleeping` let it come.
+
+- **O18. The bundle grows by 1.7 MB.** MapLibre (1.1 MB) and its inlined
+  worker (0.5 MB) take the production bundle from 2.12 MB to 3.82 MB (gzip
+  691 kB to 1,167 kB). It is served to the tablet from the tablet itself.
+  Vite's "chunks larger than 2000 kB" warning was already printed before this
+  branch (2,119.83 kB on `main`); there is no new warning, and the limit was
+  left as it is.
+
+- **O19. The skin reaches the plugin through a service, so tests never do.**
+  `createServices` gives the app `services.overhead`, a client for the
+  plugin's endpoints on Decaid's origin; fakes and previews have none, and
+  Overhead is then off. Unit tests never call Decaid (CONTRIBUTING).
+
+- **O20. Mock builds run the real plugin.** `?mockOverhead=<scenario>`
+  (`mock/overhead.ts`) runs `src/overhead/plugin` in the page, in its own mock
+  mode, with a stand-in host: the screenshots and the UI are built on the
+  same code that runs in Decaid. Off by default, so the existing mock and e2e
+  runs see no Overhead at all. The stale, empty and loading scenarios shape
+  the plugin's answer in the mock handler; the rest are the plugin's own.

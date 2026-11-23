@@ -29,6 +29,7 @@ import { withCoachCredential } from './coachAccess.ts';
 import { createCoachEngine, type CoachEngine } from './engine/engine.ts';
 import { createDisplayPrefsStore } from './displayPrefs.ts';
 import { createDrinkScreensStore } from './drinkScreens.ts';
+import { createOverheadClient } from '../overhead/ui/client.ts';
 import { createSaverScreen } from './saverScreen.ts';
 import { createScreensaverSettingStore } from './screensaverSetting.ts';
 import { createTemperatureUnitStore } from './temperatureUnit.ts';
@@ -274,6 +275,8 @@ export async function createServices(win: Window, options: CreateServicesOptions
     drinkScreens,
     screensaver,
     saverScreen,
+    // Overhead's plugin, through Decaid (docs/overhead/): absent in fakes, so tests never call it.
+    overhead: createOverheadClient(decaid.httpOrigin),
     plugins,
     coachSource,
     coachSourceBackup,

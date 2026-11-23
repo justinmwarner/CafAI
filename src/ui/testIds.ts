@@ -244,6 +244,21 @@ export const TID = {
   wakeDialogDelete: 'wake-dialog-delete',
   /** The wake time dialog's am and pm on the 12-hour clock (D245). */
   wakeDialogHalf: (half: string) => `wake-dialog-${half}`,
+  // Overhead: the plane-spotting screensaver (src/overhead/ui, docs/overhead/) and its settings section
+  overhead: 'overhead',
+  overheadReady: 'overhead-ready',
+  overheadState: 'overhead-state',
+  overheadMap: 'overhead-map',
+  overheadBoard: 'overhead-board',
+  overheadRow: 'overhead-row',
+  overheadNotable: 'overhead-notable',
+  overheadStatus: 'overhead-status',
+  overheadGuard: 'overhead-guard',
+  overheadSection: 'overhead-section',
+  overheadSectionStatus: 'overhead-section-status',
+  overheadField: (key: string) => `overhead-field-${slug(key)}`,
+  overheadSave: 'overhead-save',
+  overheadPreview: 'overhead-preview',
   // Settings > Display > Screensaver, and the screensaver over the shell (D223-D227)
   saverSection: 'saver-section',
   saverOn: 'saver-on',

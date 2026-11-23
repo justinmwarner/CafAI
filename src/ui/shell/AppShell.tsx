@@ -61,6 +61,7 @@ import { dismissEngineWarning, engineWarning, isEngineWarningDismissed, readEngi
 import { watchSafeArea } from '../platform/safeArea.ts';
 import { useHeartbeatOnInteraction } from '../platform/useHeartbeatOnInteraction.ts';
 import { placeOf, type Route, type RouteName } from '../router.ts';
+import { OverheadOverlay } from '../../overhead/ui/OverheadOverlay.tsx';
 import { SaverOverlay } from '../saver/SaverOverlay.tsx';
 import { TID } from '../testIds.ts';
 import type { RunKind } from './bagSetup.ts';
@@ -726,6 +727,8 @@ function Shell({ route, onNavigate, children }: AppShellProps) {
       </Box>
       {/* Last: the screensaver, while the machine sleeps, over everything, the top bar included (D223). */}
       <SaverOverlay />
+      {/* Overhead, the plane-spotting screensaver, in its place when on (docs/overhead/). */}
+      <OverheadOverlay />
     </Box>
   );
 }

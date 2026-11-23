@@ -23,6 +23,10 @@ export const NOTABLE_EVENT = 'notable';
 export const MIN_POLL_SECONDS = 2;
 
 export interface OverheadSettings {
+  /** Overhead covers CafAI when idle, in place of the classic screensaver (DECISIONS O17). */
+  screensaverOn: boolean;
+  /** Minutes untouched, with the machine idle or asleep, before it comes up. */
+  idleMinutes: number;
   /** Home, where the list and the map centre on. Both null until set: the screensaver then asks for it. */
   homeLat: number | null;
   homeLon: number | null;
@@ -76,6 +80,8 @@ const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /** Every setting, in the order a form lists them. */
 export const SETTING_SPECS: readonly SettingSpec<keyof OverheadSettings>[] = [
+  { field: 'screensaverOn', key: 'ScreensaverOn', kind: 'boolean', label: 'Show Overhead when idle', description: "CafAI shows Overhead in place of its screensaver when nobody has touched the screen for a while and the machine is idle or asleep.", fallback: true },
+  { field: 'idleMinutes', key: 'IdleMinutes', kind: 'number', label: 'Start after', description: 'Minutes without a touch before Overhead comes up.', fallback: 3, min: 1, max: 60 },
   { field: 'homeLat', key: 'HomeLat', kind: 'number', label: 'Home latitude', description: 'Your home, in decimal degrees (41.97, for example). Overhead asks for it before it shows anything.', fallback: null, min: -90, max: 90 },
   { field: 'homeLon', key: 'HomeLon', kind: 'number', label: 'Home longitude', description: 'Your home, in decimal degrees (-87.90, for example; west is negative).', fallback: null, min: -180, max: 180 },
   { field: 'homeAirport', key: 'HomeAirport', kind: 'string', label: 'Home airport', description: 'The ICAO code of the airport arrivals and departures are told from.', fallback: 'KORD', pattern: /^[A-Z0-9]{3,4}$/ },
