@@ -133,7 +133,8 @@ export function OverheadScreen({ payload, error, now, palette, reducedMotion, wi
   const dataAge = payload.dataAt === null ? null : now - payload.dataAt;
   const stale = payload.stale || error !== null || dataAge === null || dataAge > STALE_AFTER_MS || now - payload.generatedAt > STALE_AFTER_MS;
   const planes: MapPlane[] = payload.aircraft.map((plane) => {
-    const at = stale ? { lat: plane.lat, lon: plane.lon } : positionAt(plane, now);
+    // Under reduced motion the planes step with each answer rather than glide between them.
+    const at = stale || reducedMotion ? { lat: plane.lat, lon: plane.lon } : positionAt(plane, now);
     return {
       hex: plane.hex,
       lat: at.lat,

@@ -7,7 +7,8 @@
 import { readPayload, type OverheadPayload } from '../shared/payload.ts';
 import { CONFIG_ENDPOINT, OVERHEAD_ENDPOINT, OVERHEAD_PLUGIN_ID } from '../shared/settings.ts';
 
-export const OVERHEAD_TIMEOUT_MS = 6_000;
+/** Longer than the plugin's wait for fresh positions as a showing starts (FIRST_ANSWER_WAIT_MS, 6 s). */
+export const OVERHEAD_TIMEOUT_MS = 10_000;
 
 export interface OverheadClient {
   /** The aircraft. `active`: the screensaver shows (the plugin polls for it); `mock`: the recorded replay. */

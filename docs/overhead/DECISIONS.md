@@ -57,9 +57,9 @@ open, with the reason. Evidence is in [DISCOVERY.md](DISCOVERY.md). The root
   one bundle (Decaid replaces skin files in place) that must run on Chromium
   91. So the build compiles the worker for Chromium 91 with the core-js
   polyfills it needs (`Array.prototype.at`, `Object.hasOwn`), embeds it in
-  the bundle, and hands MapLibre a `blob:` URL. Without WebGL 2 the map gives
-  way to a dark backdrop with the home marker drawn by the board, and the
-  board still works.
+  the bundle, and hands MapLibre a `blob:` URL. Without WebGL 2 the map's
+  half says so in a quiet line on the dark page, and the board works as
+  ever. Chromium 91 itself draws the map (DISCOVERY section 11).
 
 - **O9. Fixtures name no private person.** One `ownOp` in the captured
   responses named a private owner; it reads `PRIVATE OWNER (redacted)`. The
@@ -167,3 +167,15 @@ open, with the reason. Evidence is in [DISCOVERY.md](DISCOVERY.md). The root
   minute old, which would open on "Live data paused". The first request of a
   showing waits up to 6 s for a new poll before it answers; later ones answer
   at once.
+
+- **O23. One e2e helper waits for the chat to settle.** Three e2e tests
+  (`chat-first` "the card's numbers move with the machine…",
+  `verifier-fixes` "a profile loaded behind CafAI…", `machine-profile` "the
+  Profile line follows…") failed on this branch and passed on `main` in the
+  same container. A timeline taken in both builds was the same: after the
+  "Loaded … on the machine." notice the chat is idle for about 20 ms before
+  the coach's reply starts. `showStats` (e2e/helpers.ts) tapped Stats when it
+  saw the chat idle, and in that gap the reply then pushed the card off, as
+  D91 says it should. The bigger bundle moved the test's timing into the gap;
+  the app behaves the same. `showStats` now requires the chat to be idle
+  still 400 ms later. Nothing in the app changed for it.

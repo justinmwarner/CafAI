@@ -181,11 +181,15 @@ export function OverheadMap({ home, planes, highlight, style, palette, reducedMo
       attributionControl={{ compact: false, ...(style.attribution ? { customAttribution: style.attribution } : {}) }}
       style={{ width: '100%', height: '100%' }}
       onLoad={(event) => {
+        // In mock builds only: the map, for the Chromium 91 checks (docs/overhead/DISCOVERY.md, section 11).
+        if (import.meta.env.MODE === 'mock') (window as unknown as { __overheadMap?: unknown }).__overheadMap = event.target;
         const image = planeImage();
         if (image && !event.target.hasImage(PLANE_ICON)) event.target.addImage(PLANE_ICON, image, { sdf: true, pixelRatio: 2 });
         setLoaded(true);
       }}
       onError={(event) => {
+        // Said in the console (Decaid's WebView log on a tablet), so a map that fails on a device can be found (as D251 does for screensavers).
+        console.warn(`CafAI: Overhead's map: ${event.error instanceof Error ? event.error.message : String(event.error)}`);
         // A tile or two failing is normal on a shaky network; a map that never started is not.
         if (!event.target.loaded() && !event.target.isStyleLoaded()) setFailed(true);
       }}

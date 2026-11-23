@@ -286,3 +286,22 @@ The first sample, 1 s after Overhead came up, read "Live data paused": the
 plugin answered at once with its last once-a-minute check, 35 s old. Fixed
 after the run (DECISIONS O22); in the second run the board was live 8 s after
 it came up.
+
+## 11. Chromium 91
+
+Decent's oldest tablets run a Chromium 91 WebView. The mock build, with
+Overhead open (`?mockOverhead=notable&overheadPreview=1`), was loaded in
+Chromium 91.0.4469 (puppeteer 9's r869685, `tools/chrome91/`):
+
+| Check | Result |
+|---|---|
+| Page errors | none |
+| WebGL 2 | available |
+| The board, the notable card, the attribution | as in a current Chromium |
+| MapLibre's worker (compiled for Chromium 91, DECISIONS O7) | started (`self.worker` set inside it), and parsed the tiles |
+| MapLibre itself (`window.__overheadMap`, mock builds only) | `loaded()`, `isStyleLoaded()` and `areTilesLoaded()` all true, 400 features drawn |
+| The map's pixels, read back with `readPixels` after a render | 2,357 of 2,500 pixels at the centre lit, mean 88; current Chromium: 2,357, mean 87 |
+
+Old headless Chromium's screenshots show the map's canvas blank, though a
+plain WebGL 2 canvas shows in them: the pixels above, not those screenshots,
+are the evidence that the map draws.

@@ -141,8 +141,16 @@ export function profileLine(page: Page): Locator {
  * Anything that lands in the chat after it takes it away again, so this first
  * waits for the coach to be done.
  */
+/** How long the chat must stay idle before Stats is tapped (showStats). */
+const STATS_SETTLE_MS = 400;
+
 export async function showStats(page: Page): Promise<Locator> {
-  await expect(page.getByTestId(TID.chat), 'the coach is done').not.toHaveAttribute('data-busy');
+  const chat = page.getByTestId(TID.chat);
+  await expect(chat, 'the coach is done').not.toHaveAttribute('data-busy');
+  // A notice ("Loaded … on the machine.") lands with the chat idle for about 20 ms before the coach's
+  // reply starts; Stats tapped in that gap is pushed off by the reply (D91). Idle must hold a moment.
+  await page.waitForTimeout(STATS_SETTLE_MS);
+  await expect(chat, 'the coach is still done').not.toHaveAttribute('data-busy');
   await page.getByTestId(TID.statsPrompt).click();
   await expect(statsCard(page)).toBeVisible();
   return statsCard(page);
