@@ -164,12 +164,23 @@ a person).
 | `GET /api/v1/airport/icao/KORD` | 200 | 0.28 s | `*` | `{"country_code": "US", "region_name": "Illinois", "iata": "ORD", "icao": "KORD", "airport": "Chicago O'Hare International Airport", "latitude": 41.9786, "longitude": -87.9047}` |
 | `GET /api/v1/airport/icao/ZZZZ` | 404 | 0.27 s | none | `{"status":"404","error":"Airport not found."}` |
 
+- A second pass, one request a second, over every airline callsign and a
+  dozen addresses in the adsb.fi fixture (`fixtures/overhead/hexdb-batch-ord.json`):
+  27 of 40 routes found, and **26 of the 27 last updated between 2017 and
+  2021** (only ETD93C's, May 2025, is recent). Several are multi-leg
+  round trips: `AAL1002` is `KORD-KDCA-KORD`, `AAL421` `KPHL-KBDL-KPHL`.
+  10 of 12 aircraft found; `RegisteredOwners` is often the brand flown for
+  ("United Express", "American Eagle") and `Type` a variant ("A320 232",
+  "EMB-175 LR"). More airports (`hexdb-airport-*.json`): KPWK (Chicago
+  Executive) is not in hexdb (404); names are the airport's
+  ("George Bush Intercontinental Airport"), with no city field.
 - No rate-limit headers; `cache-control: max-age=14400`. The plugin keeps to
   one request a second as the brief asks.
 - Routes carry `updatetime` (Unix seconds). It is kept, so a route older than
   a year can be shown as such, and none is ever treated as authoritative.
-- `route` is `ORIG-DEST`; multi-leg routes would have more dashes, so the plugin
-  takes the first and last code.
+- `route` is ICAO codes joined by dashes, two or more. For a multi-leg route
+  the plugin picks the leg that touches the home airport, by whether the
+  aircraft is heading for it (DECISIONS O5).
 - hexdb sends `Access-Control-Allow-Origin: *` on its 200s (not its 404s),
   unlike the brief's assumption; the skin still never calls it.
 

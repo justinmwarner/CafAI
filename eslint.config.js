@@ -30,6 +30,7 @@ export default defineConfig(
     ignores: [
       'dist/**',
       'dist-mock/**',
+      'dist-plugin/**',
       'dist-screenshots/**',
       '.verify/**',
       // Git worktrees of agents working beside this tree: another checkout, linted there.

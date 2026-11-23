@@ -1,0 +1,449 @@
+{
+ "capturedAt": "2026-11-23",
+ "source": "https://hexdb.io/api/v1/route/icao/{callsign} and /api/v1/aircraft/{hex}, one request a second",
+ "routes": {
+  "AAL1002": {
+   "status": 200,
+   "body": {
+    "flight": "AAL1002",
+    "route": "KORD-KDCA-KORD",
+    "updatetime": 1575829755
+   }
+  },
+  "AAL421": {
+   "status": 200,
+   "body": {
+    "flight": "AAL421",
+    "route": "KPHL-KBDL-KPHL",
+    "updatetime": 1575829755
+   }
+  },
+  "AAL874": {
+   "status": 200,
+   "body": {
+    "flight": "AAL874",
+    "route": "KCLT-KMDT-KCLT",
+    "updatetime": 1575829755
+   }
+  },
+  "DAL2231": {
+   "status": 200,
+   "body": {
+    "flight": "DAL2231",
+    "route": "KDTW-KLGA",
+    "updatetime": 1557342695
+   }
+  },
+  "DAL2251": {
+   "status": 200,
+   "body": {
+    "flight": "DAL2251",
+    "route": "KATL-KCLT-KATL",
+    "updatetime": 1557342695
+   }
+  },
+  "ENY4001": {
+   "status": 200,
+   "body": {
+    "flight": "ENY4001",
+    "route": "KDFW-KLCH-KDFW",
+    "updatetime": 1546188423
+   }
+  },
+  "ETD93C": {
+   "status": 200,
+   "body": {
+    "flight": "ETD93C",
+    "route": "OMAA-KORD",
+    "updatetime": 1747593022
+   }
+  },
+  "GJS4551": {
+   "status": 404,
+   "body": {
+    "status": "404",
+    "error": "Route not found."
+   }
+  },
+  "GJS4569": {
+   "status": 404,
+   "body": {
+    "status": "404",
+    "error": "Route not found."
+   }
+  },
+  "JBU919": {
+   "status": 404,
+   "body": {
+    "status": "404",
+    "error": "Route not found."
+   }
+  },
+  "LXJ658": {
+   "status": 404,
+   "body": {
+    "status": "404",
+    "error": "Route not found."
+   }
+  },
+  "SKW3841": {
+   "status": 200,
+   "body": {
+    "flight": "SKW3841",
+    "route": "KSBN-KDTW",
+    "updatetime": 1557342695
+   }
+  },
+  "SKW4646": {
+   "status": 404,
+   "body": {
+    "status": "404",
+    "error": "Route not found."
+   }
+  },
+  "SKW4742": {
+   "status": 200,
+   "body": {
+    "flight": "SKW4742",
+    "route": "KATL-KGTR",
+    "updatetime": 1557342695
+   }
+  },
+  "SKW4803": {
+   "status": 200,
+   "body": {
+    "flight": "SKW4803",
+    "route": "KMSP-KIAD",
+    "updatetime": 1557342695
+   }
+  },
+  "SKW4963": {
+   "status": 404,
+   "body": {
+    "status": "404",
+    "error": "Route not found."
+   }
+  },
+  "SKW5308": {
+   "status": 404,
+   "body": {
+    "status": "404",
+    "error": "Route not found."
+   }
+  },
+  "SKW5449": {
+   "status": 200,
+   "body": {
+    "flight": "SKW5449",
+    "route": "KSFO-KBOI",
+    "updatetime": 1542484457
+   }
+  },
+  "SKW5524": {
+   "status": 404,
+   "body": {
+    "status": "404",
+    "error": "Route not found."
+   }
+  },
+  "SKW553U": {
+   "status": 404,
+   "body": {
+    "status": "404",
+    "error": "Route not found."
+   }
+  },
+  "SKW5570": {
+   "status": 404,
+   "body": {
+    "status": "404",
+    "error": "Route not found."
+   }
+  },
+  "SKW5591": {
+   "status": 200,
+   "body": {
+    "flight": "SKW5591",
+    "route": "KPSC-KDEN",
+    "updatetime": 1512335432
+   }
+  },
+  "SKW5611": {
+   "status": 200,
+   "body": {
+    "flight": "SKW5611",
+    "route": "KASE-KLAX",
+    "updatetime": 1542845291
+   }
+  },
+  "SKW5656": {
+   "status": 200,
+   "body": {
+    "flight": "SKW5656",
+    "route": "KRNO-KSFO",
+    "updatetime": 1542795134
+   }
+  },
+  "SKW5699": {
+   "status": 200,
+   "body": {
+    "flight": "SKW5699",
+    "route": "KFAT-KDEN",
+    "updatetime": 1542484457
+   }
+  },
+  "SKW6058": {
+   "status": 404,
+   "body": {
+    "status": "404",
+    "error": "Route not found."
+   }
+  },
+  "SKW6249": {
+   "status": 404,
+   "body": {
+    "status": "404",
+    "error": "Route not found."
+   }
+  },
+  "UAL1217": {
+   "status": 200,
+   "body": {
+    "flight": "UAL1217",
+    "route": "KEWR-KMIA",
+    "updatetime": 1573570530
+   }
+  },
+  "UAL1273": {
+   "status": 200,
+   "body": {
+    "flight": "UAL1273",
+    "route": "KSFO-PHOG",
+    "updatetime": 1545595432
+   }
+  },
+  "UAL1358": {
+   "status": 404,
+   "body": {
+    "status": "404",
+    "error": "Route not found."
+   }
+  },
+  "UAL1414": {
+   "status": 200,
+   "body": {
+    "flight": "UAL1414",
+    "route": "KMFE-KIAH",
+    "updatetime": 1561902735
+   }
+  },
+  "UAL1486": {
+   "status": 200,
+   "body": {
+    "flight": "UAL1486",
+    "route": "KEWR-MDPP",
+    "updatetime": 1546188423
+   }
+  },
+  "UAL2232": {
+   "status": 200,
+   "body": {
+    "flight": "UAL2232",
+    "route": "KIAD-KFLL",
+    "updatetime": 1532859197
+   }
+  },
+  "UAL2361": {
+   "status": 200,
+   "body": {
+    "flight": "UAL2361",
+    "route": "KLAX-KIAH",
+    "updatetime": 1556723175
+   }
+  },
+  "UAL2389": {
+   "status": 200,
+   "body": {
+    "flight": "UAL2389",
+    "route": "KMCO-KIAD",
+    "updatetime": 1552218047
+   }
+  },
+  "UAL2428": {
+   "status": 200,
+   "body": {
+    "flight": "UAL2428",
+    "route": "MMSD-KIAH",
+    "updatetime": 1545595432
+   }
+  },
+  "UAL426": {
+   "status": 200,
+   "body": {
+    "flight": "UAL426",
+    "route": "KEWR-KORD",
+    "updatetime": 1546188423
+   }
+  },
+  "UAL482": {
+   "status": 200,
+   "body": {
+    "flight": "UAL482",
+    "route": "KORD-KJAX",
+    "updatetime": 1620858964
+   }
+  },
+  "UAL530": {
+   "status": 200,
+   "body": {
+    "flight": "UAL530",
+    "route": "KIAH-KSAT",
+    "updatetime": 1552218047
+   }
+  },
+  "UAL539": {
+   "status": 200,
+   "body": {
+    "flight": "UAL539",
+    "route": "KSFO-PHOG",
+    "updatetime": 1552218047
+   }
+  }
+ },
+ "aircraft": {
+  "a12ac7": {
+   "status": 404,
+   "body": {
+    "status": "404",
+    "error": "Aircraft not found."
+   }
+  },
+  "a56661": {
+   "status": 200,
+   "body": {
+    "ModeS": "A56661",
+    "Registration": "N447UA",
+    "Manufacturer": "Airbus",
+    "ICAOTypeCode": "A320",
+    "Type": "A320 232",
+    "RegisteredOwners": "United Airlines",
+    "OperatorFlagCode": "UAL"
+   }
+  },
+  "a8430d": {
+   "status": 200,
+   "body": {
+    "ModeS": "A8430D",
+    "Registration": "N631SK",
+    "Manufacturer": "Bombardier",
+    "ICAOTypeCode": "CRJ7",
+    "Type": "CRJ 700 702ER NG",
+    "RegisteredOwners": "American Eagle",
+    "OperatorFlagCode": "SKW"
+   }
+  },
+  "adc9b6": {
+   "status": 200,
+   "body": {
+    "ModeS": "ADC9B6",
+    "Registration": "N988JT",
+    "Manufacturer": "Airbus",
+    "ICAOTypeCode": "A321",
+    "Type": "A321 231SL",
+    "RegisteredOwners": "JetBlue Airways",
+    "OperatorFlagCode": "JBU"
+   }
+  },
+  "a046e7": {
+   "status": 200,
+   "body": {
+    "ModeS": "A046E7",
+    "Registration": "N117HD",
+    "Manufacturer": "Eurocopter",
+    "ICAOTypeCode": "AS50",
+    "Type": "Squirrel AS.350 B2",
+    "RegisteredOwners": "US Helicopters",
+    "OperatorFlagCode": "AS50"
+   }
+  },
+  "a8ab05": {
+   "status": 200,
+   "body": {
+    "ModeS": "A8AB05",
+    "Registration": "N658FX",
+    "Manufacturer": "Gulfstream Aerospace",
+    "ICAOTypeCode": "G650",
+    "Type": "G650 ER",
+    "RegisteredOwners": "Flexjet",
+    "OperatorFlagCode": "LXJ"
+   }
+  },
+  "aabc11": {
+   "status": 200,
+   "body": {
+    "ModeS": "AABC11",
+    "Registration": "N791DK",
+    "Manufacturer": "Embraer",
+    "ICAOTypeCode": "E170",
+    "Type": "EMB-170 LR",
+    "RegisteredOwners": "American Eagle",
+    "OperatorFlagCode": "ENY"
+   }
+  },
+  "a2452a": {
+   "status": 200,
+   "body": {
+    "ModeS": "A2452A",
+    "Registration": "N24514",
+    "Manufacturer": "Airbus",
+    "ICAOTypeCode": "A21N",
+    "Type": "A321 271NXSL",
+    "RegisteredOwners": "United Airlines",
+    "OperatorFlagCode": "UAL"
+   }
+  },
+  "ad22e1": {
+   "status": 404,
+   "body": {
+    "status": "404",
+    "error": "Aircraft not found."
+   }
+  },
+  "acced9": {
+   "status": 200,
+   "body": {
+    "ModeS": "ACCED9",
+    "Registration": "N924US",
+    "Manufacturer": "Airbus",
+    "ICAOTypeCode": "A321",
+    "Type": "A321 231",
+    "RegisteredOwners": "American Airlines",
+    "OperatorFlagCode": "AAL"
+   }
+  },
+  "a0baa1": {
+   "status": 200,
+   "body": {
+    "ModeS": "A0BAA1",
+    "Registration": "N146SY",
+    "Manufacturer": "Embraer",
+    "ICAOTypeCode": "E75L",
+    "Type": "EMB-175 LR",
+    "RegisteredOwners": "United Express",
+    "OperatorFlagCode": "SKW"
+   }
+  },
+  "a72ef7": {
+   "status": 200,
+   "body": {
+    "ModeS": "A72EF7",
+    "Registration": "N562GJ",
+    "Manufacturer": "Bombardier",
+    "ICAOTypeCode": "CRJ7",
+    "Type": "CRJ 700",
+    "RegisteredOwners": "United Express",
+    "OperatorFlagCode": "GJS"
+   }
+  }
+ }
+}

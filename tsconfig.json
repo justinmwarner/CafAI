@@ -25,6 +25,7 @@
     "e2e",
     "e2e-real",
     "vite.config.ts",
+    "vite.plugin.config.ts",
     "vitest.live.config.ts",
     "vitest.decaid.config.ts",
     "vitest.bridge.config.ts",
