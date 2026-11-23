@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { board, bucketLabel } from '../domain/buckets.ts';
+import { cpaLabel } from '../domain/cpa.ts';
 import { readPayload, type OverheadPayload } from '../shared/payload.ts';
 import { createFakeHost, fakeResponse } from './fakeHost.ts';
 import type { PluginDeps, PluginFetch } from './host.ts';
@@ -185,6 +187,25 @@ describe('the Overhead plugin', () => {
     expect(later.aircraft.find((plane) => plane.hex === 'a0baa1')?.trail.length).toBe(2);
     await vi.advanceTimersByTimeAsync(5 * 60_000);
     expect(asked).toEqual([]);
+  });
+
+  it('gives the mock home a full board: one overhead now, several within minutes, one just gone', async () => {
+    const { plugin, get } = setup({ config: { HomeLat: 41.988, HomeLon: -87.73, MockMode: true } });
+    plugin.onLoad({});
+    await plugin.ready();
+    const payload = await get();
+    const list = board(payload.aircraft, payload.settings, payload.generatedAt);
+    expect(list.map((entry) => `${entry.aircraft.callsign} ${bucketLabel(entry.bucket)}`)).toEqual([
+      'SKW5591 Now',
+      'AAL874 2 min',
+      'SKW4803 2 min',
+      'SKW4646 4 min',
+      'ETD93C 4 min',
+      'SKW5699 5 min',
+      'UAL426 Just passed',
+    ]);
+    expect(list[0]?.aircraft).toMatchObject({ airline: 'SkyWest', typeName: 'Embraer ERJ-170-200 (long wing)', altitudeFt: 2950 });
+    expect(cpaLabel(list[0]?.aircraft.cpa as NonNullable<OverheadPayload['aircraft'][number]['cpa']>)).toBe('directly over');
   });
 
   it('replays on ?mock=1 without turning mock mode on', async () => {

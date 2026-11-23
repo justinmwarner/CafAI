@@ -16,7 +16,9 @@
  * skin posted to `config` (DECISIONS O3), except a value changed in Decaid's
  * own Plugins screen since, which wins.
  */
+import { closestApproach } from '../domain/cpa.ts';
 import { bearingDeg, distanceNm, type LatLon } from '../domain/geo.ts';
+import { airlineFor, typeNameFor } from '../domain/words.ts';
 import { PAYLOAD_VERSION, STALE_AFTER_MS, type OverheadAircraft, type OverheadPayload, type PayloadSource } from '../shared/payload.ts';
 import { finite, text } from '../shared/readsb.ts';
 import { CONFIG_ENDPOINT, OVERHEAD_ENDPOINT, OVERHEAD_PLUGIN_ID, readSettings, settingsValues, validValues, type OverheadSettings } from '../shared/settings.ts';
@@ -64,29 +66,34 @@ export function homeOf(settings: OverheadSettings): LatLon | null {
   return settings.homeLat === null || settings.homeLon === null ? null : { lat: settings.homeLat, lon: settings.homeLon };
 }
 
-/** The tracked aircraft as the payload has it, before CPA, route and notable are added. */
+/** The tracked aircraft as the payload has it, with its closest approach; route and notable come after. */
 export function baseAircraft(tracked: TrackedAircraft, home: LatLon): OverheadAircraft {
   const last = tracked.last;
   const position = { lat: tracked.lat, lon: tracked.lon };
+  const callsign = text(last.flight);
+  const operator = text(last.ownOp);
+  const onGround = last.alt_baro === 'ground';
+  const groundSpeedKt = finite(last.gs);
+  const trackDeg = finite(last.track);
   return {
     hex: tracked.hex,
-    callsign: text(last.flight),
+    callsign,
     registration: text(last.r),
     typeCode: text(last.t),
-    typeName: text(last.desc),
-    operator: text(last.ownOp),
-    airline: null,
+    typeName: typeNameFor({ desc: text(last.desc), manufacturer: null, model: null }),
+    operator,
+    airline: airlineFor(callsign, operator),
     lat: tracked.lat,
     lon: tracked.lon,
     positionAt: tracked.positionAt,
     altitudeFt: typeof last.alt_baro === 'number' && Number.isFinite(last.alt_baro) ? last.alt_baro : null,
-    onGround: last.alt_baro === 'ground',
-    groundSpeedKt: finite(last.gs),
-    trackDeg: finite(last.track),
+    onGround,
+    groundSpeedKt,
+    trackDeg,
     verticalRateFpm: finite(last.baro_rate),
     distanceNm: distanceNm(home, position),
     bearingDeg: bearingDeg(home, position),
-    cpa: null,
+    cpa: onGround ? null : closestApproach(home, { position, groundSpeedKt, trackDeg }),
     route: null,
     notable: null,
     trail: tracked.trail,

@@ -64,3 +64,35 @@ open, with the reason. Evidence is in [DISCOVERY.md](DISCOVERY.md). The root
 - **O9. Fixtures name no private person.** One `ownOp` in the captured
   responses named a private owner; it reads `PRIVATE OWNER (redacted)`. The
   plane-alert-db samples keep only rows whose operator is an organisation.
+
+- **O10. The closest approach is worked out once, in the plugin; the board
+  re-buckets it every second in the skin.** Holding a straight line, the
+  closest point does not move; only the time to it runs down. So each
+  aircraft carries its CPA from the plugin (`cpa`, at `positionAt`), and the
+  shared `bucketFor(cpa, rules, elapsedSeconds)` places it on the board from
+  the time since, with no new request. The math is in
+  `src/overhead/domain/` and is the same code in both.
+
+- **O11. What the brief left open about the buckets.**
+  - "Just passed" counts only an aircraft that passed within the "soon"
+    distance (1.5 mi): one that passed 20 miles away was never on the board.
+  - "Now" wins at its edge: a plane 30 s past its closest point, within
+    0.5 mi, is still Now (the brief's ±30 s); "Just passed" follows it.
+  - "In N min" rounds to the nearest minute, at least 1.
+  - Aircraft on the ground (`alt_baro: "ground"`) or with no altitude are
+    never listed; the map still shows them.
+  - Under 0.15 mi the side is meaningless: the board says "directly over".
+  - The known-answer case 2 gives 1.149 mi, not 1.151: a westbound great
+    circle bends slightly south of the parallel. The label reads
+    "1.1 mi north"; the test allows for it.
+
+- **O12. Place names come from airport names.** hexdb gives the airport's
+  name and IATA code, not its city, so "From Denver (DEN)" is "Denver
+  International Airport" with "International Airport" taken off. For some
+  airports that is not the city ("George Bush Intercontinental (IAH)"); it is
+  still what the airport is called.
+
+- **O13. A multi-leg route is read for the leg that touches the home
+  airport.** hexdb lists round trips such as `KORD-KDCA-KORD`; the leg is the
+  inbound one when the aircraft's track points within 90° of the home
+  airport, the outbound one otherwise.
