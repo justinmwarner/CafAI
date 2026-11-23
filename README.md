@@ -516,6 +516,12 @@ machine by itself.
     **Preview** shows one now, anywhere, and a tap closes it without waking
     anything. Turn it off with the switch; under reduced motion each shows a
     still picture.
+  - **Overhead**: with the Overhead plugin installed in Decaid and your home
+    set, CafAI shows the aircraft passing over your home in the screensaver's
+    place: a map and a departure board ("Now", "In 3 min", "Just passed"),
+    with a card for notable aircraft. It comes after 3 idle minutes with the
+    machine idle or asleep, never during a shot, and a tap closes it.
+    Its settings are the plugin's own ([docs/overhead](docs/overhead/README.md)).
 - **Settings > Data and privacy**:
   - **Backup in Decaid**: when CafAI last backed up to Decaid, and what the
     copy holds (your bags, versions, shots and settings, never the API key).
@@ -595,6 +601,14 @@ troubleshooting.
 
 ## Privacy
 
+- **Overhead** (only with its Decaid plugin installed): your home's
+  latitude and longitude are kept in the plugin's settings in Decaid, which
+  any device on your network can read. The plugin sends the aircraft
+  providers (airplanes.live, adsb.fi, adsb.lol) a point within about a
+  kilometre of home, never home itself; hexdb.io gets callsigns, aircraft
+  addresses and airport codes, and plane-alert-db's lists are downloaded
+  whole. CafAI itself only talks to Decaid, and fetches the map's tiles from
+  OpenFreeMap (or MapTiler, with your key).
 - Your Anthropic API key is stored in this skin's local browser storage on
   the device you enter it on. It is never included in exports or in CafAI's
   backup in Decaid (namespace `cafai`), and never logged.

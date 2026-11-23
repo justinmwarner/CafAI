@@ -37,6 +37,12 @@ export const ACTIVE_LEASE_MS = 20_000;
 export const NOTABLE_CHECK_MS = 60_000;
 /** How often the plugin looks at whether to poll, when it is not polling faster. */
 export const IDLE_TICK_MS = 5_000;
+/**
+ * As the screensaver comes up with only old positions (the last notable
+ * check, a minute ago), the first answer waits this long at most for fresh
+ * ones, so it does not open on "Live data paused".
+ */
+export const FIRST_ANSWER_WAIT_MS = 6_000;
 
 /** A notable aircraft gone from the notable area this long can raise the event again when it comes back. */
 export const NOTABLE_FORGET_MS = 10 * 60_000;
@@ -133,11 +139,30 @@ export function createOverheadPlugin(host: PluginHost, deps: PluginDeps, version
     }
   };
   const kv = createPluginKv(host, deps);
-  const chain = createProviderChain(deps, log, options.providers);
+  // Every outbound request is counted by host (no URL in QuickJS: the host is read off the text).
+  const requestStats = new Map<string, { count: number; last: number; minGapMs: number | null }>();
+  const counted: PluginDeps = {
+    ...deps,
+    fetch: (url, init) => {
+      const target = /^[a-z]+:\/\/([^/?#]+)/i.exec(url)?.[1] ?? url;
+      const now = deps.now();
+      const stat = requestStats.get(target);
+      if (stat) {
+        const gap = now - stat.last;
+        stat.minGapMs = stat.minGapMs === null ? gap : Math.min(stat.minGapMs, gap);
+        stat.count += 1;
+        stat.last = now;
+      } else {
+        requestStats.set(target, { count: 1, last: now, minGapMs: null });
+      }
+      return deps.fetch(url, init);
+    },
+  };
+  const chain = createProviderChain(counted, log, options.providers);
   const tracker = createTracker();
   const mockTracker = createTracker();
-  const enricher = createEnricher(deps, kv, { log });
-  const planeAlert = createPlaneAlert(deps, kv, { log });
+  const enricher = createEnricher(counted, kv, { log });
+  const planeAlert = createPlaneAlert(counted, kv, { log });
   // Mock mode's own: the recorded answers, asking nobody (a lookup the recording lacks reads as not found).
   const mockDeps = { ...deps, fetch: async () => ({ status: 404, ok: false, headers: { get: () => null }, text: async () => '', json: async () => null }) };
   const mockEnricher = createEnricher(mockDeps, null, { seed: mockEnrichmentSeed() });
@@ -336,22 +361,26 @@ export function createOverheadPlugin(host: PluginHost, deps: PluginDeps, version
       aircraft,
       notable,
       providers: chain.status(),
+      requests: [...requestStats.entries()].map(([target, stat]) => ({ host: target, count: stat.count, minGapMs: stat.minGapMs })),
     };
   }
 
-  function handleOverhead(request: PluginRequest): PluginReply {
+  async function handleOverhead(request: PluginRequest): Promise<PluginReply> {
     const now = deps.now();
     const mock = settings.mockMode || request.query['mock'] === '1';
     const active = request.query['active'] !== '0';
     if (active) {
       const wasActive = now < activeUntil;
       activeUntil = now + ACTIVE_LEASE_MS;
-      // The screensaver just came up: ask now rather than at the next tick.
+      // The screensaver just came up: ask now rather than at the next tick, and with only old positions, wait a little for new ones.
       if (!wasActive && !mock) {
-        void tick();
+        const asking = tick();
+        if (homeOf(settings) !== null && (dataAt === null || now - dataAt > STALE_AFTER_MS)) {
+          await Promise.race([asking, new Promise<void>((resolve) => deps.setTimeout(resolve, FIRST_ANSWER_WAIT_MS))]);
+        }
       }
     }
-    return reply(200, build(now, mock, active));
+    return reply(200, build(deps.now(), mock, active));
   }
 
   function handleConfig(request: PluginRequest): PluginReply {
@@ -409,7 +438,12 @@ export function createOverheadPlugin(host: PluginHost, deps: PluginDeps, version
     },
     __httpRequestHandler(request) {
       try {
-        if (request.endpoint === OVERHEAD_ENDPOINT) return handleOverhead(request);
+        if (request.endpoint === OVERHEAD_ENDPOINT) {
+          return handleOverhead(request).catch((error: unknown) => {
+            log(`[overhead] overhead failed: ${error instanceof Error ? error.message : String(error)}`);
+            return reply(500, { error: 'Overhead could not answer.' });
+          });
+        }
         if (request.endpoint === CONFIG_ENDPOINT) return handleConfig(request);
         return reply(404, { error: `no endpoint ${request.endpoint}` });
       } catch (error) {

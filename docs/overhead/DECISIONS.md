@@ -152,3 +152,18 @@ open, with the reason. Evidence is in [DISCOVERY.md](DISCOVERY.md). The root
   same code that runs in Decaid. Off by default, so the existing mock and e2e
   runs see no Overhead at all. The stale, empty and loading scenarios shape
   the plugin's answer in the mock handler; the rest are the plugin's own.
+
+- **O21. The providers never learn where home is to better than a kilometre.**
+  The position query only needs a centre: the closest approach, the buckets
+  and the distances are all worked out in the plugin from the exact home. So
+  home goes out rounded to 2 decimals (within about 1.1 km) and the radius 1 nm
+  wider to make up for the rounding. hexdb and plane-alert-db never see a
+  position at all. Home itself is kept in the plugin's settings in Decaid,
+  which, like everything in Decaid's store, any device on the home network
+  can read.
+
+- **O22. The first answer waits for fresh positions.** As the screensaver
+  comes up, the plugin may hold only the last once-a-minute check, up to a
+  minute old, which would open on "Live data paused". The first request of a
+  showing waits up to 6 s for a new poll before it answers; later ones answer
+  at once.

@@ -20,8 +20,13 @@ export interface ProviderSpec {
   url(lat: number, lon: number, radiusNm: number): string;
 }
 
-/** Coordinates go out to 4 decimals (about 11 m): enough, and no more of home than that. */
-const coord = (value: number) => value.toFixed(4);
+/**
+ * Home goes out to 2 decimals (within about 1.1 km), the radius 1 nm wider to
+ * make up for it (DECISIONS O21): the closest approach is worked out here,
+ * from the real home, so a provider never needs to know where it is.
+ */
+const coord = (value: number) => value.toFixed(2);
+export const ROUNDING_MARGIN_NM = 1;
 
 export const PROVIDERS: readonly ProviderSpec[] = [
   { id: 'airplanes.live', url: (lat, lon, r) => `https://api.airplanes.live/v2/point/${coord(lat)}/${coord(lon)}/${r}` },
@@ -104,7 +109,7 @@ export function createProviderChain(deps: Pick<PluginDeps, 'fetch' | 'now' | 'se
     state.used = true;
     let response;
     try {
-      response = await fetchWithin(provider.url(lat, lon, Math.max(1, Math.ceil(radiusNm))));
+      response = await fetchWithin(provider.url(lat, lon, Math.max(1, Math.ceil(radiusNm + ROUNDING_MARGIN_NM))));
     } catch (error) {
       state.lastStatus = null;
       fail(state, error instanceof Error ? error.message : String(error));

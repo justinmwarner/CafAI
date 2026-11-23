@@ -134,6 +134,15 @@ export interface OverheadPayload {
   aircraft: OverheadAircraft[];
   notable: NotableSighting[];
   providers: ProviderStatus[];
+  /** Every host the plugin has asked since it loaded: how often, and the shortest gap between two requests (the brief: under one a second). */
+  requests?: RequestStat[];
+}
+
+export interface RequestStat {
+  host: string;
+  count: number;
+  /** Null until a second request. */
+  minGapMs: number | null;
 }
 
 /** Positions older than this are "paused" (the brief: 30 s). */
@@ -264,6 +273,13 @@ export function readPayload(value: unknown): OverheadPayload | null {
     aircraft,
     notable,
     providers: readProviders(value['providers']),
+    requests: Array.isArray(value['requests'])
+      ? value['requests'].filter(isRecord).flatMap((item) => {
+          const host = str(item['host']);
+          const count = num(item['count']);
+          return host !== null && count !== null ? [{ host, count, minGapMs: num(item['minGapMs']) }] : [];
+        })
+      : [],
   };
 }
 

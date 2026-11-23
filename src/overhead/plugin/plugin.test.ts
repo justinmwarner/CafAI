@@ -237,16 +237,17 @@ describe('the Overhead plugin', () => {
 
   it('announces a notable aircraft once as it comes within the notable area, and lists it', async () => {
     const { plugin, fake, looked, get } = setup({ config: HOME });
+    const loadedAt = Date.now();
     plugin.onLoad({});
     await plugin.ready();
-    await vi.advanceTimersByTimeAsync(0);
-    // The lists were fetched on the first tick; A046E7 (ABC7's helicopter) is 5.9 nm from O'Hare in the recording.
+    await vi.advanceTimersByTimeAsync(2000);
+    // The lists were fetched on the first tick, a second apart; A046E7 (ABC7's helicopter) is 5.9 nm from O'Hare in the recording.
     expect(looked.filter((url) => url.includes('raw.githubusercontent.com'))).toHaveLength(2);
     expect(fake.emits).toEqual([
-      { event: 'notable', payload: { hex: 'a046e7', operator: 'US Helicopters (ABC7 Chicago)', category: 'As Seen on TV', registration: 'N117HD', type: 'AS-350 Ecureuil', distanceNm: 5.9, at: Date.now() } },
+      { event: 'notable', payload: { hex: 'a046e7', operator: 'US Helicopters (ABC7 Chicago)', category: 'As Seen on TV', registration: 'N117HD', type: 'AS-350 Ecureuil', distanceNm: 5.9, at: loadedAt } },
     ]);
     const payload = await get();
-    expect(payload.notable).toEqual([{ hex: 'a046e7', info: expect.objectContaining({ operator: 'US Helicopters (ABC7 Chicago)', tags: ['As Seen on TV', 'News', 'Chicago'] }), since: Date.now() }]);
+    expect(payload.notable).toEqual([{ hex: 'a046e7', info: expect.objectContaining({ operator: 'US Helicopters (ABC7 Chicago)', tags: ['As Seen on TV', 'News', 'Chicago'] }), since: loadedAt }]);
     expect(payload.aircraft.find((plane) => plane.hex === 'a046e7')?.notable?.category).toBe('As Seen on TV');
     // Still there a minute later: no second announcement.
     await vi.advanceTimersByTimeAsync(2 * NOTABLE_CHECK_MS);
@@ -294,6 +295,38 @@ describe('the Overhead plugin', () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(fake.emits).toEqual([]);
     expect(looked).toEqual([]);
+  });
+
+  it('keeps every host it asks under one request a second, and says so', async () => {
+    const { plugin, get } = setup({ config: { HomeLat: 41.988, HomeLon: -87.73, PollIntervalSeconds: 2 } }, async (url) =>
+      url.includes('adsb.fi') ? fakeResponse(200, JSON.stringify(placedMock())) : fakeResponse(403, '{}'),
+    );
+    plugin.onLoad({});
+    await plugin.ready();
+    for (let i = 0; i < 300; i += 1) {
+      await get();
+      await vi.advanceTimersByTimeAsync(700);
+    }
+    const { requests } = await get({ active: '0' });
+    const byHost = Object.fromEntries((requests ?? []).map((stat) => [stat.host, stat]));
+    expect(Object.keys(byHost).sort()).toEqual(['api.airplanes.live', 'hexdb.io', 'opendata.adsb.fi', 'raw.githubusercontent.com']);
+    expect(byHost['opendata.adsb.fi']?.count).toBeGreaterThan(90);
+    for (const stat of requests ?? []) if (stat.minGapMs !== null) expect(stat.minGapMs).toBeGreaterThanOrEqual(1000);
+  });
+
+  it('opens the screensaver on fresh positions, not on the minute-old check', async () => {
+    const { plugin, asked, get } = setup({ config: HOME });
+    plugin.onLoad({});
+    await plugin.ready();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(asked.length).toBeGreaterThan(0);
+    // Away for a while: the last check is 50 s old.
+    await vi.advanceTimersByTimeAsync(50_000);
+    asked.length = 0;
+    const first = await get();
+    expect(asked.length).toBeGreaterThan(0);
+    expect(first.stale).toBe(false);
+    expect(first.dataAt).toBe(Date.now());
   });
 
   it('replays on ?mock=1 without turning mock mode on', async () => {

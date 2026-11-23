@@ -6,6 +6,19 @@ workflow checks against it. Settings > About shows the version you run.
 
 ## Unreleased
 
+### Overhead: the aircraft over your home
+
+- **A plane-spotting screensaver.** With its Decaid plugin installed
+  (`overhead.reaplugin`, built by `npm run build:plugin`) and your home set
+  in Settings › Display › Overhead, CafAI shows the aircraft passing over
+  your home after 3 idle minutes, with the machine idle or asleep, never
+  during a shot: a map, a departure board ("Now", "In 3 min", "Just
+  passed") with each flight's airline, type in words, where it comes from or
+  goes to, height and how close it passes, and a card for a notable aircraft
+  from plane-alert-db. A tap closes it. It dims the screen in the night hours
+  you set. While it is on it takes the screensaver's place; without the
+  plugin nothing changes. Free sources, no keys (docs/overhead/).
+
 ## 0.1.7 (2026-11-13)
 
 ### A start that hangs after the iPad slept

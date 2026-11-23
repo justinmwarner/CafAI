@@ -255,3 +255,34 @@ exactly to a version at least two weeks old, as the repository pins.
 | `@turf/distance`, `@turf/bearing`, `@turf/destination`, `@turf/great-circle`, `@turf/helpers` | 7.4.0 | 2026-08-03 | Geo math |
 | `papaparse` | 5.7.0 | 2026-08-24 | plane-alert-db CSV (5.7.1 is 12 days old) |
 | `@types/papaparse` | 5.5.2 | 2026-10-04 | Its types |
+
+## 10. The live run (Wave 5)
+
+CafAI's production build, served by the real Decaid 0.9.2 of section 1
+(`--skin-path dist`, skin on its own port), its simulated DE1 idle, the
+plugin installed through `PUT /api/v1/plugins/overhead.reaplugin/source`
+with a launch token (section 2), home under the approach to O'Hare's 27R,
+`IdleMinutes` 1 and night hours set to cover the run. Chromium at 1280x800,
+with `window.__DECENT_HOST__` set before the page loads, as Decaid's WebView
+sets it (`src/api/host.ts`). No input for 10 minutes, then a tap.
+2026-11-23, 14:21 to 14:31 UTC.
+
+| Check | Result |
+|---|---|
+| Comes up by itself | after 60 s untouched, the machine idle |
+| What it showed | live for the whole run but the first sample (below): 41 to 64 aircraft from adsb.fi, a Now overhead about every two minutes (American 2332, SkyWest 4794, SkyWest 4982, EVA Air 662 from Anchorage, United 1733), routes and types from hexdb, ABC7's helicopter as a notable aircraft from the live plane-alert-db lists |
+| Every host the page asked (Playwright's request log) | `127.0.0.1:<skin port>` 7, `127.0.0.1:8080` 166 (REST) and 8 sockets, one `blob:` (the map's worker), `tiles.openfreemap.org` 328. **No other host.** |
+| Every host the plugin asked (its `requests` stats) | `opendata.adsb.fi` 103, shortest gap 5,255 ms; `hexdb.io` 115, shortest gap 1,003 ms; `api.airplanes.live` 2, 603 s apart (403, rested 10 minutes, O2); plane-alert-db not at all (its copy from earlier that day was kept, O16). **Every host under one request a second.** |
+| Display socket, night hours (a second run, frames recorded) | on coming up: `requestWakeLock`, then `setBrightness 10`; on the tap: `setBrightness 100`, `releaseWakeLock`, socket closed |
+| The tap | Overhead gone; nothing under it pressed (the page did not move) |
+
+On this Linux build Decaid reports `platformSupported.brightness: false` and
+cannot take a wake lock (no D-Bus): `setBrightness` returns before it updates
+the state it reports (`display_controller.dart` at v0.9.2, `_applyBrightness`),
+so the frames CafAI sent are the evidence here; on an Android tablet the
+same commands dim the screen (D224, verified on 0.8.8's simulator).
+
+The first sample, 1 s after Overhead came up, read "Live data paused": the
+plugin answered at once with its last once-a-minute check, 35 s old. Fixed
+after the run (DECISIONS O22); in the second run the board was live 8 s after
+it came up.

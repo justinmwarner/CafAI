@@ -17,6 +17,8 @@ import type { PluginKv } from './kv.ts';
 export const PLANE_ALERT_BASE = 'https://raw.githubusercontent.com/sdr-enthusiasts/plane-alert-db/main';
 export const PLANE_ALERT_FILES = ['plane-alert-civ.csv', 'plane-alert-gov.csv'] as const;
 export const REFRESH_EVERY_MS = 24 * 3600_000;
+/** Between the two files: one request a second at most to any host (the brief). */
+export const BETWEEN_FILES_MS = 1100;
 /** After a failed refresh, try again this much later rather than tomorrow. */
 export const RETRY_FAILED_MS = 3600_000;
 const STORAGE_KEY = 'planeAlert';
@@ -105,7 +107,7 @@ export interface PlaneAlertOptions {
   seed?: Partial<Record<(typeof PLANE_ALERT_FILES)[number], string>>;
 }
 
-export function createPlaneAlert(deps: Pick<PluginDeps, 'fetch' | 'now'>, kv: Pick<PluginKv, 'read' | 'write'> | null, options: PlaneAlertOptions = {}): PlaneAlert {
+export function createPlaneAlert(deps: Pick<PluginDeps, 'fetch' | 'now' | 'setTimeout'>, kv: Pick<PluginKv, 'read' | 'write'> | null, options: PlaneAlertOptions = {}): PlaneAlert {
   const log = options.log ?? (() => undefined);
   let stored: Stored = { fetchedAt: 0, files: {} };
   let index = new Map<string, Row>();
@@ -127,7 +129,8 @@ export function createPlaneAlert(deps: Pick<PluginDeps, 'fetch' | 'now'>, kv: Pi
     lastAttemptAt = deps.now();
     const files: Record<string, StoredFile> = { ...stored.files };
     let allGood = true;
-    for (const file of PLANE_ALERT_FILES) {
+    for (const [index, file] of PLANE_ALERT_FILES.entries()) {
+      if (index > 0) await new Promise<void>((resolve) => deps.setTimeout(resolve, BETWEEN_FILES_MS));
       try {
         const etag = stored.files[file]?.etag ?? null;
         const response = await deps.fetch(`${PLANE_ALERT_BASE}/${file}`, etag ? { headers: { 'If-None-Match': etag } } : undefined);
@@ -136,6 +139,9 @@ export function createPlaneAlert(deps: Pick<PluginDeps, 'fetch' | 'now'>, kv: Pi
         const rows = parsePlaneAlertCsv(await response.text());
         if (rows === null || rows.length === 0) throw new Error('did not have the columns expected');
         files[file] = { etag: response.headers.get('etag'), rows };
+        // Matched from as soon as it has read, not once both have.
+        stored = { ...stored, files: { ...stored.files, [file]: files[file] as StoredFile } };
+        rebuild();
       } catch (error) {
         allGood = false;
         log(`[overhead] plane-alert-db ${file}: ${error instanceof Error ? error.message : String(error)}; keeping the last good copy`);

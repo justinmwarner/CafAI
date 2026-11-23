@@ -85,9 +85,9 @@ describe('Settings groups and what moved where (D233)', () => {
     expect(screen.getByTestId(TID.careOpen)).toBeInTheDocument();
   });
 
-  it('Display: appearance, units with the temperatures (no longer in appearance) and the clock, shot cards, and the screensaver', () => {
+  it('Display: appearance, units with the temperatures (no longer in appearance) and the clock, shot cards, the screensaver and Overhead', () => {
     renderWithServices(<GroupPage id="display" layout="pane" />, servicesWithAll());
-    expect(cards('display')).toEqual(['Appearance', 'Units', 'Shot cards', 'Screensaver']);
+    expect(cards('display')).toEqual(['Appearance', 'Units', 'Shot cards', 'Screensaver', 'Overhead']);
     const pane = screen.getByTestId(TID.settingsPane('display'));
     const units = within(pane).getByRole('region', { name: 'Units' });
     expect(within(units).getByTestId(TID.temperatureUnit('celsius'))).toBeInTheDocument();
@@ -101,7 +101,7 @@ describe('Settings groups and what moved where (D233)', () => {
 
   it('Display leaves the clock and shot cards out without the display store, as in a preview', () => {
     renderWithServices(<GroupPage id="display" layout="pane" />, createFakeServices());
-    expect(cards('display')).toEqual(['Appearance', 'Units', 'Screensaver']);
+    expect(cards('display')).toEqual(['Appearance', 'Units', 'Screensaver', 'Overhead']);
     expect(screen.queryByTestId(TID.clockFormat('24h'))).toBeNull();
   });
 

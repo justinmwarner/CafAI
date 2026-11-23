@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFakeHost, fakeResponse } from './fakeHost.ts';
 import type { PluginFetch } from './host.ts';
 import { createPluginKv } from './kv.ts';
-import { createPlaneAlert, parsePlaneAlertCsv, PLANE_ALERT_BASE, REFRESH_EVERY_MS, RETRY_FAILED_MS } from './planeAlert.ts';
+import { BETWEEN_FILES_MS, createPlaneAlert, parsePlaneAlertCsv, PLANE_ALERT_BASE, REFRESH_EVERY_MS, RETRY_FAILED_MS } from './planeAlert.ts';
 
 const fixture = (name: string) => readFileSync(new URL(`../../../fixtures/overhead/${name}`, import.meta.url), 'utf8');
 const CIV = fixture('plane-alert-civ.sample.csv');
@@ -58,50 +58,58 @@ describe('the lists, kept', () => {
       asked.push({ url, headers: init?.headers });
       return answer(url, init);
     };
-    return { fake, kv, asked, alert: createPlaneAlert({ fetch, now: () => Date.now() }, kv) };
+    return { fake, kv, asked, alert: createPlaneAlert({ fetch, now: () => Date.now(), setTimeout: timers.setTimeout }, kv) };
+  }
+
+  /** A refresh waits a second between the two files: let the clock run while it does. */
+  async function refresh(alert: { refreshIfDue(): Promise<void> }) {
+    const done = alert.refreshIfDue();
+    await vi.advanceTimersByTimeAsync(2000);
+    await done;
   }
 
   const both: PluginFetch = async (url) => fakeResponse(200, url.endsWith('gov.csv') ? GOV : CIV, { etag: url.endsWith('gov.csv') ? '"g1"' : '"c1"' });
 
   it('downloads both lists, matches any case, and keeps them', async () => {
     const { alert, asked, fake } = lists(both);
-    await alert.refreshIfDue();
+    await refresh(alert);
     expect(asked.map((request) => request.url)).toEqual([`${PLANE_ALERT_BASE}/plane-alert-civ.csv`, `${PLANE_ALERT_BASE}/plane-alert-gov.csv`]);
     expect(alert.size()).toBe(26);
     expect(alert.match('A046E7')).toMatchObject({ operator: 'US Helicopters (ABC7 Chicago)', category: 'As Seen on TV', group: 'Civ', type: 'AS-350 Ecureuil', link: 'https://abc7chicago.com' });
     expect(alert.match('a022e9')).toMatchObject({ operator: 'Department of Homeland Security', group: 'Gov', category: 'Oxcart' });
     expect(alert.match('a12ac7')).toBeNull();
-    expect(fake.store.get('planeAlert')).toMatchObject({ fetchedAt: Date.now() });
+    // Kept once both are in, the second a little over a second after the first.
+    expect(fake.store.get('planeAlert')).toMatchObject({ fetchedAt: Date.parse('2026-11-23T13:22:28Z') + BETWEEN_FILES_MS });
   });
 
   it('refreshes once a day, asking only whether the files changed', async () => {
     const { alert, asked } = lists(both);
-    await alert.refreshIfDue();
-    await alert.refreshIfDue();
+    await refresh(alert);
+    await refresh(alert);
     expect(asked).toHaveLength(2);
     vi.advanceTimersByTime(REFRESH_EVERY_MS);
-    await alert.refreshIfDue();
+    await refresh(alert);
     expect(asked.slice(2).map((request) => request.headers)).toEqual([{ 'If-None-Match': '"c1"' }, { 'If-None-Match': '"g1"' }]);
   });
 
   it('keeps the last good copy when a download fails or reads wrong, and tries again in an hour', async () => {
     let broken = false;
     const { alert, asked, kv } = lists(async (url) => (broken ? fakeResponse(200, 'not,a,list\n1,2,3') : both(url)));
-    await alert.refreshIfDue();
+    await refresh(alert);
     broken = true;
     vi.advanceTimersByTime(REFRESH_EVERY_MS);
-    await alert.refreshIfDue();
+    await refresh(alert);
     expect(alert.match('a046e7')).not.toBeNull();
     expect(asked).toHaveLength(4);
-    await alert.refreshIfDue();
+    await refresh(alert);
     expect(asked).toHaveLength(4);
     vi.advanceTimersByTime(RETRY_FAILED_MS);
     broken = false;
-    await alert.refreshIfDue();
+    await refresh(alert);
     expect(asked).toHaveLength(6);
 
     // A fresh start reads the kept copy before downloading anything.
-    const again = createPlaneAlert({ fetch: async () => fakeResponse(500, ''), now: () => Date.now() }, kv);
+    const again = createPlaneAlert({ fetch: async () => fakeResponse(500, ''), now: () => Date.now(), setTimeout: timers.setTimeout }, kv);
     const loading = again.load();
     await vi.advanceTimersByTimeAsync(0);
     await loading;

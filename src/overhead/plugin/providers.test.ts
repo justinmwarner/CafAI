@@ -37,12 +37,12 @@ describe('the provider chain', () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  it('asks airplanes.live first, with home to 4 decimals and a whole-mile radius', async () => {
+  it('asks airplanes.live first, with home rounded to about a kilometre and the radius widened to match', async () => {
     const { fetch, asked } = fakeFetch({ 'api.airplanes.live': FI });
     const chain = createProviderChain(deps(fetch), () => undefined);
     const result = await chain.fetchPositions(41.978612345, -87.904812345, 24.2);
     expect(result?.provider).toBe('airplanes.live');
-    expect(asked).toEqual(['https://api.airplanes.live/v2/point/41.9786/-87.9048/25']);
+    expect(asked).toEqual(['https://api.airplanes.live/v2/point/41.98/-87.90/26']);
   });
 
   it('fails over past a refusal, and rests the refuser for 10 minutes', async () => {
@@ -52,7 +52,7 @@ describe('the provider chain', () => {
     const first = await chain.fetchPositions(41.9786, -87.9048, 25);
     expect(first?.provider).toBe('adsb.fi');
     expect(first?.snapshot.aircraft).toHaveLength(57);
-    expect(asked).toEqual(['https://api.airplanes.live/v2/point/41.9786/-87.9048/25', 'https://opendata.adsb.fi/api/v2/lat/41.9786/lon/-87.9048/dist/25']);
+    expect(asked).toEqual(['https://api.airplanes.live/v2/point/41.98/-87.90/26', 'https://opendata.adsb.fi/api/v2/lat/41.98/lon/-87.90/dist/26']);
     expect(logs).toContain('[overhead] 57 aircraft from adsb.fi');
     expect(chain.status()[0]).toMatchObject({ id: 'airplanes.live', state: 'resting', lastStatus: 403, lastError: 'refused (403)' });
 

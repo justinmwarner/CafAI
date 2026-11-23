@@ -5491,3 +5491,15 @@ keeps the page there (`pagehide` with `persisted`), is what D283 reports.
   on purpose, and every release waits until the pin covers it. A runtime
   exception for a later Decaid's value would have set a precedent for
   passing that check without moving the pin.
+
+### Overhead, the plane-spotting screensaver (2026-11-23)
+
+- **D286. Overhead's decisions live with it.** A Decaid plugin
+  (`src/overhead/plugin`, `overhead.reaplugin`) makes every third-party
+  request and serves the aircraft near home to the skin at
+  `/api/v1/plugins/overhead.reaplugin/overhead`; the skin shows them in place
+  of the screensaver when idle (`src/overhead/ui`, one line in
+  `SaverOverlay.tsx`). Its evidence is in `docs/overhead/DISCOVERY.md` and
+  its decisions, O1 to O20, in `docs/overhead/DECISIONS.md`. Why: a feature
+  with its own plugin, sources and rules reads better whole, and its brief
+  asked for them there.
